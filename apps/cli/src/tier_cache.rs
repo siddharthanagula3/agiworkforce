@@ -74,9 +74,11 @@ impl UserTier {
     /// BYOK → no managed-cloud default; callers must require `--model`.
     pub fn default_model_id(&self) -> Option<&'static str> {
         match self {
-            UserTier::Free | UserTier::Hobby | UserTier::Pro | UserTier::ProPlus | UserTier::Max => {
-                Some(crate::model_catalog::economy_default_model())
-            }
+            UserTier::Free
+            | UserTier::Hobby
+            | UserTier::Pro
+            | UserTier::ProPlus
+            | UserTier::Max => Some(crate::model_catalog::economy_default_model()),
             UserTier::Byok => None,
         }
     }
@@ -104,7 +106,6 @@ impl UserTier {
         }
     }
 }
-
 
 impl std::fmt::Display for UserTier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -278,27 +279,18 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> Option<CachedTier> {
         return None;
     }
 
-    let api_base = std::env::var("AGIWORKFORCE_API_BASE")
-        .unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
+    let api_base =
+        std::env::var("AGIWORKFORCE_API_BASE").unwrap_or_else(|_| DEFAULT_API_BASE.to_string());
 
     // Safety: only HTTPS allowed.
     if !api_base.starts_with("https://") {
-        tracing::warn!(
-            "[tier_cache] AGIWORKFORCE_API_BASE is not HTTPS — skipping tier fetch"
-        );
+        tracing::warn!("[tier_cache] AGIWORKFORCE_API_BASE is not HTTPS — skipping tier fetch");
         return None;
     }
 
-    let url = format!(
-        "{}/api/me",
-        api_base.trim_end_matches('/')
-    );
+    let url = format!("{}/api/me", api_base.trim_end_matches('/'));
 
-    let result = tokio::time::timeout(
-        TIER_FETCH_TIMEOUT,
-        fetch_tier_from_api(&url, jwt),
-    )
-    .await;
+    let result = tokio::time::timeout(TIER_FETCH_TIMEOUT, fetch_tier_from_api(&url, jwt)).await;
 
     match result {
         Ok(Ok(resp)) => {
@@ -309,8 +301,16 @@ pub async fn resolve_user_tier(jwt: Option<&str>) -> Option<CachedTier> {
             // these in the status bar; cents → tokens conversion is approximate
             // (1 cent ≈ 1K tokens for budget models — not exact but useful for
             // the rough "X / Y" status display).
-            let tokens_used = resp.credits.as_ref().and_then(|c| c.used_cents).map(|c| c * 1000);
-            let tokens_cap = resp.credits.as_ref().and_then(|c| c.allocated_cents).map(|c| c * 1000);
+            let tokens_used = resp
+                .credits
+                .as_ref()
+                .and_then(|c| c.used_cents)
+                .map(|c| c * 1000);
+            let tokens_cap = resp
+                .credits
+                .as_ref()
+                .and_then(|c| c.allocated_cents)
+                .map(|c| c * 1000);
             write_tier_cache(&tier, tokens_used, tokens_cap);
             Some(CachedTier {
                 tier,
@@ -342,10 +342,7 @@ async fn fetch_tier_from_api(url: &str, jwt: &str) -> Result<MeApiResponse> {
         .await?;
 
     if !resp.status().is_success() {
-        anyhow::bail!(
-            "tier API returned HTTP {}",
-            resp.status().as_u16()
-        );
+        anyhow::bail!("tier API returned HTTP {}", resp.status().as_u16());
     }
 
     let body: MeApiResponse = resp.json().await?;
@@ -439,10 +436,7 @@ mod tests {
     fn free_tier_default_model_is_economy() {
         // The free tier's default model must exist in the economy bucket.
         let model = UserTier::Free.default_model_id();
-        assert!(
-            model.is_some(),
-            "Free tier must have a default model ID"
-        );
+        assert!(model.is_some(), "Free tier must have a default model ID");
         // Verify it's not empty
         assert!(
             !model.unwrap().is_empty(),
@@ -505,8 +499,7 @@ mod tests {
             tokens_cap: Some(2_000_000),
         };
         let serialized = toml::to_string(&envelope).expect("should serialize");
-        let back: TierCacheEnvelope =
-            toml::from_str(&serialized).expect("should deserialize");
+        let back: TierCacheEnvelope = toml::from_str(&serialized).expect("should deserialize");
         assert_eq!(back.tier, "hobby");
         assert_eq!(back.tokens_used, Some(500_000));
     }

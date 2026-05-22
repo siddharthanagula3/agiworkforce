@@ -4,7 +4,7 @@ import GorhomBottomSheet, {
   type BottomSheetBackdropProps,
   type BottomSheetProps as GorhomProps,
 } from '@gorhom/bottom-sheet';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 interface BottomSheetProps extends Partial<GorhomProps> {
   children: React.ReactNode;

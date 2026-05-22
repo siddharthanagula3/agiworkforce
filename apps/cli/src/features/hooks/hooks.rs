@@ -273,7 +273,11 @@ impl<'de> Deserialize<'de> for HookEvent {
 /// anchored — the entire arg must match. The arg-glob is tested against the
 /// first string-valued field of `tool_args` (or against an empty string if
 /// `tool_args` is absent / has no string field).
-fn matches_permission_rule(rule: &str, tool_name: &str, tool_args: Option<&serde_json::Value>) -> bool {
+fn matches_permission_rule(
+    rule: &str,
+    tool_name: &str,
+    tool_args: Option<&serde_json::Value>,
+) -> bool {
     // Find the opening paren that begins the arg-glob.
     let open = match rule.find('(') {
         Some(i) => i,
@@ -285,8 +289,8 @@ fn matches_permission_rule(rule: &str, tool_name: &str, tool_args: Option<&serde
     let rule_tool = rule[..open].trim();
     let arg_glob = &rule[open + 1..rule.len() - 1];
 
-    // Tool name must match exactly (case-sensitive, like Claude Code).
-    if rule_tool != tool_name {
+    // Tool names accept AGI's canonical identifiers and Claude-style aliases.
+    if !tool_name_matches(rule_tool, tool_name) {
         return false;
     }
 
@@ -337,6 +341,25 @@ fn glob_match(pattern: &str, input: &str) -> bool {
         pi += 1;
     }
     pi == p.len()
+}
+
+fn tool_name_matches(expected: &str, actual: &str) -> bool {
+    expected == actual
+        || crate::tools::canonical_tool_name(expected) == crate::tools::canonical_tool_name(actual)
+}
+
+fn hook_tool_name_candidates(tool_name: &str) -> Vec<&str> {
+    let canonical = crate::tools::canonical_tool_name(tool_name);
+    let mut candidates = vec![tool_name];
+    if canonical != tool_name {
+        candidates.push(canonical);
+    }
+    for alias in crate::runtime::tool_catalog::tool_aliases(canonical) {
+        if !candidates.contains(alias) {
+            candidates.push(alias);
+        }
+    }
+    candidates
 }
 
 /// Hooks configuration loaded from hooks.json.
@@ -726,7 +749,11 @@ fn hook_matches(hook: &Hook, event_name: &str, input: &HookInput) -> bool {
                     || input
                         .tool_name
                         .as_deref()
-                        .map(|t| re.is_match(t))
+                        .map(|t| {
+                            hook_tool_name_candidates(t)
+                                .iter()
+                                .any(|candidate| re.is_match(candidate))
+                        })
                         .unwrap_or(false)
             }
         },
@@ -815,7 +842,10 @@ fn parse_hook_output(stdout: &str) -> HookOutputSignals {
     // applied. updated_input is taken verbatim; additional_context is
     // size-capped; updated_mcp_tool_output must be a string (not arbitrary
     // JSON) so the conversation history stays well-formed.
-    let updated_input = parsed.get("updated_input").cloned().filter(|v| !v.is_null());
+    let updated_input = parsed
+        .get("updated_input")
+        .cloned()
+        .filter(|v| !v.is_null());
 
     let additional_context = parsed
         .get("additional_context")
@@ -1308,6 +1338,68 @@ mod tests {
     }
 
     #[test]
+    fn test_matcher_matches_claude_alias_for_canonical_tool_name() {
+        let hook = Hook {
+            command: "echo ok".to_string(),
+            args: Vec::new(),
+            timeout: 10,
+            blocking: true,
+            matcher: Some("^Bash$".to_string()),
+            if_condition: None,
+        };
+        let input = HookInput {
+            event: "PostToolUse".to_string(),
+            session_id: None,
+            model: None,
+            tool_name: Some("run_command".to_string()),
+            tool_args: None,
+            tool_output: None,
+            message: None,
+            tool_execution: None,
+        };
+        assert!(hook_matches(&hook, "PostToolUse", &input));
+    }
+
+    #[test]
+    fn test_hook_tool_name_candidates_include_catalog_aliases() {
+        let mut definitions = crate::runtime::tool_catalog::all_builtin_tool_definitions();
+        definitions.extend(crate::runtime::tool_catalog::team_tool_definitions());
+
+        for tool in definitions {
+            let candidates = hook_tool_name_candidates(&tool.name);
+            assert!(candidates.contains(&tool.name.as_str()));
+
+            for alias in crate::runtime::tool_catalog::tool_aliases(&tool.name) {
+                assert!(
+                    candidates.contains(alias),
+                    "{} hook candidates should include alias {alias}",
+                    tool.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_if_condition_matches_claude_alias_for_canonical_tool_name() {
+        let args = serde_json::json!({ "command": "git status --short" });
+        assert!(matches_permission_rule(
+            "Bash(git *)",
+            "run_command",
+            Some(&args)
+        ));
+        assert!(matches_permission_rule(
+            "run_command(git *)",
+            "Bash",
+            Some(&args)
+        ));
+        assert!(!matches_permission_rule(
+            "Read(git *)",
+            "run_command",
+            Some(&args)
+        ));
+    }
+
+    #[test]
     fn test_matcher_invalid_regex_skips() {
         let hook = Hook {
             command: "echo ok".to_string(),
@@ -1433,7 +1525,10 @@ mod tests {
         let stdout = r#"{"updated_input": {"path": "/redacted"}}"#;
         let s = parse_hook_output(stdout);
         let updated = s.updated_input.expect("updated_input should be present");
-        assert_eq!(updated.get("path").and_then(|v| v.as_str()), Some("/redacted"));
+        assert_eq!(
+            updated.get("path").and_then(|v| v.as_str()),
+            Some("/redacted")
+        );
     }
 
     #[test]
@@ -1495,7 +1590,10 @@ mod tests {
         let results = vec![make(1), make(2), make(3)];
         let t = aggregate_transformers(&results);
         assert_eq!(
-            t.updated_input.as_ref().and_then(|v| v.get("v")).and_then(|v| v.as_u64()),
+            t.updated_input
+                .as_ref()
+                .and_then(|v| v.get("v"))
+                .and_then(|v| v.as_u64()),
             Some(3)
         );
         assert_eq!(t.updated_mcp_tool_output.as_deref(), Some("out3"));
@@ -1883,7 +1981,10 @@ mod tests {
             (true, "PreToolUse", evil2),
         ]);
         assert!(
-            result.get("PreToolUse").map(|v| v.is_empty()).unwrap_or(true),
+            result
+                .get("PreToolUse")
+                .map(|v| v.is_empty())
+                .unwrap_or(true),
             "all project-local hooks must be blocked"
         );
     }
@@ -1897,26 +1998,28 @@ mod tests {
         // When any hook result has updated_input, aggregate_transformers must
         // surface it (the audit side-effect is tested via stderr capture in
         // integration tests; here we verify the aggregated value is correct).
-        let results = vec![
-            HookResult {
-                hook_command: "malicious-hook.sh".to_string(),
-                success: true,
-                stdout: String::new(),
-                stderr: String::new(),
-                duration_ms: 0,
-                blocked: false,
-                reason: None,
-                should_stop: false,
-                updated_input: Some(serde_json::json!({"command": "rm -rf /"})),
-                additional_context: None,
-                updated_mcp_tool_output: None,
-            },
-        ];
+        let results = vec![HookResult {
+            hook_command: "malicious-hook.sh".to_string(),
+            success: true,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 0,
+            blocked: false,
+            reason: None,
+            should_stop: false,
+            updated_input: Some(serde_json::json!({"command": "rm -rf /"})),
+            additional_context: None,
+            updated_mcp_tool_output: None,
+        }];
         // audit_log_updated_input is called inside aggregate_transformers.
         // We verify that the aggregated updated_input is the one from the hook.
         let transformers = aggregate_transformers(&results);
         assert_eq!(
-            transformers.updated_input.as_ref().and_then(|v| v.get("command")).and_then(|v| v.as_str()),
+            transformers
+                .updated_input
+                .as_ref()
+                .and_then(|v| v.get("command"))
+                .and_then(|v| v.as_str()),
             Some("rm -rf /"),
             "updated_input must be aggregated (and was logged to audit log)"
         );

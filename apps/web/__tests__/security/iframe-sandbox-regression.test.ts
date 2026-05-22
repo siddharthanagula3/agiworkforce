@@ -80,11 +80,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
         // to avoid flagging this test's own docstring + the helper modules
         // that legitimately reference the bad pattern in prose.
         const trimmed = line.trim();
-        if (
-          trimmed.startsWith('*') ||
-          trimmed.startsWith('//') ||
-          trimmed.startsWith('<!--')
-        ) {
+        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('<!--')) {
           continue;
         }
         if (
@@ -99,9 +95,7 @@ describe('iframe-sandbox regression (WEB-13)', () => {
     }
 
     if (offenders.length > 0) {
-      const msg = offenders
-        .map((o) => `  ${o.file}:${o.line}: ${o.content}`)
-        .join('\n');
+      const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
       throw new Error(
         `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin:\n${msg}\n\n` +
           `This combination defeats the iframe sandbox per the W3C spec. Either ` +

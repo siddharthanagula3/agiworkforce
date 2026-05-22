@@ -1,7 +1,7 @@
 import { useShallow } from 'zustand/react/shallow';
 import { homeDir } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { ErrorBoundary } from '@/features/error-handling';
 import {
   ChevronLeft,
   ChevronRight,
@@ -19,8 +19,8 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import type { OpenFile } from '../../stores/codeStore';
 import { useCodeStore } from '../../stores/codeStore';
-import { Button } from '../ui/Button';
-import { Dialog, DialogContent } from '../ui/Dialog';
+import { Button } from '@/components/ui/Button';
+import { Dialog, DialogContent } from '@/components/ui/Dialog';
 import { CodeEditor } from './CodeEditor';
 import { DiffViewer } from './DiffViewer';
 import { FileTree } from './FileTree';

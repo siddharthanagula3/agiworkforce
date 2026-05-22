@@ -1,0 +1,39 @@
+name: Repo Operability
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: repo-operability-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  llm-operability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+        with:
+          version: 9.15.3
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Verify Node version
+        run: bash scripts/check-node-version.sh
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: LLM and repo operability checks
+        run: pnpm check:llm-operability

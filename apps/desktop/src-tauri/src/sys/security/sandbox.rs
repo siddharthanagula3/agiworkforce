@@ -435,7 +435,7 @@ impl SandboxProfile {
 
 /// Feature-gate flags for OS sandbox enforcement.
 /// All gates default to `false` (stubs only) until the invocation paths ship.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct SandboxFeatureGates {
     /// macOS: actually invoke `sandbox-exec` with the Seatbelt DSL.
     pub macos_seatbelt_exec: bool,
@@ -443,14 +443,4 @@ pub struct SandboxFeatureGates {
     pub linux_bwrap_exec: bool,
     /// Windows: actually apply AppContainer restrictions.
     pub windows_appcontainer_exec: bool,
-}
-
-impl Default for SandboxFeatureGates {
-    fn default() -> Self {
-        Self {
-            macos_seatbelt_exec: false,
-            linux_bwrap_exec: false,
-            windows_appcontainer_exec: false,
-        }
-    }
 }

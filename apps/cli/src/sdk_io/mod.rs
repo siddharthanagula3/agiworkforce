@@ -19,7 +19,9 @@ pub(crate) mod stdin_reader;
 // referenced from main.rs / agent.rs are gated with `allow(unused_imports)` —
 // they're the public surface the next session will wire through.
 pub(crate) use ndjson::NdjsonWriter;
-pub(crate) use protocol::{AssistantMessageEvent, ErrorEvent, SdkEvent, StatusUpdateEvent, StatusUpdateReason};
+pub(crate) use protocol::{
+    AssistantMessageEvent, ErrorEvent, SdkEvent, StatusUpdateEvent, StatusUpdateReason,
+};
 
 #[allow(unused_imports)]
 pub(crate) use protocol::{

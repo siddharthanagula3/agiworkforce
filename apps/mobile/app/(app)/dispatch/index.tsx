@@ -19,7 +19,7 @@ import {
   ArrowLeft,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDispatchStore } from '@/stores/dispatchStore';
 import { useSettingsStore } from '@/stores/settingsStore';

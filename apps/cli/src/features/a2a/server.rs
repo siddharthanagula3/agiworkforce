@@ -48,7 +48,11 @@ const DELEGATED_TASK_ALLOWED_TOOLS: &[&str] = &[
 // ---------------------------------------------------------------------------
 
 /// Build the A2A server state.
-pub fn build_a2a_state(card: AgentCard, auth_token: Option<String>, config: crate::config::CliConfig) -> A2aState {
+pub fn build_a2a_state(
+    card: AgentCard,
+    auth_token: Option<String>,
+    config: crate::config::CliConfig,
+) -> A2aState {
     A2aState {
         card,
         tasks: Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new())),
@@ -136,7 +140,9 @@ async fn handle_connection(
         .lines()
         .find_map(|l| {
             let lower = l.to_ascii_lowercase();
-            lower.strip_prefix("content-length:").and_then(|v| v.trim().parse::<usize>().ok())
+            lower
+                .strip_prefix("content-length:")
+                .and_then(|v| v.trim().parse::<usize>().ok())
         })
         .unwrap_or(0);
 
@@ -359,7 +365,10 @@ async fn handle_post_handoff(_state: &A2aState, body: &str) -> String {
 // Task execution
 // ---------------------------------------------------------------------------
 
-async fn execute_delegated_task(config: &crate::config::CliConfig, request: &TaskRequest) -> Result<String> {
+async fn execute_delegated_task(
+    config: &crate::config::CliConfig,
+    request: &TaskRequest,
+) -> Result<String> {
     let sys_context = crate::context::gather_system_context();
     let mut session = crate::agent::AgentSession::new(&config.default.model, &sys_context, None);
     session.skip_permissions = false;
@@ -388,13 +397,7 @@ async fn execute_delegated_task(config: &crate::config::CliConfig, request: &Tas
         )
     };
 
-    let result = session
-        .send(
-            config,
-            &prompt,
-            Box::new(|_chunk| {}),
-        )
-        .await?;
+    let result = session.send(config, &prompt, Box::new(|_chunk| {})).await?;
 
     Ok(result.response)
 }

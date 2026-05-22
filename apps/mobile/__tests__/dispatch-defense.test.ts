@@ -404,7 +404,7 @@ jest.mock('@/components/ui/card', () => ({ Card: 'Card' }));
 jest.mock('@/components/ui/badge', () => ({ Badge: 'Badge' }));
 jest.mock('@/components/ui/button', () => ({ Button: 'Button' }));
 jest.mock('@/components/ui/separator', () => ({ Separator: 'Separator' }));
-jest.mock('@/lib/theme', () => ({
+jest.mock('@/src/ui/theme', () => ({
   colors: {
     agentActive: '#3b82f6',
     agentSuccess: '#10b981',
@@ -461,7 +461,10 @@ import { scheduleLocalNotification } from '../services/notifications';
 
 import { getCategoryForType } from '../stores/notificationPrefsStore';
 
-import { getTimeElapsed, estimateTimeRemaining } from '../components/companion/AgentDashboard';
+import {
+  getTimeElapsed,
+  estimateTimeRemaining,
+} from '../src/features/companion/components/AgentDashboard';
 
 import { startMobileHeartbeat, logApprovalDecision, logEmergencyStop } from '../services/heartbeat';
 

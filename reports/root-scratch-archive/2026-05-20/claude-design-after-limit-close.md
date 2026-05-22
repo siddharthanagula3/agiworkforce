@@ -1,0 +1,108 @@
+- generic [ref=e7] [box=0,0,1633,928]:
+  - generic [ref=e8] [box=0,0,1633,40]:
+    - generic [ref=e11] [box=6,0,393,40]:
+      - link "Back to projects" [ref=e12] [box=6,6,28,28]:
+        - /url: /design/
+        - img [ref=e13] [box=11,11,17,17]
+      - generic "AGI Mobile" [ref=e16] [box=40,7,78,25]
+      - button "" [ref=e18] [box=367,7,26,26]:
+        - generic [ref=e19] [box=372,12,16,16]: 
+    - generic [ref=e20] [box=400,0,1233,40]:
+      - generic [ref=e22] [box=410,6,107,34]:
+        - generic [ref=e23] [box=424,13,12,12]: 
+        - generic [ref=e24] [box=439,13,64,13]: Design Files
+      - generic [ref=e26] [box=489,6,961,33]:
+        - generic [ref=e28] [box=517,11,111,13]: index.html
+        - generic [ref=e634] [box=667,11,124,13]: screens-r5-canonical.jsx
+      - generic [ref=e29] [box=1464,5,161,28]:
+        - button "Present " [ref=e1214] [box=1464,8,73,22]:
+          - generic [ref=e1215] [box=1473,12,56,13]
+        - button "Share" [ref=e31] [box=1543,8,48,22]:
+          - generic [ref=e32] [box=1552,13,31,13]: Share
+        - button "Profile and connectors" [ref=e33] [cursor=pointer] [box=1597,5,28,28]:
+          - generic [ref=e34] [box=1597,5,28,28]: SN
+  - generic [ref=e36] [box=0,40,1633,888]:
+    - generic [ref=e43] [box=0,40,399,888]:
+      - generic [ref=e46] [box=14,-56244,364,56997]:
+        - generic [ref=e88] [box=14,-6834,364,75]:
+          - generic [ref=e91] [cursor=pointer] [box=15,-6834,363,24]
+          - paragraph [ref=e97] [box=14,-6801,364,42]: R4 section title renamed to "Code task surface" — no Codex term anywhere user-facing.
+        - generic [ref=e100] [box=81,-6745,297,38]: can you like brainstrom or ask me questions?
+        - generic [ref=e105] [box=14,-6687,364,1410]:
+          - paragraph [ref=e106] [box=14,-6687,364,62]: "Yes — let me ask. I've been pattern-matching to Claude/Perplexity/ChatGPT but AGI's real shape isn't fully decided yet. Critical fork-in-the-road decisions:"
+          - paragraph [ref=e107] [box=14,-6615,364,42]
+          - list [ref=e110] [box=14,-6564,364,155]
+          - paragraph [ref=e119] [box=14,-6402,364,83]
+          - list [ref=e121] [box=14,-6309,364,69]
+          - paragraph [ref=e125] [box=14,-6234,364,21]
+          - list [ref=e127] [box=14,-6203,364,131]
+          - paragraph [ref=e135] [box=14,-6065,364,83]
+          - list [ref=e137] [box=14,-5972,364,69]
+          - paragraph [ref=e141] [box=14,-5897,364,83]
+          - paragraph [ref=e143] [box=14,-5804,364,83]
+          - paragraph [ref=e146] [box=14,-5711,364,42]
+          - list [ref=e148] [box=14,-5660,364,221]
+          - paragraph [ref=e154] [box=14,-5432,364,104]
+          - paragraph [ref=e158] [box=14,-5319,364,42]: Pick any subset — the answers to 1, 4, and 8 would unblock the most.
+        - generic [ref=e161] [box=69,-5263,309,2540]:
+          - text: "<pasted_text name=\"Pasted text (70 lines)\"> 1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop” / “Continue on desktop” on a chat/message. - A Dispatch destination only shows queue/history when desktop companion is paired. 4. Agents vs Skills vs Projects User-facing distinction: - Project = a local workspace/context container: chats, files, memory, and custom instructions. - Skill = an installable reusable capability/prompt recipe. Markdown/frontmatter under the hood; user sees “saved workflow” or “skill.” - Agent = a running delegated worker/job with status, tools, approvals, artifacts. Not a persona tab on mobile v1. So: show Projects. Show Skills as drawer/plus-menu utility, not a dominant tab. Hide Agents unless desktop companion has active runs. 5. Waitlist visibility Do not show Cloud waitlist · #1,247 everywhere. Show cloud only at natural gates: - Mode toggle: Cloud · Waitlist - Locked managed-cloud model rows - Settings → Mode / Cloud Only show rank after the user joins and only if it is real server data. Before join, use Join waitlist, not fake social proof. 6. Model picker truth Yes: cloud provider models should unlock when the user supplies their own key. Separate the picker into three buckets: - On-device: installed / downloadable local models. - BYOK: Anthropic/OpenAI/Google/etc. Locked until user adds that provider key; then selectable. - AGI Cloud: managed credits/subscriptions; waitlist until launch/private beta. Important: Local → BYOK must create an explicit fork with context preview/redaction. Never silently switch an existing local chat to a provider. 7. Screens that matter Keep: - Device-tier onboarding. - Local model download/manage. - BYOK provider key entry. - Local → BYOK fork flow with context selection, secret scan, preview. - Memory import/export, but under Settings → Memory, not onboarding. - Voice as on-device push-to-talk/transcription, not a primary hero. Confirm: - No account required for Local. - Sign-in only for sync, managed cloud/private beta, or future account features. - BYOK should not require AGI account. 8. Look and feel Canonical direction: light-first, warm cream #faf9f7, with dark mode fully supported. Do not make dark + serif body the default mobile identity. Use system sans on mobile. Serif is only for rare display/editorial moments, not body UI. </pasted_text>"
+          - 'generic "1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop”…" [ref=e163] [box=81,-2748,118,17]'
+        - generic [ref=e705] [box=14,-2701,364,752]:
+          - generic [ref=e708] [cursor=pointer] [box=15,-2701,363,24]
+          - generic [ref=e713] [box=14,-2668,364,719]
+        - generic [ref=e739] [box=69,-1935,309,2323]: "Create a new R6 canonical set that keeps the visual polish of R5 but corrects the AGI Mobile product direction. Do not edit by making small copy tweaks only. Make a new light-first AGI Mobile v1 direction using these rules: 1. Product truth AGI Mobile v1 is on-device first. The hero is private AI that runs on the phone, works offline, and only leaves the device when the user explicitly chooses BYOK. Managed AGI Cloud is waitlist/private beta only. BYOK is available when the user adds their own provider key. 2. Visual direction Make canonical screens light-first with warm cream #faf9f7 as the base, white raised surfaces, teal #21808d for primary actions, terracotta #da7756 only as secondary accent. Include dark variants only as secondary examples. Use iOS/Android system sans. Do not use serif body text. Do not use negative letter spacing. Keep density professional and mobile-native. 3. Empty chat Replace \"How can I help you, Siddhartha?\" with \"Ask anything\". Add a compact trust badge near the header or above the composer: \"On-device · Private · Works offline\". Keep the composer-first layout. The screen should feel like a real tool, not a landing page. 4. Navigation Remove Agents, Dispatch, and Multi-model from primary mobile nav. Mobile v1 primary drawer should be: Chat, Projects, Skills, Memory, Models, Keys, Settings. Agents only appear later if desktop companion has active runs. Dispatch is not a v1 destination. Multi-model compare is not a primary nav item. 5. Onboarding No sign-in in first-run. Replace the current Android onboarding copy with: \"AGI runs on your device.\" Supporting copy: \"No account. No cloud. Free forever.\" Primary CTA: \"Start chatting\" or \"Continue\". Then show device-tier detection and model download/manage. BYOK is optional later in Keys. 6. Model picker Rebuild the model picker into three explicit sections: - On-device: installed and downloadable local/system models. - BYOK: Anthropic, OpenAI, Google, xAI, Perplexity, Mistral, Ollama/LM Studio, Custom. Rows say \"Add key\" until configured, then become selectable. These are not waitlist. - AGI Cloud: managed models and credits. These are waitlist/private beta only. Do not label every cloud provider model as waitlist. BYOK unlocks provider models now. 7. BYOK flow Add a Keys / BYOK screen and a Local to BYOK fork flow. The fork flow must show: choose provider/model, choose context to send, include attachments toggle, local secret scan, payload preview, confirm. Original local chat remains local. Labels should say \"Claude via your Anthropic key\" or equivalent. 8. Waitlist Remove fake or global waitlist rank from Settings and nav. Before join, show only \"Join waitlist\" at natural cloud gates. After join, rank may appear only in the waitlist confirmation and mode/cloud row, and only as server-provided data. 9. Settings and storage Remove account/email assumptions from local v1 settings. Storage export must be on-device export/share sheet, not \"emailed within 24h\". Settings sections: Mode, Keys, Memory, Voice, Storage, Performance, Privacy, Appearance, About. 10. Preserve what works Keep the high-fidelity phone frames, compact composer, inline tool-call bar, performance chip, plus menu structure, and model sheet interaction quality. Just make the IA, copy, trust boundaries, and palette correct for AGI. Output one new section titled \"R6 · AGI Mobile v1 canonical\" with these screens: onboarding hero, device tier/model download, empty chat, active chat, drawer, plus menu, model picker, Keys/BYOK setup, Local to BYOK fork preview, Settings/Storage/Privacy. Add Android light variants for drawer and onboarding."
+        - generic [ref=e749] [box=14,412,364,88]:
+          - generic [ref=e750] [box=26,423,14,14]: 
+          - generic [ref=e751] [box=48,422,318,68]
+        - generic [ref=e1218] [box=14,520,364,88]:
+          - generic [ref=e1219] [box=26,531,14,14]: 
+          - generic [ref=e1220] [box=48,530,318,68]
+        - generic [ref=e1226] [box=14,626,364,113]:
+          - generic [ref=e1229] [cursor=pointer] [box=15,626,363,24]
+          - generic [ref=e1233] [box=14,659,364,80]
+      - generic [ref=e169] [box=12,790,375,125]:
+        - textbox "Describe what you want to create..." [ref=e171] [box=25,803,350,63]
+        - generic [ref=e172] [box=25,875,350,28]:
+          - generic [ref=e173] [box=25,875,96,28]
+          - button " Send" [disabled] [ref=e1244] [box=303,875,72,28]
+    - generic [ref=e188] [box=400,40,1233,888]:
+      - generic [ref=e1247] [box=400,40,1233,39]:
+        - button "" [ref=e1249] [box=410,46,26,26]:
+          - generic [ref=e1250] [box=416,52,14,14]: 
+        - button " Mark up" [ref=e1251] [box=1260,48,75,22]:
+          - generic [ref=e1252] [box=1268,53,58,13]
+        - button " Edit" [ref=e1254] [box=1341,48,53,22]:
+          - generic [ref=e1255] [box=1350,53,36,13]
+        - button " Tweaks" [ref=e1259] [box=1400,48,72,22]:
+          - generic [ref=e1260] [box=1409,53,55,13]
+        - button " Comments" [ref=e1262] [box=1478,48,90,22]:
+          - generic [ref=e1263] [box=1487,53,73,13]
+        - button "100%" [ref=e1267] [box=1574,48,50,22]:
+          - generic [ref=e1270] [box=1582,53,33,13]: 100%
+      - iframe [ref=e1280] [box=400,79,1233,849]:
+        - generic [ref=f7e4] [box=0,0,15612,32819]:
+          - generic [ref=f7e5] [box=0,60,15612,1082]
+          - generic [ref=f7e2227] [box=0,1222,15612,1082]
+          - generic [ref=f7e3397] [box=0,2384,15612,1082]
+          - generic [ref=f7e4049] [box=0,3547,15612,1082]
+          - generic [ref=f7e4413] [box=0,4709,15612,1082]
+          - generic [ref=f7e4830] [box=0,5871,15612,1082]
+          - generic [ref=f7e5508] [box=0,7033,15612,1082]
+          - generic [ref=f7e5873] [box=0,8195,15612,1082]
+          - generic [ref=f7e7691] [box=0,9358,15612,1082]
+          - generic [ref=f7e8139] [box=0,10520,15612,1082]
+          - generic [ref=f7e9109] [box=0,11682,15612,1082]
+          - generic [ref=f7e10031] [box=0,12844,15612,2890]
+          - generic [ref=f7e10379] [box=0,15815,15612,2134]
+          - generic [ref=f7e11491] [box=0,18029,15612,1734]
+          - generic [ref=f7e11895] [box=0,19843,15612,1094]
+          - generic [ref=f7e12672] [box=0,21017,15612,1094]
+          - generic [ref=f7e14365] [box=0,22191,15612,1094]
+          - generic [ref=f7e16134] [box=0,23366,15612,1094]
+          - generic [ref=f7e17457] [box=0,24540,15612,1094]
+          - generic [ref=f7e19113] [box=0,25714,15612,1094]
+          - generic [ref=f7e20653] [box=0,26888,15612,1094]
+          - generic [ref=f7e21753] [box=0,28063,15612,1094]
+          - generic [ref=f7e22163] [box=0,29237,15612,1094]
+          - generic [ref=f7e22753] [box=0,30411,15612,1094]
+          - generic [ref=f7e25146] [box=0,31585,15612,1074]

@@ -1,0 +1,328 @@
+services/signaling-server/src/db.ts:9: * empty results instead of crashing the entire process with process.exit(1).
+services/signaling-server/src/index.ts:1156:    process.exit(1);
+services/signaling-server/src/index.ts:1193:    process.exit(0);
+services/signaling-server/src/index.ts:1197:    process.exit(1);
+crates/agiworkforce-network-proxy/src/network_policy.rs:457:        fn exit(&self, _span: &Id) {}
+crates/agiworkforce-execpolicy/src/policy.rs:327:            .chain(cmd.iter().skip(1).cloned())
+apps/extension-vscode/src/test/runTests.ts:35:    process.exit(1);
+services/api-gateway/src/index.ts:52:  process.exit(1);
+services/api-gateway/src/index.ts:197:    process.exit(0);
+services/api-gateway/src/__tests__/providerStream.live.test.ts:24:describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
+services/api-gateway/src/__tests__/providerStream.live.test.ts:93:describe.skipIf(!skip)('provider stream route — anthropic e2e (skipped)', () => {
+apps/extension-vscode/scripts/vsce-package.js:48:  process.exit(1);
+crates/agiworkforce-utils-absolute-path/src/absolutize.rs:78:        .skip(usize::from(skip_base_prefix))
+crates/agiworkforce-utils-absolute-path/src/lib.rs:407:    #[ignore]
+apps/extension-vscode/esbuild.js:89:        process.exit(1);
+apps/extension-vscode/esbuild.js:97:    process.exit(1);
+services/api-gateway/__tests__/lib/supabaseClients.test.ts:133:describe.skipIf(!integrationGate)(
+services/api-gateway/__tests__/integration/app.test.ts:203:describe.skip('WebSocket Integration (requires server)', () => {
+packages/providers/openai/src/openai.live.test.ts:22:describe.skipIf(skip)('OpenAI adapter live', () => {
+packages/providers/openai/src/openai.live.test.ts:66:describe.skipIf(!skip)('OpenAI adapter live (skipped)', () => {
+packages/providers/anthropic/src/anthropic.live.test.ts:22:describe.skipIf(skip)('Anthropic adapter live', () => {
+packages/providers/anthropic/src/anthropic.live.test.ts:67:describe.skipIf(!skip)('Anthropic adapter live (skipped)', () => {
+packages/providers/ollama/src/ollama.live.test.ts:41:describe.skipIf(skip)('Ollama adapter live', () => {
+packages/providers/ollama/src/ollama.live.test.ts:93:describe.skipIf(!skip)('Ollama adapter live (skipped)', () => {
+apps/cli/src/lib.rs:1178:                std::process::exit(out.status.code().unwrap_or(1));
+apps/cli/src/lib.rs:1923:        std::process::exit(1);
+apps/cli/src/lib.rs:1929:        std::process::exit(1);
+apps/cli/src/lib.rs:2062:                std::process::exit(1);
+apps/cli/src/lib.rs:2119:    std::process::exit(exit_code)
+apps/mobile/__tests__/dispatch-defense.test.ts:1724:  const itCompanion = DF.companion ? it : it.skip;
+apps/cli/src/features/exec/tools/common.rs:100:                .skip(1)
+apps/cli/src/features/exec/tools/common.rs:114:                .skip(1)
+apps/cli/npm/bin/agiworkforce.js:83:      process.exit(1);
+apps/cli/npm/bin/agiworkforce.js:92:      process.exit(code ?? 1);
+apps/mobile/__tests__/tier-store.test.ts:123:const describeRefreshTier = FEATURES.billing ? describe : describe.skip;
+apps/cli/src/tui/wrapping.rs:479:    word.char_indices().skip(1).map(|(idx, _)| idx).collect()
+apps/cli/src/tui/wrapping.rs:1052:        for r in rendered.iter().skip(1) {
+apps/cli/src/tui/wrapping.rs:1076:        for r in rendered.iter().skip(1) {
+apps/cli/src/tui/wrapping.rs:1389:            word.char_indices().skip(1).map(|(idx, _)| idx).collect()
+apps/mobile/__tests__/auth-storage.test.ts:345:  const itCloudAuth = FEATURES.auth ? it : it.skip;
+apps/cli/src/tui/diff_render.rs:284:        .skip(16)
+apps/cli/src/tui/app.rs:196:    Exit(ExitReason),
+apps/cli/src/tui/app.rs:1598:                AppRunControl::Exit(exit_reason) => Some(exit_reason),
+apps/cli/src/tui/app.rs:1668:                    AppRunControl::Exit(reason) => break Ok(reason),
+apps/cli/src/tui/app.rs:1790:                                return Ok(AppRunControl::Exit(ExitReason::UserRequested));
+apps/cli/src/tui/app.rs:2001:            AppEvent::Exit(mode) => {
+apps/cli/src/tui/app.rs:2005:                return Ok(AppRunControl::Exit(ExitReason::Fatal(message)));
+apps/cli/src/tui/app.rs:3245:                    AppRunControl::Exit(ExitReason::UserRequested)
+apps/cli/src/tui/app.rs:3250:                AppRunControl::Exit(ExitReason::UserRequested)
+apps/cli/src/tui/app.rs:6872:            AppRunControl::Exit(ExitReason::UserRequested)
+apps/cli/src/tui/streaming/chunking.rs:182:            self.note_catch_up_exit(now);
+apps/cli/src/tui/streaming/chunking.rs:252:    fn note_catch_up_exit(&mut self, now: Instant) {
+apps/cli/src/tui/streaming/chunking.rs:396:    fn holds_reentry_after_catch_up_exit() {
+apps/cli/src/tui/app_backtrack.rs:654:        .skip(start)
+apps/cli/src/tui/streaming/controller.rs:366:            .map(|s| s.chars().skip(2).collect::<String>())
+apps/desktop/src/data/skills/skill-creator/scripts/run_loop.py:270:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/aggregate_benchmark.py:367:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/improve_description.py:205:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/quick_validate.py:99:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/quick_validate.py:103:    sys.exit(0 if valid else 1)
+apps/desktop/src/data/skills/skill-creator/scripts/package_skill.py:117:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/package_skill.py:130:        sys.exit(0)
+apps/desktop/src/data/skills/skill-creator/scripts/package_skill.py:132:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/scripts/run_eval.py:277:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/eval-viewer/generate_review.py:409:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/eval-viewer/generate_review.py:414:        sys.exit(1)
+apps/desktop/src/data/skills/skill-creator/eval-viewer/generate_review.py:436:        sys.exit(0)
+apps/web/__tests__/api/chat-messages.test.ts:659:      it.skip('should use provided model over conversation default', async () => {
+apps/cli/src/tui/widgets/model_picker.rs:372:        .skip(scroll_offset)
+apps/cli/src/tui/chatwidget.rs:1682:        self.request_immediate_exit();
+apps/cli/src/tui/chatwidget.rs:4125:    fn request_immediate_exit(&self) {
+apps/cli/src/tui/chatwidget.rs:4126:        self.app_event_tx.send(AppEvent::Exit(ExitMode::Immediate));
+apps/cli/src/tui/chatwidget.rs:4135:            .send(AppEvent::Exit(ExitMode::ShutdownFirst));
+apps/cli/src/tui/chatwidget.rs:6092:                    tx.send(AppEvent::Exit(ExitMode::ShutdownFirst));
+apps/cli/src/tui/chatwidget.rs:6181:                    tx.send(AppEvent::Exit(ExitMode::ShutdownFirst));
+apps/extension/build.ts:36:  process.exit(1);
+apps/cli/src/tui/chatwidget/tests.rs:5126:    assert_matches!(rx.try_recv(), Ok(AppEvent::Exit(ExitMode::ShutdownFirst)));
+apps/cli/src/tui/chatwidget/tests.rs:5153:    assert_matches!(rx.try_recv(), Ok(AppEvent::Exit(ExitMode::ShutdownFirst)));
+apps/cli/src/tui/chatwidget/tests.rs:6267:async fn slash_quit_requests_exit() {
+apps/cli/src/tui/chatwidget/tests.rs:6272:    assert_matches!(rx.try_recv(), Ok(AppEvent::Exit(ExitMode::ShutdownFirst)));
+apps/cli/src/tui/chatwidget/tests.rs:6469:async fn slash_exit_requests_exit() {
+apps/cli/src/tui/chatwidget/tests.rs:6474:    assert_matches!(rx.try_recv(), Ok(AppEvent::Exit(ExitMode::ShutdownFirst)));
+apps/cli/src/tui/chatwidget/tests.rs:8606:async fn experimental_features_toggle_saves_on_exit() {
+apps/desktop/e2e/v3-locks.spec.ts:46:    if ((await shell.count()) === 0) test.skip();
+apps/desktop/e2e/chat.spec.ts:11:    test.skip(!(await newChatButton.isVisible()), 'New chat button not available');
+apps/desktop/e2e/chat.spec.ts:19:    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+apps/desktop/e2e/chat.spec.ts:31:    test.skip(!(await conversationsList.isVisible()), 'Conversation list not available');
+apps/desktop/e2e/chat.spec.ts:38:    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
+apps/desktop/e2e/chat.spec.ts:41:    test.skip(!(await pinButton.isVisible()), 'Pin button not present');
+apps/desktop/e2e/chat.spec.ts:49:    test.skip(!(await conversationItem.isVisible()), 'No conversation items available');
+apps/desktop/e2e/chat.spec.ts:53:    test.skip(!(await deleteButton.isVisible()), 'Delete button not present');
+apps/desktop/e2e/chat.spec.ts:68:    test.skip(!(await searchInput.isVisible()), 'Search input not available');
+apps/desktop/e2e/chat.spec.ts:79:    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+apps/desktop/e2e/chat.spec.ts:92:    test.skip(!(await messageItem.isVisible()), 'No messages available to edit');
+apps/desktop/e2e/chat.spec.ts:96:    test.skip(!(await editButton.isVisible()), 'Edit button not present');
+apps/desktop/e2e/chat.spec.ts:112:    test.skip(!(await statsButton.isVisible()), 'Stats button not available');
+apps/desktop/e2e/chat.spec.ts:123:    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+apps/desktop/e2e/chat.spec.ts:156:    test.skip(
+apps/desktop/e2e/chat.spec.ts:166:    test.skip(
+apps/desktop/e2e/chat.spec.ts:201:    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+apps/desktop/e2e/chat.spec.ts:209:    test.skip(!agiVisible, 'AGI submission indicator not implemented');
+apps/desktop/e2e/chat.spec.ts:215:    test.skip(!(await chatInput.isVisible()), 'Chat input not available');
+apps/cli/src/tui/bottom_pane/selection_popup_common.rs:153:                    .skip(start_idx)
+apps/cli/src/tui/bottom_pane/selection_popup_common.rs:351:    for (idx, row) in rows_all.iter().enumerate().skip(start_idx).take(max_items) {
+apps/cli/src/tui/bottom_pane/selection_popup_common.rs:549:    for (i, row) in rows_all.iter().enumerate().skip(start_idx).take(max_items) {
+apps/cli/src/tui/bottom_pane/selection_popup_common.rs:714:        .skip(start_idx)
+apps/cli/src/tui/bottom_pane/selection_popup_common.rs:842:        .skip(start_idx)
+apps/cli/src/tui/bottom_pane/textarea.rs:2249:            boundaries.extend(ta.text().char_indices().map(|(i, _)| i).skip(1));
+apps/cli/src/tui/bottom_pane/textarea.rs:2280:                        b.extend(ta.text().char_indices().map(|(i, _)| i).skip(1));
+apps/desktop/e2e/v3-reachability.spec.ts:46:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:52:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:58:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:66:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:72:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:78:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:84:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:92:    if ((await greet.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:140:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:147:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:154:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:164:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:173:    if ((await shell.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:180:    if ((await shell.count()) === 0) test.skip();
+apps/desktop/e2e/v3-reachability.spec.ts:197:    if ((await el.count()) === 0) test.skip();
+apps/desktop/e2e/agi-safety.spec.ts:15: * `test.skip` calls so CI reports skipped (not falsely-passing) when the AGI
+apps/desktop/e2e/agi-safety.spec.ts:90:  // test.skip inside beforeEach skips the current test.
+apps/desktop/e2e/agi-safety.spec.ts:91:  test.skip(!found, 'AGI section not present in current build — skipping instead of false-passing');
+apps/desktop/e2e/agi-safety.spec.ts:106:      test.skip(true, 'No running goal — iteration counter only shown during execution');
+apps/desktop/e2e/agi-safety.spec.ts:122:      test.skip(true, 'No active goal — iteration progress only shown during execution');
+apps/desktop/e2e/agi-safety.spec.ts:140:      test.skip(
+apps/desktop/e2e/agi-safety.spec.ts:165:      test.skip(true, 'No running goal — elapsed time only shown during execution');
+apps/desktop/e2e/agi-safety.spec.ts:182:      test.skip(true, 'No timeout warning visible — only appears when goal is near time limit');
+apps/desktop/e2e/agi-safety.spec.ts:193:      test.skip(true, 'No timed-out goal in history — requires a past timeout event');
+apps/desktop/e2e/agi-safety.spec.ts:217:      test.skip(true, 'No goal items present');
+apps/desktop/e2e/agi-safety.spec.ts:227:      test.skip(true, 'No failure info — goal may have no failures');
+apps/desktop/e2e/agi-safety.spec.ts:241:      test.skip(true, 'No abandoned goal in history — requires a past consecutive-failure event');
+apps/desktop/e2e/agi-safety.spec.ts:259:      test.skip(true, 'No goal items present');
+apps/desktop/e2e/agi-safety.spec.ts:267:      test.skip(true, 'No steps list visible for this goal');
+apps/desktop/e2e/agi-safety.spec.ts:291:      test.skip(true, 'No running goals — cancel button only shown during execution');
+apps/desktop/e2e/agi-safety.spec.ts:306:      test.skip(true, 'No running goal to cancel');
+apps/desktop/e2e/agi-safety.spec.ts:314:      test.skip(true, 'Cancel button not found on goal item');
+apps/desktop/e2e/agi-safety.spec.ts:330:      test.skip(true, 'Goal submission form not found');
+apps/desktop/e2e/agi-safety.spec.ts:338:      test.skip(true, 'Goal item did not appear after submission');
+apps/desktop/e2e/agi-safety.spec.ts:344:      test.skip(true, 'Could not cancel the submitted goal');
+apps/desktop/e2e/agi-safety.spec.ts:369:      test.skip(true, 'Resource panel not present in current build');
+apps/desktop/e2e/agi-safety.spec.ts:380:      test.skip(true, 'Memory indicator not present in current build');
+apps/desktop/e2e/agi-safety.spec.ts:393:      test.skip(true, 'Resource warning not currently active — depends on system state');
+apps/desktop/e2e/agi-safety.spec.ts:412:      test.skip(true, 'No pending approvals — requires a dangerous operation to be queued');
+apps/desktop/e2e/agi-safety.spec.ts:423:      test.skip(true, 'No pending approval requests — requires a queued dangerous operation');
+apps/desktop/e2e/agi-safety.spec.ts:443:      test.skip(true, 'No pending approval requests');
+apps/desktop/e2e/agi-safety.spec.ts:469:      test.skip(true, 'No running goal — pause button only shown during execution');
+apps/desktop/e2e/agi-safety.spec.ts:484:      test.skip(true, 'No paused goal — resume button only shown for paused goals');
+apps/desktop/e2e/agi-safety.spec.ts:497:      test.skip(true, 'No running goal to pause');
+apps/desktop/e2e/agi-safety.spec.ts:505:      test.skip(true, 'Pause button not found on running goal');
+apps/desktop/e2e/agi-safety.spec.ts:539:      test.skip(
+apps/desktop/e2e/agi-safety.spec.ts:553:      test.skip(true, 'No goal with failures — learning insights only shown for failed steps');
+apps/desktop/e2e/agi-safety.spec.ts:568:      test.skip(true, 'No goal items present');
+apps/desktop/e2e/agi-safety.spec.ts:578:      test.skip(true, 'No corrections/suggestions panel — may require a goal with failures');
+apps/desktop/e2e/v3-smoke.spec.ts:37:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/v3-smoke.spec.ts:45:    if ((await composer.count()) === 0) test.skip();
+apps/desktop/e2e/v3-smoke.spec.ts:51:    if ((await sidebar.count()) === 0) test.skip();
+apps/desktop/e2e/accessibility-audit.spec.ts:174:      test.skip(!(await menuTrigger.count()), 'No menu triggers found');
+apps/desktop/e2e/accessibility-audit.spec.ts:181:      test.skip(!isOpenBefore, 'Menu did not open after clicking trigger');
+apps/desktop/e2e/accessibility-audit.spec.ts:191:      test.skip(!(await selectElement.count()), 'No select elements found');
+apps/desktop/e2e/accessibility-audit.spec.ts:210:      test.skip(!(await inputs.count()), 'No text inputs or textareas found');
+apps/desktop/e2e/visual-regression.spec.ts:162:    test.skip(!newChatVisible, 'New chat button not available');
+apps/desktop/e2e/visual-regression.spec.ts:169:    test.skip(!modalVisible, 'Modal dialog did not appear after clicking new chat');
+apps/desktop/e2e/visual-regression.spec.ts:250:    test.skip(!chatInputVisible, 'Chat input not available');
+apps/desktop/e2e/visual-regression.spec.ts:276:    test.skip(!goalInputVisible, 'AGI goal input not available');
+apps/desktop/e2e/agi.spec.ts:279:    test.skip(!warningVisible, 'Resource warning not present (resources not high)');
+apps/desktop/e2e/settings.spec.ts:88:    test.skip(!cpuVisible, 'Resource limits UI not present in current build');
+apps/desktop/e2e/settings.spec.ts:107:    test.skip(!toggleVisible, 'Autonomous mode toggle not present in current build');
+apps/desktop/e2e/settings.spec.ts:127:    test.skip(!checkboxVisible, 'Auto-approval checkbox not present in current build');
+apps/desktop/e2e/settings.spec.ts:143:    test.skip(!resetButtonVisible, 'Reset button not present in current build');
+apps/desktop/e2e/tests/self-healing.spec.ts:190:      test.skip(
+apps/desktop/e2e/run-tests.sh:195:cleanup_on_exit() {
+apps/desktop/e2e/gdpr.spec.ts:52:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:57:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:63:    test.skip(!visible, 'Export data button not present in current build');
+apps/desktop/e2e/gdpr.spec.ts:69:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:75:    test.skip(toggleCount === 0, 'No privacy toggles found');
+apps/desktop/e2e/gdpr.spec.ts:81:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:87:    test.skip(!visible, 'Telemetry toggle not present in current build');
+apps/desktop/e2e/gdpr.spec.ts:93:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:97:    test.skip(!visible, 'Privacy toggle not present');
+apps/desktop/e2e/gdpr.spec.ts:116:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:121:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:127:    test.skip(!visible, 'Delete data button not present in current build');
+apps/desktop/e2e/gdpr.spec.ts:133:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:139:    test.skip(!visible, 'Delete data button not present');
+apps/desktop/e2e/gdpr.spec.ts:158:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:164:    test.skip(!visible, 'Delete data button not present');
+apps/desktop/e2e/gdpr.spec.ts:175:    test.skip(!hasWarning, 'Irreversibility warning not shown');
+apps/desktop/e2e/gdpr.spec.ts:185:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:190:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:194:    test.skip(!visible, 'Privacy toggle not present');
+apps/desktop/e2e/gdpr.spec.ts:205:    test.skip(!reopened, 'Settings panel not available after reload');
+apps/desktop/e2e/gdpr.spec.ts:207:    test.skip(!privacyReopened, 'Privacy section not available after reload');
+apps/desktop/e2e/gdpr.spec.ts:226:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:231:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:237:    test.skip(!visible, 'Data collection information not present');
+apps/desktop/e2e/gdpr.spec.ts:243:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:249:    test.skip(!visible, 'Data summary not present');
+apps/desktop/e2e/gdpr.spec.ts:265:    test.skip(!visible, 'Clear history button not present');
+apps/desktop/e2e/gdpr.spec.ts:277:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:283:    test.skip(!visible, 'Reset settings button not present');
+apps/desktop/e2e/gdpr.spec.ts:295:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:301:    test.skip(!tabVisible, 'API keys tab not present');
+apps/desktop/e2e/gdpr.spec.ts:308:    test.skip(!hasProtectedKeys, 'No masked API key inputs found');
+apps/desktop/e2e/gdpr.spec.ts:320:    test.skip(!opened, 'Settings panel not available');
+apps/desktop/e2e/gdpr.spec.ts:325:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:331:    test.skip(controlCount === 0, 'No consent controls found');
+apps/desktop/e2e/gdpr.spec.ts:337:    test.skip(!privacyOpened, 'Privacy section not available');
+apps/desktop/e2e/gdpr.spec.ts:341:    test.skip(toggleCount <= 1, 'Single or no privacy toggles — granular control not present');
+apps/cli/src/tui/app_event.rs:8://! Exit is modelled explicitly via `AppEvent::Exit(ExitMode)` so callers can request shutdown-first
+apps/cli/src/tui/app_event.rs:116:    Exit(ExitMode),
+apps/desktop/src-tauri/src/data/database/redis_client.rs:656:    #[ignore]
+apps/desktop/src-tauri/src/data/database/redis_client.rs:669:    #[ignore]
+apps/desktop/src-tauri/src/data/database/redis_client.rs:696:    #[ignore]
+apps/desktop/src-tauri/src/data/database/redis_client.rs:720:    #[ignore]
+apps/desktop/src-tauri/src/data/database/postgres.rs:275:    #[ignore]
+apps/desktop/src-tauri/src/data/database/postgres.rs:285:    #[ignore]
+apps/cli/src/tui/terminal_palette.rs:164:    XTERM_COLORS.into_iter().enumerate().skip(16)
+apps/desktop/src-tauri/src/data/database/postgres_client.rs:435:    #[ignore]
+apps/desktop/src-tauri/src/data/database/postgres_client.rs:449:    #[ignore]
+apps/desktop/src-tauri/src/data/database/mysql_client.rs:761:    #[ignore]
+apps/desktop/src-tauri/src/data/database/mysql_client.rs:774:    #[ignore]
+apps/web/scripts/audit-legacy-keys.ts:69:    process.exit(1);
+apps/web/scripts/audit-legacy-keys.ts:86:    process.exit(1);
+apps/web/scripts/audit-legacy-keys.ts:213:  process.exit(1);
+apps/web/scripts/a11y-audit.mjs:127:    process.exit(0);
+apps/web/scripts/a11y-audit.mjs:130:    process.exit(1);
+apps/web/scripts/a11y-audit.mjs:136:  process.exit(1);
+apps/web/scripts/perf-profile.js:43:  process.exit(1);
+apps/web/scripts/perf-profile.js:51:  process.exit(1);
+apps/web/scripts/perf-profile.js:106:  process.exit(1);
+apps/desktop/src-tauri/src/automation/uia/tests.rs:126:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:243:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:274:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:286:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:298:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:310:    #[ignore]
+apps/desktop/src-tauri/src/automation/uia/tests.rs:359:    #[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:2://! These tests require a display server and are marked with #[ignore] by default.
+apps/desktop/src-tauri/tests/automation_integration.rs:10:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:31:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:54:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:96:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:117:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:138:#[ignore]
+apps/desktop/src-tauri/tests/automation_integration.rs:155:#[ignore]
+apps/desktop/src-tauri/tests/mcp_integration_test.rs:56:    #[ignore] // Requires MCP server to be installed and available
+apps/desktop/src-tauri/tests/mcp_integration_test.rs:85:    #[ignore] // Requires MCP server to be installed and available
+apps/desktop/src-tauri/tests/mcp_integration_test.rs:118:    #[ignore] // Requires MCP server to be installed and available
+apps/desktop/src-tauri/tests/mcp_integration_test.rs:148:    #[ignore] // Requires MCP server to be installed and available
+apps/desktop/src-tauri/tests/mcp_integration_test.rs:180:    #[ignore] // Requires MCP server to be installed and available
+apps/desktop/src-tauri/src/automation/codegen.rs:344:        code.push_str("  process.exit(1);\n");
+apps/desktop/src-tauri/src/automation/screen/ocr.rs:67:    for line in tsv.lines().skip(1) {
+apps/desktop/src-tauri/src/bin/native_messaging_host.rs:14:    let mut args = std::env::args().skip(1);
+apps/desktop/src/__tests__/e2e/windows.spec.ts:13: *   test.skip(process.platform !== 'win32', 'Windows only')
+apps/desktop/src/__tests__/e2e/windows.spec.ts:146:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:201:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:238:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:418:    test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:446:    test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:474:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:604:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:715:    test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:749:  test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:940:    test.skip(process.platform !== 'win32', 'Windows only');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:1001:      test.skip(true, 'Web server not available');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:1036:      test.skip(true, 'Web server not available');
+apps/desktop/src/__tests__/e2e/windows.spec.ts:1076:      test.skip(true, 'Web server not available');
+apps/desktop/src-tauri/src/core/intent/detector.rs:156:            .skip(1)
+apps/desktop/src-tauri/src/features/document/edit_pdf.rs:354:        for path in pdf_paths.iter().skip(1) {
+apps/desktop/src-tauri/src/core/mcp/tests.rs:223:    #[ignore]
+apps/desktop/src-tauri/src/core/mcp/tests.rs:258:    #[ignore]
+apps/desktop/src-tauri/src/core/mcp/registry.rs:683:    /// Marked `#[ignore]` because absolute wall-clock comparisons flake on
+apps/desktop/src-tauri/src/core/mcp/tool_executor.rs:264:        history.iter().skip(skip).cloned().collect()
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:4:// so all methods that require a running display are marked `#[ignore]`.
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:482:    // Tests that require a real display -- marked #[ignore]
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:486:    #[ignore] // Requires a running display / screen capture
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:503:    #[ignore] // Requires a running display
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:517:    #[ignore] // Requires display + OCR feature
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:526:    #[ignore] // Requires display + OCR feature
+apps/desktop/src-tauri/src/core/agent/tests/vision_tests.rs:546:    #[ignore] // Requires a running display
+apps/desktop/src-tauri/src/core/agent/tests/background_agent_tests.rs:1057:    // BackgroundAgentManager (requires AppHandle -- marked #[ignore])
+apps/desktop/src-tauri/src/core/agent/tests/background_agent_tests.rs:1061:    #[ignore] // BackgroundAgentManager::new() requires a Tauri AppHandle
+apps/desktop/src-tauri/src/core/mcp/config.rs:1355:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:180:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:189:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:198:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:241:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:253:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:263:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:279:    #[ignore]
+apps/desktop/src-tauri/src/automation/input/tests.rs:288:    #[ignore]
+apps/desktop/src-tauri/src/core/agent/tests/planner_tests.rs:14://  • Mark tests that would need a live LLM with `#[ignore]`.
+apps/desktop/src-tauri/src/core/agent/tests/planner_tests.rs:626:    // Live LLM tests — marked #[ignore]
+apps/desktop/src-tauri/src/core/agent/tests/planner_tests.rs:630:    #[ignore] // Requires a configured LLM provider
+apps/desktop/src-tauri/src/sys/logging/mod.rs:113:    for entry in log_files.iter().skip(max_files) {
+apps/desktop/src-tauri/src/sys/prompt_enhancement/use_case_detector.rs:260:                    .skip(1)
+apps/desktop/src-tauri/src/sys/prompt_enhancement/api_router.rs:123:            .map(|providers| providers.iter().skip(1).copied().collect())
+apps/desktop/src-tauri/src/sys/prompt_enhancement/api_router.rs:145:        let fallbacks = providers.iter().skip(1).copied().collect();
+apps/desktop/src-tauri/src/sys/error/translator.rs:1049:                result.chars().skip(1).collect::<String>()
+apps/desktop/src-tauri/src/sys/commands/mcp.rs:295:                    .skip(1)
+apps/desktop/src-tauri/src/core/agi/sandbox.rs:882:            code: "import sys; sys.stderr.write('Error message\\n'); sys.exit(1)".to_string(),
+apps/desktop/src-tauri/src/sys/commands/automation.rs:892:    for event in events.into_iter().skip(start) {
+apps/desktop/src-tauri/src/sys/commands/ocr.rs:599:    for line in tsv.lines().skip(1) {
+apps/desktop/src-tauri/src/sys/api/request_template.rs:38:                .skip(1)
+apps/desktop/src-tauri/src/sys/commands/chat/compaction.rs:333:            .skip(1)
+apps/desktop/src-tauri/src/core/agi/orchestrator_examples.rs:370:    #[ignore] // Requires full orchestrator setup with agents
+apps/desktop/src-tauri/src/core/agi/orchestrator_examples.rs:406:    #[ignore] // Requires full orchestrator setup with resource lock
+apps/desktop/src-tauri/src/core/llm/tool_executor/edit_tools.rs:876:    for item in changed.iter_mut().take(max_len).skip(common_len) {
+apps/desktop/src-tauri/src/core/agi/checkpoint_integration_example.rs:32:///         (latest.context, latest.skip_steps)
+apps/desktop/src-tauri/src/core/llm/tests/token_counter_tests.rs:4:// can run in CI without being `#[ignore]`.  We call the production functions
+apps/desktop/src-tauri/src/core/agi/executors/search_executor.rs:211:        for chunk in html.split("<div class=\"snippet ").skip(1) {
+apps/desktop/src-tauri/src/core/agi/tests/tool_integration_tests.rs:968:    // marked with #[ignore] to avoid network calls during regular test runs
+apps/desktop/src-tauri/src/core/llm/tests/routing_logic_tests.rs:17:// [H20] fix: removed permanent `#[ignore]` from 17 routing-decision tests.
+apps/desktop/src-tauri/src/core/llm/providers/ollama.rs:592:    #[ignore]
+apps/desktop/src-tauri/src/core/agi/executors/git_executor.rs:504:        for line in lines.iter().skip(end_idx + 1) {
+apps/desktop/src-tauri/src/core/agi/executors/git_executor.rs:1240:                .skip(1)
+apps/desktop/src-tauri/src/core/artifacts/store.rs:595:                .skip(versions_to_keep)
+apps/desktop/src-tauri/src/sys/commands/notification_center.rs:263:        .skip(start)
+apps/desktop/src-tauri/src/core/artifacts/renderer.rs:357:                    .skip(1)
+apps/desktop/src-tauri/src/sys/commands/code_search.rs:335:                            for (i, item) in lines_vec.iter().enumerate().take(end).skip(start) {
+apps/desktop/src/components/Research/__tests__/ResearchPanel.test.tsx:79:  it.skip('shows mode selector with all options', async () => {
+apps/desktop/src-tauri/src/ui/tray.rs:145:            app.exit(0);

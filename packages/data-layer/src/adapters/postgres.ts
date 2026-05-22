@@ -38,12 +38,12 @@
  *
  * 4. **Pooling:** For multi-tenant traffic >10 RPS per pod, run PgBouncer
  *    in front (`pool_mode = transaction`). RDS Proxy works the same way
- *    on AWS. See `docs/SCALING.md` §"Connection pooling".
+ *    on AWS. See the archived scaling playbook's "Connection pooling" section.
  *
  * 5. **Read replicas:** `pg` supports `read_replica_pool` separately —
  *    route SELECTs there, writes to the primary. The adapter should
  *    expose a `withReadOnly()` helper symmetric to `withUser(jwt)`.
- *    See `docs/SCALING.md` §"Read replicas".
+ *    See the archived scaling playbook's "Read replicas" section.
  *
  * ## Reference implementation sketch
  *
@@ -108,7 +108,7 @@ const MIGRATION_GUIDE = `
 4. Set AGI_DATABASE_URL=postgresql://user:pwd@host:5432/db?sslmode=require.
 5. Replace this skeleton — see the JSDoc reference implementation.
 
-Full guide: docs/SCALING.md §"Self-hosted Postgres / RDS"
+Full guide: docs/archive/2026-05-21-docs-consolidation/SCALING.md §"Self-hosted Postgres / RDS"
 `.trim();
 
 export class PostgresDatabaseAdapter implements DatabaseAdapter {

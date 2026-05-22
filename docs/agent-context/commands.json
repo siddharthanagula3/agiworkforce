@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "lastUpdated": "2026-05-21",
+  "repoWide": {
+    "install": "pnpm install",
+    "lint": "pnpm lint",
+    "lintExtension": "pnpm lint:extension",
+    "typecheckAll": "pnpm typecheck:all",
+    "testAll": "pnpm test",
+    "rustCheck": "cargo check --workspace",
+    "agentContext": "pnpm check:agent-context",
+    "repoOrganization": "pnpm check:repo-organization",
+    "workspaceScripts": "pnpm check:workspace-scripts",
+    "boundaries": "pnpm check:boundaries",
+    "structureConventions": "pnpm check:structure-conventions",
+    "mobileHygiene": "pnpm check:mobile-hygiene",
+    "serviceLayer": "pnpm check:service-layer",
+    "laneOwnership": "pnpm check:lane-ownership",
+    "laneOwnershipScoped": "node scripts/check-lane-ownership.mjs --lane <lane-id> --staged",
+    "laneOwnershipPathPreview": "node scripts/check-lane-ownership.mjs --lane <lane-id> --changed-file <path>",
+    "generatedArtifacts": "pnpm check:generated-artifacts",
+    "reportRetention": "pnpm check:report-retention",
+    "supabaseMigrations": "pnpm check:supabase-migrations",
+    "ciGuardrails": "pnpm check:ci-guardrails",
+    "codeowners": "pnpm check:codeowners",
+    "readmeOwnership": "pnpm check:readme-ownership",
+    "docStatus": "pnpm check:doc-status",
+    "hooks": "pnpm check:hooks",
+    "llmOperability": "pnpm check:llm-operability",
+    "docsCheck": "pnpm docs:check"
+  },
+  "surfaces": {
+    "desktop": {
+      "dev": "pnpm dev:desktop",
+      "typecheck": "pnpm --filter @agiworkforce/desktop typecheck",
+      "test": "pnpm --filter @agiworkforce/desktop test",
+      "build": "pnpm build:desktop"
+    },
+    "web": {
+      "dev": "pnpm --filter @agiworkforce/web dev",
+      "typecheck": "pnpm --filter @agiworkforce/web typecheck",
+      "test": "pnpm --filter @agiworkforce/web test",
+      "build": "pnpm --filter @agiworkforce/web build"
+    },
+    "mobile": {
+      "dev": "pnpm --filter @agiworkforce/mobile dev",
+      "typecheck": "pnpm --filter @agiworkforce/mobile typecheck",
+      "test": "pnpm --filter @agiworkforce/mobile test"
+    },
+    "cli": {
+      "check": "cargo check -p agiworkforce-cli",
+      "test": "cargo test -p agiworkforce-cli --lib",
+      "build": "cargo build --release -p agiworkforce-cli"
+    },
+    "chromeExtension": {
+      "lint": "pnpm lint:extension",
+      "typecheck": "pnpm --filter @agiworkforce/extension typecheck",
+      "test": "pnpm --filter @agiworkforce/extension test",
+      "build": "pnpm --filter @agiworkforce/extension build"
+    },
+    "vscodeExtension": {
+      "typecheck": "pnpm --filter agi-workforce typecheck",
+      "test": "pnpm --filter agi-workforce test",
+      "build": "pnpm --filter agi-workforce build"
+    }
+  }
+}

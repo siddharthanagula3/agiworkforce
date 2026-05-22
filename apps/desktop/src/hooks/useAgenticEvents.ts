@@ -89,23 +89,6 @@ export interface ScreenshotEvent {
   messageId?: string;
 }
 
-interface ExtensionStatusDiagnosticsPayload {
-  status?: string;
-  diagnostics?: {
-    recommendations?: string[];
-    realtime_token?: {
-      valid?: boolean;
-      exists?: boolean;
-      error?: string | null;
-    };
-    native_connection?: {
-      state?: string;
-      extension_id?: string | null;
-      ready?: boolean;
-    };
-  };
-}
-
 export interface SharedListenerContext {
   hookMounts: number;
   listenersInitialized: boolean;
@@ -207,8 +190,7 @@ function runExtensionPreflightCheck(ctx: SharedListenerContext): void {
 
   void (async () => {
     try {
-      const response =
-        (await browserExtension.extensionStatus()) as ExtensionStatusDiagnosticsPayload;
+      const response = await browserExtension.extensionStatus();
       const status = String(response?.status ?? 'unknown');
       const diagnostics = response?.diagnostics;
       const recommendations = diagnostics?.recommendations ?? [];

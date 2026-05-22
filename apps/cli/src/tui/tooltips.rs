@@ -9,11 +9,11 @@ const ANNOUNCEMENT_TIP_URL: &str =
 const IS_MACOS: bool = cfg!(target_os = "macos");
 const IS_WINDOWS: bool = cfg!(target_os = "windows");
 
-const PAID_TOOLTIP: &str = "*New* Try the **AGI Workforce App** with 2x rate limits until *April 2nd*. Run 'agiworkforce app' or visit https://agiworkforce.com?app-landing-page=true";
-const PAID_TOOLTIP_WINDOWS: &str = "*New* Try the **AGI Workforce App**, now available on **Windows**, with 2x rate limits until *April 2nd*. Run 'agiworkforce app' or visit https://agiworkforce.com?app-landing-page=true";
+const PAID_TOOLTIP: &str = "*New* Try the **AGI Workforce App** with 2x rate limits until *April 2nd*. Run 'agi app' or visit https://agiworkforce.com?app-landing-page=true";
+const PAID_TOOLTIP_WINDOWS: &str = "*New* Try the **AGI Workforce App**, now available on **Windows**, with 2x rate limits until *April 2nd*. Run 'agi app' or visit https://agiworkforce.com?app-landing-page=true";
 const PAID_TOOLTIP_NON_MAC: &str = "*New* 2x rate limits until *April 2nd*.";
 const FAST_TOOLTIP: &str = "*New* Use **/fast** to enable our fastest inference at 2X plan usage.";
-const OTHER_TOOLTIP: &str = "*New* Build faster with the **AGI Workforce App**. Run 'agiworkforce app' or visit https://agiworkforce.com?app-landing-page=true";
+const OTHER_TOOLTIP: &str = "*New* Build faster with the **AGI Workforce App**. Run 'agi app' or visit https://agiworkforce.com?app-landing-page=true";
 const OTHER_TOOLTIP_NON_MAC: &str = "*New* Build faster with AGI Workforce.";
 const FREE_GO_TOOLTIP: &str =
     "*New* For a limited time, AGI Workforce is included in your plan for free \u{2013} let’s build together.";
@@ -28,7 +28,7 @@ lazy_static! {
             if line.is_empty() || line.starts_with('#') {
                 return false;
             }
-            if !IS_MACOS && !IS_WINDOWS && line.contains("agiworkforce app") {
+            if !IS_MACOS && !IS_WINDOWS && line.contains("agi app") {
                 return false;
             }
             true

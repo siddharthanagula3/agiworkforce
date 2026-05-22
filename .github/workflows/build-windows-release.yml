@@ -115,6 +115,10 @@ jobs:
           echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV
           pnpm --filter @agiworkforce/desktop run build:web
 
+      - name: Build native messaging host sidecar
+        shell: bash
+        run: pnpm --filter @agiworkforce/desktop run build:native-host
+
       - name: Build Tauri Windows app
         # Builds NSIS installer (.exe) and uploads directly to the GitHub release.
         # OCR feature excluded on Windows (requires Tesseract native library).

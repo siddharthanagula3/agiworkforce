@@ -22,6 +22,7 @@ import {
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/supabaseClients';
+import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -697,6 +698,10 @@ async function streamGoogleResponse(
 router.post(
   '/chat/completions',
   createRateLimiter('llm-completions'),
+  requireManagedComputeEligibility((req) => {
+    const model = typeof req.body?.model === 'string' ? req.body.model : 'unknown';
+    return { provider: resolveProvider(model), model };
+  }),
   async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {

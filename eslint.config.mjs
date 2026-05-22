@@ -39,6 +39,8 @@ export default [
       '**/.claude/worktrees/**',
       '.worktrees/**',
       '**/.worktrees/**',
+      '.remember/**',
+      '**/.remember/**',
       // Root-level utility/test scripts
       'create-account.js',
       'test-*.js',
@@ -525,6 +527,20 @@ export default [
         process: 'readonly',
         console: 'readonly',
         Buffer: 'readonly',
+      },
+    },
+  },
+
+  // Jest manual mocks are CommonJS files even when the package source is ESM.
+  {
+    files: ['**/__mocks__/**/*.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: {
+        jest: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
       },
     },
   },

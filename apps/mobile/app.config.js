@@ -1,6 +1,50 @@
 // app.config.js — dynamic Expo config (replaces app.json).
 // New Architecture is the default in Expo SDK 55 — no explicit newArchEnabled needed.
 /** @type {import('expo/config').ExpoConfig} */
+const appEnv = process.env.APP_ENV || process.env.EXPO_PUBLIC_APP_ENV || 'development';
+
+function envIsTruthy(name) {
+  const value = process.env[name]?.toLowerCase();
+  return value === '1' || value === 'true' || value === 'yes';
+}
+
+// Default behavior:
+// - production/preview-like app-env => keep full entitlement set (Push, SIWA, Siri, Translate).
+// - development app-env => use minimal entitlements for basic dev provisioning.
+const shouldUseProductionEntitlements =
+  envIsTruthy('EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS') ||
+  (appEnv !== 'development' && !envIsTruthy('EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS'));
+
+const iosEntitlements = shouldUseProductionEntitlements
+  ? {
+      // Siri + App Intents: required for Shortcuts app registration and Siri phrase triggers.
+      'com.apple.developer.siri': true,
+      // Apple Translate framework entitlement (required for Translation API on iOS 17.4+).
+      'com.apple.developer.natural-language.translation': true,
+    }
+  : {};
+
+const associatedDomains = shouldUseProductionEntitlements
+  ? ['applinks:agiworkforce.com', 'applinks:www.agiworkforce.com']
+  : [];
+
+const conditionalPlugins = [
+  ...(shouldUseProductionEntitlements
+    ? [
+        'expo-apple-authentication',
+        [
+          'expo-notifications',
+          {
+            icon: './assets/notification-icon.png',
+            color: '#6366f1',
+            androidMode: 'default',
+            mode: appEnv === 'development' ? 'development' : 'production',
+          },
+        ],
+      ]
+    : []),
+];
+
 const config = {
   name: 'AGI Workforce',
   slug: 'agi-workforce',
@@ -20,7 +64,7 @@ const config = {
     buildNumber: '1',
     // AUDIT-FIX: H-11 — declare apex + www so iOS verifies the AASA file on
     // /.well-known/ before any Universal-Link tap is routed to the app.
-    associatedDomains: ['applinks:agiworkforce.com', 'applinks:www.agiworkforce.com'],
+    associatedDomains,
     infoPlist: {
       NSCameraUsageDescription:
         'AGI Workforce uses the camera to scan QR codes for desktop pairing and to send images to AI for analysis.',
@@ -45,10 +89,7 @@ const config = {
       NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
     },
     entitlements: {
-      // Siri + App Intents: required for Shortcuts app registration and Siri phrase triggers.
-      'com.apple.developer.siri': true,
-      // Apple Translate framework entitlement (required for Translation API on iOS 17.4+).
-      'com.apple.developer.natural-language.translation': true,
+      ...iosEntitlements,
     },
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -111,14 +152,8 @@ const config = {
   },
   plugins: [
     'expo-router',
-    'expo-apple-authentication',
     'expo-secure-store',
-    [
-      'expo-av',
-      {
-        microphonePermission: 'Allow $(DISPLAYNAME) to access your microphone for voice chat.',
-      },
-    ],
+    ...conditionalPlugins,
     // AUDIT-FIX: STT-WIRE — on-device speech recognition via iOS Speech
     // framework / Android SpeechRecognizer. Microphone usage description is
     // already declared above; this plugin emits NSSpeechRecognitionUsageDescription
@@ -132,14 +167,6 @@ const config = {
       },
     ],
     'expo-localization',
-    [
-      'expo-notifications',
-      {
-        icon: './assets/notification-icon.png',
-        color: '#6366f1',
-        androidMode: 'default',
-      },
-    ],
     [
       'expo-camera',
       {
@@ -178,6 +205,8 @@ const config = {
     // into the generated ios/<AppName>/ directory and registers them with the Xcode project target.
     // RCT_EXTERN_MODULE bridges auto-register with React Native bridge scanning — no manual list needed.
     './native/ios/withAGINativeModulesIOS.cjs',
+    // iOS local device builds: remove production-only entitlement keys after Expo package plugins run.
+    './native/ios/withAGIDevEntitlements.cjs',
     // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
     // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',

@@ -211,6 +211,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     success,
                                     data,
                                     error,
+                                    session_secret: None,
+                                    timestamp: None,
+                                    mac: None,
                                 };
                                 if let Err(e) = resp_tx_clone.send(resp).await {
                                     tracing::error!(

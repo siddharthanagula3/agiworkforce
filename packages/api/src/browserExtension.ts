@@ -33,6 +33,37 @@ export interface TaskResultResponse {
   acknowledged: boolean;
 }
 
+/**
+ * Diagnostics payload returned by the Tauri `extension_status` command.
+ * Used by Desktop surfaces to render Chrome + VS Code bridge health
+ * (PLAN section 6: "Add Chrome and VS Code bridge status to connector hub").
+ */
+export interface ExtensionStatusDiagnostics {
+  status?: string;
+  version?: string;
+  timestamp?: string;
+  extension_support?: boolean;
+  transport?: {
+    native_messaging?: boolean;
+    websocket_port?: number;
+  };
+  diagnostics?: {
+    recommendations?: string[];
+    realtime_token?: {
+      path?: string;
+      exists?: boolean;
+      valid?: boolean;
+      error?: string | null;
+    };
+    native_connection?: {
+      state?: string;
+      extension_id?: string | null;
+      ready?: boolean;
+    };
+  };
+  commands?: string[];
+}
+
 // ---- Commands ----
 
 export async function extensionPageContext(context: PageContext): Promise<PageContextResponse> {
@@ -44,6 +75,6 @@ export async function extensionAnalyzeForms(data: FormData): Promise<FormAnalysi
 export async function extensionTaskResult(result: TaskResult): Promise<TaskResultResponse> {
   return command<TaskResultResponse>('extension_task_result', { result });
 }
-export async function extensionStatus(): Promise<unknown> {
-  return command<unknown>('extension_status');
+export async function extensionStatus(): Promise<ExtensionStatusDiagnostics> {
+  return command<ExtensionStatusDiagnostics>('extension_status');
 }

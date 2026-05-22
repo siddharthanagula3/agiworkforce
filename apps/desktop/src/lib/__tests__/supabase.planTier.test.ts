@@ -41,7 +41,7 @@ describe('PLAN_DISPLAY_NAMES', () => {
   });
 
   it('uses the canonical display labels for the new tiers', () => {
-    expect(PLAN_DISPLAY_NAMES['local-only']).toBe('Local Only');
-    expect(PLAN_DISPLAY_NAMES.byok).toBe('BYOK');
+    expect(PLAN_DISPLAY_NAMES['local-only']).toBe('Local Mode');
+    expect(PLAN_DISPLAY_NAMES.byok).toBe('Local Mode + BYOK');
   });
 });

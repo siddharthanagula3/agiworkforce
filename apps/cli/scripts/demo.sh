@@ -2,7 +2,7 @@
 # 90-second demo flow for AGI Workforce CLI.
 #
 # Pre-reqs:
-#   * `agiworkforce` on PATH (`cargo install --path apps/cli --bin agiworkforce`)
+#   * `agi` on PATH (`cargo install --path apps/cli --bin agi`)
 #   * Optional: ANTHROPIC_API_KEY / OPENAI_API_KEY for the live happy-path
 #     turn. Without them the --demo synth shows the fallback fire and
 #     surfaces a clean classified error.
@@ -10,7 +10,7 @@
 # Hit Enter at each pause. Recommended capture: asciinema or OBS.
 set -e
 
-CLI=${CLI:-agiworkforce}
+CLI=${CLI:-agi}
 
 pause() { read -r -p "" _; }
 
@@ -53,4 +53,4 @@ echo "Three baked styles, user overrides via ~/.agiworkforce/output-styles/."
 echo "Swap mid-session with /output-style explanatory."
 pause
 
-echo "Done. agiworkforce — the AI CLI that doesn't surprise you."
+echo "Done. agi — the AI CLI that doesn't surprise you."

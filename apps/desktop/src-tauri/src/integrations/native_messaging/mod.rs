@@ -6,6 +6,7 @@
 //! Protocol: https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging
 
 use anyhow::{anyhow, Result};
+use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::sync::Arc;
@@ -204,6 +205,10 @@ pub struct CookieData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NativeRequest {
     pub id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mac: Option<String>,
     pub message: NativeMessage,
 }
 
@@ -216,6 +221,12 @@ pub struct NativeResponse {
     pub data: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub session_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mac: Option<String>,
 }
 
 impl NativeResponse {
@@ -225,6 +236,9 @@ impl NativeResponse {
             success: true,
             data: serde_json::to_value(data).ok(),
             error: None,
+            session_secret: None,
+            timestamp: None,
+            mac: None,
         }
     }
 
@@ -234,7 +248,43 @@ impl NativeResponse {
             success: false,
             data: None,
             error: Some(error.to_string()),
+            session_secret: None,
+            timestamp: None,
+            mac: None,
         }
+    }
+
+    pub fn with_session_secret(mut self, session_secret: impl Into<String>) -> Self {
+        self.session_secret = Some(session_secret.into());
+        self
+    }
+
+    pub fn sign_with_secret(&mut self, secret: &[u8], timestamp: u64) -> Result<()> {
+        type HmacSha256 = Hmac<sha2::Sha256>;
+
+        let body = self.mac_body_json()?;
+        let payload = format!("{}|{}|{}", self.id, timestamp, body);
+        let mut mac =
+            HmacSha256::new_from_slice(secret).map_err(|e| anyhow!("HMAC init failed: {e}"))?;
+        mac.update(payload.as_bytes());
+
+        self.timestamp = Some(timestamp);
+        self.mac = Some(hex::encode(mac.finalize().into_bytes()));
+        Ok(())
+    }
+
+    fn mac_body_json(&self) -> Result<String> {
+        let mut body = format!("{{\"success\":{}", self.success);
+        if let Some(data) = &self.data {
+            body.push_str(",\"data\":");
+            body.push_str(&serde_json::to_string(data)?);
+        }
+        if let Some(error) = &self.error {
+            body.push_str(",\"error\":");
+            body.push_str(&serde_json::to_string(error)?);
+        }
+        body.push('}');
+        Ok(body)
     }
 }
 
@@ -399,5 +449,20 @@ mod tests {
 
         assert_eq!(manifest["name"], "com.agiworkforce.native");
         assert_eq!(manifest["type"], "stdio");
+    }
+
+    #[test]
+    fn test_native_response_signing_adds_strict_envelope() {
+        let mut response =
+            NativeResponse::success("req-1".to_string(), serde_json::json!({"connected": true}))
+                .with_session_secret("00".repeat(32));
+
+        response.sign_with_secret(&[7_u8; 32], 1234).unwrap();
+        let json = serde_json::to_value(&response).unwrap();
+
+        assert_eq!(json["id"], "req-1");
+        assert_eq!(json["timestamp"], 1234);
+        assert_eq!(json["session_secret"], "00".repeat(32));
+        assert_eq!(json["mac"].as_str().unwrap().len(), 64);
     }
 }

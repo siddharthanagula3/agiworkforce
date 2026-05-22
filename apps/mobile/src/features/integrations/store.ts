@@ -1,0 +1,377 @@
+/**
+ * integrationStore.ts
+ *
+ * Manages messaging platform integrations and device integration state.
+ * Extends the existing messagingStore pattern but covers the full set of
+ * platforms: Slack, Teams, Discord, WhatsApp, Telegram, Gmail, Outlook.
+ *
+ * Device integrations (health, calendar, location, notifications) are read
+ * at runtime via the deviceIntegrations / healthData services and stored
+ * here for cross-component sharing without re-checking permissions on every
+ * render.
+ */
+
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import {
+  connectMessagingPlatform,
+  disconnectMessagingPlatform,
+} from '@/src/features/messaging/service';
+import {
+  getCalendarPermissionStatus,
+  getContactsPermissionStatus,
+  type PermissionStatus,
+} from '@/src/features/integrations/services/deviceIntegrations';
+import {
+  isHealthAvailable,
+  getHealthPermissionStatus,
+  type HealthPermissionStatus,
+} from '@/src/features/integrations/services/healthData';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
+import type { MessagingPlatformId } from '@/src/features/integrations/components/PlatformCard';
+
+// ---------------------------------------------------------------------------
+// Platform integration types
+// ---------------------------------------------------------------------------
+
+export interface PlatformIntegration {
+  id: MessagingPlatformId;
+  name: string;
+  connected: boolean;
+  accountName?: string;
+  lastSynced?: string;
+  messageCount?: number;
+  config: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Device integration types
+// ---------------------------------------------------------------------------
+
+export type DeviceIntegrationStatus = 'active' | 'inactive' | 'needs-permission' | 'unavailable';
+
+export interface DeviceIntegration {
+  id: 'health' | 'calendar' | 'contacts' | 'notifications';
+  name: string;
+  status: DeviceIntegrationStatus;
+  lastSync?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Connector types (used by Connectors page)
+// ---------------------------------------------------------------------------
+
+export interface ConnectorState {
+  /** Connector IDs that have been authorized via OAuth */
+  connectedConnectors: Record<string, boolean>;
+  /** Connector IDs that are toggled on (only relevant for connected ones) */
+  enabledConnectors: Record<string, boolean>;
+}
+
+// ---------------------------------------------------------------------------
+// Store shape
+// ---------------------------------------------------------------------------
+
+interface IntegrationState {
+  platforms: PlatformIntegration[];
+  deviceIntegrations: DeviceIntegration[];
+  platformsLoading: boolean;
+  deviceLoading: boolean;
+  error: string | null;
+
+  // Connector state
+  connectedConnectors: Record<string, boolean>;
+  enabledConnectors: Record<string, boolean>;
+
+  fetchPlatforms: () => Promise<void>;
+  connectPlatform: (platformId: string, config?: Record<string, string>) => Promise<void>;
+  disconnectPlatform: (platformId: string) => Promise<void>;
+  checkDeviceIntegrations: () => Promise<void>;
+  clearError: () => void;
+
+  // Connector actions
+  connectConnector: (connectorId: string) => void;
+  disconnectConnector: (connectorId: string) => void;
+  toggleConnector: (connectorId: string, enabled: boolean) => void;
+  isConnectorConnected: (connectorId: string) => boolean;
+  isConnectorEnabled: (connectorId: string) => boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Default platform list — all disconnected on first load
+// ---------------------------------------------------------------------------
+
+const DEFAULT_PLATFORMS: PlatformIntegration[] = [
+  { id: 'slack', name: 'Slack', connected: false, config: {} },
+  { id: 'teams', name: 'Microsoft Teams', connected: false, config: {} },
+  { id: 'discord', name: 'Discord', connected: false, config: {} },
+  { id: 'whatsapp', name: 'WhatsApp', connected: false, config: {} },
+  { id: 'telegram', name: 'Telegram', connected: false, config: {} },
+  { id: 'gmail', name: 'Gmail', connected: false, config: {} },
+  { id: 'outlook', name: 'Outlook', connected: false, config: {} },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function permToStatus(p: PermissionStatus): DeviceIntegrationStatus {
+  switch (p) {
+    case 'granted':
+      return 'active';
+    case 'denied':
+      return 'needs-permission';
+    case 'undetermined':
+      return 'inactive';
+  }
+}
+
+function healthToStatus(h: HealthPermissionStatus): DeviceIntegrationStatus {
+  switch (h) {
+    case 'granted':
+      return 'active';
+    case 'denied':
+      return 'needs-permission';
+    case 'unavailable':
+      return 'unavailable';
+    case 'undetermined':
+      return 'inactive';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Store
+// ---------------------------------------------------------------------------
+
+export const useIntegrationStore = create<IntegrationState>()(
+  persist(
+    (set, get) => ({
+      platforms: DEFAULT_PLATFORMS,
+      deviceIntegrations: [],
+      platformsLoading: false,
+      deviceLoading: false,
+      error: null,
+
+      // Connector state — empty by default, populated as users connect
+      connectedConnectors: {},
+      enabledConnectors: {},
+
+      // ------------------------------------------------------------------
+      // Platforms
+      // ------------------------------------------------------------------
+
+      fetchPlatforms: async () => {
+        set({ platformsLoading: true, error: null });
+        try {
+          // The API only returns whatsapp/telegram/slack today.
+          // Merge server state; newer platforms default to disconnected.
+          // We intentionally don't call getMessagingConfig() because that
+          // returns the narrow 3-platform shape — the store manages the
+          // broader list locally until the API is extended.
+          const existing = get().platforms;
+          set({ platforms: existing });
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to load platform connections',
+          });
+        } finally {
+          set({ platformsLoading: false });
+        }
+      },
+
+      connectPlatform: async (platformId, config = {}) => {
+        set({ platformsLoading: true, error: null });
+        try {
+          await connectMessagingPlatform(platformId, config);
+          set((state) => ({
+            platforms: state.platforms.map((p) =>
+              p.id === platformId
+                ? {
+                    ...p,
+                    connected: true,
+                    lastSynced: new Date().toISOString(),
+                    config,
+                  }
+                : p,
+            ),
+          }));
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to connect platform',
+          });
+          throw err;
+        } finally {
+          set({ platformsLoading: false });
+        }
+      },
+
+      disconnectPlatform: async (platformId) => {
+        set({ platformsLoading: true, error: null });
+        try {
+          await disconnectMessagingPlatform(platformId);
+          set((state) => ({
+            platforms: state.platforms.map((p) =>
+              p.id === platformId
+                ? {
+                    ...p,
+                    connected: false,
+                    accountName: undefined,
+                    lastSynced: undefined,
+                    messageCount: undefined,
+                    config: {},
+                  }
+                : p,
+            ),
+          }));
+        } catch (err) {
+          set({
+            error: err instanceof Error ? err.message : 'Failed to disconnect platform',
+          });
+        } finally {
+          set({ platformsLoading: false });
+        }
+      },
+
+      // ------------------------------------------------------------------
+      // Device integrations
+      // ------------------------------------------------------------------
+
+      checkDeviceIntegrations: async () => {
+        set({ deviceLoading: true, error: null });
+        try {
+          const [calStat, contactsStat, notifResult] = await Promise.all([
+            getCalendarPermissionStatus().catch(() => 'undetermined' as PermissionStatus),
+            getContactsPermissionStatus().catch(() => 'undetermined' as PermissionStatus),
+            Notifications.getPermissionsAsync().catch(
+              () =>
+                ({
+                  status: 'undetermined' as Notifications.PermissionStatus,
+                }) as Notifications.NotificationPermissionsStatus,
+            ),
+          ]);
+
+          const notifPerm = notifResult.status as Notifications.PermissionStatus;
+
+          const healthStat = isHealthAvailable()
+            ? await getHealthPermissionStatus()
+            : 'unavailable';
+
+          const now = new Date().toISOString();
+
+          const next: DeviceIntegration[] = [
+            {
+              id: 'health',
+              name: Platform.OS === 'ios' ? 'Apple Health' : 'Google Fit',
+              status: healthToStatus(healthStat as HealthPermissionStatus),
+              lastSync: healthStat === 'granted' ? now : undefined,
+            },
+            {
+              id: 'calendar',
+              name: Platform.OS === 'ios' ? 'Apple Calendar' : 'Google Calendar',
+              status: permToStatus(calStat),
+              lastSync: calStat === 'granted' ? now : undefined,
+            },
+            {
+              id: 'contacts',
+              name: 'Contacts',
+              status: permToStatus(contactsStat),
+              lastSync: contactsStat === 'granted' ? now : undefined,
+            },
+            {
+              id: 'notifications',
+              name: 'Notifications',
+              status:
+                notifPerm === Notifications.PermissionStatus.GRANTED
+                  ? 'active'
+                  : notifPerm === Notifications.PermissionStatus.DENIED
+                    ? 'needs-permission'
+                    : 'inactive',
+            },
+          ];
+
+          set({ deviceIntegrations: next });
+        } catch (err) {
+          console.warn('[integrationStore] checkDeviceIntegrations failed:', err);
+          set({
+            error: err instanceof Error ? err.message : 'Failed to check device integrations',
+          });
+        } finally {
+          set({ deviceLoading: false });
+        }
+      },
+
+      // ------------------------------------------------------------------
+      // Connectors (Cloud Storage, Productivity, Communication, Email)
+      // ------------------------------------------------------------------
+
+      connectConnector: (connectorId) => {
+        set((state) => ({
+          connectedConnectors: { ...state.connectedConnectors, [connectorId]: true },
+          enabledConnectors: { ...state.enabledConnectors, [connectorId]: true },
+        }));
+      },
+
+      disconnectConnector: (connectorId) => {
+        set((state) => {
+          const { [connectorId]: _c, ...restConnected } = state.connectedConnectors;
+          const { [connectorId]: _e, ...restEnabled } = state.enabledConnectors;
+          return {
+            connectedConnectors: restConnected,
+            enabledConnectors: restEnabled,
+          };
+        });
+      },
+
+      toggleConnector: (connectorId, enabled) => {
+        set((state) => ({
+          enabledConnectors: { ...state.enabledConnectors, [connectorId]: enabled },
+        }));
+      },
+
+      isConnectorConnected: (connectorId) => {
+        return !!get().connectedConnectors[connectorId];
+      },
+
+      isConnectorEnabled: (connectorId) => {
+        return !!get().enabledConnectors[connectorId];
+      },
+
+      clearError: () => set({ error: null }),
+    }),
+    {
+      name: 'integration-store',
+      storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE
+      skipHydration: true,
+      onRehydrateStorage: () => (_state, error) => {
+        if (error) console.warn('[integrationStore] Hydration failed:', error);
+      },
+      partialize: (state) => ({
+        // MED-MOB-06 fix (2026-05-04): platform `config` (which holds apiKey /
+        // token for Slack, Telegram, etc.) must NOT be stored in MMKV. MMKV is
+        // encrypted at rest but the key lives in Keychain with
+        // WHEN_UNLOCKED_THIS_DEVICE_ONLY — after-first-unlock malware can read
+        // it. Third-party integration tokens are re-fetched from the backend on
+        // connectPlatform() and are not persisted locally.
+        //
+        // We persist only non-secret connection metadata (id, name, connected,
+        // accountName, lastSynced, messageCount) and strip config entirely.
+        platforms: state.platforms.map(({ config: _config, ...rest }) => ({
+          ...rest,
+          config: {} as Record<string, string>,
+        })),
+        connectedConnectors: state.connectedConnectors,
+        enabledConnectors: state.enabledConnectors,
+      }),
+    },
+  ),
+);
+
+// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
+// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
+// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
+whenMmkvReady(() => {
+  useIntegrationStore.persist.rehydrate();
+});

@@ -115,9 +115,7 @@ pub fn handle_request(
         "discover" => A2aResponse {
             jsonrpc: "2.0".into(),
             id: req.id,
-            result: Some(
-                serde_json::to_value(self_card).unwrap_or(serde_json::json!({})),
-            ),
+            result: Some(serde_json::to_value(self_card).unwrap_or(serde_json::json!({}))),
             error: None,
         },
         "list_peers" => A2aResponse {
@@ -156,9 +154,7 @@ pub fn handle_request(
             A2aResponse {
                 jsonrpc: "2.0".into(),
                 id: req.id,
-                result: Some(
-                    serde_json::to_value(resp).unwrap_or(serde_json::json!({})),
-                ),
+                result: Some(serde_json::to_value(resp).unwrap_or(serde_json::json!({}))),
                 error: None,
             }
         }
@@ -204,8 +200,7 @@ mod tests {
         let me = card();
         let resp = handle_request(req("discover", serde_json::json!({})), &reg, &me);
         assert!(resp.error.is_none());
-        let parsed: AgentCard =
-            serde_json::from_value(resp.result.unwrap()).unwrap();
+        let parsed: AgentCard = serde_json::from_value(resp.result.unwrap()).unwrap();
         assert_eq!(parsed.id, "agi-1");
     }
 
@@ -220,10 +215,8 @@ mod tests {
             id: "peer-2".into(),
             ..card()
         });
-        let resp =
-            handle_request(req("list_peers", serde_json::json!({})), &reg, &card());
-        let peers: Vec<AgentCard> =
-            serde_json::from_value(resp.result.unwrap()).unwrap();
+        let resp = handle_request(req("list_peers", serde_json::json!({})), &reg, &card());
+        let peers: Vec<AgentCard> = serde_json::from_value(resp.result.unwrap()).unwrap();
         assert_eq!(peers.len(), 2);
     }
 
@@ -243,8 +236,7 @@ mod tests {
             &me,
         );
         assert!(resp.error.is_none());
-        let parsed: TaskResponse =
-            serde_json::from_value(resp.result.unwrap()).unwrap();
+        let parsed: TaskResponse = serde_json::from_value(resp.result.unwrap()).unwrap();
         assert_eq!(parsed.state, TaskState::Accepted);
         assert_eq!(parsed.id, "task-1");
     }
@@ -267,8 +259,7 @@ mod tests {
     fn unknown_method_returns_method_not_found() {
         let reg = PeerRegistry::new();
         let me = card();
-        let resp =
-            handle_request(req("bogus/method", serde_json::json!({})), &reg, &me);
+        let resp = handle_request(req("bogus/method", serde_json::json!({})), &reg, &me);
         let err = resp.error.unwrap();
         assert_eq!(err.code, -32601);
     }

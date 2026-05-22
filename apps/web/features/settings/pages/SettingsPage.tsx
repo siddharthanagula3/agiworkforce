@@ -36,7 +36,13 @@ import { Switch } from '@shared/ui/switch';
 import { Separator } from '@shared/ui/separator';
 import { toast } from 'sonner';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { PLAN_LABEL, PLAN_DESCRIPTION, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import {
+  PLAN_LABEL,
+  PLAN_DESCRIPTION,
+  formatPrivacyModeLabel,
+  isFreePlan,
+  type UIPlanTier,
+} from '@agiworkforce/types';
 import { AdvancedModeToggle } from '@features/settings/components/AdvancedModeToggle';
 
 // ---------------------------------------------------------------------------
@@ -371,22 +377,26 @@ function PrivacyDataTab() {
         <CardContent className="space-y-3 text-sm text-muted-foreground">
           <div className="rounded-lg border border-border/50 p-3 space-y-2">
             <p>
-              <span className="font-medium text-foreground">Cloud Mode:</span> Conversations and
-              settings are stored in{' '}
+              <span className="font-medium text-foreground">
+                {formatPrivacyModeLabel('managed')} Mode:
+              </span>{' '}
+              Conversations and settings are stored in{' '}
               <span className="font-medium text-foreground">
                 Supabase (AWS us-east-2 · Ohio, USA)
               </span>
               .
             </p>
             <p>
-              <span className="font-medium text-foreground">Local Mode:</span> All data stays on
-              your device. Nothing is transmitted to our servers.
+              <span className="font-medium text-foreground">
+                {formatPrivacyModeLabel('local')} Mode:
+              </span>{' '}
+              All data stays on your device. Nothing is transmitted to our servers.
             </p>
           </div>
           <p className="text-xs">
             <span className="font-medium text-amber-400">EU Residents:</span> We do not currently
             offer EU-region data storage. If you require data to remain within the EEA, use Local
-            Mode until an EU region is available.{' '}
+            {formatPrivacyModeLabel('local')} Mode until an EU region is available.{' '}
             <a href="/privacy#7" className="text-blue-400 hover:underline">
               Learn more in our Privacy Policy.
             </a>

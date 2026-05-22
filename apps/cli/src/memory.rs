@@ -409,10 +409,7 @@ fn parse_kind_field(frontmatter: &str) -> Option<MemoryKind> {
         let trimmed = line.trim();
         if let Some(value) = trimmed.strip_prefix("kind:") {
             // Strip surrounding quotes if any.
-            let cleaned = value
-                .trim()
-                .trim_matches('"')
-                .trim_matches('\'');
+            let cleaned = value.trim().trim_matches('"').trim_matches('\'');
             return MemoryKind::parse(cleaned);
         }
     }

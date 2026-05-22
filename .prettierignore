@@ -4,5 +4,15 @@ out
 node_modules
 coverage
 apps/desktop/src-tauri
+target
+.cache
+.remember
+docs/archive
+reports
+tasks/research
+audit/reports
+audit/reference-cli-deep-audit/ledgers
+apps/mobile/ios/Pods
+apps/web/next-env.d.ts
 
 exhaustive_inventory.md

@@ -2,11 +2,23 @@
 
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
 
 // Types
 export interface MessageMetadata {
+  /** Explicit trust-boundary labels for cross-mode handoff and persisted evidence. */
+  privacyMode?: 'local' | 'byok' | 'managed';
+  providerMode?: 'Local' | 'DirectByok' | 'ManagedGateway' | 'ManagedNative';
+  /** Provider model label when persisted with metadata rather than the top-level message. */
+  model?: string;
+  /** Local -> BYOK handoff evidence persisted on the fork system message. */
+  handoffDraftId?: string;
+  handoffPreviewHashSha256?: string;
+  handoffSourceConversationId?: string;
   /** Raw extended thinking text rendered by ThinkingBlock */
   thinkingContent?: string;
+  /** Collapsible thinking summary steps rendered by assistant messages. */
+  thinkingSteps?: string[];
   /** True while thinking content is still streaming */
   isThinkingStreaming?: boolean;
   /** ISO timestamp when thinking started */
@@ -19,6 +31,8 @@ export interface MessageMetadata {
   searchResults?: Array<{ url: string; title: string; snippet: string }>;
   /** True while server-managed code execution is running */
   isExecutingCode?: boolean;
+  /** Tool activity timeline rendered below assistant messages. */
+  tools?: MessageToolEntry[];
   /** Code execution result from server-managed code_execution_20260120 tool */
   codeExecutionResult?: {
     stdout: string;
@@ -26,8 +40,24 @@ export interface MessageMetadata {
     returnCode: number;
     images?: Array<{ mediaType: string; data: string }>;
   };
+  /** Generated-file provenance for artifact workbench rendering. */
+  computeSession?: ComputeSession;
+  generatedFile?: GeneratedFile;
+  artifactManifest?: ArtifactManifest;
+  documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in Supabase messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
+}
+
+export interface MessageToolEntry {
+  id?: string;
+  name: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  durationMs?: number;
+  args?: string;
+  parameters?: Record<string, unknown>;
+  parallelGroup?: string;
+  error?: string;
 }
 
 export interface Message {
@@ -67,6 +97,7 @@ export interface Conversation {
   title: string;
   createdAt: string;
   updatedAt: string;
+  model?: string | null;
   messageCount?: number;
 }
 
@@ -145,6 +176,7 @@ interface ChatState {
     results: Array<{ url: string; title: string; snippet: string }>,
   ) => void;
   setExecutingCode: (id: string, isExecuting: boolean) => void;
+  setToolTimeline: (id: string, tools: MessageToolEntry[]) => void;
   setCodeExecutionResult: (
     id: string,
     result: NonNullable<MessageMetadata['codeExecutionResult']>,
@@ -334,6 +366,17 @@ export const useChatStore = create<ChatState>()(
             }),
             undefined,
             'chat/setExecutingCode',
+          ),
+
+        setToolTimeline: (id, tools) =>
+          set(
+            (state) => ({
+              messages: state.messages.map((m) =>
+                m.id === id ? { ...m, metadata: { ...m.metadata, tools } } : m,
+              ),
+            }),
+            undefined,
+            'chat/setToolTimeline',
           ),
 
         setCodeExecutionResult: (id, result) =>

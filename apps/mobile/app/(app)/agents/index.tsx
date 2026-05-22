@@ -6,10 +6,10 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FlashList } from '@shopify/flash-list';
 import { ArrowLeft, Bot } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { AgentCard } from '@/components/agents/AgentCard';
+import { AgentCard } from '@/src/features/agents/components/AgentCard';
 import { useAgentStore } from '@/stores/agentStore';
 import { useConnectionStore } from '@/stores/connectionStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 
 export default function AgentsScreen() {
   const router = useRouter();

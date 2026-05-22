@@ -14,22 +14,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type FlashMode } from 'expo-camera';
 import { useRouter } from 'expo-router';
-import {
-  X,
-  Zap,
-  ZapOff,
-  Send,
-  RotateCcw,
-  ScanText,
-  Copy,
-} from 'lucide-react-native';
+import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
-import { useModelStore } from '@/stores/modelStore';
-import { recognizeText, type OcrRegion } from '@/services/ocr';
+import { useModelStore } from '@/src/features/model-picker/store';
+import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -461,15 +453,7 @@ function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
           return null;
         }
 
-        return (
-          <View
-            key={i}
-            style={[
-              styles.ocrRect,
-              { left, top, width, height },
-            ]}
-          />
-        );
+        return <View key={i} style={[styles.ocrRect, { left, top, width, height }]} />;
       })}
     </View>
   );

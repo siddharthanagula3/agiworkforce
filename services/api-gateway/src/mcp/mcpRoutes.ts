@@ -18,7 +18,7 @@ import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
-import { getMcpProxySync, McpProxyError } from './mcpProxy';
+import { getMcpProxy, McpProxyError } from './mcpProxy';
 import { getServerEntry } from './mcpConfig';
 
 const router: Router = Router();
@@ -48,12 +48,13 @@ const toolNameParamSchema = z.string().min(1).max(200);
 // HELPERS
 // =============================================================================
 
-function getProxy() {
-  const proxy = getMcpProxySync();
-  if (!proxy) {
+async function getProxy() {
+  try {
+    return await getMcpProxy();
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize MCP proxy');
     throw new AppError('MCP proxy is not initialized', 503);
   }
-  return proxy;
 }
 
 function validateServerId(serverId: string | undefined): string {
@@ -83,7 +84,7 @@ function validateToolName(toolName: string | undefined): string {
  * SECURITY: Rate limited to 30/min (read-only list operation)
  */
 router.get('/servers', createRateLimiter('mcp-list'), async (_req: Request, res: Response) => {
-  const proxy = getProxy();
+  const proxy = await getProxy();
   const servers = proxy.listServers();
 
   res.json({
@@ -107,7 +108,7 @@ router.get(
   '/servers/:serverId/tools',
   createRateLimiter('mcp-list'),
   async (req: Request<{ serverId: string }>, res: Response) => {
-    const proxy = getProxy();
+    const proxy = await getProxy();
     const serverId = validateServerId(req.params.serverId);
 
     // Verify server exists in config
@@ -150,7 +151,7 @@ router.post(
   '/servers/:serverId/tools/:toolName/call',
   createRateLimiter('mcp-call'),
   async (req: Request<{ serverId: string; toolName: string }>, res: Response) => {
-    const proxy = getProxy();
+    const proxy = await getProxy();
     const serverId = validateServerId(req.params.serverId);
     const toolName = validateToolName(req.params.toolName);
     const user = req.user;

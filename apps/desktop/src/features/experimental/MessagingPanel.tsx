@@ -1,15 +1,21 @@
 import { invoke } from '@/lib/tauri-mock';
 import { MessageSquare, Plus, RefreshCcw, Send, Trash2, Wifi, WifiOff } from 'lucide-react';
-import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { ErrorBoundary } from '@/features/error-handling';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '../ui/Button';
-import { Input } from '../ui/Input';
-import { ScrollArea } from '../ui/ScrollArea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/Select';
-import { Separator } from '../ui/Separator';
-import { Textarea } from '../ui/Textarea';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { ScrollArea } from '@/components/ui/ScrollArea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/Select';
+import { Separator } from '@/components/ui/Separator';
+import { Textarea } from '@/components/ui/Textarea';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -43,6 +43,7 @@
 
 import { closeProfile, openProfile } from './profile';
 import { clearSnapshotRefs, resolveRef, takeSnapshot } from './snapshot';
+import type { ComputerAction } from '@agiworkforce/types';
 import type { BrowserAction, BrowserToolResult, BrowserSnapshot } from './types';
 
 // AUDIT-FIX: H-4 — typed error for refused navigation schemes.
@@ -83,6 +84,122 @@ export interface BrowserToolConfig {
    * implement their own approval / allow-list / domain-block layer.
    */
   allowEvaluate?: boolean;
+}
+
+export interface ComputerActionBrowserConfig extends BrowserToolConfig {
+  /**
+   * Browser profile used when the canonical action does not include
+   * `args.profile`. Defaults to the isolated `agiworkforce` profile.
+   */
+  defaultProfile?: string;
+}
+
+export type ComputerActionBrowserMapping =
+  | { ok: true; action: BrowserAction }
+  | { ok: false; reason: string };
+
+/**
+ * Convert the suite-level `ComputerAction` protocol into this package's
+ * Playwright browser action subset.
+ *
+ * The mapping is intentionally conservative: browser-safe actions map to
+ * `BrowserAction`; desktop-only or approval-only actions return an explicit
+ * unsupported result. Callers should route those to Desktop/native computer
+ * use rather than guessing in the browser runner.
+ */
+export function computerActionToBrowserAction(
+  action: ComputerAction,
+  config: ComputerActionBrowserConfig = {},
+): ComputerActionBrowserMapping {
+  const profile = stringArg(action, 'profile') ?? config.defaultProfile;
+
+  switch (action.kind) {
+    case 'open_url': {
+      const url = stringArg(action, 'url') ?? action.target;
+      if (!url) return unsupportedComputerAction(action, 'missing target URL');
+      return {
+        ok: true,
+        action: { kind: 'navigate', url, profile, waitFor: waitForArg(action) },
+      };
+    }
+    case 'click': {
+      const ref = stringArg(action, 'ref') ?? action.target;
+      if (ref) {
+        return {
+          ok: true,
+          action: { kind: 'click', ref, profile, button: buttonArg(action) },
+        };
+      }
+
+      const x = numberArg(action, 'x');
+      const y = numberArg(action, 'y');
+      if (x !== undefined && y !== undefined) {
+        return { ok: true, action: { kind: 'clickCoords', x, y, profile } };
+      }
+
+      return unsupportedComputerAction(action, 'missing target ref or x/y coordinates');
+    }
+    case 'type_text': {
+      const ref = stringArg(action, 'ref') ?? action.target;
+      const text = stringArg(action, 'text') ?? stringArg(action, 'value');
+      if (!ref) return unsupportedComputerAction(action, 'missing target ref');
+      if (text === undefined) return unsupportedComputerAction(action, 'missing text argument');
+      return {
+        ok: true,
+        action: { kind: 'type', ref, text, profile, submit: boolArg(action, 'submit') },
+      };
+    }
+    case 'press_key': {
+      const key = stringArg(action, 'key') ?? action.target;
+      if (!key) return unsupportedComputerAction(action, 'missing key argument');
+      return { ok: true, action: { kind: 'press', key, profile } };
+    }
+    case 'screenshot':
+      return {
+        ok: true,
+        action: { kind: 'screenshot', profile, fullPage: boolArg(action, 'fullPage') },
+      };
+    case 'scroll':
+    case 'drag':
+    case 'download_file':
+    case 'approve_tool':
+    case 'reject_tool':
+      return unsupportedComputerAction(
+        action,
+        'action requires a native desktop, extension, or approval runner',
+      );
+  }
+}
+
+/**
+ * Execute a canonical suite-level `ComputerAction` through the browser runner.
+ */
+export async function runComputerAction(
+  action: ComputerAction,
+  config: ComputerActionBrowserConfig = {},
+): Promise<BrowserToolResult> {
+  if (!isRunnableComputerAction(action)) {
+    return errorResult(
+      `ComputerAction ${action.id} is not runnable from status "${action.status}"` +
+        (action.requiresApproval ? ' without approval' : ''),
+    );
+  }
+
+  const mapped = computerActionToBrowserAction(action, config);
+  if (!mapped.ok) return errorResult(mapped.reason);
+
+  const result = await runBrowserAction(mapped.action, config);
+  return {
+    ...result,
+    details: {
+      ...(result.details ?? {}),
+      computerAction: {
+        id: action.id,
+        sessionId: action.sessionId,
+        kind: action.kind,
+      },
+    },
+  };
 }
 
 /**
@@ -239,6 +356,54 @@ function errorResult(message: string): BrowserToolResult {
     isError: true,
     content: [{ type: 'text', text: message }],
   };
+}
+
+function unsupportedComputerAction(
+  action: ComputerAction,
+  reason: string,
+): ComputerActionBrowserMapping {
+  return {
+    ok: false,
+    reason: `ComputerAction "${action.kind}" cannot run in browser-tool: ${reason}`,
+  };
+}
+
+function isRunnableComputerAction(action: ComputerAction): boolean {
+  if (action.status === 'completed' || action.status === 'failed' || action.status === 'rejected') {
+    return false;
+  }
+
+  if (!action.requiresApproval) return true;
+  return action.status === 'approved' || action.status === 'running';
+}
+
+function stringArg(action: ComputerAction, key: string): string | undefined {
+  const value = action.args?.[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function numberArg(action: ComputerAction, key: string): number | undefined {
+  const value = action.args?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function boolArg(action: ComputerAction, key: string): boolean | undefined {
+  const value = action.args?.[key];
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function buttonArg(action: ComputerAction): 'left' | 'right' | 'middle' | undefined {
+  const value = stringArg(action, 'button');
+  if (value === 'left' || value === 'right' || value === 'middle') return value;
+  return undefined;
+}
+
+function waitForArg(
+  action: ComputerAction,
+): 'load' | 'domcontentloaded' | 'networkidle' | undefined {
+  const value = stringArg(action, 'waitFor');
+  if (value === 'load' || value === 'domcontentloaded' || value === 'networkidle') return value;
+  return undefined;
 }
 
 function formatSnapshot(snap: BrowserSnapshot): string {

@@ -53,8 +53,7 @@ impl CommandPopup {
             self.all
                 .iter()
                 .filter(|c| {
-                    c.name.to_lowercase().contains(&q)
-                        || c.description.to_lowercase().contains(&q)
+                    c.name.to_lowercase().contains(&q) || c.description.to_lowercase().contains(&q)
                 })
                 .collect()
         }
@@ -68,7 +67,8 @@ impl CommandPopup {
 
 impl InteractiveView for CommandPopup {
     fn render(&self) -> String {
-        let mut out = String::from("┌─ Commands ─────────────────────────────────────────────────┐\n");
+        let mut out =
+            String::from("┌─ Commands ─────────────────────────────────────────────────┐\n");
         let filter_line = format!("  /{}", self.filter);
         out.push_str(&format!("│ {filter_line:<59}│\n"));
         out.push_str("│ ──────────────────────────────────────────────────────────  │\n");
@@ -78,7 +78,11 @@ impl InteractiveView for CommandPopup {
             out.push_str("│  (no matching commands)                                    │\n");
         } else {
             for (i, cmd) in items.iter().enumerate() {
-                let cursor = if i == self.state.cursor() { "❯ " } else { "  " };
+                let cursor = if i == self.state.cursor() {
+                    "❯ "
+                } else {
+                    "  "
+                };
                 let row = format!("{cursor}/{} — {}", cmd.name, cmd.description);
                 out.push_str(&format!("│ {row:<59}│\n"));
             }
@@ -119,10 +123,15 @@ impl InteractiveView for CommandPopup {
             other => {
                 // Only forward navigation keys; ignore others
                 match other {
-                    KeyAction::Up | KeyAction::Down | KeyAction::PageUp | KeyAction::PageDown
-                    | KeyAction::Home | KeyAction::End => {
-                        self.state.handle_list_key(other).unwrap_or(ViewAction::Continue)
-                    }
+                    KeyAction::Up
+                    | KeyAction::Down
+                    | KeyAction::PageUp
+                    | KeyAction::PageDown
+                    | KeyAction::Home
+                    | KeyAction::End => self
+                        .state
+                        .handle_list_key(other)
+                        .unwrap_or(ViewAction::Continue),
                     _ => ViewAction::Continue,
                 }
             }

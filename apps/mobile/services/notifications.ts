@@ -349,8 +349,8 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       // Critical: deep link to agent detail or companion dashboard
       if (isValidAgentId(data.agentId)) {
         safeNavigate({
-          pathname: '/(app)/companion/agent/[agentId]' as const,
-          params: { agentId: data.agentId },
+          pathname: '/(app)/companion/agent/[id]' as const,
+          params: { id: data.agentId },
         });
       } else {
         if (data.agentId) {
@@ -370,8 +370,8 @@ function handleNotificationResponse(response: Notifications.NotificationResponse
       // Navigate to agent detail if we have a valid agentId
       if (isValidAgentId(data.agentId)) {
         safeNavigate({
-          pathname: '/(app)/companion/agent/[agentId]' as const,
-          params: { agentId: data.agentId },
+          pathname: '/(app)/companion/agent/[id]' as const,
+          params: { id: data.agentId },
         });
       } else {
         if (data.agentId) {

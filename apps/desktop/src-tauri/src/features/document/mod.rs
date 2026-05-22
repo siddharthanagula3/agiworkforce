@@ -5,6 +5,7 @@ use std::path::Path;
 use crate::sys::error::{Error, Result};
 
 pub mod excel;
+pub mod generated_file_manifest;
 pub mod pdf;
 pub mod word;
 
@@ -102,6 +103,10 @@ pub use create_excel::{ExcelCell, ExcelDocumentConfig, ExcelDocumentCreator, Exc
 pub use create_pdf::{PdfContent, PdfDocumentConfig, PdfDocumentCreator};
 pub use create_powerpoint::{PresentationConfig, PresentationCreator, PresentationSlide};
 pub use create_word::{WordContent, WordDocumentConfig, WordDocumentCreator};
+pub use generated_file_manifest::{
+    build_generated_document_manifest, GeneratedDocumentArtifactManifest, GeneratedDocumentBundle,
+    GeneratedDocumentComputeSession, GeneratedDocumentFile, GeneratedDocumentKind,
+};
 
 pub use edit_excel::{ExcelEdit, ExcelEditor};
 pub use edit_pdf::{PdfEdit, PdfEditor};

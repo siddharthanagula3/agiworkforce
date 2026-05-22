@@ -13,31 +13,63 @@ const mockAndroidModule = {
   isThermallyThrottled: jest.fn(),
 };
 
-jest.mock('react-native', () => ({
-  NativeModules: {
-    AGIFoundationModels: mockIosModule,
-    AGIAICore: mockAndroidModule,
-  },
-  NativeEventEmitter: jest.fn().mockImplementation(() => ({
-    addListener: jest.fn(() => ({ remove: jest.fn() })),
-  })),
-  Platform: { OS: 'ios' },
-}));
+let localLlmModule: typeof import('@agiworkforce/local-llm');
+const getLocalLlm = () => localLlmModule;
 
-/* eslint-disable @typescript-eslint/no-require-imports */
-const {
-  getModelById,
-  getShippableModels,
-  getModelsForRole,
-} = require('@agiworkforce/local-llm/src/catalog');
-const { detectCapabilities } = require('@agiworkforce/local-llm/src/capabilities');
-/* eslint-enable @typescript-eslint/no-require-imports */
+const loadLocalLlmModule = () => {
+  const moduleRef: typeof import('@agiworkforce/local-llm') = (() => {
+    jest.resetModules();
+    (global as { nativeModuleProxy?: Record<string, unknown> }).nativeModuleProxy = {
+      AGIFoundationModels: mockIosModule,
+      AGIAICore: mockAndroidModule,
+      PlatformConstants: {
+        getConstants: () => ({
+          isTesting: false,
+          reactNativeVersion: {
+            major: 0,
+            minor: 84,
+            patch: 0,
+            prerelease: null,
+          },
+          interfaceIdiom: 'phone',
+          osVersion: '16.0',
+          systemName: 'iOS',
+          forceTouchAvailable: false,
+        }),
+      },
+      SourceCode: {
+        getConstants: () => ({
+          scriptURL: null,
+        }),
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return require('@agiworkforce/local-llm');
+  })();
+
+  return moduleRef;
+};
+
+beforeAll(() => {
+  localLlmModule = loadLocalLlmModule();
+});
+
+beforeEach(() => {
+  mockIosModule.getCapabilities.mockReset();
+  mockIosModule.isThermallyThrottled.mockReset();
+  mockAndroidModule.getCapabilities.mockReset();
+  mockAndroidModule.isThermallyThrottled.mockReset();
+});
 
 // System-tier model IDs (OS-resident, not downloaded) — at least one must exist.
 const SYSTEM_TIER_IDS = ['apple-foundation-models', 'gemini-nano-aicore'];
 
 describe('local-llm: catalog', () => {
   it('returns all shippable models including at least one system-tier entry', () => {
+    const { getShippableModels, getModelsForRole, getModelById, detectCapabilities } =
+      getLocalLlm();
+
     const models = getShippableModels();
     expect(models.length).toBeGreaterThanOrEqual(5);
     const ids = models.map((m: { id: string }) => m.id);
@@ -50,6 +82,8 @@ describe('local-llm: catalog', () => {
   });
 
   it('all catalog entries have a license field', () => {
+    const { getShippableModels } = getLocalLlm();
+
     const models = getShippableModels();
     for (const model of models) {
       expect(typeof model.license).toBe('string');
@@ -58,6 +92,8 @@ describe('local-llm: catalog', () => {
   });
 
   it('system-tier models: fileSizeBytes=0, role=system-multimodal', () => {
+    const { getModelsForRole } = getLocalLlm();
+
     const systemModels = getModelsForRole('system-multimodal');
     expect(systemModels.length).toBeGreaterThanOrEqual(1);
     for (const sys of systemModels) {
@@ -67,6 +103,8 @@ describe('local-llm: catalog', () => {
   });
 
   it('download models have non-zero fileSizeBytes and executorch/llama-rn runtime support', () => {
+    const { getModelById } = getLocalLlm();
+
     const qwen = getModelById('qwen3-4b-instruct-2507');
     expect(qwen).toBeDefined();
     expect(qwen.fileSizeBytes).toBeGreaterThan(0);
@@ -78,17 +116,22 @@ describe('local-llm: catalog', () => {
   });
 
   it('getModelsForRole(system-multimodal) returns system-tier entries', () => {
+    const { getModelsForRole } = getLocalLlm();
+
     const systemTier = getModelsForRole('system-multimodal');
     expect(systemTier.every((m: { role: string }) => m.role === 'system-multimodal')).toBe(true);
     expect(systemTier.length).toBeGreaterThanOrEqual(1);
   });
 
   it('getModelsForRole(default) excludes system-multimodal entries', () => {
+    const { getModelsForRole } = getLocalLlm();
+
     const defaultModels = getModelsForRole('default');
     expect(defaultModels.every((m: { role: string }) => m.role !== 'system-multimodal')).toBe(true);
   });
 
   it('returns undefined for unknown model id', () => {
+    const { getModelById } = getLocalLlm();
     expect(getModelById('totally-fake-model')).toBeUndefined();
   });
 });
@@ -99,6 +142,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('returns tier1Available=true when native module reports available', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockResolvedValue({
       tier: 1,
       available: true,
@@ -116,6 +160,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('returns tier1Available=false when native module reports available=false', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockResolvedValue({
       available: false,
       thermalThrottled: false,
@@ -128,6 +173,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('reports thermalThrottled=true', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockResolvedValue({
       available: true,
       thermalThrottled: true,
@@ -139,6 +185,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('returns tier1Available=false when native module throws', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockRejectedValue(new Error('module unavailable'));
     const caps = await detectCapabilities();
     expect(caps.tier1Available).toBe(false);
@@ -146,6 +193,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('tier2Available is true when RAM >= 3500 MB', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockResolvedValue({
       available: false,
       thermalThrottled: false,
@@ -157,6 +205,7 @@ describe('local-llm: capabilities — iOS Foundation Models', () => {
   });
 
   it('tier2Available is false when RAM < 3500 MB', async () => {
+    const { detectCapabilities } = getLocalLlm();
     mockIosModule.getCapabilities.mockResolvedValue({
       available: false,
       thermalThrottled: false,

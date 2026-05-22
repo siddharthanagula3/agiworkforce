@@ -113,8 +113,8 @@ impl SecureStorage {
     ///
     /// SEV-DESK-16: replaced the hand-rolled `unsafe { std::ptr::write_volatile }`
     /// + `compiler_fence(SeqCst)` pattern with the `zeroize` crate's `Zeroize`
-    /// trait, which guarantees the same volatile-write semantics. Removes
-    /// the only `#[allow(unsafe_code)]` block in this file.
+    ///   trait, which guarantees the same volatile-write semantics. Removes
+    ///   the only `#[allow(unsafe_code)]` block in this file.
     pub fn lock(&self) {
         if let Ok(mut master) = self.master_key.safe_write() {
             if let Some(ref mut key) = *master {

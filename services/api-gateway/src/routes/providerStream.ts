@@ -25,6 +25,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
+import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import {
@@ -180,6 +181,10 @@ router.get(
 router.post(
   '/:providerId/stream',
   createRateLimiter('device-command'),
+  requireManagedComputeEligibility((req) => ({
+    provider: String(req.params['providerId'] ?? 'unknown'),
+    model: typeof req.body?.model === 'string' ? req.body.model : 'unknown',
+  })),
   async (req: Request, res: Response) => {
     const user = req.user;
     if (!user) {

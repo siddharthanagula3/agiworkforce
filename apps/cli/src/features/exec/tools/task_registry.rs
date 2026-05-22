@@ -109,7 +109,11 @@ pub(super) async fn execute_task_create(args: &HashMap<String, String>) -> Resul
             return Ok(ToolResult {
                 tool_name: "task_create".into(),
                 success: false,
-                output: format!("Invalid kind '{}'. Valid: {}", k, VALID_TASK_KINDS.join(", ")),
+                output: format!(
+                    "Invalid kind '{}'. Valid: {}",
+                    k,
+                    VALID_TASK_KINDS.join(", ")
+                ),
             });
         }
         None => {
@@ -135,7 +139,11 @@ pub(super) async fn execute_task_create(args: &HashMap<String, String>) -> Resul
         exit_code: None,
         error: None,
     };
-    session_registry().tasks.write().unwrap().insert(id.clone(), task.clone());
+    session_registry()
+        .tasks
+        .write()
+        .unwrap()
+        .insert(id.clone(), task.clone());
     print_tool_status("task_create", &format!("id={}", id));
     Ok(ToolResult {
         tool_name: "task_create".into(),
@@ -157,11 +165,21 @@ pub(super) async fn execute_task_get(args: &HashMap<String, String>) -> Result<T
     };
     let output = {
         let guard = session_registry().tasks.read().unwrap();
-        guard.get(id.as_str()).map(|t| serde_json::to_string_pretty(t).unwrap_or_else(|_| format!("{:?}", t.id)))
+        guard
+            .get(id.as_str())
+            .map(|t| serde_json::to_string_pretty(t).unwrap_or_else(|_| format!("{:?}", t.id)))
     };
     match output {
-        Some(json) => Ok(ToolResult { tool_name: "task_get".into(), success: true, output: json }),
-        None => Ok(ToolResult { tool_name: "task_get".into(), success: false, output: format!("Task not found: {}", id) }),
+        Some(json) => Ok(ToolResult {
+            tool_name: "task_get".into(),
+            success: true,
+            output: json,
+        }),
+        None => Ok(ToolResult {
+            tool_name: "task_get".into(),
+            success: false,
+            output: format!("Task not found: {}", id),
+        }),
     }
 }
 
@@ -171,30 +189,50 @@ pub(super) async fn execute_task_list(args: &HashMap<String, String>) -> Result<
         let guard = session_registry().tasks.read().unwrap();
         let mut tasks: Vec<SessionTask> = guard
             .values()
-            .filter(|t| status_filter.as_deref().is_none() || status_filter.as_deref() == Some(t.status.as_str()))
+            .filter(|t| {
+                status_filter.as_deref().is_none()
+                    || status_filter.as_deref() == Some(t.status.as_str())
+            })
             .cloned()
             .collect();
         tasks.sort_by(|a, b| a.id.cmp(&b.id));
         tasks
     };
     if tasks_json.is_empty() {
-        return Ok(ToolResult { tool_name: "task_list".into(), success: true, output: "No tasks found.".into() });
+        return Ok(ToolResult {
+            tool_name: "task_list".into(),
+            success: true,
+            output: "No tasks found.".into(),
+        });
     }
     Ok(ToolResult {
         tool_name: "task_list".into(),
         success: true,
-        output: serde_json::to_string_pretty(&tasks_json).unwrap_or_else(|_| format!("{} task(s)", tasks_json.len())),
+        output: serde_json::to_string_pretty(&tasks_json)
+            .unwrap_or_else(|_| format!("{} task(s)", tasks_json.len())),
     })
 }
 
 pub(super) async fn execute_task_update(args: &HashMap<String, String>) -> Result<ToolResult> {
     let id = match args.get("id") {
         Some(id) => id.clone(),
-        None => return Ok(ToolResult { tool_name: "task_update".into(), success: false, output: "Missing required argument: id".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_update".into(),
+                success: false,
+                output: "Missing required argument: id".into(),
+            })
+        }
     };
     let new_status = match args.get("status") {
         Some(s) => s.clone(),
-        None => return Ok(ToolResult { tool_name: "task_update".into(), success: false, output: "Missing required argument: status".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_update".into(),
+                success: false,
+                output: "Missing required argument: status".into(),
+            })
+        }
     };
     let exit_code: Option<i32> = args.get("exit_code").and_then(|s| s.parse().ok());
     let error = args.get("error").cloned();
@@ -214,7 +252,10 @@ pub(super) async fn execute_task_update(args: &HashMap<String, String>) -> Resul
                         | ("running", "stopped")
                 );
                 if !valid {
-                    Err(format!("Invalid transition: {} → {}", task.status, new_status))
+                    Err(format!(
+                        "Invalid transition: {} → {}",
+                        task.status, new_status
+                    ))
                 } else {
                     if task.started_at.is_none() && new_status == "running" {
                         task.started_at = Some(now_iso());
@@ -231,13 +272,18 @@ pub(super) async fn execute_task_update(args: &HashMap<String, String>) -> Resul
         }
     };
     match result {
-        Err(msg) => Ok(ToolResult { tool_name: "task_update".into(), success: false, output: msg }),
+        Err(msg) => Ok(ToolResult {
+            tool_name: "task_update".into(),
+            success: false,
+            output: msg,
+        }),
         Ok(snapshot) => {
             print_tool_status("task_update", &format!("id={} → {}", id, snapshot.status));
             Ok(ToolResult {
                 tool_name: "task_update".into(),
                 success: true,
-                output: serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| format!("Updated task {}", id)),
+                output: serde_json::to_string_pretty(&snapshot)
+                    .unwrap_or_else(|_| format!("Updated task {}", id)),
             })
         }
     }
@@ -246,7 +292,13 @@ pub(super) async fn execute_task_update(args: &HashMap<String, String>) -> Resul
 pub(super) async fn execute_task_stop(args: &HashMap<String, String>) -> Result<ToolResult> {
     let id = match args.get("id") {
         Some(id) => id.clone(),
-        None => return Ok(ToolResult { tool_name: "task_stop".into(), success: false, output: "Missing required argument: id".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_stop".into(),
+                success: false,
+                output: "Missing required argument: id".into(),
+            })
+        }
     };
     let result = {
         let mut guard = session_registry().tasks.write().unwrap();
@@ -254,7 +306,10 @@ pub(super) async fn execute_task_stop(args: &HashMap<String, String>) -> Result<
             None => Err(format!("Task not found: {}", id)),
             Some(task) => {
                 if matches!(task.status.as_str(), "completed" | "failed" | "stopped") {
-                    Err(format!("Cannot stop task in terminal state: {}", task.status))
+                    Err(format!(
+                        "Cannot stop task in terminal state: {}",
+                        task.status
+                    ))
                 } else {
                     task.status = "stopped".into();
                     task.ended_at = Some(now_iso());
@@ -264,13 +319,18 @@ pub(super) async fn execute_task_stop(args: &HashMap<String, String>) -> Result<
         }
     };
     match result {
-        Err(msg) => Ok(ToolResult { tool_name: "task_stop".into(), success: false, output: msg }),
+        Err(msg) => Ok(ToolResult {
+            tool_name: "task_stop".into(),
+            success: false,
+            output: msg,
+        }),
         Ok(snapshot) => {
             print_tool_status("task_stop", &format!("id={}", id));
             Ok(ToolResult {
                 tool_name: "task_stop".into(),
                 success: true,
-                output: serde_json::to_string_pretty(&snapshot).unwrap_or_else(|_| format!("Stopped task {}", id)),
+                output: serde_json::to_string_pretty(&snapshot)
+                    .unwrap_or_else(|_| format!("Stopped task {}", id)),
             })
         }
     }
@@ -279,14 +339,29 @@ pub(super) async fn execute_task_stop(args: &HashMap<String, String>) -> Result<
 pub(super) async fn execute_task_output(args: &HashMap<String, String>) -> Result<ToolResult> {
     let id = match args.get("id") {
         Some(id) => id.clone(),
-        None => return Ok(ToolResult { tool_name: "task_output".into(), success: false, output: "Missing required argument: id".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "task_output".into(),
+                success: false,
+                output: "Missing required argument: id".into(),
+            })
+        }
     };
-    let max_bytes: usize = args.get("max_bytes").and_then(|s| s.parse().ok()).unwrap_or(8192);
+    let max_bytes: usize = args
+        .get("max_bytes")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(8192);
     let path = {
         let guard = session_registry().tasks.read().unwrap();
         match guard.get(id.as_str()) {
             Some(t) => t.output_path.clone(),
-            None => return Ok(ToolResult { tool_name: "task_output".into(), success: false, output: format!("Task not found: {}", id) }),
+            None => {
+                return Ok(ToolResult {
+                    tool_name: "task_output".into(),
+                    success: false,
+                    output: format!("Task not found: {}", id),
+                })
+            }
         }
     };
     match std::fs::read(&path) {
@@ -296,37 +371,63 @@ pub(super) async fn execute_task_output(args: &HashMap<String, String>) -> Resul
             Ok(ToolResult {
                 tool_name: "task_output".into(),
                 success: true,
-                output: if tail.is_empty() { "(no output yet)".into() } else { tail },
+                output: if tail.is_empty() {
+                    "(no output yet)".into()
+                } else {
+                    tail
+                },
             })
         }
-        Err(e) => Ok(ToolResult { tool_name: "task_output".into(), success: false, output: format!("Could not read output file: {}", e) }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "task_output".into(),
+            success: false,
+            output: format!("Could not read output file: {}", e),
+        }),
     }
 }
 
 pub(super) async fn execute_team_create(args: &HashMap<String, String>) -> Result<ToolResult> {
     let name = match args.get("name").filter(|n| !n.is_empty()) {
         Some(n) => n.clone(),
-        None => return Ok(ToolResult { tool_name: "team_create".into(), success: false, output: "Missing required argument: name".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "team_create".into(),
+                success: false,
+                output: "Missing required argument: name".into(),
+            })
+        }
     };
-    let members: Vec<String> = args.get("members").and_then(|m| serde_json::from_str(m).ok()).unwrap_or_default();
+    let members: Vec<String> = args
+        .get("members")
+        .and_then(|m| serde_json::from_str(m).ok())
+        .unwrap_or_default();
     let result = {
         let mut guard = session_registry().teams.write().unwrap();
         if guard.contains_key(&name) {
             Err(format!("Team '{}' already exists.", name))
         } else {
-            let team = SessionTeam { name: name.clone(), members, created_at: now_iso() };
+            let team = SessionTeam {
+                name: name.clone(),
+                members,
+                created_at: now_iso(),
+            };
             guard.insert(name.clone(), team.clone());
             Ok(team)
         }
     };
     match result {
-        Err(msg) => Ok(ToolResult { tool_name: "team_create".into(), success: false, output: msg }),
+        Err(msg) => Ok(ToolResult {
+            tool_name: "team_create".into(),
+            success: false,
+            output: msg,
+        }),
         Ok(team) => {
             print_tool_status("team_create", &format!("name={}", name));
             Ok(ToolResult {
                 tool_name: "team_create".into(),
                 success: true,
-                output: serde_json::to_string_pretty(&team).unwrap_or_else(|_| format!("Created team {}", name)),
+                output: serde_json::to_string_pretty(&team)
+                    .unwrap_or_else(|_| format!("Created team {}", name)),
             })
         }
     }
@@ -335,34 +436,82 @@ pub(super) async fn execute_team_create(args: &HashMap<String, String>) -> Resul
 pub(super) async fn execute_team_delete(args: &HashMap<String, String>) -> Result<ToolResult> {
     let name = match args.get("name").filter(|n| !n.is_empty()) {
         Some(n) => n.clone(),
-        None => return Ok(ToolResult { tool_name: "team_delete".into(), success: false, output: "Missing required argument: name".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "team_delete".into(),
+                success: false,
+                output: "Missing required argument: name".into(),
+            })
+        }
     };
-    let removed = session_registry().teams.write().unwrap().remove(&name).is_some();
+    let removed = session_registry()
+        .teams
+        .write()
+        .unwrap()
+        .remove(&name)
+        .is_some();
     if removed {
         print_tool_status("team_delete", &format!("name={}", name));
-        Ok(ToolResult { tool_name: "team_delete".into(), success: true, output: format!("Deleted team '{}'.", name) })
+        Ok(ToolResult {
+            tool_name: "team_delete".into(),
+            success: true,
+            output: format!("Deleted team '{}'.", name),
+        })
     } else {
-        Ok(ToolResult { tool_name: "team_delete".into(), success: false, output: format!("Team '{}' not found.", name) })
+        Ok(ToolResult {
+            tool_name: "team_delete".into(),
+            success: false,
+            output: format!("Team '{}' not found.", name),
+        })
     }
 }
 
 pub(super) async fn execute_cron_create(args: &HashMap<String, String>) -> Result<ToolResult> {
     let name = match args.get("name").filter(|n| !n.is_empty()) {
         Some(n) => n.clone(),
-        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: name".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "cron_create".into(),
+                success: false,
+                output: "Missing required argument: name".into(),
+            })
+        }
     };
     let schedule = match args.get("schedule").filter(|s| !s.is_empty()) {
         Some(s) => s.clone(),
-        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: schedule".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "cron_create".into(),
+                success: false,
+                output: "Missing required argument: schedule".into(),
+            })
+        }
     };
     let prompt = match args.get("prompt").filter(|p| !p.is_empty()) {
         Some(p) => p.clone(),
-        None => return Ok(ToolResult { tool_name: "cron_create".into(), success: false, output: "Missing required argument: prompt".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "cron_create".into(),
+                success: false,
+                output: "Missing required argument: prompt".into(),
+            })
+        }
     };
     let enabled = args.get("enabled").map(|v| v != "false").unwrap_or(true);
     let id = new_uuid();
-    let cron = SessionCron { id: id.clone(), name, schedule, prompt, enabled, created_at: now_iso() };
-    session_registry().crons.write().unwrap().insert(id.clone(), cron.clone());
+    let cron = SessionCron {
+        id: id.clone(),
+        name,
+        schedule,
+        prompt,
+        enabled,
+        created_at: now_iso(),
+    };
+    session_registry()
+        .crons
+        .write()
+        .unwrap()
+        .insert(id.clone(), cron.clone());
     print_tool_status("cron_create", &format!("id={}", id));
     Ok(ToolResult {
         tool_name: "cron_create".into(),
@@ -374,22 +523,39 @@ pub(super) async fn execute_cron_create(args: &HashMap<String, String>) -> Resul
 pub(super) async fn execute_cron_delete(args: &HashMap<String, String>) -> Result<ToolResult> {
     let id_or_name = match args.get("id").filter(|i| !i.is_empty()) {
         Some(i) => i.clone(),
-        None => return Ok(ToolResult { tool_name: "cron_delete".into(), success: false, output: "Missing required argument: id".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "cron_delete".into(),
+                success: false,
+                output: "Missing required argument: id".into(),
+            })
+        }
     };
     let mut guard = session_registry().crons.write().unwrap();
     let key = if guard.contains_key(&id_or_name) {
         Some(id_or_name.clone())
     } else {
-        guard.values().find(|c| c.name == id_or_name).map(|c| c.id.clone())
+        guard
+            .values()
+            .find(|c| c.name == id_or_name)
+            .map(|c| c.id.clone())
     };
     match key {
         Some(k) => {
             guard.remove(&k);
             drop(guard);
             print_tool_status("cron_delete", &format!("id={}", k));
-            Ok(ToolResult { tool_name: "cron_delete".into(), success: true, output: format!("Deleted cron trigger '{}'.", id_or_name) })
+            Ok(ToolResult {
+                tool_name: "cron_delete".into(),
+                success: true,
+                output: format!("Deleted cron trigger '{}'.", id_or_name),
+            })
         }
-        None => Ok(ToolResult { tool_name: "cron_delete".into(), success: false, output: format!("Cron trigger '{}' not found.", id_or_name) }),
+        None => Ok(ToolResult {
+            tool_name: "cron_delete".into(),
+            success: false,
+            output: format!("Cron trigger '{}' not found.", id_or_name),
+        }),
     }
 }
 
@@ -397,14 +563,19 @@ pub(super) async fn execute_cron_list(args: &HashMap<String, String>) -> Result<
     let _ = args;
     let guard = session_registry().crons.read().unwrap();
     if guard.is_empty() {
-        return Ok(ToolResult { tool_name: "cron_list".into(), success: true, output: "No cron triggers registered.".into() });
+        return Ok(ToolResult {
+            tool_name: "cron_list".into(),
+            success: true,
+            output: "No cron triggers registered.".into(),
+        });
     }
     let mut crons: Vec<SessionCron> = guard.values().cloned().collect();
     crons.sort_by(|a, b| a.created_at.cmp(&b.created_at));
     Ok(ToolResult {
         tool_name: "cron_list".into(),
         success: true,
-        output: serde_json::to_string_pretty(&crons).unwrap_or_else(|_| format!("{} trigger(s)", crons.len())),
+        output: serde_json::to_string_pretty(&crons)
+            .unwrap_or_else(|_| format!("{} trigger(s)", crons.len())),
     })
 }
 
@@ -424,7 +595,10 @@ pub(super) async fn execute_advisor(args: &HashMap<String, String>) -> Result<To
         }
     };
     let model = args.get("model").cloned();
-    print_tool_status("advisor", &format!("model={}", model.as_deref().unwrap_or("default")));
+    print_tool_status(
+        "advisor",
+        &format!("model={}", model.as_deref().unwrap_or("default")),
+    );
 
     let req = crate::runtime::advisor::AdvisorRequest { question, model };
     match crate::runtime::advisor::consult(req).await {
@@ -551,7 +725,13 @@ pub(super) async fn execute_ask_user(args: &HashMap<String, String>) -> Result<T
 async fn lsp_request_for_file(args: &HashMap<String, String>, method: &str) -> Result<ToolResult> {
     let file = match args.get("file").filter(|s| !s.is_empty()) {
         Some(f) => f.clone(),
-        None => return Ok(ToolResult { tool_name: method.into(), success: false, output: "Missing required argument: file".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: method.into(),
+                success: false,
+                output: "Missing required argument: file".into(),
+            })
+        }
     };
     let ext = std::path::Path::new(&file)
         .extension()
@@ -567,12 +747,24 @@ async fn lsp_request_for_file(args: &HashMap<String, String>, method: &str) -> R
     let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
         Ok(c) => c,
-        Err(e) => return Ok(ToolResult { tool_name: method.into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: method.into(),
+                success: false,
+                output: format!("Failed to spawn {server_cmd}: {e}"),
+            })
+        }
     };
     let uri = format!("file://{file}");
     let params = if method == "textDocument/definition" || method == "textDocument/hover" {
-        let line = args.get("line").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-        let character = args.get("character").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        let line = args
+            .get("line")
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
+        let character = args
+            .get("character")
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(0);
         serde_json::json!({
             "textDocument": {"uri": uri},
             "position": {"line": line, "character": character},
@@ -618,18 +810,43 @@ pub(super) async fn execute_lsp_diagnostics(args: &HashMap<String, String>) -> R
 pub(super) async fn execute_lsp_completion(args: &HashMap<String, String>) -> Result<ToolResult> {
     let file = match args.get("file").filter(|s| !s.is_empty()) {
         Some(f) => f.clone(),
-        None => return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: "Missing required argument: file".into() }),
+        None => {
+            return Ok(ToolResult {
+                tool_name: "lsp_completion".into(),
+                success: false,
+                output: "Missing required argument: file".into(),
+            })
+        }
     };
-    let line = args.get("line").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-    let character = args.get("character").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
-    let ext = std::path::Path::new(&file).extension().and_then(|e| e.to_str()).unwrap_or("");
+    let line = args
+        .get("line")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let character = args
+        .get("character")
+        .and_then(|s| s.parse::<u32>().ok())
+        .unwrap_or(0);
+    let ext = std::path::Path::new(&file)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
     let Some((server_cmd, server_args)) = crate::lsp::server_for_extension(ext) else {
-        return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("No LSP server configured for .{ext} files") });
+        return Ok(ToolResult {
+            tool_name: "lsp_completion".into(),
+            success: false,
+            output: format!("No LSP server configured for .{ext} files"),
+        });
     };
     let workspace = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let mut client = match crate::lsp::LspClient::spawn(server_cmd, server_args, &workspace).await {
         Ok(c) => c,
-        Err(e) => return Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("Failed to spawn {server_cmd}: {e}") }),
+        Err(e) => {
+            return Ok(ToolResult {
+                tool_name: "lsp_completion".into(),
+                success: false,
+                output: format!("Failed to spawn {server_cmd}: {e}"),
+            })
+        }
     };
     let uri = format!("file://{file}");
     let params = serde_json::json!({
@@ -639,12 +856,22 @@ pub(super) async fn execute_lsp_completion(args: &HashMap<String, String>) -> Re
     let result = client.request("textDocument/completion", params).await;
     let _ = client.shutdown().await;
     match result {
-        Ok(v) => Ok(ToolResult { tool_name: "lsp_completion".into(), success: true, output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()) }),
-        Err(e) => Ok(ToolResult { tool_name: "lsp_completion".into(), success: false, output: format!("LSP completion failed: {e}") }),
+        Ok(v) => Ok(ToolResult {
+            tool_name: "lsp_completion".into(),
+            success: true,
+            output: serde_json::to_string_pretty(&v).unwrap_or_else(|_| v.to_string()),
+        }),
+        Err(e) => Ok(ToolResult {
+            tool_name: "lsp_completion".into(),
+            success: false,
+            output: format!("LSP completion failed: {e}"),
+        }),
     }
 }
 
-pub(super) async fn execute_lsp_document_symbols(args: &HashMap<String, String>) -> Result<ToolResult> {
+pub(super) async fn execute_lsp_document_symbols(
+    args: &HashMap<String, String>,
+) -> Result<ToolResult> {
     lsp_request_for_file(args, "textDocument/documentSymbol").await
 }
 

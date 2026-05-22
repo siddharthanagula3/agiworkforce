@@ -13,7 +13,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/lib/theme';
+import { colors } from '@/src/ui/theme';
 import type { AutoApproveMode } from '@/types/chat';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

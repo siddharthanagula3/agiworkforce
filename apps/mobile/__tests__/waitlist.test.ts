@@ -51,8 +51,8 @@ import {
   WaitlistValidationError,
   WaitlistDuplicateError,
   WaitlistNetworkError,
-} from '../services/waitlist';
-import { useWaitlistStore } from '../stores/waitlistStore';
+  useWaitlistStore,
+} from '../src/features/waitlist';
 
 // Retrieve the inner mock functions after imports so they are fully initialised.
 const { mockInsert, mockRpc } = (

@@ -6,15 +6,57 @@ use crate::compaction;
 use crate::config::CliConfig;
 use crate::errors::CliError;
 use crate::hooks;
-use crate::models::{self, ContentBlock, Message, StreamCallback};
+use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
 
 use super::executor::{
-    detect_content_loop, hash_tool_call, tool_call_to_legacy, value_to_legacy_args,
-    LOOP_DETECTION_THRESHOLD, MAX_AGENTIC_ITERATIONS,
+    detect_content_loop, hash_tool_call, value_to_legacy_args, LOOP_DETECTION_THRESHOLD,
+    MAX_AGENTIC_ITERATIONS,
 };
 use super::history::build_assistant_message;
-use super::tools::{execute_mcp_tool, execute_team_tool, is_mutating_tool, is_team_tool};
+use super::tools::{execute_mcp_tool, execute_team_tool, is_team_tool};
 use super::{AgentSession, TurnResult};
+
+#[derive(Debug, Clone, PartialEq)]
+enum PreToolUseOutcome {
+    Proceed(serde_json::Value),
+    Blocked(String),
+    Stopped,
+}
+
+async fn run_pre_tool_use_hooks(
+    hooks_config: &hooks::HooksConfig,
+    model: &str,
+    tool_call: &ToolCallResponse,
+) -> PreToolUseOutcome {
+    let pre_results = hooks::run_hooks(
+        hooks_config,
+        hooks::HookEvent::PreToolUse,
+        &hooks::HookInput {
+            event: "PreToolUse".to_string(),
+            session_id: None,
+            model: Some(model.to_string()),
+            tool_name: Some(tool_call.name.clone()),
+            tool_args: Some(tool_call.arguments.clone()),
+            tool_output: None,
+            message: None,
+            tool_execution: None,
+        },
+    )
+    .await;
+    let pre_t = hooks::aggregate_transformers(&pre_results);
+    let effective_args = pre_t
+        .updated_input
+        .clone()
+        .unwrap_or_else(|| tool_call.arguments.clone());
+
+    match hooks::aggregate_results(&pre_results) {
+        hooks::HookAggregateOutcome::Blocked { reasons } => {
+            PreToolUseOutcome::Blocked(reasons.join("; "))
+        }
+        hooks::HookAggregateOutcome::Stop => PreToolUseOutcome::Stopped,
+        hooks::HookAggregateOutcome::Continue => PreToolUseOutcome::Proceed(effective_args),
+    }
+}
 
 impl AgentSession {
     /// Send a user message and run the full agentic loop.
@@ -24,6 +66,8 @@ impl AgentSession {
         user_input: &str,
         on_chunk: StreamCallback,
     ) -> Result<TurnResult> {
+        self.validate_privacy_boundary()?;
+
         // Context compaction: if above 90%, shrink to 70%
         let usage = compaction::context_usage(&self.messages, &self.model);
         if usage.fraction > 0.90 {
@@ -95,15 +139,17 @@ impl AgentSession {
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
             ));
         }
-        if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-            && !self.plan_approved
+        if matches!(
+            self.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ) && !self.plan_approved
         {
             prefix.push_str(
                 "[plan-mode] You must call the `update_plan` tool with a complete, ordered plan \
 of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
 task subagents). The user reviews and approves the plan; only then can you execute mutating \
 tools. If your plan is rejected, the rejection feedback will be prefixed to the next user \
-message -- revise and call `update_plan` again.\n\n"
+message -- revise and call `update_plan` again.\n\n",
             );
         }
         let effective_input = if prefix.is_empty() {
@@ -124,16 +170,7 @@ message -- revise and call `update_plan` again.\n\n"
 
         let max_tokens = config.default.max_tokens;
 
-        let mcp_tool_definitions = self
-            .mcp_manager
-            .as_ref()
-            .map(|mcp_manager| mcp_manager.tool_definitions());
-        let tool_defs = crate::runtime::tool_catalog::effective_tool_definitions(
-            self.plan_mode,
-            self.team_manager.is_some(),
-            self.allowed_tools.as_deref(),
-            mcp_tool_definitions.as_deref(),
-        );
+        let tool_defs = self.effective_tool_definitions();
         let available_tool_names = tool_defs
             .iter()
             .map(|tool_definition| tool_definition.name.as_str())
@@ -378,7 +415,11 @@ message -- revise and call `update_plan` again.\n\n"
                 format!(
                     "  Executing {} tool{}... (iteration {}/{})",
                     current_tool_calls.len(),
-                    if current_tool_calls.len() == 1 { "" } else { "s" },
+                    if current_tool_calls.len() == 1 {
+                        ""
+                    } else {
+                        "s"
+                    },
                     iteration + 1,
                     effective_max
                 )
@@ -392,6 +433,15 @@ message -- revise and call `update_plan` again.\n\n"
                 .iter()
                 .filter(|t| t.is_concurrency_safe)
                 .map(|t| t.name.clone())
+                .collect();
+            let plan_mode_mutating_names: std::collections::HashSet<&str> = tool_defs
+                .iter()
+                .filter(|tool_definition| {
+                    crate::runtime::tool_catalog::is_plan_mode_mutating_tool_definition(
+                        tool_definition,
+                    )
+                })
+                .map(|tool_definition| tool_definition.name.as_str())
                 .collect();
             let concurrent_eligible = |name: &str| -> bool {
                 self.skip_permissions
@@ -426,8 +476,10 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-                    && !self.plan_approved
+                if matches!(
+                    self.permission_mode,
+                    crate::cli_options::PermissionMode::Plan
+                ) && !self.plan_approved
                 {
                     let payload = serde_json::json!({
                         "ok": false,
@@ -442,30 +494,64 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::PreToolUse,
-                    &hooks::HookInput {
-                        event: "PreToolUse".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
-                        tool_output: None,
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
+                let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await {
+                    PreToolUseOutcome::Proceed(args) => args,
+                    PreToolUseOutcome::Blocked(reason_text) => {
+                        if !self.quiet {
+                            eprintln!(
+                                "  {} {} blocked by hook: {}",
+                                "->".dimmed(),
+                                tc.name.bold(),
+                                reason_text.red()
+                            );
+                        }
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: format!("Tool execution blocked by hook: {reason_text}"),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    PreToolUseOutcome::Stopped => {
+                        if !self.quiet {
+                            eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
+                        }
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: "Tool execution stopped by hook.".to_string(),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                };
 
-                let description = tc
-                    .arguments
+                let legacy_args = value_to_legacy_args(&effective_args);
+                if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                    &tc.name,
+                    &legacy_args,
+                    self.allowed_tools.as_deref(),
+                    &self.disallowed_tools,
+                ) {
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "tool_filter_violation",
+                            "rule": violation.rule,
+                            "message": violation.reason,
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
+
+                let description = effective_args
                     .get("description")
                     .and_then(|v| v.as_str())
                     .unwrap_or("subagent task")
                     .to_string();
-                let prompt = tc
-                    .arguments
+                let prompt = effective_args
                     .get("prompt")
                     .and_then(|v| v.as_str())
                     .unwrap_or("")
@@ -531,7 +617,7 @@ message -- revise and call `update_plan` again.\n\n"
                 task_spawn_results.push((
                     tc.id.clone(),
                     tc.name.clone(),
-                    tc.arguments.clone(),
+                    effective_args,
                     id_result,
                 ));
             }
@@ -646,8 +732,11 @@ message -- revise and call `update_plan` again.\n\n"
                 if !self.quiet {
                     eprintln!(
                         "  {} ({})",
-                        format!("running {} read-only tools in parallel", concurrent_calls.len())
-                            .dimmed(),
+                        format!(
+                            "running {} read-only tools in parallel",
+                            concurrent_calls.len()
+                        )
+                        .dimmed(),
                         concurrent_calls
                             .iter()
                             .map(|tc| tc.name.as_str())
@@ -656,7 +745,7 @@ message -- revise and call `update_plan` again.\n\n"
                     );
                 }
 
-                let mut runnable: Vec<&crate::models::ToolCallResponse> = Vec::new();
+                let mut runnable: Vec<(String, String, serde_json::Value)> = Vec::new();
                 for tc in &concurrent_calls {
                     if !available_tool_names.contains(tc.name.as_str()) {
                         result_blocks.push(ContentBlock::ToolResult {
@@ -669,25 +758,60 @@ message -- revise and call `update_plan` again.\n\n"
                         });
                         continue;
                     }
-                    runnable.push(tc);
-                }
 
-                for tc in &runnable {
-                    hooks::run_hooks(
-                        &hcfg,
-                        hooks::HookEvent::PreToolUse,
-                        &hooks::HookInput {
-                            event: "PreToolUse".to_string(),
-                            session_id: None,
-                            model: Some(self.model.clone()),
-                            tool_name: Some(tc.name.clone()),
-                            tool_args: Some(tc.arguments.clone()),
-                            tool_output: None,
-                            message: None,
-                            tool_execution: None,
-                        },
-                    )
-                    .await;
+                    let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await
+                    {
+                        PreToolUseOutcome::Proceed(args) => args,
+                        PreToolUseOutcome::Blocked(reason_text) => {
+                            if !self.quiet {
+                                eprintln!(
+                                    "  {} {} blocked by hook: {}",
+                                    "->".dimmed(),
+                                    tc.name.bold(),
+                                    reason_text.red()
+                                );
+                            }
+                            result_blocks.push(ContentBlock::ToolResult {
+                                tool_use_id: tc.id.clone(),
+                                content: format!("Tool execution blocked by hook: {reason_text}"),
+                                is_error: true,
+                            });
+                            continue;
+                        }
+                        PreToolUseOutcome::Stopped => {
+                            if !self.quiet {
+                                eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
+                            }
+                            result_blocks.push(ContentBlock::ToolResult {
+                                tool_use_id: tc.id.clone(),
+                                content: "Tool execution stopped by hook.".to_string(),
+                                is_error: true,
+                            });
+                            continue;
+                        }
+                    };
+
+                    let legacy_args = value_to_legacy_args(&effective_args);
+                    if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                        &tc.name,
+                        &legacy_args,
+                        self.allowed_tools.as_deref(),
+                        &self.disallowed_tools,
+                    ) {
+                        result_blocks.push(ContentBlock::ToolResult {
+                            tool_use_id: tc.id.clone(),
+                            content: serde_json::json!({
+                                "ok": false,
+                                "error": "tool_filter_violation",
+                                "rule": violation.rule,
+                                "message": violation.reason,
+                            })
+                            .to_string(),
+                            is_error: true,
+                        });
+                        continue;
+                    }
+                    runnable.push((tc.id.clone(), tc.name.clone(), effective_args));
                 }
 
                 let exec_opts = crate::tools::ToolExecOptions {
@@ -696,11 +820,14 @@ message -- revise and call `update_plan` again.\n\n"
                     quiet: self.quiet,
                 };
                 let futures = runnable.iter().map(|tc| {
-                    let legacy = tool_call_to_legacy(tc);
+                    let legacy = super::executor::ToolCall {
+                        name: tc.1.clone(),
+                        args: value_to_legacy_args(&tc.2),
+                    };
                     let opts = exec_opts;
-                    let id = tc.id.clone();
-                    let name = tc.name.clone();
-                    let args = tc.arguments.clone();
+                    let id = tc.0.clone();
+                    let name = tc.1.clone();
+                    let args = tc.2.clone();
                     async move {
                         let result = crate::tools::execute_tool_with_opts(&legacy, &opts).await;
                         (id, name, args, result)
@@ -724,12 +851,7 @@ message -- revise and call `update_plan` again.\n\n"
                         } else {
                             "failed".red().to_string()
                         };
-                        eprintln!(
-                            "  {} {} [{}]",
-                            "->".dimmed(),
-                            tool_name.bold(),
-                            status
-                        );
+                        eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
                     }
 
                     hooks::run_hooks(
@@ -785,9 +907,11 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                if matches!(self.permission_mode, crate::cli_options::PermissionMode::Plan)
-                    && !self.plan_approved
-                    && is_mutating_tool(&tc.name)
+                if matches!(
+                    self.permission_mode,
+                    crate::cli_options::PermissionMode::Plan
+                ) && !self.plan_approved
+                    && plan_mode_mutating_names.contains(tc.name.as_str())
                 {
                     let payload = serde_json::json!({
                         "ok": false,
@@ -802,28 +926,9 @@ message -- revise and call `update_plan` again.\n\n"
                     continue;
                 }
 
-                let pre_results = hooks::run_hooks(
-                    &hcfg,
-                    hooks::HookEvent::PreToolUse,
-                    &hooks::HookInput {
-                        event: "PreToolUse".to_string(),
-                        session_id: None,
-                        model: Some(self.model.clone()),
-                        tool_name: Some(tc.name.clone()),
-                        tool_args: Some(tc.arguments.clone()),
-                        tool_output: None,
-                        message: None,
-                        tool_execution: None,
-                    },
-                )
-                .await;
-                let pre_t = hooks::aggregate_transformers(&pre_results);
-                let effective_args =
-                    pre_t.updated_input.clone().unwrap_or_else(|| tc.arguments.clone());
-
-                match hooks::aggregate_results(&pre_results) {
-                    hooks::HookAggregateOutcome::Blocked { reasons } => {
-                        let reason_text = reasons.join("; ");
+                let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await {
+                    PreToolUseOutcome::Proceed(args) => args,
+                    PreToolUseOutcome::Blocked(reason_text) => {
                         if !self.quiet {
                             eprintln!(
                                 "  {} {} blocked by hook: {}",
@@ -839,13 +944,9 @@ message -- revise and call `update_plan` again.\n\n"
                         });
                         continue;
                     }
-                    hooks::HookAggregateOutcome::Stop => {
+                    PreToolUseOutcome::Stopped => {
                         if !self.quiet {
-                            eprintln!(
-                                "  {} {} stopped by hook",
-                                "->".dimmed(),
-                                tc.name.bold()
-                            );
+                            eprintln!("  {} {} stopped by hook", "->".dimmed(), tc.name.bold());
                         }
                         result_blocks.push(ContentBlock::ToolResult {
                             tool_use_id: tc.id.clone(),
@@ -854,13 +955,32 @@ message -- revise and call `update_plan` again.\n\n"
                         });
                         continue;
                     }
-                    hooks::HookAggregateOutcome::Continue => {}
-                }
+                };
 
                 let legacy = super::executor::ToolCall {
                     name: tc.name.clone(),
                     args: value_to_legacy_args(&effective_args),
                 };
+
+                if let Err(violation) = crate::tool_filters::ensure_tool_call_allowed(
+                    &tc.name,
+                    &legacy.args,
+                    self.allowed_tools.as_deref(),
+                    &self.disallowed_tools,
+                ) {
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tc.id.clone(),
+                        content: serde_json::json!({
+                            "ok": false,
+                            "error": "tool_filter_violation",
+                            "rule": violation.rule,
+                            "message": violation.reason,
+                        })
+                        .to_string(),
+                        is_error: true,
+                    });
+                    continue;
+                }
 
                 let tool_result = if tc.name == "update_plan" {
                     let payload = self.handle_update_plan(&effective_args);
@@ -1164,5 +1284,81 @@ message -- revise and call `update_plan` again.\n\n"
         .await?;
 
         Ok(result.text)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn pre_tool_hook_config(command: &str) -> hooks::HooksConfig {
+        let mut hooks_by_event = HashMap::new();
+        hooks_by_event.insert(
+            "PreToolUse".to_string(),
+            vec![hooks::Hook {
+                command: command.to_string(),
+                args: Vec::new(),
+                timeout: 5,
+                blocking: true,
+                matcher: None,
+                if_condition: None,
+            }],
+        );
+        hooks::HooksConfig {
+            hooks: hooks_by_event,
+        }
+    }
+
+    fn tool_call(name: &str, arguments: serde_json::Value) -> ToolCallResponse {
+        ToolCallResponse {
+            id: "toolu-test".to_string(),
+            name: name.to_string(),
+            arguments,
+        }
+    }
+
+    #[tokio::test]
+    async fn pre_tool_use_outcome_blocks_when_hook_blocks() {
+        let config =
+            pre_tool_hook_config("printf '%s' '{\"decision\":\"block\",\"reason\":\"policy\"}'");
+        let outcome = run_pre_tool_use_hooks(
+            &config,
+            "claude-sonnet-4-6",
+            &tool_call("read_file", serde_json::json!({"path":"README.md"})),
+        )
+        .await;
+
+        assert_eq!(outcome, PreToolUseOutcome::Blocked("policy".to_string()));
+    }
+
+    #[tokio::test]
+    async fn pre_tool_use_outcome_stops_when_hook_stops() {
+        let config = pre_tool_hook_config("printf '%s' '{\"continue\":false}'");
+        let outcome = run_pre_tool_use_hooks(
+            &config,
+            "claude-sonnet-4-6",
+            &tool_call("read_file", serde_json::json!({"path":"README.md"})),
+        )
+        .await;
+
+        assert_eq!(outcome, PreToolUseOutcome::Stopped);
+    }
+
+    #[tokio::test]
+    async fn pre_tool_use_outcome_applies_updated_input() {
+        let config =
+            pre_tool_hook_config("printf '%s' '{\"updated_input\":{\"path\":\"TODO.md\"}}'");
+        let outcome = run_pre_tool_use_hooks(
+            &config,
+            "claude-sonnet-4-6",
+            &tool_call("read_file", serde_json::json!({"path":"README.md"})),
+        )
+        .await;
+
+        assert_eq!(
+            outcome,
+            PreToolUseOutcome::Proceed(serde_json::json!({"path":"TODO.md"}))
+        );
     }
 }

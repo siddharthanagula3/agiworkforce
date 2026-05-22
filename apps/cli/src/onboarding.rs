@@ -82,10 +82,7 @@ fn print_welcome_banner() {
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
     );
     eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
-    eprintln!(
-        "  {}",
-        "What makes us different:".dimmed()
-    );
+    eprintln!("  {}", "What makes us different:".dimmed());
     eprintln!(
         "  {}  {}",
         "✦".cyan(),
@@ -104,7 +101,7 @@ fn print_welcome_banner() {
     eprintln!(
         "  {}  {}\n",
         "✦".cyan(),
-        "Session replay — `agiworkforce session fork <id> --at-turn N --as <name>`".dimmed()
+        "Session replay — `agi session fork <id> --at-turn N --as <name>`".dimmed()
     );
     eprintln!(
         "  {}\n",
@@ -662,7 +659,7 @@ pub async fn run_onboarding() -> Result<bool> {
                 eprintln!("\n  {} Authentication failed: {}", "⚠".yellow().bold(), e);
                 eprintln!(
                     "  {}",
-                    "You can try again later with /login or `agiworkforce login`.".dimmed()
+                    "You can try again later with /login or `agi login`.".dimmed()
                 );
             }
         }
@@ -671,7 +668,7 @@ pub async fn run_onboarding() -> Result<bool> {
                 eprintln!("\n  {} API key setup failed: {}", "⚠".yellow().bold(), e);
                 eprintln!(
                     "  {}",
-                    "You can try again later with /login or `agiworkforce login`.".dimmed()
+                    "You can try again later with /login or `agi login`.".dimmed()
                 );
             }
         }
@@ -679,7 +676,7 @@ pub async fn run_onboarding() -> Result<bool> {
             eprintln!("\n  {} Skipped authentication.", "→".dimmed());
             eprintln!(
                 "  {}",
-                "Use /login or `agiworkforce login` to authenticate later.".dimmed()
+                "Use /login or `agi login` to authenticate later.".dimmed()
             );
         }
     }

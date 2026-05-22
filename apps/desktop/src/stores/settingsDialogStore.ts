@@ -18,7 +18,8 @@ export type SettingsTab =
   | 'connectors' // Connectors + OAuth + Extensions
   | 'notifications' // Notifications (unchanged)
   | 'voice' // Voice Settings
-  | 'capabilities' // Memory + Tool access + Visuals
+  | 'capabilities' // Tool access + Visuals
+  | 'memory' // Cross-conversation memory (P0 #8 audit 2026-05-21)
   // ── Legacy aliases — kept for backward-compat, map to parent tab ───
   | 'team' // → account
   | 'personalization' // → appearance

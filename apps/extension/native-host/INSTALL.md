@@ -6,14 +6,52 @@ Chrome's native messaging API. The host name is `com.agiworkforce.browser`.
 ## Prerequisites
 
 - AGI Workforce desktop app must be installed.
-- The `agi-workforce-bridge` binary is bundled inside the desktop app package.
+- The `native_messaging_host` helper must be bundled with the desktop app.
+  Desktop release builds create this helper with
+  `pnpm --filter @agiworkforce/desktop run build:native-host`.
 
 ## Installation
 
-### 1. Copy the template
+The desktop app installs the production Chrome Web Store manifest on startup.
+For dev/unpacked extensions, the `/pair` handshake sends the runtime extension
+ID and the desktop app refreshes the manifest automatically.
 
-Copy `com.agiworkforce.browser.json.template` to the platform-specific location
-below and rename it to `com.agiworkforce.browser.json`.
+Use the manual scripts below only when testing an unpacked extension before the
+desktop app has completed pairing.
+
+### macOS / Linux
+
+```bash
+apps/extension/native-host/install.sh <EXTENSION_ID> [HOST_PATH]
+```
+
+Default helper paths:
+
+- macOS: `/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host`
+- Linux: `/opt/agiworkforce/native_messaging_host`
+
+The script writes manifests for Chrome and Edge.
+
+### Windows
+
+```powershell
+powershell -ExecutionPolicy Bypass -File apps\extension\scripts\install-native-host.ps1 -ExtensionId <EXTENSION_ID> [-HostPath "C:\Path\to\native_messaging_host.exe"]
+```
+
+The PowerShell installer writes the manifest under:
+
+```
+%LOCALAPPDATA%\com.agiworkforce.desktop\native-messaging\
+```
+
+and registers these HKCU keys:
+
+```
+HKCU\Software\Google\Chrome\NativeMessagingHosts\com.agiworkforce.browser
+HKCU\Software\Microsoft\Edge\NativeMessagingHosts\com.agiworkforce.browser
+```
+
+### Installed Manifest Locations
 
 #### macOS
 
@@ -41,42 +79,16 @@ For Chromium:
 
 #### Windows
 
-Create the following registry key:
-
-```
-HKEY_CURRENT_USER\Software\Google\Chrome\NativeMessagingHosts\com.agiworkforce.browser
-```
-
-Set the default value (REG_SZ) to the full path of the installed JSON file, e.g.:
-
-```
-C:\Users\<username>\AppData\Local\AGIWorkforce\native-host\com.agiworkforce.browser.json
-```
-
-The JSON file content is the same as the template (see below).
-
-### 2. Edit the installed file
-
-Open the installed JSON file and make two substitutions:
-
-**Replace `<EXTENSION_ID_PLACEHOLDER>`** with the actual Chrome extension ID.
-After installing from the Chrome Web Store, the extension ID appears in
-`chrome://extensions/` under the extension's detail page.
-
-**Replace the `path` value** with the actual path to the `agi-workforce-bridge`
-binary on the target machine:
-
-- macOS default: `/Applications/AGI Workforce.app/Contents/MacOS/agi-workforce-bridge`
-- Linux default: `/opt/agiworkforce/agi-workforce-bridge`
-- Windows default: `C:\Program Files\AGI Workforce\agi-workforce-bridge.exe`
+Windows uses the registry keys above. The JSON files live under
+`%LOCALAPPDATA%\com.agiworkforce.desktop\native-messaging\`.
 
 ### Example (completed)
 
 ```json
 {
   "name": "com.agiworkforce.browser",
-  "description": "AGI Workforce desktop bridge for the Chrome extension",
-  "path": "/Applications/AGI Workforce.app/Contents/MacOS/agi-workforce-bridge",
+  "description": "AGI Workforce Browser Automation Host",
+  "path": "/Applications/AGI Workforce.app/Contents/MacOS/native_messaging_host",
   "type": "stdio",
   "allowed_origins": ["chrome-extension://abcdefghijklmnopqrstuvwxyz123456/"]
 }

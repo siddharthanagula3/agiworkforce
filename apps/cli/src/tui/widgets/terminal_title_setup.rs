@@ -101,7 +101,10 @@ impl InteractiveView for TerminalTitleSetupView {
                 self.done = true;
                 ViewAction::Close
             }
-            other => self.state.handle_list_key(other).unwrap_or(ViewAction::Continue),
+            other => self
+                .state
+                .handle_list_key(other)
+                .unwrap_or(ViewAction::Continue),
         }
     }
 

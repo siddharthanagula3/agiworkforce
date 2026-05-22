@@ -14,7 +14,7 @@
 // and will be wired into the --agent CLI flag. Tests exercise all public items.
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 /// A loaded agent definition.
@@ -69,13 +69,28 @@ pub fn discover_agents() -> Vec<AgentDefinition> {
 
 /// Load agent definition markdown files from a directory.
 fn load_agents_from_dir(dir: &Path, agents: &mut Vec<AgentDefinition>) {
+    load_agents_from_dir_depth(dir, agents, 0);
+}
+
+fn load_agents_from_dir_depth(dir: &Path, agents: &mut Vec<AgentDefinition>, depth: usize) {
+    if depth > 6 {
+        return;
+    }
+
     let entries = match std::fs::read_dir(dir) {
         Ok(e) => e,
         Err(_) => return,
     };
 
-    for entry in entries.flatten() {
-        let path = entry.path();
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+
+    for path in paths {
+        if path.is_dir() {
+            load_agents_from_dir_depth(&path, agents, depth + 1);
+            continue;
+        }
+
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             if let Ok(agent) = load_agent(&path) {
                 agents.push(agent);
@@ -111,6 +126,330 @@ pub fn find_agent(name: &str) -> Option<AgentDefinition> {
     agents
         .into_iter()
         .find(|a| a.name.to_lowercase() == name_lower)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AgentScope {
+    Project,
+    Global,
+}
+
+impl AgentScope {
+    fn from_flags(tokens: &[&str]) -> Self {
+        if tokens
+            .iter()
+            .any(|token| matches!(*token, "--global" | "-g"))
+        {
+            Self::Global
+        } else {
+            Self::Project
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Global => "global",
+        }
+    }
+}
+
+/// Render the `/agents` management command.
+pub fn render_agents_command(arg: &str) -> String {
+    let tokens: Vec<&str> = arg.split_whitespace().collect();
+    let subcommand = tokens
+        .first()
+        .copied()
+        .unwrap_or("list")
+        .to_ascii_lowercase();
+
+    match subcommand.as_str() {
+        "" | "list" | "ls" => format_agents_overview(&discover_agents()),
+        "help" | "-h" | "--help" => render_agents_help(),
+        "show" | "view" | "inspect" => match first_non_flag(&tokens[1..]) {
+            Some(name) => match find_agent(name) {
+                Some(agent) => format_agent_detail(&agent),
+                None => format!("Agent `{name}` was not found.\n\n{}", render_agents_help()),
+            },
+            None => "Usage: /agents show <name>".to_string(),
+        },
+        "path" | "where" => match first_non_flag(&tokens[1..]) {
+            Some(name) => match find_agent(name) {
+                Some(agent) => agent.path.display().to_string(),
+                None => format!("Agent `{name}` was not found."),
+            },
+            None => "Usage: /agents path <name>".to_string(),
+        },
+        "new" | "create" | "init" => {
+            let scope = AgentScope::from_flags(&tokens[1..]);
+            match first_non_flag(&tokens[1..]) {
+                Some(name) => match create_agent_template(name, scope) {
+                    Ok(path) => format!(
+                        "Created {} agent `{}` at {}",
+                        scope.label(),
+                        name,
+                        path.display()
+                    ),
+                    Err(err) => format!("Failed to create agent `{name}`: {err:#}"),
+                },
+                None => "Usage: /agents create <name> [--global]".to_string(),
+            }
+        }
+        "validate" | "doctor" | "check" => format_agent_validation(&discover_agents()),
+        maybe_name => match find_agent(maybe_name) {
+            Some(agent) => format_agent_detail(&agent),
+            None => format!(
+                "Unknown /agents command `{maybe_name}`.\n\n{}",
+                render_agents_help()
+            ),
+        },
+    }
+}
+
+fn first_non_flag<'a>(tokens: &'a [&'a str]) -> Option<&'a str> {
+    tokens.iter().copied().find(|token| !token.starts_with('-'))
+}
+
+fn render_agents_help() -> String {
+    [
+        "Agents",
+        "  /agents                  list project and global agents",
+        "  /agents show <name>      show metadata and prompt body",
+        "  /agents path <name>      print the backing markdown path",
+        "  /agents create <name>    create .agiworkforce/agents/<name>.md",
+        "  /agents create <name> --global",
+        "  /agents validate         report duplicate or incomplete agents",
+    ]
+    .join("\n")
+}
+
+fn format_agents_overview(agents: &[AgentDefinition]) -> String {
+    if agents.is_empty() {
+        return [
+            "Agents",
+            "  none discovered",
+            "  project: .agiworkforce/agents/",
+            "  global:  ~/.agiworkforce/agents/",
+            "",
+            "Create one with: /agents create <name>",
+        ]
+        .join("\n");
+    }
+
+    let mut lines = vec![format!("Agents ({})", agents.len())];
+    lines.push(format!(
+        "  {:<24} {:<9} {:<18} {}",
+        "name", "scope", "model", "description"
+    ));
+    for agent in agents {
+        let model = agent.model.as_deref().unwrap_or("default model");
+        let description = if agent.description.trim().is_empty() {
+            "no description"
+        } else {
+            agent.description.trim()
+        };
+        lines.push(format!(
+            "  {:<24} {:<9} {:<18} {}",
+            agent.name,
+            agent_source(agent),
+            model,
+            description
+        ));
+    }
+    lines.push(String::new());
+    lines.push("Manage: /agents show <name> | /agents create <name> | /agents validate".into());
+    lines.join("\n")
+}
+
+fn format_agent_detail(agent: &AgentDefinition) -> String {
+    let mut lines = vec![format!("Agent: {}", agent.name)];
+    lines.push(format!("  scope: {}", agent_source(agent)));
+    lines.push(format!("  path: {}", agent.path.display()));
+    lines.push(format!(
+        "  description: {}",
+        empty_as(agent.description.trim(), "none")
+    ));
+    lines.push(format!(
+        "  model: {}",
+        agent.model.as_deref().unwrap_or("default model")
+    ));
+    if let Some(max_turns) = agent.max_turns {
+        lines.push(format!("  max_turns: {max_turns}"));
+    }
+    if let Some(permission_mode) = agent.permission_mode.as_deref() {
+        lines.push(format!("  permission_mode: {permission_mode}"));
+    }
+    if let Some(tools) = agent.tools.as_ref().filter(|tools| !tools.is_empty()) {
+        lines.push(format!("  tools: {}", tools.join(", ")));
+    }
+    if let Some(tools) = agent
+        .disallowed_tools
+        .as_ref()
+        .filter(|tools| !tools.is_empty())
+    {
+        lines.push(format!("  disallowed_tools: {}", tools.join(", ")));
+    }
+    lines.push(String::new());
+    lines.push("Prompt:".into());
+    lines.push(indent_block(
+        empty_as(agent.system_prompt.trim(), "(empty)"),
+        "  ",
+    ));
+    lines.join("\n")
+}
+
+fn format_agent_validation(agents: &[AgentDefinition]) -> String {
+    let mut issues = Vec::new();
+    let mut names = std::collections::HashMap::<String, Vec<&AgentDefinition>>::new();
+
+    for agent in agents {
+        names
+            .entry(agent.name.to_ascii_lowercase())
+            .or_default()
+            .push(agent);
+        if agent.name.trim().is_empty() || agent.name == "untitled" {
+            issues.push(format!(
+                "{}: missing explicit `name` frontmatter",
+                agent.path.display()
+            ));
+        }
+        if agent.description.trim().is_empty() {
+            issues.push(format!("{}: missing `description`", agent.path.display()));
+        }
+        if agent.system_prompt.trim().is_empty() {
+            issues.push(format!("{}: empty prompt body", agent.path.display()));
+        }
+        if let Some(permission_mode) = agent.permission_mode.as_deref() {
+            if !valid_permission_mode(permission_mode) {
+                issues.push(format!(
+                    "{}: unknown permission_mode `{}`",
+                    agent.path.display(),
+                    permission_mode
+                ));
+            }
+        }
+    }
+
+    for (name, matches) in names {
+        if matches.len() > 1 {
+            let paths = matches
+                .iter()
+                .map(|agent| agent.path.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            issues.push(format!("duplicate agent name `{name}`: {paths}"));
+        }
+    }
+
+    if issues.is_empty() {
+        format!("Agents validation passed ({} checked).", agents.len())
+    } else {
+        let mut lines = vec![format!(
+            "Agents validation found {} issue(s):",
+            issues.len()
+        )];
+        lines.extend(issues.into_iter().map(|issue| format!("  - {issue}")));
+        lines.join("\n")
+    }
+}
+
+fn valid_permission_mode(value: &str) -> bool {
+    matches!(
+        value,
+        "default"
+            | "plan"
+            | "acceptEdits"
+            | "accept-edits"
+            | "bypassPermissions"
+            | "bypass-permissions"
+            | "dontAsk"
+            | "dont-ask"
+    )
+}
+
+fn create_agent_template(name: &str, scope: AgentScope) -> Result<PathBuf> {
+    let dir = match scope {
+        AgentScope::Project => project_agents_dir()?,
+        AgentScope::Global => global_agents_dir()?,
+    };
+    create_agent_template_in_dir(name, &dir)
+}
+
+fn create_agent_template_in_dir(name: &str, dir: &Path) -> Result<PathBuf> {
+    let slug = slugify_agent_name(name);
+    if slug.is_empty() {
+        bail!("agent name must contain at least one letter or number");
+    }
+
+    std::fs::create_dir_all(dir)
+        .with_context(|| format!("Failed to create agent directory {}", dir.display()))?;
+    let path = dir.join(format!("{slug}.md"));
+    if path.exists() {
+        bail!("{} already exists", path.display());
+    }
+
+    let display_name = name.trim();
+    let content = format!(
+        "---\nname: {slug}\ndescription: \"{display_name} specialist\"\nmodel:\ntools: []\ndisallowedTools: []\nmaxTurns: 20\npermissionMode: default\n---\n\nYou are {display_name}. Define the exact responsibilities, workflows, and constraints for this agent before using it in production.\n"
+    );
+    std::fs::write(&path, content)
+        .with_context(|| format!("Failed to write agent template {}", path.display()))?;
+    Ok(path)
+}
+
+fn slugify_agent_name(name: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in name.trim().chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            last_dash = false;
+        } else if matches!(ch, '-' | '_' | ' ' | '/' | ':') && !last_dash && !out.is_empty() {
+            out.push('-');
+            last_dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    out
+}
+
+fn project_agents_dir() -> Result<PathBuf> {
+    Ok(std::env::current_dir()?
+        .join(".agiworkforce")
+        .join("agents"))
+}
+
+fn global_agents_dir() -> Result<PathBuf> {
+    Ok(crate::config::CliConfig::config_dir()?.join("agents"))
+}
+
+fn agent_source(agent: &AgentDefinition) -> &'static str {
+    if crate::config::CliConfig::config_dir()
+        .map(|dir| agent.path.starts_with(dir.join("agents")))
+        .unwrap_or(false)
+    {
+        "global"
+    } else {
+        "project"
+    }
+}
+
+fn empty_as<'a>(value: &'a str, fallback: &'a str) -> &'a str {
+    if value.is_empty() {
+        fallback
+    } else {
+        value
+    }
+}
+
+fn indent_block(value: &str, indent: &str) -> String {
+    value
+        .lines()
+        .map(|line| format!("{indent}{line}"))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -453,6 +792,99 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         assert!(out.contains("model=claude-sonnet-4-6"));
         assert!(out.contains("max_turns=20"));
         assert!(out.contains("1 agent(s) available."));
+    }
+
+    #[test]
+    fn test_load_agents_from_dir_recurses_for_imported_claude_agents() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let nested = temp.path().join("claude").join("team");
+        std::fs::create_dir_all(&nested).expect("nested dir");
+        std::fs::write(
+            nested.join("explorer.md"),
+            "---\nname: explorer\ndescription: Explore code\n---\n\nRead-only mapping agent.",
+        )
+        .expect("agent file");
+
+        let mut agents = Vec::new();
+        load_agents_from_dir(temp.path(), &mut agents);
+
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "explorer");
+        assert!(agents[0].path.ends_with("explorer.md"));
+    }
+
+    #[test]
+    fn test_create_agent_template_in_dir_slugifies_name() {
+        let temp = tempfile::tempdir().expect("tempdir");
+
+        let path = create_agent_template_in_dir("QA Reviewer", temp.path()).expect("create agent");
+
+        assert_eq!(
+            path.file_name().and_then(|n| n.to_str()),
+            Some("qa-reviewer.md")
+        );
+        let agent = load_agent(&path).expect("load created agent");
+        assert_eq!(agent.name, "qa-reviewer");
+        assert_eq!(agent.max_turns, Some(20));
+        assert!(agent.system_prompt.contains("QA Reviewer"));
+    }
+
+    #[test]
+    fn test_format_agent_detail_includes_operational_fields() {
+        let agent = AgentDefinition {
+            name: "reviewer".to_string(),
+            description: "Review code".to_string(),
+            model: Some("claude-sonnet-4-6".to_string()),
+            tools: Some(vec!["read_file".to_string()]),
+            disallowed_tools: Some(vec!["run_command".to_string()]),
+            max_turns: Some(12),
+            permission_mode: Some("plan".to_string()),
+            system_prompt: "You review code.".to_string(),
+            path: PathBuf::from("/tmp/project/.agiworkforce/agents/reviewer.md"),
+        };
+
+        let out = format_agent_detail(&agent);
+
+        assert!(out.contains("Agent: reviewer"));
+        assert!(out.contains("model: claude-sonnet-4-6"));
+        assert!(out.contains("permission_mode: plan"));
+        assert!(out.contains("disallowed_tools: run_command"));
+        assert!(out.contains("You review code."));
+    }
+
+    #[test]
+    fn test_format_agent_validation_reports_duplicates_and_bad_modes() {
+        let agents = vec![
+            AgentDefinition {
+                name: "dupe".to_string(),
+                description: String::new(),
+                model: None,
+                tools: None,
+                disallowed_tools: None,
+                max_turns: None,
+                permission_mode: Some("wild".to_string()),
+                system_prompt: String::new(),
+                path: PathBuf::from("/tmp/a.md"),
+            },
+            AgentDefinition {
+                name: "DUPE".to_string(),
+                description: "Duplicate".to_string(),
+                model: None,
+                tools: None,
+                disallowed_tools: None,
+                max_turns: None,
+                permission_mode: None,
+                system_prompt: "Body".to_string(),
+                path: PathBuf::from("/tmp/b.md"),
+            },
+        ];
+
+        let out = format_agent_validation(&agents);
+
+        assert!(out.contains("duplicate agent name `dupe`"));
+        assert!(out.contains("missing `description`"));
+        assert!(out.contains("empty prompt body"));
+        assert!(out.contains("unknown permission_mode `wild`"));
     }
 
     #[test]

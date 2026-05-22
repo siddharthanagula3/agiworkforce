@@ -1,70 +1,56 @@
-# AGI Workforce — Documentation Index
+# AGI Documentation Index
 
-The `docs/` directory is the canonical home for everything that doesn't belong in source comments or memory files. This index links to the load-bearing documents and explains how they relate.
+Status: Current
+Owner: Docs/platform
+Last updated: 2026-05-21
 
-> **Single source of truth at the repo root**: `AGI_WORKFORCE.md` (product spec), `CLAUDE.md` (engineering rules), `BUILD.md` (per-surface commands), `README.md` (user-facing). Read those before non-trivial changes.
+This directory contains durable AGI Workforce documentation. The active docs graph is intentionally small: start in `docs/current`, then follow links to decisions, agent context, surface guides, enterprise docs, or audit evidence only when needed.
 
-## Architecture & scaling
+## Start Here
 
-| File                                   | What it covers                                                                                                                                     |
-| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`ARCHITECTURE.md`](./ARCHITECTURE.md) | System map: 6 surfaces, shared packages, backend services, abstraction layers, cross-surface contracts.                                            |
-| [`SCALING.md`](./SCALING.md)           | Migration playbooks: Supabase → Neon, Auth0/Clerk swap, S3/R2/B2 storage, Pusher/Ably realtime, connection pooling, read replicas.                 |
-| [`HOSTING.md`](./HOSTING.md)           | Multi-cloud deployment: Vercel / Cloudflare / Netlify for web; Fly.io / Railway / Render for services; domain switching, edge vs origin functions. |
-| [`PERFORMANCE.md`](./PERFORMANCE.md)   | Heavy-traffic patterns: pool sizing, caching layers, streaming backpressure, provider failover, cost-aware routing.                                |
+1. [`current/`](./current/) - compact current source-of-truth docs.
+2. [`../PLAN.md`](../PLAN.md) - active Anthropic/OpenAI-style application-suite transition plan.
+3. [`../TODO.md`](../TODO.md) - active execution checklist.
+4. [`../CHANGELOG.md`](../CHANGELOG.md) - completed work log.
+5. [`decisions/CURRENT_DECISIONS.md`](./decisions/CURRENT_DECISIONS.md) - locked decisions and conflict rules.
+6. [`agent-context/`](./agent-context/) - machine-readable maps for coding agents.
 
-The `packages/data-layer/` package is the seam that makes Supabase → Neon (or any other Postgres provider) a config change instead of a rewrite. The interfaces in `data-layer/src/types.ts` are the contract every cloud-portable feature consumes.
+## Current Docs
 
-## Product & business
+| Doc                                                                                | Purpose                                                                                                        |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| [`current/product-suite.md`](./current/product-suite.md)                           | Product thesis, surfaces, trust modes, parity target, and current scope.                                       |
+| [`current/technical-architecture.md`](./current/technical-architecture.md)         | Monorepo shape, runtime boundaries, provider strategy, generated-file architecture, and enterprise foundation. |
+| [`current/commercial-and-launch.md`](./current/commercial-and-launch.md)           | Bootstrap-safe monetization, waitlist/private-beta gates, enterprise posture, and launch rules.                |
+| [`current/agent-and-repo-operability.md`](./current/agent-and-repo-operability.md) | Repo organization, docs rules, agent-native workflow, and A+ criteria.                                         |
 
-| File                         | What it covers                                                                                                          |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| [`PRICING.md`](./PRICING.md) | Locked tier matrix (Local/BYOK Free, Hobby $10, Pro $29.99 waitlist, Pro+ $49.99, Max $299.99).                         |
-| [`ROADMAP.md`](./ROADMAP.md) | High-level product roadmap pointing at the per-phase plans.                                                             |
-| [`DESIGN.md`](./DESIGN.md)   | Visual unity rules across the 6 surfaces (composer pill, model picker chevron-pill, brand mark, 3-color palette, etc.). |
-| [`HANDOFF.md`](./HANDOFF.md) | Cross-team handoff protocol for releases.                                                                               |
+## Operational Docs
 
-## Per-domain references
+| Folder                               | Purpose                                                                                                             |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| [`agent-context/`](./agent-context/) | Repo map, risk map, lane map, canonical commands, known flaws, and agent task templates.                            |
+| [`engineering/`](./engineering/)     | Naming conventions, agent-native development, parallel-agent work, review workflow, and autonomous company roadmap. |
+| [`enterprise/`](./enterprise/)       | Enterprise control plane, managed-compute gates, and profit-first readiness.                                        |
+| [`surfaces/`](./surfaces/)           | One guide per shipping surface.                                                                                     |
+| [`plans/`](./plans/)                 | Active or recent implementation plans.                                                                              |
+| [`decisions/`](./decisions/)         | ADRs and current decision index.                                                                                    |
+| [`security/`](./security/)           | Security reviews, findings, and red-team notes.                                                                     |
+| [`api/`](./api/)                     | OpenAPI, Postman collection, and API examples.                                                                      |
+| [`launch/`](./launch/)               | Launch copy, store listings, and channel drafts.                                                                    |
+| [`marketing/`](./marketing/)         | Marketing and GTM operator workspace.                                                                               |
+| [`support/`](./support/)             | Support operations and customer feedback workspace.                                                                 |
+| [`legal/`](./legal/)                 | Legal/compliance workspace.                                                                                         |
+| [`research/`](./research/)           | Durable research summaries and delegated research prompt banks.                                                     |
 
-| Folder                   | Purpose                                                                                                               |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `api/`                   | API reference material.                                                                                               |
-| `audit/`                 | Cross-surface audits — see `audit/AUDIT_2026-05-03.md`, `audit/AUDIT_REPORT_2026-05-01.md`, and `audit/FIX_QUEUE.md`. |
-| `launch/`                | Launch runbooks for each tier (Hobby, Pro+, Max).                                                                     |
-| `planning/` and `plans/` | Sprint-level plans and active workstreams.                                                                            |
-| `security/`              | Security policies + threat models + audit trails.                                                                     |
-| `superpowers/`           | Skill packs + extended capability references.                                                                         |
-| `archive/`               | Historical / superseded material.                                                                                     |
+## Archived Docs
 
-## Quickstart for new contributors
+Older long-form PRD, roadmap, pricing, hosting, scaling, ownership, handoff, and strategy docs were moved to [`archive/2026-05-21-docs-consolidation/`](./archive/2026-05-21-docs-consolidation/).
 
-1. Read `AGI_WORKFORCE.md` (product) and `CLAUDE.md` (rules).
-2. Read [`ARCHITECTURE.md`](./ARCHITECTURE.md) (system).
-3. Read the surface guide for whatever you're working on (`applications/<surface>.md`).
-4. Run `scripts/verify-surfaces.sh fast` to confirm your environment is green before changes.
-5. Commit conventions: lowercase, ≤100 chars, Conventional Commits, with `Co-Authored-By:` footer (commitlint enforces).
+Archived docs are source material only. They can explain why older decisions happened, but they do not override `docs/current`, root `PLAN.md`, root `TODO.md`, or `docs/decisions/CURRENT_DECISIONS.md`.
 
-## Verification harness
+## Rules
 
-`scripts/verify-surfaces.sh` runs the full 6-surface gate: typecheck + tests + builds where feasible. Modes:
-
-```bash
-scripts/verify-surfaces.sh           # all surfaces (slow — runs full builds)
-scripts/verify-surfaces.sh fast      # typecheck + test only, skip builds
-scripts/verify-surfaces.sh cli       # one surface
-scripts/verify-surfaces.sh desktop   # one surface
-scripts/verify-surfaces.sh web       # one surface
-scripts/verify-surfaces.sh mobile    # one surface
-scripts/verify-surfaces.sh chrome    # one surface
-scripts/verify-surfaces.sh vscode    # one surface
-```
-
-Use this before merging any cross-surface change.
-
-## How docs and memory differ
-
-- **`docs/`** — durable, repo-checked, code-reviewed. Belongs here when it's a reference engineers need to read.
-- **`~/.claude/projects/.../memory/`** — Claude's auto-memory. Personal session context, not for cross-team docs.
-- **Source comments** — only when the WHY is non-obvious (constraint, invariant, workaround). See `CLAUDE.md` "Doing tasks" section.
-
-If you find yourself adding the same context to multiple memory files or PR descriptions, promote it to `docs/`.
+- Current docs must include `Status`, `Owner`, and `Last updated`.
+- New files, folders, packages, branches, releases, and root control docs must follow [`engineering/naming-conventions.md`](./engineering/naming-conventions.md).
+- Do not add new top-level long-form product docs. Put compact current docs in `docs/current`, plans in `docs/plans`, evidence in `audit`, and historical material in `docs/archive`.
+- Run `pnpm check:llm-operability` after docs, agent-context, or structure changes.

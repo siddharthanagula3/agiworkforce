@@ -38,8 +38,8 @@ import {
   useNotificationPrefsStore,
   type NotificationCategory,
 } from '@/stores/notificationPrefsStore';
-import { useThemeColors } from '@/hooks/useTheme';
-import type { ColorScheme } from '@/lib/theme';
+import { useThemeColors } from '@/src/ui/theme';
+import type { ColorScheme } from '@/src/ui/theme';
 import type { LucideIcon } from 'lucide-react-native';
 
 // ---------------------------------------------------------------------------

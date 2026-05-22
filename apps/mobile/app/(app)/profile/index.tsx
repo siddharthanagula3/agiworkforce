@@ -19,14 +19,13 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { UpsellCard } from '@/components/billing/UpsellCard';
-import { useAuthStore } from '@/stores/authStore';
+import { fetchPortalSessionUrl, UpsellCard } from '@/src/features/billing';
+import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { api } from '@/services/api';
-import { fetchPortalSessionUrl } from '@/services/billing';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 

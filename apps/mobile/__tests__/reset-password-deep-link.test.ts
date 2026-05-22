@@ -69,7 +69,7 @@ jest.mock('../lib/mmkv', () => ({
 
 // Import AFTER mocks.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const { useAuthStore } = require('../stores/authStore');
+const { useAuthStore } = require('../src/features/auth/store');
 
 beforeEach(() => {
   mockResetPasswordForEmail.mockReset().mockResolvedValue({ error: null });

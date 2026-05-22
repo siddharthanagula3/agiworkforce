@@ -159,6 +159,7 @@ export async function translate(
   const defaultModel = getDefaultModel();
   let tokens = '';
   const result = await localGenerate(defaultModel.id, {
+    modelId: defaultModel.id,
     prompt,
     onToken: (token: string) => {
       tokens += token;

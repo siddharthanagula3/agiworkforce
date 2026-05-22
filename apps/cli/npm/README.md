@@ -4,10 +4,12 @@
 
 ```bash
 npm install -g @agiworkforce/cli
-agiworkforce login
-agiworkforce            # interactive TUI
-agiworkforce exec "..."  # one-shot
+agi login
+agi            # interactive TUI
+agi exec "..."  # one-shot
 ```
+
+`agi` is the primary command. `agiworkforce` remains available as a backward-compatible alias.
 
 ## Why AGI Workforce CLI
 
@@ -59,27 +61,27 @@ curl -fsSL https://agiworkforce.com/install.sh | bash
 ### From source (Rust 1.94+)
 
 ```bash
-cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli
+cargo install --git https://github.com/siddharthanagula3/agiworkforce agiworkforce-cli --bin agi
 ```
 
 ## Quick start
 
 ```bash
 # 1. Authenticate (OAuth or paste API key)
-agiworkforce login
+agi login
 
 # 2. Check what providers are available
-agiworkforce auth-status
-agiworkforce --list-models
+agi auth-status
+agi --list-models
 
 # 3. One-shot prompt
-agiworkforce exec "what files are in this directory?"
+agi exec "what files are in this directory?"
 
 # 4. Interactive TUI
-agiworkforce
+agi
 
 # 5. Multi-provider with fallback chain
-agiworkforce exec -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" "explain this code"
+agi exec -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" "explain this code"
 ```
 
 ## 22 subcommands
@@ -95,7 +97,7 @@ agiworkforce exec -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" "explain this code"
 | Auth            | `login`, `logout`, `auth-status`                                                          |
 | Setup           | `init`, `onboarding`                                                                      |
 
-Run `agiworkforce <command> --help` for any.
+Run `agi <command> --help` for any.
 
 ## Local LLMs (Ollama)
 
@@ -104,13 +106,13 @@ Run `agiworkforce <command> --help` for any.
 ollama pull llama3.1:8b
 
 # Use it via AGI Workforce
-agiworkforce -m llama3.1:8b exec "hello"
-agiworkforce -m "claude-sonnet-4-6,llama3.1:8b" exec "..."  # cloud first, fallback local
+agi -m llama3.1:8b exec "hello"
+agi -m "claude-sonnet-4-6,llama3.1:8b" exec "..."  # cloud first, fallback local
 ```
 
 ## MCP support
 
-AGI Workforce CLI is both an MCP client (consumes external MCP servers) and an MCP server (`agiworkforce mcp-server`). Configure in `.mcp.json` (project) or `~/.agiworkforce/.mcp.json` (global).
+AGI Workforce CLI is both an MCP client (consumes external MCP servers) and an MCP server (`agi mcp-server`). Configure in `.mcp.json` (project) or `~/.agiworkforce/.mcp.json` (global).
 
 ## Documentation
 

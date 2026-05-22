@@ -1,0 +1,289 @@
+[
+  {
+    "aliases": ["e"],
+    "description": "Run non-interactively (alias: e).",
+    "enum_name": "Command",
+    "name": "exec",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Non-interactive code review.",
+    "enum_name": "Command",
+    "name": "review",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": ["a"],
+    "description": "Apply latest diff as git patch (alias: a).",
+    "enum_name": "Command",
+    "name": "apply",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Run commands inside a sandbox.",
+    "enum_name": "Command",
+    "name": "sandbox",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Run as MCP server (stdio).",
+    "enum_name": "Command",
+    "name": "mcp-server",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Run app server for IDE integration.",
+    "enum_name": "Command",
+    "name": "app-server",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Continue previous session.",
+    "enum_name": "Command",
+    "name": "resume",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Fork a previous session.",
+    "enum_name": "Command",
+    "name": "fork",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Inspect or branch sessions (replay).",
+    "enum_name": "Command",
+    "name": "session",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Cloud tasks (BYOK, top models only).",
+    "enum_name": "Command",
+    "name": "cloud",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Manage plugins.",
+    "enum_name": "Command",
+    "name": "plugin",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Inspect feature flags.",
+    "enum_name": "Command",
+    "name": "features",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show execution policy rules.",
+    "enum_name": "Command",
+    "name": "execpolicy",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Scan for ecosystem tools (Claude, Codex, Cursor, Gemini) and import MCP configs.",
+    "enum_name": "Command",
+    "name": "ecosystem",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Browse session history.",
+    "enum_name": "Command",
+    "name": "history",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Sync dotfiles and settings across devices.",
+    "enum_name": "Command",
+    "name": "sync",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Login to AGI Workforce cloud (or an LLM provider via OAuth).",
+    "enum_name": "Command",
+    "name": "login",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Logout from AGI Workforce cloud.",
+    "enum_name": "Command",
+    "name": "logout",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show authentication status for all configured providers.",
+    "enum_name": "Command",
+    "name": "auth-status",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Browse and install marketplace plugins.",
+    "enum_name": "Command",
+    "name": "marketplace",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Initialize ~/.agiworkforce/ directory structure and project registration.",
+    "enum_name": "Command",
+    "name": "init",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Run the first-run onboarding wizard again.",
+    "enum_name": "Command",
+    "name": "onboarding",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Submit a task (BYOK).",
+    "enum_name": "CloudSubcommand",
+    "name": "cloud exec",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "List cloud tasks.",
+    "enum_name": "CloudSubcommand",
+    "name": "cloud list",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show cloud models & BYOK status.",
+    "enum_name": "CloudSubcommand",
+    "name": "cloud models",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "List recent sessions, newest first.",
+    "enum_name": "SessionAction",
+    "name": "session list",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show the turn-by-turn transcript of a session.",
+    "enum_name": "SessionAction",
+    "name": "session show",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Fork a session at a specific turn into a new named session.",
+    "enum_name": "SessionAction",
+    "name": "session fork",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "List installed plugins.",
+    "enum_name": "PluginSubcommand",
+    "name": "plugin list",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Install a plugin.",
+    "enum_name": "PluginSubcommand",
+    "name": "plugin install",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Scan for installed AI tools and IDEs.",
+    "enum_name": "EcosystemSubcommand",
+    "name": "ecosystem scan",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Import MCP server configs from detected tools.",
+    "enum_name": "EcosystemSubcommand",
+    "name": "ecosystem import",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show detected tools and available MCP servers in detail.",
+    "enum_name": "EcosystemSubcommand",
+    "name": "ecosystem show",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Show which synced files have changed since last sync.",
+    "enum_name": "SyncSubcommand",
+    "name": "sync status",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Export synced files to a JSON bundle (prints to stdout).",
+    "enum_name": "SyncSubcommand",
+    "name": "sync export",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Import a sync bundle from a JSON file.",
+    "enum_name": "SyncSubcommand",
+    "name": "sync import",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Search the remote plugin marketplace.",
+    "enum_name": "MarketplaceSubcommand",
+    "name": "marketplace search",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Install a plugin from a local path or git URL.",
+    "enum_name": "MarketplaceSubcommand",
+    "name": "marketplace install",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Uninstall a plugin by name.",
+    "enum_name": "MarketplaceSubcommand",
+    "name": "marketplace uninstall",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "List all installed marketplace plugins.",
+    "enum_name": "MarketplaceSubcommand",
+    "name": "marketplace list",
+    "source_file": "apps/cli/src/lib.rs"
+  },
+  {
+    "aliases": [],
+    "description": "Update all git-installed plugins.",
+    "enum_name": "MarketplaceSubcommand",
+    "name": "marketplace update",
+    "source_file": "apps/cli/src/lib.rs"
+  }
+]

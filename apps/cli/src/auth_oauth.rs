@@ -14,7 +14,7 @@
 
 #![allow(dead_code)]
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -133,14 +133,19 @@ fn capture_redirect(listener: TcpListener, expected_state: &str) -> Result<Strin
         .next()
         .and_then(|line| line.split_whitespace().nth(1))
         .ok_or_else(|| anyhow!("malformed HTTP request"))?;
-    let qs = path.split_once('?').map(|x| x.1).ok_or_else(|| anyhow!("no query string"))?;
+    let qs = path
+        .split_once('?')
+        .map(|x| x.1)
+        .ok_or_else(|| anyhow!("no query string"))?;
     let mut code: Option<String> = None;
     let mut state: Option<String> = None;
     for kv in qs.split('&') {
         let mut parts = kv.splitn(2, '=');
         let k = parts.next().unwrap_or("");
         let v = parts.next().unwrap_or("");
-        let v = urlencoding::decode(v).map(|s| s.to_string()).unwrap_or_else(|_| v.to_string());
+        let v = urlencoding::decode(v)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|_| v.to_string());
         match k {
             "code" => code = Some(v),
             "state" => state = Some(v),
@@ -288,7 +293,12 @@ mod tests {
     #[test]
     fn authorize_url_contains_all_required_params() {
         let p = ProviderEndpoints::known("anthropic").unwrap();
-        let url = build_authorize_url(&p, "http://127.0.0.1:1234/callback", "challenge-x", "state-y");
+        let url = build_authorize_url(
+            &p,
+            "http://127.0.0.1:1234/callback",
+            "challenge-x",
+            "state-y",
+        );
         assert!(url.contains("response_type=code"));
         assert!(url.contains("client_id="));
         assert!(url.contains("redirect_uri=http"));
@@ -318,7 +328,10 @@ mod tests {
             "token_endpoint": "https://x.example.com/oauth/token"
         }"#;
         let e: DiscoveredEndpoints = serde_json::from_str(json).expect("parse");
-        assert_eq!(e.authorization_endpoint, "https://x.example.com/oauth/authorize");
+        assert_eq!(
+            e.authorization_endpoint,
+            "https://x.example.com/oauth/authorize"
+        );
         assert_eq!(e.token_endpoint, "https://x.example.com/oauth/token");
         assert!(e.scopes_supported.is_empty());
     }
@@ -335,6 +348,9 @@ mod tests {
         }"#;
         let e: DiscoveredEndpoints = serde_json::from_str(json).expect("parse");
         assert_eq!(e.scopes_supported, vec!["read", "write"]);
-        assert!(e.code_challenge_methods_supported.iter().any(|m| m == "S256"));
+        assert!(e
+            .code_challenge_methods_supported
+            .iter()
+            .any(|m| m == "S256"));
     }
 }

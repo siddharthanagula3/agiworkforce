@@ -5,7 +5,7 @@
 # Options:
 #   --version VERSION    Install a specific version (default: latest)
 #   --no-modify-path     Skip adding to PATH
-#   --install-dir DIR    Custom install directory (default: ~/.agiworkforce/bin)
+#   --install-dir DIR    Custom install directory (default: ~/.agi/bin)
 
 set -euo pipefail
 
@@ -19,8 +19,10 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 GITHUB_REPO="siddharthanagula3/agiworkforce"
-BINARY_NAME="agiworkforce"
-DEFAULT_INSTALL_DIR="$HOME/.agiworkforce/bin"
+BINARY_NAME="agi"
+LEGACY_BINARY_NAME="agiworkforce"
+ARCHIVE_BASENAME="agiworkforce"
+DEFAULT_INSTALL_DIR="$HOME/.agi/bin"
 # CLI release tags use the v-cli-X.Y.Z scheme (separate from desktop's v-desktop-*).
 # Override via --tag-prefix if a future channel uses a different scheme.
 TAG_PREFIX="v-cli-"
@@ -107,14 +109,16 @@ download_binary() {
   local platform="$1"
   local version="$2"
   local ext="tar.gz"
+  local exe_suffix=""
 
   if [[ "$platform" == windows-* ]]; then
     ext="zip"
+    exe_suffix=".exe"
   fi
 
   # release-cli.yml produces archives named agiworkforce-{platform}.{ext}
   # (no version in filename — version is in the tag/path). Match that.
-  local filename="${BINARY_NAME}-${platform}.${ext}"
+  local filename="${ARCHIVE_BASENAME}-${platform}.${ext}"
   local url="https://github.com/${GITHUB_REPO}/releases/download/${version}/${filename}"
   local tmpdir
   tmpdir=$(mktemp -d)
@@ -130,7 +134,7 @@ download_binary() {
     echo "  - Your platform (${platform}) is not supported"
     echo ""
     echo "You can build from source instead:"
-    echo "  cargo install --git https://github.com/${GITHUB_REPO} agiworkforce-cli"
+    echo "  cargo install --git https://github.com/${GITHUB_REPO} agiworkforce-cli --bin agi"
     rm -rf "$tmpdir"
     exit 1
   fi
@@ -145,7 +149,19 @@ download_binary() {
     unzip -qo "${tmpdir}/${filename}" -d "$INSTALL_DIR"
   fi
 
-  chmod +x "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
+  # New archives include both `agi` and `agiworkforce`. Older archives only
+  # include `agiworkforce`, so create the primary short command after extract.
+  local primary_file="${INSTALL_DIR}/${BINARY_NAME}${exe_suffix}"
+  local legacy_file="${INSTALL_DIR}/${LEGACY_BINARY_NAME}${exe_suffix}"
+  if [ ! -f "$primary_file" ] && [ -f "$legacy_file" ]; then
+    cp "$legacy_file" "$primary_file"
+  fi
+  if [ ! -f "$legacy_file" ] && [ -f "$primary_file" ]; then
+    cp "$primary_file" "$legacy_file"
+  fi
+
+  chmod +x "$primary_file" 2>/dev/null || true
+  chmod +x "$legacy_file" 2>/dev/null || true
   rm -rf "$tmpdir"
 }
 
@@ -225,9 +241,10 @@ main() {
     echo -e "${GREEN}${BOLD}Installation complete!${NC}"
     echo -e "  ${installed_version}"
     echo ""
-    echo -e "  Get started: ${BOLD}agiworkforce${NC}"
-    echo -e "  Quick run:   ${BOLD}agiworkforce exec \"explain this codebase\"${NC}"
-    echo -e "  Help:        ${BOLD}agiworkforce --help${NC}"
+    echo -e "  Get started: ${BOLD}agi${NC}"
+    echo -e "  Quick run:   ${BOLD}agi exec \"explain this codebase\"${NC}"
+    echo -e "  Help:        ${BOLD}agi --help${NC}"
+    echo -e "  Alias kept:  ${BOLD}agiworkforce${NC}"
   else
     echo ""
     echo -e "${GREEN}${BOLD}Binary installed to ${INSTALL_DIR}/${BINARY_NAME}${NC}"
@@ -235,7 +252,7 @@ main() {
     echo -e "  ${YELLOW}Restart your shell or run:${NC}"
     echo -e "  ${BOLD}export PATH=\"${INSTALL_DIR}:\$PATH\"${NC}"
     echo ""
-    echo -e "  Then: ${BOLD}agiworkforce --help${NC}"
+    echo -e "  Then: ${BOLD}agi --help${NC}"
   fi
 
   echo ""

@@ -1,9 +1,106 @@
 //! Native Messaging Manifest Generation and Installation
 
 use super::*;
-#[cfg(target_os = "macos")]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+pub const NATIVE_MESSAGING_HOST_NAME: &str = "com.agiworkforce.browser";
+pub const DEFAULT_BROWSER_EXTENSION_IDS: &[&str] = &["bblfoadbknbnmbchfjpgcefpkccpdnfc"];
+
+pub fn is_valid_chrome_extension_id(extension_id: &str) -> bool {
+    extension_id.len() == 32 && extension_id.bytes().all(|byte| matches!(byte, b'a'..=b'p'))
+}
+
+fn native_host_executable_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "native_messaging_host.exe"
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        "native_messaging_host"
+    }
+}
+
+fn is_native_host_executable_name(name: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        name == "native_messaging_host.exe"
+            || (name.starts_with("native_messaging_host-") && name.ends_with(".exe"))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        name == "native_messaging_host" || name.starts_with("native_messaging_host-")
+    }
+}
+
+fn find_native_host_in_dir(dir: &Path) -> Option<PathBuf> {
+    let exact = dir.join(native_host_executable_name());
+    if exact.is_file() {
+        return Some(exact);
+    }
+
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|value| value.to_str()) else {
+            continue;
+        };
+        if is_native_host_executable_name(name) {
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+fn resolve_native_host_executable(current_exe: &Path) -> Result<PathBuf> {
+    if let Ok(configured) = std::env::var("AGI_NATIVE_MESSAGING_HOST") {
+        let configured_path = PathBuf::from(configured);
+        if configured_path.is_file() {
+            return Ok(configured_path);
+        }
+    }
+
+    if current_exe
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(is_native_host_executable_name)
+        .unwrap_or(false)
+    {
+        return Ok(current_exe.to_path_buf());
+    }
+
+    if let Some(parent) = current_exe.parent() {
+        if let Some(candidate) = find_native_host_in_dir(parent) {
+            return Ok(candidate);
+        }
+
+        // Dev builds run from target/debug while `build:native-host` writes the helper to
+        // target/release by default. Check the sibling profile dir before giving up.
+        if let Some(profile_dir) = parent.file_name().and_then(|name| name.to_str()) {
+            let sibling = match profile_dir {
+                "debug" => parent.parent().map(|target_dir| target_dir.join("release")),
+                "release" => parent.parent().map(|target_dir| target_dir.join("debug")),
+                _ => None,
+            };
+            if let Some(sibling_dir) = sibling {
+                if let Some(candidate) = find_native_host_in_dir(&sibling_dir) {
+                    return Ok(candidate);
+                }
+            }
+        }
+    }
+
+    Err(anyhow!(
+        "native_messaging_host helper was not found next to {:?}; run `pnpm --filter @agiworkforce/desktop build:native-host` before building or installing the browser native host",
+        current_exe
+    ))
+}
 
 #[cfg(target_os = "macos")]
 fn normalize_macos_home_for_native_host_paths(home: &Path) -> PathBuf {
@@ -158,7 +255,7 @@ fn try_install_manifests_via_external_helper(
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or_default();
-    if helper_name != "native_messaging_host" {
+    if !is_native_host_executable_name(helper_name) {
         return Err(anyhow!(
             "Refusing helper fallback for non-helper executable: {:?}",
             helper_binary
@@ -259,13 +356,12 @@ pub fn get_chrome_native_messaging_dir() -> Result<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
-        // On Windows, manifests go in the registry, but we can also use a file
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .map_err(|_| anyhow!("LOCALAPPDATA environment variable not set"))?;
-        Ok(PathBuf::from(format!(
-            "{}\\Google\\Chrome\\User Data\\NativeMessagingHosts",
-            local_app_data
-        )))
+        let base_dir = dirs::data_local_dir()
+            .ok_or_else(|| anyhow!("Could not determine Windows local data directory"))?;
+        Ok(base_dir
+            .join("com.agiworkforce.desktop")
+            .join("native-messaging")
+            .join("chrome"))
     }
 
     #[cfg(target_os = "linux")]
@@ -301,12 +397,12 @@ pub fn get_edge_native_messaging_dir() -> Result<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
-        let local_app_data = std::env::var("LOCALAPPDATA")
-            .map_err(|_| anyhow!("LOCALAPPDATA environment variable not set"))?;
-        Ok(PathBuf::from(format!(
-            "{}\\Microsoft\\Edge\\User Data\\NativeMessagingHosts",
-            local_app_data
-        )))
+        let base_dir = dirs::data_local_dir()
+            .ok_or_else(|| anyhow!("Could not determine Windows local data directory"))?;
+        Ok(base_dir
+            .join("com.agiworkforce.desktop")
+            .join("native-messaging")
+            .join("edge"))
     }
 
     #[cfg(target_os = "linux")]
@@ -322,23 +418,11 @@ pub fn get_edge_native_messaging_dir() -> Result<PathBuf> {
 
 /// Install native messaging manifest for Chrome and Edge
 pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
-    let host_name = "com.agiworkforce.browser";
+    let host_name = NATIVE_MESSAGING_HOST_NAME;
 
-    // Prefer dedicated native messaging host binary next to the app executable.
-    // Fallback to current executable if the sidecar is not available.
     let current_exe =
         std::env::current_exe().map_err(|e| anyhow!("Failed to get executable path: {}", e))?;
-    let mut exe_path = current_exe.clone();
-    if let Some(parent) = current_exe.parent() {
-        #[cfg(target_os = "windows")]
-        let candidate = parent.join("native_messaging_host.exe");
-        #[cfg(not(target_os = "windows"))]
-        let candidate = parent.join("native_messaging_host");
-
-        if candidate.exists() {
-            exe_path = candidate;
-        }
-    }
+    let mut exe_path = resolve_native_host_executable(&current_exe)?;
 
     #[cfg(target_os = "macos")]
     {
@@ -346,7 +430,7 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         let helper_is_bundled_sidecar = exe_path
             .file_name()
             .and_then(|name| name.to_str())
-            .map(|name| name == "native_messaging_host")
+            .map(is_native_host_executable_name)
             .unwrap_or(false)
             && current_exe_str.contains(".app/Contents/MacOS/");
 
@@ -375,8 +459,14 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         exe_path_str,
     );
 
-    // Add extension ID if provided
+    for ext_id in DEFAULT_BROWSER_EXTENSION_IDS {
+        manifest.add_extension(ext_id);
+    }
+
     if let Some(ext_id) = extension_id {
+        if !is_valid_chrome_extension_id(ext_id) {
+            return Err(anyhow!("Invalid Chrome extension ID: {}", ext_id));
+        }
         manifest.add_extension(ext_id);
     }
 
@@ -412,9 +502,23 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
 
     #[cfg(target_os = "windows")]
     {
-        // On Windows, also register in the registry
-        if let Err(e) = register_windows_native_host(host_name, &manifest_json) {
-            tracing::warn!("Failed to register Windows native host: {}", e);
+        let mut registered_count = 0usize;
+        if let Some(path) = &chrome_manifest_path {
+            if path.exists() {
+                register_windows_native_host(host_name, BrowserFamily::Chrome, path)?;
+                registered_count += 1;
+            }
+        }
+        if let Some(path) = &edge_manifest_path {
+            if path.exists() {
+                register_windows_native_host(host_name, BrowserFamily::Edge, path)?;
+                registered_count += 1;
+            }
+        }
+        if registered_count == 0 {
+            return Err(anyhow!(
+                "Failed to register Windows native messaging host because no manifest files were written"
+            ));
         }
     }
 
@@ -471,7 +575,7 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
     Ok(installed_paths)
 }
 
-fn install_manifest_to_dir(dir: &PathBuf, filename: &str, content: &str) -> Result<()> {
+fn install_manifest_to_dir(dir: &Path, filename: &str, content: &str) -> Result<()> {
     // Create directory if it doesn't exist
     std::fs::create_dir_all(dir)
         .map_err(|e| anyhow!("Failed to create directory {:?}: {}", dir, e))?;
@@ -485,12 +589,55 @@ fn install_manifest_to_dir(dir: &PathBuf, filename: &str, content: &str) -> Resu
 }
 
 #[cfg(target_os = "windows")]
-fn register_windows_native_host(host_name: &str, _manifest_json: &str) -> Result<()> {
-    // Windows requires registry registration
-    // This would use winreg crate in a real implementation
+#[derive(Debug, Clone, Copy)]
+enum BrowserFamily {
+    Chrome,
+    Edge,
+}
+
+#[cfg(target_os = "windows")]
+fn windows_registry_key_path(host_name: &str, browser: BrowserFamily) -> String {
+    match browser {
+        BrowserFamily::Chrome => {
+            format!(
+                "Software\\Google\\Chrome\\NativeMessagingHosts\\{}",
+                host_name
+            )
+        }
+        BrowserFamily::Edge => {
+            format!(
+                "Software\\Microsoft\\Edge\\NativeMessagingHosts\\{}",
+                host_name
+            )
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn register_windows_native_host(
+    host_name: &str,
+    browser: BrowserFamily,
+    manifest_path: &Path,
+) -> Result<()> {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE};
+    use winreg::RegKey;
+
+    let manifest_path = manifest_path
+        .to_str()
+        .ok_or_else(|| anyhow!("Invalid manifest path"))?;
+    let key_path = windows_registry_key_path(host_name, browser);
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    let (key, _) = hkcu
+        .create_subkey_with_flags(&key_path, KEY_WRITE)
+        .map_err(|e| anyhow!("Failed to create HKCU\\{}: {}", key_path, e))?;
+    key.set_value("", &manifest_path.to_string())
+        .map_err(|e| anyhow!("Failed to set HKCU\\{} default value: {}", key_path, e))?;
+
     tracing::info!(
-        "Windows registry registration for {} would happen here",
-        host_name
+        "Registered Windows native messaging host {:?}: HKCU\\{} -> {}",
+        browser,
+        key_path,
+        manifest_path
     );
     Ok(())
 }
@@ -501,9 +648,54 @@ fn register_windows_native_host(_host_name: &str, _manifest_json: &str) -> Resul
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+fn unregister_windows_native_hosts(host_name: &str) -> Result<()> {
+    use std::io::ErrorKind;
+    use winreg::enums::HKEY_CURRENT_USER;
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    for browser in [BrowserFamily::Chrome, BrowserFamily::Edge] {
+        let key_path = windows_registry_key_path(host_name, browser);
+        match hkcu.delete_subkey_all(&key_path) {
+            Ok(()) => tracing::info!("Removed Windows native host key HKCU\\{}", key_path),
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(anyhow!(
+                    "Failed to remove Windows native host key HKCU\\{}: {}",
+                    key_path,
+                    error
+                ));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn is_windows_native_host_registered(host_name: &str) -> bool {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ};
+    use winreg::RegKey;
+
+    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+    [BrowserFamily::Chrome, BrowserFamily::Edge]
+        .iter()
+        .any(|browser| {
+            let key_path = windows_registry_key_path(host_name, *browser);
+            let Ok(key) = hkcu.open_subkey_with_flags(key_path, KEY_READ) else {
+                return false;
+            };
+            let Ok(manifest_path) = key.get_value::<String, _>("") else {
+                return false;
+            };
+            PathBuf::from(manifest_path).exists()
+        })
+}
+
 /// Uninstall native messaging manifests
 pub fn uninstall_manifests() -> Result<()> {
-    let host_name = "com.agiworkforce.browser";
+    let host_name = NATIVE_MESSAGING_HOST_NAME;
     let manifest_filename = format!("{}.json", host_name);
 
     // Remove from Chrome
@@ -526,12 +718,21 @@ pub fn uninstall_manifests() -> Result<()> {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    unregister_windows_native_hosts(host_name)?;
+
     Ok(())
 }
 
 /// Check if native messaging is properly installed
 pub fn is_native_messaging_installed() -> bool {
-    let host_name = "com.agiworkforce.browser";
+    let host_name = NATIVE_MESSAGING_HOST_NAME;
+
+    #[cfg(target_os = "windows")]
+    {
+        return is_windows_native_host_registered(host_name);
+    }
+
     let manifest_filename = format!("{}.json", host_name);
 
     if let Ok(chrome_dir) = get_chrome_native_messaging_dir() {

@@ -1,7 +1,16 @@
 'use client';
 
 import { useCallback } from 'react';
-import { FileCode, Code2, FileText, Image as ImageIcon, Globe, ChevronRight } from 'lucide-react';
+import {
+  FileCode,
+  Code2,
+  FileText,
+  Image as ImageIcon,
+  Globe,
+  ChevronRight,
+  Shield,
+} from 'lucide-react';
+import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import type { ArtifactData } from './ArtifactPreview';
@@ -30,6 +39,8 @@ function typeBadge(type: ArtifactData['type']): string {
       return 'Diagram';
     case 'code':
       return 'Code';
+    case 'document':
+      return 'Document';
     default:
       return 'File';
   }
@@ -89,6 +100,19 @@ function codePreview(artifact: ArtifactData): string | null {
 function ArtifactThumbCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
   const canRender = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
   const preview = codePreview(artifact);
+  const generatedFileSummary = summarizeGeneratedFileBundle({
+    computeSession: artifact.computeSession,
+    generatedFile: artifact.generatedFile,
+    artifactManifest: artifact.artifactManifest,
+    fallbackFileName: artifact.title,
+    fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
+    fallbackMimeType: artifact.generatedFile?.mimeType,
+    fallbackUri: artifact.generatedFile?.uri,
+    fallbackStatus: artifact.computeSession?.status,
+  });
+  const hasGeneratedFileManifest = Boolean(
+    artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
+  );
 
   return (
     <button
@@ -146,6 +170,12 @@ function ArtifactThumbCard({ artifact, onClick }: { artifact: ArtifactData; onCl
         >
           {typeBadge(artifact.type)}
         </span>
+        {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
+          <span className="inline-flex w-fit items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[8px] font-semibold uppercase leading-tight text-muted-foreground">
+            <Shield className="h-2.5 w-2.5" aria-hidden="true" />
+            {generatedFileSummary.privacyShortLabel}
+          </span>
+        )}
       </div>
     </button>
   );

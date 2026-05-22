@@ -2,7 +2,7 @@
 
 **Surface:** `apps/extension/` (Chrome MV3 v1.2.0)
 **Last updated:** 2026-05-19
-**Owners:** Chrome extension engineer (delegated). Audit owner per `docs/HANDOFF.md`.
+**Owners:** Chrome extension engineer (delegated). Audit owner per `docs/current/agent-and-repo-operability.md`.
 
 This document declares the trust planes, data classes, and flow rules that
 the security model in `src/background/policy.ts` enforces. Every security
@@ -17,28 +17,28 @@ mitigation is shaped the way it is.
 
 ## 1. Trust planes (most-trusted → least-trusted)
 
-| Plane | Reachable code | Trust assumption |
-|---|---|---|
-| **A. Extension page** | popup, side panel, options | The user *intends* this action. `sender.id === chrome.runtime.id && !sender.tab` is the predicate. |
-| **B. Native messaging host** | desktop bridge over `chrome.runtime.connectNative('com.agiworkforce.browser')` | Installed by the user via a separate desktop-app installer. Trusted to host the LLM, but its responses are still validated (`validateShortcutActions` on bridge-supplied action plans — L-09 audit 2026-05-19). |
-| **C. Local desktop HTTP bridge** | `http://localhost:8787` (port configurable via `agi_bridge_url` chrome.storage.local) | Trusted only after pairing (token in `chrome.storage.session.agi_bridge_token`). URL validated by `validateBridgeUrl`. |
-| **D. Content script on allowlisted origin** | `agi_site_allowlist` Set in chrome.storage.local | The user added this origin specifically. Can drive its own tab's DOM via `DOM_MUTATION_MESSAGE_TYPES`, query its own page context, call `REPLAY_SHORTCUT` on shortcuts it created (origin-stamped). |
-| **E. Content script on non-allowlisted origin** | any `http(s)://*/*` page where the user has NOT clicked "allow" | Untrusted. Messages rejected at `isAllowlistedSender`. |
-| **F. Page DOM / page-supplied data** | innerText, JSON-LD blocks, WebMCP tool descriptions, NLWeb probe responses | Fully untrusted, even on allowlisted origins. Sanitization, redaction, size caps applied. |
+| Plane                                           | Reachable code                                                                        | Trust assumption                                                                                                                                                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A. Extension page**                           | popup, side panel, options                                                            | The user _intends_ this action. `sender.id === chrome.runtime.id && !sender.tab` is the predicate.                                                                                                              |
+| **B. Native messaging host**                    | desktop bridge over `chrome.runtime.connectNative('com.agiworkforce.browser')`        | Installed by the user via a separate desktop-app installer. Trusted to host the LLM, but its responses are still validated (`validateShortcutActions` on bridge-supplied action plans — L-09 audit 2026-05-19). |
+| **C. Local desktop HTTP bridge**                | `http://localhost:8787` (port configurable via `agi_bridge_url` chrome.storage.local) | Trusted only after pairing (token in `chrome.storage.session.agi_bridge_token`). URL validated by `validateBridgeUrl`.                                                                                          |
+| **D. Content script on allowlisted origin**     | `agi_site_allowlist` Set in chrome.storage.local                                      | The user added this origin specifically. Can drive its own tab's DOM via `DOM_MUTATION_MESSAGE_TYPES`, query its own page context, call `REPLAY_SHORTCUT` on shortcuts it created (origin-stamped).             |
+| **E. Content script on non-allowlisted origin** | any `http(s)://*/*` page where the user has NOT clicked "allow"                       | Untrusted. Messages rejected at `isAllowlistedSender`.                                                                                                                                                          |
+| **F. Page DOM / page-supplied data**            | innerText, JSON-LD blocks, WebMCP tool descriptions, NLWeb probe responses            | Fully untrusted, even on allowlisted origins. Sanitization, redaction, size caps applied.                                                                                                                       |
 
 ---
 
 ## 2. Data classes
 
-| Class | Where stored | Egress allowed to | Notes |
-|---|---|---|---|
-| Provider API key | `chrome.storage.session.agi_api_key` | The configured provider's HTTPS endpoint. **Never** the local bridge (chrome-HIGH-3). | Written exclusively by the trusted side-panel UI. |
-| Supabase JWT | `chrome.storage.session.agi_supabase_jwt` | `validateGatewayUrl`-approved origins (M-02 exact-match list). | Set by web-side auth flow. |
-| Bridge pairing token | `chrome.storage.session.agi_bridge_token` | Local bridge only (`X-Bridge-Token` header). Shape validated (H-07): `^[A-Za-z0-9_\-]{32,128}$`. | Set by pairing flow. |
-| Autofill profile | `chrome.storage.local.agi_autofill_profile` | Form fields on `linkedin.com` / `jobs.lever.co` autofill targets. **Never** `chrome.storage.sync` (H-04). | Migrated from sync via `migrateAutofillProfile()`. |
-| Recorded actions | `chrome.storage.local.agi_recorded_actions` | Replay against recorder's own tab. | Default selector-only (C-05). Opt-in to values drops passwords, redacts `cc-*` / `one-time-code`, runs `redactSecrets`. |
-| Page innerText | Sent to desktop LLM via native port / HTTP bridge | Allowlisted origins only (H-06b). | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB). |
-| Conversation history | `chrome.storage.local.agi_conversation_history` | Same as page innerText (forwarded as LLM context). | 100 entries cap, 30-day TTL. |
+| Class                | Where stored                                      | Egress allowed to                                                                                         | Notes                                                                                                                   |
+| -------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Provider API key     | `chrome.storage.session.agi_api_key`              | The configured provider's HTTPS endpoint. **Never** the local bridge (chrome-HIGH-3).                     | Written exclusively by the trusted side-panel UI.                                                                       |
+| Supabase JWT         | `chrome.storage.session.agi_supabase_jwt`         | `validateGatewayUrl`-approved origins (M-02 exact-match list).                                            | Set by web-side auth flow.                                                                                              |
+| Bridge pairing token | `chrome.storage.session.agi_bridge_token`         | Local bridge only (`X-Bridge-Token` header). Shape validated (H-07): `^[A-Za-z0-9_\-]{32,128}$`.          | Set by pairing flow.                                                                                                    |
+| Autofill profile     | `chrome.storage.local.agi_autofill_profile`       | Form fields on `linkedin.com` / `jobs.lever.co` autofill targets. **Never** `chrome.storage.sync` (H-04). | Migrated from sync via `migrateAutofillProfile()`.                                                                      |
+| Recorded actions     | `chrome.storage.local.agi_recorded_actions`       | Replay against recorder's own tab.                                                                        | Default selector-only (C-05). Opt-in to values drops passwords, redacts `cc-*` / `one-time-code`, runs `redactSecrets`. |
+| Page innerText       | Sent to desktop LLM via native port / HTTP bridge | Allowlisted origins only (H-06b).                                                                         | Invisible Unicode stripped + secrets redacted via `sanitizePageText`. Capped at `MAX_CONTEXT_HTML_CHARS` (100 KB).      |
+| Conversation history | `chrome.storage.local.agi_conversation_history`   | Same as page innerText (forwarded as LLM context).                                                        | 100 entries cap, 30-day TTL.                                                                                            |
 
 ---
 
@@ -93,7 +93,7 @@ LLM-supplied markdown is rendered via `side_panel/markdown.ts renderMarkdown` + 
 
 ### 3.8 Screenshot capture
 
-`CAPTURE_SCREENSHOT` from a content-script sender captures *the sender's own tab*, ignoring any `tabId` in the message body and any active-tab fallback. Extension pages may target a specific tabId or fall back to the active tab. **(H-09.)**
+`CAPTURE_SCREENSHOT` from a content-script sender captures _the sender's own tab_, ignoring any `tabId` in the message body and any active-tab fallback. Extension pages may target a specific tabId or fall back to the active tab. **(H-09.)**
 
 ### 3.9 Bridge URL semantics
 
@@ -109,11 +109,11 @@ Tokens accepted from the desktop `/pair` endpoint must match `/^[A-Za-z0-9_\-]{3
 
 ### 3.12 Page-supplied JSON size caps
 
-| Source | Cap | Const |
-|---|---|---|
-| `<script type="application/ld+json">` blocks | 256 KB | `MAX_JSON_LD_BYTES` |
-| WebMCP tool inputSchema | 64 KB | `MAX_WEBMCP_SCHEMA_BYTES` |
-| NLWeb probe body | 256 KB | `MAX_NLWEB_PROBE_BYTES` |
+| Source                                       | Cap    | Const                     |
+| -------------------------------------------- | ------ | ------------------------- |
+| `<script type="application/ld+json">` blocks | 256 KB | `MAX_JSON_LD_BYTES`       |
+| WebMCP tool inputSchema                      | 64 KB  | `MAX_WEBMCP_SCHEMA_BYTES` |
+| NLWeb probe body                             | 256 KB | `MAX_NLWEB_PROBE_BYTES`   |
 
 Implemented via `safeJsonParse` which returns `undefined` on oversize or parse-failure. **(M-03.)**
 
@@ -147,12 +147,12 @@ These are contracts every PR must keep — failing any of them is a release-bloc
 
 ## 5. Known residual risks (tracked, not yet mitigated)
 
-| Risk | Why deferred | Tracking |
-|---|---|---|
-| `chrome.storage.sync` history retention | The migrator (H-04) clears the *current* sync value but Google retains history. Notifying existing users is a product decision. | PR description for the audit batch. |
-| ~~`style-src 'unsafe-inline'` in CSP~~ | ~~Inline-style usage is pervasive. Refactor is bigger than the audit batch.~~ | **M-08 RESOLVED 2026-05-19**: popup.html / side_panel.html load styles via `<link>`; side_panel.ts uses Constructable Stylesheets (`document.adoptedStyleSheets`). |
-| Pre-stamp legacy records | Records without `createdByOrigin` are permitted at fire-time (legacy grace). | Acceptable: field set on creation post-fix. |
-| Cross-extension messaging | `externally_connectable` not declared, so other extensions cannot send. If that changes, message-router gates must extend their sender-id check. | Declared rule, not a tested invariant today. |
+| Risk                                    | Why deferred                                                                                                                                     | Tracking                                                                                                                                                           |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `chrome.storage.sync` history retention | The migrator (H-04) clears the _current_ sync value but Google retains history. Notifying existing users is a product decision.                  | PR description for the audit batch.                                                                                                                                |
+| ~~`style-src 'unsafe-inline'` in CSP~~  | ~~Inline-style usage is pervasive. Refactor is bigger than the audit batch.~~                                                                    | **M-08 RESOLVED 2026-05-19**: popup.html / side_panel.html load styles via `<link>`; side_panel.ts uses Constructable Stylesheets (`document.adoptedStyleSheets`). |
+| Pre-stamp legacy records                | Records without `createdByOrigin` are permitted at fire-time (legacy grace).                                                                     | Acceptable: field set on creation post-fix.                                                                                                                        |
+| Cross-extension messaging               | `externally_connectable` not declared, so other extensions cannot send. If that changes, message-router gates must extend their sender-id check. | Declared rule, not a tested invariant today.                                                                                                                       |
 
 ---
 

@@ -67,7 +67,7 @@ jest.mock('@agiworkforce/types', () => ({
 // Imports
 // ---------------------------------------------------------------------------
 
-import { useTierStore } from '../stores/tierStore';
+import { useTierStore } from '../src/features/billing/store';
 import { api } from '../services/api';
 import { FEATURES } from '../lib/v1FeatureFlags';
 

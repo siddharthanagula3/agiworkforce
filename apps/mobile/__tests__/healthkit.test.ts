@@ -59,11 +59,12 @@ jest.mock('@kingstinct/react-native-healthkit', () => {
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const permission =
-  require('../services/healthKitPermission') as typeof import('../services/healthKitPermission');
-const query = require('../services/healthKitQuery') as typeof import('../services/healthKitQuery');
+  require('../src/features/integrations/services/healthKitPermission') as typeof import('../src/features/integrations/services/healthKitPermission');
+const query =
+  require('../src/features/integrations/services/healthKitQuery') as typeof import('../src/features/integrations/services/healthKitQuery');
 // HEALTHKIT_TOOL lives in the query service — not in the local-llm catalog.
 const catalog =
-  require('../services/healthKitQuery') as typeof import('../services/healthKitQuery');
+  require('../src/features/integrations/services/healthKitQuery') as typeof import('../src/features/integrations/services/healthKitQuery');
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,7 +160,7 @@ describe('healthKitPermission — iOS', () => {
     jest.resetModules();
     /* eslint-disable @typescript-eslint/no-require-imports */
     const p =
-      require('../services/healthKitPermission') as typeof import('../services/healthKitPermission');
+      require('../src/features/integrations/services/healthKitPermission') as typeof import('../src/features/integrations/services/healthKitPermission');
     /* eslint-enable @typescript-eslint/no-require-imports */
     const result = await p.requestHealthKitAccess(['steps']);
     expect(result.granted).toHaveLength(0);

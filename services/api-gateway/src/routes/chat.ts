@@ -20,6 +20,7 @@ import { getUserScopedClient } from '../lib/supabaseClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
+import { isValidUuid } from '../validations/ids';
 import { randomUUID } from 'crypto';
 
 const router: Router = Router();
@@ -34,13 +35,6 @@ router.use(authenticateToken);
 // SECURITY: Baseline rate limit for all chat endpoints (100/min fallback)
 // — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
-
-// UUID validation regex (RFC 4122)
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidUUID(id: string | undefined): boolean {
-  return typeof id === 'string' && UUID_REGEX.test(id);
-}
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -69,7 +63,7 @@ const historyQuerySchema = z.object({
 // =============================================================================
 
 async function verifyDesktopOwnership(desktopId: string, userId: string): Promise<void> {
-  if (!isValidUUID(desktopId)) {
+  if (!isValidUuid(desktopId)) {
     throw new AppError('Invalid desktop ID format', 400);
   }
 

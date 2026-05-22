@@ -3,14 +3,32 @@ use std::sync::Arc;
 use tauri::State;
 
 use crate::features::document::{
-    DocumentContent, DocumentManager, DocumentMetadata, ExcelDocumentConfig, ExcelDocumentCreator,
-    ExcelSheet, PdfContent, PdfDocumentConfig, PdfDocumentCreator, PresentationConfig,
-    PresentationCreator, SearchResult, WordContent, WordDocumentConfig, WordDocumentCreator,
+    build_generated_document_manifest, DocumentContent, DocumentManager, DocumentMetadata,
+    ExcelDocumentConfig, ExcelDocumentCreator, ExcelSheet, GeneratedDocumentArtifactManifest,
+    GeneratedDocumentComputeSession, GeneratedDocumentFile, GeneratedDocumentKind, PdfContent,
+    PdfDocumentConfig, PdfDocumentCreator, PresentationConfig, PresentationCreator, SearchResult,
+    WordContent, WordDocumentConfig, WordDocumentCreator,
 };
 use crate::sys::error::{Error, Result};
 
 pub struct DocumentState {
     pub manager: Arc<DocumentManager>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentCreationResult {
+    pub path: String,
+    #[serde(rename = "file_path")]
+    pub file_path: String,
+    #[serde(rename = "filePath")]
+    pub file_path_camel: String,
+    pub format: String,
+    pub status: String,
+    pub success: bool,
+    pub compute_session: GeneratedDocumentComputeSession,
+    pub generated_file: GeneratedDocumentFile,
+    pub artifact_manifest: GeneratedDocumentArtifactManifest,
 }
 
 impl Default for DocumentState {
@@ -79,6 +97,16 @@ pub async fn document_create_word(
 }
 
 #[tauri::command]
+pub async fn document_create_word_manifest(
+    output_path: String,
+    config: WordDocumentConfig,
+    contents: Vec<WordContent>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_word(output_path, config, contents).await?;
+    document_creation_result(path, "docx", GeneratedDocumentKind::Docx)
+}
+
+#[tauri::command]
 pub async fn document_create_word_simple(
     output_path: String,
     title: Option<String>,
@@ -92,6 +120,17 @@ pub async fn document_create_word_simple(
 }
 
 #[tauri::command]
+pub async fn document_create_word_simple_manifest(
+    output_path: String,
+    title: Option<String>,
+    author: Option<String>,
+    paragraphs: Vec<String>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_word_simple(output_path, title, author, paragraphs).await?;
+    document_creation_result(path, "docx", GeneratedDocumentKind::Docx)
+}
+
+#[tauri::command]
 pub async fn document_create_excel(
     output_path: String,
     config: ExcelDocumentConfig,
@@ -101,6 +140,16 @@ pub async fn document_create_excel(
     let creator = ExcelDocumentCreator::new();
     creator.create(&resolved_path, config, sheets)?;
     Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_excel_manifest(
+    output_path: String,
+    config: ExcelDocumentConfig,
+    sheets: Vec<ExcelSheet>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_excel(output_path, config, sheets).await?;
+    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
 }
 
 #[tauri::command]
@@ -117,6 +166,17 @@ pub async fn document_create_excel_simple(
 }
 
 #[tauri::command]
+pub async fn document_create_excel_simple_manifest(
+    output_path: String,
+    sheet_name: String,
+    headers: Vec<String>,
+    rows: Vec<Vec<String>>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_excel_simple(output_path, sheet_name, headers, rows).await?;
+    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
+}
+
+#[tauri::command]
 pub async fn document_create_excel_numbers(
     output_path: String,
     sheet_name: String,
@@ -130,6 +190,17 @@ pub async fn document_create_excel_numbers(
 }
 
 #[tauri::command]
+pub async fn document_create_excel_numbers_manifest(
+    output_path: String,
+    sheet_name: String,
+    headers: Vec<String>,
+    rows: Vec<Vec<f64>>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_excel_numbers(output_path, sheet_name, headers, rows).await?;
+    document_creation_result(path, "xlsx", GeneratedDocumentKind::Xlsx)
+}
+
+#[tauri::command]
 pub async fn document_create_pdf(
     output_path: String,
     config: PdfDocumentConfig,
@@ -139,6 +210,16 @@ pub async fn document_create_pdf(
     let creator = PdfDocumentCreator::new();
     creator.create(&resolved_path, config, contents)?;
     Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_pdf_manifest(
+    output_path: String,
+    config: PdfDocumentConfig,
+    contents: Vec<PdfContent>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_pdf(output_path, config, contents).await?;
+    document_creation_result(path, "pdf", GeneratedDocumentKind::Pdf)
 }
 
 #[tauri::command]
@@ -155,6 +236,17 @@ pub async fn document_create_pdf_simple(
 }
 
 #[tauri::command]
+pub async fn document_create_pdf_simple_manifest(
+    output_path: String,
+    title: Option<String>,
+    author: Option<String>,
+    paragraphs: Vec<String>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_pdf_simple(output_path, title, author, paragraphs).await?;
+    document_creation_result(path, "pdf", GeneratedDocumentKind::Pdf)
+}
+
+#[tauri::command]
 pub async fn document_create_powerpoint(
     output_path: String,
     config: PresentationConfig,
@@ -163,6 +255,15 @@ pub async fn document_create_powerpoint(
     let creator = PresentationCreator::new();
     creator.create(&config, &resolved_path)?;
     Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_powerpoint_manifest(
+    output_path: String,
+    config: PresentationConfig,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_powerpoint(output_path, config).await?;
+    document_creation_result(path, "pptx", GeneratedDocumentKind::Pptx)
 }
 
 #[tauri::command]
@@ -176,6 +277,42 @@ pub async fn document_create_powerpoint_simple(
     let creator = PresentationCreator::new();
     creator.create_simple(&title, &author, slides, &resolved_path)?;
     Ok(resolved_path)
+}
+
+#[tauri::command]
+pub async fn document_create_powerpoint_simple_manifest(
+    output_path: String,
+    title: String,
+    author: String,
+    slides: Vec<(String, Vec<String>)>,
+) -> Result<DocumentCreationResult> {
+    let path = document_create_powerpoint_simple(output_path, title, author, slides).await?;
+    document_creation_result(path, "pptx", GeneratedDocumentKind::Pptx)
+}
+
+fn document_creation_result(
+    path: String,
+    format: &str,
+    kind: GeneratedDocumentKind,
+) -> Result<DocumentCreationResult> {
+    let bundle = build_generated_document_manifest(&path, kind).map_err(|e| {
+        Error::Generic(format!(
+            "Document was created but generated-file manifest creation failed: {}",
+            e
+        ))
+    })?;
+
+    Ok(DocumentCreationResult {
+        path: path.clone(),
+        file_path: path.clone(),
+        file_path_camel: path,
+        format: format.to_string(),
+        status: "created".to_string(),
+        success: true,
+        compute_session: bundle.compute_session,
+        generated_file: bundle.generated_file,
+        artifact_manifest: bundle.artifact_manifest,
+    })
 }
 
 fn resolve_output_path(output_path: &str) -> Result<String> {
@@ -251,4 +388,55 @@ fn resolve_output_path(output_path: &str) -> Result<String> {
     }
 
     Ok(resolved.to_string_lossy().to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn document_creation_result_exposes_legacy_path_and_manifest_metadata() {
+        let temp_dir = tempfile::tempdir().expect("temp dir");
+        let file_path = temp_dir.path().join("deck.pptx");
+        std::fs::write(&file_path, b"pptx bytes").expect("test file");
+        let compute_root = temp_dir.path().join("compute-sessions");
+        let previous_compute_root = std::env::var_os("AGIWORKFORCE_LOCAL_COMPUTE_ROOT");
+        std::env::set_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT", &compute_root);
+
+        let result = document_creation_result(
+            file_path.to_string_lossy().to_string(),
+            "pptx",
+            GeneratedDocumentKind::Pptx,
+        )
+        .expect("document creation result");
+        let value = serde_json::to_value(&result).expect("json");
+
+        assert_eq!(result.path, file_path.to_string_lossy());
+        assert_eq!(result.format, "pptx");
+        assert!(result.success);
+        assert_eq!(result.generated_file.kind, GeneratedDocumentKind::Pptx);
+        assert_eq!(result.generated_file.checksum_sha256.len(), 64);
+        assert_eq!(
+            value["file_path"].as_str().expect("legacy snake path"),
+            result.path
+        );
+        assert_eq!(
+            value["filePath"].as_str().expect("legacy camel path"),
+            result.path
+        );
+        assert_eq!(
+            result.artifact_manifest.generated_file_ids,
+            vec![result.generated_file.id.clone()]
+        );
+        assert!(compute_root
+            .join(&result.compute_session.id)
+            .join("manifest.json")
+            .is_file());
+
+        if let Some(value) = previous_compute_root {
+            std::env::set_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT", value);
+        } else {
+            std::env::remove_var("AGIWORKFORCE_LOCAL_COMPUTE_ROOT");
+        }
+    }
 }

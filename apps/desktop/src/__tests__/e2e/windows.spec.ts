@@ -176,7 +176,7 @@ test.describe('Windows: Title Bar', () => {
   });
 
   test('TitleBar component renders with window control affordances', async ({ page }) => {
-    // The TitleBar component lives at src/components/Layout/TitleBar.tsx.
+    // The TitleBar component lives at src/features/layout/TitleBar.tsx.
     // It should be present in the DOM even when native decorations are on.
     const titleBar = page
       .locator('[data-testid="title-bar"]')

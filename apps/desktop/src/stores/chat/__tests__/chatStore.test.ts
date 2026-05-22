@@ -367,6 +367,57 @@ describe('chatStore action basics (H15)', () => {
     });
   });
 
+  describe('forkConversationForByok', () => {
+    it('creates a new active conversation with copied messages', () => {
+      const { createConversation, addMessage, forkConversationForByok } = useChatStore.getState();
+      const sourceId = createConversation('Local thread');
+      addMessage({
+        role: 'user',
+        content: 'Use my local context',
+        pending: true,
+        streaming: true,
+      });
+      addMessage({
+        role: 'assistant',
+        content: 'Local answer',
+        metadata: { model: 'llama3', provider: 'ollama' },
+      });
+
+      const forkId = forkConversationForByok(sourceId, {
+        title: 'Local thread (BYOK fork)',
+        model: 'gpt-5.4',
+        provider: 'openai',
+      });
+      const state = useChatStore.getState();
+
+      expect(forkId).not.toBe(sourceId);
+      expect(state.activeConversationId).toBe(forkId);
+      expect(state.conversations[0]?.title).toBe('Local thread (BYOK fork)');
+      expect(state.messagesByConversation[sourceId]).toHaveLength(2);
+      expect(state.messagesByConversation[forkId]).toHaveLength(2);
+      expect(state.messagesByConversation[forkId]?.[0]?.pending).toBeUndefined();
+      expect(state.messagesByConversation[forkId]?.[0]?.streaming).toBeUndefined();
+      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe('gpt-5.4');
+      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.provider).toBe('openai');
+    });
+
+    it('preserves project and custom instruction metadata on the fork', () => {
+      const { createConversation, setConversationProject, setConversationCustomInstructions } =
+        useChatStore.getState();
+      const sourceId = createConversation('Project thread');
+      setConversationProject(sourceId, 'project-1');
+      setConversationCustomInstructions(sourceId, 'Use the project voice.');
+
+      const forkId = useChatStore.getState().forkConversationForByok(sourceId);
+      const fork = useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === forkId);
+
+      expect(fork?.projectId).toBe('project-1');
+      expect(fork?.customInstructions).toBe('Use the project voice.');
+    });
+  });
+
   describe('deleteConversation', () => {
     it('removes the conversation from the conversations array', () => {
       const { createConversation, deleteConversation } = useChatStore.getState();

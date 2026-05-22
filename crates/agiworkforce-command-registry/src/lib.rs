@@ -246,18 +246,12 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         RegistryCommand::builtin_slash("rewind", "Undo last code changes", false, false, vec![]),
         RegistryCommand::builtin_slash("mcp", "List MCP servers and tools", true, false, vec![]),
         RegistryCommand::builtin_slash("skills", "Browse available skills", true, false, vec![]),
-        RegistryCommand::builtin_slash(
-            "agents",
-            "Browse and manage agents",
-            true,
-            false,
-            vec![],
-        ),
+        RegistryCommand::builtin_slash("agents", "Browse and manage agents", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "permissions",
             "Manage tool permissions",
             false,
-            false,
+            true,
             vec!["perms", "approvals"],
         ),
         RegistryCommand::builtin_slash("hooks", "Manage hooks configuration", true, false, vec![]),
@@ -282,13 +276,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             false,
             vec!["plugins", "marketplace", "market"],
         ),
-        RegistryCommand::builtin_slash(
-            "tasks",
-            "View background tasks",
-            true,
-            false,
-            vec![],
-        ),
+        RegistryCommand::builtin_slash("tasks", "View background tasks", true, false, vec![]),
         RegistryCommand::builtin_slash(
             "status",
             "Show session info (model, tokens, mode)",
@@ -489,6 +477,151 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             true,
             vec![],
         ),
+        RegistryCommand::builtin_slash(
+            "add-dir",
+            "Add a directory to the current workspace context",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("color", "Set the prompt/session color", true, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "desktop",
+            "Open or manage the desktop companion",
+            true,
+            false,
+            vec!["app"],
+        ),
+        RegistryCommand::builtin_slash("effort", "Set reasoning effort", false, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "files",
+            "Attach or list files for context",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "heapdump",
+            "Write a heap diagnostic dump",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "install-github-app",
+            "Install or connect the GitHub app",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "install-slack-app",
+            "Install or connect the Slack app",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "mobile",
+            "Open or manage mobile companion setup",
+            true,
+            false,
+            vec!["ios", "android"],
+        ),
+        RegistryCommand::builtin_slash(
+            "passes",
+            "Show active passes and session gates",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "pr-comments",
+            "Inspect pull request review comments",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "privacy-settings",
+            "Show or update privacy settings",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "privacy-mode",
+            "Set the session privacy boundary",
+            true,
+            true,
+            vec!["trust-boundary"],
+        ),
+        RegistryCommand::builtin_slash(
+            "continue-with-byok",
+            "Draft an explicit Local to BYOK continuation",
+            true,
+            true,
+            vec!["fork-byok", "byok"],
+        ),
+        RegistryCommand::builtin_slash(
+            "rate-limit-options",
+            "Show rate-limit and usage-limit options",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "security-review",
+            "Run a security-focused code review",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("stats", "Show session statistics", true, false, vec![]),
+        RegistryCommand::builtin_slash(
+            "statusline",
+            "Configure the terminal status line",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "stickers",
+            "Manage Claude-style stickers",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("tag", "Tag the current session", true, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "think-back",
+            "Generate or edit a Think Back recap",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "thinkback-play",
+            "Play the last Think Back recap",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "ultrareview",
+            "Run a deep remote-style review workflow",
+            false,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "upgrade",
+            "Open upgrade and plan options",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash("vim", "Toggle Vim keybindings", true, true, vec![]),
     ]
 }
 
@@ -629,6 +762,43 @@ mod tests {
             assert!(
                 commands.iter().any(|command| command.name == name),
                 "/{name} must be registered (M11 — 2026-05-14 — for Claude Code parity)"
+            );
+        }
+    }
+
+    #[test]
+    fn late_audit_parity_commands_are_registered() {
+        let commands = builtin_slash_registry_commands();
+        for name in [
+            "add-dir",
+            "color",
+            "desktop",
+            "effort",
+            "files",
+            "heapdump",
+            "install-github-app",
+            "install-slack-app",
+            "mobile",
+            "passes",
+            "pr-comments",
+            "privacy-settings",
+            "privacy-mode",
+            "continue-with-byok",
+            "rate-limit-options",
+            "security-review",
+            "stats",
+            "statusline",
+            "stickers",
+            "tag",
+            "think-back",
+            "thinkback-play",
+            "ultrareview",
+            "upgrade",
+            "vim",
+        ] {
+            assert!(
+                commands.iter().any(|command| command.name == name),
+                "/{name} must be registered for Claude Code slash-command parity"
             );
         }
     }

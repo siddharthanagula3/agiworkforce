@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { BILLING_PLAN_PRICING } from '@agiworkforce/types';
+import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
@@ -30,6 +30,9 @@ function CheckIcon() {
 
 export default function PricingPage() {
   const [annual, setAnnual] = useState(false);
+  const localLabel = formatPrivacyModeLabel('local');
+  const byokLabel = formatPrivacyModeLabel('byok');
+  const managedLabel = formatPrivacyModeLabel('managed');
   const hobbyMonthly = BILLING_PLAN_PRICING.hobby.monthlyPriceUsd;
   const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
   const hobbyAnnualPerMonth = hobbyYearly / 12;
@@ -48,10 +51,10 @@ export default function PricingPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Simple pricing.</h1>
           <p className="agi-page-lede">
-            Local and BYOK are free forever. Hobby is the only paid tier shipping today - managed
-            cloud at ${hobbyMonthly}/mo, or ${hobbyAnnualPerMonth.toFixed(2)}/mo if you pay
-            annually. <strong>Pro, Pro+, and Max are on the waitlist</strong> until our security
-            audit closes.
+            {localLabel} and {byokLabel} are free forever. Hobby is the only paid tier shipping
+            today - {managedLabel.toLowerCase()} cloud at ${hobbyMonthly}/mo, or $
+            {hobbyAnnualPerMonth.toFixed(2)}/mo if you pay annually.{' '}
+            <strong>Pro, Pro+, and Max are on the waitlist</strong> until our security audit closes.
           </p>
         </section>
 
@@ -83,7 +86,7 @@ export default function PricingPage() {
 
           <div className="agi-tier-grid">
             <article className="agi-tier">
-              <h2 className="agi-tier-name">Local</h2>
+              <h2 className="agi-tier-name">{localLabel}</h2>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">Free</span>
                 <span className="agi-tier-price-sub">forever</span>
@@ -94,7 +97,7 @@ export default function PricingPage() {
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  Local LLMs only - fully offline
+                  {localLabel} LLMs only - fully offline
                 </li>
                 <li>
                   <CheckIcon />
@@ -115,7 +118,7 @@ export default function PricingPage() {
             </article>
 
             <article className="agi-tier">
-              <h2 className="agi-tier-name">BYOK</h2>
+              <h2 className="agi-tier-name">{byokLabel}</h2>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">Free</span>
                 <span className="agi-tier-price-sub">forever</span>

@@ -58,31 +58,18 @@ function resolvePlanTier(plan: string): UIPlanTier {
   return 'byok';
 }
 
-/**
- * Derive a stub UsageMeter from the plan tier.
- *
- * TODO(backend): replace with real data from Supabase billing endpoint
- * when the managed-plan usage API lands. Track in UNIFIED_LAUNCH_PLAN.md §billing.
- */
+/** Derive usage source from the plan tier without inventing quota numbers. */
 function deriveUsageMeter(tier: UIPlanTier): UsageMeter {
   switch (tier) {
     case 'local':
       return { remaining: null, resetsAt: null, source: 'unbounded' };
     case 'byok':
       return { remaining: null, resetsAt: null, source: 'user-api-key' };
-    case 'hobby': {
-      // Stub: 62 % remaining, resets in 4 days.
-      // TODO(backend): fetch real usage from /api/billing/usage
-      const resetsAt = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString();
-      return { remaining: 0.62, resetsAt, source: 'managed-plan' };
-    }
+    case 'hobby':
     case 'pro':
     case 'pro_plus':
-    case 'max': {
-      // Stub: Pro/Pro+/Max — show generous quota
-      const resetsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-      return { remaining: 0.85, resetsAt, source: 'managed-plan' };
-    }
+    case 'max':
+      return { remaining: null, resetsAt: null, source: 'managed-plan' };
   }
 }
 
@@ -97,12 +84,10 @@ function formatResetsIn(isoDate: string): string {
   return `in ${days}d`;
 }
 
-/** Format token counts for the meter row: 0.62 remaining of 50k → "31k / 50k tokens" */
-function formatTokenRow(remaining: number): { used: string; total: string } {
-  // Stub total: 50k for Hobby.
-  // TODO(backend): pull from plan entitlement once billing API lands.
-  const totalK = 50;
-  const usedK = Math.round(totalK * (1 - remaining) * 10) / 10;
+/** Format token counts for the meter row. */
+function formatTokenRow(usedTokens: number, limitTokens: number): { used: string; total: string } {
+  const usedK = Math.round((usedTokens / 1_000) * 10) / 10;
+  const totalK = Math.round((limitTokens / 1_000) * 10) / 10;
   return {
     used: usedK >= 1 ? `${usedK}k` : `${Math.round(usedK * 1000)}`,
     total: `${totalK}k`,
@@ -139,10 +124,23 @@ function UsageMeterRow({ meter, tier, onUpgradeClick }: UsageMeterRowProps) {
   }
 
   // managed-plan
-  const pct = meter.remaining ?? 0;
+  if (
+    meter.remaining === null ||
+    meter.usedTokens === undefined ||
+    meter.limitTokens === undefined
+  ) {
+    return (
+      <div className="flex items-center gap-1.5 px-3 py-2 text-[11px] text-[var(--chat-text-muted)]">
+        <Info size={11} className="shrink-0" />
+        <span>Managed usage unavailable</span>
+      </div>
+    );
+  }
+
+  const pct = meter.remaining;
   const barWidth = Math.round(pct * 100);
   const isLow = pct < 0.2;
-  const { used, total } = formatTokenRow(pct);
+  const { used, total } = formatTokenRow(meter.usedTokens, meter.limitTokens);
   const resetLabel = meter.resetsAt ? formatResetsIn(meter.resetsAt) : '';
 
   return (

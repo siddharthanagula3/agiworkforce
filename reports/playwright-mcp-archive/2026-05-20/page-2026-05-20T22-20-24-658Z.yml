@@ -1,0 +1,700 @@
+- generic [ref=e7]:
+    - generic [ref=e8]:
+        - generic [ref=e11]:
+            - link "Back to projects" [ref=e12]:
+                - /url: /design/
+                - img [ref=e13]
+            - generic "AGI Mobile" [ref=e16]
+            - button "" [ref=e18]:
+                - generic [ref=e19]: 
+        - generic [ref=e20]:
+            - generic [ref=e22]:
+                - generic [ref=e23]: 
+                - generic [ref=e24]: Design Files
+            - generic [ref=e26]:
+                - generic [ref=e28]: index.html
+                - generic [ref=e634]: screens-r5-canonical.jsx
+            - generic [ref=e29]:
+                - button "Share" [ref=e31]:
+                    - generic [ref=e32]: Share
+                - button "Profile and connectors" [ref=e33] [cursor=pointer]:
+                    - generic [ref=e34]: SN
+    - generic [ref=e36]:
+        - generic [ref=e43]:
+            - generic [ref=e45]:
+                - generic [ref=e46]:
+                    - generic [ref=e47]:
+                        - generic [ref=e49]:
+                            - generic [ref=e52] [cursor=pointer]:
+                                - generic [ref=e53]: 
+                                - generic [ref=e54]: Searching web, Editing, Done
+                                - generic [ref=e55]: 
+                            - paragraph [ref=e58]:
+                                - text: Confirmed — Cowork
+                                - emphasis [ref=e59]: and
+                                - text: Dispatch are both Claude product names. Renaming to neutral engineering terms.
+                        - generic [ref=e61]:
+                            - text: use the terminollgy of agiworkforce
+                            - generic [ref=e64]: agiworkforce
+                        - generic [ref=e66]:
+                            - generic [ref=e69] [cursor=pointer]:
+                                - generic [ref=e70]: 
+                                - generic [ref=e71]: Listing local files, Searching locally ×2, Editing, Done
+                                - generic [ref=e72]: 
+                            - generic [ref=e74]:
+                                - paragraph [ref=e75]: "R5 drawer updated to AGI Workforce's actual vocabulary:"
+                                - paragraph [ref=e76]:
+                                    - strong [ref=e77]: Chat · Agents · Projects · Skills · Dispatch (to desktop) · Multi-model (Pro+)
+                                - paragraph [ref=e78]:
+                                    - text: These match the repo's mobile tab structure (
+                                    - code [ref=e79]: chat / agents / projects / settings
+                                    - text: ') plus the explicitly-owned features from the README:'
+                                    - strong [ref=e80]: Skills
+                                    - text: (the packages/skills loader),
+                                    - strong [ref=e81]: Dispatch
+                                    - text: (the Anthropic-Dispatch-parity feature they claim as theirs in the differentiator table), and
+                                    - strong [ref=e82]: Multi-model side-by-side
+                                    - text: (Pro+ gated, per the Wave 6 list).
+                    - generic [ref=e85]: dont use codex
+                    - generic [ref=e88]:
+                        - generic [ref=e91] [cursor=pointer]:
+                            - generic [ref=e92]: 
+                            - generic [ref=e93]: Editing, Done
+                            - generic [ref=e94]: 
+                        - paragraph [ref=e97]: R4 section title renamed to "Code task surface" — no Codex term anywhere user-facing.
+                    - generic [ref=e100]: can you like brainstrom or ask me questions?
+                    - generic [ref=e105]:
+                        - paragraph [ref=e106]: "Yes — let me ask. I've been pattern-matching to Claude/Perplexity/ChatGPT but AGI's real shape isn't fully decided yet. Critical fork-in-the-road decisions:"
+                        - paragraph [ref=e107]:
+                            - strong [ref=e108]: 1. The differentiator.
+                            - text: AGI's pitch is "all AIs in one place + BYOK + local LLM." Which of those is the
+                            - emphasis [ref=e109]: hero
+                            - text: on mobile?
+                        - list [ref=e110]:
+                            - listitem [ref=e111]:
+                                - strong [ref=e112]: a)
+                                - text: Multi-provider switcher (Perplexity model-picker style — first thing you see)
+                            - listitem [ref=e113]:
+                                - strong [ref=e114]: b)
+                                - text: On-device (Apple FM / Llama 3.2 / Qwen — privacy-first hero)
+                            - listitem [ref=e115]:
+                                - strong [ref=e116]: c)
+                                - text: BYOK (your keys, your bill — pro-user hero)
+                            - listitem [ref=e117]:
+                                - strong [ref=e118]: d)
+                                - text: All three subordinated to one chat surface (Claude-style restraint)
+                        - paragraph [ref=e119]:
+                            - strong [ref=e120]: 2. The greeting copy.
+                            - text: 'Right now I have "How can I help you, Siddhartha?" (Claude voice). Your design system says voice is "engineering-adjacent, direct." Possible alternatives:'
+                        - list [ref=e121]:
+                            - listitem [ref=e122]: '"Ask anything" (Perplexity neutral)'
+                            - listitem [ref=e123]: '"What do you want to build?" (Codex Desktop''s vibe)'
+                            - listitem [ref=e124]: No greeting — just composer (most engineering-tool)
+                        - paragraph [ref=e125]:
+                            - strong [ref=e126]: 3. Dispatch role on mobile.
+                            - text: 'Is Dispatch:'
+                        - list [ref=e127]:
+                            - listitem [ref=e128]:
+                                - strong [ref=e129]: a)
+                                - text: A nav destination (a top-level "Dispatch" tab — like the drawer item)
+                            - listitem [ref=e130]:
+                                - strong [ref=e131]: b)
+                                - text: An action
+                                - emphasis [ref=e132]: inside
+                                - text: a chat ("send this to my desktop" button on a message)
+                            - listitem [ref=e133]:
+                                - strong [ref=e134]: c)
+                                - text: Both (destination shows queue, message-level action queues)
+                        - paragraph [ref=e135]:
+                            - strong [ref=e136]: 4. Agents vs Skills vs Projects
+                            - text: — these all overlap conceptually. In your repo Agents is its own tab AND Skills is its own package. What's the user-facing distinction on mobile?
+                        - list [ref=e137]:
+                            - listitem [ref=e138]: Agent = a persona with system prompt + tool set?
+                            - listitem [ref=e139]: Skill = a markdown+frontmatter mini-prompt?
+                            - listitem [ref=e140]: Project = a folder of chats + files?
+                        - paragraph [ref=e141]:
+                            - strong [ref=e142]: 5. The waitlist visibility.
+                            - text: 'I''ve been showing "Cloud waitlist · #1,247" in many places. Is that the right number to surface or should mobile be silent about cloud entirely (since v1 is local-only and cloud paid is paused until Aug 1, 2026)?'
+                        - paragraph [ref=e143]:
+                            - strong [ref=e144]: 6. Model picker truth.
+                            - text: Right now my model picker shows on-device models + 6 cloud models as "waitlist". But the README says BYOK
+                            - emphasis [ref=e145]: is
+                            - text: available — should cloud models be unlocked when user supplies their own key, even now?
+                        - paragraph [ref=e146]:
+                            - strong [ref=e147]: 7. What screens are still missing
+                            - text: that you actually care about?
+                        - list [ref=e148]:
+                            - listitem [ref=e149]: Account creation / sign-in (you scrapped login earlier — confirm?)
+                            - listitem [ref=e150]: Onboarding (the device-tier detection screen — keep or kill?)
+                            - listitem [ref=e151]: Voice (have it, but it's Claude-shaped — does AGI even prioritize voice on mobile?)
+                            - listitem [ref=e152]: Memory import (Wave 6 has memory import/export — distinct screen?)
+                            - listitem [ref=e153]: BYOK provider key entry (you scrapped earlier — does it come back for the few who want it now?)
+                        - paragraph [ref=e154]:
+                            - strong [ref=e155]: 8. Look-and-feel ambivalence.
+                            - text: R4/R5 are dark-default with serif body. Your design system says light + dark both ship, with warm cream
+                            - code [ref=e156]: '#faf9f7'
+                            - text: as the canonical surface. Should the
+                            - emphasis [ref=e157]: canonical
+                            - text: mobile direction be light-first or dark-first?
+                        - paragraph [ref=e158]: Pick any subset — the answers to 1, 4, and 8 would unblock the most.
+                    - generic [ref=e161]:
+                        - text: '<pasted_text name="Pasted text (70 lines)"> 1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop” / “Continue on desktop” on a chat/message. - A Dispatch destination only shows queue/history when desktop companion is paired. 4. Agents vs Skills vs Projects User-facing distinction: - Project = a local workspace/context container: chats, files, memory, and custom instructions. - Skill = an installable reusable capability/prompt recipe. Markdown/frontmatter under the hood; user sees “saved workflow” or “skill.” - Agent = a running delegated worker/job with status, tools, approvals, artifacts. Not a persona tab on mobile v1. So: show Projects. Show Skills as drawer/plus-menu utility, not a dominant tab. Hide Agents unless desktop companion has active runs. 5. Waitlist visibility Do not show Cloud waitlist · #1,247 everywhere. Show cloud only at natural gates: - Mode toggle: Cloud · Waitlist - Locked managed-cloud model rows - Settings → Mode / Cloud Only show rank after the user joins and only if it is real server data. Before join, use Join waitlist, not fake social proof. 6. Model picker truth Yes: cloud provider models should unlock when the user supplies their own key. Separate the picker into three buckets: - On-device: installed / downloadable local models. - BYOK: Anthropic/OpenAI/Google/etc. Locked until user adds that provider key; then selectable. - AGI Cloud: managed credits/subscriptions; waitlist until launch/private beta. Important: Local → BYOK must create an explicit fork with context preview/redaction. Never silently switch an existing local chat to a provider. 7. Screens that matter Keep: - Device-tier onboarding. - Local model download/manage. - BYOK provider key entry. - Local → BYOK fork flow with context selection, secret scan, preview. - Memory import/export, but under Settings → Memory, not onboarding. - Voice as on-device push-to-talk/transcription, not a primary hero. Confirm: - No account required for Local. - Sign-in only for sync, managed cloud/private beta, or future account features. - BYOK should not require AGI account. 8. Look and feel Canonical direction: light-first, warm cream #faf9f7, with dark mode fully supported. Do not make dark + serif body the default mobile identity. Use system sans on mobile. Serif is only for rare display/editorial moments, not body UI. </pasted_text>'
+                        - 'generic "1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop”…" [ref=e163]':
+                            - generic [ref=e164]: Pasted text (70 lines)
+                - generic [ref=e167]: Working on your other tab's request...
+            - generic [ref=e169]:
+                - textbox "Describe what you want to create..." [ref=e171]
+                - generic [ref=e172]:
+                    - generic [ref=e173]:
+                        - button "" [ref=e175]:
+                            - generic [ref=e176]: 
+                        - button "" [ref=e177]:
+                            - generic [ref=e179]: 
+                        - button "" [ref=e180]:
+                            - generic [ref=e181]: 
+                    - button " Send" [disabled] [ref=e183]:
+                        - generic [ref=e184]:
+                            - generic [ref=e185]: 
+                            - text: Send
+        - generic [ref=e188]:
+            - generic [ref=e640]:
+                - generic [ref=e641]: Saved
+                - button " Reload" [ref=e642]:
+                    - generic [ref=e643]:
+                        - generic [ref=e644]: 
+                        - text: Reload
+                - button " Save" [disabled] [ref=e645]:
+                    - generic [ref=e646]:
+                        - generic [ref=e647]: 
+                        - text: Save
+                - button " Copy" [ref=e648]:
+                    - generic [ref=e649]:
+                        - generic [ref=e650]: 
+                        - text: Copy
+            - generic [ref=e655]:
+                - generic:
+                    - generic: '1'
+                    - generic: '2'
+                    - generic: '3'
+                    - generic: '4'
+                    - generic: '5'
+                    - generic: '6'
+                    - generic: '7'
+                    - generic: '8'
+                    - generic: '9'
+                    - generic: '10'
+                    - generic: '11'
+                    - generic: '12'
+                    - generic: '13'
+                    - generic: '14'
+                    - generic: '15'
+                    - generic: '16'
+                    - generic: '17'
+                    - generic: '18'
+                    - generic: '19'
+                    - generic: '20'
+                    - generic: '21'
+                    - generic: '22'
+                    - generic: '23'
+                    - generic: '24'
+                    - generic: '25'
+                    - generic: '26'
+                    - generic: '27'
+                    - generic: '28'
+                    - generic: '29'
+                    - generic: '30'
+                    - generic: '31'
+                    - generic: '32'
+                    - generic: '33'
+                    - generic: '34'
+                    - generic: '35'
+                    - generic: '36'
+                    - generic: '37'
+                    - generic: '38'
+                    - generic: '39'
+                    - generic: '40'
+                    - generic: '41'
+                    - generic: '42'
+                    - generic: '43'
+                    - generic: '44'
+                    - generic: '45'
+                    - generic: '46'
+                    - generic: '47'
+                    - generic: '48'
+                    - generic: '49'
+                    - generic: '50'
+                    - generic: '51'
+                    - generic: '52'
+                    - generic: '53'
+                    - generic: '54'
+                    - generic: '55'
+                    - generic: '56'
+                    - generic: '57'
+                    - generic: '58'
+                    - generic: '59'
+                    - generic: '60'
+                    - generic: '61'
+                    - generic: '62'
+                    - generic: '63'
+                    - generic: '64'
+                    - generic: '65'
+                    - generic: '66'
+                    - generic: '67'
+                    - generic: '68'
+                    - generic: '69'
+                    - generic: '70'
+                    - generic: '71'
+                    - generic: '72'
+                    - generic: '73'
+                    - generic: '74'
+                    - generic: '75'
+                    - generic: '76'
+                    - generic: '77'
+                    - generic: '78'
+                    - generic: '79'
+                    - generic: '80'
+                    - generic: '81'
+                    - generic: '82'
+                    - generic: '83'
+                    - generic: '84'
+                    - generic: '85'
+                    - generic: '86'
+                    - generic: '87'
+                    - generic: '88'
+                    - generic: '89'
+                    - generic: '90'
+                    - generic: '91'
+                    - generic: '92'
+                    - generic: '93'
+                    - generic: '94'
+                    - generic: '95'
+                    - generic: '96'
+                    - generic: '97'
+                    - generic: '98'
+                    - generic: '99'
+                    - generic: '100'
+                    - generic: '101'
+                    - generic: '102'
+                    - generic: '103'
+                    - generic: '104'
+                    - generic: '105'
+                    - generic: '106'
+                    - generic: '107'
+                    - generic: '108'
+                    - generic: '109'
+                    - generic: '110'
+                    - generic: '111'
+                    - generic: '112'
+                    - generic: '113'
+                    - generic: '114'
+                    - generic: '115'
+                    - generic: '116'
+                    - generic: '117'
+                    - generic: '118'
+                    - generic: '119'
+                    - generic: '120'
+                    - generic: '121'
+                    - generic: '122'
+                    - generic: '123'
+                    - generic: '124'
+                    - generic: '125'
+                    - generic: '126'
+                    - generic: '127'
+                    - generic: '128'
+                    - generic: '129'
+                    - generic: '130'
+                    - generic: '131'
+                    - generic: '132'
+                    - generic: '133'
+                    - generic: '134'
+                    - generic: '135'
+                    - generic: '136'
+                    - generic: '137'
+                    - generic: '138'
+                    - generic: '139'
+                    - generic: '140'
+                    - generic: '141'
+                    - generic: '142'
+                    - generic: '143'
+                    - generic: '144'
+                    - generic: '145'
+                    - generic: '146'
+                    - generic: '147'
+                    - generic: '148'
+                    - generic: '149'
+                    - generic: '150'
+                    - generic: '151'
+                    - generic: '152'
+                    - generic: '153'
+                    - generic: '154'
+                    - generic: '155'
+                    - generic: '156'
+                    - generic: '157'
+                    - generic: '158'
+                    - generic: '159'
+                    - generic: '160'
+                    - generic: '161'
+                    - generic: '162'
+                    - generic: '163'
+                    - generic: '164'
+                    - generic: '165'
+                    - generic: '166'
+                    - generic: '167'
+                    - generic: '168'
+                    - generic: '169'
+                    - generic: '170'
+                    - generic: '171'
+                    - generic: '172'
+                    - generic: '173'
+                    - generic: '174'
+                    - generic: '175'
+                    - generic: '176'
+                    - generic: '177'
+                    - generic: '178'
+                    - generic: '179'
+                    - generic: '180'
+                    - generic: '181'
+                    - generic: '182'
+                    - generic: '183'
+                    - generic: '184'
+                    - generic: '185'
+                    - generic: '186'
+                    - generic: '187'
+                    - generic: '188'
+                    - generic: '189'
+                    - generic: '190'
+                    - generic: '191'
+                    - generic: '192'
+                    - generic: '193'
+                    - generic: '194'
+                    - generic: '195'
+                    - generic: '196'
+                    - generic: '197'
+                    - generic: '198'
+                    - generic: '199'
+                    - generic: '200'
+                    - generic: '201'
+                    - generic: '202'
+                    - generic: '203'
+                    - generic: '204'
+                    - generic: '205'
+                    - generic: '206'
+                    - generic: '207'
+                    - generic: '208'
+                    - generic: '209'
+                    - generic: '210'
+                    - generic: '211'
+                    - generic: '212'
+                    - generic: '213'
+                    - generic: '214'
+                    - generic: '215'
+                    - generic: '216'
+                    - generic: '217'
+                    - generic: '218'
+                    - generic: '219'
+                    - generic: '220'
+                    - generic: '221'
+                    - generic: '222'
+                    - generic: '223'
+                    - generic: '224'
+                    - generic: '225'
+                    - generic: '226'
+                    - generic: '227'
+                    - generic: '228'
+                    - generic: '229'
+                    - generic: '230'
+                    - generic: '231'
+                    - generic: '232'
+                    - generic: '233'
+                    - generic: '234'
+                    - generic: '235'
+                    - generic: '236'
+                    - generic: '237'
+                    - generic: '238'
+                    - generic: '239'
+                    - generic: '240'
+                    - generic: '241'
+                    - generic: '242'
+                    - generic: '243'
+                    - generic: '244'
+                    - generic: '245'
+                    - generic: '246'
+                    - generic: '247'
+                    - generic: '248'
+                    - generic: '249'
+                    - generic: '250'
+                    - generic: '251'
+                    - generic: '252'
+                    - generic: '253'
+                    - generic: '254'
+                    - generic: '255'
+                    - generic: '256'
+                    - generic: '257'
+                    - generic: '258'
+                    - generic: '259'
+                    - generic: '260'
+                    - generic: '261'
+                    - generic: '262'
+                    - generic: '263'
+                    - generic: '264'
+                    - generic: '265'
+                    - generic: '266'
+                    - generic: '267'
+                    - generic: '268'
+                    - generic: '269'
+                    - generic: '270'
+                    - generic: '271'
+                    - generic: '272'
+                    - generic: '273'
+                    - generic: '274'
+                    - generic: '275'
+                    - generic: '276'
+                    - generic: '277'
+                    - generic: '278'
+                    - generic: '279'
+                    - generic: '280'
+                    - generic: '281'
+                    - generic: '282'
+                    - generic: '283'
+                    - generic: '284'
+                    - generic: '285'
+                    - generic: '286'
+                    - generic: '287'
+                    - generic: '288'
+                    - generic: '289'
+                    - generic: '290'
+                    - generic: '291'
+                    - generic: '292'
+                    - generic: '293'
+                    - generic: '294'
+                    - generic: '295'
+                    - generic: '296'
+                    - generic: '297'
+                    - generic: '298'
+                    - generic: '299'
+                    - generic: '300'
+                    - generic: '301'
+                    - generic: '302'
+                    - generic: '303'
+                    - generic: '304'
+                    - generic: '305'
+                    - generic: '306'
+                    - generic: '307'
+                    - generic: '308'
+                    - generic: '309'
+                    - generic: '310'
+                    - generic: '311'
+                    - generic: '312'
+                    - generic: '313'
+                    - generic: '314'
+                    - generic: '315'
+                    - generic: '316'
+                    - generic: '317'
+                    - generic: '318'
+                    - generic: '319'
+                    - generic: '320'
+                    - generic: '321'
+                    - generic: '322'
+                    - generic: '323'
+                    - generic: '324'
+                    - generic: '325'
+                    - generic: '326'
+                    - generic: '327'
+                    - generic: '328'
+                    - generic: '329'
+                    - generic: '330'
+                    - generic: '331'
+                    - generic: '332'
+                    - generic: '333'
+                    - generic: '334'
+                    - generic: '335'
+                    - generic: '336'
+                    - generic: '337'
+                    - generic: '338'
+                    - generic: '339'
+                    - generic: '340'
+                    - generic: '341'
+                    - generic: '342'
+                    - generic: '343'
+                    - generic: '344'
+                    - generic: '345'
+                    - generic: '346'
+                    - generic: '347'
+                    - generic: '348'
+                    - generic: '349'
+                    - generic: '350'
+                    - generic: '351'
+                    - generic: '352'
+                    - generic: '353'
+                    - generic: '354'
+                    - generic: '355'
+                    - generic: '356'
+                    - generic: '357'
+                    - generic: '358'
+                    - generic: '359'
+                    - generic: '360'
+                    - generic: '361'
+                    - generic: '362'
+                    - generic: '363'
+                    - generic: '364'
+                    - generic: '365'
+                    - generic: '366'
+                    - generic: '367'
+                    - generic: '368'
+                    - generic: '369'
+                    - generic: '370'
+                    - generic: '371'
+                    - generic: '372'
+                    - generic: '373'
+                    - generic: '374'
+                    - generic: '375'
+                    - generic: '376'
+                    - generic: '377'
+                    - generic: '378'
+                    - generic: '379'
+                    - generic: '380'
+                    - generic: '381'
+                    - generic: '382'
+                    - generic: '383'
+                    - generic: '384'
+                    - generic: '385'
+                    - generic: '386'
+                    - generic: '387'
+                    - generic: '388'
+                    - generic: '389'
+                    - generic: '390'
+                    - generic: '391'
+                    - generic: '392'
+                    - generic: '393'
+                    - generic: '394'
+                    - generic: '395'
+                    - generic: '396'
+                    - generic: '397'
+                    - generic: '398'
+                    - generic: '399'
+                    - generic: '400'
+                    - generic: '401'
+                    - generic: '402'
+                    - generic: '403'
+                    - generic: '404'
+                    - generic: '405'
+                    - generic: '406'
+                    - generic: '407'
+                    - generic: '408'
+                    - generic: '409'
+                    - generic: '410'
+                    - generic: '411'
+                    - generic: '412'
+                    - generic: '413'
+                    - generic: '414'
+                    - generic: '415'
+                    - generic: '416'
+                    - generic: '417'
+                    - generic: '418'
+                    - generic: '419'
+                    - generic: '420'
+                    - generic: '421'
+                    - generic: '422'
+                    - generic: '423'
+                    - generic: '424'
+                    - generic: '425'
+                    - generic: '426'
+                    - generic: '427'
+                    - generic: '428'
+                    - generic: '429'
+                    - generic: '430'
+                    - generic: '431'
+                    - generic: '432'
+                    - generic: '433'
+                    - generic: '434'
+                    - generic: '435'
+                    - generic: '436'
+                    - generic: '437'
+                    - generic: '438'
+                    - generic: '439'
+                    - generic: '440'
+                    - generic: '441'
+                    - generic: '442'
+                    - generic: '443'
+                    - generic: '444'
+                    - generic: '445'
+                    - generic: '446'
+                    - generic: '447'
+                    - generic: '448'
+                    - generic: '449'
+                    - generic: '450'
+                    - generic: '451'
+                    - generic: '452'
+                    - generic: '453'
+                    - generic: '454'
+                    - generic: '455'
+                    - generic: '456'
+                    - generic: '457'
+                    - generic: '458'
+                    - generic: '459'
+                    - generic: '460'
+                    - generic: '461'
+                    - generic: '462'
+                    - generic: '463'
+                    - generic: '464'
+                    - generic: '465'
+                    - generic: '466'
+                    - generic: '467'
+                    - generic: '468'
+                    - generic: '469'
+                    - generic: '470'
+                    - generic: '471'
+                    - generic: '472'
+                    - generic: '473'
+                    - generic: '474'
+                    - generic: '475'
+                    - generic: '476'
+                    - generic: '477'
+                    - generic: '478'
+                    - generic: '479'
+                    - generic: '480'
+                    - generic: '481'
+                    - generic: '482'
+                    - generic: '483'
+                    - generic: '484'
+                    - generic: '485'
+                    - generic: '486'
+                    - generic: '487'
+                    - generic: '488'
+                    - generic: '489'
+                    - generic: '490'
+                    - generic: '491'
+                    - generic: '492'
+                    - generic: '493'
+                    - generic: '494'
+                    - generic: '495'
+                    - generic: '496'
+                    - generic: '497'
+                    - generic: '498'
+                    - generic: '499'
+                    - generic: '500'
+                    - generic: '501'
+                    - generic: '502'
+                    - generic: '503'
+                    - generic: '504'
+                    - generic: '505'
+                    - generic: '506'
+                    - generic: '507'
+                    - generic: '508'
+                    - generic: '509'
+                    - generic: '510'
+                    - generic: '511'
+                    - generic: '512'
+                    - generic: '513'
+                    - generic: '514'
+                    - generic: '515'
+                    - generic: '516'
+                    - generic: '517'
+                    - generic: '518'
+                    - generic: '519'
+                    - generic: '520'
+                    - generic: '521'
+                    - generic: '522'
+                    - generic: '523'
+                    - generic: '524'
+                - textbox [ref=e656]: '// screens-r5-canonical.jsx — AGI canonical iOS direction // Claude structural base · Perplexity Models sheet · ChatGPT plus-menu list const AG = { bg: ''#1a1915'', raised: ''rgba(255,235,205,0.04)'', card: ''rgba(255,235,205,0.05)'', ink: ''#e8e4db'', ink2: ''rgba(232,228,219,0.65)'', ink3: ''rgba(232,228,219,0.42)'', rule: ''rgba(255,235,205,0.08)'', ruleStrong: ''rgba(255,235,205,0.18)'', terra: ''#da7756'', teal: ''#21808d'', blue: ''#5e9fff'', }; const AGI_SERIF = ''"Crimson Pro", "IBM Plex Serif", Georgia, serif''; function AgChip({ children, badge, accent, onWhite }) { return ( <div style={{ position: ''relative'', width: 40, height: 40, borderRadius: 20, background: accent ? AG.terra : onWhite ? ''#fff'' : ''rgba(255,235,205,0.05)'', border: accent || onWhite ? ''none'' : `1px solid ${AG.rule}`, display: ''flex'', alignItems: ''center'', justifyContent: ''center'', flexShrink: 0, }}> {children} {badge && <div style={{ position: ''absolute'', top: 6, right: 6, width: 8, height: 8, borderRadius: 4, background: AG.terra }} />} </div> ); } // Asterisk glyph (terracotta) — AGI''s only decorative flourish function AgAsterisk({ size = 22 }) { return ( <svg width={size} height={size} viewBox="0 0 22 22" fill="none"> {[0, 30, 60, 90, 120, 150].map(deg => ( <rect key={deg} x="10" y="3" width="2" height="8" rx="1" fill={AG.terra} transform={`rotate(${deg} 11 11)`} /> ))} </svg> ); } // ───────────────────────────────────────────────────────────── // R5.1 · Empty state (Claude structural base) // ───────────────────────────────────────────────────────────── function R5_Empty() { return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, display: ''flex'', flexDirection: ''column'' }}> {/* Top: hamburger w/ red dot · centered model pill · ghost (custom prompt) */} <div style={{ padding: ''14px 16px'', display: ''flex'', alignItems: ''flex-start'', gap: 10 }}> <AgChip badge><Lucide name="menu" size={20} color={AG.ink} stroke={1.8} /></AgChip> <div style={{ flex: 1, display: ''flex'', flexDirection: ''column'', alignItems: ''center'', marginTop: 4 }}> <div style={{ display: ''flex'', alignItems: ''center'', gap: 4 }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 22, fontWeight: 600, color: AG.ink, letterSpacing: -0.3 }}>Llama 3.2 3B</span> <Lucide name="chevron-down" size={16} color={AG.ink2} stroke={2} /> </div> <span style={{ fontFamily: AGI_SERIF, fontSize: 14, color: AG.ink2, marginTop: -2 }}>On-device · Tier 2</span> </div> <AgChip> <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={AG.ink} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"> <path d="M9 9 a 6 6 0 0 1 6 0 v8 l-3-2-3 2z" /> <circle cx="10" cy="12" r="0.8" fill={AG.ink} /> <circle cx="14" cy="12" r="0.8" fill={AG.ink} /> </svg> </AgChip> </div> {/* Asterisk + greeting */} <div style={{ flex: 1, display: ''flex'', flexDirection: ''column'', alignItems: ''center'', justifyContent: ''center'', padding: ''0 28px'' }}> <AgAsterisk size={56} /> <div style={{ marginTop: 30, fontFamily: AGI_SERIF, fontSize: 34, fontWeight: 500, color: AG.ink, letterSpacing: -0.5, lineHeight: 1.15, textAlign: ''center'' }}> How can I help you,<br/>Siddhartha? </div> <div style={{ marginTop: 14, fontFamily: AGI_SERIF, fontSize: 16, color: AG.ink2, letterSpacing: -0.1 }}> Runs on your phone. Free forever. </div> </div> {/* Composer */} <div style={{ padding: ''0 14px 16px'' }}> <div style={{ padding: ''14px 16px'', borderRadius: 22, background: AG.raised, border: `1px solid ${AG.rule}` }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, color: AG.ink3, letterSpacing: -0.2 }}>Ask AGI</span> <div style={{ marginTop: 14, display: ''flex'', alignItems: ''center'', gap: 8 }}> <Lucide name="plus" size={22} color={AG.ink2} stroke={2} /> <div style={{ flex: 1 }} /> <Lucide name="mic" size={20} color={AG.ink2} stroke={1.8} /> <div style={{ width: 32, height: 32, borderRadius: 16, background: ''#fff'', display: ''flex'', alignItems: ''center'', justifyContent: ''center'' }}> <svg width="16" height="16" viewBox="0 0 16 16" fill="none"> {[2.5, 5, 7.5, 10, 12.5].map((x, i) => { const hs = [5, 9, 6, 11, 4]; const ys = [5.5, 3.5, 5, 2.5, 6]; return <rect key={i} x={x} y={ys[i]} width="1.5" height={hs[i]} rx="0.75" fill="#1a1915" />; })} </svg> </div> </div> </div> </div> </div> </HiPhone> ); } // ───────────────────────────────────────────────────────────── // R5.2 · Active chat (Claude serif body) // ───────────────────────────────────────────────────────────── function R5_Active() { return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, display: ''flex'', flexDirection: ''column'' }}> <div style={{ padding: ''14px 16px'', display: ''flex'', alignItems: ''flex-start'', gap: 10 }}> <AgChip badge><Lucide name="menu" size={20} color={AG.ink} stroke={1.8} /></AgChip> <div style={{ flex: 1, display: ''flex'', flexDirection: ''column'', alignItems: ''center'', marginTop: 4 }}> <div style={{ display: ''flex'', alignItems: ''center'', gap: 4 }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 22, fontWeight: 600, color: AG.ink }}>Llama 3.2 3B</span> <Lucide name="chevron-down" size={16} color={AG.ink2} stroke={2} /> </div> <span style={{ fontFamily: AGI_SERIF, fontSize: 14, color: AG.ink2, marginTop: -2 }}>On-device · Tier 2</span> </div> <AgChip accent><Lucide name="plus" size={20} color="#fff" stroke={2.2} /></AgChip> </div> <div style={{ flex: 1, overflow: ''auto'' }} className="hifi-scroll"> {/* user bubble */} <div style={{ display: ''flex'', justifyContent: ''flex-end'', padding: ''12px 18px'' }}> <div style={{ maxWidth: ''82%'', padding: ''14px 18px'', borderRadius: 18, background: ''#3b3733'' }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, color: ''#e8e4db'', lineHeight: 1.45, letterSpacing: -0.2 }}>What''s a good 78% hydration bulk time at 22°C?</span> </div> </div> {/* assistant — serif body */} <div style={{ padding: ''8px 18px 18px'' }}> <div style={{ display: ''flex'', alignItems: ''center'', gap: 8, padding: ''8px 12px'', borderRadius: 999, background: AG.raised, marginBottom: 14 }}> <Lucide name="refresh" size={14} color={AG.ink2} stroke={1.8} /> <span style={{ fontFamily: AGI_SERIF, fontSize: 14, color: AG.ink2, flex: 1, whiteSpace: ''nowrap'', overflow: ''hidden'', textOverflow: ''ellipsis'' }}>Considered bulk ferment timing for high-hydration loa…</span> <Lucide name="chevron-right" size={14} color={AG.ink2} stroke={2} /> </div> <p style={{ margin: ''0 0 14px'', fontFamily: AGI_SERIF, fontSize: 18, color: AG.ink, lineHeight: 1.45, letterSpacing: -0.2 }}> At 78% hydration with room temp around 22°C, plan on <b>4 to 5 hours</b> of bulk fermentation with stretch-and-folds every 30 minutes for the first 2 hours. </p> <p style={{ margin: ''0'', fontFamily: AGI_SERIF, fontSize: 18, color: AG.ink, lineHeight: 1.45, letterSpacing: -0.2 }}> Look for ~50% volume increase and a domed top before shaping. Cooler rooms (18°C) stretch this to 7–9 hours and produce a more sour profile. </p> <div style={{ marginTop: 14, display: ''inline-flex'', alignItems: ''center'', gap: 6, padding: ''4px 10px'', borderRadius: 999, border: `1px dashed ${AG.ruleStrong}` }}> <span style={{ fontFamily: ''ui-monospace, monospace'', fontSize: 11, color: AG.ink3 }}>↳</span> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: AG.ink2 }}>Llama 3.2 3B</span> <span style={{ width: 3, height: 3, borderRadius: 2, background: AG.ink3 }} /> <span style={{ fontFamily: FONTS.text, fontSize: 11, color: AG.ink3 }}>on-device · 22 t/s · ttft 180ms</span> </div> </div> </div> <div style={{ padding: ''0 14px 16px'' }}> <div style={{ padding: ''14px 16px'', borderRadius: 22, background: AG.raised, border: `1px solid ${AG.rule}` }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, color: AG.ink3, letterSpacing: -0.2 }}>Reply to AGI</span> <div style={{ marginTop: 14, display: ''flex'', alignItems: ''center'', gap: 8 }}> <Lucide name="plus" size={22} color={AG.ink2} stroke={2} /> <div style={{ flex: 1 }} /> <Lucide name="mic" size={20} color={AG.ink2} stroke={1.8} /> <div style={{ width: 32, height: 32, borderRadius: 16, background: ''#fff'', display: ''flex'', alignItems: ''center'', justifyContent: ''center'' }}> <svg width="16" height="16" viewBox="0 0 16 16" fill="none"> {[2.5, 5, 7.5, 10, 12.5].map((x, i) => { const hs = [5, 9, 6, 11, 4]; const ys = [5.5, 3.5, 5, 2.5, 6]; return <rect key={i} x={x} y={ys[i]} width="1.5" height={hs[i]} rx="0.75" fill="#1a1915" />; })} </svg> </div> </div> </div> </div> </div> </HiPhone> ); } // ───────────────────────────────────────────────────────────── // R5.3 · Drawer (Claude IA — peer nav + Recents + bottom row) // ───────────────────────────────────────────────────────────── function R5_Drawer() { const recents = [ ''Sourdough hydration timing'', ''EU AI Act Article 50 in 4 bullets'', ''Refactor zod validator nested unions'', ''Lisbon trip plan for two'', ''A15 vs M2 inference benchmarks'', ''Local PDF Q&A · lease 2024'', ''OCR receipt totals — Big Bazaar'', ''Hindi → English on-device'', ''Sketch a v1 launch checklist'', ''Compare Apple FM vs Llama 3B'', ]; return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, display: ''flex'', flexDirection: ''column'', position: ''relative'' }}> <div style={{ flex: 1, display: ''flex'', flexDirection: ''column'', padding: ''20px 22px 0'', maxWidth: ''88%'' }}> {/* wordmark */} <div style={{ marginBottom: 24, display: ''flex'', alignItems: ''center'', gap: 8 }}> <AgAsterisk size={26} /> <span style={{ fontFamily: AGI_SERIF, fontSize: 34, fontWeight: 600, color: AG.ink, letterSpacing: -0.6 }}>AGI</span> </div> {/* nav items — Claude IA */} {[ { icon: ''message-square'', label: ''Chat'' }, { icon: ''user'', label: ''Agents'' }, { icon: ''folder'', label: ''Projects'' }, { icon: ''sparkles'', label: ''Skills'' }, { icon: ''send'', label: ''Dispatch'', sub: ''to desktop'' }, { icon: ''list-checks'', label: ''Multi-model'', badge: ''Pro+'' }, ].map((n, i) => ( <div key={i} style={{ padding: ''11px 0'', display: ''flex'', alignItems: ''center'', gap: 14 }}> <div style={{ width: 26, display: ''flex'', justifyContent: ''center'' }}> {n.code ? <span style={{ fontFamily: ''ui-monospace, monospace'', fontSize: 14, color: AG.ink }}>{''</>''}</span> : <Lucide name={n.icon} size={20} color={AG.ink} stroke={1.7} />} </div> <span style={{ fontFamily: AGI_SERIF, fontSize: 21, fontWeight: 500, color: AG.ink, letterSpacing: -0.3 }}>{n.label}</span> {n.badge && ( <div style={{ padding: ''3px 9px'', borderRadius: 999, background: AG.terra }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 12, fontWeight: 600, color: ''#fff'' }}>{n.badge}</span> </div> )} </div> ))} <div style={{ marginTop: 18, marginBottom: 4 }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 15, color: AG.ink2, letterSpacing: -0.1 }}>Recents</span> </div> <div style={{ flex: 1, overflowY: ''auto'', paddingBottom: 80 }} className="hifi-scroll"> {recents.map((t, i) => ( <div key={i} style={{ padding: ''10px 0'' }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, color: AG.ink, letterSpacing: -0.2, whiteSpace: ''nowrap'', overflow: ''hidden'', textOverflow: ''ellipsis'', display: ''block'' }}>{t}</span> </div> ))} </div> </div> {/* bottom: avatar pill + terracotta new-chat FAB */} <div style={{ position: ''absolute'', bottom: 14, left: 22, right: 22, display: ''flex'', alignItems: ''center'', gap: 12 }}> <div style={{ padding: ''8px 14px 8px 8px'', borderRadius: 999, background: AG.raised, border: `1px solid ${AG.rule}`, display: ''flex'', alignItems: ''center'', gap: 10 }}> <div style={{ width: 28, height: 28, borderRadius: 14, background: ''#1a1915'', border: `1px solid ${AG.rule}`, display: ''flex'', alignItems: ''center'', justifyContent: ''center'' }}> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: AG.ink }}>SN</span> </div> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, fontWeight: 500, color: AG.ink, letterSpacing: -0.2 }}>Siddhartha Nagula</span> </div> <div style={{ flex: 1 }} /> <div style={{ width: 48, height: 48, borderRadius: 24, background: AG.terra, display: ''flex'', alignItems: ''center'', justifyContent: ''center'', boxShadow: ''0 4px 16px rgba(218,119,86,0.4)'' }}> <Lucide name="edit" size={20} color="#fff" stroke={2.2} /> </div> </div> {/* peek of dimmed chat */} <div style={{ position: ''absolute'', top: 0, bottom: 0, right: 0, width: 60, background: ''rgba(0,0,0,0.5)'', borderLeft: `1px solid ${AG.rule}` }} /> </div> </HiPhone> ); } // ───────────────────────────────────────────────────────────── // R5.4 · Plus menu — ChatGPT pattern (4 squares + photo strip + descriptive list) // ───────────────────────────────────────────────────────────── function R5_PlusMenu() { return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, display: ''flex'', flexDirection: ''column'', position: ''relative'' }}> <div style={{ flex: 1, opacity: 0.35, padding: ''60px 24px 0'' }}> <AgAsterisk size={44} /> </div> <div style={{ position: ''absolute'', inset: 0, background: ''rgba(0,0,0,0.18)'', zIndex: 30 }} /> <div style={{ position: ''absolute'', left: 0, right: 0, bottom: 0, background: ''#252220'', borderTopLeftRadius: 22, borderTopRightRadius: 22, zIndex: 40, paddingTop: 10, boxShadow: ''0 -10px 32px rgba(0,0,0,0.5)'', maxHeight: ''90%'', display: ''flex'', flexDirection: ''column'', }}> <div style={{ width: 36, height: 5, borderRadius: 2.5, background: AG.ruleStrong, margin: ''0 auto 14px'' }} /> {/* header */} <div style={{ padding: ''0 22px 12px'', display: ''flex'', alignItems: ''center'' }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 17, fontWeight: 600, color: AG.ink, letterSpacing: -0.2 }}>AGI</span> <div style={{ flex: 1 }} /> <span style={{ fontFamily: AGI_SERIF, fontSize: 14, color: AG.ink2 }}>Limited photos access</span> <Lucide name="info" size={16} color={AG.ink2} stroke={1.8} style={{ marginLeft: 6 }} /> </div> {/* Camera + Photos squares + 3 photo thumbs */} <div style={{ padding: ''0 14px 14px'', display: ''flex'', gap: 8, overflowX: ''auto'' }} className="hifi-scroll"> {[[''camera'', ''Camera''], [''image'', ''Photos'']].map(([icon, label]) => ( <div key={label} style={{ flex: ''0 0 96px'', height: 96, borderRadius: 14, background: AG.raised, display: ''flex'', flexDirection: ''column'', alignItems: ''center'', justifyContent: ''center'', gap: 8 }}> <Lucide name={icon} size={26} color={AG.ink} stroke={1.7} /> <span style={{ fontFamily: AGI_SERIF, fontSize: 14, fontWeight: 500, color: AG.ink }}>{label}</span> </div> ))} {[ ''linear-gradient(135deg,#2a3a4a,#4a5560)'', ''linear-gradient(135deg,#a87645,#6c4220)'', ''linear-gradient(135deg,#4a7c4a,#2d5530)'', ].map((g, i) => ( <div key={i} style={{ position: ''relative'', flex: ''0 0 96px'', height: 96, borderRadius: 14, background: g, overflow: ''hidden'' }}> {i === 0 && <div style={{ position: ''absolute'', top: 6, right: 6, width: 22, height: 22, borderRadius: 11, border: ''2px solid #fff'', background: ''transparent'' }} />} </div> ))} </div> <div style={{ height: 0.5, background: AG.rule, margin: ''0 22px'' }} /> {/* Descriptive list — ChatGPT pattern, AGI features */} <div style={{ flex: 1, overflowY: ''auto'', padding: ''4px 0 18px'' }} className="hifi-scroll"> {[ { icon: ''sparkles'', label: ''Image analysis'', sub: ''Visualize, identify, caption — on-device'' }, { icon: ''file-text'', label: ''Add files'', sub: ''Analyze or summarize PDFs locally'' }, { icon: ''scan-line'', label: ''Scan to text'', sub: ''OCR · Apple Vision · instant'' }, { icon: ''languages'', label: ''Translate'', sub: ''Hindi · Tamil · English · on-device'' }, { icon: ''cpu'', label: ''On-device mode'', sub: ''Llama 3.2 3B · Tier 2'', active: true }, { icon: ''globe'', label: ''Web search'', sub: ''Real-time news — needs cloud'', locked: true }, { icon: ''github'', label: ''GitHub'', sub: ''Repos, issues, PRs — cloud waitlist'', locked: true }, { icon: ''plug'', label: ''Connectors'', sub: ''Drive, Notion, Linear — waitlist'', locked: true }, ].map((row, i) => ( <div key={i} style={{ padding: ''14px 22px'', display: ''flex'', alignItems: ''center'', gap: 16 }}> {row.icon === ''github'' ? ( <div style={{ width: 32, height: 32, borderRadius: 8, background: ''#1a1915'', display: ''flex'', alignItems: ''center'', justifyContent: ''center'' }}> <Lucide name="github" size={18} color="#fff" stroke={1.8} /> </div> ) : ( <Lucide name={row.icon} size={22} color={AG.ink} stroke={1.8} /> )} <div style={{ flex: 1 }}> <div style={{ display: ''flex'', alignItems: ''center'', gap: 6 }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 19, fontWeight: 600, color: AG.ink, letterSpacing: -0.2 }}>{row.label}</span> {row.active && <div style={{ padding: ''2px 7px'', borderRadius: 4, background: AG.teal }}><span style={{ fontFamily: FONTS.text, fontSize: 10, fontWeight: 600, color: ''#fff'', letterSpacing: 0.3 }}>ACTIVE</span></div>} </div> <div style={{ marginTop: 2, fontFamily: AGI_SERIF, fontSize: 14, color: AG.ink2 }}>{row.sub}</div> </div> {row.locked && <Lucide name="lock" size={16} color={AG.ink2} stroke={2} />} </div> ))} </div> </div> </div> </HiPhone> ); } // ───────────────────────────────────────────────────────────── // R5.5 · Model picker — Perplexity pattern (Best hero + monogram list + max badges) // ───────────────────────────────────────────────────────────── function R5_ModelPicker() { const models = [ { kind: ''llama'', name: ''Llama 3.2 3B'', badge: ''on-device'', selected: true }, { kind: ''apple'', name: ''Apple Foundation 3B'', badge: ''on-device · Tier 1'' }, { kind: ''qwen'', name: ''Qwen 2.5 0.5B'', badge: ''fallback'' }, { kind: ''claude'', name: ''Claude Opus 4.7'', badge: ''waitlist'' }, { kind: ''claude'', name: ''Claude Sonnet 4.6'', badge: ''waitlist'' }, { kind: ''openai'', name: ''GPT-5.4'', badge: ''waitlist'' }, { kind: ''openai'', name: ''GPT-5.5'', badge: ''waitlist · max'' }, { kind: ''gemini'', name: ''Gemini 3.1 Pro'', badge: ''waitlist'' }, { kind: ''sonar'', name: ''Sonar 2'', badge: ''waitlist'' }, ]; const Mono = ({ kind, color }) => { const s = { stroke: color, strokeWidth: 1.7, fill: ''none'', strokeLinecap: ''round'', strokeLinejoin: ''round'' }; if (kind === ''llama'') return <span style={{ fontSize: 20, lineHeight: 1 }}>🦙</span>; if (kind === ''apple'') return <svg width="22" height="22" viewBox="0 0 24 24" fill={color}><path d="M17.5 12.5c0-2.4 2-3.5 2-3.5-1-1.6-3-2-3.5-2-1.5-.2-3 .9-3.7.9s-2-.9-3.4-.8c-1.7.1-3.4 1-4.3 2.6-1.8 3.2-.5 7.9 1.3 10.5.9 1.3 1.9 2.7 3.3 2.6 1.3-.1 1.8-.9 3.4-.9s2 .9 3.4.9c1.4 0 2.3-1.3 3.2-2.6.7-1 1.3-2.1 1.6-3.3-3-1.1-3.3-5-3.3-4.4z M14.5 4.6c.7-.9 1.2-2.1 1.1-3.3-1 .1-2.2.7-3 1.6-.7.8-1.2 2-1 3.2 1.1.1 2.2-.6 2.9-1.5z"/></svg>; if (kind === ''qwen'') return <svg width="22" height="22" viewBox="0 0 24 24" {...s}><circle cx="12" cy="12" r="9"/><path d="M7 17 L12 12 L17 17"/></svg>; if (kind === ''claude'') return <svg width="22" height="22" viewBox="0 0 22 22" fill={color}>{[0, 45, 90, 135].map(deg => <rect key={deg} x="10" y="3" width="2" height="16" rx="1" transform={`rotate(${deg} 11 11)`}/>)}</svg>; if (kind === ''openai'') return <svg width="22" height="22" viewBox="0 0 24 24" {...s}><path d="M12 4c-2.5 0-4.5 2-4.5 4.5 0 1 .3 1.9.9 2.6-1.4.4-2.4 1.7-2.4 3.2 0 2.5 2 4.2 4.5 4.2.7 0 1.4-.2 2-.5 0 1.6 1.4 2.5 3 2.5 2.5 0 4.5-2 4.5-4.5 0-1-.3-1.9-.9-2.6 1.4-.4 2.4-1.7 2.4-3.2 0-2.5-2-4.2-4.5-4.2-.7 0-1.4.2-2 .5 0-1.6-1.4-2.5-3-2.5z" /></svg>; if (kind === ''gemini'') return <svg width="22" height="22" viewBox="0 0 24 24" fill={color}><path d="M12 2 L14 10 L22 12 L14 14 L12 22 L10 14 L2 12 L10 10 Z"/></svg>; if (kind === ''sonar'') return <svg width="22" height="22" viewBox="0 0 22 22"><g stroke={color} strokeWidth="1.5" strokeLinecap="round">{[0, 45, 90, 135].map(deg => <line key={deg} x1="11" y1="3" x2="11" y2="19" transform={`rotate(${deg} 11 11)`}/>)}{[22.5, 67.5, 112.5, 157.5].map(deg => <line key={deg} x1="11" y1="6" x2="11" y2="16" transform={`rotate(${deg} 11 11)`}/>)}</g></svg>; return null; }; return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, position: ''relative'', display: ''flex'', flexDirection: ''column'' }}> {/* faint AGI wordmark backdrop */} <div style={{ flex: 1, display: ''flex'', alignItems: ''center'', justifyContent: ''center'', opacity: 0.30 }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 48, fontWeight: 400, color: AG.ink2, letterSpacing: -1 }}> AGI <span style={{ color: AG.ink3 }}>local</span> </span> </div> <div style={{ position: ''absolute'', inset: 0, background: ''rgba(0,0,0,0.18)'', zIndex: 30 }} /> <div style={{ position: ''absolute'', left: 0, right: 0, bottom: 0, background: ''#252220'', borderTopLeftRadius: 22, borderTopRightRadius: 22, zIndex: 40, paddingTop: 10, boxShadow: ''0 -10px 32px rgba(0,0,0,0.5)'', maxHeight: ''90%'', display: ''flex'', flexDirection: ''column'', }}> <div style={{ width: 36, height: 5, borderRadius: 2.5, background: AG.ruleStrong, margin: ''0 auto 14px'' }} /> {/* Models · X */} <div style={{ padding: ''0 22px 12px'', display: ''flex'', alignItems: ''center'' }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 26, fontWeight: 700, color: AG.ink, letterSpacing: -0.4 }}>Models</span> <div style={{ flex: 1 }} /> <AgChip><Lucide name="x" size={16} color={AG.ink} stroke={2.2} /></AgChip> </div> {/* Best hero card */} <div style={{ padding: ''0 14px 12px'' }}> <div style={{ padding: ''16px 18px'', borderRadius: 18, background: AG.raised, display: ''flex'', alignItems: ''flex-start'', gap: 12 }}> <div style={{ flex: 1 }}> <div style={{ fontFamily: AGI_SERIF, fontWeight: 700, fontSize: 22, color: AG.ink, letterSpacing: -0.3 }}>Best</div> <div style={{ marginTop: 2, fontFamily: AGI_SERIF, fontSize: 15, color: AG.ink2, letterSpacing: -0.1 }}>Auto-routes to fastest local model for your device</div> </div> <Lucide name="check" size={22} color={AG.teal} stroke={2.6} /> </div> </div> <div style={{ height: 0.5, background: AG.rule, margin: ''4px 0'' }} /> {/* Model list */} <div style={{ flex: 1, overflowY: ''auto'', padding: ''4px 0 18px'' }} className="hifi-scroll"> {models.map((m, i) => ( <div key={i} style={{ padding: ''16px 22px'', display: ''flex'', alignItems: ''center'', gap: 14, opacity: m.badge?.includes(''waitlist'') ? 0.55 : 1 }}> <div style={{ width: 28, height: 28, display: ''flex'', alignItems: ''center'', justifyContent: ''center'' }}> <Mono kind={m.kind} color={AG.ink} /> </div> <span style={{ flex: 1, fontFamily: AGI_SERIF, fontSize: 19, fontWeight: 600, color: AG.ink, letterSpacing: -0.3 }}>{m.name}</span> {m.selected && <Lucide name="check" size={18} color={AG.teal} stroke={2.6} />} {m.badge === ''on-device'' && ( <div style={{ padding: ''3px 9px'', borderRadius: 6, background: ''rgba(33,128,141,0.20)'' }}> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: AG.teal, letterSpacing: 0.1 }}>on-device</span> </div> )} {m.badge?.startsWith(''on-device · Tier'') && ( <div style={{ padding: ''3px 9px'', borderRadius: 6, background: ''rgba(33,128,141,0.20)'' }}> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: AG.teal, letterSpacing: 0.1 }}>Tier 1</span> </div> )} {m.badge === ''fallback'' && ( <div style={{ padding: ''3px 9px'', borderRadius: 6, background: AG.raised }}> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: AG.ink2 }}>fallback</span> </div> )} {m.badge === ''waitlist'' && <Lucide name="lock" size={14} color={AG.ink2} stroke={2} />} {m.badge === ''waitlist · max'' && ( <> <div style={{ padding: ''3px 9px'', borderRadius: 6, background: AG.terra }}> <span style={{ fontFamily: FONTS.text, fontSize: 11, fontWeight: 600, color: ''#fff'' }}>max</span> </div> <Lucide name="lock" size={14} color={AG.ink2} stroke={2} /> </> )} </div> ))} </div> </div> </div> </HiPhone> ); } // ───────────────────────────────────────────────────────────── // R5.6 · Settings index (Claude pattern) // ───────────────────────────────────────────────────────────── function R5_Settings() { const Row = ({ icon, code, label, value, valueGray, chevron = true, divider = true, toggle, on }) => ( <div style={{ padding: ''16px 8px'', display: ''flex'', alignItems: ''center'', gap: 14, borderBottom: divider ? `0.5px solid ${AG.rule}` : ''none'' }}> {code ? <span style={{ fontFamily: ''ui-monospace, monospace'', fontSize: 14, color: AG.ink, width: 22, display: ''flex'', justifyContent: ''center'' }}>{''</>''}</span> : <Lucide name={icon} size={22} color={AG.ink} stroke={1.7} />} <span style={{ flex: 1, fontFamily: AGI_SERIF, fontSize: 19, fontWeight: 500, color: AG.ink, letterSpacing: -0.2 }}>{label}</span> {value && <span style={{ fontFamily: AGI_SERIF, fontSize: 17, color: valueGray ? AG.ink2 : AG.ink, letterSpacing: -0.2 }}>{value}</span>} {toggle ? ( <div style={{ width: 51, height: 31, borderRadius: 16, background: on ? AG.blue : ''rgba(255,235,205,0.15)'', position: ''relative'' }}> <div style={{ position: ''absolute'', top: 2, left: on ? 22 : 2, width: 27, height: 27, borderRadius: 14, background: ''#fff'', boxShadow: ''0 1px 3px rgba(0,0,0,0.4)'' }} /> </div> ) : (chevron && <Lucide name="chevron-right" size={16} color={AG.ink2} stroke={2} />)} </div> ); return ( <HiPhone dark> <div style={{ flex: 1, background: AG.bg, color: AG.ink, display: ''flex'', flexDirection: ''column'' }}> <div style={{ padding: ''14px 16px'', display: ''flex'', alignItems: ''center'', gap: 10 }}> <AgChip><Lucide name="x" size={18} color={AG.ink} stroke={2.2} /></AgChip> <div style={{ flex: 1, textAlign: ''center'' }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 20, fontWeight: 600, color: AG.ink, letterSpacing: -0.3 }}>Settings</span> </div> <AgChip><Lucide name="info" size={18} color={AG.ink} stroke={1.6} /></AgChip> </div> <div style={{ flex: 1, padding: ''0 18px 24px'', overflow: ''auto'' }} className="hifi-scroll"> <div style={{ padding: ''16px 18px'', borderRadius: 14, background: AG.card, border: `1px solid ${AG.rule}` }}> <span style={{ fontFamily: AGI_SERIF, fontSize: 19, fontWeight: 600, color: AG.ink, letterSpacing: -0.2 }}>siddharthanagula3@gmail.com</span> </div> <div style={{ marginTop: 18 }}> <Row icon="user" label="Profile" /> <Row icon="cpu" label="Performance" value="Tier 1 · 42 t/s" valueGray /> <Row icon="bar-chart-3" label="Usage" /> <Row icon="cloud" label="Cloud waitlist" value="#1,247" valueGray divider={false} /> </div> <div style={{ marginTop: 18, height: 0.5, background: AG.rule }} /> <div style={{ marginTop: 8 }}> <Row icon="settings" label="Capabilities" /> <Row icon="list-checks" label="Connectors" /> <Row icon="lock" label="Permissions" divider={false} /> </div> <div style={{ marginTop: 18, height: 0.5, background: AG.rule }} /> <div style={{ marginTop: 8 }}> <Row icon="sparkles" label="Appearance" value="Dark" valueGray chevron={false} /> <Row icon="globe" label="Speech language" value="EN" valueGray /> <Row icon="bell" label="Notifications" /> <Row icon="share" label="Shared links" divider={false} /> </div> <div style={{ marginTop: 18, height: 0.5, background: AG.rule }} /> <Row icon="cpu" label="Haptic feedback" toggle on chevron={false} divider={false} /> </div> </div> </HiPhone> ); } function renderRoundFiveCanonical() { const W = 480, H = 988; const wrap = (id, label, El) => ( <DCArtboard id={id} label={label} width={W} height={H}> <div style={{ width: W, height: H, padding: 18, background: ''#15130f'', boxSizing: ''border-box'', display: ''flex'', justifyContent: ''center'', alignItems: ''center'' }}>{El}</div> </DCArtboard> ); return ( <DCSection id="r5" title="R5 · AGI canonical (Claude + Perplexity + ChatGPT)" subtitle="Claude structural base · Perplexity Models · ChatGPT plus menu"> {wrap(''r5-empty'', ''R5.1 · Empty state'', <R5_Empty />)} {wrap(''r5-active'', ''R5.2 · Active chat'', <R5_Active />)} {wrap(''r5-drawer'', ''R5.3 · Drawer'', <R5_Drawer />)} {wrap(''r5-plus'', ''R5.4 · Plus menu (ChatGPT pattern)'', <R5_PlusMenu />)} {wrap(''r5-models'', ''R5.5 · Model picker (Perplexity pattern)'', <R5_ModelPicker />)} {wrap(''r5-settings'', ''R5.6 · Settings'', <R5_Settings />)} </DCSection> ); } Object.assign(window, { AG, AGI_SERIF, AgChip, AgAsterisk, R5_Empty, R5_Active, R5_Drawer, R5_PlusMenu, R5_ModelPicker, R5_Settings, renderRoundFiveCanonical });'

@@ -1,0 +1,516 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`shared-primitive DOM snapshots > locks the GeneratedFileCard rendered structure for a completed Local PDF 1`] = `
+<div
+  class="flex flex-col gap-3 rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-3"
+  data-generated-file-id="gf_snapshot"
+  data-testid="generated-file-card"
+>
+  <div
+    class="flex items-start gap-3"
+  >
+    <div
+      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[var(--chat-surface-overlay)]"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-file-text text-rose-400"
+        fill="none"
+        height="16"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="16"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+        />
+        <path
+          d="M14 2v5a1 1 0 0 0 1 1h5"
+        />
+        <path
+          d="M10 9H8"
+        />
+        <path
+          d="M16 13H8"
+        />
+        <path
+          d="M16 17H8"
+        />
+      </svg>
+    </div>
+    <div
+      class="flex min-w-0 flex-1 flex-col gap-1"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <span
+          class="truncate text-sm font-medium text-[var(--chat-text-primary)]"
+        >
+          Snapshot report
+        </span>
+        <span
+          class="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-shield-check h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+            />
+            <path
+              d="m9 12 2 2 4-4"
+            />
+          </svg>
+          Ready
+        </span>
+      </div>
+      <div
+        class="flex flex-wrap items-center gap-2 text-[11px] text-[var(--chat-text-muted)]"
+      >
+        <span>
+          PDF
+        </span>
+        <span>
+          · 
+          4.0 KB
+        </span>
+        <span
+          title="SHA-256 (first 12 hex chars)"
+        >
+          · 
+          abc
+        </span>
+      </div>
+      <div
+        class="flex flex-wrap items-center gap-1.5 pt-0.5"
+      >
+        <span
+          class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-lock h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <rect
+              height="11"
+              rx="2"
+              ry="2"
+              width="18"
+              x="3"
+              y="11"
+            />
+            <path
+              d="M7 11V7a5 5 0 0 1 10 0v4"
+            />
+          </svg>
+          Local
+        </span>
+        <span
+          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+        >
+          Local
+        </span>
+        <span
+          class="inline-flex items-center rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium text-[var(--chat-text-secondary)]"
+        >
+          Desktop
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+`;
+
+exports[`shared-primitive DOM snapshots > locks the ProjectHeader rendered structure for a Local project 1`] = `
+<div
+  class="flex flex-col gap-3 rounded-xl border p-4 border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]"
+  data-accent-color="emerald"
+  data-stays-local="true"
+  data-testid="project-header"
+>
+  <div
+    class="flex items-start gap-3"
+  >
+    <div
+      aria-hidden="true"
+      class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border text-xl bg-emerald-500/15 border-emerald-500/30 text-emerald-300"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-folder h-6 w-6"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+        />
+      </svg>
+    </div>
+    <div
+      class="min-w-0 flex-1"
+    >
+      <div
+        class="flex items-center gap-2"
+      >
+        <h2
+          class="truncate text-base font-semibold text-[var(--chat-text-primary)]"
+        >
+          Snapshot Project
+        </h2>
+        <span
+          class="inline-flex items-center rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-violet-500/40 bg-violet-500/10 text-violet-300"
+          data-testid="project-header-imported-from"
+        >
+          Created in AGI
+        </span>
+      </div>
+      <p
+        class="mt-0.5 line-clamp-2 text-xs text-[var(--chat-text-secondary)]"
+      >
+        Pinned shape for snapshot tests.
+      </p>
+    </div>
+  </div>
+  <div
+    class="flex flex-wrap items-center gap-1.5"
+  >
+    <span
+      class="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+      data-stays-local="true"
+      data-testid="project-header-privacy-chip"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-lock h-3 w-3"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          height="11"
+          rx="2"
+          ry="2"
+          width="18"
+          x="3"
+          y="11"
+        />
+        <path
+          d="M7 11V7a5 5 0 0 1 10 0v4"
+        />
+      </svg>
+      <span>
+        Local
+      </span>
+    </span>
+    <span
+      class="inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium border-emerald-500/40 text-emerald-300 bg-emerald-500/5"
+      data-provider-mode="Local"
+      data-testid="project-header-provider-chip"
+    >
+      Local
+    </span>
+  </div>
+  <div
+    class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-[var(--chat-text-muted)]"
+    data-testid="project-header-meta-row"
+  >
+    <span
+      class="inline-flex items-center gap-1"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-users h-3 w-3"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+        />
+        <path
+          d="M16 3.128a4 4 0 0 1 0 7.744"
+        />
+        <path
+          d="M22 21v-2a4 4 0 0 0-3-3.87"
+        />
+        <circle
+          cx="9"
+          cy="7"
+          r="4"
+        />
+      </svg>
+      2 files
+    </span>
+    <span
+      class="inline-flex items-center gap-1"
+    >
+      1 member
+    </span>
+    <span
+      class="inline-flex items-center gap-1"
+    >
+      Last used 2h ago
+    </span>
+    <span
+      class="inline-flex items-center gap-1"
+    >
+      Default model: Llama 3.2 8B
+    </span>
+  </div>
+  <div
+    class="flex flex-wrap items-center gap-1"
+    data-testid="project-header-surface-chips"
+  >
+    <span
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+    >
+      Web
+    </span>
+    <span
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+    >
+      Desktop
+    </span>
+    <span
+      class="inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] uppercase tracking-wide border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] text-[var(--chat-text-secondary)]"
+    >
+      Mobile
+    </span>
+  </div>
+</div>
+`;
+
+exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structure for a BYOK turn 1`] = `
+<div
+  class="flex flex-col gap-2 rounded-[var(--chat-radius-md)] border px-3 py-2 text-xs border-amber-500/30 bg-amber-500/5"
+  data-provider-mode="DirectByok"
+  data-stays-local="false"
+  data-testid="send-preview"
+>
+  <div
+    class="flex items-center gap-2"
+  >
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-key-round h-4 w-4 text-amber-300"
+      fill="none"
+      height="24"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+      />
+      <circle
+        cx="16.5"
+        cy="7.5"
+        fill="currentColor"
+        r=".5"
+      />
+    </svg>
+    <span
+      class="font-medium text-[var(--chat-text-primary)]"
+    >
+      Sent to api.anthropic.com
+    </span>
+    <span
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-lock h-3 w-3"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          height="11"
+          rx="2"
+          ry="2"
+          width="18"
+          x="3"
+          y="11"
+        />
+        <path
+          d="M7 11V7a5 5 0 0 1 10 0v4"
+        />
+      </svg>
+      BYOK
+    </span>
+    <span
+      class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
+    >
+      Claude Sonnet 4.6
+    </span>
+  </div>
+  <p
+    class="text-[11px] leading-relaxed text-[var(--chat-text-secondary)]"
+  >
+    BYOK turn. The request, attachments, and system prompt go directly to api.anthropic.com via your API key. AGI does not receive a copy of the payload.
+  </p>
+</div>
+`;
+
+exports[`shared-primitive DOM snapshots > locks the SendPreview rendered structure for a Local turn 1`] = `
+<div
+  class="flex flex-col gap-2 rounded-[var(--chat-radius-md)] border px-3 py-2 text-xs border-emerald-500/30 bg-emerald-500/5"
+  data-provider-mode="Local"
+  data-stays-local="true"
+  data-testid="send-preview"
+>
+  <div
+    class="flex items-center gap-2"
+  >
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-hard-drive h-4 w-4 text-emerald-400"
+      fill="none"
+      height="24"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="M10 16h.01"
+      />
+      <path
+        d="M2.212 11.577a2 2 0 0 0-.212.896V18a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-5.527a2 2 0 0 0-.212-.896L18.55 5.11A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+      />
+      <path
+        d="M21.946 12.013H2.054"
+      />
+      <path
+        d="M6 16h.01"
+      />
+    </svg>
+    <span
+      class="font-medium text-[var(--chat-text-primary)]"
+    >
+      Stays on this device
+    </span>
+    <span
+      class="inline-flex items-center gap-1 rounded-full border border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-secondary)]"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-lock h-3 w-3"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <rect
+          height="11"
+          rx="2"
+          ry="2"
+          width="18"
+          x="3"
+          y="11"
+        />
+        <path
+          d="M7 11V7a5 5 0 0 1 10 0v4"
+        />
+      </svg>
+      Local
+    </span>
+    <span
+      class="ml-auto text-[10px] text-[var(--chat-text-muted)]"
+    >
+      Llama 3.2 8B
+    </span>
+  </div>
+  <p
+    class="text-[11px] leading-relaxed text-[var(--chat-text-secondary)]"
+  >
+    Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.
+  </p>
+  <button
+    aria-controls="send-preview-details"
+    aria-expanded="false"
+    class="inline-flex items-center gap-1 self-start text-[10px] font-medium uppercase tracking-wide text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+    type="button"
+  >
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-chevron-down h-3 w-3"
+      fill="none"
+      height="24"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <path
+        d="m6 9 6 6 6-6"
+      />
+    </svg>
+    Show details
+  </button>
+</div>
+`;

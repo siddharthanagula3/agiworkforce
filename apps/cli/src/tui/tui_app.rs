@@ -17,7 +17,7 @@ use ratatui::Terminal;
 
 use crate::agent::AgentSession;
 use crate::command_registry::{
-    registry_from_builtins_skills_and_prompts, CommandRegistry, RegistryCommand,
+    registry_from_builtins_skills_and_prompts, CommandRegistry, CommandSource, RegistryCommand,
 };
 use crate::config::CliConfig;
 use crate::context::SystemContext;
@@ -195,6 +195,63 @@ impl TuiApp {
             Some(crate::sandbox::SandboxType::detect())
         };
 
+        let mut command_registry =
+            registry_from_builtins_skills_and_prompts(&crate::skills::discover_skills(), &[]);
+        for command in crate::custom_commands::discover_custom_slash_commands() {
+            if command_registry.find(&command.name).is_some() {
+                continue;
+            }
+            let source = match command.source {
+                crate::custom_commands::CustomCommandSource::ProjectAgi
+                | crate::custom_commands::CustomCommandSource::ProjectClaude => {
+                    CommandSource::Project
+                }
+                crate::custom_commands::CustomCommandSource::UserAgi
+                | crate::custom_commands::CustomCommandSource::ImportedClaude
+                | crate::custom_commands::CustomCommandSource::UserClaude => CommandSource::User,
+            };
+            let loaded_from = format!("{}: {}", command.source.label(), command.path.display());
+            let mut registry_command = RegistryCommand::prompt(
+                command.name,
+                command.description,
+                source,
+                Some(&loaded_from),
+            );
+            registry_command.argument_hint = command.argument_hint;
+            command_registry.push(registry_command);
+        }
+        if let Some(prompts) = session.mcp_prompt_info() {
+            for prompt in prompts {
+                if command_registry.find(&prompt.command_name).is_some() {
+                    continue;
+                }
+                let loaded_from = format!("mcp:{}", prompt.server_name);
+                let mut registry_command = RegistryCommand::prompt(
+                    prompt.command_name.clone(),
+                    format!("[MCP:{}] {}", prompt.server_name, prompt.description),
+                    CommandSource::Mcp,
+                    Some(&loaded_from),
+                );
+                if !prompt.arguments.is_empty() {
+                    registry_command.argument_hint = Some(
+                        prompt
+                            .arguments
+                            .iter()
+                            .map(|arg| {
+                                if arg.required {
+                                    format!("{}=<value>", arg.name)
+                                } else {
+                                    format!("[{}=<value>]", arg.name)
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    );
+                }
+                command_registry.push(registry_command);
+            }
+        }
+
         Self {
             session,
             config,
@@ -224,10 +281,7 @@ impl TuiApp {
             stream_buffer: String::new(),
             stream_start: None,
             git_branch,
-            command_registry: registry_from_builtins_skills_and_prompts(
-                &crate::skills::discover_skills(),
-                &[],
-            ),
+            command_registry,
             fallback_banner: Arc::new(std::sync::Mutex::new(None)),
             active_overlay: None,
         }
@@ -324,8 +378,8 @@ impl TuiApp {
 fn crossterm_to_keyaction(
     key: crossterm::event::KeyEvent,
 ) -> crate::tui::widgets::interactive::KeyAction {
-    use crossterm::event::KeyCode;
     use crate::tui::widgets::interactive::KeyAction;
+    use crossterm::event::KeyCode;
     match key.code {
         KeyCode::Up => KeyAction::Up,
         KeyCode::Down => KeyAction::Down,
@@ -396,8 +450,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             out_tokens: app.total_output_tokens,
             cache_read: app.session.total_cache_read_tokens,
             cache_creation: app.session.total_cache_creation_tokens,
-            context_used: app.total_input_tokens as u64
-                + app.total_output_tokens as u64,
+            context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
             context_window: crate::model_catalog::context_window(&app.model_name) as u64,
         };
         super::cost_hud::render(frame, area, &hud, &app.model_name);
@@ -772,9 +825,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", Color::Green),
         Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", Color::Green),
         Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", Color::Green),
-        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => {
-            ("sandbox: win", Color::Green)
-        }
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", Color::Green),
         Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", Color::Red),
     };
 
@@ -806,10 +857,7 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     if shown_at.elapsed() > MODE_BANNER_TTL {
         return;
     }
-    let text = format!(
-        "  Mode: {} (shift+tab to cycle)  ",
-        app.mode.label()
-    );
+    let text = format!("  Mode: {} (shift+tab to cycle)  ", app.mode.label());
     let width = (text.chars().count() as u16).min(chat_area.width.saturating_sub(2));
     if width == 0 {
         return;
@@ -822,7 +870,11 @@ fn render_mode_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &TuiApp)
     };
     // Use the same color as the mode badge, white text for legibility on grey
     let bg = app.mode.color();
-    let fg = if app.mode == InteractionMode::Chat { Color::White } else { Color::Black };
+    let fg = if app.mode == InteractionMode::Chat {
+        Color::White
+    } else {
+        Color::Black
+    };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
             text,
@@ -997,7 +1049,12 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
                     .command_registry
                     .commands()
                     .iter()
-                    .map(|rc| PopupCmd::new(rc.slash_name().trim_start_matches('/'), rc.description.clone()))
+                    .map(|rc| {
+                        PopupCmd::new(
+                            rc.slash_name().trim_start_matches('/'),
+                            rc.description.clone(),
+                        )
+                    })
                     .collect();
                 app.open_overlay(Box::new(CommandPopup::new(cmds)));
             }
@@ -1281,8 +1338,7 @@ fn apply_mode(app: &mut TuiApp, mode: InteractionMode) {
     app.session.plan_mode = mode == InteractionMode::Plan;
     app.session.skip_permissions =
         mode == InteractionMode::BypassPermissions || mode == InteractionMode::FullAuto;
-    app.session.auto_approve_safe =
-        mode == InteractionMode::AcceptEdits
+    app.session.auto_approve_safe = mode == InteractionMode::AcceptEdits
         || mode == InteractionMode::BypassPermissions
         || mode == InteractionMode::FullAuto;
     // FullAuto: verbose output so the user can see what is happening
@@ -1318,8 +1374,24 @@ enum SlashResult {
     SystemMessage(String),
     Quit,
     SendAsPrompt,
+    SendPrompt(String),
+    SendMcpPrompt(String),
     RunLogin,
     RunLogout,
+}
+
+fn resolve_tui_slash_command(input_command: &str, registry: &CommandRegistry) -> String {
+    let normalized = input_command.to_lowercase();
+    // `/sessions` is an exact TUI/REPL runtime command; keep it from being
+    // rewritten through the registry's `/resume` compatibility alias.
+    if matches!(normalized.as_str(), "/sessions") {
+        return normalized;
+    }
+
+    registry
+        .find(input_command)
+        .map(RegistryCommand::slash_name)
+        .unwrap_or(normalized)
 }
 
 fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
@@ -1328,11 +1400,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
     }
 
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
-    let cmd = app
-        .command_registry
-        .find(parts[0])
-        .map(RegistryCommand::slash_name)
-        .unwrap_or_else(|| parts[0].to_lowercase());
+    let cmd = resolve_tui_slash_command(parts[0], &app.command_registry);
     let arg = parts.get(1).map(|s| s.trim()).unwrap_or_default();
 
     match cmd.as_str() {
@@ -1395,10 +1463,17 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 SlashResult::SystemMessage(lines.join("\n"))
             } else {
                 app.session.apply_output_style(arg);
-                SlashResult::SystemMessage(format!(
+                let mut message = format!(
                     "Output style: {} (applies on next turn)",
                     app.session.output_style
-                ))
+                );
+                if let Err(err) = app
+                    .config
+                    .persist_output_style_project(&app.session.output_style)
+                {
+                    message.push_str(&format!("\nFailed to persist output style: {err}"));
+                }
+                SlashResult::SystemMessage(message)
             }
         }
 
@@ -1425,7 +1500,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/replay" => SlashResult::SystemMessage(
-            "Session replay: drop to shell and run\n  agiworkforce session list\n  agiworkforce session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
+            "Session replay: drop to shell and run\n  agi session list\n  agi session fork <id> --at-turn N --as <name>\n(Inline turn picker coming in v0.2.)"
                 .to_string(),
         ),
 
@@ -1435,7 +1510,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 .managed_session_id()
                 .unwrap_or("(no session)");
             SlashResult::SystemMessage(format!(
-                "Inspect this session as JSONL events:\n  agiworkforce exec --json-events --session {} \"<prompt>\" | jq",
+                "Inspect this session as JSONL events:\n  agi exec --json-events --session {} \"<prompt>\" | jq",
                 sid
             ))
         }
@@ -1551,35 +1626,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/help" | "/h" | "/?" => {
-            let mut help = String::from("Commands:\n");
-            for cmd in app.command_registry.commands() {
-                let slash_aliases = cmd.slash_aliases();
-                let aliases = if slash_aliases.is_empty() {
-                    String::new()
-                } else {
-                    format!(" ({})", slash_aliases.join(", "))
-                };
-                help.push_str(&format!(
-                    "  {:<18} {}{}\n",
-                    cmd.slash_name(),
-                    cmd.description,
-                    aliases
-                ));
-            }
-            help.push_str("\nKeyboard shortcuts:\n");
-            help.push_str("  Shift+Tab    Cycle mode: Default → Plan → AcceptEdits → Bypass → FullAuto\n");
-            help.push_str("  /            Open command palette\n");
-            help.push_str("  Esc          Quit\n");
-            help.push_str("  Up/Down      Scroll chat history\n");
-            help.push_str("  Ctrl-L       Clear screen\n");
-            help.push_str("  Ctrl-C       Clear input\n");
-            help.push_str("\nModes (cycle with Shift+Tab):\n");
-            help.push_str("  Default        Normal conversation (grey)\n");
-            help.push_str("  Plan           Read-only planning, no edits (blue)\n");
-            help.push_str("  AcceptEdits    Auto-accept file edits (green)\n");
-            help.push_str("  Bypass         Skip all tool confirmation (yellow)\n");
-            help.push_str("  FullAuto       No prompts at all — extreme caution (red)\n");
-            SlashResult::SystemMessage(help)
+            SlashResult::SystemMessage(crate::command_registry::format_command_help(
+                &app.command_registry,
+                crate::command_registry::ShortcutHelp::Tui,
+            ))
         }
 
         // ── Session management ──
@@ -1676,6 +1726,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             )
         }
 
+        "/agents" => {
+            SlashResult::SystemMessage(crate::agents::render_agents_command(arg))
+        }
+
         "/init" => {
             crate::repl::handle_init_project();
             SlashResult::SystemMessage("Project initialized.".to_string())
@@ -1696,23 +1750,13 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         "/hooks" => {
             let hooks = crate::hooks::load_hooks().unwrap_or_default();
-            let mut msg = String::from("Hooks:\n");
-            if hooks.hooks.is_empty() {
-                msg.push_str("  No hooks configured.\n");
-                msg.push_str("  Add hooks to ~/.agiworkforce/hooks.yaml or .agiworkforce/hooks.yaml\n");
-            } else {
-                for (event, hook_list) in &hooks.hooks {
-                    for h in hook_list {
-                        msg.push_str(&format!("  {:<20} {}\n", event, h.command));
-                    }
-                }
-            }
+            let msg = crate::hooks::format_hooks_list(&hooks);
             SlashResult::SystemMessage(msg)
         }
 
-        "/plugins" => {
+        "/plugin" | "/plugins" | "/marketplace" | "/market" => {
             SlashResult::SystemMessage(
-                "Plugin management:\n  Use `agiworkforce plugin list` to see installed plugins.\n  Use `agiworkforce plugin install <name>` to install.".to_string()
+                "Plugin management:\n  Use `agi plugin list` to see installed plugins.\n  Use `agi plugin install <name>` to install.".to_string()
             )
         }
 
@@ -1725,10 +1769,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         // ── Voice ──
         // run_voice_mode is async and requires session/config args; the TUI slash
         // handler is sync so we surface instructions instead of invoking directly.
-        // Use `agiworkforce --no-tui --voice-lang en` for the interactive REPL voice loop.
+        // Use `agi --no-tui --voice-lang en` for the interactive REPL voice loop.
         "/voice" | "/v" => {
             SlashResult::SystemMessage(
-                "Voice mode requires the REPL (not TUI). Run:\n  agiworkforce --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
+                "Voice mode requires the REPL (not TUI). Run:\n  agi --no-tui --voice-lang en\nSupported languages: en es fr de it pt ja ko zh ar hi ru nl pl sv da no fi tr cs".to_string()
             )
         }
 
@@ -1781,9 +1825,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             } else {
                 format!("Please review the code related to: {arg}. Look for bugs, security issues, and improvements.")
             };
-            app.input = review_prompt;
-            app.cursor = app.input.len();
-            SlashResult::SendAsPrompt
+            SlashResult::SendPrompt(review_prompt)
         }
 
         "/effort" | "/e" => {
@@ -1936,14 +1978,14 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 }
             } else {
                 SlashResult::SystemMessage(format!(
-                    "No team-onboarding guide found at {}. Run `agiworkforce onboarding` to generate one.",
+                    "No team-onboarding guide found at {}. Run `agi onboarding` to generate one.",
                     path.display()
                 ))
             }
         }
 
         "/terminal-setup" | "/shell-setup" => {
-            let snippet = "# Add to ~/.bashrc or ~/.zshrc:\nexport AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"\nalias agi='agiworkforce'\n# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce";
+            let snippet = "# Add to ~/.bashrc or ~/.zshrc:\nexport AGIWORKFORCE_HOME=\"$HOME/.agiworkforce\"\n# agi is the primary command; agiworkforce remains a compatibility alias\n# fish: set -gx AGIWORKFORCE_HOME ~/.agiworkforce";
             SlashResult::SystemMessage(format!("Shell integration:\n{snippet}"))
         }
 
@@ -1970,7 +2012,53 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
             SlashResult::SystemMessage(lines.join("\n"))
         }
 
-        _ => SlashResult::SendAsPrompt,
+        _ => {
+            if let Some(prompt) = crate::custom_commands::expand_custom_slash_invocation(input) {
+                return SlashResult::SendPrompt(prompt);
+            }
+            if input.trim_start().starts_with("/mcp:") {
+                return SlashResult::SendMcpPrompt(input.to_string());
+            }
+
+            let shared =
+                crate::claude_parity::handle_shared_command(cmd.as_str(), arg, &mut app.session);
+            persist_tui_shared_ui_config(cmd.as_str(), arg, app);
+
+            match shared {
+                crate::claude_parity::ParityCommandResult::SystemMessage(message) => {
+                    SlashResult::SystemMessage(message)
+                }
+                crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+                    SlashResult::SendPrompt(prompt)
+                }
+                crate::claude_parity::ParityCommandResult::DraftPrompt(prompt) => {
+                    app.input = prompt;
+                    app.cursor = app.input.len();
+                    SlashResult::SystemMessage(
+                        "Drafted BYOK continuation prompt. Review it before pressing Enter.".into(),
+                    )
+                }
+                crate::claude_parity::ParityCommandResult::NotHandled => SlashResult::SendAsPrompt,
+            }
+        }
+    }
+}
+
+fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
+    match cmd {
+        "/output-style" if !arg.trim().is_empty() => {
+            let _ = app
+                .config
+                .persist_output_style_project(&app.session.output_style);
+        }
+        "/privacy-mode" | "/trust-boundary"
+            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
+        {
+            let _ = app
+                .config
+                .persist_privacy_mode_project(app.session.privacy_mode.label());
+        }
+        _ => {}
     }
 }
 
@@ -1997,11 +2085,15 @@ pub async fn run(
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
     sandbox_disabled: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
+    mcp_config_options: crate::mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
     if let Some(ref provider) = provider_override {
         session.set_provider_override(provider);
     }
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
@@ -2011,6 +2103,7 @@ pub async fn run(
     // semantics from `repl::run_repl` and `run_oneshot`.
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
@@ -2055,22 +2148,7 @@ pub async fn run(
         }
     }
 
-    // Connect MCP servers
-    let mut mcp_configs = crate::mcp::McpManager::load_configs().unwrap_or_default();
-    let mut plugin_mgr = crate::plugins::PluginsManager::new();
-    if let Ok(_plugins) = plugin_mgr.load_all(std::env::current_dir().ok().as_deref()) {
-        let plugin_mcp = plugin_mgr.mcp_configs();
-        if !plugin_mcp.is_empty() {
-            mcp_configs.extend(plugin_mcp);
-        }
-    }
-    if !mcp_configs.is_empty() {
-        let mut mcp_mgr = crate::mcp::McpManager::new();
-        if let Err(e) = mcp_mgr.connect_all(&mcp_configs).await {
-            eprintln!("MCP connection warning: {:#}", e);
-        }
-        session.set_mcp_manager(mcp_mgr);
-    }
+    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
 
     // Hooks
     let hooks_config = session.hooks_config().clone();
@@ -2160,8 +2238,12 @@ async fn run_event_loop(
                             msg.push_str("\n  Press Shift+Tab again to advance to FullAuto, or cycle back to Default.");
                         }
                         if new_mode == InteractionMode::FullAuto {
-                            msg.push_str("\n\n  WARNING: Full-auto mode — no prompts, no confirmations.");
-                            msg.push_str("\n  Use with extreme caution in trusted environments only.");
+                            msg.push_str(
+                                "\n\n  WARNING: Full-auto mode — no prompts, no confirmations.",
+                            );
+                            msg.push_str(
+                                "\n  Use with extreme caution in trusted environments only.",
+                            );
                         }
                         app.chat_messages.push(ChatMessage {
                             role: ChatRole::System,
@@ -2228,6 +2310,24 @@ async fn run_event_loop(
                             }
                             SlashResult::NotSlash | SlashResult::SendAsPrompt => {
                                 send_message(terminal, app, &text).await?;
+                            }
+                            SlashResult::SendPrompt(prompt) => {
+                                send_message(terminal, app, &prompt).await?;
+                            }
+                            SlashResult::SendMcpPrompt(invocation) => {
+                                match app.session.expand_mcp_prompt_invocation(&invocation).await {
+                                    Ok(Some(prompt)) => {
+                                        send_message(terminal, app, &prompt).await?;
+                                    }
+                                    Ok(None) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: "Unknown MCP prompt command.".to_string(),
+                                    }),
+                                    Err(e) => app.chat_messages.push(ChatMessage {
+                                        role: ChatRole::System,
+                                        text: format!("MCP prompt failed: {e:#}"),
+                                    }),
+                                }
                             }
                         }
                     }
@@ -2346,6 +2446,7 @@ async fn send_message(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::command_registry::builtin_slash_registry_commands;
     use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
     // Minimal stub view that tracks how many times handle_key was called.
@@ -2357,7 +2458,11 @@ mod tests {
 
     impl StubView {
         fn new(close_on_enter: bool) -> Self {
-            Self { call_count: 0, close_on_enter, last_key: None }
+            Self {
+                call_count: 0,
+                close_on_enter,
+                last_key: None,
+            }
         }
     }
 
@@ -2442,5 +2547,141 @@ mod tests {
 
         let consumed = app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
         assert!(!consumed, "no overlay → dispatch returns false");
+    }
+
+    fn builtin_registry() -> CommandRegistry {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+        registry
+    }
+
+    fn tui_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
+        let mut names = std::collections::BTreeSet::new();
+        names.extend(
+            crate::claude_parity::shared_runtime_command_names()
+                .iter()
+                .copied(),
+        );
+        names.extend([
+            "exit",
+            "quit",
+            "q",
+            "clear",
+            "model",
+            "m",
+            "plan",
+            "cost",
+            "output-style",
+            "fallback",
+            "replay",
+            "insights",
+            "status",
+            "context",
+            "fast",
+            "new",
+            "models",
+            "providers",
+            "config",
+            "diff",
+            "copy",
+            "login",
+            "logout",
+            "feedback",
+            "bug",
+            "help",
+            "h",
+            "?",
+            "compact",
+            "history",
+            "sessions",
+            "resume",
+            "fork",
+            "branch",
+            "save",
+            "rename",
+            "export",
+            "rewind",
+            "mcp",
+            "permissions",
+            "perms",
+            "approvals",
+            "agents",
+            "init",
+            "skills",
+            "hooks",
+            "plugin",
+            "plugins",
+            "marketplace",
+            "market",
+            "memory",
+            "mem",
+            "voice",
+            "v",
+            "theme",
+            "btw",
+            "ctx",
+            "review",
+            "effort",
+            "e",
+            "usage",
+            "tasks",
+            "memories",
+            "skills-toggle",
+            "statusline",
+            "title",
+            "diff-review",
+            "focus",
+            "background",
+            "bg",
+            "advisor",
+            "team-onboarding",
+            "onboarding",
+            "terminal-setup",
+            "shell-setup",
+            "reload-plugins",
+            "extra-usage",
+            "pricing",
+            "remote-env",
+        ]);
+        names
+    }
+
+    #[test]
+    fn slash_resolution_keeps_exact_sessions_runtime_command() {
+        let registry = builtin_registry();
+
+        assert_eq!(
+            resolve_tui_slash_command("/sessions", &registry),
+            "/sessions"
+        );
+    }
+
+    #[test]
+    fn slash_resolution_still_normalizes_registered_aliases() {
+        let registry = builtin_registry();
+
+        assert_eq!(resolve_tui_slash_command("/branch", &registry), "/fork");
+        assert_eq!(resolve_tui_slash_command("/diagnose", &registry), "/doctor");
+    }
+
+    #[test]
+    fn registered_builtin_commands_have_tui_runtime_coverage() {
+        let runtime = tui_runtime_command_names();
+
+        for command in builtin_slash_registry_commands() {
+            assert!(
+                runtime.contains(command.name.as_str()),
+                "/{} is registered but has no TUI runtime coverage",
+                command.name
+            );
+            for alias in command.aliases {
+                assert!(
+                    runtime.contains(alias.as_str()),
+                    "/{} alias for /{} has no TUI runtime coverage",
+                    alias,
+                    command.name
+                );
+            }
+        }
     }
 }

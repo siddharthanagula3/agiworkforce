@@ -18,8 +18,8 @@ use slash_commands::{handle_slash_command, SlashResult};
 
 // Re-export the public handler functions used by tui_app.rs and lib.rs.
 pub use registry::{
-    handle_branch, handle_compact, handle_export, handle_history, handle_init_project,
-    handle_load, handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
+    handle_branch, handle_compact, handle_export, handle_history, handle_init_project, handle_load,
+    handle_memory, handle_permissions, handle_rename, handle_rewind, handle_save,
 };
 
 type ManagedSessionResume = (crate::runtime::session::ManagedSession, std::path::PathBuf);
@@ -45,6 +45,9 @@ pub async fn run_repl(
     quiet: bool,
     permission_mode: crate::cli_options::PermissionMode,
     auto_approve_plan: bool,
+    allowed_tools: Vec<String>,
+    disallowed_tools: Vec<String>,
+    mcp_config_options: crate::mcp::McpConfigLoadOptions,
 ) -> Result<()> {
     let provider_name = crate::models::detect_provider(model);
     let provider_str = format!("{:?}", provider_name).to_lowercase();
@@ -53,6 +56,7 @@ pub async fn run_repl(
     output::print_tier_status();
 
     let mut session = AgentSession::new(model, sys_context, custom_system_prompt);
+    session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
@@ -61,6 +65,7 @@ pub async fn run_repl(
     session.session_name = session_name;
     session.permission_mode = permission_mode;
     session.auto_approve_plan = auto_approve_plan;
+    session.apply_tool_filters(&allowed_tools, &disallowed_tools);
     if matches!(permission_mode, crate::cli_options::PermissionMode::Plan) {
         session.plan_mode = true;
     }
@@ -91,15 +96,7 @@ pub async fn run_repl(
         }
     }
 
-    let mcp_configs = crate::mcp::McpManager::load_configs().unwrap_or_default();
-    if !mcp_configs.is_empty() {
-        eprintln!("{}", "Connecting to MCP servers...".dimmed());
-        let mut mcp_mgr = crate::mcp::McpManager::new();
-        if let Err(e) = mcp_mgr.connect_all(&mcp_configs).await {
-            output::print_warn(&format!("MCP connection error: {:#}", e));
-        }
-        session.set_mcp_manager(mcp_mgr);
-    }
+    crate::attach_mcp_manager_for_session(&mut session, &mcp_config_options, true, true).await?;
 
     let hooks_config = session.hooks_config().clone();
     crate::hooks::run_hooks(
@@ -249,61 +246,51 @@ pub async fn run_repl(
                                 }
                             }
                         }
-                        SlashResult::Sync(subcmd) => {
-                            match crate::config::CliConfig::config_dir() {
-                                Ok(home) => match subcmd.as_str() {
-                                    "status" => match crate::sync::ConfigSync::status(&home) {
-                                        Ok(changes) => {
-                                            if changes.is_empty() {
-                                                eprintln!("No synced files found.");
-                                            } else {
-                                                for (path, change) in &changes {
-                                                    eprintln!("  {:<35} {}", path, change);
-                                                }
+                        SlashResult::Sync(subcmd) => match crate::config::CliConfig::config_dir() {
+                            Ok(home) => match subcmd.as_str() {
+                                "status" => match crate::sync::ConfigSync::status(&home) {
+                                    Ok(changes) => {
+                                        if changes.is_empty() {
+                                            eprintln!("No synced files found.");
+                                        } else {
+                                            for (path, change) in &changes {
+                                                eprintln!("  {:<35} {}", path, change);
                                             }
                                         }
-                                        Err(e) => output::print_error(&format!(
-                                            "Sync status failed: {}",
-                                            e
-                                        )),
-                                    },
-                                    "export" => match crate::sync::ConfigSync::export(&home) {
-                                        Ok(bundle) => {
-                                            if let Ok(json) = serde_json::to_string_pretty(&bundle)
-                                            {
-                                                println!("{}", json);
-                                            }
-                                        }
-                                        Err(e) => output::print_error(&format!(
-                                            "Sync export failed: {}",
-                                            e
-                                        )),
-                                    },
-                                    _ => {
-                                        output::print_info("Usage: /sync status | /sync export");
+                                    }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync status failed: {}", e))
                                     }
                                 },
-                                Err(e) => {
-                                    output::print_error(&format!("Config dir error: {}", e))
+                                "export" => match crate::sync::ConfigSync::export(&home) {
+                                    Ok(bundle) => {
+                                        if let Ok(json) = serde_json::to_string_pretty(&bundle) {
+                                            println!("{}", json);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        output::print_error(&format!("Sync export failed: {}", e))
+                                    }
+                                },
+                                _ => {
+                                    output::print_info("Usage: /sync status | /sync export");
                                 }
-                            }
-                        }
+                            },
+                            Err(e) => output::print_error(&format!("Config dir error: {}", e)),
+                        },
                         SlashResult::Onboarding => {
                             match crate::onboarding::run_onboarding().await {
                                 Ok(true) => output::print_info(
                                     "Onboarding complete. Restart to apply changes.",
                                 ),
                                 Ok(false) => output::print_info("Onboarding skipped."),
-                                Err(e) => {
-                                    output::print_error(&format!("Onboarding error: {}", e))
-                                }
+                                Err(e) => output::print_error(&format!("Onboarding error: {}", e)),
                             }
                         }
                         SlashResult::Btw(question) => {
                             let spinner = output::create_spinner("Side query...");
-                            let md_btw = std::sync::Arc::new(std::sync::Mutex::new(
-                                MarkdownRenderer::new(),
-                            ));
+                            let md_btw =
+                                std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
                             let md_btw_cb = std::sync::Arc::clone(&md_btw);
 
                             let btw_result = session
@@ -366,6 +353,18 @@ pub async fn run_repl(
                             )
                             .await;
                         }
+                        SlashResult::Prompt(prompt) => {
+                            run_prompt_turn(&mut session, config, prompt).await;
+                        }
+                        SlashResult::McpPrompt(invocation) => {
+                            match session.expand_mcp_prompt_invocation(&invocation).await {
+                                Ok(Some(prompt)) => {
+                                    run_prompt_turn(&mut session, config, prompt).await
+                                }
+                                Ok(None) => output::print_warn("Unknown MCP prompt command."),
+                                Err(e) => output::print_error(&format!("MCP prompt failed: {e:#}")),
+                            }
+                        }
                         SlashResult::Handled => {}
                     }
                     continue;
@@ -377,45 +376,7 @@ pub async fn run_repl(
                     input.to_string()
                 };
 
-                let spinner = output::create_spinner("Thinking...");
-                let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
-                let md_cb = std::sync::Arc::clone(&md);
-
-                let result = session
-                    .send(
-                        config,
-                        &full_input,
-                        Box::new(move |chunk| {
-                            if let Ok(mut renderer) = md_cb.lock() {
-                                output::print_assistant_chunk_formatted(&mut renderer, chunk);
-                            }
-                        }),
-                    )
-                    .await;
-
-                spinner.finish_and_clear();
-
-                if let Ok(mut renderer) = md.lock() {
-                    output::flush_markdown(&mut renderer);
-                }
-
-                match result {
-                    Ok(turn) => {
-                        output::print_assistant_end();
-                        if turn.via_subscription {
-                            output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
-                        } else {
-                            output::print_cost(
-                                &session.model,
-                                turn.input_tokens,
-                                turn.output_tokens,
-                            );
-                        }
-                    }
-                    Err(e) => {
-                        output::print_error(&format!("{:#}", e));
-                    }
-                }
+                run_prompt_turn(&mut session, config, full_input).await;
             }
             Err(ReadlineError::Interrupted) => {
                 eprintln!("{}", "(Ctrl-C to cancel, /exit to quit)".dimmed());
@@ -463,6 +424,44 @@ pub async fn run_repl(
     );
 
     Ok(())
+}
+
+async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
+    let spinner = output::create_spinner("Thinking...");
+    let md = std::sync::Arc::new(std::sync::Mutex::new(MarkdownRenderer::new()));
+    let md_cb = std::sync::Arc::clone(&md);
+
+    let result = session
+        .send(
+            config,
+            &full_input,
+            Box::new(move |chunk| {
+                if let Ok(mut renderer) = md_cb.lock() {
+                    output::print_assistant_chunk_formatted(&mut renderer, chunk);
+                }
+            }),
+        )
+        .await;
+
+    spinner.finish_and_clear();
+
+    if let Ok(mut renderer) = md.lock() {
+        output::flush_markdown(&mut renderer);
+    }
+
+    match result {
+        Ok(turn) => {
+            output::print_assistant_end();
+            if turn.via_subscription {
+                output::print_subscription_cost(turn.input_tokens, turn.output_tokens);
+            } else {
+                output::print_cost(&session.model, turn.input_tokens, turn.output_tokens);
+            }
+        }
+        Err(e) => {
+            output::print_error(&format!("{:#}", e));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

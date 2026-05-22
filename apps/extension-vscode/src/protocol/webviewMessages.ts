@@ -56,6 +56,46 @@ const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 
+/**
+ * `attachFiles` carries dropped or pasted file payloads from the webview
+ * composer. Each entry is a data URL with a sanitized name + content type so
+ * the host can persist it to extension storage and add it to context.
+ *
+ * Per-entry size limits are enforced here so a hostile webview cannot post
+ * unbounded payloads. The data URL ceiling is ~7 MB raw (10 MB base64) per
+ * file; eight files at the same time stays under VS Code's IPC limits.
+ */
+const attachFiles = z.object({
+  type: z.literal('attachFiles'),
+  payload: z.object({
+    files: z
+      .array(
+        z.object({
+          // Strip path separators; the host runs a defensive sanitize before
+          // touching disk anyway, but we reject obviously hostile names here.
+          name: z
+            .string()
+            .min(1)
+            .max(255)
+            .refine((value) => !value.includes('/') && !value.includes('\\'), {
+              message: 'Filename must not contain path separators',
+            }),
+          mimeType: z.string().min(1).max(200),
+          sizeBytes: z.number().int().min(0).max(10_000_000),
+          dataUrl: z
+            .string()
+            .min(1)
+            .max(15_000_000)
+            .refine((value) => value.startsWith('data:'), {
+              message: 'Expected a data: URL',
+            }),
+        }),
+      )
+      .min(1)
+      .max(8),
+  }),
+});
+
 const fileSearch = z.object({
   type: z.literal('fileSearch'),
   payload: z.object({
@@ -109,6 +149,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   selectModel,
   proposeDiff,
   openFilePicker,
+  attachFiles,
 ]);
 
 export type WebviewToExtMessage = z.infer<typeof WebviewToExtSchema>;

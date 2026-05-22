@@ -7,7 +7,7 @@ import { ArrowLeft, Sparkles, ExternalLink, MessageCircle, Mail, Info } from 'lu
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 // Metro's default config supports importing package.json — read versions from
 // the manifest so the About screen never drifts from the actual installed deps.
 import pkg from '../../package.json';

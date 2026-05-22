@@ -4,8 +4,7 @@ use anyhow::Result;
 use tokio::process::Command;
 
 use super::common::{
-    format_size, print_tool_status, truncate_output_with_save, validate_file_path,
-    COMMAND_TIMEOUT, MAX_OUTPUT_BYTES,
+    format_size, print_tool_status, truncate_output_with_save, validate_file_path, COMMAND_TIMEOUT,
 };
 use super::ToolResult;
 
@@ -243,14 +242,8 @@ pub(super) async fn execute_grep_files(
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
             let output = if stdout.is_empty() {
                 format!("No matches for: {}", pattern)
-            } else if stdout.len() > MAX_OUTPUT_BYTES {
-                let mut end = MAX_OUTPUT_BYTES.min(stdout.len());
-                while !stdout.is_char_boundary(end) {
-                    end -= 1;
-                }
-                format!("{}\n...(truncated)", &stdout[..end])
             } else {
-                stdout
+                truncate_output_with_save("grep_files", stdout)
             };
             Ok(ToolResult {
                 tool_name: "grep_files".into(),
@@ -269,7 +262,10 @@ pub(super) async fn execute_grep_files(
                 Ok(o) => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: true,
-                    output: String::from_utf8_lossy(&o.stdout).to_string(),
+                    output: truncate_output_with_save(
+                        "grep_files",
+                        String::from_utf8_lossy(&o.stdout).to_string(),
+                    ),
                 }),
                 Err(e) => Ok(ToolResult {
                     tool_name: "grep_files".into(),

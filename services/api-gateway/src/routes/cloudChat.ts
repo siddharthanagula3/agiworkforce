@@ -20,6 +20,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
+import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { requireProPlan } from '../middleware/planGate';
 import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/supabaseClients';
@@ -460,161 +461,170 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
  *
  * SECURITY: Rate limited to 30/min as it is an action-based operation.
  */
-router.post('/send', createRateLimiter('cloud-chat-send'), async (req: Request, res: Response) => {
-  const user = req.user;
-  if (!user) {
-    throw new AppError('Unauthorized', 401);
-  }
+router.post(
+  '/send',
+  createRateLimiter('cloud-chat-send'),
+  requireManagedComputeEligibility((req) => {
+    const model =
+      typeof req.body?.model === 'string' ? req.body.model : 'claude-haiku-4-5-20251001';
+    return { provider: resolveProvider(model), model };
+  }),
+  async (req: Request, res: Response) => {
+    const user = req.user;
+    if (!user) {
+      throw new AppError('Unauthorized', 401);
+    }
 
-  const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
+    const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
 
-  const supabase = getUserScopedClient(user.userId);
+    const supabase = getUserScopedClient(user.userId);
 
-  // Auto-create conversation if none provided
-  let conversationId = conversation_id;
-  if (!conversationId) {
-    const newId = randomUUID();
-    const now = new Date().toISOString();
-    const { error: createErr } = await supabase.from('conversations').insert({
-      id: newId,
-      user_id: user.userId,
-      title: message.slice(0, 100),
-      model: model ?? null,
-      is_archived: false,
-      is_deleted: false,
-      created_at: now,
-      updated_at: now,
+    // Auto-create conversation if none provided
+    let conversationId = conversation_id;
+    if (!conversationId) {
+      const newId = randomUUID();
+      const now = new Date().toISOString();
+      const { error: createErr } = await supabase.from('conversations').insert({
+        id: newId,
+        user_id: user.userId,
+        title: message.slice(0, 100),
+        model: model ?? null,
+        is_archived: false,
+        is_deleted: false,
+        created_at: now,
+        updated_at: now,
+      });
+      if (createErr) {
+        logger.error({ error: createErr }, 'Failed to auto-create conversation');
+        throw new AppError('Failed to create conversation', 500);
+      }
+      conversationId = newId;
+    } else {
+      await verifyConversationOwnership(conversationId, user.userId);
+    }
+
+    // Persist user message
+    const userMsgId = randomUUID();
+    const { error: userMsgErr } = await supabase.from('messages').insert({
+      id: userMsgId,
+      conversation_id: conversationId,
+      role: 'user',
+      content: message,
+      model: null,
+      created_at: new Date().toISOString(),
     });
-    if (createErr) {
-      logger.error({ error: createErr }, 'Failed to auto-create conversation');
-      throw new AppError('Failed to create conversation', 500);
-    }
-    conversationId = newId;
-  } else {
-    await verifyConversationOwnership(conversationId, user.userId);
-  }
-
-  // Persist user message
-  const userMsgId = randomUUID();
-  const { error: userMsgErr } = await supabase.from('messages').insert({
-    id: userMsgId,
-    conversation_id: conversationId,
-    role: 'user',
-    content: message,
-    model: null,
-    created_at: new Date().toISOString(),
-  });
-  if (userMsgErr) {
-    logger.error({ error: userMsgErr }, 'Failed to persist user message');
-    throw new AppError('Failed to save message', 500);
-  }
-
-  // Fetch conversation history for context
-  const { data: history } = await supabase
-    .from('messages')
-    .select('role, content')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
-    .limit(50);
-
-  const messages = (history ?? []).map((m: { role: string; content: string }) => ({
-    role: m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }));
-
-  // Resolve provider and call upstream LLM
-  const resolvedModel = model ?? 'claude-haiku-4-5-20251001';
-  const provider = resolveProvider(resolvedModel);
-
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  let fullContent = '';
-
-  try {
-    // Send conversation_id as first event
-    res.write(`data: ${JSON.stringify({ conversation_id: conversationId })}\n\n`);
-
-    const upstreamRes = await callUpstreamLLM(provider, resolvedModel, messages);
-
-    if (!upstreamRes.body) {
-      res.write(`data: ${JSON.stringify({ error: 'No response body from upstream' })}\n\n`);
-      res.write('data: [DONE]\n\n');
-      res.end();
-      return;
+    if (userMsgErr) {
+      logger.error({ error: userMsgErr }, 'Failed to persist user message');
+      throw new AppError('Failed to save message', 500);
     }
 
-    const reader = upstreamRes.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+    // Fetch conversation history for context
+    const { data: history } = await supabase
+      .from('messages')
+      .select('role, content')
+      .eq('conversation_id', conversationId)
+      .order('created_at', { ascending: true })
+      .limit(50);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const messages = (history ?? []).map((m: { role: string; content: string }) => ({
+      role: m.role as 'user' | 'assistant' | 'system',
+      content: m.content,
+    }));
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
+    // Resolve provider and call upstream LLM
+    const resolvedModel = model ?? 'claude-haiku-4-5-20251001';
+    const provider = resolveProvider(resolvedModel);
 
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith(':')) continue;
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
 
-        if (trimmed === 'data: [DONE]') {
-          continue;
-        }
+    let fullContent = '';
 
-        if (trimmed.startsWith('data: ')) {
-          const jsonStr = trimmed.slice(6);
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const text = extractTextFromChunk(parsed, provider);
-            if (text) {
-              fullContent += text;
-              res.write(`data: ${JSON.stringify({ text })}\n\n`);
+    try {
+      // Send conversation_id as first event
+      res.write(`data: ${JSON.stringify({ conversation_id: conversationId })}\n\n`);
+
+      const upstreamRes = await callUpstreamLLM(provider, resolvedModel, messages);
+
+      if (!upstreamRes.body) {
+        res.write(`data: ${JSON.stringify({ error: 'No response body from upstream' })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+        return;
+      }
+
+      const reader = upstreamRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || trimmed.startsWith(':')) continue;
+
+          if (trimmed === 'data: [DONE]') {
+            continue;
+          }
+
+          if (trimmed.startsWith('data: ')) {
+            const jsonStr = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(jsonStr);
+              const text = extractTextFromChunk(parsed, provider);
+              if (text) {
+                fullContent += text;
+                res.write(`data: ${JSON.stringify({ text })}\n\n`);
+              }
+            } catch {
+              // Skip unparseable lines
             }
-          } catch {
-            // Skip unparseable lines
           }
         }
       }
-    }
 
-    // Persist assistant message
-    const { error: assistantMsgErr } = await supabase.from('messages').insert({
-      id: randomUUID(),
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: fullContent,
-      model: resolvedModel,
-      created_at: new Date().toISOString(),
-    });
-    if (assistantMsgErr) {
-      logger.error({ error: assistantMsgErr }, 'Failed to persist assistant message');
-    }
+      // Persist assistant message
+      const { error: assistantMsgErr } = await supabase.from('messages').insert({
+        id: randomUUID(),
+        conversation_id: conversationId,
+        role: 'assistant',
+        content: fullContent,
+        model: resolvedModel,
+        created_at: new Date().toISOString(),
+      });
+      if (assistantMsgErr) {
+        logger.error({ error: assistantMsgErr }, 'Failed to persist assistant message');
+      }
 
-    // Update conversation timestamp
-    await supabase
-      .from('conversations')
-      .update({ updated_at: new Date().toISOString() })
-      .eq('id', conversationId);
+      // Update conversation timestamp
+      await supabase
+        .from('conversations')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', conversationId);
 
-    res.write('data: [DONE]\n\n');
-    res.end();
-  } catch (err) {
-    logger.error({ error: err }, 'SSE stream error');
-    try {
-      res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
       res.write('data: [DONE]\n\n');
       res.end();
-    } catch {
-      // Response already ended
+    } catch (err) {
+      logger.error({ error: err }, 'SSE stream error');
+      try {
+        res.write(`data: ${JSON.stringify({ error: 'Stream error' })}\n\n`);
+        res.write('data: [DONE]\n\n');
+        res.end();
+      } catch {
+        // Response already ended
+      }
     }
-  }
-});
+  },
+);
 
 export { router as cloudChatRouter };

@@ -14,9 +14,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { ProjectCard } from '@/components/projects/ProjectCard';
-import { useProjectStore, type Project } from '@/stores/projectStore';
-import { useThemeColors } from '@/hooks/useTheme';
+import { ProjectCard } from '@/src/features/projects';
+import { useProjectStore, type Project } from '@/src/features/projects/store';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * Projects tab -- manage project contexts that apply instructions to chat.

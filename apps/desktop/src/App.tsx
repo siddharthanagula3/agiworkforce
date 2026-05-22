@@ -23,7 +23,7 @@ import {
 import { useChatStore as useDesktopChatStore } from './stores/chat/chatStore';
 import { TauriRuntime } from './runtime/TauriRuntime';
 import { WebRuntime } from './runtime/WebRuntime';
-import type { CommandOption } from './components/UnifiedAgenticChat/CommandPalette';
+import type { CommandOption } from './features/chat/CommandPalette';
 import { useSearchModal } from './hooks/useSearchModal';
 import { useThemeContext } from './providers/ThemeProvider';
 import { useWindowManager } from './hooks/useWindowManager';
@@ -38,7 +38,7 @@ import {
 } from './stores/unifiedChatStore';
 import { useDeepLink } from './hooks/useDeepLink';
 import { useTierBridge } from './hooks/useTierBridge';
-import type { TimeoutWarningData } from './components/Execution/TimeoutWarningDialog';
+import type { TimeoutWarningData } from './features/execution/TimeoutWarningDialog';
 
 import {
   AlertTriangle,
@@ -51,7 +51,7 @@ import {
   RefreshCcw,
   Sun,
 } from 'lucide-react';
-import { ErrorBoundary } from './components/ErrorHandling';
+import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { getModelMetadata, getProviderDefaultModel } from './constants/llm';
 import { errorReportingService } from './services/errorReporting';
@@ -74,12 +74,12 @@ import { applyTheme, getThemeById } from './themes/index';
 import { FeatureFlagName, useFeatureFlag } from './services/featureFlags';
 
 const VisualizationLayer = lazy(() =>
-  import('./components/Overlay/VisualizationLayer').then((m) => ({
+  import('./features/overlay/VisualizationLayer').then((m) => ({
     default: m.VisualizationLayer,
   })),
 );
 const FloatingChat = lazy(() =>
-  import('./components/FloatingChat').then((m) => ({
+  import('./features/floating-chat').then((m) => ({
     default: m.FloatingChat,
   })),
 );
@@ -89,70 +89,70 @@ const ChatInterface = lazy(() =>
   })),
 );
 const DesktopShellV3 = lazy(() =>
-  import('./components/v3').then((m) => ({
+  import('./features/v3').then((m) => ({
     default: m.DesktopShellV3,
   })),
 );
 const SearchModal = lazy(() =>
-  import('./components/UnifiedAgenticChat/SearchModal').then((m) => ({
+  import('./features/chat/SearchModal').then((m) => ({
     default: m.SearchModal,
   })),
 );
 const CommandPalette = lazy(() =>
-  import('./components/UnifiedAgenticChat/CommandPalette').then((m) => ({
+  import('./features/chat/CommandPalette').then((m) => ({
     default: m.CommandPalette,
   })),
 );
 const QuickQuery = lazy(() =>
-  import('./components/QuickQuery').then((m) => ({
+  import('./features/quick-query').then((m) => ({
     default: m.QuickQuery,
   })),
 );
 const VoiceInputOverlay = lazy(() =>
-  import('./components/Voice/VoiceInputOverlay').then((m) => ({
+  import('./features/voice/VoiceInputOverlay').then((m) => ({
     default: m.VoiceInputOverlay,
   })),
 );
 const OnboardingWelcome = lazy(() =>
-  import('./components/Onboarding').then((m) => ({
+  import('./features/onboarding').then((m) => ({
     default: m.OnboardingWelcome,
   })),
 );
 const AuthPage = lazy(() =>
-  import('./components/Auth/AuthPage').then((m) => ({
+  import('./features/auth/AuthPage').then((m) => ({
     default: m.AuthPage,
   })),
 );
 const SettingsPanel = lazy(() =>
-  import('./components/Settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
+  import('./features/settings/SettingsPanel').then((m) => ({ default: m.SettingsPanel })),
 );
 const UpdateChecker = lazy(() =>
-  import('./components/Updates').then((m) => ({
+  import('./features/updates').then((m) => ({
     default: m.UpdateChecker,
   })),
 );
 const AutomationPermissionsModal = lazy(() =>
-  import('./components/Settings/AutomationPermissionsModal').then((m) => ({
+  import('./features/settings/AutomationPermissionsModal').then((m) => ({
     default: m.AutomationPermissionsModal,
   })),
 );
 const TimeoutWarningDialog = lazy(() =>
-  import('./components/Execution/TimeoutWarningDialog').then((m) => ({
+  import('./features/execution/TimeoutWarningDialog').then((m) => ({
     default: m.TimeoutWarningDialog,
   })),
 );
 const StatusBanner = lazy(() =>
-  import('./components/StatusBanner').then((m) => ({
+  import('./features/status-banner').then((m) => ({
     default: m.StatusBanner,
   })),
 );
 const OfflineIndicator = lazy(() =>
-  import('./components/OfflineIndicator').then((m) => ({
+  import('./features/offline-indicator').then((m) => ({
     default: m.OfflineIndicator,
   })),
 );
 const ErrorToastContainer = lazy(() =>
-  import('./components/Errors/ErrorToast').then((m) => ({
+  import('./features/errors/ErrorToast').then((m) => ({
     default: m.default,
   })),
 );
@@ -160,7 +160,7 @@ import { useSessionPersistence } from './hooks/useSessionPersistence';
 import { initializeSyncManager, cleanupSyncManager } from './lib/offline/offlineSync';
 import { CHAT_COMPOSER_CAPTURE_EVENT } from './lib/chatComposerEvents';
 import type { CaptureResult } from './types/capture';
-import { PlansModal } from './components/Pricing/PlansModal';
+import { PlansModal } from './features/pricing/PlansModal';
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">

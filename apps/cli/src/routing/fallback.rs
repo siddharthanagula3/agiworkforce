@@ -28,7 +28,6 @@ pub enum FallbackOn {
     Any,
 }
 
-
 /// Ordered list of models to try. `primaries[0]` is the user's first choice;
 /// each subsequent entry is consulted in order on a classified error.
 #[derive(Debug, Clone, Default)]

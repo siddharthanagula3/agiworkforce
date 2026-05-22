@@ -1,11 +1,92 @@
 ---
-status: PROPOSED — documentation-only commit, no code moves yet
+status: ACTIVE - Web complete, Mobile component-domain wave complete, Desktop component-domain wave complete
 owner: team-lead
-last-updated: 2026-05-15
+last-updated: 2026-05-21
 phase: D (Architecture cleanup, post-launch backlog)
 ---
 
 # Domain-first reorganization plan
+
+Status: Active
+Owner: Team lead
+Last updated: 2026-05-21
+
+## 2026-05-21 Update
+
+Web now treats `apps/web/features` as the canonical product-domain root.
+The stale `apps/web/src/features` split has been removed, and
+`pnpm check:structure-conventions` prevents new Web product-domain files from
+being added under `apps/web/src/features`.
+
+Mobile and Desktop use `src/features`; Web uses root `features`.
+
+The Mobile waitlist pilot is complete: app/tests import from
+`apps/mobile/src/features/waitlist`, and the old temporary waitlist barrels have
+been removed.
+
+The Mobile projects, billing, and schedules domains have moved: `ProjectCard`,
+`UpsellCard`, the billing portal service, and the schedule components/API/store
+now live under `apps/mobile/src/features`.
+
+The Mobile component-heavy domain wave is complete: agents, auth, chat,
+companion, connectors, drawer, edge cases, image, integrations, messaging,
+model picker, onboarding, paywall, settings, sidebar, and voice UI now live
+under `apps/mobile/src/features`. Voice STT/TTS services and messaging
+service/state also moved into their owning feature domains. The only remaining
+legacy `apps/mobile/components` code is the documented `components/ui`
+primitive layer.
+
+The Mobile model-picker ownership slice is complete: model selection state,
+remote model catalog loading, and provider-switch guard logic now live under
+`apps/mobile/src/features/model-picker`, with structure checks guarding the old
+`services/modelCatalog.ts`, `services/tierGuard.ts`, and `stores/modelStore.ts`
+paths.
+
+The Mobile projects ownership slice is complete: project state now lives under
+`apps/mobile/src/features/projects/store.ts`, with structure checks guarding the
+old `stores/projectStore.ts` path.
+
+The Mobile integrations ownership slice is complete: platform integration
+state, device permission helpers, health-context access, and HealthKit helpers
+now live under `apps/mobile/src/features/integrations`, with structure checks
+guarding the old integration service/store paths.
+
+The Mobile image ownership slice is complete: image generation, OCR, and vision
+routing helpers now live under `apps/mobile/src/features/image/services`, with
+structure checks guarding the old image service paths.
+
+The Mobile auth ownership slice is complete: auth state, age-gate helpers, and
+the biometric gate hook now live under `apps/mobile/src/features/auth`, with
+structure checks guarding the old auth hook/service/store paths.
+
+The Mobile billing ownership slice is complete: subscription tier state now
+lives under `apps/mobile/src/features/billing/store.ts`, with structure checks
+guarding the old `stores/tierStore.ts` path.
+
+The Mobile memory ownership slice is complete: memory state, cloud-memory API
+helpers, import parsers, context budgeting, compaction, RAG chunking, and RAG
+indexing now live under `apps/mobile/src/features/memory`, with structure
+checks guarding the old memory service/store paths.
+
+The Mobile skills ownership slice is complete: catalog access and installed
+skill state now live under `apps/mobile/src/features/skills`, with structure
+checks guarding the old skills service/store paths.
+
+The Desktop small-domain wave has moved quick query, voice, simple mode,
+subscription, pricing, planning, reminders, messaging, mobile companion, teams,
+terminal, tools, vision, and workflows out of `src/components` into
+`apps/desktop/src/features`, with call sites and structure checks updated.
+
+The Desktop component-domain wave is complete. Product UI domains have moved
+out of `src/components` into `apps/desktop/src/features`, including chat,
+settings, MCP, execution, memory, tooling side panels, v3 shell, governance,
+scheduler, screen capture, ROI, auth, file upload, document/media/code,
+overlay, and adjacent small domains. `apps/desktop/src/components` is now
+reserved for shared UI primitives only.
+
+Every current Web, Mobile, and Desktop top-level feature folder now has a local
+ownership README, and `pnpm check:readme-ownership` enforces feature README
+coverage.
 
 ## Why
 
@@ -186,27 +267,29 @@ Target:
 ```
 apps/mobile/
 ├── app/           # Expo Router stays (file-based routing is the bind point)
-├── core/          # MMKV, secure store, biometric, deepgram client — platform
-├── features/
-│   ├── chat/{components,hooks,services}/
-│   ├── dispatch/{...}
-│   ├── settings/{...}
-│   ├── auth/{...}
-│   ├── voice/{...}
-│   └── …
-└── shared/        # generic UI atoms, theme tokens
+├── src/
+│   ├── core/      # MMKV, secure store, biometric, deepgram client - platform
+│   ├── features/
+│   │   ├── chat/{components,hooks,services}/
+│   │   ├── dispatch/{...}
+│   │   ├── settings/{...}
+│   │   ├── auth/{...}
+│   │   ├── voice/{...}
+│   │   └── ...
+│   └── ui/        # generic UI atoms, theme tokens
+└── components/    # legacy barrels/shared atoms during migration
 ```
 
 `app/` stays put — file-based router is the public contract Expo enforces.
-Screen _implementations_ under `app/` should import from `features/<domain>/`
-rather than from sibling `components/` paths.
+Screen _implementations_ under `app/` should import from
+`@/src/features/<domain>/` rather than from sibling `components/` paths.
 
 ## Recommended order (start small, validate, expand)
 
 1. **Web first** (Wave A — already 60% there).
    - Move `apps/web/components/billing/*` → `apps/web/features/billing/components/*`
    - Move `apps/web/hooks/use-billing-*` → `apps/web/features/billing/hooks/*`
-   - Verify: `pnpm --filter web build`, `pnpm --filter web test`, Playwright smoke.
+   - Verify: `pnpm --filter @agiworkforce/web build`, `pnpm --filter @agiworkforce/web test`, Playwright smoke.
    - Then chat, then one domain per PR — never two domains in one PR.
 2. **Mobile second** (Wave B — smaller blast radius than desktop).
    - Same per-domain pattern; verify with `pnpm --filter @agiworkforce/mobile test`
@@ -250,7 +333,7 @@ Per-PR checklist for every domain move:
   `apps/web/lib/<domain>/` directories are empty of domain-scoped code.
 - **Mobile (Wave B) done when:** `apps/mobile/components/` only contains
   shared atoms; every screen under `apps/mobile/app/` imports its
-  domain-scoped components from `apps/mobile/features/<domain>/`.
+  domain-scoped components from `apps/mobile/src/features/<domain>/`.
 - **Desktop (Wave C) done when:** `apps/desktop/src/components/` is reduced
   from 76 subdirs to ≤10 (shared UI atoms only); every other former
   component subdir lives under `apps/desktop/src/features/<domain>/`.

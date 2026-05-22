@@ -2,9 +2,12 @@ import {
   useRef,
   useEffect,
   useCallback,
+  useMemo,
   useState,
-  type KeyboardEvent,
   type ChangeEvent,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
 } from 'react';
 import { ArrowUp, Mic, Plus, Square } from 'lucide-react';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils';
@@ -16,7 +19,12 @@ import { ModelSelector } from './ModelSelector';
 import { AgentControl } from './AgentControl';
 import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
-import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import {
+  ALLOWED_ATTACHMENT_ACCEPT,
+  PROVIDER_DISPLAY,
+  validateAttachmentFile,
+  type ProviderId,
+} from '@agiworkforce/types';
 
 export interface ChatInputProps {
   onSend: (content: string, agentMode?: string, effort?: string) => void;
@@ -62,7 +70,9 @@ export function ChatInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const plusButtonRef = useRef<HTMLButtonElement>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [webSearchEnabled, setWebSearchEnabled] = useState(true);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<
@@ -124,6 +134,105 @@ export function ChatInput({
     [adjustHeight],
   );
 
+  // Validate + append candidate files through the shared @agiworkforce/types
+  // contract (MIME prefix + extension allowlist + MAX_ATTACHMENT_BYTES). Any
+  // rejection surfaces the first failure message under the textarea so the
+  // user knows why nothing attached. Round-2 audit P0 #4 (2026-05-21).
+  const appendFiles = useCallback((candidates: File[]) => {
+    if (candidates.length === 0) return;
+    const accepted: File[] = [];
+    const rejections: string[] = [];
+    for (const file of candidates) {
+      const result = validateAttachmentFile(file);
+      if (result.ok) {
+        accepted.push(file);
+      } else {
+        rejections.push(result.message);
+      }
+    }
+    if (accepted.length > 0) {
+      setAttachedFiles((prev) => [...prev, ...accepted]);
+    }
+    setAttachmentError(rejections[0] ?? null);
+  }, []);
+
+  // Drag-drop + paste-image — parity-gap round-2 P0 #3 (2026-05-21). Mirrors
+  // Claude / ChatGPT: dropping files anywhere on the composer or pasting an
+  // image from the clipboard attaches them to the message, with a visual
+  // border highlight while dragging.
+  const handleDragOver = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      if (disabled || isStreaming) return;
+      e.preventDefault();
+      if (!isDragOver) setIsDragOver(true);
+    },
+    [disabled, isStreaming, isDragOver],
+  );
+
+  const handleDragLeave = useCallback((e: DragEvent<HTMLDivElement>) => {
+    // Only clear when the cursor actually exits the bounding box, not when
+    // crossing a child element.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      if (disabled || isStreaming) return;
+      const files = Array.from(e.dataTransfer?.files ?? []);
+      appendFiles(files);
+    },
+    [disabled, isStreaming, appendFiles],
+  );
+
+  const handlePaste = useCallback(
+    (e: ClipboardEvent<HTMLTextAreaElement>) => {
+      if (disabled || isStreaming) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const pasted: File[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (!item) continue;
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) pasted.push(file);
+        }
+      }
+      if (pasted.length > 0) {
+        // Prevent the binary blob from being inserted into the textarea as
+        // garbage text — but only when we actually captured a file paste.
+        e.preventDefault();
+        appendFiles(pasted);
+      }
+    },
+    [disabled, isStreaming, appendFiles],
+  );
+
+  // Object URLs for image thumbnails. Re-built whenever the attached file
+  // set changes and revoked on unmount / change so we don't leak blob URLs.
+  const thumbnailUrls = useMemo(() => {
+    const urls: Array<{ key: string; url: string | null }> = [];
+    for (let i = 0; i < attachedFiles.length; i++) {
+      const file = attachedFiles[i];
+      if (!file) continue;
+      const key = `${file.name}-${i}-${file.size}`;
+      const url = file.type.startsWith('image/') ? URL.createObjectURL(file) : null;
+      urls.push({ key, url });
+    }
+    return urls;
+  }, [attachedFiles]);
+
+  useEffect(() => {
+    return () => {
+      for (const t of thumbnailUrls) {
+        if (t.url) URL.revokeObjectURL(t.url);
+      }
+    };
+  }, [thumbnailUrls]);
+
   const handleSend = useCallback(() => {
     if (disabled) return;
     const el = textareaRef.current;
@@ -182,33 +291,55 @@ export function ChatInput({
     <div className={cn('mx-auto w-full max-w-3xl px-4 pb-2', className)}>
       <div
         className={cn(
-          'overflow-hidden border',
+          'overflow-hidden border transition-colors',
           'bg-[var(--chat-surface-elevated)]',
-          focused
-            ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_rgba(33,128,141,0.25)]'
-            : 'border-[var(--chat-border)]',
+          isDragOver
+            ? 'border-[var(--chat-accent-primary)] shadow-[0_0_0_2px_rgba(218,119,86,0.25)]'
+            : focused
+              ? 'border-[var(--chat-border-strong,var(--chat-border))] shadow-[0_0_0_2px_rgba(33,128,141,0.25)]'
+              : 'border-[var(--chat-border)]',
         )}
         style={{ borderRadius: 16 }}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
       >
-        {/* Attached files preview */}
+        {/* Inline attachment validation error — dismissed on next valid add. */}
+        {attachmentError && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="px-3 pt-2 text-[11px] text-[var(--chat-destructive)]"
+          >
+            {attachmentError}
+          </div>
+        )}
+
+        {/* Attached files preview — image thumbnails for image/*, text chip otherwise */}
         {attachedFiles.length > 0 && (
           <div className="flex flex-wrap gap-1.5 px-3 pt-2">
-            {attachedFiles.map((file, i) => (
-              <span
-                key={`${file.name}-${i}`}
-                className="inline-flex items-center gap-1 rounded-md bg-[var(--chat-surface-hover)] px-2 py-0.5 text-xs text-[var(--chat-text-secondary)]"
-              >
-                {file.name}
-                <button
-                  type="button"
-                  onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                  className="ml-0.5 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]"
-                  aria-label={`Remove ${file.name}`}
+            {attachedFiles.map((file, i) => {
+              const thumb = thumbnailUrls[i];
+              return (
+                <span
+                  key={thumb?.key ?? `${file.name}-${i}`}
+                  className="inline-flex items-center gap-1 rounded-md bg-[var(--chat-surface-hover)] px-2 py-0.5 text-xs text-[var(--chat-text-secondary)]"
                 >
-                  &times;
-                </button>
-              </span>
-            ))}
+                  {thumb?.url ? (
+                    <img src={thumb.url} alt={file.name} className="h-5 w-5 rounded object-cover" />
+                  ) : null}
+                  {file.name}
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="ml-0.5 text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]"
+                    aria-label={`Remove ${file.name}`}
+                  >
+                    &times;
+                  </button>
+                </span>
+              );
+            })}
           </div>
         )}
 
@@ -219,6 +350,7 @@ export function ChatInput({
           placeholder={placeholder}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           disabled={disabled}
@@ -241,11 +373,11 @@ export function ChatInput({
             type="file"
             multiple
             className="hidden"
-            accept="image/*,.pdf,.txt,.md,.csv,.json,.js,.ts,.py,.rs,.go,.java,.html,.css"
+            accept={ALLOWED_ATTACHMENT_ACCEPT}
             onChange={(e) => {
               const files = e.target.files;
               if (files && files.length > 0) {
-                setAttachedFiles(Array.from(files));
+                appendFiles(Array.from(files));
               }
               e.target.value = '';
             }}

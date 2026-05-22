@@ -45,6 +45,10 @@ import {
   type OpenAIProviderOptions,
 } from '@/lib/ai-sdk/providers';
 import { createAiSdkStream, toCoreMessages, toAiSdkTools } from '@/lib/ai-sdk/stream-handler';
+import {
+  MANAGED_AI_GATEWAY_PROVIDER_MODE_HEADER,
+  resolveManagedAiGatewayProviderMode,
+} from '@/lib/ai-sdk/managed-provider-mode-gate';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import {
   estimateTokenCount,
@@ -61,6 +65,8 @@ import type { User } from '@supabase/supabase-js';
 // ---------------------------------------------------------------------------
 // Request schema (same shape as v1)
 // ---------------------------------------------------------------------------
+
+const ProviderModeSchema = z.enum(['Local', 'DirectByok', 'ManagedGateway', 'ManagedNative']);
 
 const V2ChatRequestSchema = z.object({
   model: z.string().min(1),
@@ -121,6 +127,8 @@ const V2ChatRequestSchema = z.object({
   reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
   reasoning_summary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
   service_tier: z.enum(['auto', 'default', 'flex']).optional(),
+  providerMode: ProviderModeSchema.optional(),
+  provider_mode: ProviderModeSchema.optional(),
 });
 
 type V2ChatRequest = z.infer<typeof V2ChatRequestSchema>;
@@ -645,6 +653,34 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   }
 
   const chatRequest = validation.data;
+  const providerModeDecision = resolveManagedAiGatewayProviderMode({
+    headerProviderMode: request.headers.get(MANAGED_AI_GATEWAY_PROVIDER_MODE_HEADER),
+    bodyProviderMode: chatRequest.providerMode,
+    bodyProviderModeSnake: chatRequest.provider_mode,
+  });
+
+  if (!providerModeDecision.allowed) {
+    logger.warn(
+      {
+        userId: user.id,
+        model: chatRequest.model,
+        code: providerModeDecision.code,
+        receivedProviderMode: providerModeDecision.receivedProviderMode,
+      },
+      'v2: managed AI Gateway request denied by providerMode gate',
+    );
+    return NextResponse.json(
+      {
+        error: {
+          message: providerModeDecision.message,
+          type: 'invalid_request_error',
+          code: providerModeDecision.code,
+        },
+      },
+      { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    );
+  }
+
   const useAiSdk = request.headers.get('x-use-ai-sdk') !== 'false'; // default on for this route
 
   // Auto model routing: if model is 'auto' or 'auto-route', use the model router
@@ -1071,6 +1107,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     responseHeaders.set('x-agi-provider', aiSdkProvider);
     responseHeaders.set('x-agi-sdk-path', 'v2-ai-sdk');
     responseHeaders.set('x-agi-model', apiModelId);
+    responseHeaders.set('x-agi-provider-mode', providerModeDecision.providerMode);
     if (contextCompacted) {
       responseHeaders.set('x-context-compacted', 'true');
     }

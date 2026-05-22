@@ -135,11 +135,17 @@ fn validate_and_escape_seatbelt_path(path: &Path) -> Result<String> {
         anyhow::bail!("workspace path must be absolute: {:?}", path);
     }
     if s != s.trim() {
-        anyhow::bail!("workspace path has leading or trailing whitespace: {:?}", path);
+        anyhow::bail!(
+            "workspace path has leading or trailing whitespace: {:?}",
+            path
+        );
     }
     // Control chars including NUL (terminates C string) and newlines (split rules).
     if s.chars().any(|c| (c as u32) < 0x20) {
-        anyhow::bail!("workspace path contains ASCII control character: {:?}", path);
+        anyhow::bail!(
+            "workspace path contains ASCII control character: {:?}",
+            path
+        );
     }
     // Unicode line/paragraph separators — some SBPL parsers treat as newlines.
     if s.contains('\u{2028}') || s.contains('\u{2029}') {
@@ -183,9 +189,7 @@ pub async fn execute_sandboxed(
             // CRIT-1: network is default-deny. Only re-open outbound when the caller
             // has explicitly opted in via NetworkPolicy::Allow.
             let network_rules = match manager.network_policy {
-                NetworkPolicy::Allow => {
-                    "(allow network-outbound)\n(allow network-inbound)\n"
-                }
+                NetworkPolicy::Allow => "(allow network-outbound)\n(allow network-inbound)\n",
                 // SECURITY: omit (allow network-outbound) entirely so Seatbelt deny-default
                 // blocks all outbound connections including DNS resolution.
                 NetworkPolicy::Deny => "",
@@ -239,12 +243,22 @@ pub async fn execute_sandboxed(
                 bwrap_args.push("--unshare-net");
             }
             bwrap_args.extend([
-                "--ro-bind", "/", "/",
-                "--bind", &ws, &ws,
-                "--tmpfs", "/tmp",
-                "--dev", "/dev",
-                "--proc", "/proc",
-                "--", "sh", "-c", command,
+                "--ro-bind",
+                "/",
+                "/",
+                "--bind",
+                &ws,
+                &ws,
+                "--tmpfs",
+                "/tmp",
+                "--dev",
+                "/dev",
+                "--proc",
+                "/proc",
+                "--",
+                "sh",
+                "-c",
+                command,
             ]);
             bcmd.args(&bwrap_args);
             if let Some(dir) = cwd {

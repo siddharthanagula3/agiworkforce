@@ -1,5 +1,13 @@
 # @agiworkforce/llm-normalize
 
+Status: Current
+Owner role: Provider/platform owner
+Last updated: 2026-05-20
+Kind: ts-package
+Criticality: high
+
+## Purpose
+
 Cross-provider LLM payload normalization helpers.
 
 This package encodes production-tested knowledge about per-vendor / per-endpoint

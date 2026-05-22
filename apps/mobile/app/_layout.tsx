@@ -17,13 +17,14 @@ import {
   type AppStateStatus,
 } from 'react-native';
 import { Fingerprint } from 'lucide-react-native';
-import { useAuthStore } from '@/stores/authStore';
-import { useTierStore } from '@/stores/tierStore';
+import { useAuthStore } from '@/src/features/auth/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
-import { useBiometricGate } from '@/hooks/useBiometricGate';
-import { useTheme } from '@/hooks/useTheme';
+import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
+import { useTheme } from '@/src/ui/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   registerForPushNotifications,
   setupNotificationListeners,
@@ -37,8 +38,8 @@ import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtim
 import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatchRealtime';
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
-import { isAgeGateConfirmed } from '@/services/ageGate';
-import { OfflineBanner } from '@/components/edge-cases/OfflineBanner';
+import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
+import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 
 export default function RootLayout() {
@@ -256,6 +257,26 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = (segments[0] as string) === '(public)';
+
+    // v1 local-only: auth flows are feature-gated off. Never redirect to the
+    // (auth) group — the login screen is intentionally a redirect-stub in
+    // this mode. If we somehow landed there (legacy state, deep link),
+    // route to onboarding or (app) like the post-sign-in branch below.
+    if (!FEATURES.auth) {
+      if (inAuthGroup) {
+        const onboardingDone = storage.getString('onboarding-done');
+        if (!onboardingDone) {
+          if (!isAgeGateConfirmed()) {
+            router.replace({ pathname: '/(public)/age-gate' as never });
+          } else {
+            router.replace({ pathname: '/(public)/onboarding' as never });
+          }
+        } else {
+          router.replace({ pathname: '/(app)' as const });
+        }
+      }
+      return;
+    }
 
     if (!session && !inAuthGroup) {
       router.replace({ pathname: '/(auth)/login' as const });

@@ -142,21 +142,22 @@ export function renderMarkdown(text: string): string {
   html = html.replace(
     /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g,
     (_match: string, text: string, url: string) => {
-    const rawUrl = url.trim();
-    const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
-    const encodedHref = safeUrl
-      .replace(/"/g, '%22')
-      .replace(/'/g, '%27')
-      .replace(/</g, '%3C')
-      .replace(/>/g, '%3E');
-    const encodedText = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-    return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
-  });
+      const rawUrl = url.trim();
+      const safeUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl : '#';
+      const encodedHref = safeUrl
+        .replace(/"/g, '%22')
+        .replace(/'/g, '%27')
+        .replace(/</g, '%3C')
+        .replace(/>/g, '%3E');
+      const encodedText = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      return `<a href="${encodedHref}" target="_blank" rel="noopener noreferrer">${encodedText}</a>`;
+    },
+  );
 
   html = html
     .split(/\n{2,}/)

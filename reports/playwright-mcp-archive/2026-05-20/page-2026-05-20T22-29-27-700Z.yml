@@ -1,0 +1,396 @@
+- generic [ref=e7]:
+    - generic [ref=e8]:
+        - generic [ref=e11]:
+            - link "Back to projects" [ref=e12]:
+                - /url: /design/
+                - img [ref=e13]
+            - generic "AGI Mobile" [ref=e16]
+            - button "" [ref=e18]:
+                - generic [ref=e19]: 
+        - generic [ref=e20]:
+            - generic [ref=e22]:
+                - generic [ref=e23]: 
+                - generic [ref=e24]: Design Files
+            - generic [ref=e26]:
+                - generic [ref=e28]: index.html
+                - generic [ref=e634]: screens-r5-canonical.jsx
+            - generic [ref=e29]:
+                - button "Share" [ref=e31]:
+                    - generic [ref=e32]: Share
+                - button "Profile and connectors" [ref=e33] [cursor=pointer]:
+                    - generic [ref=e34]: SN
+    - generic [ref=e36]:
+        - generic [ref=e43]:
+            - generic [ref=e46]:
+                - generic [ref=e88]:
+                    - generic [ref=e91] [cursor=pointer]:
+                        - generic [ref=e92]: 
+                        - generic [ref=e93]: Editing, Done
+                        - generic [ref=e94]: 
+                    - paragraph [ref=e97]: R4 section title renamed to "Code task surface" — no Codex term anywhere user-facing.
+                - generic [ref=e100]: can you like brainstrom or ask me questions?
+                - generic [ref=e105]:
+                    - paragraph [ref=e106]: "Yes — let me ask. I've been pattern-matching to Claude/Perplexity/ChatGPT but AGI's real shape isn't fully decided yet. Critical fork-in-the-road decisions:"
+                    - paragraph [ref=e107]:
+                        - strong [ref=e108]: 1. The differentiator.
+                        - text: AGI's pitch is "all AIs in one place + BYOK + local LLM." Which of those is the
+                        - emphasis [ref=e109]: hero
+                        - text: on mobile?
+                    - list [ref=e110]:
+                        - listitem [ref=e111]:
+                            - strong [ref=e112]: a)
+                            - text: Multi-provider switcher (Perplexity model-picker style — first thing you see)
+                        - listitem [ref=e113]:
+                            - strong [ref=e114]: b)
+                            - text: On-device (Apple FM / Llama 3.2 / Qwen — privacy-first hero)
+                        - listitem [ref=e115]:
+                            - strong [ref=e116]: c)
+                            - text: BYOK (your keys, your bill — pro-user hero)
+                        - listitem [ref=e117]:
+                            - strong [ref=e118]: d)
+                            - text: All three subordinated to one chat surface (Claude-style restraint)
+                    - paragraph [ref=e119]:
+                        - strong [ref=e120]: 2. The greeting copy.
+                        - text: 'Right now I have "How can I help you, Siddhartha?" (Claude voice). Your design system says voice is "engineering-adjacent, direct." Possible alternatives:'
+                    - list [ref=e121]:
+                        - listitem [ref=e122]: '"Ask anything" (Perplexity neutral)'
+                        - listitem [ref=e123]: '"What do you want to build?" (Codex Desktop''s vibe)'
+                        - listitem [ref=e124]: No greeting — just composer (most engineering-tool)
+                    - paragraph [ref=e125]:
+                        - strong [ref=e126]: 3. Dispatch role on mobile.
+                        - text: 'Is Dispatch:'
+                    - list [ref=e127]:
+                        - listitem [ref=e128]:
+                            - strong [ref=e129]: a)
+                            - text: A nav destination (a top-level "Dispatch" tab — like the drawer item)
+                        - listitem [ref=e130]:
+                            - strong [ref=e131]: b)
+                            - text: An action
+                            - emphasis [ref=e132]: inside
+                            - text: a chat ("send this to my desktop" button on a message)
+                        - listitem [ref=e133]:
+                            - strong [ref=e134]: c)
+                            - text: Both (destination shows queue, message-level action queues)
+                    - paragraph [ref=e135]:
+                        - strong [ref=e136]: 4. Agents vs Skills vs Projects
+                        - text: — these all overlap conceptually. In your repo Agents is its own tab AND Skills is its own package. What's the user-facing distinction on mobile?
+                    - list [ref=e137]:
+                        - listitem [ref=e138]: Agent = a persona with system prompt + tool set?
+                        - listitem [ref=e139]: Skill = a markdown+frontmatter mini-prompt?
+                        - listitem [ref=e140]: Project = a folder of chats + files?
+                    - paragraph [ref=e141]:
+                        - strong [ref=e142]: 5. The waitlist visibility.
+                        - text: 'I''ve been showing "Cloud waitlist · #1,247" in many places. Is that the right number to surface or should mobile be silent about cloud entirely (since v1 is local-only and cloud paid is paused until Aug 1, 2026)?'
+                    - paragraph [ref=e143]:
+                        - strong [ref=e144]: 6. Model picker truth.
+                        - text: Right now my model picker shows on-device models + 6 cloud models as "waitlist". But the README says BYOK
+                        - emphasis [ref=e145]: is
+                        - text: available — should cloud models be unlocked when user supplies their own key, even now?
+                    - paragraph [ref=e146]:
+                        - strong [ref=e147]: 7. What screens are still missing
+                        - text: that you actually care about?
+                    - list [ref=e148]:
+                        - listitem [ref=e149]: Account creation / sign-in (you scrapped login earlier — confirm?)
+                        - listitem [ref=e150]: Onboarding (the device-tier detection screen — keep or kill?)
+                        - listitem [ref=e151]: Voice (have it, but it's Claude-shaped — does AGI even prioritize voice on mobile?)
+                        - listitem [ref=e152]: Memory import (Wave 6 has memory import/export — distinct screen?)
+                        - listitem [ref=e153]: BYOK provider key entry (you scrapped earlier — does it come back for the few who want it now?)
+                    - paragraph [ref=e154]:
+                        - strong [ref=e155]: 8. Look-and-feel ambivalence.
+                        - text: R4/R5 are dark-default with serif body. Your design system says light + dark both ship, with warm cream
+                        - code [ref=e156]: '#faf9f7'
+                        - text: as the canonical surface. Should the
+                        - emphasis [ref=e157]: canonical
+                        - text: mobile direction be light-first or dark-first?
+                    - paragraph [ref=e158]: Pick any subset — the answers to 1, 4, and 8 would unblock the most.
+                - generic [ref=e161]:
+                    - text: '<pasted_text name="Pasted text (70 lines)"> 1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop” / “Continue on desktop” on a chat/message. - A Dispatch destination only shows queue/history when desktop companion is paired. 4. Agents vs Skills vs Projects User-facing distinction: - Project = a local workspace/context container: chats, files, memory, and custom instructions. - Skill = an installable reusable capability/prompt recipe. Markdown/frontmatter under the hood; user sees “saved workflow” or “skill.” - Agent = a running delegated worker/job with status, tools, approvals, artifacts. Not a persona tab on mobile v1. So: show Projects. Show Skills as drawer/plus-menu utility, not a dominant tab. Hide Agents unless desktop companion has active runs. 5. Waitlist visibility Do not show Cloud waitlist · #1,247 everywhere. Show cloud only at natural gates: - Mode toggle: Cloud · Waitlist - Locked managed-cloud model rows - Settings → Mode / Cloud Only show rank after the user joins and only if it is real server data. Before join, use Join waitlist, not fake social proof. 6. Model picker truth Yes: cloud provider models should unlock when the user supplies their own key. Separate the picker into three buckets: - On-device: installed / downloadable local models. - BYOK: Anthropic/OpenAI/Google/etc. Locked until user adds that provider key; then selectable. - AGI Cloud: managed credits/subscriptions; waitlist until launch/private beta. Important: Local → BYOK must create an explicit fork with context preview/redaction. Never silently switch an existing local chat to a provider. 7. Screens that matter Keep: - Device-tier onboarding. - Local model download/manage. - BYOK provider key entry. - Local → BYOK fork flow with context selection, secret scan, preview. - Memory import/export, but under Settings → Memory, not onboarding. - Voice as on-device push-to-talk/transcription, not a primary hero. Confirm: - No account required for Local. - Sign-in only for sync, managed cloud/private beta, or future account features. - BYOK should not require AGI account. 8. Look and feel Canonical direction: light-first, warm cream #faf9f7, with dark mode fully supported. Do not make dark + serif body the default mobile identity. Use system sans on mobile. Serif is only for rare display/editorial moments, not body UI. </pasted_text>'
+                    - 'generic "1. Mobile hero Use on-device / privacy-first as the mobile hero. The mobile app should feel like: “AGI runs on your phone, works offline, and only leaves the device when you explicitly choose BYOK.” Do not make the first screen a cloud model picker. Multi-provider and BYOK are still core, but on mobile they sit inside one restrained chat surface. 2. Greeting copy Use “Ask anything”. Avoid “How can I help you, Siddhartha?” because it is too Claude-shaped. Avoid “What do you want to build?” because mobile is broader than coding. The on-device badge should carry the product truth: On- device · Private · Works offline. 3. Dispatch For mobile v1: hide Dispatch as a top-level nav item. Post-v1: use both, but message-level action is primary: - “Send to desktop”…" [ref=e163]':
+                        - generic [ref=e164]: Pasted text (70 lines)
+                - generic [ref=e705]:
+                    - generic [ref=e708] [cursor=pointer]:
+                        - generic [ref=e709]: 
+                        - generic [ref=e710]: Writing, Done
+                        - generic [ref=e711]: 
+                    - generic [ref=e713]:
+                        - paragraph [ref=e714]:
+                            - strong [ref=e715]: R5 rebuilt with all 8 decisions applied.
+                            - text: '12 artboards (6 screens × light/dark), now light-first:'
+                        - list [ref=e716]:
+                            - listitem [ref=e717]:
+                                - strong [ref=e718]: R5.1 Empty
+                                - text: — warm cream bg, terracotta asterisk, "Ask anything." display, "Runs on your phone. Free, forever, for what runs on-device." subline. Mode toggle
+                                - code [ref=e719]: '[On-device][Cloud · Waitlist]'
+                                - text: ', on-device badge below:'
+                                - code [ref=e720]: 🛡 On-device · Private · Works offline
+                            - listitem [ref=e721]:
+                                - strong [ref=e722]: R5.2 Active chat
+                                - text: — sans body (NOT serif), terracotta-tint user bubble (light), 4-5 hour sourdough answer, dashed-border PerformanceChip
+                            - listitem [ref=e723]:
+                                - strong [ref=e724]: R5.3 Drawer
+                                - text: '— restrained 4 items only:'
+                                - strong [ref=e725]: Chat · Projects · Skills (saved workflows) · Settings
+                                - text: . No Dispatch, no Agents top-level. Asterisk + serif "AGI" wordmark, Recents below, avatar pill + terracotta FAB
+                            - listitem [ref=e726]:
+                                - strong [ref=e727]: R5.4 Plus menu
+                                - text: — ChatGPT pattern (Camera/Photos squares + photo strip), Skills surfaces as first list item ("Browse and run saved workflows"), Web search + GitHub locked with
+                                - code [ref=e728]: cloud waitlist
+                                - text: sub
+                            - listitem [ref=e729]:
+                                - strong [ref=e730]: R5.5 Model picker — 3 buckets
+                                - text: —
+                                - strong [ref=e731]: On-device
+                                - text: (Apple FM 3B Tier 1 / Llama 3.2 3B selected / Qwen 0.5B fallback),
+                                - strong [ref=e732]: BYOK
+                                - text: ("Locked · add Anthropic key" etc — all locked but unlockable via key),
+                                - strong [ref=e733]: AGI Cloud
+                                - text: '(waitlist). Footer info: "Switching from on-device to BYOK starts a new chat. We''ll show what gets sent before it leaves your device."'
+                            - listitem [ref=e734]:
+                                - strong [ref=e735]: R5.6 Local → BYOK fork flow
+                                - text: — warning header ("Your chat will leave your device"), Context preview (4 messages, editable), green "No secrets, API keys, or PII detected." scan card, destination card (Claude Sonnet · ~$0.003/turn estimated), primary "Send to Claude · start new chat" + secondary "stay on-device"
+                        - paragraph [ref=e736]: Serif (Crimson Pro) is reserved for the AGI wordmark and the "Models" sheet heading only — body is system SF Pro / Inter throughout.
+                - generic [ref=e739]: 'Create a new R6 canonical set that keeps the visual polish of R5 but corrects the AGI Mobile product direction. Do not edit by making small copy tweaks only. Make a new light-first AGI Mobile v1 direction using these rules: 1. Product truth AGI Mobile v1 is on-device first. The hero is private AI that runs on the phone, works offline, and only leaves the device when the user explicitly chooses BYOK. Managed AGI Cloud is waitlist/private beta only. BYOK is available when the user adds their own provider key. 2. Visual direction Make canonical screens light-first with warm cream #faf9f7 as the base, white raised surfaces, teal #21808d for primary actions, terracotta #da7756 only as secondary accent. Include dark variants only as secondary examples. Use iOS/Android system sans. Do not use serif body text. Do not use negative letter spacing. Keep density professional and mobile-native. 3. Empty chat Replace "How can I help you, Siddhartha?" with "Ask anything". Add a compact trust badge near the header or above the composer: "On-device · Private · Works offline". Keep the composer-first layout. The screen should feel like a real tool, not a landing page. 4. Navigation Remove Agents, Dispatch, and Multi-model from primary mobile nav. Mobile v1 primary drawer should be: Chat, Projects, Skills, Memory, Models, Keys, Settings. Agents only appear later if desktop companion has active runs. Dispatch is not a v1 destination. Multi-model compare is not a primary nav item. 5. Onboarding No sign-in in first-run. Replace the current Android onboarding copy with: "AGI runs on your device." Supporting copy: "No account. No cloud. Free forever." Primary CTA: "Start chatting" or "Continue". Then show device-tier detection and model download/manage. BYOK is optional later in Keys. 6. Model picker Rebuild the model picker into three explicit sections: - On-device: installed and downloadable local/system models. - BYOK: Anthropic, OpenAI, Google, xAI, Perplexity, Mistral, Ollama/LM Studio, Custom. Rows say "Add key" until configured, then become selectable. These are not waitlist. - AGI Cloud: managed models and credits. These are waitlist/private beta only. Do not label every cloud provider model as waitlist. BYOK unlocks provider models now. 7. BYOK flow Add a Keys / BYOK screen and a Local to BYOK fork flow. The fork flow must show: choose provider/model, choose context to send, include attachments toggle, local secret scan, payload preview, confirm. Original local chat remains local. Labels should say "Claude via your Anthropic key" or equivalent. 8. Waitlist Remove fake or global waitlist rank from Settings and nav. Before join, show only "Join waitlist" at natural cloud gates. After join, rank may appear only in the waitlist confirmation and mode/cloud row, and only as server-provided data. 9. Settings and storage Remove account/email assumptions from local v1 settings. Storage export must be on-device export/share sheet, not "emailed within 24h". Settings sections: Mode, Keys, Memory, Voice, Storage, Performance, Privacy, Appearance, About. 10. Preserve what works Keep the high-fidelity phone frames, compact composer, inline tool-call bar, performance chip, plus menu structure, and model sheet interaction quality. Just make the IA, copy, trust boundaries, and palette correct for AGI. Output one new section titled "R6 · AGI Mobile v1 canonical" with these screens: onboarding hero, device tier/model download, empty chat, active chat, drawer, plus menu, model picker, Keys/BYOK setup, Local to BYOK fork preview, Settings/Storage/Privacy. Add Android light variants for drawer and onboarding.'
+                - generic [ref=e749]:
+                    - generic [ref=e750]: 
+                    - generic [ref=e751]:
+                        - generic [ref=e752]: You've used 97% of your Claude Design weekly limit · It resets at 6:00 PM. Claude Design has its own usage limit, separate from your regular Claude usage.
+                        - link "Upgrade plan" [ref=e754] [cursor=pointer]:
+                            - /url: https://claude.ai/settings/billing
+                - generic [ref=e1218]:
+                    - generic [ref=e1219]: 
+                    - generic [ref=e1220]:
+                        - generic [ref=e1221]: You've hit your Claude Design weekly limit · It resets at 6:00 PM. Claude Design has its own usage limit, separate from your regular Claude usage.
+                        - link "Upgrade plan" [ref=e1223] [cursor=pointer]:
+                            - /url: https://claude.ai/settings/billing
+                - generic [ref=e1226]:
+                    - generic [ref=e1229] [cursor=pointer]:
+                        - generic [ref=e1230]: 
+                        - generic [ref=e1231]: Writing, Editing ×2, Done
+                        - generic [ref=e1232]: 
+                    - generic [ref=e1233]:
+                        - generic [ref=e1234]:
+                            - generic [ref=e1235]: 
+                            - generic [ref=e1236]: You've hit your Claude Design usage limit — try again in about 34 minutes. Claude Design uses its own usage limit for now — this is separate from your regular Claude usage.
+                        - generic [ref=e1237]:
+                            - button " Retry" [ref=e1238]:
+                                - generic [ref=e1239]:
+                                    - generic [ref=e1240]: 
+                                    - text: Retry
+                            - button " Report…" [ref=e1241]:
+                                - generic [ref=e1242]:
+                                    - generic [ref=e1243]: 
+                                    - text: Report…
+            - generic [ref=e169]:
+                - textbox "Describe what you want to create..." [ref=e171]
+                - generic [ref=e172]:
+                    - generic [ref=e173]:
+                        - button "" [ref=e175]:
+                            - generic [ref=e176]: 
+                        - button "" [ref=e177]:
+                            - generic [ref=e179]: 
+                        - button "" [ref=e180]:
+                            - generic [ref=e181]: 
+                    - button " Send" [disabled] [ref=e1244]:
+                        - generic [ref=e1245]:
+                            - generic [ref=e1246]: 
+                            - text: Send
+        - generic [ref=e1293]:
+            - generic [ref=e1294]:
+                - button "" [disabled] [ref=e1295]:
+                    - generic [ref=e1296]: 
+                - button "" [ref=e1298]:
+                    - generic [ref=e1299]: 
+                - button "project" [ref=e1301]
+                - button " New sketch" [ref=e1302]:
+                    - generic [ref=e1303]:
+                        - generic [ref=e1304]: 
+                        - text: New sketch
+                - button " Paste" [ref=e1305]:
+                    - generic [ref=e1306]:
+                        - generic [ref=e1307]: 
+                        - text: Paste
+            - generic [ref=e1308]:
+                - generic [ref=e1309]:
+                    - generic [ref=e1310]:
+                        - generic [ref=e1311]: Folders
+                        - generic "uploads" [ref=e1312]:
+                            - generic [ref=e1314]: 
+                            - generic [ref=e1319]:
+                                - generic [ref=e1320]: uploads
+                                - generic [ref=e1321]: Folder
+                            - generic [ref=e1322]: —
+                        - generic [ref=e1323]: Pages
+                        - generic "index.html · Modified 3m ago" [ref=e1324]:
+                            - generic [ref=e1332]:
+                                - generic [ref=e1333]: index.html
+                                - generic [ref=e1334]: HTML page
+                            - generic [ref=e1335]: 3m ago
+                        - generic [ref=e1336]: Components
+                        - generic "app.jsx · Modified 3m ago" [ref=e1337]:
+                            - generic [ref=e1345]:
+                                - generic [ref=e1346]: app.jsx
+                                - generic [ref=e1347]: Component
+                            - generic [ref=e1348]: 3m ago
+                        - generic "screens-r6-canonical.jsx · Modified 3m ago" [ref=e1349]:
+                            - generic [ref=e1357]:
+                                - generic [ref=e1358]: screens-r6-canonical.jsx
+                                - generic [ref=e1359]: Component
+                            - generic [ref=e1360]: 3m ago
+                        - generic "screens-r5-canonical.jsx · Modified 8m ago" [ref=e1361]:
+                            - generic [ref=e1369]:
+                                - generic [ref=e1370]: screens-r5-canonical.jsx
+                                - generic [ref=e1371]: Component
+                            - generic [ref=e1372]: 8m ago
+                        - generic "screens-r4-codex.jsx · Modified 29m ago" [ref=e1373]:
+                            - generic [ref=e1381]:
+                                - generic [ref=e1382]: screens-r4-codex.jsx
+                                - generic [ref=e1383]: Component
+                            - generic [ref=e1384]: 29m ago
+                        - generic "screens-r4-claude-final.jsx · Modified 1h ago" [ref=e1385]:
+                            - generic [ref=e1393]:
+                                - generic [ref=e1394]: screens-r4-claude-final.jsx
+                                - generic [ref=e1395]: Component
+                            - generic [ref=e1396]: 1h ago
+                        - generic "screens-r4-claude-extra.jsx · Modified 2h ago" [ref=e1397]:
+                            - generic [ref=e1405]:
+                                - generic [ref=e1406]: screens-r4-claude-extra.jsx
+                                - generic [ref=e1407]: Component
+                            - generic [ref=e1408]: 2h ago
+                        - generic "screens-r4-claude-settings.jsx · Modified 2h ago" [ref=e1409]:
+                            - generic [ref=e1417]:
+                                - generic [ref=e1418]: screens-r4-claude-settings.jsx
+                                - generic [ref=e1419]: Component
+                            - generic [ref=e1420]: 2h ago
+                        - generic "screens-r3-chatgpt-style.jsx · Modified 2h ago" [ref=e1421]:
+                            - generic [ref=e1429]:
+                                - generic [ref=e1430]: screens-r3-chatgpt-style.jsx
+                                - generic [ref=e1431]: Component
+                            - generic [ref=e1432]: 2h ago
+                        - generic "screens-r4-claude-style.jsx · Modified 2h ago" [ref=e1433]:
+                            - generic [ref=e1441]:
+                                - generic [ref=e1442]: screens-r4-claude-style.jsx
+                                - generic [ref=e1443]: Component
+                            - generic [ref=e1444]: 2h ago
+                        - generic "hifi-kit.jsx · Modified 3h ago" [ref=e1445]:
+                            - generic [ref=e1453]:
+                                - generic [ref=e1454]: hifi-kit.jsx
+                                - generic [ref=e1455]: Component
+                            - generic [ref=e1456]: 3h ago
+                        - generic "screens-r2-as-appstore.jsx · Modified 2 days ago" [ref=e1457]:
+                            - generic [ref=e1465]:
+                                - generic [ref=e1466]: screens-r2-as-appstore.jsx
+                                - generic [ref=e1467]: Component
+                            - generic [ref=e1468]: 2 days ago
+                        - generic "screens-r2-h3-features.jsx · Modified 2 days ago" [ref=e1469]:
+                            - generic [ref=e1477]:
+                                - generic [ref=e1478]: screens-r2-h3-features.jsx
+                                - generic [ref=e1479]: Component
+                            - generic [ref=e1480]: 2 days ago
+                        - generic "screens-r2-h1-onboarding.jsx · Modified 2 days ago" [ref=e1481]:
+                            - generic [ref=e1489]:
+                                - generic [ref=e1490]: screens-r2-h1-onboarding.jsx
+                                - generic [ref=e1491]: Component
+                            - generic [ref=e1492]: 2 days ago
+                        - generic "screens-r2-h2-chat.jsx · Modified 2 days ago" [ref=e1493]:
+                            - generic [ref=e1501]:
+                                - generic [ref=e1502]: screens-r2-h2-chat.jsx
+                                - generic [ref=e1503]: Component
+                            - generic [ref=e1504]: 2 days ago
+                        - generic "screens-system.jsx · Modified 2 days ago" [ref=e1505]:
+                            - generic [ref=e1513]:
+                                - generic [ref=e1514]: screens-system.jsx
+                                - generic [ref=e1515]: Component
+                            - generic [ref=e1516]: 2 days ago
+                        - generic "screens-g-settings.jsx · Modified 2 days ago" [ref=e1517]:
+                            - generic [ref=e1525]:
+                                - generic [ref=e1526]: screens-g-settings.jsx
+                                - generic [ref=e1527]: Component
+                            - generic [ref=e1528]: 2 days ago
+                        - generic "screens-d-composer.jsx · Modified 2 days ago" [ref=e1529]:
+                            - generic [ref=e1537]:
+                                - generic [ref=e1538]: screens-d-composer.jsx
+                                - generic [ref=e1539]: Component
+                            - generic [ref=e1540]: 2 days ago
+                        - generic "screens-f-destinations.jsx · Modified 2 days ago" [ref=e1541]:
+                            - generic [ref=e1549]:
+                                - generic [ref=e1550]: screens-f-destinations.jsx
+                                - generic [ref=e1551]: Component
+                            - generic [ref=e1552]: 2 days ago
+                        - generic "screens-e-drawer.jsx · Modified 2 days ago" [ref=e1553]:
+                            - generic [ref=e1561]:
+                                - generic [ref=e1562]: screens-e-drawer.jsx
+                                - generic [ref=e1563]: Component
+                            - generic [ref=e1564]: 2 days ago
+                        - generic "screens-android.jsx · Modified 2 days ago" [ref=e1565]:
+                            - generic [ref=e1573]:
+                                - generic [ref=e1574]: screens-android.jsx
+                                - generic [ref=e1575]: Component
+                            - generic [ref=e1576]: 2 days ago
+                        - generic "screens-b-chat.jsx · Modified 2 days ago" [ref=e1577]:
+                            - generic [ref=e1585]:
+                                - generic [ref=e1586]: screens-b-chat.jsx
+                                - generic [ref=e1587]: Component
+                            - generic [ref=e1588]: 2 days ago
+                        - generic "screens-i-misc.jsx · Modified 2 days ago" [ref=e1589]:
+                            - generic [ref=e1597]:
+                                - generic [ref=e1598]: screens-i-misc.jsx
+                                - generic [ref=e1599]: Component
+                            - generic [ref=e1600]: 2 days ago
+                        - generic "screens-a-firstrun.jsx · Modified 2 days ago" [ref=e1601]:
+                            - generic [ref=e1609]:
+                                - generic [ref=e1610]: screens-a-firstrun.jsx
+                                - generic [ref=e1611]: Component
+                            - generic [ref=e1612]: 2 days ago
+                        - generic "screens-c-cap.jsx · Modified 2 days ago" [ref=e1613]:
+                            - generic [ref=e1621]:
+                                - generic [ref=e1622]: screens-c-cap.jsx
+                                - generic [ref=e1623]: Component
+                            - generic [ref=e1624]: 2 days ago
+                        - generic "screens-k-local.jsx · Modified 2 days ago" [ref=e1625]:
+                            - generic [ref=e1633]:
+                                - generic [ref=e1634]: screens-k-local.jsx
+                                - generic [ref=e1635]: Component
+                            - generic [ref=e1636]: 2 days ago
+                        - generic "wireframe-kit.jsx · Modified 2 days ago" [ref=e1637]:
+                            - generic [ref=e1645]:
+                                - generic [ref=e1646]: wireframe-kit.jsx
+                                - generic [ref=e1647]: Component
+                            - generic [ref=e1648]: 2 days ago
+                        - generic "screens-j-legal.jsx · Modified 2 days ago" [ref=e1649]:
+                            - generic [ref=e1657]:
+                                - generic [ref=e1658]: screens-j-legal.jsx
+                                - generic [ref=e1659]: Component
+                            - generic [ref=e1660]: 2 days ago
+                        - generic "screens-h-agents.jsx · Modified 2 days ago" [ref=e1661]:
+                            - generic [ref=e1669]:
+                                - generic [ref=e1670]: screens-h-agents.jsx
+                                - generic [ref=e1671]: Component
+                            - generic [ref=e1672]: 2 days ago
+                        - generic "android-frame.jsx · Modified 2 days ago" [ref=e1673]:
+                            - generic [ref=e1681]:
+                                - generic [ref=e1682]: android-frame.jsx
+                                - generic [ref=e1683]: Component
+                            - generic [ref=e1684]: 2 days ago
+                        - generic "ios-frame.jsx · Modified 2 days ago" [ref=e1685]:
+                            - generic [ref=e1693]:
+                                - generic [ref=e1694]: ios-frame.jsx
+                                - generic [ref=e1695]: Component
+                            - generic [ref=e1696]: 2 days ago
+                        - generic "design-canvas.jsx · Modified 2 days ago" [ref=e1697]:
+                            - generic [ref=e1705]:
+                                - generic [ref=e1706]: design-canvas.jsx
+                                - generic [ref=e1707]: Component
+                            - generic [ref=e1708]: 2 days ago
+                        - generic [ref=e1709]: Images
+                        - generic "_check.jpg · Modified 2 days ago" [ref=e1710]:
+                            - generic [ref=e1715]: 
+                            - generic [ref=e1716]:
+                                - generic [ref=e1717]: _check.jpg
+                                - generic [ref=e1718]: Image
+                            - generic [ref=e1719]: 2 days ago
+                    - generic [ref=e1721]: Select a file to preview
+                - generic [ref=e1723]:
+                    - generic [ref=e1724]:
+                        - generic [ref=e1725]: 
+                        - text: Drop files here
+                    - generic [ref=e1726]: Images, docs, references, Figma links, or folders — Claude will use them as context.

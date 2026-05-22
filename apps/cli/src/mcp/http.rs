@@ -71,17 +71,15 @@ pub(super) async fn connect_http(
 
     // Best-effort cached-token lookup for the optional GET subscription.
     let cached_bearer: Option<String> = if oauth.is_some() {
-        McpOAuthStore::load()
-            .ok()
-            .and_then(|store| {
-                store.get(url).and_then(|t| {
-                    if t.is_expiring_soon(60) {
-                        None
-                    } else {
-                        Some(t.access_token.clone())
-                    }
-                })
+        McpOAuthStore::load().ok().and_then(|store| {
+            store.get(url).and_then(|t| {
+                if t.is_expiring_soon(60) {
+                    None
+                } else {
+                    Some(t.access_token.clone())
+                }
             })
+        })
     } else {
         None
     };
@@ -254,13 +252,13 @@ pub(super) async fn send_request_http(
                 }
             };
 
-            // Headless guard: TTY-less runs (e.g. `agiworkforce -p`) shouldn't
+            // Headless guard: TTY-less runs (e.g. `agi -p`) shouldn't
             // pop a browser; surface a clear error instead.
             if !is_interactive() {
                 bail!(
                     "[{}] [mcp http] received 401 on '{}' but no usable cached token \
                      and not running interactively — re-run from a terminal or pre-auth \
-                     via `agiworkforce mcp oauth login <server>`. body: {}",
+                     via `agi mcp oauth login <server>`. body: {}",
                     server_name,
                     method_name,
                     body_text
@@ -474,8 +472,7 @@ async fn send_once(
                     continue;
                 }
                 if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data_buf) {
-                    if let Some(matched) =
-                        extract_matching_response(&v, expected_id, server_name)?
+                    if let Some(matched) = extract_matching_response(&v, expected_id, server_name)?
                     {
                         return Ok(SendOutcome::Done(matched));
                     }
@@ -488,7 +485,10 @@ async fn send_once(
 
     // Default path: JSON body inline.
     let value: serde_json::Value = resp.json().await.with_context(|| {
-        format!("[{}] [mcp http] parse json body on '{}'", server_name, method_name)
+        format!(
+            "[{}] [mcp http] parse json body on '{}'",
+            server_name, method_name
+        )
     })?;
     match extract_matching_response(&value, body.id, server_name)? {
         Some(matched) => Ok(SendOutcome::Done(matched)),
@@ -542,8 +542,8 @@ async fn prepare_bearer(url: &str, cfg: &McpOAuthConfig) -> Option<String> {
 
 /// Persist a freshly-acquired token to the on-disk store.
 fn persist_token(url: &str, token: &McpOAuthToken) -> Result<()> {
-    let mut store = McpOAuthStore::load()
-        .map_err(|e| anyhow!("load mcp-oauth.json before persist: {}", e))?;
+    let mut store =
+        McpOAuthStore::load().map_err(|e| anyhow!("load mcp-oauth.json before persist: {}", e))?;
     store.put(url.to_string(), token.clone());
     store.save()
 }

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { formatProviderModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { AgiChatDemo } from '../../components/agi/AgiChatDemo';
@@ -11,18 +12,26 @@ export const metadata: Metadata = {
 };
 
 const PROVIDERS = [
-  { name: 'Anthropic', models: 'Claude family', auth: 'BYOK · OAuth' },
-  { name: 'OpenAI', models: 'GPT family', auth: 'BYOK' },
-  { name: 'Google', models: 'Gemini family', auth: 'BYOK' },
-  { name: 'xAI', models: 'Grok family', auth: 'BYOK' },
-  { name: 'DeepSeek', models: 'V & R family', auth: 'BYOK' },
-  { name: 'Perplexity', models: 'Sonar family', auth: 'BYOK' },
-  { name: 'Qwen', models: 'Qwen family', auth: 'BYOK' },
-  { name: 'Moonshot', models: 'Kimi family', auth: 'BYOK' },
-  { name: 'Zhipu', models: 'GLM family', auth: 'BYOK' },
-  { name: 'Ollama', models: 'Any local GGUF', auth: 'Local' },
-  { name: 'LM Studio', models: 'Any local model', auth: 'Local' },
-  { name: 'Custom BYO', models: 'OpenAI-compatible URL', auth: 'BYOK' },
+  {
+    name: 'Anthropic',
+    models: 'Claude family',
+    auth: `${formatProviderModeLabel('DirectByok')} · OAuth`,
+  },
+  { name: 'OpenAI', models: 'GPT family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Google', models: 'Gemini family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'xAI', models: 'Grok family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'DeepSeek', models: 'V & R family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Perplexity', models: 'Sonar family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Qwen', models: 'Qwen family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Moonshot', models: 'Kimi family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Zhipu', models: 'GLM family', auth: formatProviderModeLabel('DirectByok') },
+  { name: 'Ollama', models: 'Any local GGUF', auth: formatProviderModeLabel('Local') },
+  { name: 'LM Studio', models: 'Any local model', auth: formatProviderModeLabel('Local') },
+  {
+    name: 'Custom BYO',
+    models: 'OpenAI-compatible URL',
+    auth: formatProviderModeLabel('DirectByok'),
+  },
 ];
 
 export default function ProvidersPage() {

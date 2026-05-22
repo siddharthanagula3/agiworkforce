@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build the desktop Vite SPA for /chat and copy to public/chat/
-# This runs as part of `pnpm --filter web build` before `next build`
+# This runs as part of `pnpm --filter @agiworkforce/web build` before `next build`
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

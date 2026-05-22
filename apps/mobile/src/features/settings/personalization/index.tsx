@@ -13,7 +13,7 @@ import { ArrowLeft, Check, Sun, Moon, Monitor } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useSettingsStore, type ThemeMode } from '@/stores/settingsStore';
-import { useThemeColors } from '@/hooks/useTheme';
+import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Slider config

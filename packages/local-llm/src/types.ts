@@ -34,6 +34,12 @@ export interface ChatMessage {
 export type LLMTool = object;
 
 export interface GenerateOptions {
+  /**
+   * Catalog model id for runtimes that cache by named preset instead of a
+   * caller-visible file path. Keep passing `modelPath` as the first
+   * `localGenerate` argument for llama.rn / GGUF models.
+   */
+  modelId?: string;
   prompt: string;
   systemPrompt?: string;
   messages?: ChatMessage[];

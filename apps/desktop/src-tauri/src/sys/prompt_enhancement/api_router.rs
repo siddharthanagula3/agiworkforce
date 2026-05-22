@@ -177,7 +177,8 @@ impl APIRouter {
                     claude_model_for_task("code_generation")
                 };
                 (
-                    format!("Claude is optimal for code generation with strong reasoning capabilities."),
+                    "Claude is optimal for code generation with strong reasoning capabilities."
+                        .to_string(),
                     model,
                 )
             },

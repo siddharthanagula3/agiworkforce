@@ -51,7 +51,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
 
-  const { content, model, role, skipLlm } = validationResult.data;
+  const { content, metadata, model, role, skipLlm } = validationResult.data;
 
   // Verify conversation ownership
   const { data: conversation, error: convError } = await supabase
@@ -75,6 +75,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
         role,
         content: content.trim(),
         model: role === 'assistant' ? model : undefined,
+        metadata,
       })
       .select()
       .single();

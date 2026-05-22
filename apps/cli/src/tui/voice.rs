@@ -931,7 +931,7 @@ async fn resolve_auth() -> Result<TranscriptionAuthContext, String> {
     let agiworkforce_home = find_agiworkforce_home().map_err(|e| format!("failed to find agiworkforce home: {e}"))?;
     let auth = AgiWorkforceAuth::from_auth_storage(&agiworkforce_home, AuthCredentialsStoreMode::Auto)
         .map_err(|e| format!("failed to read auth.json: {e}"))?
-        .ok_or_else(|| "No auth is configured; please run `agiworkforce login`".to_string())?;
+        .ok_or_else(|| "No auth is configured; please run `agi login`".to_string())?;
 
     let chatgpt_account_id = auth.get_account_id();
 

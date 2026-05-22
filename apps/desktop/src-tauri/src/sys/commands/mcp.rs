@@ -944,7 +944,7 @@ pub async fn mcp_call_tool(
     // Extract bare tool name from mcp__<server>__<tool>__ format.
     let bare_tool_name = tool_id
         .strip_prefix("mcp__")
-        .and_then(|s| s.splitn(3, "__").nth(1))
+        .and_then(|s| s.split("__").nth(1))
         .map(|s| s.trim_end_matches('_').to_string())
         .unwrap_or_else(|| tool_id.clone());
 

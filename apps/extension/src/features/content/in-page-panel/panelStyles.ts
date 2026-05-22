@@ -11,7 +11,7 @@ export function buildPanelStyles(): string {
       position:fixed;
       top:0; right:-400px;
       width:380px; height:100vh;
-      background:var(--agi-ext-surface);
+      background:var(--agi-ext-bg);
       border-left:1px solid var(--agi-ext-border-strong);
       box-shadow:-4px 0 32px rgba(0,0,0,0.12);
       z-index:2147483647;
@@ -28,23 +28,25 @@ export function buildPanelStyles(): string {
     /* ── Header ──────────────────────────────────────────────────────────── */
     .agi-header {
       display:flex; align-items:center;
-      padding:14px 16px;
+      padding:12px 14px;
       border-bottom:1px solid var(--agi-ext-border);
-      background:linear-gradient(135deg,var(--agi-ext-accent) 0%,var(--agi-ext-accent-secondary) 100%);
-      color:var(--agi-ext-on-accent);
+      background:var(--agi-ext-surface);
+      color:var(--agi-ext-text);
       flex-shrink:0;
     }
 
     .agi-logo {
       font-size:15px; font-weight:700;
-      letter-spacing:-0.3px;
+      letter-spacing:0;
       flex:1;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
 
     .agi-provider-pill {
       font-size:11px; font-weight:600;
-      background:rgba(255,255,255,0.2);
+      background:rgba(33,128,141,0.12);
+      border:1px solid rgba(33,128,141,0.3);
+      color:var(--agi-ext-accent);
       border-radius:12px;
       padding:3px 10px;
       margin-right:10px;
@@ -55,7 +57,7 @@ export function buildPanelStyles(): string {
 
     .agi-close-btn {
       background:transparent; border:none; cursor:pointer;
-      color:var(--agi-ext-on-accent); font-size:18px;
+      color:var(--agi-ext-text-muted); font-size:18px;
       width:28px; height:28px;
       display:flex; align-items:center; justify-content:center;
       border-radius:50%;
@@ -63,7 +65,7 @@ export function buildPanelStyles(): string {
       line-height:1;
       flex-shrink:0;
     }
-    .agi-close-btn:hover { background:rgba(255,255,255,0.2); }
+    .agi-close-btn:hover { background:var(--agi-ext-hover); color:var(--agi-ext-text); }
 
     /* ── Quick actions ───────────────────────────────────────────────────── */
     .agi-actions-row {
@@ -74,10 +76,10 @@ export function buildPanelStyles(): string {
 
     .agi-action-chip {
       display:inline-flex; align-items:center; gap:4px;
-      padding:5px 12px;
-      background:var(--agi-ext-hover); border:1px solid var(--agi-ext-border-strong);
+      padding:5px 11px;
+      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border);
       border-radius:20px;
-      font-size:12px; font-weight:600; color:var(--agi-ext-text);
+      font-size:12px; font-weight:500; color:var(--agi-ext-text-muted);
       cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
@@ -138,8 +140,8 @@ export function buildPanelStyles(): string {
 
     .agi-textarea {
       flex:1;
-      resize:none; border:1px solid var(--agi-ext-border-strong);
-      border-radius:8px; padding:9px 12px;
+      resize:none; border:1px solid var(--agi-ext-border);
+      border-radius:16px; padding:10px 12px;
       font-size:13px; font-family:inherit; color:var(--agi-ext-text);
       background:var(--agi-ext-surface); outline:none;
       min-height:40px; max-height:120px;
@@ -152,9 +154,9 @@ export function buildPanelStyles(): string {
     }
 
     .agi-submit-btn {
-      width:38px; height:38px;
-      background:linear-gradient(135deg,var(--agi-ext-accent) 0%,var(--agi-ext-accent-secondary) 100%);
-      border:none; border-radius:8px; cursor:pointer; color:var(--agi-ext-on-accent);
+      width:34px; height:34px;
+      background:var(--agi-ext-accent);
+      border:none; border-radius:50%; cursor:pointer; color:var(--agi-ext-on-accent);
       font-size:16px;
       display:flex; align-items:center; justify-content:center;
       flex-shrink:0;

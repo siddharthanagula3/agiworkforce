@@ -72,9 +72,9 @@ jest.mock('react-native-reanimated', () => {
 // Import modules under test
 // ---------------------------------------------------------------------------
 
-import { ThinkingLine } from '../components/chat/ThinkingLine';
-import { ThinkingBottomSheet } from '../components/chat/ThinkingBottomSheet';
-import { StreamingIndicator } from '../components/chat/StreamingIndicator';
+import { ThinkingLine } from '../src/features/chat/components/ThinkingLine';
+import { ThinkingBottomSheet } from '../src/features/chat/components/ThinkingBottomSheet';
+import { StreamingIndicator } from '../src/features/chat/components/StreamingIndicator';
 
 // ---------------------------------------------------------------------------
 // ThinkingLine tests

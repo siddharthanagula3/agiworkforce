@@ -13,21 +13,21 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { Button } from '../../components/ui/Button';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../../components/ui/Select';
-import { ScrollArea } from '../../components/ui/ScrollArea';
-import { Skeleton } from '../../components/ui/Skeleton';
+} from '@/components/ui/Select';
+import { ScrollArea } from '@/components/ui/ScrollArea';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useBillingUsageStore } from '../../stores/billingUsage';
 import { MODEL_PRESETS, PROVIDER_LABELS, PROVIDERS_IN_ORDER } from '../../constants/llm';
 import type { Provider } from '../../stores/settingsStore';
-import { usePrompt } from '../../components/ui/PromptDialog';
+import { usePrompt } from '@/components/ui/PromptDialog';
 import { toast } from 'sonner';
 
 const palette = ['#2563eb', '#22c55e', '#f97316', '#a855f7', '#0ea5e9', '#f43f5e'];

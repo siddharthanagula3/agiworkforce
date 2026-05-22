@@ -5,7 +5,9 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./node": "./src/node.ts"
+    "./node": "./src/node.ts",
+    "./state": "./src/state/index.ts",
+    "./queue": "./src/queue/index.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",
