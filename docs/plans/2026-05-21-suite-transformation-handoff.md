@@ -2,10 +2,62 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 16: six-lane parallel team sprint via TeamCreate)
+Last updated: 2026-05-22 (extended through round 18: 7-lane Claude-parity sprint + main rebase resolution)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `f9aba1747` (round-16 boundary at session end)
-PR: [#378 — feat: suite transformation rounds 12-16](https://github.com/siddharthanagula3/agiworkforce/pull/378) (open, awaiting review)
+Head pushed: `f8b77ac66` (round-18 boundary at session end)
+PR: [#378 — feat: suite transformation rounds 12-18](https://github.com/siddharthanagula3/agiworkforce/pull/378) (open, MERGEABLE)
+
+## Round 18 — Claude-parity sprint across all 6 surfaces (2026-05-22)
+
+User set a session-scoped goal: "Autonomously complete the remaining AGI Workforce frontend across all six surfaces… using the newest Claude UI reference images available under /Users/siddhartha/Desktop/reference/ui." Team `round-18-claude-parity` spawned 7 parallel agents, each pulling 2-3 highest-impact items from a specific `reference/ui/{surface}/claude*/` directory. All 7 tasks completed.
+
+- `feat(vscode-ext): claude/cursor parity - sidebar polish + slash command samplerequest` (`6df4f2b52`, agent: **vscode-claude**)
+  - Sidebar webview: history + new-chat header icon buttons, "What to do first?" empty-state headline, `/slash` prompt chips, "Upload from computer" + "Add context" menu labels. New `openHistory` + `newChat` Zod messages wired through `webviewMessages.ts` → `ChatStateManager` → `chatParticipant.ts`.
+  - All 6 slash commands (`/explain`, `/fix`, `/refactor`, `/tests`, `/docs`, `/model`) gained `sampleRequest` for VS Code's hover + autocomplete suggestions.
+  - 528/528 tests pass, 3 webview snapshots updated, sync-rule compliance comment preserved.
+
+- `feat(mobile): claude ios parity — settings inset-grouped cards + time greeting` (`028434625`, agent: **mobile-claude**)
+  - Settings: inset-grouped card layout matching Claude iOS image 10 (rounded surfaceElevated containers, per-side borders + corner radii on first/last items, icon-offset separator).
+  - Chat tab greeting: `getTimeOfDayGreeting()` returns "How can I help you this morning/afternoon/evening/tonight?" per device hour. 28/34 font tuned to Claude iOS serif treatment.
+  - 5 new RN snapshot tests (settings tree + 4 time-boundary unit tests).
+
+- `feat(chrome-ext): popup status pill + side-panel open-in-desktop parity` (`e0c9b5c7c`, agent: **chrome-claude**)
+  - Popup: 500px verbose status-card collapsed to a compact inline status pill (dot + label + reconnect glyph) in the header bar. Quick-action buttons gained title tooltips and shorter labels ("Chat" / "Group") matching Comet's compact grid.
+  - Side panel: "Open in desktop" icon button wired through `OPEN_IN_DESKTOP` message → `background.ts` → `sendNativeMessage` to desktop bridge port 8787.
+  - 775/775 tests pass, static HTML snapshot updated, sync-rule preserved (chrome.storage.local + bridge only).
+
+- `feat(web): claude-style settings nav + connector hub parity` (`41f1cc114`, agents: **web-settings** + **desktop-toolcall** co-staged)
+  - Web settings: sectioned nav (Account / Models / Privacy / Notifications / Integrations) with uppercase group headers, new `SettingsNavActive` client component for active-state highlighting via `usePathname`.
+  - Web connectors: `connectedAt` timestamp surfaced as "Connected Xd ago" recent-activity label.
+  - Em-dash sweep across `privacy/page.tsx`, `connections/page.tsx`, `ConnectorsPage.tsx`.
+  - Playwright `round-18-visual-verification.spec.ts` + 2 captured PNGs under `docs/visual-verification/web/round-18-*`.
+  - **Bonus: desktop-toolcall's work co-staged in this commit** — `ToolCallCard.tsx` collapsed-row + expanded JSON request/response with per-panel copy buttons + status-color borders, `ThinkingBlock.tsx` clock-icon + live elapsed timer + multi-block "Thought N" labels + new `ThinkingBlockFlow` connector, `ToolTimeline` left unchanged (existing pattern already matched references). 31 new tests; 134 desktop chat tests pass.
+
+- `test(desktop): land orphan artifact-sidebar + scroll-to-bottom tests` (`e5421d92a`, recovered from **desktop-artifact**)
+  - desktop-artifact pushed an empty commit (`ff63bd368`) — staged-without-add bug. Recovered the 4 test files (2 specs + 2 snapshots, 5 tests) post-hoc. `ArtifactSidebarParity.test.tsx` locks the panel empty-state + header-buttons assertion; `ScrollToBottomButton.test.tsx` covers hidden/visible states + click handler at >200px scroll threshold.
+  - Note: the existing `ArtifactPanel` in `AppLayout.tsx` (lines 422-457) already had Copy/Refresh/Close/Maximize parity; the scroll-to-bottom button already existed in `ChatStream.tsx`. The agent's research correctly identified the gap as test coverage, not implementation.
+
+- `feat(cli/tui): claude-code parity — plan-mode banner + effort indicator` (`f8b77ac66`, agent: **cli-claude-code**)
+  - Plan-mode banner: `"Plan mode"` → `"⏸ plan mode on"` (U+23F8 pause icon, East Asian Width N = 1 col).
+  - Plan-mode footer right-side: when plan mode is active, context-window percentage replaced by `● <effort> · /effort` (magenta bullet + label + dim shortcut hint). Wired through `effective_reasoning_effort()` → `update_collaboration_mode_indicator()` → `BottomPane::set_plan_mode_effort_label()` → `ChatComposerState` → `FooterProps` → `plan_mode_effort_right_line()`. Refreshes on `set_reasoning_effort()` while plan mode active.
+  - 1452 CLI tests pass (2 new + 15 snapshots updated), sync-rule preserved.
+
+### Round 18 — meta-lesson
+
+Parallel sprint produced 6 production commits + 1 recovered orphan commit across all six surfaces in ~15 minutes wall-clock. Two coordination findings worth surfacing:
+
+1. **Co-staging conflict** — when two agents touch overlapping or adjacent files and commit simultaneously, the second commit grabs both sets of changes. Round 16 saw this with web-r10-put + desktop-r10-ui; Round 18 saw it again with web-settings + desktop-toolcall. Not a bug, but commit attribution gets confused. Future team prompts should explicitly call out file-path ownership AND request that agents `git fetch + rebase` before committing.
+2. **Empty-commit bug** — desktop-artifact pushed `ff63bd368` without staging files first. The commit message landed but no diff. Recovery was straightforward (the working tree retained the files), but agents should `git status` between staging and committing.
+
+## Round 17.5 — main-rebase resolution (2026-05-22, between rounds 17 and 18)
+
+PR #378 was `CONFLICTING` with main after rounds 12-17 (24 conflicts: doc + canonical types + runtime exports + desktop UI + sync services + visual-verification PNGs). Resolved via merge-into-branch (preserves history, no force-push needed):
+
+- `chore: merge main into branch, resolve round-17 conflicts` (`b202ef593`)
+  - All 24 conflicts resolved by keeping HEAD where my work was the better version: round-13 `assertGeneratedFileTrustBoundary` throw-variant, round-16 Rust `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` helpers, round-14 `./offline-queue` + `./offline-sync` runtime exports, round-12 useIsMounted migrations, round-13 `assertSurfaceCanSyncChats` wiring, round-15.1 canonical surface arrays consolidation, projects warm-dark fix, KB/artifact/voice scaffolds, 6-surface visual-verification captures.
+  - Picked up from main: PR #377 cost_calculator canonicalization fix.
+  - Verification: types/runtime/web/desktop typecheck pass, 18 Rust protocol projects tests pass.
+  - PR went from `CONFLICTING` → `MERGEABLE` without force-push.
 
 ## Round 16 — parallel team sprint via TeamCreate (2026-05-22)
 
