@@ -2,9 +2,34 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 14: defined-but-unused defensive utilities + local-constant drift cleanup + offline-queue extract, seven checkpoints)
+Last updated: 2026-05-22 (extended through round 15: offline-sync extract closes the queue-orchestration unification + model-router catalog derivation)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `69057d557` (round-14 boundary at session end)
+Head pushed: `87686898e` (round-15 boundary at session end)
+
+## Round 15 additions (offline-sync extract + model-router fallback fix, 2026-05-22)
+
+Continued the cross-surface duplication / catalog-drift pattern after Stop-hook continuation.
+
+- `feat(runtime): extract offline-sync manager + migrate web and desktop wrappers` (`a9e69d0ae`)
+  - Mirrors the round-14 offline-queue extract. Web + desktop had ~280 lines of copy-pasted state-machine + retry + debounce logic. Both now consume `createOfflineSyncManager` from `@agiworkforce/runtime/offline-sync` with DI for queue adapter, network event subscriber, and initial-online probe.
+  - Closing the extract also fixed three real defects that drifted into the web copy: (1) `window` event handlers were never removed in cleanup because the listeners were anonymous arrow functions, (2) retry backoff was static at 40s instead of exponential (`5000 * 2^3`, never incremented retryCount), (3) a ternary returned `ONLINE` in both branches.
+  - 13 vitest tests cover initialize/cleanup idempotency, debounced sync, error+retry, retrySync, queue-subscription updates, network event flips, status message/severity, and state-change snapshots.
+  - Closes open-path #4 from previous handoff.
+
+- `fix(web): derive model-router fallback chain from canonical catalog` (`87686898e`)
+  - `ModelRouter`'s `suitableModels.length === 0` fallback hardcoded `'gpt-5.4'` as a second-chance lookup after `DEFAULT_ROUTER_MODEL` fails to resolve. Now uses `getProviderDefaultModel('openai')` so a new openai generation lands here automatically when `models.json` updates.
+
+### Round 15 — meta-lesson
+
+Same pattern, same yield. The two duplicated `offlineQueue.ts` + `offlineSync.ts` files were a single source of cross-surface drift; collapsing both into the runtime package took two rounds (14 + 15) but eliminated ~1,500 LOC of copy-paste and surfaced three latent defects that only manifested in the web copy.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + `20260521130000` + `20260521140000` + `20260521150000`) once production Supabase is authorized.
+2. ~~Extract `@agiworkforce/runtime/offline-queue`~~ — closed at `69057d557` (round 14).
+3. Sweep `assertGeneratedFileTrustBoundary` into real call sites — currently the throw variant has tests but zero production wiring (and no canonical `{ComputeSession, GeneratedFile, ArtifactManifest}` composition site exists yet to wire it into).
+4. ~~Mobile PNG capture infrastructure~~ — still on the board, needs expo-web build pipeline (heavy).
+5. ~~Migrate `apps/desktop/src/lib/offline/offlineSync.ts`~~ — closed at `a9e69d0ae` (round 15).
 
 ## Round 14 additions (continued ultrathink pattern, 2026-05-22)
 
