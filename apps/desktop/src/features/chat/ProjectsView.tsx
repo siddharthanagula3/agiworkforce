@@ -23,10 +23,11 @@ import {
   Settings,
   MessageSquare,
   File,
-  Calendar,
   ChevronRight,
   Star,
 } from 'lucide-react';
+import { ProjectHeader } from '@agiworkforce/unified-chat';
+import { summarizeProjectHeader, type ProjectRecord } from '@agiworkforce/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -49,6 +50,50 @@ import {
 } from '../../stores/projectStore';
 import { useUnifiedChatStore, type ConversationSummary } from '../../stores/unifiedChatStore';
 import { cn } from '../../lib/utils';
+
+/**
+ * Map the Desktop-local Project store shape to the canonical
+ * `summarizeProjectHeader()` input. v1 is LOCAL ONLY, so we default
+ * privacy/provider modes to Local and the allowed surfaces to the three
+ * consumer surfaces that sync chat (web/desktop/mobile). The Desktop
+ * store doesn't track project members yet, so memberCount is omitted —
+ * the shared meta row hides the missing field automatically.
+ */
+function mapDesktopProjectToHeaderRecord(project: Project): ProjectRecord {
+  return {
+    id: project.id,
+    ownerUserId: 'local-user',
+    name: project.name,
+    description: project.description || null,
+    defaultPrivacyMode: 'local',
+    defaultProviderMode: 'Local',
+    allowedSurfaces: ['web', 'desktop', 'mobile'],
+    instructions: project.customInstructions || null,
+    iconEmoji: project.icon ?? null,
+    accentColor: null,
+    knowledgeFileCount: project.knowledgeBaseFiles?.length ?? null,
+    memberCount: null,
+    lastUsedAt: project.updatedAt,
+    importedFrom: 'manual',
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
+function formatRelativeFromIso(iso: string | undefined | null): string | undefined {
+  if (!iso) return undefined;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return undefined;
+  const diff = Date.now() - then;
+  const minutes = Math.round(diff / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 type FilterMode = 'all' | 'active' | 'archived';
 
@@ -463,37 +508,31 @@ function ProjectDetails({
     project.conversationIds.includes(conv.id),
   );
 
+  const headerPresentation = useMemo(
+    () =>
+      summarizeProjectHeader({
+        project: mapDesktopProjectToHeaderRecord(project),
+        lastUsedRelativeLabel: formatRelativeFromIso(project.updatedAt),
+      }),
+    [project],
+  );
+
   return (
     <div className="flex-1 overflow-auto">
       {/* Header */}
       <div className="p-6 border-b border-border">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <div
-              className="w-16 h-16 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: project.color || 'var(--color-teal-500)' }}
-            >
-              <Layers className="w-8 h-8 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-semibold text-foreground">{project.name}</h1>
-              <p className="text-muted-foreground mt-1">
-                {project.description || 'No description'}
-              </p>
-              <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
-                  Created {new Date(project.createdAt).toLocaleDateString()}
-                </span>
-                {project.isArchived && (
-                  <Badge variant="secondary" className="bg-accent text-muted-foreground">
-                    Archived
-                  </Badge>
-                )}
+        <div className="flex items-start gap-4">
+          <div className="flex-1 min-w-0">
+            <ProjectHeader presentation={headerPresentation} />
+            {project.isArchived && (
+              <div className="mt-2">
+                <Badge variant="secondary" className="bg-accent text-muted-foreground">
+                  Archived
+                </Badge>
               </div>
-            </div>
+            )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button
               variant="outline"
               onClick={onEditDetails}
