@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Check, ExternalLink, Loader2, LogOut, X } from 'lucide-react';
+import { AlertCircle, Check, ExternalLink, Loader2, LogOut, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { McpClient } from '@/api/mcp';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,35 @@ interface OAuthConnectorCardProps {
   error: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  /**
+   * Unix timestamp (seconds) when the current OAuth token expires.
+   * When supplied, the card shows a "Expires in X" / "Expired" badge.
+   * PLAN.md section 6: "Add OAuth status and refresh UX".
+   */
+  expiresAt?: number | null;
+  /** Optional refresh handler — when supplied, an explicit Refresh action is exposed. */
+  onRefresh?: () => Promise<void> | void;
+}
+
+const ONE_HOUR_SECONDS = 60 * 60;
+
+function formatExpiresLabel(expiresAt: number): {
+  text: string;
+  variant: 'ok' | 'expiring' | 'expired';
+} {
+  const now = Math.floor(Date.now() / 1000);
+  const delta = expiresAt - now;
+  if (delta <= 0) return { text: 'Expired', variant: 'expired' };
+  if (delta < ONE_HOUR_SECONDS) {
+    const minutes = Math.max(1, Math.floor(delta / 60));
+    return { text: `Expires in ${minutes}m`, variant: 'expiring' };
+  }
+  if (delta < 24 * ONE_HOUR_SECONDS) {
+    const hours = Math.floor(delta / ONE_HOUR_SECONDS);
+    return { text: `Expires in ${hours}h`, variant: 'ok' };
+  }
+  const days = Math.floor(delta / (24 * ONE_HOUR_SECONDS));
+  return { text: `Expires in ${days}d`, variant: 'ok' };
 }
 
 /**
@@ -32,8 +61,11 @@ export function OAuthConnectorCard({
   error,
   onConnect,
   onDisconnect,
+  expiresAt,
+  onRefresh,
 }: OAuthConnectorCardProps) {
   const [revoking, setRevoking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleDisconnect = useCallback(async () => {
     setRevoking(true);
@@ -49,7 +81,23 @@ export function OAuthConnectorCard({
     }
   }, [connector.id, connector.name, onDisconnect]);
 
-  const isLoading = loading || revoking;
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+      toast.success(`${connector.name} token refreshed`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Refresh failed';
+      toast.error(`Failed to refresh ${connector.name}: ${message}`);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [connector.name, onRefresh]);
+
+  const isLoading = loading || revoking || refreshing;
+  const expiresLabel =
+    connected && typeof expiresAt === 'number' ? formatExpiresLabel(expiresAt) : null;
 
   return (
     <div
@@ -117,16 +165,36 @@ export function OAuthConnectorCard({
         </p>
       </div>
 
-      {/* Auth type badge */}
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {connector.authType === 'oauth'
-          ? 'OAuth'
-          : connector.authType === 'api_key'
-            ? 'API Key'
-            : connector.authType === 'mcp_remote'
-              ? 'MCP'
-              : 'Auto'}
-      </span>
+      {/* Auth type + expiry badges */}
+      <div className="flex flex-wrap items-center justify-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted/60 px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {connector.authType === 'oauth'
+            ? 'OAuth'
+            : connector.authType === 'api_key'
+              ? 'API Key'
+              : connector.authType === 'mcp_remote'
+                ? 'MCP'
+                : 'Auto'}
+        </span>
+        {expiresLabel ? (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-medium',
+              expiresLabel.variant === 'expired'
+                ? 'bg-destructive/15 text-destructive'
+                : expiresLabel.variant === 'expiring'
+                  ? 'bg-amber-500/15 text-amber-500'
+                  : 'bg-emerald-500/15 text-emerald-500',
+            )}
+            title={`Token expires at ${new Date(expiresAt! * 1000).toLocaleString()}`}
+          >
+            {expiresLabel.variant === 'expired' || expiresLabel.variant === 'expiring' ? (
+              <AlertCircle className="h-2.5 w-2.5" />
+            ) : null}
+            {expiresLabel.text}
+          </span>
+        ) : null}
+      </div>
 
       {/* Action button */}
       <div className="w-full mt-auto pt-1">
@@ -145,16 +213,30 @@ export function OAuthConnectorCard({
             {revoking ? 'Disconnecting...' : 'Connecting...'}
           </button>
         ) : connected ? (
-          <button
-            type="button"
-            onClick={handleDisconnect}
-            className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs
-              font-medium border border-destructive/30 text-destructive hover:bg-destructive/10
-              transition-colors"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            Disconnect
-          </button>
+          <div className="flex w-full flex-col gap-1.5">
+            {onRefresh && expiresLabel && expiresLabel.variant !== 'ok' ? (
+              <button
+                type="button"
+                onClick={() => void handleRefresh()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs
+                  font-medium border border-amber-500/40 text-amber-500 hover:bg-amber-500/10
+                  transition-colors"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                Refresh token
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              className="flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs
+                font-medium border border-destructive/30 text-destructive hover:bg-destructive/10
+                transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Disconnect
+            </button>
+          </div>
         ) : (
           <button
             type="button"

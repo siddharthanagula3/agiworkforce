@@ -75,10 +75,57 @@ export function ConnectorGallery() {
     })),
   );
 
+  // Per-provider OAuth token expiry (unix seconds). Populated after
+  // `fetchConnected` so the OAuthConnectorCard can render an
+  // "Expires in X" badge and optionally a Refresh action.
+  const [expiresAtByProvider, setExpiresAtByProvider] = useState<Record<string, number | null>>({});
+
   // Fetch connected status on mount
   useEffect(() => {
     void fetchConnected();
   }, [fetchConnected]);
+
+  // After connected ids are known, batch-fetch oauth status for each so we
+  // can surface token expiry to the user. Best-effort — failures are logged
+  // but do not block rendering since the badge is optional UX.
+  useEffect(() => {
+    if (connectedIds.length === 0) {
+      setExpiresAtByProvider({});
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const next: Record<string, number | null> = {};
+      await Promise.all(
+        connectedIds.map(async (id) => {
+          try {
+            const status = await McpClient.oauthStatus(
+              id as Parameters<typeof McpClient.oauthStatus>[0],
+            );
+            next[id] = status.expiresAt ?? null;
+          } catch {
+            next[id] = null;
+          }
+        }),
+      );
+      if (!cancelled) setExpiresAtByProvider(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectedIds]);
+
+  const handleRefreshToken = useCallback(async (connectorId: string) => {
+    try {
+      const refreshed = await McpClient.oauthRefresh(
+        connectorId as Parameters<typeof McpClient.oauthRefresh>[0],
+      );
+      setExpiresAtByProvider((prev) => ({ ...prev, [connectorId]: refreshed.expiresAt ?? null }));
+    } catch (err) {
+      // Surface via thrown error so OAuthConnectorCard's toast handler shows it.
+      throw err instanceof Error ? err : new Error('Token refresh failed');
+    }
+  }, []);
 
   // Listen for OAuth callbacks from Tauri
   useEffect(() => {
@@ -242,12 +289,25 @@ export function ConnectorGallery() {
               error={error[connector.id] ?? null}
               onConnect={() => handleConnectClick(connector)}
               onDisconnect={() => void handleDisconnect(connector.id)}
+              expiresAt={expiresAtByProvider[connector.id] ?? null}
+              onRefresh={
+                connector.authType === 'oauth' ? () => handleRefreshToken(connector.id) : undefined
+              }
             />
           ))}
         </div>
       );
     },
-    [connectedIds, loading, error, handleConnectClick, handleDisconnect, statusFilter],
+    [
+      connectedIds,
+      loading,
+      error,
+      handleConnectClick,
+      handleDisconnect,
+      statusFilter,
+      expiresAtByProvider,
+      handleRefreshToken,
+    ],
   );
 
   return (
