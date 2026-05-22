@@ -1,14 +1,4 @@
-import {
-  Copy,
-  Download,
-  File,
-  FileSpreadsheet,
-  FileText,
-  FolderOpen,
-  Loader2,
-  Share2,
-  Shield,
-} from 'lucide-react';
+import { Copy, Download, FileText, FolderOpen, Loader2, Share2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -18,6 +8,7 @@ import {
   type ComputeSession,
   type GeneratedFile,
 } from '@agiworkforce/types';
+import { GeneratedFileCard } from '@agiworkforce/unified-chat';
 import { invoke, isTauri } from '../../../lib/tauri-mock';
 import type { ToolResultProps } from './index';
 import { Button } from '@/components/ui/Button';
@@ -83,26 +74,6 @@ function fileUriToPath(uri?: string): string | undefined {
     return decoded;
   } catch {
     return undefined;
-  }
-}
-
-function getDocTypeInfo(ext: string): { icon: React.ReactNode; color: string; label: string } {
-  switch (ext) {
-    case 'pdf':
-      return { icon: <FileText className="h-4 w-4" />, color: 'text-red-400', label: 'PDF' };
-    case 'docx':
-    case 'doc':
-      return { icon: <File className="h-4 w-4" />, color: 'text-blue-400', label: 'Word' };
-    case 'xlsx':
-    case 'xls':
-    case 'csv':
-      return {
-        icon: <FileSpreadsheet className="h-4 w-4" />,
-        color: 'text-green-400',
-        label: 'Excel',
-      };
-    default:
-      return { icon: <FileText className="h-4 w-4" />, color: 'text-cyan-400', label: 'Document' };
   }
 }
 
@@ -181,6 +152,21 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
       return fileMeta.createdAt;
     }
   }, [fileMeta?.createdAt]);
+
+  // Effective summary merges the Tauri-fetched fileMeta size in when the
+  // canonical generatedFile presentation does not carry one yet. Declared
+  // above the render early-returns to satisfy rules-of-hooks.
+  const effectiveSummary = useMemo(
+    () => ({
+      ...generatedFileSummary,
+      title: generatedFileSummary.title ?? fileName,
+      fileName: generatedFileSummary.fileName ?? fileName,
+      byteCountLabel:
+        generatedFileSummary.byteCountLabel ??
+        (fileMeta ? formatFileSize(fileMeta.sizeBytes) : undefined),
+    }),
+    [generatedFileSummary, fileName, fileMeta],
+  );
 
   // Check running state before null guard so the spinner is reachable
   if (status === 'running') {
@@ -321,53 +307,19 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   };
 
-  const docType = getDocTypeInfo(extension);
-  const fileSizeDisplay =
-    generatedFileSummary.byteCountLabel ?? (fileMeta ? formatFileSize(fileMeta.sizeBytes) : null);
-
   return (
     <div className="mt-3 rounded-lg bg-surface-elevated border border-border/50 overflow-hidden">
       <div className="px-3 py-2 bg-surface-overlay/30 border-b border-border/30">
-        <div className="flex items-center gap-2 mb-1">
-          <span className={docType.color}>{docType.icon}</span>
-          <span className="text-xs font-medium text-muted-foreground">
-            Generated {docType.label}
-          </span>
-          <span className="rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {generatedFileSummary.statusLabel}
-          </span>
-          {generatedFileSummary.privacyShortLabel && (
-            <span className="inline-flex items-center gap-1 rounded-full border border-border/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-              <Shield className="h-3 w-3" />
-              {generatedFileSummary.privacyShortLabel}
-            </span>
-          )}
-          {fileSizeDisplay && (
-            <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-              {fileSizeDisplay}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground truncate">{fileName}</p>
+        {/*
+          Display-only adoption: keep the Desktop-specific bigger button row
+          (Preview / Show in Finder / Save As / Share / Copy Path) below as the
+          action surface. The card unifies the header metadata + status badge
+          + chips with the shared web/mobile shape.
+        */}
+        <GeneratedFileCard presentation={effectiveSummary} />
         {createdAtDisplay && (
-          <p className="text-[10px] text-muted-foreground mt-0.5">Created {createdAtDisplay}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Created {createdAtDisplay}</p>
         )}
-        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
-          {generatedFileSummary.providerLabel && (
-            <span>Provider: {generatedFileSummary.providerLabel}</span>
-          )}
-          {generatedFileSummary.sourceSurfaceLabel && (
-            <span>Source: {generatedFileSummary.sourceSurfaceLabel}</span>
-          )}
-          {generatedFileSummary.sourceSessionLabel && (
-            <span>{generatedFileSummary.sourceSessionLabel}</span>
-          )}
-          {generatedFileSummary.checksumShort && (
-            <span title={data?.generatedFile?.checksumSha256}>
-              SHA-256: {generatedFileSummary.checksumShort}
-            </span>
-          )}
-        </div>
         {generatedFileSummary.localOnly && (
           <p className="mt-1 text-[10px] text-muted-foreground">
             Local file. Share copies a reference only; AGI does not upload it.
