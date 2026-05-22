@@ -5,13 +5,16 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { MAX_ATTACHMENT_BYTES } from '@agiworkforce/types';
 import { Attachment } from '../../../stores/unifiedChatStore';
 import { getModelMetadata } from '../../../constants/llm';
 import { useSimpleModeStore } from '../../../stores/ui';
 
 export const ATTACHMENT_LIMITS = {
-  MAX_FILE_SIZE: 50 * 1024 * 1024, // 50MB per file
-  MAX_TOTAL_SIZE: 200 * 1024 * 1024, // 200MB total
+  /** Per-file cap. Sourced from canonical `MAX_ATTACHMENT_BYTES` so a future
+   *  bump in `@agiworkforce/types` propagates without surface drift. */
+  MAX_FILE_SIZE: MAX_ATTACHMENT_BYTES,
+  MAX_TOTAL_SIZE: MAX_ATTACHMENT_BYTES * 8, // 8x per-file (matches prior 200 MB / 25 MiB ratio)
   MAX_COUNT: 10, // Maximum 10 attachments per message
   MAX_PASTE_FILE_SIZE: 10 * 1024 * 1024, // 10MB limit for paste
   MAX_CONCURRENT_READS: 3, // Limit concurrent FileReaders
