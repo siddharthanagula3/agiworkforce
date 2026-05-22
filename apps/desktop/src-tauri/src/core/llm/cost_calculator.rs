@@ -180,6 +180,13 @@ impl CostCalculator {
             return 0.0;
         }
 
+        // AUDIT-FIX: bug_010 — resolve aliases (e.g. "deepseek-chat" → "deepseek-v4-flash",
+        // "kimi-k2.5" → "kimi-k2.6") so the lookup hits registered pricing instead of
+        // falling through to provider-default. Mirrors thinking.rs:229, llm_router.rs:177,
+        // provider_adapter.rs:396/2153/2886, managed_cloud_provider.rs:60.
+        let canonical = super::models_config::get_canonicalized_id(model);
+        let model = canonical.as_str();
+
         let key = (provider, model.to_string());
         let pricing = self
             .pricing
@@ -229,6 +236,11 @@ impl CostCalculator {
         if prompt_tokens == 0 && completion_tokens == 0 {
             return 0.0;
         }
+
+        // AUDIT-FIX: bug_010 — see calculate(); same alias-resolution applied here so
+        // cache-aware cost paths also honor the canonicalization map.
+        let canonical = super::models_config::get_canonicalized_id(model);
+        let model = canonical.as_str();
 
         let key = (provider, model.to_string());
         let pricing = self

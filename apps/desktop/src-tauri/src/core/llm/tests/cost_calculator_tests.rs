@@ -399,4 +399,32 @@ mod tests {
             cost
         );
     }
+
+    // AUDIT-FIX: bug_010 regression — alias lookup must match the canonical model's
+    // pricing, not fall through to provider-default. Before the canonicalization
+    // call was added to calculate()/calculate_with_cache(), calling with the alias
+    // returned $4.95 (Moonshot default $0.95/$4.00) while the canonical id returned
+    // $3.10 (kimi-k2.6 $0.60/$2.50). Same story for deepseek aliases.
+    #[test]
+    fn test_alias_lookup_matches_canonical_kimi() {
+        let calc = CostCalculator::new();
+        let alias = calc.calculate(Provider::Moonshot, "kimi-k2.5", 1_000_000, 1_000_000);
+        let canonical = calc.calculate(Provider::Moonshot, "kimi-k2.6", 1_000_000, 1_000_000);
+        assert!(
+            (alias - canonical).abs() < 1e-9,
+            "alias kimi-k2.5 ({alias}) should match canonical kimi-k2.6 ({canonical})"
+        );
+    }
+
+    #[test]
+    fn test_alias_lookup_matches_canonical_deepseek() {
+        let calc = CostCalculator::new();
+        let alias = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
+        let canonical =
+            calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
+        assert!(
+            (alias - canonical).abs() < 1e-9,
+            "alias deepseek-chat ({alias}) should match canonical deepseek-v4-flash ({canonical})"
+        );
+    }
 }
