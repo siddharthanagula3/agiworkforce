@@ -85,7 +85,12 @@ export { ConversationHeader } from './components/ConversationHeader';
 // Rich message components
 export { ThinkingBlock } from './components/ThinkingBlock';
 export { CitationPill } from './components/CitationPill';
-export { WebSearchCard } from './components/WebSearchCard';
+export { WebSearchCard, LegacyWebSearchCard } from './components/WebSearchCard';
+export type {
+  WebSearchCardProps,
+  LegacyWebSearchCardProps,
+  LegacyWebSearchResult,
+} from './components/WebSearchCard';
 export { ProvenanceFooter } from './components/ProvenanceFooter';
 export type { ProvenanceFooterProps } from './components/ProvenanceFooter';
 
@@ -184,13 +189,18 @@ export {
   InlineToolCall,
   InlineToolCallStack,
   inferKindFromLabel,
+  KIND_TO_BADGE,
 } from './components/InlineToolCall';
 export type {
   InlineToolCallProps,
   InlineToolCallStackProps,
   InlineToolCallStatus,
   InlineToolKind,
+  InlineToolIconStyle,
+  BadgeConfig,
 } from './components/InlineToolCall';
+export { InlineToolCallGroup } from './components/InlineToolCallGroup';
+export type { InlineToolCallGroupProps } from './components/InlineToolCallGroup';
 export { RewindTimeline } from './components/RewindTimeline';
 export type { RewindTimelineProps, CodingCheckpoint } from './components/RewindTimeline';
 export {
