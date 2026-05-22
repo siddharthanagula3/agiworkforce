@@ -616,6 +616,7 @@ async fn stream_anthropic(
         cache_creation_input_tokens,
         via_subscription: false,
         stop_reason,
+        reasoning_output_tokens: 0,
     })
 }
 
@@ -857,6 +858,7 @@ async fn stream_google(
         cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
+        reasoning_output_tokens: 0,
     })
 }
 
@@ -1026,6 +1028,7 @@ async fn stream_ollama(
         cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
+        reasoning_output_tokens: 0,
     })
 }
 
@@ -1298,6 +1301,7 @@ async fn parse_openai_sse_stream(
         cache_creation_input_tokens: 0,
         via_subscription: false,
         stop_reason,
+        reasoning_output_tokens: 0,
     })
 }
 

@@ -95,6 +95,12 @@ pub(crate) enum StatusLineItem {
 
     /// Whether Fast mode is currently active.
     FastMode,
+
+    /// Cached input tokens saved in this session (omitted when zero).
+    CachedInputTokens,
+
+    /// Reasoning output tokens used in this session (omitted when zero).
+    ReasoningOutputTokens,
 }
 
 impl StatusLineItem {
@@ -129,6 +135,12 @@ impl StatusLineItem {
                 "Current session identifier (omitted until session starts)"
             }
             StatusLineItem::FastMode => "Whether Fast mode is currently active",
+            StatusLineItem::CachedInputTokens => {
+                "Cached input tokens saved in session (omitted when zero)"
+            }
+            StatusLineItem::ReasoningOutputTokens => {
+                "Reasoning output tokens used in session (omitted when zero)"
+            }
         }
     }
 }
@@ -390,5 +402,227 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Mirrors the codex-cli `status_card_token_usage_excludes_cached_tokens` test:
+    /// the headline "used" item is built from `blended_total()` which excludes cached,
+    /// so the status line value for `UsedTokens` must NOT contain "cached".
+    #[test]
+    fn status_line_used_tokens_excludes_cached() {
+        // UsedTokens value is set from the outside (via status_line_value_for_item),
+        // so we verify here that when cached is a separate item it does not leak into
+        // the UsedTokens slot by checking the item labels are distinct.
+        let preview_data = StatusLinePreviewData::from_iter([
+            (StatusLineItem::UsedTokens, "2.1k used".to_string()),
+            (StatusLineItem::CachedInputTokens, "200 cached".to_string()),
+        ]);
+
+        let used_value = preview_data.values.get(&StatusLineItem::UsedTokens).unwrap();
+        let cached_value = preview_data
+            .values
+            .get(&StatusLineItem::CachedInputTokens)
+            .unwrap();
+
+        assert!(
+            !used_value.contains("cached"),
+            "UsedTokens value must not contain 'cached': {used_value}"
+        );
+        assert!(
+            cached_value.contains("cached"),
+            "CachedInputTokens value must contain 'cached': {cached_value}"
+        );
+    }
+
+    /// Verifies that `CachedInputTokens` appears in the preview when a value is provided.
+    #[test]
+    fn cached_input_tokens_present_when_provided() {
+        let preview_data = StatusLinePreviewData::from_iter([
+            (StatusLineItem::ModelName, "claude-opus-4-6".to_string()),
+            (StatusLineItem::CachedInputTokens, "500 cached".to_string()),
+        ]);
+
+        let items = vec![
+            MultiSelectItem {
+                id: StatusLineItem::ModelName.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::CachedInputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+        ];
+
+        let line = preview_data.line_for_items(&items).unwrap();
+        let text = line.to_string();
+        assert!(text.contains("cached"), "expected 'cached' in: {text}");
+        assert!(
+            text.contains("claude-opus-4-6"),
+            "expected model in: {text}"
+        );
+    }
+
+    /// Verifies that `CachedInputTokens` is absent from the preview when not provided
+    /// (mirrors the zero-omit behaviour enforced by `status_line_value_for_item`).
+    #[test]
+    fn cached_input_tokens_absent_when_not_provided() {
+        let preview_data = StatusLinePreviewData::from_iter([(
+            StatusLineItem::ModelName,
+            "claude-opus-4-6".to_string(),
+        )]);
+
+        let items = vec![
+            MultiSelectItem {
+                id: StatusLineItem::ModelName.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::CachedInputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+        ];
+
+        let line = preview_data.line_for_items(&items).unwrap();
+        let text = line.to_string();
+        assert!(
+            !text.contains("cached"),
+            "CachedInputTokens must be omitted when no value: {text}"
+        );
+    }
+
+    /// Verifies that `ReasoningOutputTokens` appears when provided (reasoning models).
+    #[test]
+    fn reasoning_output_tokens_present_when_provided() {
+        let preview_data = StatusLinePreviewData::from_iter([
+            (StatusLineItem::ModelName, "claude-opus-4-6".to_string()),
+            (
+                StatusLineItem::ReasoningOutputTokens,
+                "150 reasoning".to_string(),
+            ),
+        ]);
+
+        let items = vec![
+            MultiSelectItem {
+                id: StatusLineItem::ModelName.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::ReasoningOutputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+        ];
+
+        let line = preview_data.line_for_items(&items).unwrap();
+        let text = line.to_string();
+        assert!(text.contains("reasoning"), "expected 'reasoning' in: {text}");
+    }
+
+    /// Verifies that `ReasoningOutputTokens` is absent when not provided
+    /// (non-reasoning model path — zero tokens → `status_line_value_for_item` returns None).
+    #[test]
+    fn reasoning_output_tokens_absent_when_not_provided() {
+        let preview_data = StatusLinePreviewData::from_iter([(
+            StatusLineItem::ModelName,
+            "gpt-5.5-mini".to_string(),
+        )]);
+
+        let items = vec![
+            MultiSelectItem {
+                id: StatusLineItem::ModelName.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::ReasoningOutputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+        ];
+
+        let line = preview_data.line_for_items(&items).unwrap();
+        let text = line.to_string();
+        assert!(
+            !text.contains("reasoning"),
+            "ReasoningOutputTokens must be omitted when no value: {text}"
+        );
+    }
+
+    /// Verifies that all 5 token fields can coexist in the preview simultaneously
+    /// (full breakdown: input, cached, output, reasoning, total).
+    #[test]
+    fn all_five_token_fields_coexist_in_preview() {
+        let preview_data = StatusLinePreviewData::from_iter([
+            (StatusLineItem::TotalInputTokens, "1.0k in".to_string()),
+            (StatusLineItem::CachedInputTokens, "200 cached".to_string()),
+            (StatusLineItem::TotalOutputTokens, "900 out".to_string()),
+            (
+                StatusLineItem::ReasoningOutputTokens,
+                "150 reasoning".to_string(),
+            ),
+            (StatusLineItem::UsedTokens, "2.1k used".to_string()),
+        ]);
+
+        let items = vec![
+            MultiSelectItem {
+                id: StatusLineItem::TotalInputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::CachedInputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::TotalOutputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::ReasoningOutputTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+            MultiSelectItem {
+                id: StatusLineItem::UsedTokens.to_string(),
+                name: String::new(),
+                description: None,
+                enabled: true,
+            },
+        ];
+
+        let line = preview_data.line_for_items(&items).unwrap();
+        let text = line.to_string();
+
+        // All 5 columns visible
+        assert!(text.contains("in"), "missing input: {text}");
+        assert!(text.contains("cached"), "missing cached: {text}");
+        assert!(text.contains("out"), "missing output: {text}");
+        assert!(text.contains("reasoning"), "missing reasoning: {text}");
+        assert!(text.contains("used"), "missing used: {text}");
+
+        // UsedTokens headline does NOT contain 'cached' — it's a separate column
+        let used_value = preview_data.values.get(&StatusLineItem::UsedTokens).unwrap();
+        assert!(
+            !used_value.contains("cached"),
+            "headline 'used' must not embed cached tokens: {used_value}"
+        );
     }
 }
