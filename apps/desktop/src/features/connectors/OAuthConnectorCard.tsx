@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertCircle, Check, ExternalLink, Loader2, LogOut, RefreshCw, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { McpClient } from '@/api/mcp';
@@ -67,6 +67,20 @@ export function OAuthConnectorCard({
   const [revoking, setRevoking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Unmount guard — handleDisconnect calls onDisconnect() which often
+  // removes this card from the parent's list (the card unmounts mid-
+  // promise). The finally-block setState would then fire on an
+  // unmounted component, triggering React's "Can't perform a state
+  // update on an unmounted component" warning. Same defensive
+  // pattern applied to handleRefresh.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const handleDisconnect = useCallback(async () => {
     setRevoking(true);
     try {
@@ -77,7 +91,9 @@ export function OAuthConnectorCard({
       const message = err instanceof Error ? err.message : 'Disconnect failed';
       toast.error(`Failed to disconnect ${connector.name}: ${message}`);
     } finally {
-      setRevoking(false);
+      if (mountedRef.current) {
+        setRevoking(false);
+      }
     }
   }, [connector.id, connector.name, onDisconnect]);
 
@@ -91,7 +107,9 @@ export function OAuthConnectorCard({
       const message = err instanceof Error ? err.message : 'Refresh failed';
       toast.error(`Failed to refresh ${connector.name}: ${message}`);
     } finally {
-      setRefreshing(false);
+      if (mountedRef.current) {
+        setRefreshing(false);
+      }
     }
   }, [connector.name, onRefresh]);
 
