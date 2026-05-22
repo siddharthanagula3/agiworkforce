@@ -25,7 +25,9 @@ exports[`Chrome extension static HTML snapshots > locks the popup.html structure
       <div class="status-pill" id="statusCard">
         <div class="status-dot" id="statusDot"></div>
         <span class="status-pill-label" id="statusTitle">Connecting…</span>
-        <button class="reconnect-btn" id="reconnectBtn" title="Reconnect to desktop app">&#8635;</button>
+        <button class="reconnect-btn" id="reconnectBtn" title="Reconnect to desktop app">
+          &#8635;
+        </button>
       </div>
     </div>
 
