@@ -1,3 +1,20 @@
+// SYNC-RULE COMPLIANCE — Chrome surface (developer-session only)
+//
+// Locked rule: "CLI, VS Code, and Chrome must not sync consumer chat history.
+// They may keep separate developer-session history, event streams, exports,
+// and explicit user-approved handoffs."
+//
+// This surface is compliant:
+//   • Chat history (`agi_conversation_history`) is written exclusively to
+//     `chrome.storage.local` — device-scoped, never synced to Google's servers
+//     or to any consumer-identity endpoint.
+//   • No `ConversationSyncService` from `@agiworkforce/types` is imported or
+//     constructed here.
+//   • No POSTs to `/api/chat/conversations` or any web-surface consumer endpoint.
+//   • Bridge calls (localhost:8787) route chat operations to the desktop app,
+//     which is the designated persistence owner. That delegation is explicitly
+//     permitted by the locked rule — the Chrome surface itself does not persist.
+
 import type {
   ExtensionMessage,
   ExtensionResponse,
