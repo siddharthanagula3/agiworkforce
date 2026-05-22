@@ -32,13 +32,14 @@ const WORK_DESCRIPTIONS = [
 
 type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
+const LS_PREFERRED_NAME_KEY = 'agi.profile.preferredName';
 const LS_WORK_KEY = 'agi.profile.workDescription';
 const LS_INSTRUCTIONS_KEY = 'agi.profile.instructions';
 
 export default function ProfileSettingsPage() {
   const user = useBillingStore((s) => s.user);
 
-  const initialName =
+  const initialFullName =
     (user?.user_metadata?.['full_name'] as string | undefined) ??
     (user?.user_metadata?.['name'] as string | undefined) ??
     (typeof window !== 'undefined'
@@ -47,7 +48,20 @@ export default function ProfileSettingsPage() {
     user?.email?.split('@')[0] ??
     '';
 
-  const [displayName, setDisplayName] = useState(initialName);
+  // Full legal name (used for billing, display in account panels).
+  const [displayName, setDisplayName] = useState(initialFullName);
+
+  // Preferred name: what the assistant calls you in greetings (may differ from full name).
+  const [preferredName, setPreferredName] = useState<string>(() => {
+    if (typeof window === 'undefined') return '';
+    return (
+      (user?.user_metadata?.['preferred_name'] as string | undefined) ??
+      window.localStorage.getItem(LS_PREFERRED_NAME_KEY) ??
+      initialFullName.split(' ')[0] ??
+      ''
+    );
+  });
+
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -71,12 +85,14 @@ export default function ProfileSettingsPage() {
     !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
   async function handleSave() {
-    const trimmed = displayName.trim();
-    if (!trimmed) return;
+    const trimmedFull = displayName.trim();
+    if (!trimmedFull) return;
+    const trimmedPreferred = preferredName.trim() || (trimmedFull.split(' ')[0] ?? trimmedFull);
     setSaving(true);
     setSaveError(null);
     try {
-      window.localStorage.setItem('agi.profile.displayName', trimmed);
+      window.localStorage.setItem('agi.profile.displayName', trimmedFull);
+      window.localStorage.setItem(LS_PREFERRED_NAME_KEY, trimmedPreferred);
       window.localStorage.setItem(LS_WORK_KEY, workDescription);
       window.localStorage.setItem(LS_INSTRUCTIONS_KEY, instructions);
 
@@ -84,7 +100,8 @@ export default function ProfileSettingsPage() {
         const supabase = getSupabaseClient();
         const { error } = await supabase.auth.updateUser({
           data: {
-            full_name: trimmed,
+            full_name: trimmedFull,
+            preferred_name: trimmedPreferred,
             work_description: workDescription,
             instructions: instructions.slice(0, 2000),
           },
@@ -150,7 +167,7 @@ export default function ProfileSettingsPage() {
               flexShrink: 0,
             }}
           >
-            {(displayName || user?.email || 'A').slice(0, 1)}
+            {(preferredName || displayName || user?.email || 'A').slice(0, 1)}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>
@@ -200,16 +217,16 @@ export default function ProfileSettingsPage() {
           />
         </label>
 
-        {/* What should AGI call you */}
+        {/* What should AGI call you -- independent from full name */}
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
             What should AGI call you?
           </span>
           <input
             type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value.slice(0, 80))}
-            maxLength={80}
+            value={preferredName}
+            onChange={(e) => setPreferredName(e.target.value.slice(0, 60))}
+            maxLength={60}
             placeholder="Nickname or first name"
             style={{
               fontSize: 14,

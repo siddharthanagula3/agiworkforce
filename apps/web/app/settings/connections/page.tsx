@@ -83,8 +83,10 @@ function formatRelativeTime(isoString: string | null | undefined): string {
 const managedLabel = formatPrivacyModeLabel('managed');
 
 export default function ConnectionsSettingsPage() {
-  // In v1 LOCAL ONLY, no connectors are active. The connected/connectedAt
-  // values here represent the live state once Cloud Managed waitlist opens.
+  // In v1 LOCAL ONLY, no connectors are active. This map is intentionally empty;
+  // it will be populated from the /api/connectors response once the Cloud Managed
+  // waitlist opens. The Disconnect button and "Connected Xd ago" branches are
+  // wired but inert until activation.
   const connectedAtMap: Record<string, string | null> = {};
 
   return (
