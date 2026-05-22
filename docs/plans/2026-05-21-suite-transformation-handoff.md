@@ -25,6 +25,8 @@ After the round-6 boundary, an additional autonomous loop shipped 13 commits clo
 
 34 new regression tests across `ArtifactPanel.live-preview.test.tsx`, `webviewAttachFiles.test.ts`, `sidePanelComposerDragDrop.test.ts`, `GeneratedFileCard.test.tsx` (web), and `generated-file-card.test.tsx` (mobile). Repo guardrails (`pnpm check:llm-operability`, repo typecheck, lint) clean on every commit. Branch pushed (`3dcc4933b..9409e954e`).
 
+**CSS-var dependency verified (round 7).** The shared web `GeneratedFileCard` consumes `var(--chat-border)`, `var(--chat-radius-md)`, `var(--chat-surface-elevated)`, `var(--chat-surface-hover)`, `var(--chat-surface-overlay)`, `var(--chat-text-muted)`, `var(--chat-text-primary)`, and `var(--chat-text-secondary)`. All 8 vars are defined in `packages/design-tokens/src/chat.css` (under both light/dark blocks) and both `apps/desktop/src/styles/globals.css` and `apps/web/app/globals.css` `@import '@agiworkforce/design-tokens/chat.css';` on line 2. The Mobile mirror does not need this check — it consumes `colors.X` directly from `@agiworkforce/design-tokens` via the Mobile theme indirection. Without this check, a "silent visual regression" — card with transparent background and no border — would have shipped undetected.
+
 ### Round 7 — known consumer-adoption gap
 
 The round-2 audit estimates for P0 #9 (Artifacts: 186h) and the new generated-file TODO included **host consumer adoption**, not only the shared primitive. Round 7 closed the shared-package work; remaining host adoption is intentionally scoped:
