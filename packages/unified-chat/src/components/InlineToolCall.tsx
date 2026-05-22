@@ -228,7 +228,7 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
         <CircleCheck
           size={16}
           strokeWidth={2}
-          className="text-[color:var(--state-success,#22c55e)]"
+          className="text-[color:var(--chat-success,#16a34a)]"
         />
       </span>
     );
@@ -237,18 +237,18 @@ function BadgeIcon({ config }: { config: BadgeConfig }) {
     const Icon = config.Icon;
     return (
       <span
-        className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--surface-elevated,rgba(0,0,0,0.06))]"
+        className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))]"
         aria-hidden="true"
         data-badge-kind="glyph"
       >
-        <Icon size={11} strokeWidth={2} className="text-[color:var(--text-muted)]" />
+        <Icon size={11} strokeWidth={2} className="text-[color:var(--chat-text-muted,#8b8680)]" />
       </span>
     );
   }
   // letter
   return (
     <span
-      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--surface-elevated,rgba(0,0,0,0.06))] text-[color:var(--text-muted)] text-[10px] font-semibold select-none"
+      className="inline-tool-call__badge inline-flex items-center justify-center w-6 h-6 rounded-full bg-[color:var(--chat-surface-elevated,rgba(26,25,21,0.06))] text-[color:var(--chat-text-muted,#8b8680)] text-[10px] font-semibold select-none"
       aria-hidden="true"
       data-badge-kind="letter"
       data-badge-letter={config.letter}
@@ -266,7 +266,7 @@ function StatusIndicator({ status }: { status: InlineToolCallStatus }) {
       <Loader2
         size={14}
         strokeWidth={2}
-        className="inline-tool-call__spinner animate-spin text-[color:var(--text-muted)]"
+        className="inline-tool-call__spinner animate-spin text-[color:var(--chat-text-muted,#8b8680)]"
         aria-hidden="true"
       />
     );
@@ -319,11 +319,11 @@ function colorClassForStatus(status: InlineToolCallStatus): string {
     case 'partial':
       return 'text-[color:var(--state-warning,#f59e0b)]';
     case 'pending':
-      return 'text-[color:var(--text-muted)]';
+      return 'text-[color:var(--chat-text-muted,#8b8680)]';
     case 'running':
     case 'success':
     default:
-      return 'text-[color:var(--text-secondary,inherit)]';
+      return 'text-[color:var(--chat-text-secondary,inherit)]';
   }
 }
 
@@ -400,7 +400,8 @@ export function InlineToolCall({
           className={cn(
             'inline-tool-call__bar flex items-center gap-2 select-none',
             'h-7 px-1 rounded-md',
-            isExpandable && 'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
+            isExpandable &&
+              'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))]',
             'transition-colors duration-100',
           )}
         >
@@ -411,7 +412,7 @@ export function InlineToolCall({
           {argSummary ? (
             <span
               className={cn(
-                'inline-tool-call__summary text-xs text-[color:var(--text-muted)]',
+                'inline-tool-call__summary text-xs text-[color:var(--chat-text-muted,#8b8680)]',
                 'whitespace-nowrap overflow-hidden text-ellipsis',
                 'max-w-[360px] min-w-0 flex-1',
               )}
@@ -433,7 +434,7 @@ export function InlineToolCall({
               size={14}
               strokeWidth={2}
               className={cn(
-                'inline-tool-call__chevron shrink-0 text-[color:var(--text-muted)]',
+                'inline-tool-call__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
                 'transition-transform duration-150',
                 effectiveOpen && 'rotate-90',
               )}
@@ -445,7 +446,7 @@ export function InlineToolCall({
         {/* "Result" sub-label below the bar in badge mode (Claude parity) */}
         {showResultLabel ? (
           <span
-            className="inline-tool-call__result-label ml-8 text-[10px] font-mono text-[color:var(--text-muted)] leading-4"
+            className="inline-tool-call__result-label ml-8 text-[10px] font-mono text-[color:var(--chat-text-muted,#8b8680)] leading-4"
             data-result-label=""
           >
             {resultLabel}
@@ -459,10 +460,10 @@ export function InlineToolCall({
             aria-label={`${label} details`}
             className={cn(
               'inline-tool-call__body',
-              'bg-[color:var(--bg-code,rgba(0,0,0,0.04))]',
-              'border border-[color:var(--border-subtle,rgba(0,0,0,0.08))]',
+              'bg-[color:var(--chat-code-bg,rgba(0,0,0,0.04))]',
+              'border border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
               'rounded-lg p-4',
-              'text-sm font-mono leading-5 text-[color:var(--text-primary,inherit)]',
+              'text-sm font-mono leading-5 text-[color:var(--chat-text-primary,inherit)]',
               'overflow-x-auto max-h-[480px] overflow-y-auto',
             )}
           >
@@ -498,14 +499,15 @@ export function InlineToolCall({
         className={cn(
           'inline-tool-call__bar flex items-center gap-2 select-none',
           'h-8 px-1 rounded-md',
-          isExpandable && 'cursor-pointer hover:bg-[color:var(--bg-hover,rgba(0,0,0,0.04))]',
+          isExpandable &&
+            'cursor-pointer hover:bg-[color:var(--chat-surface-hover,rgba(26,25,21,0.04))]',
           'transition-colors duration-100',
         )}
       >
         <Icon
           size={16}
           strokeWidth={1.75}
-          className="inline-tool-call__icon shrink-0 text-[color:var(--text-muted)]"
+          className="inline-tool-call__icon shrink-0 text-[color:var(--chat-text-muted,#8b8680)]"
           aria-hidden="true"
         />
         <span className={cn('inline-tool-call__label text-sm font-normal shrink-0', colorClass)}>
@@ -514,7 +516,7 @@ export function InlineToolCall({
         {argSummary ? (
           <span
             className={cn(
-              'inline-tool-call__summary text-xs text-[color:var(--text-muted)]',
+              'inline-tool-call__summary text-xs text-[color:var(--chat-text-muted,#8b8680)]',
               'whitespace-nowrap overflow-hidden text-ellipsis',
               'max-w-[360px] min-w-0 flex-1',
             )}
@@ -536,7 +538,7 @@ export function InlineToolCall({
             size={14}
             strokeWidth={2}
             className={cn(
-              'inline-tool-call__chevron shrink-0 text-[color:var(--text-muted)]',
+              'inline-tool-call__chevron shrink-0 text-[color:var(--chat-text-muted,#8b8680)]',
               'transition-transform duration-150',
               effectiveOpen && 'rotate-90',
             )}
@@ -552,10 +554,10 @@ export function InlineToolCall({
           aria-label={`${label} details`}
           className={cn(
             'inline-tool-call__body',
-            'bg-[color:var(--bg-code,rgba(0,0,0,0.04))]',
-            'border border-[color:var(--border-subtle,rgba(0,0,0,0.08))]',
+            'bg-[color:var(--chat-code-bg,rgba(0,0,0,0.04))]',
+            'border border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
             'rounded-lg p-4',
-            'text-sm font-mono leading-5 text-[color:var(--text-primary,inherit)]',
+            'text-sm font-mono leading-5 text-[color:var(--chat-text-primary,inherit)]',
             'overflow-x-auto max-h-[480px] overflow-y-auto',
           )}
         >
@@ -578,7 +580,7 @@ export function InlineToolCallStack({ children, className }: InlineToolCallStack
     <div
       className={cn(
         'inline-tool-call-stack flex flex-col gap-2 ml-2 pl-3',
-        'border-l border-[color:var(--border-subtle,rgba(0,0,0,0.08))]',
+        'border-l border-[color:var(--chat-border-subtle,rgba(26,25,21,0.08))]',
         className,
       )}
       data-tool-stack=""
