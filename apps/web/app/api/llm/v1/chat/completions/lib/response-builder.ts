@@ -22,6 +22,7 @@ export async function buildNonStreamResponse(
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    reasoningOutputTokens?: number;
     cacheCreationInputTokens?: number;
     cachedInputTokens?: number;
     citations?: unknown[];
@@ -121,6 +122,7 @@ export async function buildNonStreamResponse(
     recordModelUsage(userId, llmResponse.model, {
       inputTokens: llmResponse.promptTokens,
       outputTokens: llmResponse.completionTokens,
+      reasoningOutputTokens: llmResponse.reasoningOutputTokens,
       cacheReadInputTokens: llmResponse.cachedInputTokens,
       cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
     });
