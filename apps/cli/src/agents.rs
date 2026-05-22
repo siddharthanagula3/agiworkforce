@@ -40,27 +40,122 @@ pub struct AgentDefinition {
     pub path: PathBuf,
 }
 
+impl AgentDefinition {
+    /// Apply this agent definition's overrides to an `AgentSession`.
+    ///
+    /// The following fields are applied when set:
+    /// - `model`: calls `session.switch_model()`
+    /// - `tools`: sets `session.allowed_tools` (whitelist)
+    /// - `disallowed_tools`: appends to `session.disallowed_tools`
+    /// - `max_turns`: sets `session.max_turns`
+    /// - `permission_mode`: sets `session.permission_mode`
+    /// - `system_prompt`: injects as a "system" context message
+    ///
+    /// This method does NOT clear the existing conversation history, so callers
+    /// may prepend agent context to an ongoing session.
+    pub fn apply_to_session(&self, session: &mut crate::agent::AgentSession) {
+        if let Some(ref model) = self.model {
+            if !model.is_empty() {
+                session.switch_model(model);
+            }
+        }
+        if let Some(ref tools) = self.tools {
+            if !tools.is_empty() {
+                session.allowed_tools = Some(tools.clone());
+            }
+        }
+        if let Some(ref disallowed) = self.disallowed_tools {
+            for t in disallowed {
+                if !session.disallowed_tools.contains(t) {
+                    session.disallowed_tools.push(t.clone());
+                }
+            }
+        }
+        if let Some(max_turns) = self.max_turns {
+            session.max_turns = Some(max_turns);
+        }
+        if let Some(ref perm) = self.permission_mode {
+            use crate::cli_options::PermissionMode;
+            let mode = match perm.as_str() {
+                "plan" => Some(PermissionMode::Plan),
+                "acceptEdits" | "accept-edits" => Some(PermissionMode::AcceptEdits),
+                "bypassPermissions" | "bypass-permissions" => Some(PermissionMode::BypassPermissions),
+                "dontAsk" | "dont-ask" => Some(PermissionMode::DontAsk),
+                _ => None,
+            };
+            if let Some(m) = mode {
+                session.permission_mode = m;
+            }
+        }
+        if !self.system_prompt.trim().is_empty() {
+            use crate::models::Message;
+            session.messages.push(Message::text(
+                "system",
+                format!(
+                    "<agent_system_prompt agent=\"{}\">\n{}\n</agent_system_prompt>",
+                    self.name,
+                    self.system_prompt.trim()
+                ),
+            ));
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Discovery
 // ---------------------------------------------------------------------------
 
 /// Discover all available agent definitions from project and global directories.
+///
+/// Discovery order (later entries can shadow earlier ones by name):
+/// 1. `.agiworkforce/agents/` in the current project directory
+/// 2. `.claude/agents/` in the current project directory (Claude Code compat)
+/// 3. `~/.agiworkforce/agents/` global agents
+/// 4. `~/.claude/agents/` global agents (Claude Code compat)
+/// 5. Plugin-declared agent paths (via installed plugin manifests)
 pub fn discover_agents() -> Vec<AgentDefinition> {
     let mut agents = Vec::new();
 
-    // Project-level agents: .agiworkforce/agents/
+    // Project-level agents: .agiworkforce/agents/ and .claude/agents/
     if let Ok(cwd) = std::env::current_dir() {
-        let project_dir = cwd.join(".agiworkforce").join("agents");
-        if project_dir.exists() {
-            load_agents_from_dir(&project_dir, &mut agents);
+        let agi_dir = cwd.join(".agiworkforce").join("agents");
+        if agi_dir.exists() {
+            load_agents_from_dir(&agi_dir, &mut agents);
+        }
+        let claude_dir = cwd.join(".claude").join("agents");
+        if claude_dir.exists() {
+            load_agents_from_dir(&claude_dir, &mut agents);
         }
     }
 
-    // Global agents: ~/.agiworkforce/agents/
+    // Global agents: ~/.agiworkforce/agents/ and ~/.claude/agents/
     if let Ok(config_dir) = crate::config::CliConfig::config_dir() {
         let global_dir = config_dir.join("agents");
         if global_dir.exists() {
             load_agents_from_dir(&global_dir, &mut agents);
+        }
+    }
+    if let Some(home) = dirs::home_dir() {
+        let claude_global = home.join(".claude").join("agents");
+        if claude_global.exists() {
+            load_agents_from_dir(&claude_global, &mut agents);
+        }
+    }
+
+    // Plugin-declared agent paths
+    let mut plugins_mgr = crate::plugins::PluginsManager::new();
+    if plugins_mgr
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_ok()
+    {
+        for path in plugins_mgr.agent_paths() {
+            if path.is_dir() {
+                load_agents_from_dir(&path, &mut agents);
+            } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                if let Ok(agent) = load_agent(&path) {
+                    agents.push(agent);
+                }
+            }
         }
     }
 
@@ -426,14 +521,27 @@ fn global_agents_dir() -> Result<PathBuf> {
 }
 
 fn agent_source(agent: &AgentDefinition) -> &'static str {
+    agent_scope_label(agent)
+}
+
+/// Classify an agent as "global", "claude-global", or "project" based on its
+/// backing file path. Public so TUI widgets can display the scope badge.
+pub fn agent_scope_label(agent: &AgentDefinition) -> &'static str {
+    // ~/.agiworkforce/agents/
     if crate::config::CliConfig::config_dir()
         .map(|dir| agent.path.starts_with(dir.join("agents")))
         .unwrap_or(false)
     {
-        "global"
-    } else {
-        "project"
+        return "global";
     }
+    // ~/.claude/agents/
+    if dirs::home_dir()
+        .map(|h| agent.path.starts_with(h.join(".claude").join("agents")))
+        .unwrap_or(false)
+    {
+        return "claude-global";
+    }
+    "project"
 }
 
 fn empty_as<'a>(value: &'a str, fallback: &'a str) -> &'a str {
@@ -892,5 +1000,116 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         // Should not crash even if no agent directories exist
         let agents = discover_agents();
         let _ = agents;
+    }
+
+    #[test]
+    fn test_discover_agents_finds_claude_agents_dir() {
+        // Verify that .claude/agents/ is discovered as a root (not only .agiworkforce/agents/).
+        let temp = tempfile::tempdir().expect("tempdir");
+        let claude_dir = temp.path().join(".claude").join("agents");
+        std::fs::create_dir_all(&claude_dir).expect("create .claude/agents/");
+        std::fs::write(
+            claude_dir.join("compat-agent.md"),
+            "---\nname: compat-agent\ndescription: Claude-compat\n---\n\nBody.",
+        )
+        .expect("write agent");
+
+        let mut agents = Vec::new();
+        load_agents_from_dir(&claude_dir, &mut agents);
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0].name, "compat-agent");
+    }
+
+    #[test]
+    fn test_agent_scope_label_project() {
+        let agent = AgentDefinition {
+            name: "test".to_string(),
+            description: String::new(),
+            model: None,
+            tools: None,
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/some/project/.agiworkforce/agents/test.md"),
+        };
+        assert_eq!(agent_scope_label(&agent), "project");
+    }
+
+    fn make_test_context() -> crate::context::SystemContext {
+        crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_apply_to_session_sets_model_and_tools() {
+        let ctx = make_test_context();
+        let mut session = crate::agent::AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let agent = AgentDefinition {
+            name: "test-agent".to_string(),
+            description: "Test".to_string(),
+            model: None,
+            tools: Some(vec!["read_file".to_string()]),
+            disallowed_tools: Some(vec!["run_command".to_string()]),
+            max_turns: Some(5),
+            permission_mode: Some("plan".to_string()),
+            system_prompt: "You are a test agent.".to_string(),
+            path: PathBuf::from("/tmp/test-agent.md"),
+        };
+
+        agent.apply_to_session(&mut session);
+
+        assert_eq!(
+            session.allowed_tools.as_deref(),
+            Some(&["read_file".to_string()][..])
+        );
+        assert!(session.disallowed_tools.contains(&"run_command".to_string()));
+        assert_eq!(session.max_turns, Some(5));
+        assert!(matches!(
+            session.permission_mode,
+            crate::cli_options::PermissionMode::Plan
+        ));
+        // System prompt injected as a system message
+        let has_prompt = session
+            .messages
+            .iter()
+            .any(|m| m.role == "system" && m.text_content().contains("You are a test agent."));
+        assert!(has_prompt, "apply_to_session should inject system prompt message");
+    }
+
+    #[test]
+    fn test_apply_to_session_with_model_override() {
+        let ctx = make_test_context();
+        let mut session = crate::agent::AgentSession::new("claude-sonnet-4-6", &ctx, None);
+        let initial_model = session.model.clone();
+
+        let agent = AgentDefinition {
+            name: "model-override-agent".to_string(),
+            description: "Test".to_string(),
+            model: Some("claude-opus-4-6".to_string()),
+            tools: None,
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/tmp/model-override.md"),
+        };
+
+        agent.apply_to_session(&mut session);
+        assert_ne!(session.model, initial_model);
+        assert_eq!(session.model, "claude-opus-4-6");
     }
 }
