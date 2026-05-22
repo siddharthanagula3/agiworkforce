@@ -2,9 +2,9 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 14: defined-but-unused defensive utilities + local-constant drift cleanup, four more checkpoints)
+Last updated: 2026-05-22 (extended through round 14: defined-but-unused defensive utilities + local-constant drift cleanup + offline-queue extract, seven checkpoints)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `2cc3ea623` (round-14 boundary at session end)
+Head pushed: `69057d557` (round-14 boundary at session end)
 
 ## Round 14 additions (continued ultrathink pattern, 2026-05-22)
 
@@ -27,16 +27,26 @@ Continued the defined-but-unused / local-constant-drift pattern after resume. Fo
 - `fix(web): dedupe max_message_length in chat validation schema` (`2cc3ea623`)
   - `CreateMessageSchema.content.max()` inlined `100000` alongside its own error string, while canonical `MAX_MESSAGE_LENGTH` already lived in `apps/web/lib/validations/llm.ts` (extracted in Round 13). Now reads from the same constant.
 
+- `fix(desktop): align attachment file-size cap with canonical max_attachment_bytes` (`ea5ffdbe6`)
+  - `apps/desktop/src/features/chat/hooks/useAttachments.ts` defined `ATTACHMENT_LIMITS.MAX_FILE_SIZE = 50 MB` — 2x the canonical `MAX_ATTACHMENT_BYTES = 25 MiB`. Files 25-50 MB passed desktop validation then hit provider gateways with opaque 413s. Mirrors the round-13 web fix (`da70d1af8`); both surfaces now share the canonical.
+
+- `feat(runtime): extract offline-queue factory + migrate web and desktop wrappers` (`69057d557`)
+  - Web + desktop had ~400 lines of identical `offlineQueue.ts` implementation, deliberately copy-ported. Both now consume `createOfflineQueue(opts)` from `@agiworkforce/runtime/offline-queue` with adapter-pattern DI for storage/logger/onStorageChange/probeOnline.
+  - Web wrapper provides pino logger + `/api/health` HEAD probe + `window.addEventListener('storage')` subscriber.
+  - Desktop wrapper provides console logger + no network probe (Tauri webview can't reach web `/api/health`) + the same window subscriber.
+  - 14 vitest tests pin queuing, sync, retry, max-retries, 401 rethrow, probeOnline short-circuit, subscribeToQueueChanges, injected generateId. Closes open-path #2 from previous handoff.
+
 ### Round 14 — meta-lesson
 
-The same ultrathink pattern (defined-but-unused defensive utilities + local-constant duplication) keeps producing high-leverage finds. Each turn the grep vector shifts: provider alias maps, validation schemas, db row mappers. The yield drops once the obvious categories are exhausted, but the audit-pass cost is low.
+The same ultrathink pattern (defined-but-unused defensive utilities + local-constant duplication) keeps producing high-leverage finds. Each turn the grep vector shifts: provider alias maps, validation schemas, db row mappers, attachment caps. Once obvious targets exhaust, the natural next move is structural extracts — the offline-queue dedup converts a copy-paste anti-pattern into a single canonical factory.
 
 Open paths still on the board:
 
 1. Apply the round-10 migration (`20260521120000` + `20260521130000` + `20260521140000` + `20260521150000`) once production Supabase is authorized.
-2. Extract `@agiworkforce/runtime/offline-queue` so web + desktop share the implementation instead of the copy-paste.
+2. ~~Extract `@agiworkforce/runtime/offline-queue`~~ — **closed** at `69057d557`.
 3. Sweep `assertGeneratedFileTrustBoundary` into real call sites — currently the throw variant has tests but zero production wiring (and no canonical `{ComputeSession, GeneratedFile, ArtifactManifest}` composition site exists yet to wire it into).
 4. Mobile PNG capture infrastructure for visual verification parity (RN tree snapshots are the only signal today).
+5. Migrate `apps/desktop/src/lib/offline/offlineSync.ts` and the equivalent web file through the same shared-factory pattern — they remain copy-ported per-surface even after the queue layer is unified.
 
 ## Round 13 additions (ultrathink-mode architecture audit, 2026-05-22)
 
