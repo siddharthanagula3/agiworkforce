@@ -40,6 +40,7 @@ export async function buildStreamResponse(
 
   let inputTokens = 0;
   let outputTokens = 0;
+  let reasoningOutputTokens: number | undefined;
   let cacheReadInputTokens: number | undefined;
   let cacheCreationInputTokens: number | undefined;
   let buffer = '';
@@ -291,6 +292,33 @@ export async function buildStreamResponse(
             if (event.usage) {
               inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
               outputTokens = Math.max(outputTokens, event.usage.completion_tokens || 0);
+              // OpenAI/OpenRouter: capture cached token counts from the final usage
+              // event emitted when stream_options.include_usage=true is set.
+              // Chat Completions shape: prompt_tokens_details.cached_tokens
+              // Responses API shape:   input_tokens_details.cached_tokens
+              // OpenRouter (anthropic routes): cache_read_input_tokens / cache_creation_input_tokens
+              const streamCacheRead =
+                event.usage.prompt_tokens_details?.cached_tokens ??
+                event.usage.input_tokens_details?.cached_tokens ??
+                event.usage.cache_read_input_tokens ??
+                undefined;
+              if (streamCacheRead != null) {
+                cacheReadInputTokens = streamCacheRead;
+              }
+              const streamCacheCreation = event.usage.cache_creation_input_tokens ?? undefined;
+              if (streamCacheCreation != null) {
+                cacheCreationInputTokens = streamCacheCreation;
+              }
+              // Reasoning tokens:
+              //   Chat Completions: completion_tokens_details.reasoning_tokens
+              //   Responses API:    output_tokens_details.reasoning_tokens
+              const streamReasoning =
+                event.usage.completion_tokens_details?.reasoning_tokens ??
+                event.usage.output_tokens_details?.reasoning_tokens ??
+                undefined;
+              if (streamReasoning != null) {
+                reasoningOutputTokens = streamReasoning;
+              }
             }
             if (event.usageMetadata) {
               inputTokens = Math.max(inputTokens, event.usageMetadata.promptTokenCount || 0);
@@ -444,6 +472,7 @@ export async function buildStreamResponse(
         recordModelUsage(userId, modelUsed, {
           inputTokens,
           outputTokens,
+          reasoningOutputTokens,
           cacheReadInputTokens,
           cacheCreationInputTokens,
         });
