@@ -94,6 +94,39 @@ pub enum ProjectSourceSurface {
     Chrome,
 }
 
+/// Consumer chat-sync surfaces per the locked /goal rule. Mirrors the TS
+/// `SYNCED_APP_SURFACES` export in `packages/types/src/suite-contracts.ts`.
+/// Chat history may sync across these surfaces only — see
+/// `assertSurfaceCanSyncChats` on the TS side.
+pub const SYNCED_APP_SURFACES: &[ProjectSourceSurface] = &[
+    ProjectSourceSurface::Web,
+    ProjectSourceSurface::Desktop,
+    ProjectSourceSurface::Mobile,
+];
+
+/// Developer-session surfaces per the locked /goal rule. Mirrors the TS
+/// `DEVELOPER_SESSION_SURFACES` export. These surfaces keep separate
+/// developer-session history and never sync consumer chat.
+pub const DEVELOPER_SESSION_SURFACES: &[ProjectSourceSurface] = &[
+    ProjectSourceSurface::Cli,
+    ProjectSourceSurface::Vscode,
+    ProjectSourceSurface::Chrome,
+];
+
+impl ProjectSourceSurface {
+    /// Returns `true` if this surface participates in consumer chat sync.
+    /// Mirrors the TS `isSyncedAppSurface` helper.
+    pub fn is_synced_app_surface(self) -> bool {
+        matches!(self, Self::Web | Self::Desktop | Self::Mobile)
+    }
+
+    /// Returns `true` if this surface is a developer-session surface
+    /// (CLI / VS Code / Chrome). Mirrors `isDeveloperSessionSurface`.
+    pub fn is_developer_session_surface(self) -> bool {
+        matches!(self, Self::Cli | Self::Vscode | Self::Chrome)
+    }
+}
+
 /// ProjectRecord — canonical Rust mirror of the TS `ProjectRecord`.
 ///
 /// All "denormalized" or display-only fields are optional so backends can
@@ -258,6 +291,68 @@ mod tests {
     fn normalize_accent_color_falls_back_for_unknown_and_none() {
         assert_eq!(normalize_accent_color(Some("teal")), ProjectAccentColor::Zinc);
         assert_eq!(normalize_accent_color(None), ProjectAccentColor::Zinc);
+    }
+
+    #[test]
+    fn synced_app_surfaces_matches_canonical_set() {
+        assert_eq!(
+            SYNCED_APP_SURFACES,
+            &[
+                ProjectSourceSurface::Web,
+                ProjectSourceSurface::Desktop,
+                ProjectSourceSurface::Mobile,
+            ]
+        );
+    }
+
+    #[test]
+    fn developer_session_surfaces_matches_canonical_set() {
+        assert_eq!(
+            DEVELOPER_SESSION_SURFACES,
+            &[
+                ProjectSourceSurface::Cli,
+                ProjectSourceSurface::Vscode,
+                ProjectSourceSurface::Chrome,
+            ]
+        );
+    }
+
+    #[test]
+    fn is_synced_app_surface_accepts_web_desktop_mobile() {
+        assert!(ProjectSourceSurface::Web.is_synced_app_surface());
+        assert!(ProjectSourceSurface::Desktop.is_synced_app_surface());
+        assert!(ProjectSourceSurface::Mobile.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Cli.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Vscode.is_synced_app_surface());
+        assert!(!ProjectSourceSurface::Chrome.is_synced_app_surface());
+    }
+
+    #[test]
+    fn is_developer_session_surface_accepts_cli_vscode_chrome() {
+        assert!(ProjectSourceSurface::Cli.is_developer_session_surface());
+        assert!(ProjectSourceSurface::Vscode.is_developer_session_surface());
+        assert!(ProjectSourceSurface::Chrome.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Web.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Desktop.is_developer_session_surface());
+        assert!(!ProjectSourceSurface::Mobile.is_developer_session_surface());
+    }
+
+    #[test]
+    fn surface_classifications_are_mutually_exclusive() {
+        for surface in [
+            ProjectSourceSurface::Web,
+            ProjectSourceSurface::Desktop,
+            ProjectSourceSurface::Mobile,
+            ProjectSourceSurface::Cli,
+            ProjectSourceSurface::Vscode,
+            ProjectSourceSurface::Chrome,
+        ] {
+            assert_ne!(
+                surface.is_synced_app_surface(),
+                surface.is_developer_session_surface(),
+                "every surface must be in exactly one classification: {surface:?}"
+            );
+        }
     }
 
     #[test]
