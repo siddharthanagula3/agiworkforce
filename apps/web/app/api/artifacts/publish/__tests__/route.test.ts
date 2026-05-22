@@ -2,9 +2,10 @@
  * Tests for POST /api/artifacts/publish
  *
  * Covers:
- *   - Happy path returns 200 with { artifactId, manifestId, publishedAt }
+ *   - Happy path returns 200 with { kind: 'waitlist', shareUrl: null, waitlistGated: true }
  *   - Trust-boundary violation returns 400 with { code, codes, message }
- *   - DB table missing (42P01) returns 503 with artifact_persistence_unavailable
+ *   - No 503 path: ArtifactPersistenceUnavailableError is gone; waitlist result
+ *     is returned as a clean discriminated union instead.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -31,24 +32,14 @@ vi.mock('@/lib/artifact-publisher', () => {
       this.codes = codes;
     }
   }
-  class ArtifactPersistenceUnavailableError extends Error {
-    constructor() {
-      super('Artifact persistence requires Cloud Managed (pending private beta migration)');
-      this.name = 'ArtifactPersistenceUnavailableError';
-    }
-  }
   return {
     publishArtifact: mockPublishArtifact,
     TrustBoundaryViolationError,
-    ArtifactPersistenceUnavailableError,
   };
 });
 
 import { POST } from '../route';
-import {
-  TrustBoundaryViolationError,
-  ArtifactPersistenceUnavailableError,
-} from '@/lib/artifact-publisher';
+import { TrustBoundaryViolationError } from '@/lib/artifact-publisher';
 
 function makeValidBody() {
   return {
@@ -108,22 +99,22 @@ function makeRequest(body: unknown) {
 }
 
 describe('POST /api/artifacts/publish', () => {
-  it('happy path returns 200 with artifactId, manifestId, publishedAt', async () => {
+  it('happy path returns 200 with waitlist discriminated union', async () => {
     mockGetAuth.mockResolvedValueOnce({ user: { id: 'user-1' }, userDb: {} });
     mockRequireCsrf.mockResolvedValueOnce(null);
     mockWithRateLimit.mockResolvedValueOnce(null);
     mockPublishArtifact.mockResolvedValueOnce({
-      artifactId: 'artifact-row-1',
-      manifestId: 'manifest-1',
-      publishedAt: '2026-05-22T01:00:00Z',
+      kind: 'waitlist',
+      shareUrl: null,
+      waitlistGated: true,
     });
 
     const res = await POST(makeRequest(makeValidBody()));
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, string>;
-    expect(body['artifactId']).toBe('artifact-row-1');
-    expect(body['manifestId']).toBe('manifest-1');
-    expect(body['publishedAt']).toBe('2026-05-22T01:00:00Z');
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body['kind']).toBe('waitlist');
+    expect(body['shareUrl']).toBeNull();
+    expect(body['waitlistGated']).toBe(true);
   });
 
   it('trust-boundary violation returns 400 with code and codes array', async () => {
@@ -146,16 +137,22 @@ describe('POST /api/artifacts/publish', () => {
     expect(typeof body['message']).toBe('string');
   });
 
-  it('DB table missing (42P01) returns 503 with artifact_persistence_unavailable', async () => {
+  it('route does not expose a 503 path — waitlist result is always 200', async () => {
+    // This test is a regression guard. The old publisher threw
+    // ArtifactPersistenceUnavailableError (42P01) which caused 503s.
+    // The new publisher returns { kind: 'waitlist' } instead.
+    // Verify the route has no special-case 503 branch.
     mockGetAuth.mockResolvedValueOnce({ user: { id: 'user-1' }, userDb: {} });
     mockRequireCsrf.mockResolvedValueOnce(null);
     mockWithRateLimit.mockResolvedValueOnce(null);
-    mockPublishArtifact.mockRejectedValueOnce(new ArtifactPersistenceUnavailableError());
+    mockPublishArtifact.mockResolvedValueOnce({
+      kind: 'waitlist',
+      shareUrl: null,
+      waitlistGated: true,
+    });
 
     const res = await POST(makeRequest(makeValidBody()));
-    expect(res.status).toBe(503);
-    const body = (await res.json()) as Record<string, string>;
-    expect(body['error']).toBe('artifact_persistence_unavailable');
-    expect(body['message']).toContain('Cloud Managed');
+    expect(res.status).toBe(200);
+    expect(res.status).not.toBe(503);
   });
 });

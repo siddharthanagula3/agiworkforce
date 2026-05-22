@@ -2,22 +2,20 @@
  * Tests for lib/artifact-publisher.ts
  *
  * Covers:
- *   - Valid bundle passes trust-boundary and calls DB upsert
- *   - Invalid bundle throws TrustBoundaryViolationError with codes
- *   - Missing transfer evidence for byok target throws appropriate code
- *   - DB table-not-found (42P01) throws ArtifactPersistenceUnavailableError
- *   - Idempotency: same triple calls upsert with same onConflict key
+ *   - Valid managed bundle passes trust-boundary and returns WaitlistPublishResult
+ *   - Invalid bundle (session mismatch) throws TrustBoundaryViolationError with codes
+ *   - byok bundle missing transfer evidence throws byok-transfer-preview-required
+ *   - Calling twice returns the same waitlist shape (idempotent, no DB)
+ *
+ * The ArtifactPersistenceUnavailableError / 42P01 path is gone — the publisher
+ * no longer calls the DB. The 503 is replaced by 200 + { kind: 'waitlist' }.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import {
-  publishArtifact,
-  TrustBoundaryViolationError,
-  ArtifactPersistenceUnavailableError,
-} from '../artifact-publisher';
+import { publishArtifact, TrustBoundaryViolationError } from '../artifact-publisher';
 import type {
   ComputeSession,
   GeneratedFile,
@@ -89,63 +87,38 @@ function makeManagedEvidence() {
 }
 
 // ---------------------------------------------------------------------------
-// Supabase mock helpers
-// ---------------------------------------------------------------------------
-
-function makeUpsertChain(result: { data: unknown; error: unknown }) {
-  const singleFn = vi.fn().mockResolvedValue(result);
-  const selectFn = vi.fn().mockReturnValue({ single: singleFn });
-  const upsertFn = vi.fn().mockReturnValue({ select: selectFn });
-  const fromFn = vi.fn().mockReturnValue({ upsert: upsertFn });
-  return { fromFn, upsertFn, selectFn, singleFn };
-}
-
-// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('publishArtifact', () => {
-  it('valid managed bundle passes trust-boundary and calls DB upsert', async () => {
-    const { fromFn, upsertFn } = makeUpsertChain({
-      data: {
-        id: 'artifact-row-1',
-        artifact_manifest_id: 'manifest-1',
-        published_at: '2026-05-22T01:00:00Z',
-      },
-      error: null,
-    });
-    const userDb = { from: fromFn } as never;
-
+describe('publishArtifact (web adapter)', () => {
+  it('valid managed bundle returns WaitlistPublishResult (kind=waitlist)', async () => {
     const result = await publishArtifact({
       computeSession: makeSession(),
       generatedFile: makeFile(),
       artifactManifest: makeManifest(),
       managed: makeManagedEvidence(),
-      userDb,
-      userId: 'user-1',
     });
 
-    expect(fromFn).toHaveBeenCalledWith('published_artifacts');
-    expect(upsertFn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        compute_session_id: 'session-1',
-        generated_file_id: 'file-1',
-        artifact_manifest_id: 'manifest-1',
-        owner_user_id: 'user-1',
-        privacy_mode: 'managed',
-        provider_mode: 'ManagedGateway',
-        source_surface: 'web',
-      }),
-      { onConflict: 'compute_session_id,generated_file_id,artifact_manifest_id' },
-    );
-    expect(result.artifactId).toBe('artifact-row-1');
-    expect(result.manifestId).toBe('manifest-1');
-    expect(result.publishedAt).toBe('2026-05-22T01:00:00Z');
+    expect(result.kind).toBe('waitlist');
+    expect(result.shareUrl).toBeNull();
+    expect(result.waitlistGated).toBe(true);
+  });
+
+  it('waitlist result has no DB side-effects (no upsert called)', async () => {
+    // No DB mock needed — the new publisher never calls the DB.
+    // This test is a regression guard: if a DB call were accidentally
+    // re-introduced it would fail at the import stage (no SupabaseClient).
+    const result = await publishArtifact({
+      computeSession: makeSession(),
+      generatedFile: makeFile(),
+      artifactManifest: makeManifest(),
+      managed: makeManagedEvidence(),
+    });
+
+    expect(result.kind).toBe('waitlist');
   });
 
   it('invalid bundle (compute-session-mismatch) throws TrustBoundaryViolationError with codes', async () => {
-    const userDb = { from: vi.fn() } as never;
-
     const mismatchedFile = makeFile({ computeSessionId: 'other-session' });
 
     await expect(
@@ -154,8 +127,6 @@ describe('publishArtifact', () => {
         generatedFile: mismatchedFile,
         artifactManifest: makeManifest(),
         managed: makeManagedEvidence(),
-        userDb,
-        userId: 'user-1',
       }),
     ).rejects.toSatisfy((err: unknown) => {
       return (
@@ -165,8 +136,6 @@ describe('publishArtifact', () => {
   });
 
   it('byok bundle missing transfer evidence throws byok-transfer-preview-required', async () => {
-    const userDb = { from: vi.fn() } as never;
-
     const byokSession = makeSession({ privacyMode: 'byok', providerMode: 'DirectByok' });
     const byokFile = makeFile({
       computeSessionId: 'session-1',
@@ -191,8 +160,6 @@ describe('publishArtifact', () => {
         generatedFile: byokFile,
         artifactManifest: byokManifest,
         transfer: incompleteTransfer,
-        userDb,
-        userId: 'user-1',
       }),
     ).rejects.toSatisfy((err: unknown) => {
       return (
@@ -202,64 +169,17 @@ describe('publishArtifact', () => {
     });
   });
 
-  it('DB table-not-found (42P01) throws ArtifactPersistenceUnavailableError', async () => {
-    const { fromFn } = makeUpsertChain({
-      data: null,
-      error: { message: 'relation "published_artifacts" does not exist', code: '42P01' },
-    });
-    const userDb = { from: fromFn } as never;
-
-    await expect(
-      publishArtifact({
-        computeSession: makeSession(),
-        generatedFile: makeFile(),
-        artifactManifest: makeManifest(),
-        managed: makeManagedEvidence(),
-        userDb,
-        userId: 'user-1',
-      }),
-    ).rejects.toBeInstanceOf(ArtifactPersistenceUnavailableError);
-  });
-
-  it('is idempotent: same triple always calls upsert with same onConflict key', async () => {
-    const makeResult = () => ({
-      data: {
-        id: 'artifact-row-1',
-        artifact_manifest_id: 'manifest-1',
-        published_at: '2026-05-22T01:00:00Z',
-      },
-      error: null,
-    });
-    const upsertCalls: unknown[] = [];
-
-    const mockUpsert = vi.fn((row: unknown, opts: unknown) => {
-      upsertCalls.push({ row, opts });
-      return {
-        select: vi.fn().mockReturnValue({ single: vi.fn().mockResolvedValue(makeResult()) }),
-      };
-    });
-    const userDb = { from: vi.fn().mockReturnValue({ upsert: mockUpsert }) } as never;
-
+  it('calling twice returns the same waitlist shape (idempotent)', async () => {
     const args = {
       computeSession: makeSession(),
       generatedFile: makeFile(),
       artifactManifest: makeManifest(),
       managed: makeManagedEvidence(),
-      userDb,
-      userId: 'user-1',
     };
 
-    await publishArtifact(args);
-    await publishArtifact(args);
+    const [r1, r2] = await Promise.all([publishArtifact(args), publishArtifact(args)]);
 
-    expect(mockUpsert).toHaveBeenCalledTimes(2);
-
-    for (const call of upsertCalls) {
-      const c = call as { row: Record<string, unknown>; opts: { onConflict: string } };
-      expect(c.opts.onConflict).toBe('compute_session_id,generated_file_id,artifact_manifest_id');
-      expect(c.row['compute_session_id']).toBe('session-1');
-      expect(c.row['generated_file_id']).toBe('file-1');
-      expect(c.row['artifact_manifest_id']).toBe('manifest-1');
-    }
+    expect(r1).toEqual({ kind: 'waitlist', shareUrl: null, waitlistGated: true });
+    expect(r2).toEqual({ kind: 'waitlist', shareUrl: null, waitlistGated: true });
   });
 });

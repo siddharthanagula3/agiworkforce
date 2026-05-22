@@ -1,19 +1,21 @@
 /**
- * Artifact publish helper.
+ * Artifact publish helper — web surface adapter.
  *
- * Cloud Managed — waitlist-gated. Persists generated-file bundles to the
- * `published_artifacts` Supabase table after asserting the trust boundary.
+ * v1 LOCAL ONLY (lock: v1-local-only-cloud-waitlist-2026-05-18):
  *
- * In v1 LOCAL ONLY mode the table does not exist yet (migration ships in the
- * private beta). All calls will receive a 42P01 from Postgres, which is
- * surfaced as {@link ArtifactPersistenceUnavailableError} so the API route
- * can return 503 with a clean user-facing message.
+ * Web has no local filesystem. Cloud publish is waitlist-gated because the
+ * `published_artifacts` table migration ships only in private beta.
+ *
+ * This adapter always returns a clean {@link WaitlistPublishResult} instead of
+ * attempting any network call or DB upsert. The previous implementation threw
+ * `ArtifactPersistenceUnavailableError` on 42P01, which caused 503s in
+ * production. That error class is gone; the route now receives a discriminated
+ * union and returns 200 with kind='waitlist'.
  *
  * See: locks/v1-local-only-cloud-waitlist-2026-05-18.md
  */
 import 'server-only';
 
-import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   assertGeneratedFileTrustBoundary,
   validateGeneratedFileTrustBoundary,
@@ -25,7 +27,9 @@ import {
   type GeneratedFileTrustBoundaryViolationCode,
 } from '@agiworkforce/types';
 
-const PG_UNDEFINED_TABLE = '42P01';
+import type { PublishResult, WaitlistPublishResult } from '@agiworkforce/services';
+
+export type { PublishResult, WaitlistPublishResult };
 
 export class TrustBoundaryViolationError extends Error {
   readonly codes: GeneratedFileTrustBoundaryViolationCode[];
@@ -37,33 +41,26 @@ export class TrustBoundaryViolationError extends Error {
   }
 }
 
-export class ArtifactPersistenceUnavailableError extends Error {
-  constructor() {
-    super('Artifact persistence requires Cloud Managed (pending private beta migration)');
-    this.name = 'ArtifactPersistenceUnavailableError';
-    Object.setPrototypeOf(this, ArtifactPersistenceUnavailableError.prototype);
-  }
-}
-
 export interface PublishArtifactInput {
   computeSession: ComputeSession;
   generatedFile: GeneratedFile;
   artifactManifest: ArtifactManifest;
   transfer?: GeneratedFileTransferEvidence;
   managed?: GeneratedFileManagedEvidence;
-  userDb: SupabaseClient;
-  userId: string;
 }
 
-export interface PublishArtifactResult {
-  artifactId: string;
-  manifestId: string;
-  publishedAt: string;
-}
-
-export async function publishArtifact(input: PublishArtifactInput): Promise<PublishArtifactResult> {
-  const { computeSession, generatedFile, artifactManifest, transfer, managed, userDb, userId } =
-    input;
+/**
+ * Publish an artifact from the web surface.
+ *
+ * Enforces the generated-file trust boundary before returning the waitlist
+ * result. No DB call is made. Returns `{ kind: 'waitlist', shareUrl: null,
+ * waitlistGated: true }` for all inputs that pass the boundary check.
+ *
+ * @throws {TrustBoundaryViolationError} When the generated-file trust boundary
+ *   is violated (mismatched session IDs, wrong privacy/provider mode, etc.).
+ */
+export async function publishArtifact(input: PublishArtifactInput): Promise<PublishResult> {
+  const { computeSession, generatedFile, artifactManifest, transfer, managed } = input;
 
   const boundaryInput = { computeSession, generatedFile, artifactManifest, transfer, managed };
 
@@ -79,45 +76,12 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
     );
   }
 
-  const publishedAt = new Date().toISOString();
-  const payload = {
-    computeSession,
-    generatedFile,
-    artifactManifest,
-    ...(transfer ? { transfer } : {}),
-    ...(managed ? { managed } : {}),
+  // v1 LOCAL ONLY: web has no local filesystem; cloud publish is waitlist-gated.
+  // Return clean discriminated union — no DB upsert, no network call.
+  const result: WaitlistPublishResult = {
+    kind: 'waitlist',
+    shareUrl: null,
+    waitlistGated: true,
   };
-
-  const { data, error } = await userDb
-    .from('published_artifacts')
-    .upsert(
-      {
-        owner_user_id: userId,
-        compute_session_id: computeSession.id,
-        generated_file_id: generatedFile.id,
-        artifact_manifest_id: artifactManifest.id,
-        payload,
-        privacy_mode: artifactManifest.privacyMode,
-        provider_mode: artifactManifest.providerMode,
-        source_surface: computeSession.sourceSurface,
-        published_at: publishedAt,
-      },
-      { onConflict: 'compute_session_id,generated_file_id,artifact_manifest_id' },
-    )
-    .select('id, artifact_manifest_id, published_at')
-    .single();
-
-  if (error) {
-    const pgError = error as unknown as { code?: string };
-    if (pgError.code === PG_UNDEFINED_TABLE) {
-      throw new ArtifactPersistenceUnavailableError();
-    }
-    throw new Error(`Failed to persist artifact: ${error.message}`);
-  }
-
-  return {
-    artifactId: (data as { id: string }).id,
-    manifestId: artifactManifest.id,
-    publishedAt: (data as { published_at: string }).published_at ?? publishedAt,
-  };
+  return result;
 }
