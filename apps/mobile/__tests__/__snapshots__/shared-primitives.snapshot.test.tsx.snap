@@ -1,0 +1,1046 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tree for a BYOK project 1`] = `
+<View
+  accessibilityLabel="Project: Snapshot project"
+  style={
+    {
+      "backgroundColor": "#1a1a1a",
+      "borderColor": "#333",
+      "borderRadius": 12,
+      "borderWidth": 1,
+      "flexDirection": "column",
+      "gap": 12,
+      "padding": 16,
+    }
+  }
+  testID="project-header"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(16, 185, 129, 0.16)",
+          "borderColor": "rgba(16, 185, 129, 0.32)",
+          "borderRadius": 12,
+          "borderWidth": 1,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#6ee7b7"
+        size={22}
+        testID="icon-folder"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "fontSize": 16,
+              "fontWeight": "600",
+            }
+          }
+        >
+          Snapshot project
+        </Text>
+        <View
+          style={
+            {
+              "backgroundColor": "rgba(139, 92, 246, 0.16)",
+              "borderColor": "rgba(139, 92, 246, 0.32)",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="project-header-imported-from"
+        >
+          <Text
+            style={
+              {
+                "color": "#c4b5fd",
+                "fontSize": 10,
+                "fontWeight": "500",
+                "letterSpacing": 0.4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Created in AGI
+          </Text>
+        </View>
+      </View>
+      <Text
+        numberOfLines={2}
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 12,
+            "marginTop": 2,
+          }
+        }
+      >
+        Stays on this device.
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 6,
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Privacy: BYOK"
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(113, 113, 122, 0.16)",
+          "borderColor": "rgba(113, 113, 122, 0.4)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 4,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-privacy-chip"
+    >
+      <View
+        color="#e4e4e7"
+        size={11}
+        testID="icon-key-round"
+      />
+      <Text
+        style={
+          {
+            "color": "#e4e4e7",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        BYOK
+      </Text>
+    </View>
+    <View
+      accessibilityLabel="Provider mode: DirectByok"
+      style={
+        {
+          "backgroundColor": "rgba(245, 158, 11, 0.16)",
+          "borderColor": "rgba(245, 158, 11, 0.32)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-provider-chip"
+    >
+      <Text
+        style={
+          {
+            "color": "#fcd34d",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        BYOK
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "columnGap": 12,
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "rowGap": 4,
+      }
+    }
+    testID="project-header-meta-row"
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        color="#777"
+        size={11}
+        testID="icon-users"
+      />
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        2 files
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        1 member
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 4,
+      }
+    }
+    testID="project-header-surface-chips"
+  >
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Web
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Desktop
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Mobile
+      </Text>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tree for a Local project 1`] = `
+<View
+  accessibilityLabel="Project: Snapshot project"
+  style={
+    {
+      "backgroundColor": "#1a1a1a",
+      "borderColor": "#333",
+      "borderRadius": 12,
+      "borderWidth": 1,
+      "flexDirection": "column",
+      "gap": 12,
+      "padding": 16,
+    }
+  }
+  testID="project-header"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(16, 185, 129, 0.16)",
+          "borderColor": "rgba(16, 185, 129, 0.32)",
+          "borderRadius": 12,
+          "borderWidth": 1,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#6ee7b7"
+        size={22}
+        testID="icon-folder"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "fontSize": 16,
+              "fontWeight": "600",
+            }
+          }
+        >
+          Snapshot project
+        </Text>
+        <View
+          style={
+            {
+              "backgroundColor": "rgba(139, 92, 246, 0.16)",
+              "borderColor": "rgba(139, 92, 246, 0.32)",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="project-header-imported-from"
+        >
+          <Text
+            style={
+              {
+                "color": "#c4b5fd",
+                "fontSize": 10,
+                "fontWeight": "500",
+                "letterSpacing": 0.4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Created in AGI
+          </Text>
+        </View>
+      </View>
+      <Text
+        numberOfLines={2}
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 12,
+            "marginTop": 2,
+          }
+        }
+      >
+        Stays on this device.
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 6,
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Privacy: Local"
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(16, 185, 129, 0.12)",
+          "borderColor": "rgba(16, 185, 129, 0.4)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 4,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-privacy-chip"
+    >
+      <View
+        color="#6ee7b7"
+        size={11}
+        testID="icon-lock"
+      />
+      <Text
+        style={
+          {
+            "color": "#6ee7b7",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        Local
+      </Text>
+    </View>
+    <View
+      accessibilityLabel="Provider mode: Local"
+      style={
+        {
+          "backgroundColor": "rgba(16, 185, 129, 0.16)",
+          "borderColor": "rgba(16, 185, 129, 0.32)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-provider-chip"
+    >
+      <Text
+        style={
+          {
+            "color": "#6ee7b7",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        Local
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "columnGap": 12,
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "rowGap": 4,
+      }
+    }
+    testID="project-header-meta-row"
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        color="#777"
+        size={11}
+        testID="icon-users"
+      />
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        2 files
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        1 member
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 4,
+      }
+    }
+    testID="project-header-surface-chips"
+  >
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Web
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Desktop
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Mobile
+      </Text>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tree with denormalized counts + last-used + model 1`] = `
+<View
+  accessibilityLabel="Project: Snapshot project"
+  style={
+    {
+      "backgroundColor": "#1a1a1a",
+      "borderColor": "#333",
+      "borderRadius": 12,
+      "borderWidth": 1,
+      "flexDirection": "column",
+      "gap": 12,
+      "padding": 16,
+    }
+  }
+  testID="project-header"
+>
+  <View
+    style={
+      {
+        "alignItems": "flex-start",
+        "flexDirection": "row",
+        "gap": 12,
+      }
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(16, 185, 129, 0.16)",
+          "borderColor": "rgba(16, 185, 129, 0.32)",
+          "borderRadius": 12,
+          "borderWidth": 1,
+          "height": 48,
+          "justifyContent": "center",
+          "width": 48,
+        }
+      }
+    >
+      <View
+        color="#6ee7b7"
+        size={22}
+        testID="icon-folder"
+      />
+    </View>
+    <View
+      style={
+        {
+          "flex": 1,
+        }
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "flexWrap": "wrap",
+            "gap": 6,
+          }
+        }
+      >
+        <Text
+          numberOfLines={1}
+          style={
+            {
+              "color": "#fff",
+              "fontSize": 16,
+              "fontWeight": "600",
+            }
+          }
+        >
+          Snapshot project
+        </Text>
+        <View
+          style={
+            {
+              "backgroundColor": "rgba(139, 92, 246, 0.16)",
+              "borderColor": "rgba(139, 92, 246, 0.32)",
+              "borderRadius": 9999,
+              "borderWidth": 1,
+              "paddingHorizontal": 6,
+              "paddingVertical": 2,
+            }
+          }
+          testID="project-header-imported-from"
+        >
+          <Text
+            style={
+              {
+                "color": "#c4b5fd",
+                "fontSize": 10,
+                "fontWeight": "500",
+                "letterSpacing": 0.4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            Created in AGI
+          </Text>
+        </View>
+      </View>
+      <Text
+        numberOfLines={2}
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 12,
+            "marginTop": 2,
+          }
+        }
+      >
+        Stays on this device.
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 6,
+      }
+    }
+  >
+    <View
+      accessibilityLabel="Privacy: Local"
+      style={
+        {
+          "alignItems": "center",
+          "backgroundColor": "rgba(16, 185, 129, 0.12)",
+          "borderColor": "rgba(16, 185, 129, 0.4)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "flexDirection": "row",
+          "gap": 4,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-privacy-chip"
+    >
+      <View
+        color="#6ee7b7"
+        size={11}
+        testID="icon-lock"
+      />
+      <Text
+        style={
+          {
+            "color": "#6ee7b7",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        Local
+      </Text>
+    </View>
+    <View
+      accessibilityLabel="Provider mode: Local"
+      style={
+        {
+          "backgroundColor": "rgba(16, 185, 129, 0.16)",
+          "borderColor": "rgba(16, 185, 129, 0.32)",
+          "borderRadius": 9999,
+          "borderWidth": 1,
+          "paddingHorizontal": 8,
+          "paddingVertical": 2,
+        }
+      }
+      testID="project-header-provider-chip"
+    >
+      <Text
+        style={
+          {
+            "color": "#6ee7b7",
+            "fontSize": 11,
+            "fontWeight": "500",
+          }
+        }
+      >
+        Local
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "columnGap": 12,
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "rowGap": 4,
+      }
+    }
+    testID="project-header-meta-row"
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <View
+        color="#777"
+        size={11}
+        testID="icon-users"
+      />
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        4 files
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        3 members
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        Last used 2h ago
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "gap": 4,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#777",
+            "fontSize": 11,
+          }
+        }
+      >
+        Default model: Llama 3.2 8B
+      </Text>
+    </View>
+  </View>
+  <View
+    style={
+      {
+        "flexDirection": "row",
+        "flexWrap": "wrap",
+        "gap": 4,
+      }
+    }
+    testID="project-header-surface-chips"
+  >
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Web
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Desktop
+      </Text>
+    </View>
+    <View
+      style={
+        {
+          "backgroundColor": "#0e0e0e",
+          "borderColor": "#333",
+          "borderRadius": 4,
+          "borderWidth": 1,
+          "paddingHorizontal": 6,
+          "paddingVertical": 2,
+        }
+      }
+    >
+      <Text
+        style={
+          {
+            "color": "#aaa",
+            "fontSize": 10,
+            "fontWeight": "500",
+            "letterSpacing": 0.4,
+            "textTransform": "uppercase",
+          }
+        }
+      >
+        Mobile
+      </Text>
+    </View>
+  </View>
+</View>
+`;
