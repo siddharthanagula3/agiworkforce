@@ -20,21 +20,18 @@
  * existing clients depend on `color`.
  */
 
-import type {
-  PrivacyMode,
-  ProviderMode,
-  ProjectAccentColor,
-  ProjectImportSource,
-  SourceSurface,
+import {
+  DEVELOPER_SESSION_SURFACES,
+  PRIVACY_MODES,
+  PROVIDER_MODES,
+  SYNCED_APP_SURFACES,
+  type PrivacyMode,
+  type ProviderMode,
+  type ProjectAccentColor,
+  type ProjectImportSource,
+  type SourceSurface,
 } from '@agiworkforce/types';
 
-const PRIVACY_MODES: readonly PrivacyMode[] = ['local', 'byok', 'managed'];
-const PROVIDER_MODES: readonly ProviderMode[] = [
-  'Local',
-  'DirectByok',
-  'ManagedGateway',
-  'ManagedNative',
-];
 const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'emerald',
   'sky',
@@ -44,9 +41,9 @@ const ACCENT_COLORS: readonly ProjectAccentColor[] = [
   'zinc',
 ];
 const IMPORT_SOURCES: readonly ProjectImportSource[] = ['claude', 'openai', 'manual'];
-const SURFACES: readonly SourceSurface[] = ['web', 'desktop', 'mobile', 'cli', 'vscode', 'chrome'];
+const SURFACES: readonly SourceSurface[] = [...SYNCED_APP_SURFACES, ...DEVELOPER_SESSION_SURFACES];
 
-const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = ['web', 'desktop', 'mobile'];
+const DEFAULT_ALLOWED_SURFACES: SourceSurface[] = [...SYNCED_APP_SURFACES];
 
 export interface MappedProject {
   id: string;

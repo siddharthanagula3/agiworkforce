@@ -73,7 +73,7 @@ function pickProviderMode(value: unknown): ProviderMode {
 }
 
 function pickSurfaces(value: unknown): SourceSurface[] {
-  if (!Array.isArray(value)) return ['web', 'desktop', 'mobile'];
+  if (!Array.isArray(value)) return [...SYNCED_APP_SURFACES];
   const known = ALL_SOURCE_SURFACES as readonly string[];
   return value.filter(
     (entry): entry is SourceSurface => typeof entry === 'string' && known.includes(entry),

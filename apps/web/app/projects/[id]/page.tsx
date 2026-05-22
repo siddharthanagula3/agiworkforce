@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ProjectHeader, useChatProjectStore as useProjectStore } from '@agiworkforce/unified-chat';
 import {
+  SYNCED_APP_SURFACES,
   summarizeProjectHeader,
   type ProjectRecord,
   type ProjectAccentColor,
@@ -73,7 +74,7 @@ export default function ProjectDetailPage() {
       description: project.description ?? null,
       defaultPrivacyMode: 'local',
       defaultProviderMode: 'Local',
-      allowedSurfaces: ['web', 'desktop', 'mobile'],
+      allowedSurfaces: [...SYNCED_APP_SURFACES],
       instructions: project.instructions ?? null,
       iconEmoji: project.iconEmoji ?? null,
       accentColor: normalizeAccent(project.accentColor),

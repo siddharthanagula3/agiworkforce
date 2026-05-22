@@ -27,7 +27,11 @@ import {
   Star,
 } from 'lucide-react';
 import { ProjectHeader } from '@agiworkforce/unified-chat';
-import { summarizeProjectHeader, type ProjectRecord } from '@agiworkforce/types';
+import {
+  SYNCED_APP_SURFACES,
+  summarizeProjectHeader,
+  type ProjectRecord,
+} from '@agiworkforce/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ScrollArea } from '@/components/ui/ScrollArea';
@@ -67,7 +71,7 @@ function mapDesktopProjectToHeaderRecord(project: Project): ProjectRecord {
     description: project.description || null,
     defaultPrivacyMode: 'local',
     defaultProviderMode: 'Local',
-    allowedSurfaces: ['web', 'desktop', 'mobile'],
+    allowedSurfaces: [...SYNCED_APP_SURFACES],
     instructions: project.customInstructions || null,
     iconEmoji: project.icon ?? null,
     accentColor: null,
