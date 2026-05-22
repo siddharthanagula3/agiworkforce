@@ -16,6 +16,15 @@
  *  - cache_read: 10% of input cost (Anthropic's published 90% discount).
  *  - cache_creation: 125% of input cost (Anthropic's 25% write surcharge).
  *  These constants mirror prompt-cache-helper.ts calculateCacheSavings().
+ *
+ * Reasoning tokens (OpenAI o-series, Anthropic extended thinking) are billed
+ * at the same per-token rate as regular output tokens, matching codex-cli's
+ * TokenUsage struct (input_tokens, cached_input_tokens, output_tokens,
+ * reasoning_output_tokens, total_tokens).
+ *
+ * OTEL attributes follow GenAI semantic conventions (standard) plus
+ * codex.usage.* vendor extensions, aligned with codex-cli's attribute map.
+ * No opentelemetry package dependency; callers receive a plain attribute object.
  */
 
 import 'server-only';
@@ -26,6 +35,7 @@ export interface ModelUsage {
   modelId: string;
   inputTokens: number;
   outputTokens: number;
+  reasoningOutputTokens: number;
   cacheReadInputTokens: number;
   cacheCreationInputTokens: number;
   requestCount: number;
@@ -35,6 +45,7 @@ export interface ModelUsage {
 export interface NormalizedUsage {
   inputTokens: number;
   outputTokens: number;
+  reasoningOutputTokens?: number;
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
 }
@@ -86,12 +97,16 @@ function calculateCostUsd(modelId: string, usage: NormalizedUsage): number {
 
   const inputTokens = usage.inputTokens ?? 0;
   const outputTokens = usage.outputTokens ?? 0;
+  // Reasoning tokens are billed at the same rate as output tokens.
+  // Reference: codex-cli TokenUsage.reasoning_output_tokens — counted at output rate.
+  const reasoningTokens = usage.reasoningOutputTokens ?? 0;
   const cacheRead = usage.cacheReadInputTokens ?? 0;
   const cacheCreation = usage.cacheCreationInputTokens ?? 0;
 
   return (
     (inputTokens * inputPerM) / 1_000_000 +
     (outputTokens * outputPerM) / 1_000_000 +
+    (reasoningTokens * outputPerM) / 1_000_000 +
     (cacheRead * cacheReadPerM) / 1_000_000 +
     (cacheCreation * cacheCreationPerM) / 1_000_000
   );
@@ -113,6 +128,7 @@ export function recordModelUsage(sessionId: string, modelId: string, usage: Norm
     modelId,
     inputTokens: 0,
     outputTokens: 0,
+    reasoningOutputTokens: 0,
     cacheReadInputTokens: 0,
     cacheCreationInputTokens: 0,
     requestCount: 0,
@@ -121,6 +137,7 @@ export function recordModelUsage(sessionId: string, modelId: string, usage: Norm
 
   existing.inputTokens += usage.inputTokens ?? 0;
   existing.outputTokens += usage.outputTokens ?? 0;
+  existing.reasoningOutputTokens += usage.reasoningOutputTokens ?? 0;
   existing.cacheReadInputTokens += usage.cacheReadInputTokens ?? 0;
   existing.cacheCreationInputTokens += usage.cacheCreationInputTokens ?? 0;
   existing.requestCount += 1;
@@ -169,4 +186,76 @@ export function resetModelUsage(sessionId: string): void {
 export function resetAllSessions(): void {
   sessionStore.clear();
   sessionOrder.length = 0;
+}
+
+/**
+ * Infer the GenAI system name from a provider string or model ID prefix.
+ *
+ * Maps internal provider keys to OpenTelemetry GenAI semantic convention
+ * gen_ai.system values. Falls back to the raw provider string when unknown.
+ * Reference: codex-cli otel-attributes.ts inferGenAiSystem().
+ */
+export function inferGenAiSystem(provider: string): string {
+  const normalized = provider.toLowerCase();
+  if (normalized === 'anthropic') return 'anthropic';
+  if (normalized === 'openai') return 'openai';
+  if (normalized === 'google') return 'google_ai_studio';
+  if (normalized === 'xai') return 'xai';
+  if (normalized === 'deepseek') return 'deepseek';
+  if (normalized === 'perplexity') return 'perplexity';
+  if (normalized === 'qwen') return 'qwen';
+  if (normalized === 'moonshot') return 'moonshot';
+  if (normalized === 'zhipu') return 'zhipu';
+  if (normalized === 'openrouter') return 'openrouter';
+  if (normalized === 'ollama') return 'ollama';
+  if (normalized === 'lmstudio') return 'lmstudio';
+  return normalized;
+}
+
+/**
+ * Produce an OpenTelemetry attribute bag for a single LLM usage event.
+ *
+ * Standard GenAI semantic conventions (spec-stable):
+ *   gen_ai.usage.input_tokens         — total prompt tokens (includes cache-read hits)
+ *   gen_ai.usage.output_tokens        — completion tokens (excludes reasoning)
+ *   gen_ai.usage.cache_read.input_tokens  — tokens served from cache (10% cost)
+ *
+ * Vendor extensions (codex.usage.* namespace, aligned with codex-cli):
+ *   codex.usage.cache_creation_input_tokens — tokens written to cache (125% cost)
+ *   codex.usage.reasoning_output_tokens    — thinking/reasoning tokens (output rate)
+ *   codex.usage.total_tokens               — sum of all categories for cost attribution
+ *
+ * Returns a plain Record so callers have zero opentelemetry package dependency.
+ * Reference: codex-cli otel-attributes.ts toOtelAttributes().
+ */
+export function toOtelAttributes(
+  provider: string,
+  modelId: string,
+  usage: NormalizedUsage,
+): Record<string, number | string> {
+  const attrs: Record<string, number | string> = {
+    'gen_ai.system': inferGenAiSystem(provider),
+    'gen_ai.request.model': modelId,
+    'gen_ai.usage.input_tokens': usage.inputTokens ?? 0,
+    'gen_ai.usage.output_tokens': usage.outputTokens ?? 0,
+  };
+
+  if (usage.cacheReadInputTokens != null) {
+    attrs['gen_ai.usage.cache_read.input_tokens'] = usage.cacheReadInputTokens;
+  }
+  if (usage.cacheCreationInputTokens != null) {
+    attrs['codex.usage.cache_creation_input_tokens'] = usage.cacheCreationInputTokens;
+  }
+  if (usage.reasoningOutputTokens != null) {
+    attrs['codex.usage.reasoning_output_tokens'] = usage.reasoningOutputTokens;
+  }
+
+  const total =
+    (usage.inputTokens ?? 0) +
+    (usage.outputTokens ?? 0) +
+    (usage.reasoningOutputTokens ?? 0) +
+    (usage.cacheCreationInputTokens ?? 0);
+  attrs['codex.usage.total_tokens'] = total;
+
+  return attrs;
 }
