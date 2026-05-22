@@ -1,0 +1,11 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: rendered
+---
+┌─ Commands ─────────────────────────────────────────────────┐
+│   /resu                                                    │
+│ ──────────────────────────────────────────────────────────  │
+│ ❯ /resume — Continue a previous session                    │
+│                                                            │
+│  Type to filter   ↑↓ navigate   Enter select   Esc cancel  │
+└────────────────────────────────────────────────────────────┘

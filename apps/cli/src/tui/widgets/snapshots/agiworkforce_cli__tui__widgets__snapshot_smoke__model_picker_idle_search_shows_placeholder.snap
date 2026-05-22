@@ -1,0 +1,24 @@
+---
+source: apps/cli/src/tui/widgets/snapshot_smoke.rs
+expression: terminal.backend()
+---
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"                                                                                "
+"  ┌ Select Model  (/ search  ↑↓ navigate  Tab jump-provider  Enter select  Es┐  "
+"  │/ type to filter by name or provider...                                   │  "
+"  │──────────────────────────────────────────────────────────────────────────│  "
+"  │ Anthropic                                                                │  "
+"  │  ● fixture-flagship                Balanced       200K ctx               │  "
+"  │    fixture-balanced                Balanced       200K ctx               │  "
+"  │ OpenAI                                                                   │  "
+"  │    fixture-fast                    Balanced       128K ctx               │  "
+"  │ [Thinking: ON] [Effort: ◀ Medium ▶]  Tab/←→ to change                    │  "
+"  └──────────────────────────────────────────────────────────────────────────┘  "
+"                                                                                "
