@@ -2,9 +2,77 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — autonomous suite transformation, round 20] — 2026-05-22
+
+Round 20 is the first `/goal`-activated round of the 1-week parity sprint
+(target Mon 2026-05-25 → Sun 2026-05-31). 3-lane parallel team dispatched
+the three highest-leverage codeable items from EXEC-SUMMARY-r2's
+"next-session priorities": web settings depth, artifact publish service,
+CLI /agents palette command. All verification gates green.
+
+### Added
+
+- `packages/services` — new shared package owning cross-surface service
+  modules behind sync-rule + trust-boundary gating. First module:
+  `publishArtifact({ artifact, privacyMode, surface, localFileWriter })`
+  returning a `LocalPublishResult | WaitlistPublishResult` discriminated
+  union. v1 LOCAL ONLY: `byok` / `managed` privacy modes return
+  waitlist-gated with zero network calls (verified). 12 unit tests.
+- `ArtifactPanel` in `@agiworkforce/unified-chat` accepts new optional DI
+  prop `publishArtifact?: () => Promise<ArtifactPublishResult>` plus a
+  bottom notification bar rendering one of three states (file:// URL + copy
+  on local publish, "Join waitlist" CTA on waitlist-gated, dismissable error
+  text on failure). Existing clipboard fallback retained when prop absent.
+- `apps/desktop/src/features/artifacts/publishAdapter.ts` — Tauri local file
+  writer wired into `ArtifactPanel`. New "Publish" item in the panel
+  dropdown calls the service → toast with file:// path + copy action.
+- Web Settings depth (Claude desktop parity):
+  - `/settings/profile` — Full name, Preferred name (independent
+    `agi.profile.preferredName` localStorage key + Supabase
+    `user_metadata.preferred_name`), Work-description 14-option dropdown,
+    2000-char Instructions textarea, inline Appearance (`next-themes`
+    `useTheme` toggle), avatar Cloud Managed stub.
+  - `/settings/privacy` — Delete-account two-step confirmation (type
+    "DELETE" then POST `/api/user/delete-account` with CSRF), export-data
+    button wired to GET `/api/user/data`.
+  - `/settings/notifications` — Reorganized into Browser / Email Cloud
+    Managed-gated / Mobile Cloud Managed-gated channel groups.
+  - `/settings/connections` — Icon chips + `formatRelativeTime()` + disconnect
+    stub; `connectedAtMap` inert in v1 with activation comment.
+- CLI `/agents` slash command:
+  - Discovery scans 5 roots (`.agiworkforce/agents/`, `.claude/agents/`,
+    `~/.agiworkforce/`, `~/.claude/`, plugin paths).
+  - TUI picker with incremental search, arrow-key nav, Enter-to-invoke,
+    Esc-to-close. Floating overlay with cyan border + detail row showing
+    description + tool count + scope badge (project / global / claude-global).
+  - Quick-invoke `/agents <name>` (no UI) + `/agents list|show|info` text mode.
+  - `AgentDefinition::apply_to_session()` applies model override via
+    `switch_model()`, tool allow/disallow lists, max_turns, permission_mode,
+    - injects fenced `<agent_system_prompt>` message.
+  - 14 new tests (10 picker, 4 agents.rs).
+- `packages/services/README.md` — package-level README matching the
+  repo's README-ownership contract.
+
+### Verification
+
+- `pnpm check:llm-operability` — green (all 16 sub-guardrails).
+- All four touched packages (`@agiworkforce/services`,
+  `@agiworkforce/unified-chat`, `@agiworkforce/desktop`,
+  `@agiworkforce/web`) — typecheck green.
+- Web tests: 3,414 pass across 159 files.
+- CLI tests: 1,471 / 1,471 pass (`cargo test --lib`), 0 new clippy errors.
+
+### Sprint-state
+
+- Total session-local commits ahead of origin/main: 14 (R18-R20 work).
+- NOT pushed — awaiting daily 22:00-local user authorization per sprint
+  push policy.
+- Full handoff state in `docs/plans/2026-05-21-suite-transformation-handoff.md`
+  §"Round 20 — /goal-activated 3-lane sprint."
 
 ## [Unreleased — autonomous suite transformation, round 10] — 2026-05-21
 
