@@ -128,6 +128,12 @@ pub struct ProjectRecord {
     pub accent_color: Option<ProjectAccentColor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub imported_from: Option<ProjectImportSource>,
+    /// Whether the project is archived. Mirrors Postgres `is_archived`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_archived: Option<bool>,
+    /// Free-form jsonb metadata. Mirrors Postgres `metadata` column.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -166,6 +172,11 @@ pub struct ProjectKnowledgeFile {
     pub retention_expires_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Storage URI of the underlying binary in Supabase Storage. The
+    /// Postgres column is `storage_uri text NOT NULL`. Consumers should
+    /// not assume this is a public URL — most files require a signed-URL
+    /// fetch via the storage SDK.
+    pub storage_uri: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
@@ -221,6 +232,8 @@ mod tests {
             icon_emoji: None,
             accent_color: None,
             imported_from: Some(ProjectImportSource::Manual),
+            is_archived: None,
+            metadata: None,
             created_at: "2026-05-01T00:00:00Z".to_string(),
             updated_at: "2026-05-20T00:00:00Z".to_string(),
         }
@@ -351,6 +364,7 @@ mod tests {
             added_at: "2026-05-20T00:00:00Z".to_string(),
             retention_expires_at: None,
             deleted_at: None,
+            storage_uri: "supabase-storage://projects/proj_1/kf_1".to_string(),
         };
         let json = serde_json::to_string(&file).expect("serialize");
         let back: ProjectKnowledgeFile = serde_json::from_str(&json).expect("deserialize");

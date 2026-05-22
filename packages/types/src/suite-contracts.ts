@@ -528,6 +528,13 @@ export type ProjectImportSource = 'claude' | 'openai' | 'manual';
 
 export interface ProjectRecord {
   id: string;
+  /**
+   * Owner user id. Stored as `user_id` in the Postgres `user_projects`
+   * table for historical reasons (the column predates the round-10
+   * schema). The data-layer maps both names; downstream code should
+   * prefer `ownerUserId` because the SQL `user_id` is ambiguous
+   * (project_members also has `user_id` for a different purpose).
+   */
   ownerUserId: string;
   organizationId?: string | null;
   name: string;
@@ -551,6 +558,17 @@ export interface ProjectRecord {
   accentColor?: ProjectAccentColor | null;
   /** Provenance for imported projects (Claude / OpenAI / manual). */
   importedFrom?: ProjectImportSource | null;
+  /**
+   * Whether the project is archived. Mirrors Postgres `is_archived`
+   * column from the original 20260318 migration.
+   */
+  isArchived?: boolean;
+  /**
+   * Free-form jsonb metadata. Mirrors Postgres `metadata` column from
+   * the original 20260318 migration. Reserved for app-specific
+   * extensions that don't deserve a typed field yet.
+   */
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -587,6 +605,13 @@ export interface ProjectKnowledgeFile {
   /** Retention timestamp if any (mirrors generated-file retention). */
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
+  /**
+   * Storage URI of the underlying binary in Supabase Storage. The
+   * Postgres column is `storage_uri text NOT NULL`. Consumers should
+   * not assume this is a public URL — most files require a signed-URL
+   * fetch via the storage SDK.
+   */
+  storageUri: string;
 }
 
 export interface ProjectInstructions {
