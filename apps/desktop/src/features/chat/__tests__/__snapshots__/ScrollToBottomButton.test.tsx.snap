@@ -1,0 +1,22 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Scroll-to-bottom floating button parity > does not render when user is at bottom (visible=false) 1`] = `<div />`;
+
+exports[`Scroll-to-bottom floating button parity > renders the floating button when user has scrolled up (visible=true) 1`] = `
+<div>
+  <button
+    aria-label="Scroll to bottom"
+    class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-muted/90 backdrop-blur-sm border border-white/10 text-sm text-foreground hover:bg-accent/90 shadow-lg z-10"
+    type="button"
+  >
+    <span
+      aria-hidden="true"
+    >
+      ↓
+    </span>
+    <span>
+      New messages
+    </span>
+  </button>
+</div>
+`;
