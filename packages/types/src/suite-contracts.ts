@@ -1383,3 +1383,147 @@ export interface TaskBoard {
   }>;
   updatedAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// SendPreview — "what will be sent" disclosure for cloud/BYOK turns
+// ---------------------------------------------------------------------------
+//
+// Implements PLAN.md section 5 task: "Add visible 'what will be sent' previews
+// for cloud/BYOK turns." Surfaces consume `SendPreviewPresentation` (built via
+// `summarizeSendPreview`) to render a privacy-respecting disclosure of the
+// outbound request shape before the user sends a message — model destination,
+// privacy mode, attachment summary, system-prompt size, estimated context
+// tokens. Local mode renders with a privacy-positive "stays on device" banner
+// rather than the BYOK/Managed destination call-out. This is intentional —
+// AGI's local-first stance treats Local turns as transparent by default.
+
+export interface SendPreviewInput {
+  providerMode: ProviderMode;
+  modelLabel?: string | undefined;
+  modelId?: string | undefined;
+  messageBody?: string | undefined;
+  attachmentCount?: number | undefined;
+  attachmentSummaries?: ReadonlyArray<{ name: string; mimeType?: string }> | undefined;
+  systemPromptLength?: number | undefined;
+  estimatedInputTokens?: number | undefined;
+  contextWindowTokens?: number | undefined;
+  toolNames?: ReadonlyArray<string> | undefined;
+  /** Destination host for BYOK/Managed turns (e.g., "api.anthropic.com"). */
+  destinationHost?: string | undefined;
+  /** Source session label inherited into this turn, if any. */
+  sourceSessionLabel?: string | undefined;
+}
+
+export interface SendPreviewPresentation {
+  providerMode: ProviderMode;
+  privacyMode: PrivacyMode;
+  privacyShortLabel: string;
+  privacyLabel: string;
+  /** True for `providerMode === 'Local'` — drives the privacy-positive banner. */
+  staysLocal: boolean;
+  destinationLabel: string;
+  destinationHost?: string | undefined;
+  modelLabel?: string | undefined;
+  modelId?: string | undefined;
+  bodyCharLabel?: string | undefined;
+  attachmentLabel?: string | undefined;
+  systemPromptLabel?: string | undefined;
+  contextLabel?: string | undefined;
+  toolsLabel?: string | undefined;
+  sourceSessionLabel?: string | undefined;
+  /** Long-form banner copy describing where the turn goes and what carries with it. */
+  bannerCopy: string;
+}
+
+function compactNumber(value: number): string {
+  if (value < 1000) return value.toString();
+  if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
+  if (value < 1_000_000) return `${Math.round(value / 1000)}k`;
+  return `${(value / 1_000_000).toFixed(1)}M`;
+}
+
+function joinDistinct(items: ReadonlyArray<string>): string | undefined {
+  const unique: string[] = [];
+  for (const item of items) {
+    const trimmed = item.trim();
+    if (trimmed && !unique.includes(trimmed)) unique.push(trimmed);
+  }
+  if (unique.length === 0) return undefined;
+  return unique.join(', ');
+}
+
+export function summarizeSendPreview(input: SendPreviewInput): SendPreviewPresentation {
+  const providerMode = input.providerMode;
+  const privacyMode = providerModeToPrivacyMode(providerMode);
+  const privacyDisplay = getPrivacyModeDisplay(privacyMode);
+  const providerDisplay = getProviderModeDisplay(providerMode);
+  const staysLocal = providerMode === 'Local';
+
+  let destinationLabel: string;
+  if (staysLocal) {
+    destinationLabel = 'Stays on this device';
+  } else if (input.destinationHost) {
+    destinationLabel = `Sent to ${input.destinationHost}`;
+  } else if (providerMode === 'DirectByok') {
+    destinationLabel = 'Sent to your BYOK provider';
+  } else {
+    destinationLabel = 'Sent through AGI Managed gateway';
+  }
+
+  const bodyChars = input.messageBody?.length ?? 0;
+  const bodyCharLabel = bodyChars > 0 ? `${compactNumber(bodyChars)} chars` : undefined;
+
+  const attachmentCount = input.attachmentCount ?? input.attachmentSummaries?.length ?? 0;
+  let attachmentLabel: string | undefined;
+  if (attachmentCount > 0) {
+    const types =
+      input.attachmentSummaries && input.attachmentSummaries.length > 0
+        ? joinDistinct(
+            input.attachmentSummaries.map((s) => (s.mimeType ?? '').split('/').pop() || 'file'),
+          )
+        : undefined;
+    attachmentLabel = types
+      ? `${attachmentCount} ${attachmentCount === 1 ? 'attachment' : 'attachments'} (${types})`
+      : `${attachmentCount} ${attachmentCount === 1 ? 'attachment' : 'attachments'}`;
+  }
+
+  const systemPromptLabel =
+    input.systemPromptLength && input.systemPromptLength > 0
+      ? `${compactNumber(input.systemPromptLength)} char system prompt`
+      : undefined;
+
+  let contextLabel: string | undefined;
+  if (input.estimatedInputTokens && input.estimatedInputTokens > 0) {
+    contextLabel = input.contextWindowTokens
+      ? `≈ ${compactNumber(input.estimatedInputTokens)} / ${compactNumber(input.contextWindowTokens)} tokens`
+      : `≈ ${compactNumber(input.estimatedInputTokens)} tokens`;
+  }
+
+  const toolsLabel =
+    input.toolNames && input.toolNames.length > 0 ? joinDistinct(input.toolNames) : undefined;
+
+  const bannerCopy = staysLocal
+    ? 'Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.'
+    : providerMode === 'DirectByok'
+      ? `BYOK turn. The request, attachments, and system prompt go directly to ${input.destinationHost ?? 'your configured provider'} via your API key. AGI does not receive a copy of the payload.`
+      : `Managed turn. The request, attachments, and system prompt go through ${input.destinationHost ?? 'an AGI-managed gateway'} subject to the managed-mode retention and access controls.`;
+
+  return {
+    providerMode,
+    privacyMode,
+    privacyShortLabel: privacyDisplay.shortLabel,
+    privacyLabel: privacyDisplay.label,
+    staysLocal,
+    destinationLabel,
+    destinationHost: input.destinationHost,
+    modelLabel: input.modelLabel ?? providerDisplay.label,
+    modelId: input.modelId,
+    bodyCharLabel,
+    attachmentLabel,
+    systemPromptLabel,
+    contextLabel,
+    toolsLabel,
+    sourceSessionLabel: input.sourceSessionLabel,
+    bannerCopy,
+  };
+}

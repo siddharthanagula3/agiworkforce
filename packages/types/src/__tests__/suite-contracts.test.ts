@@ -23,6 +23,7 @@ import {
   providerSurfaceToProviderMode,
   PROVIDER_MODES,
   summarizeGeneratedFileBundle,
+  summarizeSendPreview,
   SYNCED_APP_SURFACES,
   validateGeneratedFileTrustBoundary,
   type ArtifactManifest,
@@ -813,5 +814,122 @@ describe('suite contracts — records', () => {
     };
 
     expect(payload.action).toBe('agent.command');
+  });
+});
+
+describe('summarizeSendPreview', () => {
+  it('produces a privacy-positive banner for Local turns', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'Local',
+      modelLabel: 'Llama 3.2 8B',
+      messageBody: 'hello',
+    });
+    expect(out.staysLocal).toBe(true);
+    expect(out.privacyMode).toBe('local');
+    expect(out.privacyShortLabel).toBe('Local');
+    expect(out.destinationLabel).toBe('Stays on this device');
+    expect(out.bannerCopy).toMatch(/nothing is uploaded/i);
+    expect(out.modelLabel).toBe('Llama 3.2 8B');
+  });
+
+  it('names the BYOK destination host when supplied', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'DirectByok',
+      destinationHost: 'api.anthropic.com',
+      modelLabel: 'Claude Sonnet 4.6',
+      messageBody: 'hi',
+    });
+    expect(out.staysLocal).toBe(false);
+    expect(out.privacyMode).toBe('byok');
+    expect(out.destinationLabel).toBe('Sent to api.anthropic.com');
+    expect(out.bannerCopy).toMatch(/api.anthropic.com/);
+    expect(out.bannerCopy).toMatch(/your API key/);
+  });
+
+  it('falls back to a generic BYOK label when destinationHost is omitted', () => {
+    const out = summarizeSendPreview({ providerMode: 'DirectByok' });
+    expect(out.destinationLabel).toBe('Sent to your BYOK provider');
+    expect(out.bannerCopy).toMatch(/your configured provider/);
+  });
+
+  it('names the Managed gateway destination for ManagedGateway / ManagedNative', () => {
+    const gateway = summarizeSendPreview({
+      providerMode: 'ManagedGateway',
+      destinationHost: 'gateway.agi.example',
+    });
+    expect(gateway.privacyMode).toBe('managed');
+    expect(gateway.destinationLabel).toBe('Sent to gateway.agi.example');
+
+    const native = summarizeSendPreview({ providerMode: 'ManagedNative' });
+    expect(native.destinationLabel).toBe('Sent through AGI Managed gateway');
+    expect(native.bannerCopy).toMatch(/managed-mode retention/);
+  });
+
+  it('summarizes message body chars with a compact label', () => {
+    const small = summarizeSendPreview({
+      providerMode: 'Local',
+      messageBody: 'a'.repeat(123),
+    });
+    expect(small.bodyCharLabel).toBe('123 chars');
+
+    const k = summarizeSendPreview({
+      providerMode: 'Local',
+      messageBody: 'a'.repeat(8500),
+    });
+    expect(k.bodyCharLabel).toBe('8.5k chars');
+  });
+
+  it('summarizes attachments with mime-type deduplication', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'DirectByok',
+      destinationHost: 'api.openai.com',
+      attachmentSummaries: [
+        { name: 'a.png', mimeType: 'image/png' },
+        { name: 'b.jpg', mimeType: 'image/jpeg' },
+        { name: 'c.pdf', mimeType: 'application/pdf' },
+      ],
+    });
+    expect(out.attachmentLabel).toBe('3 attachments (png, jpeg, pdf)');
+  });
+
+  it('falls back to plain count when no mime types are provided', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'DirectByok',
+      attachmentCount: 1,
+    });
+    expect(out.attachmentLabel).toBe('1 attachment');
+  });
+
+  it('includes system-prompt and context-budget labels when sized', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'ManagedGateway',
+      destinationHost: 'gateway.agi.example',
+      systemPromptLength: 1700,
+      estimatedInputTokens: 1200,
+      contextWindowTokens: 200_000,
+    });
+    expect(out.systemPromptLabel).toBe('1.7k char system prompt');
+    expect(out.contextLabel).toBe('≈ 1.2k / 200k tokens');
+  });
+
+  it('omits the context window slash form when the window size is unknown', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'Local',
+      estimatedInputTokens: 80,
+    });
+    expect(out.contextLabel).toBe('≈ 80 tokens');
+  });
+
+  it('joins distinct tool names', () => {
+    const out = summarizeSendPreview({
+      providerMode: 'DirectByok',
+      toolNames: ['web_search', 'code_interpreter', 'web_search'],
+    });
+    expect(out.toolsLabel).toBe('web_search, code_interpreter');
+  });
+
+  it('keeps the modelLabel falling back to the provider-mode label when omitted', () => {
+    const out = summarizeSendPreview({ providerMode: 'DirectByok' });
+    expect(out.modelLabel).toBe('BYOK');
   });
 });

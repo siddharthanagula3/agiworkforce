@@ -96,6 +96,8 @@ export { DownloadCard } from './components/DownloadCard';
 export type { DownloadCardProps } from './components/DownloadCard';
 export { GeneratedFileCard } from './components/GeneratedFileCard';
 export type { GeneratedFileCardProps } from './components/GeneratedFileCard';
+export { SendPreview } from './components/SendPreview';
+export type { SendPreviewProps } from './components/SendPreview';
 export { ImageGenCard } from './components/ImageGenCard';
 export type { ImageGenCardProps } from './components/ImageGenCard';
 export { VideoGenCard } from './components/VideoGenCard';
