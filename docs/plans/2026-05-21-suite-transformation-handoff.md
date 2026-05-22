@@ -2,9 +2,41 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through rounds 11-13: visual-verification discharge, host adoptions, supabase migrations, useIsMounted extraction, and ultrathink-mode architecture audit)
+Last updated: 2026-05-22 (extended through round 14: defined-but-unused defensive utilities + local-constant drift cleanup, four more checkpoints)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `724b6b8a3` (round-13 boundary at session end)
+Head pushed: `2cc3ea623` (round-14 boundary at session end)
+
+## Round 14 additions (continued ultrathink pattern, 2026-05-22)
+
+Continued the defined-but-unused / local-constant-drift pattern after resume. Four more checkpoints, each a real bug-class fix.
+
+- `feat(web): map projects api through round-10 schema with safe defaults` (`18cd2e120`)
+  - `/api/projects` and `/api/projects/[id]` were selecting only legacy columns (`id, name, description, instructions, color, is_archived, metadata, created_at, updated_at`) and silently dropping the round-10 fields the migration adds.
+  - Extracted `apps/web/lib/projects.ts` with a tolerant `mapProjectRow` mapper that defaults `defaultPrivacyMode='local'`, `defaultProviderMode='Local'`, `allowedSurfaces=['web','desktop','mobile']` when columns are absent (pre-migration), and passes round-10 fields through once the migration applies.
+  - 5 vitest tests cover pre-migration row defaults, post-migration full row, invalid-enum fallbacks, empty-surface fallback, metadata coercion. All endpoints now use `select('*')` + mapper.
+
+- `fix(desktop): replace silent catches in offline queue with console.warn` (`68c9304b3`)
+  - Desktop port of `offlineQueue` had stripped the logger calls when copied from web — `loadQueue`, `saveQueue`, `clearQueuedMessage`, `clearQueuedToolExecution`, `clearAllQueued`, `getLastSyncTime` all swallowed errors silently. Losing queued offline data with zero observability.
+  - Restored visibility via `console.warn` at each silent-catch site. The full extract of `@agiworkforce/runtime/offline-queue` (sharing the implementation between web + desktop) remains a follow-up.
+
+- `fix(web): derive anthropic model aliases from canonical catalog` (`a62ad9335`)
+  - `AnthropicProvider.getModelAliases()` hardcoded 5 model ids and used `normalizeModelId(alias) ?? alias` — the `?? alias` fallback silently fabricated a phantom alias for `claude-opus-4-5`, a model that doesn't exist in `models.json` at all.
+  - Now filters the canonical `modelIdAliases` map by `getModelIdsForProvider('anthropic', { includeDeprecated: true })`, so new models, canonicalization redirects, and api-model-id mirrors all flow through automatically and bogus ids are excluded.
+  - Test updated to remove the bogus expectation; existing real-alias assertions still pass.
+
+- `fix(web): dedupe max_message_length in chat validation schema` (`2cc3ea623`)
+  - `CreateMessageSchema.content.max()` inlined `100000` alongside its own error string, while canonical `MAX_MESSAGE_LENGTH` already lived in `apps/web/lib/validations/llm.ts` (extracted in Round 13). Now reads from the same constant.
+
+### Round 14 — meta-lesson
+
+The same ultrathink pattern (defined-but-unused defensive utilities + local-constant duplication) keeps producing high-leverage finds. Each turn the grep vector shifts: provider alias maps, validation schemas, db row mappers. The yield drops once the obvious categories are exhausted, but the audit-pass cost is low.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + `20260521130000` + `20260521140000` + `20260521150000`) once production Supabase is authorized.
+2. Extract `@agiworkforce/runtime/offline-queue` so web + desktop share the implementation instead of the copy-paste.
+3. Sweep `assertGeneratedFileTrustBoundary` into real call sites — currently the throw variant has tests but zero production wiring (and no canonical `{ComputeSession, GeneratedFile, ArtifactManifest}` composition site exists yet to wire it into).
+4. Mobile PNG capture infrastructure for visual verification parity (RN tree snapshots are the only signal today).
 
 ## Round 13 additions (ultrathink-mode architecture audit, 2026-05-22)
 
