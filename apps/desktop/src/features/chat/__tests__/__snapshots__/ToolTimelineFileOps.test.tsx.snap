@@ -1,0 +1,213 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ToolTimeline — file-op structured rows > matches snapshot for a completed Edit entry 1`] = `
+<div
+  class="border border-border/30 rounded-lg overflow-hidden"
+>
+  <button
+    aria-expanded="true"
+    class="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+    type="button"
+  >
+    <div
+      animate="[object Object]"
+      transition="[object Object]"
+    >
+      <svg
+        aria-hidden="true"
+        class="lucide lucide-chevron-down w-3 h-3"
+        fill="none"
+        height="24"
+        stroke="currentColor"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        stroke-width="2"
+        viewBox="0 0 24 24"
+        width="24"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path
+          d="m6 9 6 6 6-6"
+        />
+      </svg>
+    </div>
+    <svg
+      aria-hidden="true"
+      class="lucide lucide-circle-check w-3 h-3"
+      fill="none"
+      height="24"
+      stroke="currentColor"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      stroke-width="2"
+      viewBox="0 0 24 24"
+      width="24"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <circle
+        cx="12"
+        cy="12"
+        r="10"
+      />
+      <path
+        d="m9 12 2 2 4-4"
+      />
+    </svg>
+    <span>
+      Changed a file
+      <span
+        class="text-muted-foreground/60 ml-1"
+      >
+        (
+        120ms
+        )
+      </span>
+    </span>
+  </button>
+  <div
+    animate="[object Object]"
+    class="overflow-hidden"
+    exit="[object Object]"
+    initial="[object Object]"
+    transition="[object Object]"
+  >
+    <div
+      class="border-t border-border/20 px-3 pb-1 pt-2"
+    >
+      <div
+        class="relative flex gap-3"
+      >
+        <div
+          class="relative z-10 mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border bg-background border-border text-muted-foreground"
+        >
+          <svg
+            aria-hidden="true"
+            class="lucide lucide-file-plus h-3 w-3"
+            fill="none"
+            height="24"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            width="24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+            />
+            <path
+              d="M14 2v5a1 1 0 0 0 1 1h5"
+            />
+            <path
+              d="M9 15h6"
+            />
+            <path
+              d="M12 18v-6"
+            />
+          </svg>
+        </div>
+        <div
+          class="min-w-0 flex-1 pb-3"
+        >
+          <div
+            class="flex flex-wrap items-center gap-1.5"
+          >
+            <span
+              class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-muted/60 text-muted-foreground font-mono"
+            >
+              RS
+            </span>
+            <button
+              class="inline-flex items-center gap-1 font-mono text-[11px] text-foreground/80 truncate max-w-[260px] hover:text-foreground cursor-pointer"
+              title="src/main.rs"
+              type="button"
+            >
+              main.rs
+              <span
+                animate="[object Object]"
+                class="inline-flex shrink-0"
+                transition="[object Object]"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-chevron-down h-2.5 w-2.5 text-muted-foreground"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="m6 9 6 6 6-6"
+                  />
+                </svg>
+              </span>
+            </button>
+            <span
+              class="flex items-center gap-1 shrink-0"
+            >
+              <span
+                class="inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-emerald-400"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-plus h-2.5 w-2.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                  <path
+                    d="M12 5v14"
+                  />
+                </svg>
+                2
+              </span>
+              <span
+                class="inline-flex items-center gap-0.5 text-[10px] font-mono font-medium text-red-400"
+              >
+                <svg
+                  aria-hidden="true"
+                  class="lucide lucide-minus h-2.5 w-2.5"
+                  fill="none"
+                  height="24"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  viewBox="0 0 24 24"
+                  width="24"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 12h14"
+                  />
+                </svg>
+                1
+              </span>
+            </span>
+            <span
+              class="font-mono text-[10px] text-muted-foreground/60 ml-auto"
+            >
+              120ms
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+`;

@@ -32,6 +32,7 @@ interface MessageState {
   renameConversation: (id: string, title: string) => Promise<void>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
+  markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   enqueueOfflineMessage: (
     conversationId: string,
@@ -227,6 +228,14 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) =>
             c.id === id ? { ...c, temporary: false } : c,
+          ),
+        }));
+      },
+
+      markConversationRead: (id) => {
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === id ? { ...c, unread: false } : c,
           ),
         }));
       },

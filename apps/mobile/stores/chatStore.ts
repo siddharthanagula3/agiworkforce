@@ -57,6 +57,7 @@ export interface CombinedChatState {
   renameConversation: (id: string, title: string) => Promise<void>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
+  markConversationRead: (id: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
   enqueueOfflineMessage: (
     conversationId: string,
@@ -104,6 +105,7 @@ function buildCombinedState(
     renameConversation: msg.renameConversation,
     pinConversation: msg.pinConversation,
     makeConversationPermanent: msg.makeConversationPermanent,
+    markConversationRead: msg.markConversationRead,
     deleteMessage: msg.deleteMessage,
     enqueueOfflineMessage: msg.enqueueOfflineMessage,
     resolveOfflineMessage: msg.resolveOfflineMessage,
