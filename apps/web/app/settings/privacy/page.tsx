@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 /**
  * /settings/privacy — local-first privacy controls. Round-2 audit P0 #7 (web
- * settings depth). All toggles persist in localStorage in v1; Cloud Managed
- * replaces persistence with a Supabase row but the contract here stays the
- * same so the wire-up is a delta.
+ * settings depth). Toggles persist in localStorage in v1; Cloud Managed
+ * replaces persistence with a Supabase row. Round-20 adds delete account and
+ * data export with confirmation flow.
  */
 
 const PRIVACY_KEYS = {
@@ -75,12 +76,68 @@ export default function PrivacySettingsPage() {
     ),
   );
 
+  // Export state
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  // Delete account state
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteInput, setDeleteInput] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
+
   function toggle(key: ToggleKey) {
     setState((prev) => {
       const next = { ...prev, [key]: !prev[key] };
       writeToggle(key, next[key]);
       return next;
     });
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch('/api/user/data', { method: 'GET' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `agi-export-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleDeleteAccount() {
+    if (deleteInput !== 'DELETE') return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const csrfToken = await getCsrfToken();
+      const res = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error((body as { error?: string }).error ?? 'Deletion failed');
+      }
+      setDeleteSuccess(true);
+      setShowDeleteConfirm(false);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
@@ -98,10 +155,11 @@ export default function PrivacySettingsPage() {
           Privacy & data controls
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          AGI Workforce is local-first. These toggles override defaults for this device.
+          AGI is local-first. These toggles override defaults for this device.
         </p>
       </div>
 
+      {/* Toggles */}
       <section
         style={{
           border: '1px solid var(--border)',
@@ -156,6 +214,7 @@ export default function PrivacySettingsPage() {
         ))}
       </section>
 
+      {/* Export data */}
       <section
         style={{
           border: '1px solid var(--border)',
@@ -164,33 +223,177 @@ export default function PrivacySettingsPage() {
           padding: '18px 20px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 6,
+          gap: 8,
         }}
       >
         <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>
           Export your data
         </h2>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
-          Download all your conversations as JSON. Available locally; Cloud Managed adds server-side
-          archive export.
+          Download all your conversations as JSON. Cloud Managed adds server-side archive export.
         </p>
-        <button
-          type="button"
-          disabled
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            style={{
+              padding: '6px 14px',
+              fontSize: 12,
+              fontWeight: 600,
+              color: exporting ? 'var(--text-3)' : 'var(--text-1)',
+              background: 'transparent',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-md)',
+              cursor: exporting ? 'not-allowed' : 'pointer',
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            {exporting ? 'Preparing...' : 'Export all data'}
+          </button>
+          {exportError && (
+            <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{exportError}</span>
+          )}
+        </div>
+      </section>
+
+      {/* Delete account */}
+      <section
+        style={{
+          border: '1px solid rgba(218,119,86,0.35)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
           style={{
-            alignSelf: 'flex-start',
-            marginTop: 6,
-            padding: '6px 12px',
-            fontSize: 12,
-            color: 'var(--text-3)',
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-md)',
-            cursor: 'not-allowed',
+            padding: '14px 20px',
+            borderBottom: '1px solid rgba(218,119,86,0.25)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--terracotta, #da7756)',
           }}
         >
-          Export (coming soon)
-        </button>
+          Danger zone
+        </div>
+        <div
+          style={{
+            padding: '16px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}
+        >
+          {deleteSuccess ? (
+            <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
+              Account deletion scheduled. You will receive a confirmation email with a 24-hour
+              cancellation window.
+            </p>
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+                Permanently delete your account and all associated data. This cannot be undone.
+              </p>
+              {!showDeleteConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  style={{
+                    alignSelf: 'flex-start',
+                    padding: '7px 14px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: 'var(--terracotta, #da7756)',
+                    background: 'transparent',
+                    border: '1px solid rgba(218,119,86,0.5)',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Delete account
+                </button>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
+                    padding: '14px 16px',
+                    background: 'rgba(218,119,86,0.06)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid rgba(218,119,86,0.2)',
+                  }}
+                >
+                  <p style={{ fontSize: 12, color: 'var(--text-2)', margin: 0 }}>
+                    This will permanently delete all conversations, settings, and billing history.
+                    Type <strong>DELETE</strong> to confirm.
+                  </p>
+                  <input
+                    type="text"
+                    value={deleteInput}
+                    onChange={(e) => setDeleteInput(e.target.value)}
+                    placeholder="Type DELETE to confirm"
+                    style={{
+                      fontSize: 13,
+                      padding: '7px 10px',
+                      background: 'var(--bg-base)',
+                      color: 'var(--text-1)',
+                      border: '1px solid rgba(218,119,86,0.4)',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={handleDeleteAccount}
+                      disabled={deleteInput !== 'DELETE' || deleting}
+                      style={{
+                        padding: '7px 14px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: '#fff',
+                        background:
+                          deleteInput !== 'DELETE' || deleting
+                            ? 'rgba(218,119,86,0.4)'
+                            : 'var(--terracotta, #da7756)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-md)',
+                        cursor: deleteInput !== 'DELETE' || deleting ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      {deleting ? 'Deleting...' : 'Confirm deletion'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteConfirm(false);
+                        setDeleteInput('');
+                        setDeleteError(null);
+                      }}
+                      style={{
+                        padding: '7px 14px',
+                        fontSize: 12,
+                        color: 'var(--text-2)',
+                        background: 'transparent',
+                        border: '1px solid var(--border)',
+                        borderRadius: 'var(--radius-md)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                  {deleteError && (
+                    <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>
+                      {deleteError}
+                    </span>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </section>
     </div>
   );
