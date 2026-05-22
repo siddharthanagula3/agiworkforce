@@ -7,6 +7,7 @@ import { secureToken } from '@/lib/secure-random';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
+import { recordModelUsage } from '@/lib/cost-tracker';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { reconcileUsage } from '@/lib/assert-quota';
 import type { ProcessedRequest } from './request-processor';
@@ -113,6 +114,18 @@ export async function buildNonStreamResponse(
     }
   } catch (analyticsError) {
     logger.warn({ error: analyticsError, userId, requestId }, 'Cache analytics logging failed');
+  }
+
+  // Fire-and-forget cost tracking (must not block response).
+  try {
+    recordModelUsage(userId, llmResponse.model, {
+      inputTokens: llmResponse.promptTokens,
+      outputTokens: llmResponse.completionTokens,
+      cacheReadInputTokens: llmResponse.cachedInputTokens,
+      cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
+    });
+  } catch (trackingError) {
+    logger.warn({ error: trackingError, userId, requestId }, 'Cost tracking failed');
   }
 
   // Tier-quota counter update (fire-and-forget)
