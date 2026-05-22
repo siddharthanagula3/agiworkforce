@@ -29,7 +29,14 @@ These need follow-up but were surfaced BY the visual-verification slice, which p
 - [x] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility. Fixed in `651b4e016`.
 - [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font. **Deferred** — requires a security-policy decision (allow `cdn.jsdelivr.net` in CSP font-src OR self-host the font binary). Not autonomous-loop scope.
 
-Remaining visual-verification surfaces (Desktop / VS Code / Chrome) still need their own capture infrastructure. Mobile gained structural verification via `bd0f487bf` + `9528e57ec`.
+All six surfaces now have visual-verification coverage:
+
+- Web: PNG capture + DOM snapshots (`5a70bd734`, `651b4e016`)
+- Desktop: PNG capture via cloud-web bundle (`b7c0f56ff`)
+- Mobile: RN tree snapshots (`bd0f487bf` + `9528e57ec`)
+- VS Code: webview HTML snapshots (`46fb492cf`)
+- Chrome: static HTML snapshots (`46fb492cf`)
+- CLI: no UI (covered by Rust unit tests)
 
 ### Backend round-10 — landed `bf499e57d`
 

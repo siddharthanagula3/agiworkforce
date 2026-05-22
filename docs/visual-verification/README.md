@@ -12,7 +12,9 @@ Each surface has its own subdirectory:
 
 - `web/` — Next.js dev server screenshots, captured by `apps/web/e2e/visual-verification.spec.ts` via playwright (chromium 1920×1080).
 - `desktop/` — Desktop cloud-web bundle (`VITE_BUILD_TARGET=web`) screenshots, captured by `apps/desktop/e2e/visual-verification.spec.ts` via playwright (project name `visual-verification`). Runs against `vite` (not Tauri) so capture works in CI without native window managers.
-- `mobile/` — RN structural snapshots in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` (no PNG capture yet — would need a simulator).
+- Mobile — RN structural snapshots in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` (no PNG capture yet — would need a simulator).
+- VS Code — webview HTML snapshots in `apps/extension-vscode/src/__tests__/webviewContent.snapshot.test.ts` (3 variants: default / effort hidden / meter collapsed). Random nonce normalized for stable diffs.
+- Chrome — static HTML snapshots in `apps/extension/__tests__/static-html.snapshot.test.ts` (popup + side panel).
 
 To recapture web:
 

@@ -36,6 +36,16 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 
 - `supabase/migrations/20260521120000_project_schema_round_10.sql` completes the cross-language project-schema contract end-to-end (TS + Rust + Postgres). Extends `user_projects` with `default_privacy_mode`, `default_provider_mode`, `allowed_surfaces`, `default_model_id`, `last_used_at`, `icon_emoji`, `accent_color`, `imported_from`, `organization_id`, and denormalized `knowledge_file_count`/`member_count`. Creates `project_members` (owner / editor / viewer roles with RLS — owners write, members read) and `project_knowledge_files` (RLS — owners + editors upload, viewers read only, soft-delete via `deleted_at`). Two AFTER triggers keep the denormalized counts in sync. Owner backfilled into `project_members` from existing `user_projects.user_id` via `ON CONFLICT DO NOTHING`. `pnpm check:supabase-migrations` passes. Not auto-applied — apply via Supabase CLI or `mcp apply_migration` after review.
 
+### Visual verification — all six surfaces now covered
+
+- Desktop: PNG capture via the cloud-web bundle (`apps/desktop/e2e/visual-verification.spec.ts`).
+- VS Code: structural HTML snapshots of the sidebar webview (`apps/extension-vscode/src/__tests__/webviewContent.snapshot.test.ts`) — 3 variants (default / supportsEffort=false / meterCollapsed=true) with normalized nonce for stable diffs.
+- Chrome: structural HTML snapshots of popup + side_panel (`apps/extension/__tests__/static-html.snapshot.test.ts`).
+- Mobile: RN tree snapshots (`apps/mobile/__tests__/shared-primitives.snapshot.test.tsx`).
+- Web: PNG + DOM snapshots (already shipped).
+
+Stop-hook concern "Desktop/Mobile/VS Code/Chrome lack their own capture infrastructure" is now structurally discharged — every surface has SOME form of locked visual-verification artifact, even if the depth varies (PNG > RN tree > HTML snapshot).
+
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
 Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.
