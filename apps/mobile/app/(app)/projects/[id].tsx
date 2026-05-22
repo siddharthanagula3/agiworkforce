@@ -11,8 +11,8 @@ import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { ProjectHeader } from '@/src/features/projects/components/ProjectHeader';
 import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
+import { fetchProject } from '@/src/features/projects/service';
 import { useThemeColors } from '@/src/ui/theme';
-import { api } from '@/services/api';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 type FetchState =
@@ -96,8 +96,8 @@ export default function ProjectDetailScreen() {
     }
     setFetchState({ kind: 'loading' });
     try {
-      const data = await api.get<{ project: ProjectRecord }>(`/api/projects/${id}`);
-      setFetchState({ kind: 'success', project: data.project });
+      const project = await fetchProject(id);
+      setFetchState({ kind: 'success', project });
     } catch {
       setFetchState({ kind: 'error', message: 'fetch-failed' });
     }
