@@ -46,6 +46,10 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 
 Stop-hook concern "Desktop/Mobile/VS Code/Chrome lack their own capture infrastructure" is now structurally discharged — every surface has SOME form of locked visual-verification artifact, even if the depth varies (PNG > RN tree > HTML snapshot).
 
+### Fixed (visual-verification follow-ups)
+
+- `/home` CSP violation resolved (`1cab133f1`). The OpenDyslexic font @font-face rules in `apps/web/app/globals.css` referenced `cdn.jsdelivr.net`, which the production CSP blocks. The font therefore never actually loaded and the "Dyslexic Friendly" setting fell silently back to `system-ui`. Removed the broken rules; inline comment documents the self-host follow-up. consoleErrors on `/` dropped from 5 → 3 (remaining 3 are dev-mode-only React/Next noise).
+
 ### UX parity — TODO #44 closed
 
 - `@agiworkforce/unified-chat` `ProjectGallery` inline create form now exposes an emoji picker (12-emoji palette, 📁 default) + 4 quick-start preset chips (Coding 💻 / Writing 📝 / Research 🔬 / Learning 📚) + explicit Cancel + Create project buttons. Mirrors the ChatGPT create-project modal pattern documented in the round-10 pixel-parity comparison without copying labels. Round-10 `iconEmoji` + `accentColor` schema fields are now threaded through `handleCreate` to both the host-`onCreate` and default-local-create paths. 7 vitest tests pin the new UX contract.

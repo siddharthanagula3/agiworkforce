@@ -27,7 +27,7 @@ Closes the PLAN.md section 5 task "Define project schema." Types-first cross-sur
 These need follow-up but were surfaced BY the visual-verification slice, which proves the workflow works:
 
 - [x] /projects: dark-mode text nearly invisible (`var(--text-1)` heading + `var(--text-3)` description against black background). High severity — accessibility. Fixed in `651b4e016`.
-- [ ] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Medium severity — accessibility regression for users who need the dyslexia-friendly font. **Deferred** — requires a security-policy decision (allow `cdn.jsdelivr.net` in CSP font-src OR self-host the font binary). Not autonomous-loop scope.
+- [x] / home: CSP violations blocking inline scripts and open-dyslexic CDN font. Resolved in `1cab133f1` by removing the broken @font-face rules (the font never actually loaded — CSP blocked it). Self-hosting the OFL-licensed binary under `apps/web/public/fonts/` remains a follow-up for whoever prioritizes the dyslexia-friendly feature; the inline comment in `globals.css` documents the path.
 
 All six surfaces now have visual-verification coverage:
 
