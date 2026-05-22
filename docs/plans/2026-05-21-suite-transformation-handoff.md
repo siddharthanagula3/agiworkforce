@@ -2,9 +2,27 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 15: offline-sync extract closes the queue-orchestration unification + model-router catalog derivation)
+Last updated: 2026-05-22 (extended through round 15.1: canonical surface-array consolidation; diminishing-returns territory reached)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `87686898e` (round-15 boundary at session end)
+Head pushed: `7418575d6` (round-15.1 boundary at session end)
+
+## Round 15.1 — canonical surface-array consolidation (2026-05-22)
+
+- `fix(web,desktop): replace inline surface arrays with canonical synced_app_surfaces` (`7418575d6`)
+  - Four call sites inlined `['web', 'desktop', 'mobile']` as the default allowed-surfaces value. All now spread from `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` (the canonical /goal sync-rule sources of truth). `apps/web/lib/projects.ts` also pulls `PRIVACY_MODES` + `PROVIDER_MODES` from canonical instead of redeclaring locally.
+
+### Diminishing-returns observation (round 15.1)
+
+After 25+ commits and ~5.5 hours of autonomous canonical-derivation / dedup work, the patch yield per audit-pass is dropping. Remaining work to actual Claude/OpenAI-class production parity is **product work, not cleanup**:
+
+- Apply the round-10 supabase migration (needs user authorization)
+- Real connected backend wiring: `/api/projects/[id]` mutations end-to-end, cloud-managed billing UI ↔ Stripe webhooks (waitlist-gated), artifact-publish service for the trust-boundary guard
+- Per-surface feature parity gaps: mobile voice + vision composer, computer-use production polish, mobile artifact live-edit, full Slash-Command + Skills marketplace, project knowledge-file ingestion + retrieval, real-time multi-tab conversation sync
+- Native distribution: signed installers (macOS/Windows/Linux), App Store + Play Store, web-extension store reviews
+- Evals + safety: red-team suite, prompt-injection guards in computer-use, A/B harness, content moderation, first-run flow polish, i18n
+- Verified screenshots + perf across all six surfaces
+
+Calendar estimate (single focused engineer): 3-6 months. Autonomous loop in current mode: 6-12 months of incremental cleanup. The product-work bucket needs user-product decisions and external accounts (Stripe, App Store, prod Supabase auth) that this loop can't autonomously execute.
 
 ## Round 15 additions (offline-sync extract + model-router fallback fix, 2026-05-22)
 
