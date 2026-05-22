@@ -31,6 +31,7 @@ import {
   SYNCED_APP_SURFACES,
   summarizeProjectHeader,
   type ProjectRecord,
+  type ProjectAccentColor,
 } from '@agiworkforce/types';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -63,18 +64,27 @@ import { cn } from '../../lib/utils';
  * store doesn't track project members yet, so memberCount is omitted —
  * the shared meta row hides the missing field automatically.
  */
+const ACCENT_COLOR_CLASS: Record<ProjectAccentColor, string> = {
+  emerald: 'bg-emerald-500',
+  sky: 'bg-sky-500',
+  amber: 'bg-amber-500',
+  rose: 'bg-rose-500',
+  violet: 'bg-violet-500',
+  zinc: 'bg-zinc-500',
+};
+
 function mapDesktopProjectToHeaderRecord(project: Project): ProjectRecord {
   return {
     id: project.id,
     ownerUserId: 'local-user',
     name: project.name,
     description: project.description || null,
-    defaultPrivacyMode: 'local',
+    defaultPrivacyMode: project.defaultPrivacyMode ?? 'local',
     defaultProviderMode: 'Local',
     allowedSurfaces: [...SYNCED_APP_SURFACES],
     instructions: project.customInstructions || null,
-    iconEmoji: project.icon ?? null,
-    accentColor: null,
+    iconEmoji: project.iconEmoji ?? null,
+    accentColor: project.accentColor ?? null,
     knowledgeFileCount: project.knowledgeBaseFiles?.length ?? null,
     memberCount: null,
     lastUsedAt: project.updatedAt,
@@ -417,15 +427,27 @@ function ProjectListItem({
       <div className="flex items-start gap-3">
         {/* Project Icon */}
         <div
-          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+          className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 text-lg"
           style={{ backgroundColor: project.color || 'var(--color-teal-500)' }}
         >
-          <Layers className="w-5 h-5 text-white" />
+          {project.iconEmoji ? (
+            <span>{project.iconEmoji}</span>
+          ) : (
+            <Layers className="w-5 h-5 text-white" />
+          )}
         </div>
 
         {/* Project Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
+            {project.accentColor && (
+              <span
+                className={cn(
+                  'w-2 h-2 rounded-full shrink-0',
+                  ACCENT_COLOR_CLASS[project.accentColor],
+                )}
+              />
+            )}
             <h3 className="text-sm font-medium text-foreground truncate">{project.name}</h3>
             {project.isArchived && (
               <Badge variant="secondary" className="bg-accent text-muted-foreground text-xs">
