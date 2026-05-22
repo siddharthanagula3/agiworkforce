@@ -33,6 +33,12 @@ export interface LLMProviderRequest {
   tool_choice?: unknown;
   thinking_mode?: boolean;
   usePromptCache?: boolean;
+  /** Cache retention hint for providers that support explicit TTL markers.
+   *  'short' = 5-minute ephemeral (Anthropic default), 'long' = 1-hour,
+   *  'none' = suppress cache_control entirely.
+   *  Undefined means use the provider's default logic (for Anthropic: 'short'
+   *  when usePromptCache is true). */
+  cacheRetention?: 'none' | 'short' | 'long';
   thinking?: {
     type: string;
     budget_tokens?: number;
