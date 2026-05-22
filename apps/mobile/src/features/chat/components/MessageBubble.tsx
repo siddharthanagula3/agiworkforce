@@ -510,6 +510,7 @@ export const MessageBubble = memo(function MessageBubble({
         artifact={expandedArtifact}
         visible={expandedArtifact !== null}
         onClose={handleCloseArtifact}
+        onRegenerate={onRetryMessage ? () => onRetryMessage(message.id) : undefined}
       />
 
       {/* Full-screen image viewer */}
