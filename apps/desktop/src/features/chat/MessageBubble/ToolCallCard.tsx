@@ -6,6 +6,8 @@
  *
  * Approval/IPC logic (approve, deny, cancel) is kept intact inside the expanded
  * body ReactNode so it renders inside the collapsible section.
+ *
+ * Canonical ToolCallCard for desktop chat surface; consolidated from 3 implementations in R25 V7.
  */
 
 import React, { memo, useCallback, useMemo } from 'react';

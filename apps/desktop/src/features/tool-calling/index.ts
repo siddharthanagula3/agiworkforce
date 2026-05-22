@@ -6,7 +6,7 @@
  */
 
 // Core Components
-export { ToolCallCard } from './ToolCallCard';
+export { ToolCallCard } from '@/features/chat/MessageBubble/ToolCallCard';
 export { ToolResultCard } from './ToolResultCard';
 export { ToolApprovalDialog } from './ToolApprovalDialog';
 export { ToolErrorDisplay } from './ToolErrorDisplay';

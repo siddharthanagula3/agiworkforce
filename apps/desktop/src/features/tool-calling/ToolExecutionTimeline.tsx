@@ -15,7 +15,7 @@ import {
   ChevronRight,
   Target,
 } from 'lucide-react';
-import { ToolCallCard } from './ToolCallCard';
+import { ToolCallCard } from '@/features/chat/MessageBubble/ToolCallCard';
 import { ToolResultCard } from './ToolResultCard';
 import { ToolErrorDisplay } from './ToolErrorDisplay';
 import { cn } from '../../lib/utils';
@@ -95,13 +95,10 @@ function TimelineStep({
       <div className="flex-1 pb-6">
         {/* Tool Call */}
         <ToolCallCard
-          toolCall={step.tool_call}
-          onCancel={onCancelTool}
-          onApprove={onApproveTool}
-          onReject={onRejectTool}
-          defaultExpanded={
-            step.tool_call.status === 'in_progress' || step.tool_call.status === 'awaiting_approval'
-          }
+          messageId={step.tool_call.id}
+          toolName={step.tool_call.tool_name}
+          toolStatus={step.tool_call.status}
+          requiresApproval={step.tool_call.status === 'awaiting_approval'}
         />
 
         {/* Tool Result */}
