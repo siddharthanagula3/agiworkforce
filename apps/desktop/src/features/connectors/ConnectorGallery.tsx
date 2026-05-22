@@ -16,6 +16,7 @@ import { OAuthConnectorCard } from './OAuthConnectorCard';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
 import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
+import { BridgeStatusCard } from './BridgeStatusCard';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import {
   Select,
@@ -339,6 +340,9 @@ export function ConnectorGallery() {
           </button>
         </div>
       </div>
+
+      {/* Chrome + VS Code developer bridges */}
+      <BridgeStatusCard />
 
       {/* Status filter pills */}
       <div className="flex items-center gap-1.5">
