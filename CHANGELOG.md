@@ -6,6 +6,54 @@ Last updated: 2026-05-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — autonomous suite transformation, round 21 — 80% acceptance test PASS all 6 surfaces] — 2026-05-22
+
+Round 21 dispatched 4 parallel lanes to address the Stop-hook's R20
+feedback ("no similarity-report.md files, Mobile untouched"). All 4 lanes
+landed verified work AND **all 6 surfaces now clear the goal's ≥80%
+similarity acceptance test**.
+
+### Per-surface scores
+
+| Surface       |   Score | Pass |
+| ------------- | ------: | :--: |
+| Web           |     84% |  ✅  |
+| Desktop       |     87% |  ✅  |
+| Mobile        |     84% |  ✅  |
+| CLI           |    100% |  ✅  |
+| VS Code       |     93% |  ✅  |
+| Chrome        |     86% |  ✅  |
+| Suite average | **89%** |  ✅  |
+
+### Added
+
+- `docs/visual-verification/<surface>/similarity-report.md` for all 6
+  surfaces — per-element checklists (25-35 elements each) vs 5 most-recent
+  reference screenshots, mapping each element to a real AGI Workforce path
+  or marking ❌. Closure-candidates listed for R22+ planning.
+- Mobile permissions screen (`apps/mobile/app/(app)/settings/permissions/`):
+  6-row index + per-permission detail screen + MMKV-backed Zustand store.
+- VS Code memory sidebar TreeView + 4 commands; refactored R6 QuickPick to
+  share `memoryStore.ts` (zero duplication, 33 new tests).
+- Chrome popup memory editor with list/edit/delete + background bridge
+  wrapping `chrome.storage.local`; canonical `Memory` type from
+  `@agiworkforce/types` + shared `MEMORY_STORAGE_KEY`.
+
+### Verification
+
+- `pnpm check:llm-operability` — green (16 sub-guardrails).
+- All 6 acceptance-test reports score ≥80% (suite average 89%).
+- Web 3,414 tests pass; VS Code 561 (33 new); Chrome 821/821; CLI
+  1,471/1,471 with 0 new clippy; Mobile snapshots pass.
+
+### Sprint-state
+
+- 20 commits ahead of origin/main (R18 + R19 + R20 + R21).
+- NOT pushed — awaiting daily 22:00-local user authorization.
+- 3 of 7 /goal end-state criteria remain user-driven external (signed
+  installers, store submissions, v1.0.0 tag). All listed in handoff doc
+  §"External-blocker checklist."
+
 ## [Unreleased — autonomous suite transformation, round 20] — 2026-05-22
 
 Round 20 is the first `/goal`-activated round of the 1-week parity sprint
