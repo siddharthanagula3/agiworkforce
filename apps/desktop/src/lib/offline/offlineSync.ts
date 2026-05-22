@@ -11,7 +11,7 @@
  * now share the canonical factory; only adapters differ.
  */
 
-import { createOfflineSyncManager } from '@agiworkforce/runtime/offline-sync';
+import { createOfflineSyncManager } from '@agiworkforce/runtime';
 import { syncOfflineQueue, getQueuedItemCount, subscribeToQueueChanges } from './offlineQueue';
 import type { SyncManagerState, SyncSummary } from '@agiworkforce/types';
 import { SyncState } from '@agiworkforce/types';

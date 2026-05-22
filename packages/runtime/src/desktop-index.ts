@@ -40,3 +40,33 @@ export type {
   QueuedCommand,
   SyncKvStore,
 } from './queue';
+
+// Shared offline queue + sync manager factories. Mirrored so the
+// desktop bundle (which aliases the package root to this file) can
+// resolve `createOfflineQueue` and `createOfflineSyncManager` without
+// the subpath import shape that the alias breaks. Web/Next reaches the
+// `./offline-queue` and `./offline-sync` subpath exports directly via
+// the package.json `exports` map.
+export { createOfflineQueue } from './offline-queue';
+export type {
+  MessageRetryStatus,
+  OfflineQueueApi,
+  OfflineQueueLogger,
+  OfflineQueueOptions,
+  OfflineQueueState,
+  OfflineQueueStorage,
+  QueuedMessage,
+  QueuedToolExecution,
+  SyncCallbacks,
+  SyncSummary,
+} from './offline-queue';
+
+export { createOfflineSyncManager, SyncState } from './offline-sync';
+export type {
+  OfflineSyncLogger,
+  OfflineSyncManager,
+  OfflineSyncNetworkHandlers,
+  OfflineSyncOptions,
+  OfflineSyncQueueAdapter,
+  SyncManagerState,
+} from './offline-sync';

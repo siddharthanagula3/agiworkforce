@@ -9,7 +9,7 @@
  * SyncManager's own `navigator.onLine` listener.
  */
 
-import { createOfflineQueue } from '@agiworkforce/runtime/offline-queue';
+import { createOfflineQueue } from '@agiworkforce/runtime';
 import { safeGetJSON, safeSetJSON } from '@/utils/localStorage';
 
 const OFFLINE_QUEUE_KEY = 'agi_offline_queue';
