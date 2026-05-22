@@ -22,7 +22,10 @@ import {
   PROVIDER_MODE_DISPLAY,
   providerSurfaceToProviderMode,
   PROVIDER_MODES,
+  normalizeProjectAccentColor,
+  projectMemberRoleLabel,
   summarizeGeneratedFileBundle,
+  summarizeProjectHeader,
   summarizeSendPreview,
   SYNCED_APP_SURFACES,
   validateGeneratedFileTrustBoundary,
@@ -931,5 +934,155 @@ describe('summarizeSendPreview', () => {
   it('keeps the modelLabel falling back to the provider-mode label when omitted', () => {
     const out = summarizeSendPreview({ providerMode: 'DirectByok' });
     expect(out.modelLabel).toBe('BYOK');
+  });
+});
+
+describe('summarizeProjectHeader', () => {
+  type ProjectFixture = Parameters<typeof summarizeProjectHeader>[0]['project'];
+  const baseProject: ProjectFixture = {
+    id: 'proj_1',
+    ownerUserId: 'user_1',
+    name: 'Local research',
+    description: 'On-device only experiments.',
+    defaultPrivacyMode: 'local',
+    defaultProviderMode: 'Local',
+    allowedSurfaces: ['web', 'desktop', 'mobile'],
+    createdAt: '2026-05-01T00:00:00Z',
+    updatedAt: '2026-05-20T00:00:00Z',
+  };
+
+  it('emits title, description, and staysLocal=true for local-mode projects', () => {
+    const out = summarizeProjectHeader({ project: { ...baseProject } });
+    expect(out.title).toBe('Local research');
+    expect(out.description).toBe('On-device only experiments.');
+    expect(out.privacyMode).toBe('local');
+    expect(out.staysLocal).toBe(true);
+  });
+
+  it('falls back to the zinc accent for unknown values', () => {
+    const out = summarizeProjectHeader({
+      project: { ...baseProject, accentColor: 'turquoise' as unknown as undefined },
+    });
+    expect(out.accentColor).toBe('zinc');
+  });
+
+  it('passes through a recognised accent color unchanged', () => {
+    const out = summarizeProjectHeader({
+      project: { ...baseProject, accentColor: 'emerald' },
+    });
+    expect(out.accentColor).toBe('emerald');
+  });
+
+  it('orders surface chips by canonical order regardless of input order', () => {
+    const out = summarizeProjectHeader({
+      project: { ...baseProject, allowedSurfaces: ['mobile', 'web', 'desktop'] },
+    });
+    expect(out.surfaceChips).toEqual(['Web', 'Desktop', 'Mobile']);
+  });
+
+  it('formats knowledge-file and member counts with English singular/plural', () => {
+    const single = summarizeProjectHeader({
+      project: { ...baseProject, knowledgeFileCount: 1, memberCount: 1 },
+    });
+    expect(single.knowledgeFileCountLabel).toBe('1 file');
+    expect(single.memberCountLabel).toBe('1 member');
+
+    const many = summarizeProjectHeader({
+      project: { ...baseProject, knowledgeFileCount: 12, memberCount: 4 },
+    });
+    expect(many.knowledgeFileCountLabel).toBe('12 files');
+    expect(many.memberCountLabel).toBe('4 members');
+
+    const zero = summarizeProjectHeader({
+      project: { ...baseProject, knowledgeFileCount: 0, memberCount: 0 },
+    });
+    expect(zero.knowledgeFileCountLabel).toBe('No knowledge files');
+    expect(zero.memberCountLabel).toBe('No members');
+  });
+
+  it('omits count labels when counts are null/undefined (denormalization unavailable)', () => {
+    const out = summarizeProjectHeader({ project: { ...baseProject } });
+    expect(out.knowledgeFileCountLabel).toBeUndefined();
+    expect(out.memberCountLabel).toBeUndefined();
+  });
+
+  it('emits last-used label only when host provides the relative form', () => {
+    const without = summarizeProjectHeader({ project: { ...baseProject } });
+    expect(without.lastUsedLabel).toBeUndefined();
+
+    const withRelative = summarizeProjectHeader({
+      project: { ...baseProject, lastUsedAt: '2026-05-20T00:00:00Z' },
+      lastUsedRelativeLabel: '2h ago',
+    });
+    expect(withRelative.lastUsedLabel).toBe('Last used 2h ago');
+  });
+
+  it('labels imported-from provenance for Claude / OpenAI / manual sources', () => {
+    const claude = summarizeProjectHeader({
+      project: { ...baseProject, importedFrom: 'claude' },
+    });
+    expect(claude.importedFromLabel).toBe('Imported from Claude');
+
+    const openai = summarizeProjectHeader({
+      project: { ...baseProject, importedFrom: 'openai' },
+    });
+    expect(openai.importedFromLabel).toBe('Imported from ChatGPT');
+
+    const manual = summarizeProjectHeader({
+      project: { ...baseProject, importedFrom: 'manual' },
+    });
+    expect(manual.importedFromLabel).toBe('Created in AGI');
+  });
+
+  it('flips staysLocal off for BYOK and Managed default modes', () => {
+    const byok = summarizeProjectHeader({
+      project: { ...baseProject, defaultPrivacyMode: 'byok', defaultProviderMode: 'DirectByok' },
+    });
+    expect(byok.staysLocal).toBe(false);
+    expect(byok.privacyLabel).toContain('BYOK');
+
+    const managed = summarizeProjectHeader({
+      project: {
+        ...baseProject,
+        defaultPrivacyMode: 'managed',
+        defaultProviderMode: 'ManagedGateway',
+      },
+    });
+    expect(managed.staysLocal).toBe(false);
+    expect(managed.providerLabel).toContain('Managed');
+  });
+
+  it('passes through optional default model id + label', () => {
+    const out = summarizeProjectHeader({
+      project: { ...baseProject, defaultModelId: 'claude-sonnet-4-6' },
+      defaultModelLabel: 'Claude Sonnet 4.6',
+    });
+    expect(out.defaultModelId).toBe('claude-sonnet-4-6');
+    expect(out.defaultModelLabel).toBe('Claude Sonnet 4.6');
+  });
+});
+
+describe('normalizeProjectAccentColor', () => {
+  it('keeps known palette values', () => {
+    expect(normalizeProjectAccentColor('emerald')).toBe('emerald');
+    expect(normalizeProjectAccentColor('sky')).toBe('sky');
+    expect(normalizeProjectAccentColor('amber')).toBe('amber');
+    expect(normalizeProjectAccentColor('rose')).toBe('rose');
+    expect(normalizeProjectAccentColor('violet')).toBe('violet');
+    expect(normalizeProjectAccentColor('zinc')).toBe('zinc');
+  });
+
+  it('falls back to zinc for unknown / null / undefined', () => {
+    expect(normalizeProjectAccentColor('teal')).toBe('zinc');
+    expect(normalizeProjectAccentColor(null)).toBe('zinc');
+    expect(normalizeProjectAccentColor(undefined)).toBe('zinc');
+  });
+});
+
+describe('projectMemberRoleLabel', () => {
+  it('labels each role', () => {
+    expect(projectMemberRoleLabel('owner')).toBe('Owner');
+    expect(projectMemberRoleLabel('editor')).toBe('Editor');
+    expect(projectMemberRoleLabel('viewer')).toBe('Viewer');
   });
 });

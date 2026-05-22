@@ -522,6 +522,10 @@ export interface HandoffDraft {
 // Projects, Artifacts, Compute Sessions, And Generated Files
 // ============================================================================
 
+export type ProjectAccentColor = 'emerald' | 'sky' | 'amber' | 'rose' | 'violet' | 'zinc';
+
+export type ProjectImportSource = 'claude' | 'openai' | 'manual';
+
 export interface ProjectRecord {
   id: string;
   ownerUserId: string;
@@ -531,8 +535,63 @@ export interface ProjectRecord {
   defaultPrivacyMode: PrivacyMode;
   defaultProviderMode: ProviderMode;
   allowedSurfaces: SourceSurface[];
+  /** Custom instructions / system prompt scoped to the project. */
+  instructions?: string | null;
+  /** Catalog model id from `packages/types/src/models.json`. Never invent. */
+  defaultModelId?: string | null;
+  /** Denormalized count for header rendering (avoids fan-out reads). */
+  knowledgeFileCount?: number | null;
+  /** Denormalized count for header rendering. */
+  memberCount?: number | null;
+  /** ISO-8601 timestamp of last activity, used for sort + "Last used" chip. */
+  lastUsedAt?: string | null;
+  /** Single emoji for visual identity. Capped at one grapheme by host. */
+  iconEmoji?: string | null;
+  /** Bounded accent palette. Host maps to its own color tokens. */
+  accentColor?: ProjectAccentColor | null;
+  /** Provenance for imported projects (Claude / OpenAI / manual). */
+  importedFrom?: ProjectImportSource | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ProjectMemberRole = 'owner' | 'editor' | 'viewer';
+
+export interface ProjectMember {
+  id: string;
+  projectId: string;
+  userId: string;
+  role: ProjectMemberRole;
+  invitedByUserId?: string | null;
+  addedAt: string;
+}
+
+export interface ProjectKnowledgeFile {
+  id: string;
+  projectId: string;
+  fileName: string;
+  mimeType: string;
+  byteCount: number;
+  checksumSha256: string;
+  /** Optional short summary (for tooltips / search). */
+  summary?: string | null;
+  sourceSurface: SourceSurface;
+  addedByUserId: string;
+  addedAt: string;
+  /** Retention timestamp if any (mirrors generated-file retention). */
+  retentionExpiresAt?: string | null;
+  deletedAt?: string | null;
+}
+
+export interface ProjectInstructions {
+  /** Free-form system prompt prepended to chats inside the project. */
+  systemPrompt?: string | null;
+  /** Short rules-of-engagement (tone, format, etc.). */
+  responseStyle?: string | null;
+  /** Preferred response format ("markdown" / "json" / "plain"). */
+  formatPreference?: string | null;
+  /** Hard safety directives (will not be overridden by chat-scoped instructions). */
+  safetyDirectives?: string | null;
 }
 
 export type ComputeSessionStatus =
@@ -1526,4 +1585,154 @@ export function summarizeSendPreview(input: SendPreviewInput): SendPreviewPresen
     sourceSessionLabel: input.sourceSessionLabel,
     bannerCopy,
   };
+}
+
+// ============================================================================
+// Project Header Presentation
+// ============================================================================
+//
+// Pure derivation of header-level chips and labels from a ProjectRecord.
+// Hosts (Web sidebar, Desktop project view, Mobile drawer) read the
+// presentation to keep wording, accent palette, and surface-chip ordering
+// identical across surfaces without sharing JSX.
+
+const PROJECT_ACCENT_FALLBACK: ProjectAccentColor = 'zinc';
+
+const PROJECT_IMPORT_SOURCE_LABELS: Record<ProjectImportSource, string> = {
+  claude: 'Imported from Claude',
+  openai: 'Imported from ChatGPT',
+  manual: 'Created in AGI',
+};
+
+const PROJECT_MEMBER_ROLE_LABELS: Record<ProjectMemberRole, string> = {
+  owner: 'Owner',
+  editor: 'Editor',
+  viewer: 'Viewer',
+};
+
+const SOURCE_SURFACE_CHIP_LABELS: Record<SourceSurface, string> = {
+  web: 'Web',
+  desktop: 'Desktop',
+  mobile: 'Mobile',
+  cli: 'CLI',
+  vscode: 'VS Code',
+  chrome: 'Chrome',
+};
+
+const SOURCE_SURFACE_CHIP_ORDER: SourceSurface[] = [
+  'web',
+  'desktop',
+  'mobile',
+  'cli',
+  'vscode',
+  'chrome',
+];
+
+export interface ProjectHeaderInput {
+  project: ProjectRecord;
+  /** Optional display label for the default model — host resolves from catalog. */
+  defaultModelLabel?: string | null;
+  /** Optional relative label like "2h ago" — host computes from `lastUsedAt`. */
+  lastUsedRelativeLabel?: string | null;
+}
+
+export interface ProjectHeaderPresentation {
+  id: string;
+  title: string;
+  description?: string | undefined;
+  iconEmoji?: string | undefined;
+  accentColor: ProjectAccentColor;
+  privacyMode: PrivacyMode;
+  privacyLabel: string;
+  providerMode: ProviderMode;
+  providerLabel: string;
+  staysLocal: boolean;
+  defaultModelId?: string | undefined;
+  defaultModelLabel?: string | undefined;
+  knowledgeFileCountLabel?: string | undefined;
+  memberCountLabel?: string | undefined;
+  lastUsedLabel?: string | undefined;
+  importedFromLabel?: string | undefined;
+  /**
+   * Allowed-surface chips ordered by canonical surface order (web → desktop →
+   * mobile → cli → vscode → chrome). Hosts render in this order so the chip
+   * row is identical across surfaces.
+   */
+  surfaceChips: string[];
+}
+
+export function normalizeProjectAccentColor(
+  value: ProjectAccentColor | string | null | undefined,
+): ProjectAccentColor {
+  if (
+    value === 'emerald' ||
+    value === 'sky' ||
+    value === 'amber' ||
+    value === 'rose' ||
+    value === 'violet' ||
+    value === 'zinc'
+  ) {
+    return value;
+  }
+  return PROJECT_ACCENT_FALLBACK;
+}
+
+export function summarizeProjectHeader(input: ProjectHeaderInput): ProjectHeaderPresentation {
+  const project = input.project;
+  const providerMode = project.defaultProviderMode;
+  const privacyMode = project.defaultPrivacyMode;
+  const providerDisplay = getProviderModeDisplay(providerMode);
+  const privacyDisplay = getPrivacyModeDisplay(privacyMode);
+  const staysLocal = privacyMode === 'local';
+
+  const knowledgeFileCountLabel = knowledgeFileCountToLabel(project.knowledgeFileCount);
+  const memberCountLabel = memberCountToLabel(project.memberCount);
+  const lastUsedLabel = input.lastUsedRelativeLabel
+    ? `Last used ${input.lastUsedRelativeLabel}`
+    : undefined;
+  const importedFromLabel = project.importedFrom
+    ? PROJECT_IMPORT_SOURCE_LABELS[project.importedFrom]
+    : undefined;
+
+  const surfaceChips = SOURCE_SURFACE_CHIP_ORDER.filter((surface) =>
+    project.allowedSurfaces.includes(surface),
+  ).map((surface) => SOURCE_SURFACE_CHIP_LABELS[surface]);
+
+  return {
+    id: project.id,
+    title: project.name,
+    description: project.description ?? undefined,
+    iconEmoji: project.iconEmoji ?? undefined,
+    accentColor: normalizeProjectAccentColor(project.accentColor),
+    privacyMode,
+    privacyLabel: privacyDisplay.label,
+    providerMode,
+    providerLabel: providerDisplay.label,
+    staysLocal,
+    defaultModelId: project.defaultModelId ?? undefined,
+    defaultModelLabel: input.defaultModelLabel ?? undefined,
+    knowledgeFileCountLabel,
+    memberCountLabel,
+    lastUsedLabel,
+    importedFromLabel,
+    surfaceChips,
+  };
+}
+
+export function projectMemberRoleLabel(role: ProjectMemberRole): string {
+  return PROJECT_MEMBER_ROLE_LABELS[role];
+}
+
+function knowledgeFileCountToLabel(value: number | null | undefined): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (value <= 0) return 'No knowledge files';
+  if (value === 1) return '1 file';
+  return `${compactNumber(value)} files`;
+}
+
+function memberCountToLabel(value: number | null | undefined): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (value <= 0) return 'No members';
+  if (value === 1) return '1 member';
+  return `${compactNumber(value)} members`;
 }
