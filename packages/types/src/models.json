@@ -2961,6 +2961,66 @@
       "released": "2024",
       "deprecation_date": null
     },
+    "groq-llama-3.3-70b": {
+      "id": "groq-llama-3.3-70b",
+      "apiModelId": "llama-3.3-70b-versatile",
+      "name": "Llama 3.3 70B (Groq)",
+      "provider": "groq",
+      "modelType": "chat",
+      "contextWindow": 131072,
+      "inputCost": 0.59,
+      "outputCost": 0.79,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "very-fast",
+      "quality": "good",
+      "qualityTier": "balanced",
+      "bestFor": ["Fast Chat", "Tool Use", "Low Latency"],
+      "released": "2024",
+      "deprecation_date": null
+    },
+    "groq-llama-3.1-8b": {
+      "id": "groq-llama-3.1-8b",
+      "apiModelId": "llama-3.1-8b-instant",
+      "name": "Llama 3.1 8B Instant (Groq)",
+      "provider": "groq",
+      "modelType": "chat",
+      "contextWindow": 131072,
+      "inputCost": 0.05,
+      "outputCost": 0.08,
+      "capabilities": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speed": "very-fast",
+      "quality": "fair",
+      "qualityTier": "fast",
+      "bestFor": ["Ultra-Fast Inference", "Simple Tasks", "Budget Usage"],
+      "released": "2024",
+      "deprecation_date": null
+    },
     "meta-llama/llama-3.3-70b-instruct:free": {
       "id": "meta-llama/llama-3.3-70b-instruct:free",
       "apiModelId": "meta-llama/llama-3.3-70b-instruct:free",
@@ -3518,9 +3578,57 @@
         "label": "GLM-5.1"
       }
     ],
-    "mistral": [],
+    "mistral": [
+      {
+        "value": "mistral-large-3",
+        "label": "Mistral Large 3"
+      },
+      {
+        "value": "mistral-medium-3",
+        "label": "Mistral Medium 3.1"
+      },
+      {
+        "value": "mistral-small-3",
+        "label": "Mistral Small 3.2"
+      },
+      {
+        "value": "codestral-2",
+        "label": "Codestral 2"
+      },
+      {
+        "value": "pixtral-large",
+        "label": "Pixtral Large"
+      }
+    ],
+    "groq": [
+      {
+        "value": "groq-llama-3.3-70b",
+        "label": "Llama 3.3 70B (Groq)"
+      },
+      {
+        "value": "groq-llama-3.1-8b",
+        "label": "Llama 3.1 8B Instant (Groq)"
+      }
+    ],
     "nvidia_nim": [],
-    "open_router": []
+    "open_router": [
+      {
+        "value": "meta-llama/llama-3.3-70b-instruct:free",
+        "label": "Llama 3.3 70B (Free)"
+      },
+      {
+        "value": "mistralai/mistral-small-3.1-24b-instruct:free",
+        "label": "Mistral Small 3.1 (Free)"
+      },
+      {
+        "value": "qwen/qwen3-coder:free",
+        "label": "Qwen3 Coder (Free)"
+      },
+      {
+        "value": "nvidia/nemotron-3-super-120b-a12b:free",
+        "label": "Nemotron 3 Super 120B (Free)"
+      }
+    ]
   },
   "providersInOrder": [
     "managed_cloud",
@@ -3533,6 +3641,8 @@
     "moonshot",
     "perplexity",
     "zhipu",
+    "mistral",
+    "groq",
     "open_router",
     "nvidia_nim",
     "ollama"

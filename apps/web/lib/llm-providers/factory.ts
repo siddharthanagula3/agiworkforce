@@ -11,6 +11,9 @@ import { MoonshotProvider } from './moonshot';
 import { DeepSeekProvider } from './deepseek';
 import { PerplexityProvider } from './perplexity';
 import { ZhipuProvider } from './zhipu';
+import { MistralProvider } from './mistral';
+import { GroqProvider } from './groq';
+import { OpenRouterProvider } from './openrouter';
 import { logger } from '@/lib/logger';
 import { shouldEnablePromptCache } from '@/lib/prompt-cache-helper';
 import {
@@ -35,6 +38,9 @@ function logProviderDiagnostics() {
     'deepseek',
     'perplexity',
     'zhipu',
+    'mistral',
+    'groq',
+    'openrouter',
   ];
   const envKeyMap: Record<string, string> = {
     openai: 'OPENAI_API_KEY',
@@ -46,6 +52,9 @@ function logProviderDiagnostics() {
     deepseek: 'DEEPSEEK_API_KEY',
     perplexity: 'PERPLEXITY_API_KEY',
     zhipu: 'ZHIPU_API_KEY',
+    mistral: 'MISTRAL_API_KEY',
+    groq: 'GROQ_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
   };
 
   const status: Record<string, string> = {};
@@ -117,6 +126,14 @@ export class LLMProviderFactory {
         return new PerplexityProvider(key, baseUrl);
       case 'zhipu':
         return new ZhipuProvider(key, baseUrl);
+      case 'mistral':
+        return new MistralProvider(key, baseUrl);
+      case 'groq':
+        return new GroqProvider(key, baseUrl);
+      // models.json canonical ID is 'open_router'; support both forms
+      case 'openrouter':
+      case 'open_router':
+        return new OpenRouterProvider(key, baseUrl);
       default:
         logger.warn({ provider }, 'Unknown provider');
         return null;
@@ -140,6 +157,8 @@ export class LLMProviderFactory {
     'api.perplexity.ai',
     'open.bigmodel.cn',
     'api.groq.com',
+    'api.mistral.ai',
+    'openrouter.ai',
     'gateway.ai.cloudflare.com',
     'localhost',
     '127.0.0.1',
@@ -156,6 +175,10 @@ export class LLMProviderFactory {
       deepseek: 'DEEPSEEK_BASE_URL',
       perplexity: 'PERPLEXITY_BASE_URL',
       zhipu: 'ZHIPU_BASE_URL',
+      mistral: 'MISTRAL_BASE_URL',
+      groq: 'GROQ_BASE_URL',
+      openrouter: 'OPENROUTER_BASE_URL',
+      open_router: 'OPENROUTER_BASE_URL',
     };
 
     const envKey = envKeyMap[provider.toLowerCase()];
@@ -204,6 +227,12 @@ export class LLMProviderFactory {
       deepseek: 'DEEPSEEK_API_KEY',
       perplexity: 'PERPLEXITY_API_KEY',
       zhipu: 'ZHIPU_API_KEY',
+      mistral: 'MISTRAL_API_KEY',
+      groq: 'GROQ_API_KEY',
+      openrouter: 'OPENROUTER_API_KEY',
+      // models.json uses 'open_router' as the canonical provider ID;
+      // alias it here so detectProviderFromModelId results map correctly.
+      open_router: 'OPENROUTER_API_KEY',
     };
     return envKeyMap[provider.toLowerCase()];
   }
@@ -223,6 +252,8 @@ export class LLMProviderFactory {
   static getProviderFromModel(model: string): string {
     const catalogProvider = detectProviderFromModelId(model);
     if (catalogProvider) {
+      // Normalise open_router -> openrouter so createProvider switch case matches
+      if (catalogProvider === 'open_router') return 'openrouter';
       return catalogProvider;
     }
 
@@ -254,6 +285,17 @@ export class LLMProviderFactory {
     }
     if (modelLower.includes('glm-')) {
       return 'zhipu';
+    }
+    if (
+      modelLower.includes('mistral') ||
+      modelLower.includes('codestral') ||
+      modelLower.includes('pixtral')
+    ) {
+      return 'mistral';
+    }
+    // Bare llama model IDs (no slash prefix) route to groq by convention
+    if (modelLower.startsWith('llama-')) {
+      return 'groq';
     }
 
     // Default to OpenAI
