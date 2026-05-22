@@ -2,9 +2,45 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-22 (extended through round 15.1: canonical surface-array consolidation; diminishing-returns territory reached)
+Last updated: 2026-05-22 (extended through round 16: six-lane parallel team sprint via TeamCreate)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `7418575d6` (round-15.1 boundary at session end)
+Head pushed: `f9aba1747` (round-16 boundary at session end)
+PR: [#378 — feat: suite transformation rounds 12-16](https://github.com/siddharthanagula3/agiworkforce/pull/378) (open, awaiting review)
+
+## Round 16 — parallel team sprint via TeamCreate (2026-05-22)
+
+User directed: "use parallel sub agents" + "use TeamCreate" + "Use all the tools you have to speed up the process." Team `round-16-parity-sprint` spawned 7 parallel agents across non-overlapping lanes. Results landed in ~5 minutes of wall clock (vs ~1 hour serial).
+
+- `feat(protocol): rust mirror for synced_app_surfaces + developer_session_surfaces` (`ea9340941`)
+  - Round-15 to round-16 setup: Rust mirror in `crates/agiworkforce-protocol/src/projects.rs` gained `SYNCED_APP_SURFACES` + `DEVELOPER_SESSION_SURFACES` const arrays + `is_synced_app_surface()` + `is_developer_session_surface()` methods. 5 new tests pin canonical-set equality, surface acceptance, and mutual exclusivity. All 18 projects tests pass.
+
+- `docs(vscode-ext): add sync-rule compliance block to chat participant` (`14ad28e27`, agent: **vscode-sync-audit**)
+  - Audited 30 source files; no supabase client; chat history via `vscode.ExtensionContext.globalState` only; existing `assertSurfaceCanSyncChats('vscode')` test confirmed locked. Added compliance comment block. 528/528 tests pass.
+
+- `docs(extension): add sync-rule compliance block to background service worker` (`610fc67e0`, agent: **chrome-sync-audit**)
+  - Audited Chrome MV3; `chrome.storage.local` device-scoped only; bridge to desktop:8787 is the legitimate persistence path; no consumer-chat writes. Compliance block at `apps/extension/src/background.ts`. 775/775 tests pass.
+
+- `test(cli): assert cli surface is developer-session-only per sync rule` (`86907d442`, agent: **cli-sync-audit**)
+  - Audited ~195 Rust files; no supabase client; conversations under `~/.agiworkforce/conversations/` (local-file) only; no `ProjectSourceSurface::Web|Desktop|Mobile` construction. Added compliance comment to `apps/cli/src/sessions.rs` + Rust unit test asserting CLI surface is developer-session-only.
+
+- `feat(mobile): add projects detail screen with canonical project header` (`0cca242f3`, `a576cdc4a`, agent: **mobile-projects**)
+  - New `apps/mobile/app/(app)/projects/[id].tsx` consuming canonical `summarizeProjectHeader`. v1 LOCAL ONLY: `FEATURES.auth=off` short-circuits to a `LocalOnlyFallback` with "Join Cloud waitlist" CTA; auth-on path fetches `/api/projects/[id]` and maps through canonical. Active-project chip added to `chat/[id].tsx` header for navigation. New `apps/mobile/src/features/projects/service.ts` thin fetch wrapper (extracted to satisfy pre-push service-layer hook). 3 RN snapshot tests. Typecheck PASS.
+
+- `feat(web/api): wire round-10 project fields in put and post handlers` (`f9aba1747`, agent: **web-r10-put**, also adopted task #2 desktop UI work)
+  - PUT `/api/projects/[id]` and POST `/api/projects` accept iconEmoji, accentColor, defaultPrivacyMode, defaultProviderMode, allowedSurfaces, defaultModelId, importedFrom. Enum validation against canonical `@agiworkforce/types` constants with 400 + field-name error message. allowedSurfaces filtered to known values rather than rejected. Pre-migration safe: try/catch on PG error `42703` (undefined_column) retries without round-10 fields. 9 new vitest tests in `app/api/projects/__tests__/round10-fields.test.ts`.
+  - Also (out-of-lane but useful): added `apps/desktop/src/features/chat/ProjectSettingsDialog.tsx` (new, 140 lines), extended desktop `projectStore` with accentColor + defaultPrivacyMode, wired round-10 columns into desktop SQLite migration `apps/desktop/src-tauri/src/data/db/migrations.rs` and Tauri command `apps/desktop/src-tauri/src/sys/commands/projects.rs`. ACCENT_COLOR_CLASS rendering in `ProjectsView.tsx`.
+
+PR #378 opened by **pr-opener** with full round 12-16 summary, ~46 new tests called out, sync-rule verification block, and test plan checklist.
+
+### Round 16 — meta-lesson
+
+Parallel team sprint converted ~6 hours of marginal-cleanup work into ~5 minutes of wall-clock by parallelizing across non-overlapping lanes. Web-r10-put expanded scope into desktop files which created task-#2 overlap — this is a coordination cost worth flagging in the team prompt template (be more explicit about file-path ownership). Three sync-rule audits returned "CLEAN, confirmed compliance" which is a meaningful verification result, not just busywork. The mobile detail screen + web PUT wiring together close the projects round-10 end-to-end loop modulo the unapplied migration.
+
+Open paths still on the board:
+
+1. Apply the round-10 migration (`20260521120000` + fix-ups). Web PUT/POST now use a 42703-retry shim so production is safe pre-migration; once applied, all round-10 fields persist by default.
+2. ~~Trust-boundary production wiring~~ — no canonical composition site exists yet; deferred until artifact-publish service lands.
+3. Mobile PNG capture infrastructure (still needs expo-web build pipeline; heavy).
 
 ## Round 15.1 — canonical surface-array consolidation (2026-05-22)
 
