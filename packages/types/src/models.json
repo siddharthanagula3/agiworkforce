@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-17",
+  "lastUpdated": "2026-05-22",
   "providers": {
     "managed_cloud": {
       "label": "Managed Cloud",
@@ -611,7 +611,7 @@
       "taskRouting": {
         "fast_completion": "meta-llama/llama-3.3-70b-instruct:free",
         "code_generation": "qwen/qwen3-coder:free",
-        "complex_reasoning": "nvidia/nemotron-3-super-120b-a12b:free",
+        "complex_reasoning": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
         "chat": "meta-llama/llama-3.3-70b-instruct:free",
         "vision": "mistralai/mistral-small-3.1-24b-instruct:free",
         "long_context": "meta-llama/llama-3.3-70b-instruct:free"
@@ -2000,8 +2000,8 @@
     },
     "mistral-small-3": {
       "id": "mistral-small-3",
-      "apiModelId": "mistral-small-2506",
-      "name": "Mistral Small 3.2",
+      "apiModelId": "mistral-small-2603",
+      "name": "Mistral Small 4",
       "provider": "mistral",
       "modelType": "chat",
       "contextWindow": 131072,
@@ -2030,7 +2030,7 @@
     },
     "codestral-2": {
       "id": "codestral-2",
-      "apiModelId": "codestral-2",
+      "apiModelId": "codestral-2508",
       "name": "Codestral 2",
       "provider": "mistral",
       "modelType": "code",
@@ -3057,7 +3057,7 @@
       "name": "Mistral Small 3.1 24B (Free)",
       "provider": "open_router",
       "modelType": "chat",
-      "contextWindow": 32768,
+      "contextWindow": 128000,
       "inputCost": 0.0,
       "outputCost": 0.0,
       "capabilities": {
@@ -3111,10 +3111,10 @@
       "released": "2025",
       "deprecation_date": null
     },
-    "nvidia/nemotron-3-super-120b-a12b:free": {
-      "id": "nvidia/nemotron-3-super-120b-a12b:free",
-      "apiModelId": "nvidia/nemotron-3-super-120b-a12b:free",
-      "name": "Nemotron 3 Super 120B (Free)",
+    "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
+      "id": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+      "apiModelId": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+      "name": "Nemotron Super 49B (Free)",
       "provider": "open_router",
       "modelType": "chat",
       "contextWindow": 131072,
@@ -3709,7 +3709,7 @@
       },
       {
         "value": "mistral-small-3",
-        "label": "Mistral Small 3.2"
+        "label": "Mistral Small 4"
       },
       {
         "value": "codestral-2",
@@ -3761,8 +3761,8 @@
         "label": "Qwen3 Coder (Free)"
       },
       {
-        "value": "nvidia/nemotron-3-super-120b-a12b:free",
-        "label": "Nemotron 3 Super 120B (Free)"
+        "value": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
+        "label": "Nemotron Super 49B (Free)"
       }
     ]
   },
