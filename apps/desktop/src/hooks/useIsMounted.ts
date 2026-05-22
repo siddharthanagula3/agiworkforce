@@ -2,17 +2,27 @@
  * useIsMounted — returns a ref whose `.current` flips to `false` after the
  * component unmounts.
  *
- * Use to guard `setState` calls that happen after `await` in async event
- * handlers. Without the guard, an async handler that resolves after the
- * component unmounts (e.g. user clicks Disconnect → parent removes the
- * card from a list → mid-promise unmount) will trigger React's
- * "Can't perform a React state update on an unmounted component"
- * warning AND potentially overwrite fresher state from a new mount with
- * stale resolved values from the previous one.
+ * **STATUS (2026-05-22)**: this hook exists for HISTORICAL reasons. The
+ * "Can't perform a React state update on an unmounted component" warning
+ * was REMOVED in React 18 (see
+ * https://github.com/reactwg/react-18/discussions/82) — React 19, which
+ * this app uses, silently no-ops `setState` on unmounted components. So
+ * the unmount race this hook was extracted to handle does NOT actually
+ * fire warnings or leak memory in the current React version.
  *
- * Self-audit (2026-05-21) found 67 desktop components with this exact
- * pattern — extracting the hook makes the fix one import + one check per
- * consumer instead of 9-line boilerplate.
+ * **DO NOT migrate additional components to this hook.** An earlier
+ * sweep migrated 14 components (BridgeStatusCard, OAuthConnectorCard,
+ * SaveToMemoryButton, MemoryCard, ToolLabel, ArtifactToolbar,
+ * DataSection, DotfileSettings.ConfigEditorSection, ConnectorDetailView,
+ * ArtifactVersionHistory, MemoryImport, ShareConversationDialog,
+ * AgentTaskCreator, DatabaseWorkspace.SchemaExplorer). Those are
+ * harmless but redundant. The remaining ~50 candidates from the sweep
+ * should be left alone.
+ *
+ * **When the hook IS legitimately useful**: when an async handler's
+ * resolved value needs to be applied to fresh state from a new mount
+ * (e.g. component re-keyed mid-promise). This is rare; verify the
+ * scenario before reaching for the hook.
  *
  * Usage:
  * ```tsx
