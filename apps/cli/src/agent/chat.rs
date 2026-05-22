@@ -310,6 +310,7 @@ message -- revise and call `update_plan` again.\n\n",
                                         cache_creation_input_tokens: 0,
                                         via_subscription: true,
                                         stop_reason: Some("end_turn".to_string()),
+                                        reasoning_output_tokens: 0,
                                     })
                                 } else {
                                     models::stream_completion(
@@ -348,6 +349,7 @@ message -- revise and call `update_plan` again.\n\n",
         let mut total_output = result.output_tokens;
         let mut total_cache_read = result.cache_read_input_tokens;
         let mut total_cache_creation = result.cache_creation_input_tokens;
+        let mut result_reasoning = result.reasoning_output_tokens;
         let via_subscription = result.via_subscription;
         let mut final_response = result.text;
         let mut current_tool_calls = result.tool_calls;
@@ -1136,6 +1138,7 @@ message -- revise and call `update_plan` again.\n\n",
             total_output += continuation.output_tokens;
             total_cache_read += continuation.cache_read_input_tokens;
             total_cache_creation += continuation.cache_creation_input_tokens;
+            result_reasoning += continuation.reasoning_output_tokens;
             final_response = continuation.text;
             current_tool_calls = continuation.tool_calls;
 
@@ -1177,6 +1180,7 @@ message -- revise and call `update_plan` again.\n\n",
         self.total_output_tokens += total_output;
         self.total_cache_read_tokens += total_cache_read;
         self.total_cache_creation_tokens += total_cache_creation;
+        self.total_reasoning_tokens += result_reasoning;
         self.turn_count += 1;
         self.cost_ledger.record_turn(
             &self.model,
