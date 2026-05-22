@@ -183,6 +183,7 @@ const ToolCallCardComponent: React.FC<ToolCallCardProps> = ({
         id={toolCall.id}
         label={toolCall.name}
         status={inlineStatus}
+        iconStyle="badge"
         argSummary={
           toolCall.durationMs != null && toolCall.status === 'complete'
             ? formatDuration(toolCall.durationMs)
