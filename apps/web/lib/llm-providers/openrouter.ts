@@ -7,6 +7,7 @@ import {
   RETRYABLE_HTTP_STATUS_CODES,
 } from './base';
 import { logger } from '@/lib/logger';
+import { buildAnthropicCacheControl, resolveCacheRetention } from './cache-retention';
 
 /** Site URL for OpenRouter attribution header (required by OpenRouter ToS). */
 const OPENROUTER_SITE_URL = process.env['NEXT_PUBLIC_APP_URL'] || 'https://agiworkforce.app';
@@ -16,8 +17,16 @@ const OPENROUTER_APP_TITLE = 'AGI Workforce';
 /**
  * Map messages to OpenAI-compatible format, preserving tool_calls and tool_call_id.
  * OpenRouter proxies to underlying models using the OpenAI wire format.
+ *
+ * For Anthropic-routed models (modelId starts with 'anthropic/'), OpenRouter
+ * passes cache_control through to the upstream Anthropic API on system messages.
+ * Reference: openclaw extra-params.openrouter-cache-control.test.ts — system
+ * message only, not last-user or last-tool_result.
  */
-function mapMessages(messages: LLMProviderRequest['messages']) {
+function mapMessages(
+  messages: LLMProviderRequest['messages'],
+  systemCacheControl: { type: 'ephemeral'; ttl?: '5m' | '1h' } | null = null,
+) {
   return messages.map((msg) => {
     const mapped: Record<string, unknown> = {
       role: msg.role,
@@ -29,6 +38,15 @@ function mapMessages(messages: LLMProviderRequest['messages']) {
     if (msg.tool_call_id) {
       mapped['tool_call_id'] = msg.tool_call_id;
     }
+
+    // Inject Anthropic cache_control on the system message for anthropic/* routes.
+    // OpenRouter passes this through to upstream Anthropic; do not apply to
+    // non-Anthropic models (google/*, meta-llama/*, etc.).
+    if (msg.role === 'system' && systemCacheControl) {
+      const text = typeof msg.content === 'string' ? msg.content : '';
+      mapped['content'] = [{ type: 'text', text, cache_control: systemCacheControl }];
+    }
+
     return mapped;
   });
 }
@@ -69,9 +87,16 @@ export class OpenRouterProvider extends BaseLLMProvider {
   async sendRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
     const url = `${this.baseUrl}/chat/completions`;
 
+    // For Anthropic-routed models, inject cache_control on the system message.
+    // Resolve retention once (stability: do not re-evaluate mid-session).
+    const retention = resolveCacheRetention(undefined, 'openrouter', request.model);
+    const systemCacheControl = buildAnthropicCacheControl(
+      request.cacheRetention ?? retention ?? undefined,
+    );
+
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: mapMessages(request.messages),
+      messages: mapMessages(request.messages, systemCacheControl),
     };
 
     if (request.temperature !== undefined) {
@@ -158,6 +183,13 @@ export class OpenRouterProvider extends BaseLLMProvider {
       const message = data.choices[0]?.message;
       const finishReason = data.choices[0]?.finish_reason;
 
+      // OpenRouter exposes Anthropic-style cache counters when routing to anthropic/*.
+      // Fields: usage.cache_read_input_tokens, usage.cache_creation_input_tokens.
+      // Reference: openclaw prompt-caching.md "OpenRouter models" section.
+      const cacheReadTokens: number | undefined = data.usage?.cache_read_input_tokens ?? undefined;
+      const cacheCreationTokens: number | undefined =
+        data.usage?.cache_creation_input_tokens ?? undefined;
+
       return {
         content: message?.content || '',
         model: data.model || request.model,
@@ -165,6 +197,8 @@ export class OpenRouterProvider extends BaseLLMProvider {
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason,
+        cachedInputTokens: cacheReadTokens,
+        cacheCreationInputTokens: cacheCreationTokens,
         ...(message?.tool_calls &&
           message.tool_calls.length > 0 && { tool_calls: message.tool_calls }),
       };
@@ -177,9 +211,15 @@ export class OpenRouterProvider extends BaseLLMProvider {
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
     const url = `${this.baseUrl}/chat/completions`;
 
+    // Resolve Anthropic cache_control for streaming (same logic as sendRequest).
+    const retentionStream = resolveCacheRetention(undefined, 'openrouter', request.model);
+    const systemCacheControlStream = buildAnthropicCacheControl(
+      request.cacheRetention ?? retentionStream ?? undefined,
+    );
+
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: mapMessages(request.messages),
+      messages: mapMessages(request.messages, systemCacheControlStream),
       stream: true,
     };
 
