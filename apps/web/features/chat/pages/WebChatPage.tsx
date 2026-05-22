@@ -7,6 +7,12 @@ import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { getSupabaseClient } from '@/services/supabase';
 import { useModelStore } from '@shared/stores/model-store';
+import { SendPreview } from '@agiworkforce/unified-chat';
+import {
+  summarizeSendPreview,
+  type ProviderMode,
+  type SendPreviewPresentation,
+} from '@agiworkforce/types';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
@@ -145,6 +151,44 @@ export default function WebChatPage() {
 
   // Model from the model store (kept in sync by ComposerFooter)
   const selectedModelId = useModelStore((s) => s.selectedModelId);
+  const selectedModel = useModelStore((s) =>
+    s.availableModels.find((m) => m.id === s.selectedModelId),
+  );
+
+  // SendPreview presentation — privacy-disclosure card rendered above the
+  // composer so users always see where the next turn is going (local device,
+  // BYOK provider host, or AGI managed gateway) before they send.
+  const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
+    const providerKey = selectedModel?.providerKey;
+    const providerMode: ProviderMode = !providerKey
+      ? 'Local'
+      : providerKey === 'managed_cloud'
+        ? 'ManagedGateway'
+        : providerKey === 'local' ||
+            providerKey === 'ollama' ||
+            providerKey === 'lmstudio' ||
+            providerKey === 'executorch' ||
+            providerKey === 'llamacpp'
+          ? 'Local'
+          : 'DirectByok';
+    return summarizeSendPreview({
+      providerMode,
+      modelLabel: selectedModel?.name ?? undefined,
+      modelId: selectedModelId,
+      destinationHost:
+        providerMode === 'Local'
+          ? undefined
+          : providerKey === 'anthropic'
+            ? 'api.anthropic.com'
+            : providerKey === 'openai'
+              ? 'api.openai.com'
+              : providerKey === 'google'
+                ? 'generativelanguage.googleapis.com'
+                : providerKey === 'managed_cloud'
+                  ? 'gateway.agiworkforce.com'
+                  : undefined,
+    });
+  }, [selectedModel, selectedModelId]);
 
   // Conversation CRUD
   const {
@@ -518,13 +562,16 @@ export default function WebChatPage() {
             />
           </div>
 
-          {/* Composer */}
+          {/* Composer + Send Preview disclosure */}
           <div
             className={cn(
               'mx-auto w-full max-w-3xl px-4 pb-6',
               sidebarCollapsed ? 'max-w-4xl' : '',
             )}
           >
+            <div className="mb-2">
+              <SendPreview presentation={sendPreviewPresentation} />
+            </div>
             <ChatComposerNew
               onSend={handleSend}
               onStop={stopGeneration}
