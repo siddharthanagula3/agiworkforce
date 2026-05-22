@@ -99,4 +99,17 @@ test.describe('visual verification — web shared primitives', () => {
     mkdirSync(SCREENSHOT_DIR, { recursive: true });
     writeFileSync(`${SCREENSHOT_DIR}/home-route-findings.json`, JSON.stringify(capture, null, 2));
   });
+
+  test('project detail route renders the not-found state and captures it', async ({ page }) => {
+    // The shared projectStore isn't persisted, so a clean page load shows the
+    // "Project not found" empty state. The populated state can be captured
+    // manually after creating a project through the gallery — out of scope
+    // for the automated spec, which runs against an empty store.
+    const capture = await captureRoute(page, '/projects/empty-id', 'projects-detail-empty');
+    mkdirSync(SCREENSHOT_DIR, { recursive: true });
+    writeFileSync(
+      `${SCREENSHOT_DIR}/projects-detail-empty-findings.json`,
+      JSON.stringify(capture, null, 2),
+    );
+  });
 });

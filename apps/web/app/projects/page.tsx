@@ -85,7 +85,7 @@ export default function ProjectsPage() {
             description=""
             layout="grid"
             onSelect={(project) => {
-              router.push(`/chat?project=${encodeURIComponent(project.id)}`);
+              router.push(`/projects/${encodeURIComponent(project.id)}`);
             }}
           />
         </section>
