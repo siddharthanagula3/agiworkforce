@@ -2,9 +2,26 @@
 
 Status: Current
 Owner: Next session lead
-Last updated: 2026-05-21 (extended through round 9, bridge-status lane)
+Last updated: 2026-05-21 (extended through round 10, project-schema lane)
 Branch: `fix/extension-typecheck-and-c02-sync-2026-05-20`
-Head pushed: `6d7045146` (round-8 boundary) → round 9 in progress this session
+Head pushed: `6d7045146` (round-8 boundary) → rounds 9-10 in progress this session
+
+## Round 10 additions (after Round 9 wrap at `e3e5d85f8`)
+
+Round 10 closes the PLAN.md section 5 task "Define project schema." Types-first cross-surface contract — same pattern as SendPreviewPresentation / GeneratedFilePresentation: hosts adopt in later slices.
+
+- `feat(types): project schema + project header presentation`
+  - `ProjectRecord` extended with `instructions`, `defaultModelId`, `knowledgeFileCount`, `memberCount`, `lastUsedAt`, `iconEmoji`, `accentColor`, `importedFrom` (all optional — non-breaking).
+  - New companion types: `ProjectMember`, `ProjectMemberRole`, `ProjectKnowledgeFile`, `ProjectInstructions`, `ProjectAccentColor` (bounded palette emerald/sky/amber/rose/violet/zinc), `ProjectImportSource` (claude/openai/manual).
+  - `summarizeProjectHeader()` derives `ProjectHeaderPresentation` with title, description, icon, normalized accent, privacy/provider labels, staysLocal flag, default-model passthrough, denormalized file/member counts, last-used label, imported-from label, and canonical-order surface chips.
+  - Helpers: `normalizeProjectAccentColor()`, `projectMemberRoleLabel()`.
+  - 15 new vitest tests.
+
+### Round 10 — open paths for next session
+
+1. **First host adoption** — Desktop project view or Web sidebar adopts `summarizeProjectHeader()` to render the project header. This unlocks a verified end-to-end view of the new schema fields.
+2. **Project knowledge files DB schema** — Supabase migration for `project_knowledge_files` table + canonical migration in `supabase/migrations/`.
+3. **MCP prompts as slash commands** — see Round 9 open paths note about the missing Tauri `mcp_list_prompts` command.
 
 ## Round 9 additions (after Round 8 wrap at `6d7045146`)
 
@@ -18,9 +35,31 @@ Round 9 closes the PLAN.md section 6 task: "Add Chrome and VS Code bridge status
 ### Round 9 — open paths for next session
 
 1. **Per-client VS Code bridge tracking** — currently the VS Code row uses overall transport status + websocket port presence as a proxy. A future enhancement would have the desktop Rust backend track active WebSocket clients per extension (Chrome vs VS Code vs CLI) and expose them as part of `extension_status`.
-2. **PLAN.md section 6 remaining tasks** — "Unify Desktop/CLI MCP server registry", "Add MCP prompts as slash commands", "Add connector install/uninstall across Desktop/Web/CLI".
+2. **PLAN.md section 6 remaining tasks** — "Unify Desktop/CLI MCP server registry", "Add MCP prompts as slash commands", "Add connector install/uninstall across Desktop/Web/CLI". Note: MCP prompts as slash commands requires a new Tauri `mcp_list_prompts` command first (the `PromptsListResult` protocol type exists at `apps/desktop/src-tauri/src/core/mcp/protocol.rs:243` but no command implementation does).
 3. **PLAN.md section 7** — Visual agent manager, queryable subagent runtime snapshots, per-agent tool/model restrictions.
 4. **PLAN.md section 5 remaining tasks** — "Define project schema", "Support project-level memory", "Add project export/import bundle".
+
+### Visual verification debt — Rounds 7-9
+
+Per the /goal checklist, "Screenshots confirming UI parity against Claude/OpenAI references" is required for completion. Rounds 7-9 shipped 14+ UI-touching commits with **zero visual verification** — typecheck + lint + unit tests + llm-operability all pass, which confirms code correctness but not pixel/layout correctness. Items pending a visual pass:
+
+| Surface | Component                                               | Round | Risk                                                                                                                     |
+| ------- | ------------------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------ |
+| Web     | `ArtifactPreview` adopting `GeneratedFileCard`          | 7     | Status pill, kind icon, source-session chip placement                                                                    |
+| Web     | `WebChatPage` `SendPreview` above composer              | 8     | Banner copy width, expand/collapse interaction, accent color across emerald/amber/sky variants                           |
+| Web     | `AttachmentPreview` per-file privacy chip               | 8     | Lock-icon chip overlay on image thumbnails (`.absolute -bottom-1 left-1`) — could clip remove button on small thumbnails |
+| Desktop | `InlineDocumentGeneration` adopting `GeneratedFileCard` | 7     | Header card spacing vs the action row below                                                                              |
+| Desktop | `ChatInputArea` `SendPreview` above composer            | 8     | Spacing in dense composer layout                                                                                         |
+| Desktop | `AttachmentPreview` per-file privacy chip               | 8     | Same as Web — absolute-positioned chip on images                                                                         |
+| Desktop | `OAuthConnectorCard` expiry badge + Refresh button      | 8     | Color-coded badge (emerald >24h / amber <1h / red expired) — confirm contrast in dark + light themes                     |
+| Desktop | `BridgeStatusCard` in `ConnectorGallery`                | 9     | Card layout, state dot colors, refresh button affordance                                                                 |
+| Mobile  | `ArtifactFullScreen` adopting `GeneratedFileCard`       | 7     | RN spacing/typography fidelity vs Web sibling                                                                            |
+| Mobile  | Chat tab `SendPreview` above `ChatInput`                | 8     | Padding integration with project selector bar                                                                            |
+| Mobile  | `AttachmentPreview` per-file privacy chip               | 8     | RN absolute-positioned chip placement on thumbnails                                                                      |
+
+**Recommended next visual-verification slice**: dedicated playwright + RN screenshot pass. Or, until that lands, document each new UI slice as visually-unverified in CHANGELOG entries. The current approach of relying on type/unit/lint gates is fine for refactors and contracts but not for net-new UI.
+
+The advisor (Round 9 pre-flight) explicitly flagged this risk: "You cannot honestly claim the /goal 'production-grade frontend parity' completion criterion is satisfied for any surface until somebody (you, an agent, or playwright) actually looks at the rendered output."
 
 ## Round 8 additions (after Round 7 wrap at `55305313e`)
 

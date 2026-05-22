@@ -2,9 +2,18 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21 (post round-9 suite-transformation session, bridge-status lane).
+Last updated: 2026-05-21 (post round-10 suite-transformation session, project-schema lane).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
+
+## 2026-05-21 Suite Transformation Session — Round 10 (in progress)
+
+Closes the PLAN.md section 5 task "Define project schema." Types-first cross-surface contract slice for the Projects feature — same pattern as SendPreviewPresentation / GeneratedFilePresentation: shared TYPES, hosts adopt in later slices.
+
+- [x] Extend `ProjectRecord` with instructions, defaultModelId, knowledgeFileCount, memberCount, lastUsedAt, iconEmoji, accentColor, importedFrom (all optional, non-breaking)
+- [x] Add companion types: ProjectMember, ProjectMemberRole, ProjectKnowledgeFile, ProjectInstructions, ProjectAccentColor, ProjectImportSource
+- [x] Add `summarizeProjectHeader()` + `normalizeProjectAccentColor()` + `projectMemberRoleLabel()` helpers
+- [x] 15 new vitest tests pin accent palette, canonical surface order, count formatting, imported-from labelling, staysLocal flip, model passthrough
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
