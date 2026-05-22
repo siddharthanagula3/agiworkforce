@@ -18,7 +18,13 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, within } from '@testing-library/react';
 import { Box } from 'lucide-react';
 
-import { InlineToolCall, InlineToolCallStack, inferKindFromLabel } from '../InlineToolCall';
+import {
+  InlineToolCall,
+  InlineToolCallStack,
+  inferKindFromLabel,
+  KIND_TO_BADGE,
+  type InlineToolKind,
+} from '../InlineToolCall';
 
 afterEach(() => {
   cleanup();
@@ -295,5 +301,174 @@ describe('InlineToolCall — controlled mode', () => {
     );
     expect(screen.getByRole('button').getAttribute('aria-expanded')).toBe('true');
     expect(screen.queryByTestId('b')).not.toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. Badge icon mode (iconStyle='badge')
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('InlineToolCall — badge icon mode', () => {
+  it('renders data-icon-style="badge" on the root when iconStyle is badge', () => {
+    const { container } = render(
+      <InlineToolCall id="b1" label="Read" status="success" iconStyle="badge" />,
+    );
+    expect(container.querySelector('[data-icon-style="badge"]')).not.toBeNull();
+  });
+
+  it('renders a badge element with the correct letter for filesystem kinds', () => {
+    // read / write / edit / fs-list → letter F
+    const kinds: Array<{ kind: InlineToolKind; label: string }> = [
+      { kind: 'read', label: 'Read' },
+      { kind: 'write', label: 'Write' },
+      { kind: 'edit', label: 'Edit' },
+      { kind: 'fs-list', label: 'List' },
+    ];
+    for (const { kind, label } of kinds) {
+      const { container } = render(
+        <InlineToolCall
+          id={`b-${kind}`}
+          label={label}
+          status="success"
+          kind={kind}
+          iconStyle="badge"
+        />,
+      );
+      const badge = container.querySelector('[data-badge-kind="letter"]');
+      expect(badge).not.toBeNull();
+      expect(badge?.getAttribute('data-badge-letter')).toBe('F');
+      cleanup();
+    }
+  });
+
+  it('renders a glyph badge for web-search kind', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="b2"
+        label="Search"
+        status="success"
+        kind="web-search"
+        iconStyle="badge"
+      />,
+    );
+    expect(container.querySelector('[data-badge-kind="glyph"]')).not.toBeNull();
+  });
+
+  it('renders a glyph badge for thinking kind', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="b3"
+        label="Thinking"
+        status="running"
+        kind="thinking"
+        iconStyle="badge"
+      />,
+    );
+    expect(container.querySelector('[data-badge-kind="glyph"]')).not.toBeNull();
+  });
+
+  it('renders a check badge for done kind', () => {
+    const { container } = render(
+      <InlineToolCall id="b4" label="Done" status="success" kind="done" iconStyle="badge" />,
+    );
+    expect(container.querySelector('[data-badge-kind="check"]')).not.toBeNull();
+  });
+
+  it('renders "Result" sub-label below bar for badge+success with no body', () => {
+    const { container } = render(
+      <InlineToolCall id="b5" label="Read" status="success" kind="read" iconStyle="badge" />,
+    );
+    expect(container.querySelector('[data-result-label]')).not.toBeNull();
+    expect(container.querySelector('[data-result-label]')?.textContent).toBe('Result');
+  });
+
+  it('does NOT render "Result" sub-label when body is provided (expandable row)', () => {
+    const { container } = render(
+      <InlineToolCall
+        id="b6"
+        label="Read"
+        status="success"
+        kind="read"
+        iconStyle="badge"
+        body={<pre>some content</pre>}
+      />,
+    );
+    expect(container.querySelector('[data-result-label]')).toBeNull();
+  });
+
+  it('uses iconLetter override when provided', () => {
+    const { container } = render(
+      <InlineToolCall id="b7" label="Custom" status="success" iconStyle="badge" iconLetter="X" />,
+    );
+    const badge = container.querySelector('[data-badge-kind="letter"]');
+    expect(badge?.getAttribute('data-badge-letter')).toBe('X');
+  });
+
+  it('renders 28px-height bar in badge mode (h-7 class)', () => {
+    const { container } = render(
+      <InlineToolCall id="b8" label="Read" status="success" iconStyle="badge" />,
+    );
+    const bar = container.querySelector('.inline-tool-call__bar');
+    expect(bar?.className).toMatch(/h-7/);
+  });
+
+  it('renders 32px-height bar in legacy lucide mode (h-8 class)', () => {
+    const { container } = render(
+      <InlineToolCall id="b9" label="Read" status="success" iconStyle="lucide" />,
+    );
+    const bar = container.querySelector('.inline-tool-call__bar');
+    expect(bar?.className).toMatch(/h-8/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 9. KIND_TO_BADGE map coverage
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('KIND_TO_BADGE map', () => {
+  const kinds: Array<Exclude<InlineToolKind, 'auto'>> = [
+    'bash',
+    'read',
+    'write',
+    'edit',
+    'web-search',
+    'web-fetch',
+    'fs-list',
+    'image-gen',
+    'browser',
+    'mcp-custom',
+    'thinking',
+    'done',
+    'unknown',
+  ];
+
+  it('has an entry for every concrete InlineToolKind (no gaps)', () => {
+    for (const kind of kinds) {
+      expect(KIND_TO_BADGE[kind]).toBeDefined();
+    }
+  });
+
+  it('maps bash → letter >', () => {
+    const cfg = KIND_TO_BADGE['bash'];
+    expect(cfg.kind).toBe('letter');
+    if (cfg.kind === 'letter') expect(cfg.letter).toBe('>');
+  });
+
+  it('maps web-search → glyph', () => {
+    expect(KIND_TO_BADGE['web-search'].kind).toBe('glyph');
+  });
+
+  it('maps thinking → glyph', () => {
+    expect(KIND_TO_BADGE['thinking'].kind).toBe('glyph');
+  });
+
+  it('maps done → check', () => {
+    expect(KIND_TO_BADGE['done'].kind).toBe('check');
+  });
+
+  it('maps mcp-custom → letter M', () => {
+    const cfg = KIND_TO_BADGE['mcp-custom'];
+    expect(cfg.kind).toBe('letter');
+    if (cfg.kind === 'letter') expect(cfg.letter).toBe('M');
   });
 });
