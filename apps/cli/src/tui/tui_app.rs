@@ -453,6 +453,7 @@ fn render(terminal: &mut Terminal<CrosstermBackend<Stdout>>, app: &TuiApp) -> Re
             out_tokens: app.total_output_tokens,
             cache_read: app.session.total_cache_read_tokens,
             cache_creation: app.session.total_cache_creation_tokens,
+            reasoning_tokens: app.session.total_reasoning_tokens,
             context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
             context_window: crate::model_catalog::context_window(&app.model_name) as u64,
         };

@@ -514,6 +514,22 @@ impl ChatWidget {
                     "Fast off".to_string()
                 },
             ),
+            StatusLineItem::CachedInputTokens => {
+                let cached = self.status_line_total_usage().cached_input_tokens;
+                if cached <= 0 {
+                    None
+                } else {
+                    Some(format!("{} cached", format_tokens_compact(cached)))
+                }
+            }
+            StatusLineItem::ReasoningOutputTokens => {
+                let reasoning = self.status_line_total_usage().reasoning_output_tokens;
+                if reasoning <= 0 {
+                    None
+                } else {
+                    Some(format!("{} reasoning", format_tokens_compact(reasoning)))
+                }
+            }
         }
     }
 

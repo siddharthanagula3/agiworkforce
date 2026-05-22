@@ -34,6 +34,9 @@ pub struct CostHud {
     pub out_tokens: u32,
     pub cache_read: u32,
     pub cache_creation: u32,
+    /// Reasoning output tokens from extended-thinking / chain-of-thought.
+    /// Only shown in the HUD when non-zero (i.e., for reasoning models only).
+    pub reasoning_tokens: u32,
     pub context_used: u64,
     pub context_window: u64,
 }
@@ -111,11 +114,19 @@ fn build_line<'a>(hud: &CostHud, model_id: &str) -> Line<'a> {
         ),
     ];
 
+    if hud.reasoning_tokens > 0 {
+        spans.push(Span::raw(" · "));
+        spans.push(Span::styled(
+            format!("reasoning {}", format_tokens(hud.reasoning_tokens)),
+            Style::default().fg(Color::DarkGray),
+        ));
+    }
+
     if hud.cache_read > 0 || hud.cache_creation > 0 {
         spans.push(Span::raw(" · "));
         spans.push(Span::styled(
             format!(
-                "cache {}/{}",
+                "cached {}/{}",
                 format_tokens(hud.cache_read),
                 format_tokens(hud.cache_creation),
             ),
@@ -186,6 +197,112 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(hud.context_percent(), 100);
+    }
+
+    /// Mirrors codex-cli `status_card_token_usage_excludes_cached_tokens`:
+    /// the "in"/"out" headline must NOT embed cached tokens (cached is separate).
+    #[test]
+    fn hud_in_out_headline_excludes_cached_tokens() {
+        let hud = CostHud {
+            in_tokens: 1_200,
+            out_tokens: 900,
+            cache_read: 200,
+            cache_creation: 0,
+            reasoning_tokens: 0,
+            context_used: 2_100,
+            context_window: 200_000,
+        };
+        let line = build_line(&hud, "claude-sonnet-4-6");
+        let text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>();
+        // "in N" present — plain input count
+        assert!(text.contains("in "), "missing 'in' field: {text}");
+        // "out N" present
+        assert!(text.contains("out "), "missing 'out' field: {text}");
+        // "cached" shown separately because cache_read > 0
+        assert!(text.contains("cached"), "missing 'cached' field: {text}");
+        // The "in" value does NOT include cached tokens
+        // (1200 input != 1000 non-cached; we check that "in" comes before "cached")
+        let in_pos = text.find("in ").unwrap();
+        let cached_pos = text.find("cached").unwrap();
+        assert!(in_pos < cached_pos, "'in' must appear before 'cached': {text}");
+    }
+
+    /// Reasoning column is absent when reasoning_tokens == 0 (non-reasoning model).
+    #[test]
+    fn reasoning_column_absent_for_non_reasoning_model() {
+        let hud = CostHud {
+            in_tokens: 1_000,
+            out_tokens: 500,
+            reasoning_tokens: 0,
+            ..Default::default()
+        };
+        let line = build_line(&hud, "gpt-5.5-mini");
+        let text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>();
+        assert!(
+            !text.contains("reasoning"),
+            "reasoning column must be absent when tokens=0: {text}"
+        );
+    }
+
+    /// Reasoning column is present when reasoning_tokens > 0 (extended-thinking model).
+    #[test]
+    fn reasoning_column_present_for_reasoning_model() {
+        let hud = CostHud {
+            in_tokens: 1_200,
+            out_tokens: 900,
+            reasoning_tokens: 150,
+            ..Default::default()
+        };
+        let line = build_line(&hud, "claude-sonnet-4-6");
+        let text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>();
+        assert!(
+            text.contains("reasoning"),
+            "reasoning column must appear when tokens>0: {text}"
+        );
+        // reasoning column appears before cached/cost (after 'out')
+        let reasoning_pos = text.find("reasoning").unwrap();
+        let dollars_pos = text.find('$').unwrap();
+        assert!(
+            reasoning_pos < dollars_pos,
+            "reasoning must appear before cost: {text}"
+        );
+    }
+
+    /// All 5 fields coexist: in, cached, out, reasoning, cost (matching codex pattern).
+    #[test]
+    fn all_five_token_fields_coexist_in_hud() {
+        let hud = CostHud {
+            in_tokens: 1_200,
+            out_tokens: 900,
+            cache_read: 200,
+            cache_creation: 0,
+            reasoning_tokens: 150,
+            context_used: 2_100,
+            context_window: 200_000,
+        };
+        let line = build_line(&hud, "claude-sonnet-4-6");
+        let text = line
+            .spans
+            .iter()
+            .map(|s| s.content.as_ref())
+            .collect::<String>();
+        assert!(text.contains("in "), "missing in: {text}");
+        assert!(text.contains("out "), "missing out: {text}");
+        assert!(text.contains("cached"), "missing cached: {text}");
+        assert!(text.contains("reasoning"), "missing reasoning: {text}");
+        assert!(text.contains("ctx"), "missing ctx: {text}");
     }
 
     #[test]

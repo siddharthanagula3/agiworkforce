@@ -61,6 +61,9 @@ pub struct AgentSession {
     pub total_output_tokens: u32,
     pub total_cache_read_tokens: u32,
     pub total_cache_creation_tokens: u32,
+    /// Cumulative reasoning output tokens across all turns. 0 for non-reasoning
+    /// models or when the provider does not report this field.
+    pub total_reasoning_tokens: u32,
     pub turn_count: u32,
     pub cost_ledger: crate::cost_ledger::CostLedger,
     pub fallback_chain: Option<crate::routing::fallback::FallbackChain>,
@@ -249,6 +252,7 @@ impl AgentSession {
             total_output_tokens: 0,
             total_cache_read_tokens: 0,
             total_cache_creation_tokens: 0,
+            total_reasoning_tokens: 0,
             turn_count: 0,
             cost_ledger: crate::cost_ledger::CostLedger::default(),
             fallback_chain: None,
