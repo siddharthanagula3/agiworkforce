@@ -28,6 +28,10 @@ Round 10 closes the PLAN.md section 5 task "Define project schema" and ships the
 
 - `/projects` dark-mode text contrast — the page referenced `--text-1` and `--text-3` design tokens that don't exist anywhere in the repo, so they fell back to default colors and rendered nearly invisible against the forced-dark `#09090b` background. Replaced with direct hex values from the design-tokens dark palette (`#e8e4db` heading / `#b3aea4` body) and hardcoded the section card border + background to the warm-dark surface tokens. Re-captured visual-verification PNG confirms the heading and body copy are now legible.
 
+### Tested
+
+- Mobile RN-native ProjectHeader snapshot tests in `apps/mobile/__tests__/shared-primitives.snapshot.test.tsx` lock the rendered RN tree across Local / BYOK / counts+last-used+model variants. Mirrors the unified-chat snapshot pattern so Mobile gains structural visual-verification parity. 3 jest snapshots (1,159 lines of locked tree shape).
+
 ## [Unreleased — autonomous suite transformation, round 9] — 2026-05-21
 
 Round 9 closes the PLAN.md section 6 task "Add Chrome and VS Code bridge status to connector hub" — making developer-surface transport health a first-class part of the consumer connector hub.
