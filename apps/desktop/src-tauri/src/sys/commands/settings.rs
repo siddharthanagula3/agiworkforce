@@ -454,6 +454,19 @@ pub async fn settings_load_from_disk(
             loaded_settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
         }
 
+        // v1 LOCAL ONLY migration: if a user previously opted into cloud sync (before
+        // the v1-local-only gate), coerce chat_storage_mode back to "local" on load.
+        // This prevents spawn_sync_message from firing for upgrading users.
+        // Remove this coercion when cloud sync is ungated for production.
+        if let Some(ref mut chat_prefs) = loaded_settings.chat_preferences {
+            if chat_prefs.chat_storage_mode == "cloud" {
+                tracing::info!(
+                    "v1 LOCAL ONLY: coercing persisted chat_storage_mode 'cloud' → 'local'"
+                );
+                chat_prefs.chat_storage_mode = "local".to_string();
+            }
+        }
+
         // Update in-memory state
         let mut current_settings = state.settings.lock().await;
         *current_settings = loaded_settings.clone();

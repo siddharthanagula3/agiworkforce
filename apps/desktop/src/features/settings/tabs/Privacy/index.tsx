@@ -1,14 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Check, Database, Download, Loader2, X } from 'lucide-react';
-import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
+import { isTauri } from '@/lib/tauri-mock';
 import { analyticsDeleteAllData } from '@/api/analytics';
 import { chat, cache, settings, onboarding } from '@agiworkforce/api';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { Button } from '@/components/ui/Button';
-import { Switch } from '@/components/ui/Switch';
-import { useSettingsStore } from '../../../../stores/settingsStore';
 import { errorTracking } from '../../../../services/errorTracking';
 
 const LazyMasterPasswordSettings = lazy(() =>
@@ -42,8 +40,6 @@ function Fallback({ label }: { label: string }) {
 }
 
 function DataPrivacySection() {
-  const chatStorageMode = useSettingsStore((state) => state.chatPreferences.chatStorageMode);
-  const setChatStorageMode = useSettingsStore((state) => state.setChatStorageMode);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -245,34 +241,7 @@ function DataPrivacySection() {
           )}
         </div>
 
-        {!isCloudWeb && (
-          <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-            <div>
-              <h4 className="font-semibold mb-1">Chat History Storage</h4>
-              <p className="text-sm text-muted-foreground">
-                Choose where your chat history is kept. Local storage never leaves your device.
-                Cloud sync backs up your conversations to your account.
-              </p>
-            </div>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <label htmlFor="chatStorageMode" className="text-sm font-medium">
-                  Sync chat history to cloud
-                </label>
-                <p className="text-xs text-muted-foreground">
-                  {chatStorageMode === 'cloud'
-                    ? 'Conversations are synced to your account after each message.'
-                    : 'Conversations stay on this device only (default).'}
-                </p>
-              </div>
-              <Switch
-                id="chatStorageMode"
-                checked={chatStorageMode === 'cloud'}
-                onCheckedChange={(checked) => setChatStorageMode(checked ? 'cloud' : 'local')}
-              />
-            </div>
-          </div>
-        )}
+        {/* Cloud sync toggle removed for v1 LOCAL ONLY. Re-add when cloud is ungated. */}
 
         <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-6">
           <div className="flex items-start gap-4">

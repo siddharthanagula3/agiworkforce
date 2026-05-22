@@ -406,6 +406,11 @@ fn extract_jwt_sub(jwt: &str) -> Option<String> {
 /// Spawn a background task to sync a conversation to Supabase.
 /// Does nothing if Supabase is not configured or the user is not authenticated.
 pub fn spawn_sync_conversation(conversation: Conversation) {
+    #[cfg(test)]
+    {
+        use std::sync::atomic::Ordering;
+        TEST_SPAWN_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
     tokio::spawn(async move {
         if let Some(client) = SupabaseSyncClient::new() {
             if let Err(e) = client.sync_conversation(&conversation).await {
@@ -418,6 +423,11 @@ pub fn spawn_sync_conversation(conversation: Conversation) {
 /// Spawn a background task to sync a message to Supabase.
 /// Does nothing if Supabase is not configured or the user is not authenticated.
 pub fn spawn_sync_message(message: Message) {
+    #[cfg(test)]
+    {
+        use std::sync::atomic::Ordering;
+        TEST_SPAWN_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
     tokio::spawn(async move {
         if let Some(client) = SupabaseSyncClient::new() {
             if let Err(e) = client.sync_message(&message).await {
@@ -426,3 +436,22 @@ pub fn spawn_sync_message(message: Message) {
         }
     });
 }
+
+// ============================================================================
+// Test-only spawn counter — incremented at the top of each spawn_sync_* fn.
+// Lets unit tests assert sync is never (or always) triggered without needing
+// a real Supabase connection.
+// ============================================================================
+
+#[cfg(test)]
+static TEST_SPAWN_COUNT: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// Reset the spawn counter and return its previous value.
+/// Call once at the start of each test to ensure isolation.
+#[cfg(test)]
+pub(crate) fn test_take_spawn_count() -> usize {
+    use std::sync::atomic::Ordering;
+    TEST_SPAWN_COUNT.swap(0, Ordering::Relaxed)
+}
+
