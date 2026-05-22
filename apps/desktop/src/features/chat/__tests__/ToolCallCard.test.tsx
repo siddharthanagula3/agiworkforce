@@ -1,13 +1,17 @@
 /**
- * ToolCallCard Component Tests
+ * ToolCallCard Component Tests (R22 badge-mode refactor)
+ *
+ * The desktop ToolCallCard now renders via @agiworkforce/unified-chat
+ * InlineToolCall with iconStyle="badge". Tests validate the new visual
+ * contract rather than the old framer-motion bordered-card contract.
  *
  * Covers:
- * - Collapsed row: icon + tool name + brief result summary + chevron
- * - Expanded JSON request/response sections with labeled headers
- * - Status border variants (pending, running, complete, error)
- * - Duration display
- * - Source badge for MCP and browser tools
- * - No expand affordance when card has no detail
+ * - Tool name rendered in the bar
+ * - Badge icon rendered (data-icon-style="badge")
+ * - Status → InlineToolCallStatus mapping
+ * - Expandable body with Request / Response sections
+ * - Duration display in argSummary
+ * - Keyboard expand/collapse
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -25,181 +29,152 @@ vi.mock('framer-motion', () => ({
 import { ToolCallCard } from '../ToolCallCard';
 
 describe('ToolCallCard', () => {
-  describe('collapsed row', () => {
-    it('renders the tool name', () => {
+  describe('basic rendering', () => {
+    it('renders the tool name in the label', () => {
       render(<ToolCallCard toolCallId="tc-1" toolName="list_directory" status="complete" />);
-      expect(screen.getByText('list_directory')).toBeInTheDocument();
+      expect(screen.getByText('list_directory')).toBeTruthy();
     });
 
-    it('shows a brief result summary in collapsed state', () => {
-      render(
-        <ToolCallCard
-          toolCallId="tc-2"
-          toolName="read_file"
-          status="complete"
-          result={'file contents here\nline 2\nline 3'}
-        />,
-      );
-      expect(screen.getByText('file contents here')).toBeInTheDocument();
-    });
-
-    it('truncates long result summary to 80 chars with ellipsis', () => {
-      const longLine = 'a'.repeat(90);
-      render(
-        <ToolCallCard toolCallId="tc-3" toolName="bash" status="complete" result={longLine} />,
-      );
-      const summary = screen.getByText(/^a+…$/);
-      expect(summary.textContent?.length).toBeLessThanOrEqual(81);
-    });
-
-    it('shows error summary in collapsed state for error status', () => {
-      render(
-        <ToolCallCard
-          toolCallId="tc-4"
-          toolName="bash"
-          status="error"
-          error="Command not found: foo"
-        />,
-      );
-      expect(screen.getByText('Command not found: foo')).toBeInTheDocument();
-    });
-
-    it('shows a chevron when there is expandable detail', () => {
+    it('renders in badge icon mode (data-icon-style="badge")', () => {
       const { container } = render(
-        <ToolCallCard toolCallId="tc-5" toolName="tool" status="complete" result="some result" />,
+        <ToolCallCard toolCallId="tc-2" toolName="read_file" status="complete" />,
       );
-      // ChevronDown SVG should be present
-      expect(container.querySelector('svg')).toBeTruthy();
+      expect(container.querySelector('[data-icon-style="badge"]')).not.toBeNull();
     });
 
-    it('renders an MCP badge for MCP-prefixed tool ids', () => {
-      render(
-        <ToolCallCard
-          toolCallId="mcp__filesystem__list"
-          toolName="list_directory"
-          status="complete"
-        />,
+    it('renders a badge element', () => {
+      const { container } = render(
+        <ToolCallCard toolCallId="tc-3" toolName="list_directory" status="complete" />,
       );
-      expect(screen.getByText('MCP')).toBeInTheDocument();
+      expect(container.querySelector('[data-badge-kind]')).not.toBeNull();
+    });
+  });
+
+  describe('status mapping', () => {
+    it('pending status renders ellipsis suffix', () => {
+      const { container } = render(
+        <ToolCallCard toolCallId="s1" toolName="tool" status="pending" />,
+      );
+      expect(container.querySelector('[data-status="pending"]')).not.toBeNull();
     });
 
-    it('renders a Browser badge for known browser display names', () => {
-      render(<ToolCallCard toolCallId="tc-6" toolName="click" status="complete" />);
-      expect(screen.getByText('Browser')).toBeInTheDocument();
+    it('running status renders the spinner', () => {
+      const { container } = render(
+        <ToolCallCard toolCallId="s2" toolName="tool" status="running" />,
+      );
+      expect(container.querySelector('.animate-spin')).not.toBeNull();
     });
 
-    it('shows duration for complete status', () => {
-      render(<ToolCallCard toolCallId="tc-7" toolName="tool" status="complete" elapsedMs={1250} />);
-      expect(screen.getByText('1.3s')).toBeInTheDocument();
+    it('complete status maps to data-status="success"', () => {
+      const { container } = render(
+        <ToolCallCard toolCallId="s3" toolName="tool" status="complete" />,
+      );
+      expect(container.querySelector('[data-status="success"]')).not.toBeNull();
+    });
+
+    it('error status maps to data-status="error"', () => {
+      const { container } = render(<ToolCallCard toolCallId="s4" toolName="tool" status="error" />);
+      expect(container.querySelector('[data-status="error"]')).not.toBeNull();
+    });
+  });
+
+  describe('duration display', () => {
+    it('shows duration in seconds for elapsedMs >= 1000', () => {
+      render(<ToolCallCard toolCallId="d1" toolName="tool" status="complete" elapsedMs={1250} />);
+      expect(screen.getByText('1.3s')).toBeTruthy();
     });
 
     it('shows duration in ms when under 1 second', () => {
-      render(<ToolCallCard toolCallId="tc-8" toolName="tool" status="complete" elapsedMs={450} />);
-      expect(screen.getByText('450ms')).toBeInTheDocument();
+      render(<ToolCallCard toolCallId="d2" toolName="tool" status="complete" elapsedMs={450} />);
+      expect(screen.getByText('450ms')).toBeTruthy();
     });
   });
 
   describe('expand / collapse', () => {
-    it('expands to show Request section when args provided', async () => {
+    it('bar is not expandable when no args or result', () => {
+      const { container } = render(
+        <ToolCallCard toolCallId="e1" toolName="tool" status="complete" />,
+      );
+      // No expandable body means no role=button on the bar
+      expect(container.querySelector('[data-icon-style="badge"] [role="button"]')).toBeNull();
+    });
+
+    it('bar is expandable when args are provided', async () => {
       const user = userEvent.setup();
       render(
         <ToolCallCard
-          toolCallId="tc-9"
+          toolCallId="e2"
           toolName="list_directory"
           status="complete"
           args={{ path: '/home/user' }}
-          result="file1.txt\nfile2.txt"
+          result="file1.txt"
         />,
       );
-
-      const toggleBtn = screen.getByRole('button', { name: /expand tool details/i });
-      await user.click(toggleBtn);
-
-      expect(screen.getByText('Request')).toBeInTheDocument();
+      const bar = screen.getByRole('button');
+      expect(bar.getAttribute('aria-expanded')).toBe('false');
+      await user.click(bar);
+      expect(bar.getAttribute('aria-expanded')).toBe('true');
+      expect(screen.getByText('Request')).toBeTruthy();
     });
 
     it('expands to show Response section when result provided', async () => {
       const user = userEvent.setup();
       render(
         <ToolCallCard
-          toolCallId="tc-10"
+          toolCallId="e3"
           toolName="read_file"
           status="complete"
           args={{ path: '/etc/hosts' }}
           result="127.0.0.1 localhost"
         />,
       );
-
-      await user.click(screen.getByRole('button', { name: /expand tool details/i }));
-
-      expect(screen.getByText('Response')).toBeInTheDocument();
-    });
-
-    it('shows Response labeled in red for error status', async () => {
-      const user = userEvent.setup();
-      render(
-        <ToolCallCard
-          toolCallId="tc-11"
-          toolName="bash"
-          status="error"
-          args={{ cmd: 'broken' }}
-          error="exit code 127"
-        />,
-      );
-
-      await user.click(screen.getByRole('button', { name: /expand tool details/i }));
-
-      const responseLabel = screen.getByText('Response');
-      expect(responseLabel).toHaveClass('text-red-400');
+      await user.click(screen.getByRole('button'));
+      expect(screen.getByText('Response')).toBeTruthy();
     });
 
     it('collapses back when clicked again', async () => {
       const user = userEvent.setup();
       render(
-        <ToolCallCard toolCallId="tc-12" toolName="read_file" status="complete" result="content" />,
+        <ToolCallCard
+          toolCallId="e4"
+          toolName="read_file"
+          status="complete"
+          result="content"
+          args={{ path: '/f' }}
+        />,
       );
-
-      const btn = screen.getByRole('button', { name: /expand tool details/i });
+      const btn = screen.getByRole('button');
       await user.click(btn);
-      expect(screen.getByText('Response')).toBeInTheDocument();
-
+      expect(screen.getByText('Response')).toBeTruthy();
       await user.click(btn);
-      expect(screen.queryByText('Response')).not.toBeInTheDocument();
-    });
-
-    it('renders the expand button as disabled when there is no detail', () => {
-      render(<ToolCallCard toolCallId="tc-13" toolName="tool" status="running" />);
-      // Button is present but disabled — not interactive
-      const btn = screen.getByRole('button', { name: /expand tool details/i });
-      expect(btn).toBeDisabled();
+      expect(screen.queryByText('Response')).toBeNull();
     });
   });
 
-  describe('status icons', () => {
-    it('shows spinning loader for pending status', () => {
+  describe('kind inference', () => {
+    it('infers browser kind for known browser tool names', () => {
       const { container } = render(
-        <ToolCallCard toolCallId="s1" toolName="tool" status="pending" />,
+        <ToolCallCard toolCallId="k1" toolName="click" status="complete" />,
       );
-      expect(container.querySelector('.animate-spin')).toBeTruthy();
+      // Browser kind maps to badge letter "B"
+      const badge = container.querySelector('[data-badge-kind="letter"]');
+      expect(badge?.getAttribute('data-badge-letter')).toBe('B');
     });
 
-    it('shows ping animation for running status', () => {
+    it('infers mcp kind for mcp-prefixed tool names', () => {
       const { container } = render(
-        <ToolCallCard toolCallId="s2" toolName="tool" status="running" />,
+        <ToolCallCard toolCallId="k2" toolName="mcp__filesystem__list" status="complete" />,
       );
-      expect(container.querySelector('.animate-ping')).toBeTruthy();
+      const badge = container.querySelector('[data-badge-kind="letter"]');
+      expect(badge?.getAttribute('data-badge-letter')).toBe('M');
     });
 
-    it('applies green border for complete status', () => {
+    it('infers read kind and shows F badge for read-related tools', () => {
       const { container } = render(
-        <ToolCallCard toolCallId="s3" toolName="tool" status="complete" />,
+        <ToolCallCard toolCallId="k3" toolName="read_file" status="complete" />,
       );
-      expect(container.firstChild).toHaveClass('border-green-500/40');
-    });
-
-    it('applies red border for error status', () => {
-      const { container } = render(<ToolCallCard toolCallId="s4" toolName="tool" status="error" />);
-      expect(container.firstChild).toHaveClass('border-red-500/40');
+      const badge = container.querySelector('[data-badge-kind="letter"]');
+      expect(badge?.getAttribute('data-badge-letter')).toBe('F');
     });
   });
 });
