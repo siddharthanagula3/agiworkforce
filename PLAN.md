@@ -399,7 +399,7 @@ Tasks:
 - [x] Convert Desktop PDF/DOCX/XLSX/PPTX tools into generated-file manifest producers.
 - [x] Add local compute-session work directories with TTL metadata and audit events.
 - [x] Add shared generated-file presentation helpers and first-pass Desktop/Web/Mobile status, preview, download, share, source, checksum, and privacy labels.
-- Add generated-file request, status, preview, download, and share controls to Web, Mobile, and Desktop.
+- [x] Add generated-file request, status, preview, download, and share controls to Web, Mobile, and Desktop. (Round 7 — shared `GeneratedFileCard` in `packages/unified-chat` adopted by `apps/web` `ArtifactPreview`, `apps/desktop` `InlineDocumentGeneration`, and `apps/mobile` `ArtifactFullScreen` via an RN-native mirror that consumes the same `GeneratedFilePresentation` from `@agiworkforce/types`.)
 - [x] Add provider-container adapters that convert OpenAI Code Interpreter-style file annotations into AGI `GeneratedFile` records.
 - [x] Add tests proving Local mode does not upload generated files, BYOK transfer requires explicit approval, and Managed mode files carry TTL/quota/deletion metadata.
 
