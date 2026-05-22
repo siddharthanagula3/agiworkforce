@@ -59,6 +59,24 @@ These findings discharge part of the Stop hook visual-verification debt that the
 | ------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- |
 | / (cloud-web) | `desktop/desktop-root-viewport.png` | Sign-in screen renders cleanly. agi.workforce branding, navigation chrome (Providers / Pricing / Compare / About / Sign in / Install), accessible form labels (EMAIL / PASSWORD), and OAuth options (Continue with Google / GitHub) all visible. Production-quality light-mode layout. | Informational |
 
+## Pixel-parity comparisons — 2026-05-21
+
+The /goal calls for "screenshots confirming UI parity against Claude/OpenAI references." This section is the auditable comparison. Reference images are copied into `_reference-comparisons/` so the comparison stays valid even if the source path at `~/Desktop/reference/ui/` changes.
+
+### Web /projects vs ChatGPT projects views
+
+| AGI capture                             | Reference                                                      | Parity gap                                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `web/projects-route-viewport.png`       | `_reference-comparisons/ref-chatgpt-projects-create-modal.png` | **CREATE UX**: ChatGPT's create-project modal has an emoji-add icon on the name input + preset chips (Investing / Homework / Writing) + explicit "Create project" / "More options" buttons. AGI's inline `Project name...` input has no presets, no emoji picker, no secondary CTA. Round 10 schema supports `iconEmoji` + `accentColor` but UI doesn't expose either. **Tracked as TODO #44.** |
+| `web/projects-route-viewport.png` (hub) | `_reference-comparisons/ref-chatgpt-projects-detail.png`       | **DETAIL VIEW**: ChatGPT has a per-project detail view at `/g-p-<id>` showing project name + folder icon centered with Chats/Sources tabs + composer pinned bottom. AGI's `/projects` is hub-only — selecting a project routes to `/chat?project=foo` (mixes project context into chat). Round 10's `ProjectHeader` primitive is ready to wedge into a detail route. **Tracked as TODO #45.**   |
+
+### What this comparison concludes
+
+- AGI's `/projects` hub layout and Round-10 contrast fix are production-quality at the structural level (correct chrome, search input, empty state, CTA placement, dark mode legible after `651b4e016`).
+- The gaps are FEATURES the reference has and AGI doesn't yet — not pixel-level visual regressions. They're tracked as discrete TODOs rather than blockers because they require product-decision approval before implementation.
+
+Each future surface-touching PR should rerun the relevant capture step and re-check this matrix.
+
 ## Why not pixel-diff snapshots?
 
 We deliberately commit raw PNGs rather than running pixel-diff assertions in CI:
