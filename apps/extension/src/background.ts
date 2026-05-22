@@ -58,6 +58,7 @@ import {
   type BrowserAction,
 } from './browserTool';
 import { migrateAutofillProfile } from './autofill/filler';
+import { memoryList, memoryAdd, memoryUpdate, memoryDelete } from './background/memory-bridge';
 import {
   DISCOVERY_MESSAGE_TYPES,
   DOM_MUTATION_MESSAGE_TYPES,
@@ -1501,6 +1502,57 @@ async function handleMessageAsync(
         const msg = err instanceof Error ? err.message : 'Prompt failed';
         return { success: false, error: msg } as ExtensionResponse;
       }
+    }
+
+    case 'LIST_MEMORIES' as ExtensionMessage['type']: {
+      const memories = await memoryList();
+      return { success: true, memories } as ExtensionResponse;
+    }
+
+    case 'ADD_MEMORY' as ExtensionMessage['type']: {
+      const addPayload = message as unknown as { content?: string };
+      const addContent = typeof addPayload.content === 'string' ? addPayload.content : '';
+      if (!addContent.trim()) {
+        return { success: false, error: 'Memory content is required' } as ExtensionResponse;
+      }
+      const added = await memoryAdd(addContent);
+      if (!added) {
+        return {
+          success: false,
+          error: 'Memory limit reached or content empty',
+        } as ExtensionResponse;
+      }
+      return { success: true, memory: added } as ExtensionResponse;
+    }
+
+    case 'UPDATE_MEMORY' as ExtensionMessage['type']: {
+      const upPayload = message as unknown as { id?: string; content?: string };
+      const upId = typeof upPayload.id === 'string' ? upPayload.id : '';
+      const upContent = typeof upPayload.content === 'string' ? upPayload.content : '';
+      if (!upId || !upContent.trim()) {
+        return {
+          success: false,
+          error: 'Memory id and content are required',
+        } as ExtensionResponse;
+      }
+      const updated = await memoryUpdate(upId, upContent);
+      if (!updated) {
+        return { success: false, error: 'Memory not found' } as ExtensionResponse;
+      }
+      return { success: true, memory: updated } as ExtensionResponse;
+    }
+
+    case 'DELETE_MEMORY' as ExtensionMessage['type']: {
+      const delPayload = message as unknown as { id?: string };
+      const delId = typeof delPayload.id === 'string' ? delPayload.id : '';
+      if (!delId) {
+        return { success: false, error: 'Memory id is required' } as ExtensionResponse;
+      }
+      const deleted = await memoryDelete(delId);
+      return {
+        success: deleted,
+        error: deleted ? undefined : 'Memory not found',
+      } as ExtensionResponse;
     }
 
     case 'BRIDGE_URL_CHANGED': {

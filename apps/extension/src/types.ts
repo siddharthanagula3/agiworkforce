@@ -64,7 +64,11 @@ export type NativeMessageType =
   | 'CREATE_SCHEDULED_TASK'
   | 'LIST_SCHEDULED_TASKS'
   | 'UPDATE_SCHEDULED_TASK'
-  | 'DELETE_SCHEDULED_TASK';
+  | 'DELETE_SCHEDULED_TASK'
+  | 'LIST_MEMORIES'
+  | 'ADD_MEMORY'
+  | 'UPDATE_MEMORY'
+  | 'DELETE_MEMORY';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
 export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
