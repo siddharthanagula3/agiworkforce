@@ -46,6 +46,8 @@ export default [
       'test-*.js',
       // Web app maintenance/migration scripts (Node.js CJS, not app source)
       'apps/web/scripts/**',
+      // CLI utility scripts (Node.js ESM, not Rust source)
+      'apps/cli/scripts/**',
       // VS Code extension utility scripts (Node.js CJS, not app source)
       'apps/extension-vscode/scripts/**',
       // Workspace stub for react-native-worklets (CJS, no linting needed)
