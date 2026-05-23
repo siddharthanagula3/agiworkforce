@@ -1,13 +1,12 @@
 import { useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, Alert } from 'react-native';
+import { View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Check, Zap } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useTierStore } from '@/src/features/billing/store';
-import { api } from '@/services/api';
-import { openExternalUrl } from '@/lib/safeOpenURL';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import type { BillingPlanTier, BillingInterval } from '@agiworkforce/types';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -231,7 +230,7 @@ export default function PricingScreen() {
   const c = useThemeColors();
   const currentTier = useTierStore((s) => s.tier);
   const [interval, setInterval] = useState<BillingInterval>('monthly');
-  const [upgrading, setUpgrading] = useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
@@ -241,27 +240,9 @@ export default function PricingScreen() {
     }
   }, [router]);
 
-  const handleUpgrade = useCallback(
-    async (tier: BillingPlanTier) => {
-      if (upgrading) return;
-      setUpgrading(true);
-      try {
-        const data = await api.post<{ url: string }>('/api/checkout', { tier, interval });
-        if (data.url && (await openExternalUrl(data.url))) {
-          return;
-        }
-      } catch {
-        // Fall through to static URL
-      } finally {
-        setUpgrading(false);
-      }
-      Alert.alert(
-        'Upgrade',
-        'Could not open checkout. Please visit agiworkforce.com/billing in your browser.',
-      );
-    },
-    [interval, upgrading],
-  );
+  const handleUpgrade = useCallback((_tier: BillingPlanTier) => {
+    setInviteModalOpen(true);
+  }, []);
 
   if (!FEATURES.billing) return null;
 
@@ -348,6 +329,14 @@ export default function PricingScreen() {
           />
         ))}
       </ScrollView>
+
+      {/* v1: paid upgrades route to InviteCodeModal (no IAP/Stripe in v1) */}
+      <InviteCodeModal
+        open={inviteModalOpen}
+        onClose={() => setInviteModalOpen(false)}
+        source="team-plan"
+        defaultTab="invite"
+      />
     </SafeAreaView>
   );
 }
