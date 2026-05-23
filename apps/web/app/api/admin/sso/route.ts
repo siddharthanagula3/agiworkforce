@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
@@ -38,15 +39,17 @@ interface OrgMemberRow {
   role: string;
 }
 
-interface CreateSSOConnectionBody {
-  organization_id: string;
-  provider_type: 'saml' | 'oidc';
-  domain: string;
-  display_name?: string;
-  metadata_url?: string;
-  metadata_xml?: string;
-  attribute_mapping?: Record<string, string>;
-}
+const CreateSSOConnectionSchema = z.object({
+  organization_id: z.string().uuid(),
+  provider_type: z.enum(['saml', 'oidc']),
+  domain: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/),
+  display_name: z.string().max(200).optional(),
+  metadata_url: z.string().url().optional(),
+  metadata_xml: z.string().max(500_000).optional(),
+  attribute_mapping: z.record(z.string(), z.string()).optional(),
+});
+
+type CreateSSOConnectionBody = z.infer<typeof CreateSSOConnectionSchema>;
 
 type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 
@@ -237,11 +240,19 @@ export async function POST(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: CreateSSOConnectionBody;
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as CreateSSOConnectionBody;
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const parsed = CreateSSOConnectionSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request body', details: parsed.error.flatten().fieldErrors },
+      { status: 400 },
+    );
   }
 
   const {
@@ -252,26 +263,8 @@ export async function POST(request: NextRequest): Promise<Response> {
     metadata_url,
     metadata_xml,
     attribute_mapping,
-  } = body;
+  } = parsed.data;
 
-  // Input validation
-  if (!organization_id) {
-    return NextResponse.json({ error: 'organization_id is required' }, { status: 400 });
-  }
-  if (!provider_type || !['saml', 'oidc'].includes(provider_type)) {
-    return NextResponse.json({ error: 'provider_type must be "saml" or "oidc"' }, { status: 400 });
-  }
-  if (!domain) {
-    return NextResponse.json({ error: 'domain is required' }, { status: 400 });
-  }
-  // Basic domain format validation (e.g. acme.com)
-  const domainPattern = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?\.[a-zA-Z]{2,}$/;
-  if (!domainPattern.test(domain)) {
-    return NextResponse.json(
-      { error: 'domain must be a valid domain name (e.g. acme.com)' },
-      { status: 400 },
-    );
-  }
   if (!metadata_url && !metadata_xml) {
     return NextResponse.json(
       { error: 'Either metadata_url or metadata_xml must be provided' },
