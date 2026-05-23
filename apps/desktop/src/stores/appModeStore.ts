@@ -35,11 +35,18 @@ interface AppModeState {
 }
 
 const APP_MODE_STORE_VERSION = 1;
+const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set([
+  'hobby',
+  'pro',
+  'pro_plus',
+  'max',
+  'enterprise',
+]);
 
 export const useAppModeStore = create<AppModeState>()(
   devtools(
     persist(
-      subscribeWithSelector((set) => ({
+      subscribeWithSelector((set, get) => ({
         mode: isTauri ? 'local' : 'cloud',
         planTier: 'free',
         hasOnboarded: false,
@@ -65,6 +72,10 @@ export const useAppModeStore = create<AppModeState>()(
               toast.error(
                 `Sign in to join the ${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
               );
+              return;
+            }
+            if (!CLOUD_MANAGED_TIERS.has(get().planTier)) {
+              toast.error('Managed Cloud is available to Hobby, Pro, Max, and Enterprise tiers.');
               return;
             }
             set({ mode }, undefined, 'appMode/setMode');
