@@ -6,26 +6,15 @@
  * and persists the dismissal in localStorage.
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
+import { useConnectorsStore } from '../../stores/connectorsStore';
+import { CONNECTORS as CONNECTOR_DEFS } from '../connectors/connectorDefinitions';
 
 const DISMISS_KEY = 'connectorBarDismissed';
-
-interface ConnectorPlaceholder {
-  name: string;
-  initial: string;
-  color: string;
-}
-
-const CONNECTORS: ConnectorPlaceholder[] = [
-  { name: 'Gmail', initial: 'G', color: 'bg-red-500/20 text-red-300' },
-  { name: 'Slack', initial: 'S', color: 'bg-purple-500/20 text-purple-300' },
-  { name: 'GitHub', initial: 'G', color: 'bg-muted-foreground/20 text-foreground' },
-  { name: 'Notion', initial: 'N', color: 'bg-muted-foreground/20 text-foreground' },
-  { name: 'Calendar', initial: 'C', color: 'bg-blue-500/20 text-blue-300' },
-];
+const MAX_DISPLAYED = 5;
 
 interface ConnectorDiscoveryBarProps {
   className?: string;
@@ -41,6 +30,15 @@ export const ConnectorDiscoveryBar: React.FC<ConnectorDiscoveryBarProps> = ({ cl
   });
 
   const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const connectedIds = useConnectorsStore((s) => s.connectedIds);
+
+  // Show featured connectors not yet connected, then fall back to featured connectors
+  const displayedConnectors = useMemo(() => {
+    const featured = CONNECTOR_DEFS.filter((c) => c.featured && !c.comingSoon);
+    const unconnected = featured.filter((c) => !connectedIds.includes(c.id));
+    const pool = unconnected.length >= MAX_DISPLAYED ? unconnected : featured;
+    return pool.slice(0, MAX_DISPLAYED);
+  }, [connectedIds]);
 
   const handleDismiss = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -87,17 +85,14 @@ export const ConnectorDiscoveryBar: React.FC<ConnectorDiscoveryBarProps> = ({ cl
 
       {/* Connector icons */}
       <div className="flex items-center gap-1.5 flex-1">
-        {CONNECTORS.map((connector) => (
+        {displayedConnectors.map((connector) => (
           <span
-            key={connector.name}
+            key={connector.id}
             title={connector.name}
             aria-label={connector.name}
-            className={cn(
-              'inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold shrink-0',
-              connector.color,
-            )}
+            className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-semibold shrink-0 bg-muted/30 text-muted-foreground"
           >
-            {connector.initial}
+            {connector.icon}
           </span>
         ))}
       </div>
