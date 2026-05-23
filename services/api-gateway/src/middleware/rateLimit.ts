@@ -13,9 +13,48 @@
  * - Health checks: Moderate limits (100/min) for monitoring
  */
 
-import rateLimit, { type Options, ipKeyGenerator } from 'express-rate-limit';
+import rateLimit, { type Options, type Store, ipKeyGenerator } from 'express-rate-limit';
 import type { RequestHandler, Request } from 'express';
 import { logger } from '../lib/logger';
+
+let _sharedStore: Store | undefined;
+let _storeInitialized = false;
+
+function getOrCreateStore(): Store | undefined {
+  if (_storeInitialized) return _sharedStore;
+  _storeInitialized = true;
+
+  const redisUrl =
+    process.env['RATE_LIMIT_REDIS_URL'] ?? process.env['UPSTASH_REDIS_REST_URL'];
+  if (!redisUrl) {
+    if (process.env.NODE_ENV === 'production') {
+      logger.warn(
+        'RATE_LIMIT_REDIS_URL not configured — using in-memory rate limiting (P1-23). ' +
+          'This is NOT suitable for multi-instance production deployments.',
+      );
+    }
+    return undefined;
+  }
+
+  try {
+    // Dynamic import at init-time to keep ioredis + rate-limit-redis optional.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { RedisStore } = require('rate-limit-redis');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Redis } = require('ioredis');
+    const client = new Redis(redisUrl);
+    _sharedStore = new RedisStore({
+      sendCommand: (...args: string[]) => client.call(...args),
+    });
+    logger.info('Rate limiter using Redis store — global limits enforced across instances.');
+  } catch (err) {
+    logger.warn(
+      { error: err instanceof Error ? err.message : String(err) },
+      'Failed to initialize Redis rate limit store — falling back to in-memory.',
+    );
+  }
+  return _sharedStore;
+}
 
 /**
  * Rate limit configurations per endpoint category.
@@ -123,12 +162,9 @@ export const rateLimitConfigs = {
   // SECURITY: Default fallback for unlisted endpoints
   default: { windowMs: 60_000, max: 100 },
 } as const;
-// TODO(scaling): When deploying multiple API gateway instances behind a load balancer,
-// migrate to a Redis-backed store using `rate-limit-redis` to enforce global rate limits:
-//   import RedisStore from 'rate-limit-redis';
-//   import { createClient } from 'redis';
-//   const client = createClient({ url: process.env.REDIS_URL });
-//   store: new RedisStore({ sendCommand: (...args) => client.sendCommand(args) })
+// Redis store is now wired via getOrCreateStore(). Set RATE_LIMIT_REDIS_URL or
+// UPSTASH_REDIS_REST_URL to enable global rate limiting across instances.
+// Without Redis the library falls back to its built-in MemoryStore (per-instance).
 
 /**
  * Multi-instance gap (P1-23, audit 2026-05-08).
@@ -216,9 +252,12 @@ function keyGenerator(req: Request): string {
 export function createRateLimiter(key: RateLimitKey): RequestHandler {
   const config = rateLimitConfigs[key];
 
+  const store = getOrCreateStore();
+
   const options: Partial<Options> = {
     windowMs: config.windowMs,
     max: config.max,
+    ...(store ? { store } : {}),
     // Return rate limit info in standard headers (RFC 6585)
     standardHeaders: true,
     // Disable deprecated X-RateLimit-* headers
