@@ -622,6 +622,20 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash("vim", "Toggle Vim keybindings", true, true, vec![]),
+        RegistryCommand::builtin_slash(
+            "remote-control",
+            "Connect to the AGI desktop bridge (port 8787)",
+            true,
+            false,
+            vec!["rc"],
+        ),
+        RegistryCommand::builtin_slash(
+            "debug",
+            "Toggle debug mode (verbose tool output and hook traces)",
+            true,
+            false,
+            vec![],
+        ),
     ]
 }
 

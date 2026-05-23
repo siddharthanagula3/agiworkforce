@@ -155,7 +155,23 @@ message -- revise and call `update_plan` again.\n\n",
         let effective_input = if prefix.is_empty() {
             user_input.to_string()
         } else {
-            format!("{prefix}{user_input}")
+            let expanded = format!("{prefix}{user_input}");
+            hooks::run_hooks(
+                &self.hooks_config,
+                hooks::HookEvent::UserPromptExpansion,
+                &hooks::HookInput {
+                    event: "UserPromptExpansion".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(expanded.clone()),
+                    tool_execution: None,
+                },
+            )
+            .await;
+            expanded
         };
         self.messages.push(Message::text("user", &effective_input));
 
@@ -380,22 +396,65 @@ message -- revise and call `update_plan` again.\n\n",
                             "\n{}",
                             "  Auto-stopping: second loop detected in this session.".red()
                         );
+                        hooks::run_hooks(
+                            &self.hooks_config,
+                            hooks::HookEvent::StopFailure,
+                            &hooks::HookInput {
+                                event: "StopFailure".to_string(),
+                                session_id: None,
+                                model: Some(self.model.clone()),
+                                tool_name: None,
+                                tool_args: None,
+                                tool_output: None,
+                                message: Some("loop-detection auto-stop".to_string()),
+                                tool_execution: None,
+                            },
+                        )
+                        .await;
                         break;
                     }
 
-                    eprintln!(
-                        "\n{}",
-                        format!(
-                            "  Warning: Detected {} identical consecutive tool calls ({}). Possible loop. [strike {}/2]",
-                            LOOP_DETECTION_THRESHOLD,
-                            current_tool_calls
-                                .first()
-                                .map(|tc| tc.name.as_str())
-                                .unwrap_or("unknown"),
-                            self.loop_strike_count
-                        )
-                        .yellow()
+                    let loop_msg = format!(
+                        "  Warning: Detected {} identical consecutive tool calls ({}). Possible loop. [strike {}/2]",
+                        LOOP_DETECTION_THRESHOLD,
+                        current_tool_calls
+                            .first()
+                            .map(|tc| tc.name.as_str())
+                            .unwrap_or("unknown"),
+                        self.loop_strike_count
                     );
+                    eprintln!("\n{}", loop_msg.yellow());
+                    hooks::run_hooks(
+                        &self.hooks_config,
+                        hooks::HookEvent::Notification,
+                        &hooks::HookInput {
+                            event: "Notification".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: None,
+                            tool_args: None,
+                            tool_output: None,
+                            message: Some(loop_msg),
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
+
+                    hooks::run_hooks(
+                        &self.hooks_config,
+                        hooks::HookEvent::PermissionRequest,
+                        &hooks::HookInput {
+                            event: "PermissionRequest".to_string(),
+                            session_id: None,
+                            model: Some(self.model.clone()),
+                            tool_name: current_tool_calls.first().map(|tc| tc.name.clone()),
+                            tool_args: current_tool_calls.first().map(|tc| tc.arguments.clone()),
+                            tool_output: None,
+                            message: Some("loop-detection confirmation".to_string()),
+                            tool_execution: None,
+                        },
+                    )
+                    .await;
 
                     let confirmed = dialoguer::Confirm::new()
                         .with_prompt("Continue with these tool calls?")
@@ -405,6 +464,23 @@ message -- revise and call `update_plan` again.\n\n",
 
                     if !confirmed {
                         eprintln!("{}", "  Agentic loop stopped by user.".dimmed());
+                        hooks::run_hooks(
+                            &self.hooks_config,
+                            hooks::HookEvent::PermissionDenied,
+                            &hooks::HookInput {
+                                event: "PermissionDenied".to_string(),
+                                session_id: None,
+                                model: Some(self.model.clone()),
+                                tool_name: current_tool_calls.first().map(|tc| tc.name.clone()),
+                                tool_args: current_tool_calls
+                                    .first()
+                                    .map(|tc| tc.arguments.clone()),
+                                tool_output: None,
+                                message: Some("user rejected loop-detection confirmation".to_string()),
+                                tool_execution: None,
+                            },
+                        )
+                        .await;
                         break;
                     }
 
@@ -1085,6 +1161,22 @@ message -- revise and call `update_plan` again.\n\n",
 
             self.messages.push(Message::blocks("user", result_blocks));
 
+            hooks::run_hooks(
+                &hcfg,
+                hooks::HookEvent::PostToolBatch,
+                &hooks::HookInput {
+                    event: "PostToolBatch".to_string(),
+                    session_id: None,
+                    model: Some(self.model.clone()),
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!("iteration={iteration}")),
+                    tool_execution: None,
+                },
+            )
+            .await;
+
             if !hook_additional_contexts.is_empty() {
                 let merged = hook_additional_contexts.join("\n\n");
                 self.messages.push(Message::text("system", merged));
@@ -1249,6 +1341,22 @@ message -- revise and call `update_plan` again.\n\n",
                 format!("  warning: failed to persist managed session: {error:#}").yellow()
             );
         }
+
+        hooks::run_hooks(
+            &self.hooks_config,
+            hooks::HookEvent::AfterMessage,
+            &hooks::HookInput {
+                event: "AfterMessage".to_string(),
+                session_id: None,
+                model: Some(self.model.clone()),
+                tool_name: None,
+                tool_args: None,
+                tool_output: None,
+                message: Some(final_response.clone()),
+                tool_execution: None,
+            },
+        )
+        .await;
 
         Ok(TurnResult {
             response: final_response,

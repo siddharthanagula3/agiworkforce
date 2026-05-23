@@ -131,6 +131,26 @@ pub enum HookEvent {
     DaemonStarted,
     /// AGI-specific: fires when the daemon process stops.
     DaemonStopped,
+    /// Fires after the user's prompt is expanded (macros, context injections).
+    UserPromptExpansion,
+    /// Fires when the agentic Stop fails (loop-detect abort, hard kill).
+    StopFailure,
+    /// Fires when a permission request is denied by the user or policy.
+    PermissionDenied,
+    /// Fires once after all tools in a parallel tool batch have completed.
+    PostToolBatch,
+    /// Fires when a teammate transitions to idle (team mode only).
+    TeammateIdle,
+    /// Fires when first-run setup completes.
+    Setup,
+    /// Fires when a git worktree is created (EnterWorktree tool).
+    WorktreeCreate,
+    /// Fires when a git worktree is removed (ExitWorktree tool).
+    WorktreeRemove,
+    /// Fires when an MCP elicitation request arrives from a server.
+    Elicitation,
+    /// Fires after the user responds to an MCP elicitation request.
+    ElicitationResult,
 }
 
 impl std::fmt::Display for HookEvent {
@@ -158,6 +178,16 @@ impl std::fmt::Display for HookEvent {
             Self::FileChanged => write!(f, "FileChanged"),
             Self::DaemonStarted => write!(f, "DaemonStarted"),
             Self::DaemonStopped => write!(f, "DaemonStopped"),
+            Self::UserPromptExpansion => write!(f, "UserPromptExpansion"),
+            Self::StopFailure => write!(f, "StopFailure"),
+            Self::PermissionDenied => write!(f, "PermissionDenied"),
+            Self::PostToolBatch => write!(f, "PostToolBatch"),
+            Self::TeammateIdle => write!(f, "TeammateIdle"),
+            Self::Setup => write!(f, "Setup"),
+            Self::WorktreeCreate => write!(f, "WorktreeCreate"),
+            Self::WorktreeRemove => write!(f, "WorktreeRemove"),
+            Self::Elicitation => write!(f, "Elicitation"),
+            Self::ElicitationResult => write!(f, "ElicitationResult"),
         }
     }
 }
@@ -198,6 +228,16 @@ fn resolve_event_name(name: &str) -> Option<HookEvent> {
         "FileChanged" => Some(HookEvent::FileChanged),
         "DaemonStarted" => Some(HookEvent::DaemonStarted),
         "DaemonStopped" => Some(HookEvent::DaemonStopped),
+        "UserPromptExpansion" => Some(HookEvent::UserPromptExpansion),
+        "StopFailure" => Some(HookEvent::StopFailure),
+        "PermissionDenied" => Some(HookEvent::PermissionDenied),
+        "PostToolBatch" => Some(HookEvent::PostToolBatch),
+        "TeammateIdle" => Some(HookEvent::TeammateIdle),
+        "Setup" => Some(HookEvent::Setup),
+        "WorktreeCreate" => Some(HookEvent::WorktreeCreate),
+        "WorktreeRemove" => Some(HookEvent::WorktreeRemove),
+        "Elicitation" => Some(HookEvent::Elicitation),
+        "ElicitationResult" => Some(HookEvent::ElicitationResult),
         _ => None,
     };
     if let Some(event) = canonical {
@@ -252,12 +292,15 @@ impl<'de> Deserialize<'de> for HookEvent {
         resolve_event_name(&name).ok_or_else(|| {
             serde::de::Error::custom(format!(
                 "unknown hook event \"{}\". Canonical events: SessionStart, SessionEnd, \
-                 PreToolUse, PostToolUse, UserPromptSubmit, AfterMessage, PlanModeChanged, \
-                 PreCompact, PostCompact, SubagentStart, SubagentStop, PermissionRequest, \
-                 Notification, Stop, CronTriggered, WebhookReceived, FileChanged, \
-                 DaemonStarted, DaemonStopped. Legacy aliases (deprecated): BeforeToolUse, \
-                 AfterToolUse, BeforeMessage, PreEdit, PostEdit, PreCommand, PostCommand, \
-                 ContextCompacted, SubagentSpawned, SubagentCompleted.",
+                 PreToolUse, PostToolUse, UserPromptSubmit, UserPromptExpansion, AfterMessage, \
+                 PlanModeChanged, PreCompact, PostCompact, BeforeModelResolve, BeforePromptBuild, \
+                 ToolResultPersist, SubagentStart, SubagentStop, PermissionRequest, \
+                 PermissionDenied, Notification, Stop, StopFailure, PostToolBatch, CronTriggered, \
+                 WebhookReceived, FileChanged, DaemonStarted, DaemonStopped, Setup, TeammateIdle, \
+                 WorktreeCreate, WorktreeRemove, Elicitation, ElicitationResult. \
+                 Legacy aliases (deprecated): BeforeToolUse, AfterToolUse, BeforeMessage, \
+                 PreEdit, PostEdit, PreCommand, PostCommand, ContextCompacted, \
+                 SubagentSpawned, SubagentCompleted.",
                 name
             ))
         })

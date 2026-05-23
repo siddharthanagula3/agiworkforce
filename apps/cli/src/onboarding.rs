@@ -749,6 +749,23 @@ pub async fn run_onboarding() -> Result<bool> {
         eprintln!("  Warning: could not write setup marker: {}", e);
     }
 
+    let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+    crate::hooks::run_hooks(
+        &hcfg,
+        crate::hooks::HookEvent::Setup,
+        &crate::hooks::HookInput {
+            event: "Setup".to_string(),
+            session_id: None,
+            model: None,
+            tool_name: None,
+            tool_args: None,
+            tool_output: None,
+            message: Some("first-run setup complete".to_string()),
+            tool_execution: None,
+        },
+    )
+    .await;
+
     eprintln!();
     Ok(true)
 }
