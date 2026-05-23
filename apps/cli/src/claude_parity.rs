@@ -84,6 +84,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "remote-control",
         "rc",
         "debug",
+        "tui",
+        "powerup",
     ]
 }
 
@@ -190,6 +192,8 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(render_remote_control())
         }
         "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
+        "/tui" => ParityCommandResult::SystemMessage(handle_tui(session, arg)),
+        "/powerup" => ParityCommandResult::Prompt(powerup_prompt(arg)),
         _ => ParityCommandResult::NotHandled,
     }
 }
@@ -515,9 +519,32 @@ pub fn handle_tag(session: &mut AgentSession, arg: &str) -> String {
 }
 
 pub fn render_install_app(app_name: &str) -> String {
-    format!(
-        "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  For now, authenticate in the target service, then run /plugin or agi plugin list."
-    )
+    let url = match app_name {
+        "GitHub" | "github" | "install-github-app" => {
+            Some("https://github.com/apps/agiworkforce/installations/new")
+        }
+        "Slack" | "slack" | "install-slack-app" => {
+            Some("https://api.slack.com/apps?new_app=1")
+        }
+        _ => None,
+    };
+
+    if let Some(install_url) = url {
+        let opened = webbrowser::open(install_url).is_ok();
+        if opened {
+            format!(
+                "{app_name} app installation\n  Opening install page in your browser: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
+            )
+        } else {
+            format!(
+                "{app_name} app installation\n  Visit: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
+            )
+        }
+    } else {
+        format!(
+            "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  Authenticate in the target service, then run /plugin or agi plugin list."
+        )
+    }
 }
 
 pub fn render_companion(surface: &str) -> String {
@@ -920,6 +947,42 @@ pub fn handle_debug(session: &mut AgentSession) -> String {
         "Debug mode ON — verbose tool output and hook traces enabled.".to_string()
     } else {
         "Debug mode OFF.".to_string()
+    }
+}
+
+pub fn handle_tui(_session: &mut AgentSession, arg: &str) -> String {
+    match arg.trim() {
+        "fullscreen" | "full" | "on" | "1" | "true" => {
+            "TUI renderer: fullscreen mode requested. Restart without --no-tui to apply.".to_string()
+        }
+        "default" | "off" | "0" | "false" => {
+            "TUI renderer: REPL (default) mode requested. Restart with --no-tui to apply.".to_string()
+        }
+        "" => {
+            let active = std::env::var("AGIWORKFORCE_NO_TUI").is_ok_and(|v| v == "1");
+            let current = if active { "default (REPL)" } else { "fullscreen (TUI)" };
+            format!(
+                "Current renderer: {current}\n  Use /tui fullscreen to enable the TUI renderer or /tui default to use REPL mode."
+            )
+        }
+        other => format!(
+            "Unknown renderer '{other}'. Valid options: default, fullscreen."
+        ),
+    }
+}
+
+pub fn powerup_prompt(arg: &str) -> String {
+    let topic = arg.trim();
+    if topic.is_empty() {
+        "Walk me through the top 5 AGI Workforce CLI features I should know about. For each \
+         feature: state its name, show a one-line example command, and explain what problem it \
+         solves. Keep each lesson concise and interactive — ask me to try one before moving on."
+            .to_string()
+    } else {
+        format!(
+            "Teach me how to use the '{topic}' feature of the AGI Workforce CLI. Show a \
+             concrete example, explain when to use it, and end with a quick exercise I can try."
+        )
     }
 }
 

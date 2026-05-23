@@ -636,6 +636,20 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             false,
             vec![],
         ),
+        RegistryCommand::builtin_slash(
+            "tui",
+            "Set the terminal UI renderer (default | fullscreen)",
+            true,
+            false,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
+            "powerup",
+            "Discover AGI Workforce features through quick interactive lessons",
+            false,
+            true,
+            vec![],
+        ),
     ]
 }
 
