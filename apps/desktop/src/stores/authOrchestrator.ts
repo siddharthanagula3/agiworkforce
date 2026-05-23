@@ -221,16 +221,17 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
           authState.profile?.avatar_url || (authState.user.user_metadata?.['avatar_url'] as string),
       });
     } else {
+      // clearAuth() sets sessionValidated: true, unblocking the boot skeleton.
+      // Do NOT call reset() after this — reset() uses getDefaultState() which
+      // sets sessionValidated: false, undoing the clearAuth() call and leaving
+      // local-only users stuck on the loading skeleton forever.
       unifiedAuthStore.clearAuth();
-    }
-
-    // If no user and not loading, clear store and return
-    if (!authState.user) {
-      unifiedAuthStore.reset();
       clearCachedSubscription();
       cachedUserHash = null;
       return;
     }
+
+    // Guarded: authState.user is non-null from here on.
 
     // ═══════════════════════════════════════════════════════════════
     // STEP 2: Determine plan tier with cache fallback
