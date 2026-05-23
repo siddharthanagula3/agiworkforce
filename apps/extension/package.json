@@ -29,7 +29,9 @@
     "clean": "rm -rf dist",
     "package": "pnpm build && cd dist && zip -r ../extension.zip . -x '*.map'",
     "lint": "eslint src --ext .ts,.js --cache --cache-strategy content --cache-location .cache/eslint",
-    "format": "prettier --write \"src/**/*.{js,html}\""
+    "format": "prettier --write \"src/**/*.{js,html}\"",
+    "check:no-hex": "node scripts/check-no-hex-colors.mjs",
+    "check:no-cloud-ipc": "node scripts/check-no-cloud-ipc-v1.mjs"
   },
   "dependencies": {
     "@agiworkforce/browser-tool": "workspace:*",
