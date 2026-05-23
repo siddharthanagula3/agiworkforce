@@ -31,6 +31,57 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
 };
 
+function ChatPreview() {
+  const messages = [
+    { role: 'user', text: 'Refactor this into a state machine' },
+    {
+      role: 'assistant',
+      text: 'I can break that into 5 explicit states with typed transitions. Want me to show the diff first?',
+    },
+    { role: 'user', text: 'Show the diff' },
+    {
+      role: 'assistant',
+      text: "Here's the state machine. Each transition is pure. I kept your error paths and added a timeout guard.",
+    },
+  ];
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        padding: '20px 0',
+      }}
+    >
+      {messages.map((msg, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '80%',
+              padding: '9px 13px',
+              borderRadius: msg.role === 'user' ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
+              background: msg.role === 'user' ? 'var(--agi-amber-soft)' : 'var(--agi-bg-3)',
+              border: '1px solid var(--agi-rule)',
+              fontSize: 13,
+              lineHeight: 1.5,
+              color: 'var(--agi-ink)',
+            }}
+          >
+            {msg.text}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function LoginForm() {
   const { t } = useTranslation('auth');
   const searchParams = useSearchParams();
@@ -100,126 +151,274 @@ function LoginForm() {
   }
 
   return (
-    <section
-      className="agi-section"
-      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
-    >
-      <p className="agi-section-eyebrow">{t('signInEyebrow')}</p>
-      <h1 className="agi-page-h1" style={{ marginBottom: 32 }}>
-        {t('welcomeBackHeading')}
-      </h1>
+    <div style={{ width: '100%' }}>
+      {/* Split layout: marketing left, auth right */}
+      <div className="agi-login-split">
+        {/* Left panel: marketing copy + chat preview */}
+        <div className="agi-login-left">
+          <div style={{ maxWidth: 440 }}>
+            <p
+              style={{
+                fontSize: 12,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+                color: 'var(--agi-amber)',
+                marginBottom: 20,
+                fontFamily: 'var(--agi-font-mono)',
+              }}
+            >
+              agi.workforce
+            </p>
+            <h1
+              style={{
+                fontSize: 'clamp(32px, 4vw, 52px)',
+                fontWeight: 700,
+                lineHeight: 1.1,
+                letterSpacing: '-0.03em',
+                color: 'var(--agi-ink)',
+                marginBottom: 20,
+              }}
+            >
+              Think fast,
+              <br />
+              build faster.
+            </h1>
+            <p
+              style={{
+                fontSize: 15,
+                color: 'var(--agi-ink-2)',
+                lineHeight: 1.6,
+                marginBottom: 32,
+              }}
+            >
+              One workspace. Every major model. Six surfaces.
+            </p>
+            <div
+              style={{
+                background: 'var(--agi-bg-2)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 10,
+                padding: '4px 16px 16px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '10px 0',
+                  borderBottom: '1px solid var(--agi-rule)',
+                  marginBottom: 4,
+                }}
+              >
+                <span
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    background: 'var(--agi-rule)',
+                    display: 'inline-block',
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--agi-ink-quiet)',
+                    fontFamily: 'var(--agi-font-mono)',
+                  }}
+                >
+                  New Chat
+                </span>
+              </div>
+              <ChatPreview />
+            </div>
+          </div>
+        </div>
 
-      <form
-        onSubmit={onPasswordSignIn}
-        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
-      >
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>{t('email')}</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={inputStyle}
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>{t('password')}</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-            style={inputStyle}
-          />
-        </label>
-        {message && (
-          <p
-            style={{
-              color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
-              fontSize: 13,
-              margin: 0,
-            }}
-          >
-            {message.text}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="agi-cta-primary"
-          style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
-        >
-          {loading ? t('signingIn') : t('signIn')}
-        </button>
-      </form>
+        {/* Right panel: auth card */}
+        <div className="agi-login-right">
+          <div style={{ maxWidth: 420, width: '100%' }}>
+            <p className="agi-section-eyebrow" style={{ marginBottom: 8 }}>
+              {t('signInEyebrow')}
+            </p>
+            <h2
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                letterSpacing: '-0.025em',
+                color: 'var(--agi-ink)',
+                marginBottom: 32,
+              }}
+            >
+              {t('welcomeBackHeading')}
+            </h2>
 
-      <button
-        type="button"
-        onClick={onMagicLink}
-        disabled={magicLoading || !email}
-        className="agi-cta-ghost"
-        style={{
-          marginTop: 12,
-          border: 'none',
-          background: 'transparent',
-          cursor: 'pointer',
-          textAlign: 'left',
-          padding: 0,
-        }}
-      >
-        {magicLoading ? t('sendingMagicLink') : `${t('emailMagicLinkCta')} →`}
-      </button>
+            <form
+              onSubmit={onPasswordSignIn}
+              style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+            >
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={labelStyle}>{t('email')}</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  style={inputStyle}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={labelStyle}>{t('password')}</span>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  style={inputStyle}
+                />
+              </label>
+              {message && (
+                <p
+                  style={{
+                    color:
+                      message.type === 'error' ? 'var(--agi-error, #ff6b6b)' : 'var(--agi-amber)',
+                    fontSize: 13,
+                    margin: 0,
+                  }}
+                >
+                  {message.text}
+                </p>
+              )}
+              <button
+                type="submit"
+                disabled={loading}
+                className="agi-cta-primary"
+                style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
+              >
+                {loading ? t('signingIn') : t('signIn')}
+              </button>
+            </form>
 
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          margin: '28px 0',
-          color: 'var(--agi-ink-quiet)',
-          fontSize: 12,
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-        {t('orContinueWith')}
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+            <button
+              type="button"
+              onClick={onMagicLink}
+              disabled={magicLoading || !email}
+              className="agi-cta-ghost"
+              style={{
+                marginTop: 12,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                textAlign: 'left',
+                padding: 0,
+              }}
+            >
+              {magicLoading ? t('sendingMagicLink') : `${t('emailMagicLinkCta')} →`}
+            </button>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                margin: '28px 0',
+                color: 'var(--agi-ink-quiet)',
+                fontSize: 12,
+              }}
+            >
+              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+              {t('orContinueWith')}
+              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => onOAuth('google')}
+                disabled={oauthLoading !== null}
+                className="agi-tier-cta agi-tier-cta--ghost"
+                style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
+              >
+                {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
+              </button>
+              <button
+                type="button"
+                onClick={() => onOAuth('github')}
+                disabled={oauthLoading !== null}
+                className="agi-tier-cta agi-tier-cta--ghost"
+                style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
+              >
+                {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
+              </button>
+            </div>
+
+            <p
+              style={{
+                marginTop: 32,
+                fontSize: 14,
+                color: 'var(--agi-ink-2)',
+                textAlign: 'center',
+              }}
+            >
+              {t('newHere')}{' '}
+              <Link href="/signup" style={{ color: 'var(--agi-ink)' }}>
+                {t('createAccount')}
+              </Link>
+              {' · '}
+              <Link href="/forgot-password" style={{ color: 'var(--agi-ink-2)' }}>
+                {t('forgotPassword')}
+              </Link>
+            </p>
+
+            {/* W1-08: Download desktop app CTA */}
+            <div
+              style={{
+                marginTop: 32,
+                padding: '16px 18px',
+                background: 'var(--agi-bg-2)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <div>
+                <p
+                  style={{
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--agi-ink)',
+                    margin: 0,
+                    marginBottom: 3,
+                  }}
+                >
+                  {t('downloadDesktopHeading')}
+                </p>
+                <p style={{ fontSize: 12, color: 'var(--agi-ink-quiet)', margin: 0 }}>
+                  {t('downloadDesktopBody')}
+                </p>
+              </div>
+              <Link
+                href="/download"
+                className="agi-top-cta"
+                style={{
+                  flexShrink: 0,
+                  fontSize: 12,
+                  padding: '7px 14px',
+                  textDecoration: 'none',
+                }}
+              >
+                {t('downloadCta')}
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button
-          type="button"
-          onClick={() => onOAuth('google')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOAuth('github')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
-        </button>
-      </div>
-
-      <p style={{ marginTop: 32, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        {t('newHere')}{' '}
-        <Link href="/signup" style={{ color: 'var(--agi-ink)' }}>
-          {t('createAccount')}
-        </Link>
-        {' · '}
-        <Link href="/forgot-password" style={{ color: 'var(--agi-ink-2)' }}>
-          {t('forgotPassword')}
-        </Link>
-      </p>
-    </section>
+    </div>
   );
 }
 
@@ -233,6 +432,41 @@ export default function LoginPage() {
         </Suspense>
         <MarketingFooter />
       </main>
+
+      <style jsx global>{`
+        .agi-login-split {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 80px;
+          padding: 60px 0 80px;
+          min-height: 80vh;
+          align-items: center;
+        }
+        .agi-login-left {
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+        .agi-login-right {
+          display: flex;
+          align-items: flex-start;
+          justify-content: center;
+          padding-top: 8px;
+        }
+        @media (max-width: 860px) {
+          .agi-login-split {
+            grid-template-columns: 1fr;
+            gap: 40px;
+            padding: 40px 0 60px;
+          }
+          .agi-login-left {
+            display: none;
+          }
+          .agi-login-right {
+            justify-content: flex-start;
+          }
+        }
+      `}</style>
     </div>
   );
 }
