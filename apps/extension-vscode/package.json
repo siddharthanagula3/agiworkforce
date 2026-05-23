@@ -922,7 +922,8 @@
     "check:refs": "tsc -b tsconfig.build.json",
     "clean": "rimraf out",
     "prebuild": "pnpm run clean && pnpm run typecheck",
-    "build": "pnpm run compile"
+    "build": "pnpm run compile",
+    "check:vscode-theme-tokens": "node scripts/check-vscode-theme-tokens.mjs"
   },
   "dependencies": {
     "@agiworkforce/design-tokens": "workspace:*",
