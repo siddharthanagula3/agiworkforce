@@ -1072,6 +1072,11 @@ pub fn run() {
                 tracing::error!("[tray] initialization failed: {err:?}");
             }
 
+            // Native window menu (macOS menu bar + Windows/Linux title-bar menu)
+            if let Err(err) = crate::ui::window_menu::build_window_menu(app) {
+                tracing::warn!("[menu] window menu initialization failed: {err:?}");
+            }
+
             // Initialize global shortcuts (Option+Space, etc.)
             // On macOS, global shortcuts rely on CGEventTap which requires
             // the Accessibility permission (kTCCServiceAccessibility).  Registering
@@ -1645,6 +1650,7 @@ pub fn run() {
             crate::sys::commands::file_read_binary,
             crate::sys::commands::file_write_binary,
             crate::sys::commands::file_read_range,
+            crate::sys::commands::upload_file,
 
             // Code search (Grep + Glob + Formatter pipeline)
             crate::sys::commands::grep_search,
@@ -2384,6 +2390,7 @@ pub fn run() {
             crate::sys::commands::auth_remove_session,
             crate::sys::commands::auth_retrieve_session,
             crate::sys::commands::auth_store_session,
+            crate::sys::commands::get_local_user_id,
             crate::sys::commands::project_memory::auto_save_decision,
             crate::sys::commands::automation_drag_drop,
             crate::sys::commands::automation_get_text,

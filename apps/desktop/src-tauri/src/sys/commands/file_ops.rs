@@ -1972,3 +1972,83 @@ pub async fn undo_file_operation(
         _ => Err(format!("Unknown undo operation: {}", operation)),
     }
 }
+
+// ---------------------------------------------------------------------------
+// Chat attachment upload
+// ---------------------------------------------------------------------------
+
+/// Returned to the frontend after a chat file attachment is stored locally.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileUploadResult {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub mime_type: String,
+    pub size: u64,
+}
+
+/// Save a base64-encoded file (from the chat composer) into the app's
+/// `uploads/` directory and return a stable file-ref for use in messages.
+///
+/// The frontend encodes the file as a `data:<mime>;base64,<b64>` data URL.
+/// We strip the header, decode the bytes, and write them to disk.
+/// The returned `url` is a `file://` path that Tauri's asset protocol
+/// can serve back to the webview.
+#[tauri::command]
+pub async fn upload_file(
+    app: AppHandle,
+    name: String,
+    mime_type: String,
+    data_url: String,
+    size: u64,
+) -> Result<FileUploadResult, String> {
+    use base64::engine::general_purpose::STANDARD as B64;
+
+    // Strip data URL header: "data:<mime>;base64,<data>"
+    let b64_data = data_url
+        .splitn(2, ',')
+        .nth(1)
+        .ok_or("Invalid data URL: missing comma separator")?;
+
+    let bytes = B64
+        .decode(b64_data)
+        .map_err(|e| format!("Base64 decode failed: {e}"))?;
+
+    // Resolve uploads directory inside app data dir.
+    let uploads_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Could not resolve app data dir: {e}"))?
+        .join("uploads");
+
+    fs::create_dir_all(&uploads_dir)
+        .map_err(|e| format!("Failed to create uploads dir: {e}"))?;
+
+    // Use a UUID-prefixed filename to avoid collisions.
+    let id = uuid::Uuid::new_v4().to_string();
+    let sanitized_name = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .collect::<String>();
+    let file_name = format!("{id}_{sanitized_name}");
+    let dest: PathBuf = uploads_dir.join(&file_name);
+
+    fs::write(&dest, &bytes).map_err(|e| format!("Failed to write upload: {e}"))?;
+
+    // Return a file:// URL so Tauri's asset protocol can read it.
+    let url = format!("file://{}", dest.to_string_lossy());
+    let actual_size = bytes.len() as u64;
+
+    info!(
+        "[upload_file] Saved attachment '{}' ({} bytes) → {}",
+        name, actual_size, dest.display()
+    );
+
+    Ok(FileUploadResult {
+        id,
+        name: sanitized_name,
+        url,
+        mime_type,
+        size: if actual_size > 0 { actual_size } else { size },
+    })
+}

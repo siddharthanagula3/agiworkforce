@@ -215,3 +215,15 @@ pub async fn auth_remove_session(state: State<'_, SessionState>) -> Result<(), S
     *store = None;
     Ok(())
 }
+
+/// Return a stable install-scoped user ID for local-only (no Supabase session) users.
+///
+/// The ID is derived from `machine_key::get_manager().get_install_id()` with a
+/// `local-` prefix so callers can distinguish it from a real Supabase UUID. It is
+/// stable across app restarts and unique per installation.
+#[tauri::command]
+pub async fn get_local_user_id() -> Result<String, String> {
+    use crate::sys::security::machine_key;
+    let raw_install_id = machine_key::get_manager().get_install_id();
+    Ok(format!("local-{raw_install_id}"))
+}
