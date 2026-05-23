@@ -684,7 +684,31 @@ impl AgentSession {
     }
 
     /// Adopt an existing managed session as the persistence backing.
+    /// Rehydrates session-state fields (permission_mode, plan_mode, etc.) if present.
     pub fn adopt_managed_session(&mut self, managed_session: ManagedSession, path: PathBuf) {
+        if let Some(pm) = managed_session.permission_mode {
+            self.permission_mode = pm;
+        }
+        if let Some(plan_mode) = managed_session.plan_mode {
+            self.plan_mode = plan_mode;
+        }
+        if let Some(plan_approved) = managed_session.plan_approved {
+            self.plan_approved = plan_approved;
+        }
+        if let Some(ref plan) = managed_session.current_plan {
+            self.current_plan = Some(plan.clone());
+        }
+        if let Some(fast_mode) = managed_session.fast_mode {
+            self.fast_mode = fast_mode;
+        }
+        if let Some(ref style) = managed_session.output_style {
+            self.output_style = style.clone();
+        }
+        if let Some(ref ids) = managed_session.fallback_model_ids {
+            self.fallback_chain = Some(crate::routing::fallback::FallbackChain::parse(
+                &ids.join(","),
+            ));
+        }
         self.managed_session = Some(managed_session);
         self.managed_session_path = Some(path);
     }
@@ -698,6 +722,17 @@ impl AgentSession {
             return Ok(());
         };
         managed_session.messages = self.messages.clone();
+        managed_session.permission_mode = Some(self.permission_mode);
+        managed_session.plan_mode = Some(self.plan_mode);
+        managed_session.plan_approved = Some(self.plan_approved);
+        managed_session.current_plan = self.current_plan.clone();
+        managed_session.fast_mode = Some(self.fast_mode);
+        managed_session.output_style = Some(self.output_style.clone());
+        managed_session.fallback_model_ids = self
+            .fallback_chain
+            .as_ref()
+            .map(|fc| fc.primaries.clone());
+        managed_session.version = crate::runtime::session::MANAGED_SESSION_VERSION;
         managed_session.touch();
         managed_session.save_to_path(path)?;
         self.sync_managed_session_metadata()

@@ -5,6 +5,8 @@ use std::fs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
+use crate::cli_options::PermissionMode;
+use crate::features::plan::plan_mode::Plan;
 use crate::models::Message;
 
 /// Write `contents` to `target` via a tempfile-then-rename so partial writes
@@ -26,7 +28,10 @@ fn atomic_write_session(target: &Path, contents: &[u8]) -> Result<()> {
 }
 
 /// Current on-disk schema version for managed CLI sessions.
-pub const MANAGED_SESSION_VERSION: u32 = 1;
+/// v1: messages + fork only.
+/// v2: adds permission_mode, plan_mode, plan_approved, current_plan, fast_mode,
+///     output_style, fallback_model_ids fields (all optional, serde(default)).
+pub const MANAGED_SESSION_VERSION: u32 = 2;
 
 /// Default JSONL extension for managed session files.
 pub const MANAGED_SESSION_JSONL_EXTENSION: &str = "jsonl";
@@ -53,6 +58,23 @@ pub struct ManagedSession {
     pub messages: Vec<Message>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork: Option<ManagedSessionForkMetadata>,
+    // --- v2 session-state fields (all optional for backward compat with v1 files) ---
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permission_mode: Option<PermissionMode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_mode: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan_approved: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_plan: Option<Plan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fast_mode: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_style: Option<String>,
+    /// Ordered model IDs for the fallback chain. Stored separately because
+    /// FallbackChain does not implement Serialize.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_model_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,6 +87,20 @@ enum ManagedSessionJsonlRecord {
         updated_at: DateTime<Utc>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         fork: Option<ManagedSessionForkMetadata>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        permission_mode: Option<PermissionMode>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan_mode: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan_approved: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        current_plan: Option<Plan>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fast_mode: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output_style: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fallback_model_ids: Option<Vec<String>>,
     },
     Message {
         message: Message,
@@ -81,6 +117,13 @@ impl ManagedSession {
             updated_at: created_at,
             messages: Vec::new(),
             fork: None,
+            permission_mode: None,
+            plan_mode: None,
+            plan_approved: None,
+            current_plan: None,
+            fast_mode: None,
+            output_style: None,
+            fallback_model_ids: None,
         }
     }
 
@@ -116,6 +159,13 @@ impl ManagedSession {
                 source_message_count: source.messages.len(),
                 forked_at,
             }),
+            permission_mode: None,
+            plan_mode: None,
+            plan_approved: None,
+            current_plan: None,
+            fast_mode: None,
+            output_style: None,
+            fallback_model_ids: None,
         }
     }
 
@@ -189,13 +239,7 @@ impl ManagedSession {
     }
 
     fn from_jsonl(contents: &str) -> Result<Self> {
-        let mut header: Option<(
-            u32,
-            String,
-            DateTime<Utc>,
-            DateTime<Utc>,
-            Option<ManagedSessionForkMetadata>,
-        )> = None;
+        let mut header: Option<ManagedSession> = None;
         let mut messages = Vec::new();
 
         for (line_number, line) in contents.lines().enumerate() {
@@ -219,11 +263,32 @@ impl ManagedSession {
                     created_at,
                     updated_at,
                     fork,
+                    permission_mode,
+                    plan_mode,
+                    plan_approved,
+                    current_plan,
+                    fast_mode,
+                    output_style,
+                    fallback_model_ids,
                 } => {
                     if header.is_some() {
                         bail!("Managed session JSONL file contains more than one header record");
                     }
-                    header = Some((version, session_id, created_at, updated_at, fork));
+                    header = Some(ManagedSession {
+                        version,
+                        session_id,
+                        created_at,
+                        updated_at,
+                        messages: Vec::new(),
+                        fork,
+                        permission_mode,
+                        plan_mode,
+                        plan_approved,
+                        current_plan,
+                        fast_mode,
+                        output_style,
+                        fallback_model_ids,
+                    });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
                     if header.is_none() {
@@ -234,23 +299,16 @@ impl ManagedSession {
             }
         }
 
-        let (version, session_id, created_at, updated_at, fork) =
+        let mut session =
             header.ok_or_else(|| anyhow::anyhow!("Managed session JSONL file is empty"))?;
-
-        Ok(Self {
-            version,
-            session_id,
-            created_at,
-            updated_at,
-            messages,
-            fork,
-        })
+        session.messages = messages;
+        Ok(session)
     }
 
     fn validate(&self) -> Result<()> {
-        if self.version != MANAGED_SESSION_VERSION {
+        if self.version == 0 || self.version > MANAGED_SESSION_VERSION {
             bail!(
-                "Unsupported managed session version {} (expected {})",
+                "Unsupported managed session version {} (max supported: {})",
                 self.version,
                 MANAGED_SESSION_VERSION
             );
@@ -274,6 +332,13 @@ impl ManagedSession {
             created_at: self.created_at,
             updated_at: self.updated_at,
             fork: self.fork.clone(),
+            permission_mode: self.permission_mode,
+            plan_mode: self.plan_mode,
+            plan_approved: self.plan_approved,
+            current_plan: self.current_plan.clone(),
+            fast_mode: self.fast_mode,
+            output_style: self.output_style.clone(),
+            fallback_model_ids: self.fallback_model_ids.clone(),
         };
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -316,11 +381,24 @@ mod tests {
         ]
     }
 
+    fn null_state_fields() -> (
+        Option<crate::cli_options::PermissionMode>,
+        Option<bool>,
+        Option<bool>,
+        Option<crate::features::plan::plan_mode::Plan>,
+        Option<bool>,
+        Option<String>,
+        Option<Vec<String>>,
+    ) {
+        (None, None, None, None, None, None, None)
+    }
+
     #[test]
     fn jsonl_round_trip_preserves_session_snapshot() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().join("session.jsonl");
         let source_path = temp_dir.path().join("source.jsonl");
+        let (permission_mode, plan_mode, plan_approved, current_plan, fast_mode, output_style, fallback_model_ids) = null_state_fields();
         let session = ManagedSession {
             version: super::MANAGED_SESSION_VERSION,
             session_id: "session-123".to_string(),
@@ -334,6 +412,13 @@ mod tests {
                 source_message_count: 2,
                 forked_at: Utc.with_ymd_and_hms(2025, 1, 1, 10, 0, 0).unwrap(),
             }),
+            permission_mode,
+            plan_mode,
+            plan_approved,
+            current_plan,
+            fast_mode,
+            output_style,
+            fallback_model_ids,
         };
 
         session.save_to_path(&path).unwrap();
@@ -349,6 +434,7 @@ mod tests {
     fn json_fallback_round_trip_preserves_session_snapshot() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().join("session.json");
+        let (permission_mode, plan_mode, plan_approved, current_plan, fast_mode, output_style, fallback_model_ids) = null_state_fields();
         let session = ManagedSession {
             version: super::MANAGED_SESSION_VERSION,
             session_id: "session-456".to_string(),
@@ -356,6 +442,13 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 2, 1, 10, 5, 0).unwrap(),
             messages: sample_messages(),
             fork: None,
+            permission_mode,
+            plan_mode,
+            plan_approved,
+            current_plan,
+            fast_mode,
+            output_style,
+            fallback_model_ids,
         };
 
         session.save_to_path(&path).unwrap();
@@ -365,5 +458,17 @@ mod tests {
             serde_json::to_value(&loaded).unwrap(),
             serde_json::to_value(&session).unwrap()
         );
+    }
+
+    #[test]
+    fn v1_schema_jsonl_loads_without_state_fields() {
+        let v1_jsonl = r#"{"record_type":"header","version":1,"session_id":"v1-session","created_at":"2025-03-01T00:00:00Z","updated_at":"2025-03-01T00:05:00Z"}
+{"record_type":"message","message":{"role":"user","content":"hello"}}"#;
+        let session = ManagedSession::from_serialized_str(v1_jsonl).unwrap();
+        assert_eq!(session.session_id, "v1-session");
+        assert_eq!(session.messages.len(), 1);
+        assert!(session.permission_mode.is_none());
+        assert!(session.plan_mode.is_none());
+        assert!(session.fallback_model_ids.is_none());
     }
 }
