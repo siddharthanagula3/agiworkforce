@@ -3,7 +3,7 @@ export function useApprovalActions() {
   return {
     approveAction: async () => {},
     rejectAction: async () => {},
-    pendingApprovals: [] as any[],
-    resolveApproval: async (_approval: any, _decision: string, _opts?: any) => {},
+    pendingApprovals: [] as unknown[],
+    resolveApproval: async (_approval: unknown, _decision: string, _opts?: unknown) => {},
   };
 }
