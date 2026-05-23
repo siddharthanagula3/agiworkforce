@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-22 (post R25 failure-mode verification sweep — see `CHANGELOG.md` round 25 entry and `docs/audit/2026-05-22-r25-summary.md`).
+Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped on origin/main, 42 commits, 137 files, +14267/-808. See `CHANGELOG.md` R27 entry and `docs/audit/2026-05-23-r27-v1-backlog.md`).
 
 ## Mission
 

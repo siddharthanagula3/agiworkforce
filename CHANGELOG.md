@@ -6,6 +6,87 @@ Last updated: 2026-05-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — R27-PARITY phase D, per-image claude parity + v1 cloud-bridge implementation] — 2026-05-23
+
+Round 27 closed the per-image verdict gap left by R26 (7% prior coverage)
+and built the v1 cloud-bridge foundation per the locked strategy
+(local-only + waitlist + invite-code unlock with BYOK/Groq/OpenRouter/
+DeepSeek bridge stack). 6-surface implementation across 5 stages.
+
+42 commits, 137 files changed, +14,267/-808 lines.
+
+Stages shipped:
+
+- **Stage 0** — Cloud-bridge foundation. Supabase `beta_invites` +
+  `beta_redemptions` tables + `validate_and_redeem_invite_code` RPC
+  (atomic + `SELECT ... FOR UPDATE`), canonical `InviteCodeModal` at
+  `apps/desktop/src/features/cloud-bridge/`, 4 cross-surface ports
+  (web/mobile/chrome ext/vscode ext), 5 surface-native `waitlistService`
+  modules with inline anonymous Supabase sign-in.
+- **Stage 1** — 6 parallel P0 release blockers: R-DESKTOP-001 boot-hang
+  fixed (`reset()` after `clearAuth()` was undoing `sessionValidated`),
+  mobile billing routed to InviteCodeModal (no Stripe IAP in v1 per
+  v1-cloud-bridge lock), 9 CLI hook fire sites wired + 11 missing
+  Claude Code events added (33 total per cli-hooks-canonical lock),
+  49 hardcoded `Color::*` literals tokenized, web stale model IDs
+  fixed, native menus + ATS narrowed + `upload_file` IPC + PlusMenu
+  store-binding, chrome ext autonomy toggle + inline permission
+  prompts + offline onboarding, VS Code `rewindLast` real impl.
+- **Stage 1.5** — Cleanup: web BYOK gate broadening (3-way check
+  subscription/local-provider/env-keys), i18n on Header + login +
+  signup + pricing (61 keys × en/es), mobile `scrim` token added to
+  `@agiworkforce/design-tokens` + 6 sites migrated.
+- **Stage 2** — Desktop sidebar `UpdatePill` + Help menu item for
+  in-app updater (tauri-plugin-updater was pre-wired; this added the
+  canonical UX surfaces matching Claude.app).
+- **Stage 3** — 7 CI gate scripts enforcing AP-02 through AP-10:
+  `check:marketing-models` (AP-03), `check:hardcoded-arrays` (AP-08),
+  `check:lock-drift` (AP-09), `check:hook-fire-sites` (AP-07 — 32
+  variants verified), per-surface `check:no-hex-*` (AP-02 with baseline
+  allowlists for grandfathered violations), `apps/extension
+check:no-cloud-ipc` (AP-10).
+- **Stage 4** — P1 parity batch across all 6 surfaces: web split-screen
+  login + pricing tabs IA + plan comparison table, desktop connectors
+  directory wiring + artifact toolbar Open-in-system-app + Download-all
+  - effort matrix + skills directory modal, mobile dual usage bars +
+    capabilities toggles + Shared Links screen + speech language picker,
+    CLI `/tui` toggle + `/powerup` + GitHub/Slack install commands,
+    chrome ext Quick mode + Options page + Tasks concept, VS Code
+    shift+tab mode cycle + Account/usage panel + Mention-file-from-project.
+
+Locks added/refined in R27:
+
+- `locks/v1-cloud-bridge-strategy-2026-05-23.md` — primary BYOK,
+  secondary Groq, tertiary OpenRouter, quaternary DeepSeek with
+  explicit data-residency disclosure.
+- `locks/cli-hooks-canonical-2026-05-23.md` — LC-02 resolved: 33 events
+  total (29 Claude-Code-shared + 4 AGI-exclusive).
+- `feedback_claude_quality_floor.md` — Claude apps = v1 release floor.
+- `feedback_code_centric_verification.md` — code reading + cloud CI
+  only; no computer-use / playwright / simulators.
+- `feedback_no_hardcoded_colors.md` — design tokens only across all
+  7 surfaces.
+
+R27 audit deliverables (committed Stage 0):
+
+- `docs/audit/2026-05-23-r27-coverage-matrix.md` — Phase A audit (7%
+  prior R26 verdict coverage confirmed; 5 surfaces required full
+  per-image verification)
+- `docs/audit/2026-05-23-r27-perimage-*.md` × 5 — per-image verdicts
+  per surface (desktop 210, mobile 28, cli 31, chrome ext 20,
+  vscode ext 23)
+- `docs/audit/2026-05-23-r27-v1-backlog.md` — Phase C synthesis
+  (252 v1-local + 35 v2-cloud-gated + 14 deferred; 55 release blockers
+  ranked across all surfaces)
+
+R28 deferred items (multi-day features for next round):
+
+- Cowork mode UI (W2a-03), Code mode UI (W2a-04), Artifact creation
+  wizard (W2b-04), PDF artifact renderer (W2c-06), Notify-when-done
+  banner (W2b-03), Connectors directory expansion surfacing 49
+  coming-soon connectors (W2b-10), mobile push backend (W3-PUSH-BACKEND),
+  Spanish i18n runtime verification end-to-end (W1-WEB-00C follow-up).
+
 ## [Unreleased — autonomous suite transformation, round 25 — failure-mode verification sweep] — 2026-05-22
 
 Round 25 dispatched 7 parallel verification lanes (V1-V7) to audit the
