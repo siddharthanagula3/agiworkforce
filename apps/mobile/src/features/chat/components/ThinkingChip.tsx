@@ -87,7 +87,7 @@ export function ThinkingChip({ thinkingText, isStreaming, duration }: ThinkingCh
         marginVertical: 2,
         borderRadius: 8,
         overflow: 'hidden',
-        backgroundColor: 'rgba(255,255,255,0.03)',
+        backgroundColor: colors.surfaceOverlay,
         borderWidth: 1,
         borderColor: colors.border,
       }}
