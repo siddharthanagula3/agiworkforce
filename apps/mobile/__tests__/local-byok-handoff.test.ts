@@ -36,6 +36,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { useChatStore } from '../stores/chatStore';
+import { api } from '../services/api';
 
 const HASH = 'abc1234567890defabc1234567890defabc1234567890defabc1234567890def';
 
@@ -164,6 +165,22 @@ describe('mobile Local to BYOK handoff forks', () => {
       sourceMessagePolicy: 'redacted_preview_only',
     });
     expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
+  });
+
+  it('does not touch remote chat APIs while mobile v1 is local-only', async () => {
+    const state = useChatStore.getState();
+
+    await state.loadConversations();
+    const localId = await state.createConversation('Local only');
+    await state.loadMessages(localId);
+    await state.renameConversation(localId, 'Renamed local');
+    await state.pinConversation(localId);
+    await state.deleteConversation(localId);
+
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
   });
 
   it('rejects blocked previews before creating a fork', async () => {
