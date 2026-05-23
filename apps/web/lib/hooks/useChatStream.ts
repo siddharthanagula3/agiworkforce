@@ -19,7 +19,15 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   thinkingEnabled?: boolean;
+  /** Output style hint. When set and not 'normal', a system message is prepended. */
+  styleMode?: string;
 }
+
+const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
+  concise: 'Be concise. Give short, direct answers without unnecessary detail.',
+  formal: 'Use formal, professional language. Be precise and structured.',
+  explanatory: 'Be thorough and educational. Explain concepts in detail with examples.',
+};
 
 interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
@@ -274,6 +282,15 @@ export function useChatStream(): UseChatStreamReturn {
               content: m.content as MessageContent,
             })),
         ];
+
+        // Prepend a style system message when the user has selected a non-default style.
+        // This is injected invisibly into the API call and does not appear in chat bubbles.
+        if (options.styleMode && options.styleMode !== 'normal') {
+          const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
+          if (styleInstruction) {
+            apiMessages.unshift({ role: 'system', content: styleInstruction });
+          }
+        }
 
         // If there are image attachments, format the last user message for the API
         if (options.attachments?.some((a) => a.type === 'image')) {
