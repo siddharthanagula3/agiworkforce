@@ -207,7 +207,7 @@ const GenerativeWidgetComponent: React.FC<GenerativeWidgetProps> = ({
         <iframe
           ref={iframeRef}
           src={blobUrl}
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           title={title ?? 'Generative widget'}
           width="100%"
           height={displayHeight}
