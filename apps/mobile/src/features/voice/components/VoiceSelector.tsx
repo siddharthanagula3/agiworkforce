@@ -285,11 +285,9 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
                   width: '48%',
                   padding: 12,
                   borderRadius: 10,
-                  backgroundColor: isSelected
-                    ? 'rgba(33, 128, 141, 0.18)'
-                    : 'rgba(255, 255, 255, 0.05)',
+                  backgroundColor: isSelected ? colors.surfaceHover : colors.borderLight,
                   borderWidth: 1,
-                  borderColor: isSelected ? 'rgba(33, 128, 141, 0.5)' : 'rgba(255, 255, 255, 0.08)',
+                  borderColor: isSelected ? colors.teal : colors.border,
                 }}
                 accessibilityLabel={`${preset.name} voice preset: ${preset.description}`}
                 accessibilityRole="radio"

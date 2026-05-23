@@ -131,7 +131,7 @@ export default function SharedLinksScreen() {
           accessibilityLabel="Join the Cloud waitlist"
           accessibilityRole="button"
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Join the waitlist</Text>
+          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Join the waitlist</Text>
         </Pressable>
       </ScrollView>
 

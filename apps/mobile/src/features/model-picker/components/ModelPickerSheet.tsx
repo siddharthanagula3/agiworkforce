@@ -369,12 +369,13 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
               <View
                 className="w-6 h-6 rounded-md items-center justify-center"
                 style={{
-                  backgroundColor: thinkingModeEnabled
-                    ? 'rgba(167,139,250,0.15)'
-                    : 'rgba(255,255,255,0.06)',
+                  backgroundColor: thinkingModeEnabled ? colors.surfaceHover : colors.borderLight,
                 }}
               >
-                <Brain size={16} color={thinkingModeEnabled ? '#a78bfa' : colors.textMuted} />
+                <Brain
+                  size={16}
+                  color={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
+                />
               </View>
 
               <View className="flex-1">
@@ -393,8 +394,8 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
               <Switch
                 value={thinkingModeEnabled}
                 onValueChange={handleToggleExtendedThinking}
-                trackColor={{ false: 'rgba(255,255,255,0.15)', true: 'rgba(167,139,250,0.4)' }}
-                thumbColor={thinkingModeEnabled ? '#a78bfa' : '#666'}
+                trackColor={{ false: colors.border, true: colors.surfaceHover }}
+                thumbColor={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
                 style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
                 accessibilityLabel="Enable extended thinking"
               />
