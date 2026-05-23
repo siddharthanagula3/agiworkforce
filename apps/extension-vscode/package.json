@@ -397,6 +397,11 @@
         "command": "agi-workforce.memory.delete",
         "title": "AGI Workforce: Delete Memory Fact",
         "icon": "$(trash)"
+      },
+      {
+        "command": "agi-workforce.openInviteCodeModal",
+        "title": "AGI Workforce: Unlock Cloud Features",
+        "icon": "$(cloud)"
       }
     ],
     "chatParticipants": [
@@ -810,6 +815,16 @@
           ],
           "default": "byok",
           "markdownDescription": "Subscription tier override for the VS Code extension. When set to any value other than `byok`, this overrides the live tier fetched from the desktop bridge or API (useful for testing). Leave at `byok` to use the real resolved tier."
+        },
+        "agiWorkforce.supabaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Supabase project URL used for waitlist sign-up and invite-code redemption. Leave empty to disable cloud-bridge features (v1 default)."
+        },
+        "agiWorkforce.supabaseAnonKey": {
+          "type": "string",
+          "default": "",
+          "description": "Supabase anonymous (public) API key. Paired with agiWorkforce.supabaseUrl. Stored in VS Code settings (not SecretStorage) — this is the public anon key, not a service role key."
         }
       }
     },

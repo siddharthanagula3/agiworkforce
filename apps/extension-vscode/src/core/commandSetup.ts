@@ -1362,4 +1362,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
     }),
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.openInviteCodeModal', async () => {
+      const { openInviteCodeModal } = await import('../features/cloud-bridge/InviteCodeModal');
+      await openInviteCodeModal(context, { source: 'other' });
+    }),
+  );
 }
