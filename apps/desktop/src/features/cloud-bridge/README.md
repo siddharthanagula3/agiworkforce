@@ -29,11 +29,14 @@ interface InviteCodeModalProps {
 **Tab 1: "Enter invitation code"** (default tab)
 
 - Auto-uppercase input; min 6 chars before enabling submit.
-- Calls `waitlistService.validateInviteCode(code)` (1-arg; existing service).
-- On success: shows "Cloud unlocked!" confirmation + calls `onRedeemed(invite.id)` + closes after 1.5 s.
-- Error copy mapped in `friendlyInviteError()` by pattern-matching prose strings returned by the
-  service (typed error codes are a server-side backlog item — see
-  `docs/audit/2026-05-23-r27-v1-backlog.md §2.1`).
+- Calls `waitlistService.redeemInviteCode(code, source)` — atomic validate + redeem via the
+  `validate_and_redeem_invite_code` security-definer RPC.
+- Anonymous Supabase sign-in happens inline inside the service if no session exists. Each surface's
+  `waitlistService` replicates this pattern — no account is required from the user.
+- On success: shows "Cloud unlocked!" confirmation + calls `onRedeemed(inviteId)` (where `inviteId`
+  is `result.inviteId` from the RPC response) + closes after 1.5 s.
+- Errors are typed: `friendlyInviteError(result.error)` switches on the `InviteCodeError` union
+  (see `types.ts`). Do NOT pattern-match prose strings — use the typed switch.
 - "Don't have a code?" link switches to Tab 2.
 
 **Tab 2: "Join waitlist"**
@@ -43,6 +46,21 @@ interface InviteCodeModalProps {
   NOTE: the desktop service method is `joinWaitlist`, NOT `addToWaitlist`. Ports to surfaces that
   have their own waitlist service should verify the local method name.
 - On success: shows "You're on the list!" + calls `onWaitlisted(email)` + closes after 2 s.
+
+## Error codes (`InviteCodeError` union — from `types.ts`)
+
+```typescript
+export type InviteCodeError =
+  | 'invalid_code' // code doesn't match any record
+  | 'expired' // code past expires_at
+  | 'fully_redeemed' // current_uses >= max_uses
+  | 'already_redeemed_by_user' // same user tried to redeem twice
+  | 'anon_signin_failed' // couldn't create anonymous Supabase session
+  | 'rpc_error'; // Supabase RPC transport error
+```
+
+`InviteCodeError` is the cross-surface contract type. Import it from `./types` (or the surface
+equivalent), not directly from `waitlistService`.
 
 ## Modal copy (verbatim — do not localise in ports without team-lead sign-off)
 
@@ -82,21 +100,28 @@ above — but do not block the port on translation.
 The modal calls two methods on the singleton `waitlistService`:
 
 ```typescript
-waitlistService.validateInviteCode(code: string): Promise<{
-  valid: boolean;
-  invite?: BetaInvite;
-  error?: string;
+// Atomic validate + redeem — the correct call for all cloud-unlock flows.
+waitlistService.redeemInviteCode(code: string, source?: string): Promise<{
+  success: boolean;
+  inviteId?: string;
+  error?: InviteCodeError;
 }>
 
+// Waitlist signup — unchanged.
 waitlistService.joinWaitlist(entry: WaitlistEntry): Promise<{
   success: boolean;
   error?: string;
 }>
 ```
 
-**Known gap:** `beta_invites` and `beta_redemptions` tables are not yet created in Supabase.
-Every call to `validateInviteCode` will return `{ valid: false, error: '...' }` until the
-migration in `docs/audit/2026-05-23-r27-v1-backlog.md §2.7` is applied.
+`redeemInviteCode` creates an anonymous Supabase session if none exists, then calls the
+`validate_and_redeem_invite_code` security-definer RPC (defined in
+`supabase/migrations/20260523000000_beta_invites.sql`). The RPC holds a `FOR UPDATE` lock to
+prevent concurrent double-spend.
+
+`validateInviteCode` is retained in the service as a read-only helper for admin UI / pre-flight
+hints but must NOT be called from the invite-code submit path. It cannot read `beta_invites`
+directly under anon/user RLS — all redemption flows go through the RPC.
 
 ## How to open the modal from any cloud-gated entry point
 
@@ -122,7 +147,15 @@ function MyCloudFeatureButton() {
 }
 ```
 
-## Cross-surface port guide
+## Cross-surface port guide (Stages 0c–0f)
+
+Each port must:
+
+1. Call `redeemInviteCode(code, source)` not `validateInviteCode(code)`.
+2. Use the typed `InviteCodeError` switch — no prose-string pattern matching.
+3. Pass `result.inviteId` to `onRedeemed`.
+4. Keep anonymous sign-in inside the service (not the modal).
+5. Use the surface's own token system (no hardcoded colors).
 
 | Surface    | Recommended base                                                         | Notes                                                                                 |
 | ---------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
