@@ -243,8 +243,11 @@ impl RealtimeServer {
             if Instant::now() < until {
                 return true;
             }
-            // Lockout expired — reset so a previously locked-out client gets
-            // a fresh failure budget after the cooldown.
+            tracing::info!(
+                "SEV-DESK-01: auth lockout expired for IP {} (was locked for {}s)",
+                ip,
+                LOCKOUT_DURATION.as_secs()
+            );
             rec.lockout_until = None;
             rec.count = 0;
             rec.first_failure_at = None;
