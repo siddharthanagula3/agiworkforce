@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-21.
+Last updated: 2026-05-22 (post R25 failure-mode verification sweep — see `CHANGELOG.md` round 25 entry and `docs/audit/2026-05-22-r25-summary.md`).
 
 ## Mission
 

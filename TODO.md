@@ -2,9 +2,39 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21 (post round-10 suite-transformation session, project-schema lane).
+Last updated: 2026-05-22 (post R25 failure-mode verification sweep).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
+
+## 2026-05-22 R25 — Failure-Mode Verification Sweep (close-out)
+
+7-lane parallel verification of R18-R24 commits against failure modes
+11-17. Full synthesis at `docs/audit/2026-05-22-r25-summary.md`.
+
+- [x] V1 cli orphan-tree salvage — ~118 files removed, tui module ownership rule locked (`c8f5f95b9` + `e3a316d39` + `5c4e623c1` + `1960799ad`)
+- [x] V2 model-ID drift — 4 corrections + 8 regression tests (`20bdd9cba`)
+- [x] V3 cost-tracker E2E test — 7/7 pass both OpenAI shapes (`a48158798`)
+- [x] V3 toOtelAttributes wire-up — gen_ai.\* attributes now emit in production (`36d39ae9e`)
+- [x] V4 BYOK env-key-status + waitlist NEGATIVE tests — 38 tests, no leaks (`91068d33a`)
+- [x] V5 desktop sync silence + privacy migration coercion (`8d225f81a`)
+- [x] V6 random-sample failure-mode audit — severity histogram + 8-item R26 list (`a1f79472a`)
+- [x] V7 desktop ToolCallCard dedup — 4 consumers migrated (`12f00467f`)
+- [x] R25 synthesis (`9b80e801f`)
+
+## 2026-05-22 R26 — Remediation Backlog
+
+From V6's 8-item list + cross-lane patterns. Priority-ordered.
+
+- [ ] **R26-1** Module-graph reachability CI check (Rust + TS). Asserts every `.rs` file under `apps/*/src/` has a `mod`/`pub mod` declaration reachable from `lib.rs`/`main.rs`, and every `.ts`/`.tsx` file under `apps/*/src/` resolves from the production entry point. Closes failure mode #11 across all 6 surfaces.
+- [ ] **R26-2** Consolidate `apps/web/lib/llm-providers/openai.ts` (fetch-based, used by `/api/llm/v1`) + `packages/providers/openai/` (SDK-based, used by CLI/desktop via `@agiworkforce/llm-normalize`) into one canonical adapter. R22 audit identified; V3 confirmed still drifting.
+- [ ] **R26-3** Hash `cloud_managed_waitlist.email` (currently plain text PII) + swap rate-limit key from `default` (100/min/IP) to `auth-signup` (3/h) to reduce email-harvesting surface.
+- [ ] **R26-4** Pre-commit subject-vs-payload classifier hook — warn when `docs(...)` or `chore(...)` ships >100 LOC of non-doc files. Catches commit-classifier drift (V6 saw `docs(visual-verification):` shipping 2,360 LOC of mobile feature code).
+- [ ] **R26-5** Verify every model ID in `packages/types/src/models.json` against provider catalogs (extends V2 to all 8 providers). Add `source_doc_date` field to track verification staleness.
+- [ ] **R26-6** Audit every iframe-rendering chat component for `sandbox` attribute. Start with `ArtifactThumbnailCard` (V6 finding).
+- [ ] **R26-7** Clarify or fix `toOtelAttributes`' `codex.usage.total_tokens` semantic — does it intentionally exclude `cacheReadInputTokens`, or is that a bug? V6 documentation gap.
+- [ ] **R26-8** Re-audit all R18-R22 commits touching CLI surface for orphan-tree pattern. V6 extrapolation: ~20 of 54 commits may carry similar issues.
+- [ ] **R26-9** Rename contradictory test case in `apps/web/lib/llm-providers/__tests__/openai-cache.test.ts` (V6 minor).
+- [ ] **R26-10** Push the 65-commit window to `origin/main` so cloud CI handles heavy verification. Per new operating rule: local CLI reserved for `~/Desktop/reference/`-touching work; verification + builds go to cloud.
 
 ## 2026-05-21 Suite Transformation Session — Round 10 (in progress)
 
