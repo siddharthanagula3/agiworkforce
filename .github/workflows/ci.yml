@@ -79,6 +79,22 @@ jobs:
         # model IDs" is enforced uniformly across the repo.
         run: bash scripts/check-no-hardcoded-models.sh
 
+      - name: Hardcoded-fixture-array gate (AP-08)
+        # R27-PARITY: detects UI components that declare their own copy of
+        # display data (CONNECTORS, SKILLS_LIST, etc.) when a live store
+        # already exists for the same domain. Canonical definition files
+        # (*Definitions.ts, *Catalog.ts) are exempt. Exit 1 = anti-pattern.
+        run: pnpm check:hardcoded-arrays
+
+      - name: Lock-vs-build drift check (AP-09, advisory)
+        # R27-PARITY: compares model ID references in Claude memory lock files
+        # against packages/types/src/models.json. Lock files live in ~/.claude/
+        # (user home — not in repo), so this step exits 0 (skip) in CI and is
+        # only substantive when run locally by a developer. Exit 2 = drift
+        # warnings; non-blocking (continue-on-error).
+        run: pnpm check:lock-drift
+        continue-on-error: true
+
       - name: Type check
         run: pnpm typecheck:all
 
