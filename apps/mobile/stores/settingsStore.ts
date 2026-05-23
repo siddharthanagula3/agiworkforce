@@ -23,6 +23,10 @@ interface Capabilities {
   imageGen: boolean;
   memory: boolean;
   desktopControl: boolean;
+  artifacts: boolean;
+  codeExecution: boolean;
+  voice: boolean;
+  camera: boolean;
 }
 
 interface SettingsState {
@@ -50,6 +54,8 @@ interface SettingsState {
   selectedPresetId: string | null;
   /** TTS provider: system (free) or cloud (premium) */
   ttsProvider: TTSProvider;
+  /** Language prefix for voice filtering (e.g. 'en', 'fr') */
+  speechLanguage: string;
   /** Auto-listen after AI speaks in voice conversation mode */
   autoListenEnabled: boolean;
   /** Temporary chat mode: conversations won't be saved */
@@ -75,6 +81,7 @@ interface SettingsState {
   setSpeechPitch: (pitch: number) => void;
   setSelectedPresetId: (id: string | null) => void;
   setTtsProvider: (provider: TTSProvider) => void;
+  setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
@@ -96,6 +103,7 @@ export const useSettingsStore = create<SettingsState>()(
       speechPitch: 1.0,
       selectedPresetId: null,
       ttsProvider: 'system',
+      speechLanguage: 'en',
       autoListenEnabled: true,
       isTemporaryChat: false,
       personalization: {
@@ -113,6 +121,10 @@ export const useSettingsStore = create<SettingsState>()(
         imageGen: true,
         memory: true,
         desktopControl: true,
+        artifacts: true,
+        codeExecution: true,
+        voice: true,
+        camera: true,
       },
 
       setAutoApproveMode: (mode) => set({ autoApproveMode: mode }),
@@ -127,6 +139,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSpeechPitch: (pitch) => set({ speechPitch: Math.min(Math.max(pitch, 0.5), 2.0) }),
       setSelectedPresetId: (id) => set({ selectedPresetId: id }),
       setTtsProvider: (provider) => set({ ttsProvider: provider }),
+      setSpeechLanguage: (language) => set({ speechLanguage: language }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setPersonalization: (partial) =>

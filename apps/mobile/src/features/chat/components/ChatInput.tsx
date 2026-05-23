@@ -238,7 +238,7 @@ export function ChatInput({
       ? `Offline — message will send on reconnect${queueLabel}`
       : isThreadActive
         ? 'Reply to AGI'
-        : 'Ask anything...';
+        : "What's on your mind?";
 
   return (
     <View className="px-4 pb-4 pt-2">

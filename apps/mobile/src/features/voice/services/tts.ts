@@ -106,12 +106,45 @@ export async function getAvailableVoices(): Promise<VoiceInfo[]> {
  * Get available English voices, sorted by quality.
  */
 export async function getEnglishVoices(): Promise<VoiceInfo[]> {
+  return getVoicesForLanguage('en');
+}
+
+/**
+ * Get voices for a given language prefix (e.g. 'en', 'fr', 'es').
+ * Falls back to all voices if the prefix matches nothing.
+ */
+export async function getVoicesForLanguage(languagePrefix: string): Promise<VoiceInfo[]> {
   const voices = await getAvailableVoices();
-  return voices
-    .filter((v) => v.language.startsWith('en'))
-    .sort((a, b) => {
-      // Prefer 'Enhanced' / 'Premium' quality
-      const qualityOrder: Record<string, number> = { Enhanced: 0, Default: 1 };
-      return (qualityOrder[a.quality] ?? 2) - (qualityOrder[b.quality] ?? 2);
-    });
+  const filtered = voices.filter((v) =>
+    v.language.toLowerCase().startsWith(languagePrefix.toLowerCase()),
+  );
+  const result = filtered.length > 0 ? filtered : voices;
+  return result.sort((a, b) => {
+    const qualityOrder: Record<string, number> = { Enhanced: 0, Default: 1 };
+    return (qualityOrder[a.quality] ?? 2) - (qualityOrder[b.quality] ?? 2);
+  });
+}
+
+/**
+ * Return unique language prefixes from the available voice list.
+ * Each entry has a code (e.g. 'en'), a display label (e.g. 'English'),
+ * and the raw locale of the first matching voice.
+ */
+export async function getAvailableLanguages(): Promise<
+  { code: string; label: string; locale: string }[]
+> {
+  const voices = await getAvailableVoices();
+  const seen = new Map<string, string>();
+  for (const v of voices) {
+    const code = v.language.split('-')[0].toLowerCase();
+    if (!seen.has(code)) seen.set(code, v.language);
+  }
+  const displayNames = new Intl.DisplayNames(['en'], { type: 'language' });
+  return Array.from(seen.entries())
+    .map(([code, locale]) => ({
+      code,
+      locale,
+      label: displayNames.of(code) ?? code.toUpperCase(),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
