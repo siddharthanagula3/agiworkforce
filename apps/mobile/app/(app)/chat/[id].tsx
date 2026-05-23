@@ -26,7 +26,6 @@ import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
-import { ThinkingBottomSheet } from '@/src/features/chat/components/ThinkingBottomSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
@@ -72,8 +71,6 @@ export default function ChatScreen() {
     ) => void;
   } | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
-  const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
-  const [thinkingContent, setThinkingContent] = useState('');
   const [modeSwitchState, setModeSwitchState] = useState<{
     visible: boolean;
     fromMode: AppMode;
@@ -463,15 +460,6 @@ export default function ChatScreen() {
     setRefreshing(false);
   }, [id, loadMessages]);
 
-  const handleOpenThinking = useCallback((content: string) => {
-    setThinkingContent(content);
-    setThinkingSheetIndex(0);
-  }, []);
-
-  const handleCloseThinking = useCallback(() => {
-    setThinkingSheetIndex(-1);
-  }, []);
-
   const handleOpenVoiceMode = useCallback(() => {
     setVoiceModeVisible(true);
   }, []);
@@ -760,7 +748,6 @@ export default function ChatScreen() {
             onRefresh={handleRefresh}
             refreshing={refreshing}
             onQuoteReply={handleQuoteReply}
-            onOpenThinking={handleOpenThinking}
           />
         )}
 
@@ -809,13 +796,6 @@ export default function ChatScreen() {
           sheetRef={exportSheetRef}
           messages={conversationMessages}
           title={title}
-        />
-
-        {/* Shared thinking bottom sheet — one instance for all messages */}
-        <ThinkingBottomSheet
-          thinkingText={thinkingContent}
-          sheetIndex={thinkingSheetIndex}
-          onClose={handleCloseThinking}
         />
 
         {/* Paywall bottom sheet — shown when the API returns a tier-cap 429. */}

@@ -71,8 +71,6 @@ interface MessageBubbleProps {
   onRetryMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
-  /** Called to open the shared thinking bottom sheet with this message's reasoning */
-  onOpenThinking?: (content: string, duration?: number) => void;
 }
 
 /**
@@ -90,7 +88,6 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryMessage,
   onEditMessage,
   onReaction,
-  onOpenThinking,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -155,12 +152,6 @@ export const MessageBubble = memo(function MessageBubble({
     },
     [isAssistant, hapticsEnabled, message.id, onReaction],
   );
-
-  const handleOpenThinkingSheet = useCallback(() => {
-    if (message.reasoning && onOpenThinking) {
-      onOpenThinking(message.reasoning, message.metadata?.thinkingDuration as number | undefined);
-    }
-  }, [message.reasoning, message.metadata?.thinkingDuration, onOpenThinking]);
 
   const handleOpenEditModal = useCallback(() => {
     setEditText(message.content);
