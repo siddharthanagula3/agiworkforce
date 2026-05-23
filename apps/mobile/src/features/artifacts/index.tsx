@@ -135,12 +135,6 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
     [cardWidth],
   );
 
-  // Empty state shows only when user has no artifacts; Inspiration still renders via footer.
-  const ListEmpty = useMemo(
-    () => (isLoading ? <ArtifactsSkeletonGrid cardWidth={cardWidth} /> : <ArtifactsEmptyState />),
-    [isLoading, cardWidth],
-  );
-
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header bar */}
@@ -165,17 +159,23 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
         </Text>
       </View>
 
-      <FlatList
-        data={isLoading ? [] : userArtifacts}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        numColumns={NUM_COLUMNS}
-        testID="artifacts-grid"
-        contentContainerStyle={listContentStyle}
-        ListEmptyComponent={ListEmpty}
-        ListFooterComponent={ListFooter}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <ScrollView contentContainerStyle={listContentStyle} showsVerticalScrollIndicator={false}>
+          <ArtifactsSkeletonGrid cardWidth={cardWidth} />
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={userArtifacts}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          numColumns={NUM_COLUMNS}
+          testID="artifacts-grid"
+          contentContainerStyle={listContentStyle}
+          ListEmptyComponent={<ArtifactsEmptyState />}
+          ListFooterComponent={ListFooter}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <ArtifactPreviewModal artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
     </SafeAreaView>

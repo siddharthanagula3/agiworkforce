@@ -127,7 +127,7 @@ describe('Artifacts gallery', () => {
 
     fireEvent.press(getByTestId('artifact-card-stem-opt-salary-rules'));
 
-    expect(getByText('Received artifact')).toBeTruthy();
+    expect(getByText('Artifact preview')).toBeTruthy();
     expect(getByTestId('artifact-preview-content')).toBeTruthy();
   });
 });
