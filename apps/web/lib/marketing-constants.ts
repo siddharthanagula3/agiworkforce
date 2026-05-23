@@ -24,6 +24,106 @@ export const MARKETING_MODEL_PILLS = [
   'llama-3.3-70b',
 ] as const;
 
+export type PricingTabId = 'individual' | 'team' | 'api';
+
+export interface PlanFeatureRow {
+  planId: string;
+  label: string;
+  price: string;
+  billingInterval: string;
+  usageCapacity: string;
+  bestFor: string;
+  ctaLabel: string;
+  ctaHref: string;
+  waitlist?: boolean;
+  contactSales?: boolean;
+  highlighted?: boolean;
+}
+
+export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = {
+  individual: [
+    {
+      planId: 'local-only',
+      label: 'Local',
+      price: 'Free',
+      billingInterval: 'Forever',
+      usageCapacity: 'Unlimited (device-bound)',
+      bestFor: 'Offline, privacy-first use',
+      ctaLabel: 'Install',
+      ctaHref: '/download',
+    },
+    {
+      planId: 'byok',
+      label: 'BYOK',
+      price: 'Free',
+      billingInterval: 'Forever',
+      usageCapacity: 'Your own API quotas',
+      bestFor: 'Power users with provider accounts',
+      ctaLabel: 'Install',
+      ctaHref: '/download',
+    },
+    {
+      planId: 'hobby',
+      label: 'Hobby',
+      price: '$10/mo',
+      billingInterval: 'Monthly or annual',
+      usageCapacity: 'Standard daily credits',
+      bestFor: 'Individuals wanting managed cloud',
+      ctaLabel: 'Subscribe',
+      ctaHref: '/login',
+      highlighted: true,
+    },
+  ],
+  team: [
+    {
+      planId: 'pro',
+      label: 'Pro',
+      price: '$29.99/mo',
+      billingInterval: 'Monthly or annual',
+      usageCapacity: 'Higher daily credits',
+      bestFor: 'Professionals and small teams',
+      ctaLabel: 'Join waitlist',
+      ctaHref: '/pricing',
+      waitlist: true,
+    },
+    {
+      planId: 'pro_plus',
+      label: 'Pro+',
+      price: '$49.99/mo',
+      billingInterval: 'Monthly or annual',
+      usageCapacity: 'Large daily credits',
+      bestFor: 'Heavy daily AI workflows',
+      ctaLabel: 'Join waitlist',
+      ctaHref: '/pricing',
+      waitlist: true,
+    },
+    {
+      planId: 'max',
+      label: 'Max',
+      price: '$299.99/mo',
+      billingInterval: 'Monthly or annual',
+      usageCapacity: 'Highest available capacity',
+      bestFor: 'Intensive multi-agent workloads',
+      ctaLabel: 'Join waitlist',
+      ctaHref: '/pricing',
+      waitlist: true,
+    },
+  ],
+  api: [
+    {
+      planId: 'enterprise',
+      label: 'Enterprise',
+      price: 'Custom',
+      billingInterval: 'Annual contract',
+      usageCapacity: 'Negotiated SLA',
+      bestFor: 'Organizations needing SSO, audit logs, SLA',
+      ctaLabel: 'Contact sales',
+      ctaHref: '/contact-sales',
+      contactSales: true,
+    },
+  ],
+};
+
 export const MARKETING = {
   providers: { count: 10, display: '10+', label: 'AI Providers' },
   // skills: 23 categories with counted skills in features/ai-skills page (168 total). 150+ is a
