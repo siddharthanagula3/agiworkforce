@@ -232,7 +232,171 @@ Our registry is grounded in `/Users/siddhartha/Desktop/agiworkforce/crates/agiwo
 
 ---
 
-## 5. Where We Are Ahead
+## 5. User-Flow Reality Check
+
+For each major flow: what does a user who installed `agi` actually experience at runtime, vs what the code claims? Grounded in source — not in what is registered, but what fires.
+
+---
+
+### 5.1 Slash Commands — Registered vs Dispatched
+
+**Flow:** User types `/command arg` at the REPL or TUI palette.
+
+**Reality: SOLID.** The dispatch path is fully wired end-to-end.
+
+- In the REPL: `apps/cli/src/repl/mod.rs` feeds input to `handle_slash_command()` (`slash_commands.rs:40`) which first calls `handle_shared_command()` (`claude_parity.rs:87`). Every command registered in the 83-builtin registry has a corresponding match arm or shared handler — verified by the test at `claude_parity.rs:1048` (`shared_runtime_command_names_are_handled`) which asserts each shared command returns non-`NotHandled`.
+- In the TUI: the command palette (`tui/widgets/command_popup.rs`) filters from the same builtin registry, and selection dispatches into the same `handle_slash_command` / `handle_shared_command` path.
+- The `SlashResult` enum (`slash_commands.rs:11-38`) captures every non-trivial outcome (Btw, A2a, Batch, Prompt, etc.) which the REPL main loop (`repl/mod.rs`) handles before returning to the prompt. No results are silently swallowed.
+
+**One real-flow weakness found:** Many commands in `claude_parity.rs` return `SystemMessage(String)` containing informational text — the `/effort`, `/color`, `/heapdump`, `/stickers` handlers. These print text but do not mutate session state or fire network calls. A user typing `/effort high` gets the message `"Effort level 'high' recognized. The REPL will use the configured model defaults; TUI mode applies effort interactively."` — effort is NOT actually applied to the model call in REPL mode. (`claude_parity.rs:714-722`) **FLOW GAP: `/effort` in REPL mode is informational-only.**
+
+---
+
+### 5.2 Hooks — Defined vs Actually Firing
+
+**Flow:** User configures a hook in `~/.agiworkforce/hooks.json`; the CLI fires it on the matching event.
+
+**Reality: PARTIAL — 13 of 22 events are confirmed wired; 9 are defined but have no fire site.**
+
+**Confirmed wired (fire sites in source):**
+
+| Event                | Fire site                                                      |
+| -------------------- | -------------------------------------------------------------- |
+| `SessionStart`       | `repl/mod.rs:102` + `tui/tui_app.rs:2239`                      |
+| `SessionEnd`         | `repl/mod.rs:424` + `tui/tui_app.rs:2264`                      |
+| `PreToolUse`         | `agent/chat.rs:31`                                             |
+| `PostToolUse`        | `agent/chat.rs:693`, `agent/chat.rs:861`, `agent/chat.rs:1041` |
+| `PreCompact`         | `agent/chat.rs:76`                                             |
+| `PostCompact`        | `agent/chat.rs:108`                                            |
+| `BeforePromptBuild`  | `agent/chat.rs:180`                                            |
+| `BeforeModelResolve` | `agent/chat.rs:199`                                            |
+| `ToolResultPersist`  | `agent/chat.rs:711`, `agent/chat.rs:875`, `agent/chat.rs:1063` |
+| `SubagentStart`      | `agent/chat.rs:571`                                            |
+| `SubagentStop`       | `agent/chat.rs:597`                                            |
+| `DaemonStarted`      | `daemon.rs:176`                                                |
+| `CronTriggered`      | `daemon.rs:849`                                                |
+
+**NOT wired — enum variant exists, no `run_hooks(HookEvent::X, ...)` call found anywhere:**
+
+| Event               | Status                                                                                                                                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `UserPromptSubmit`  | **MISSING FIRE SITE** — defined in `hooks.rs:183` and documented in the deserialization error string, but no `run_hooks(HookEvent::UserPromptSubmit, ...)` call exists in any `.rs` file. Claude Code fires this for every user message. |
+| `AfterMessage`      | **MISSING FIRE SITE** — AGI-specific event; no call site.                                                                                                                                                                                |
+| `PlanModeChanged`   | **MISSING FIRE SITE** — fires on plan on/off; `slash_commands.rs:201-213` sets `session.plan_mode` but does not call `run_hooks`.                                                                                                        |
+| `PermissionRequest` | **MISSING FIRE SITE** — defined, referenced in error string, no fire site.                                                                                                                                                               |
+| `Notification`      | **MISSING FIRE SITE** — no fire site.                                                                                                                                                                                                    |
+| `Stop`              | **MISSING FIRE SITE** — no Ctrl-C or loop-end fire site.                                                                                                                                                                                 |
+| `WebhookReceived`   | **MISSING FIRE SITE** — daemon mode only; `daemon.rs` handles webhook triggers by dispatching to agent, no `HookEvent::WebhookReceived` call.                                                                                            |
+| `FileChanged`       | **MISSING FIRE SITE** — daemon file watcher exists but no hook fire call.                                                                                                                                                                |
+| `DaemonStopped`     | **MISSING FIRE SITE** — `DaemonStarted` fires at `daemon.rs:176`; `DaemonStopped` has no matching call.                                                                                                                                  |
+
+**Verdict: 9 hook events are dead code at runtime.** A user configuring a `UserPromptSubmit` hook (the most common Claude Code hook pattern) would see it never fire. This is the most impactful user-facing hook gap.
+
+---
+
+### 5.3 MCP Transports — Config Plumbing vs Actual Connection
+
+**Flow:** User configures an MCP server in `~/.agiworkforce/config.toml` or via a plugin manifest.
+
+**Reality: SOLID for stdio; SOLID for SSE and HTTP; plugin MCP configs are fully translated and connected.**
+
+- `attach_mcp_manager_for_session()` (`lib.rs:2202`) calls `plugin_mgr.load_all()` then `plugin_mgr.mcp_configs()` to translate plugin manifest MCP entries into `McpServerConfig` variants, then calls `mcp_mgr.connect_all(&mcp_configs)` (`lib.rs:2233`).
+- `mcp_configs()` in `plugins.rs:355-434` correctly dispatches on `transport` field: `"sse"` → `McpServerConfig::sse(url, headers)`, `"http"` → `McpServerConfig::Tagged(McpTransport::Http { url, headers, auth })`, `None/"stdio"` → `McpServerConfig::stdio(command, args, env)`.
+- OAuth PKCE is wired: the `auth` block from plugin manifests is deserialized into `McpOAuthConfig` (`plugins.rs:396-407`) and threaded to the HTTP transport.
+- **One real-flow weakness:** plugin MCP server configs with SSE transport use `cfg.extra.get("url")` — the URL must be in the manifest's `extra` field (not a typed field), because `McpServerConfig.extra` is a `serde_json::Map` catch-all (`plugins.rs:129`). This works for Claude Code-format manifests that put `transport` and `url` at the top level, but any manifest that puts `url` in a nested object will be silently skipped with `[plugins] MCP server '...' declares transport=sse but has no 'url'` warning. **MINOR FLOW GAP: SSE plugin entries with non-flat URL fields are silently skipped.**
+
+---
+
+### 5.4 Plugin Manifests — Discovery vs Execution
+
+**Flow:** User installs a plugin with `.claude-plugin/plugin.json`; expects slash commands, skills, MCP servers, and hooks to activate.
+
+**Reality: MIXED — discovery and MCP wiring are solid; hooks from plugins are partially blocked by design.**
+
+- Discovery: `PluginsManager::load_all()` (`plugins.rs:237-250`) scans `~/.agiworkforce/plugins/` (global) and `<cwd>/.agiworkforce/plugins/` (project-local) in priority order, reads all 5 manifest formats. **Works.**
+- MCP servers: wired via `mcp_configs()` as described above. **Works.**
+- Skills: `manifest_skills` paths are loaded; plugin skills compose into the registry via `command_registry.rs` → `registry_from_builtins_skills_and_prompts()`. **Works.**
+- Slash commands: `manifest_commands` paths → custom markdown commands → `custom_commands::expand_custom_slash_invocation()` at the end of `handle_slash_command()` fallback. **Works.**
+- **Hooks from plugins:** `manifest_hooks` is read into `LoadedPlugin.manifest_hooks` (`plugins.rs:109`). There is a `merge_plugin_hooks()` function referenced in comments (`plugins.rs:472-513`). **However:** the hooks session-load path in `repl/mod.rs` and `tui/tui_app.rs` calls `session.hooks_config()` which loads from `~/.agiworkforce/hooks.json` — it does NOT merge plugin hooks at startup. Plugin hooks are **not injected into the live hooks config**. A plugin declaring hooks silently does nothing at runtime. **FLOW GAP: Plugin-declared hooks are discovered but not merged into the active HooksConfig.**
+- **Project-local plugin hooks are explicitly blocked** by design (`plugins.rs:513`, HIGH-2 security note). Only global plugins may contribute hooks; this is intentional but is not documented to the user.
+
+---
+
+### 5.5 Sessions — Resume/Fork/Branch State Rehydration
+
+**Flow:** User runs `/resume <id>` or `agi exec --session <id>` to continue a prior session.
+
+**Reality: SOLID for message rehydration; PARTIAL for session metadata.**
+
+- `handle_load()` (`repl/registry.rs:42`) calls `load_managed_session(id)` → reads the JSONL file from `~/.agiworkforce/managed_sessions/<id>.jsonl`, then calls `super::load_messages_into_session(session, managed_session.messages)` and `session.adopt_managed_session(managed_session, path)` (`registry.rs:54`). Messages are reinjected into the live `AgentSession.messages` vector.
+- **What IS rehydrated:** full message history (all roles including tool calls and results), session_id, model name, cwd from metadata.
+- **What IS NOT rehydrated:** `permission_mode`, `plan_mode`, `plan_approved`, `current_plan`, `fast_mode`, `output_style`, `fallback_chain`, `skip_permissions`. These session fields default to their initial values on resume. A user who resumes a plan-mode session loses plan state and must re-enter plan mode manually. **FLOW GAP: Non-message session state (plan mode, permission mode, output style, fallback chain) is not persisted and is dropped on resume.**
+- Branch/Fork: `handle_branch()` in `registry.rs` forks the current session at the current turn count. This works but inherits the same state-loss issue — only messages are forked, not the session config fields.
+
+---
+
+### 5.6 Provider Auto-Balanced Default — Task-Type Routing
+
+**Flow:** User expects the CLI to automatically pick the best model for the task type (e.g. heavy reasoning vs quick edits) via `packages/llm-normalize` or task-type classification.
+
+**Reality: NOT IMPLEMENTED.** The routing module `apps/cli/src/routing/strategy.rs:1` has the comment:
+
+```
+// PHASE2: composable router not yet wired into AgentSession; planned to replace
+// the manual FallbackChain as the differentiating routing layer.
+```
+
+The `RoutingStrategy` trait and `DefaultStrategy`/`FallbackStrategy`/`TaskTypeStrategy` implementations exist (`routing/strategy.rs`) but the `#![allow(dead_code)]` at the top confirms none of these are called from `AgentSession`. Model selection at runtime is: (1) the model passed via `--model` flag, (2) `session.switch_model()` from `/model` or `/fast`, or (3) the `config.default.model` field from `~/.agiworkforce/config.toml`. There is no task-type classifier, no `llm-normalize` integration, and no automatic model selection based on prompt complexity. **FLOW GAP: Auto-balanced routing is dead code. Users get the configured default model for every task.**
+
+---
+
+### 5.7 TUI Screens — Wired to Backend vs Static Views
+
+**Flow:** User opens a TUI overlay (e.g. `/agents`, `/tasks`, `/plugin`) expecting live data.
+
+**Reality: MIXED — most screens reflect live session state; tasks and background screen are backed by a real registry; a few screens are text-only in REPL mode.**
+
+- `/agents` (`agent_picker.rs`): calls `agents::discover_agents()` which reads `.claude/agents/` and `~/.claude/agents/`. **Live.**
+- `/skills` (`skills_toggle.rs`): calls `skills::discover_skills()`. **Live.**
+- `/mcp` (`mcp/tui_handler.rs`): reads `session.mcp_info()` which returns live connected tools. **Live.**
+- `/permissions` (`approval_overlay.rs`): reads from `permissions::load_rules()`. **Live.**
+- `/tasks` (`claude_parity.rs:580`): calls `tools::session_task_summaries()` which reads from `SESSION_REGISTRY` global (`task_registry.rs:66`) — a `OnceLock<SessionRegistry>` backed by an in-process `RwLock<HashMap>`. **Live within the session; resets on process restart.**
+- `/plugin` marketplace tabs: calls `PluginsManager::load_all()` live. **Live.**
+- **REPL-mode text-only**: `/chrome`, `/ide`, `/effort` (partial), `/color`, `/heapdump`, `/stickers`, `/statusline` return plain text in both REPL and TUI entry points via `claude_parity.rs`. In TUI mode the overlays would ideally render these as structured dialogs, but the `claude_parity.rs` path is shared — TUI gets the same string output, not a rendered widget. **PARTIAL: these commands produce text in TUI instead of structured overlay widgets.**
+- `/tasks` TUI dialog: The TUI renders `session_task_summaries()`. However, background tasks spawned by the model tool (e.g. `BackgroundTask`) write to `SESSION_REGISTRY`, which is process-global. If a task completes before `/tasks` is opened, it shows correctly. If the CLI restarts, registry is empty. **Acceptable for an in-process registry; documented behavior.**
+
+---
+
+### 5.8 Plan Mode — Persistence Across Turns
+
+**Flow:** User runs `/plan`, model calls `update_plan`, user runs `/plan accept`, model proceeds with implementation.
+
+**Reality: SOLID within a single session; plan state is lost on resume.**
+
+- `handle_update_plan()` (`agent/mod.rs:611`) parses the plan JSON, writes it to disk via `plan.write_to_disk(&session_id)` and stores it in `session.current_plan`. **Disk write is real.**
+- The tool gate at `agent/chat.rs:484` checks `session.plan_mode && !session.plan_approved` and returns an error to the model before any mutating tool fires. **Blocking is real.**
+- `auto_approve_plan` flag (`--auto-approve-plan`) bypasses the user confirmation step (`agent/mod.rs:641-643`). **Works.**
+- **Gap 1:** Plan state (`plan_mode`, `plan_approved`, `current_plan`) is not included in the managed session JSONL format. On `/resume`, these fields default to `false`/`None` (verified: `agent/mod.rs:268-272`). A resumed session loses plan context even though the plan file was written to disk. **FLOW GAP: Plan mode is not rehydrated on session resume.**
+- **Gap 2:** `PlanModeChanged` hook event is never fired (confirmed in §5.2 above). Users cannot hook on plan state transitions.
+
+---
+
+### 5.9 Summary of Flow Gaps Found
+
+| #     | Flow             | Gap                                                                                                                                                                                      | Severity                                        |
+| ----- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| FG-01 | Hooks            | `UserPromptSubmit`, `AfterMessage`, `PlanModeChanged`, `PermissionRequest`, `Notification`, `Stop`, `WebhookReceived`, `FileChanged`, `DaemonStopped` — 9 events defined but never fired | P0 — breaks core Claude Code hook compatibility |
+| FG-02 | Hooks            | Plugin-declared `manifest_hooks` are not merged into live HooksConfig                                                                                                                    | P1                                              |
+| FG-03 | Session resume   | `permission_mode`, `plan_mode`, `plan_approved`, `current_plan`, `fast_mode`, `output_style`, `fallback_chain` are not persisted or rehydrated                                           | P1                                              |
+| FG-04 | Plan mode        | Plan state not rehydrated on `/resume` (subset of FG-03)                                                                                                                                 | P1                                              |
+| FG-05 | Provider routing | Auto-balanced task-type routing is dead code (`routing/strategy.rs` has `#![allow(dead_code)]`); users always get configured default                                                     | P2                                              |
+| FG-06 | Slash commands   | `/effort` in REPL mode is informational-only — does not apply effort to model calls                                                                                                      | P2                                              |
+| FG-07 | Plugin MCP       | SSE plugin entries with non-flat `url` fields are silently skipped                                                                                                                       | P2                                              |
+| FG-08 | TUI screens      | `/chrome`, `/ide`, `/effort`, `/color`, `/heapdump`, `/stickers`, `/statusline` render plain text in TUI instead of structured widgets                                                   | P3                                              |
+
+---
+
+## 6. Where We Are Ahead
 
 **Source citations below are verified against current files.**
 
