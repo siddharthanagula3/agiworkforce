@@ -26,11 +26,6 @@
     "sourceMap": true,
     "inlineSources": false,
     "moduleResolution": "node",
-    // FIX-017 follow-up (Sprint 3): TS 6.0 starts warning that the
-    // legacy `node` resolver alias is deprecated. We're not ready to
-    // migrate to `nodenext` here yet (the VS Code extension API
-    // surface is still CJS-flavored), so silence until Sprint 5. TS
-    // 5.x accepts "5.0" as the version-skew ignore string.
     "ignoreDeprecations": "5.0",
     "allowSyntheticDefaultImports": true,
     "incremental": true,
