@@ -24,6 +24,7 @@ import Constants from 'expo-constants';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import {
   composeFirstRunDisclosure,
@@ -139,6 +140,7 @@ export default function OnboardingScreen() {
   );
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Detect device capabilities once on mount
@@ -219,55 +221,79 @@ export default function OnboardingScreen() {
   // ---------------------------------------------------------------------------
   // Device tier → download
   // ---------------------------------------------------------------------------
-  const handleStartDownload = useCallback(() => {
-    if (!recommendedModel.needsDownload) {
-      finishOnboarding();
-      return;
-    }
-    setScreen('download');
-    setDownloadProgress(0);
-
-    // TODO(model-catalog-engineer): add downloadUrl + checksum + format + runtime to OnDeviceModel,
-    // then replace this stub with the real call:
-    //
-    //   import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
-    //   downloadModel({
-    //     modelId: recommendedModel.id,
-    //     displayName: recommendedModel.displayName,
-    //     downloadUrl: recommendedModel.downloadUrl,   // not yet in catalog
-    //     checksum: recommendedModel.checksum,         // not yet in catalog
-    //     fileSizeBytes: recommendedModel.fileSizeBytes,
-    //     runtime: recommendedModel.supportedRuntimes[0],  // authoritative from catalog
-    //     format: recommendedModel.format,                 // authoritative from catalog
-    //     wifiOnly: !cellularEnabled,                  // wire cellular toggle state here
-    //     onProgress(downloaded, total, speedBps) {
-    //       setDownloadProgress((downloaded / total) * 100);
-    //       setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
-    //     },
-    //   }).then(finishOnboarding).catch(handleDownloadError);
-    //
-    // Simulated progress until catalog fields are available:
-    let progress = 0;
-    downloadTimerRef.current = setInterval(() => {
-      progress += 1.2;
-      const clamped = Math.min(progress, 100);
-      setDownloadProgress(clamped);
-      setDownloadSpeedMBs(Math.round(8 + Math.random() * 6));
-      if (progress >= 100) {
-        clearInterval(downloadTimerRef.current!);
-        downloadTimerRef.current = null;
-        setTimeout(finishOnboarding, 600);
+  const handleStartDownload = useCallback(
+    (cellularEnabled = false) => {
+      if (!recommendedModel.needsDownload) {
+        finishOnboarding();
+        return;
       }
-    }, 80);
-  }, [recommendedModel, finishOnboarding]);
+      setScreen('download');
+      setDownloadProgress(0);
+      setDownloadError(null);
+
+      if (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format) {
+        // Real download path — catalog fields are present.
+        // ModelFormat in storage/types uses the same string literals as OnDeviceModel.format.
+        downloadModel({
+          modelId: recommendedModel.id,
+          displayName: recommendedModel.displayName,
+          downloadUrl: recommendedModel.downloadUrl,
+          checksum: recommendedModel.checksum,
+          fileSizeBytes: recommendedModel.fileSizeBytes,
+          runtime: 'local',
+          format: recommendedModel.format,
+          wifiOnly: !cellularEnabled,
+          onProgress(downloaded, total, speedBps) {
+            setDownloadProgress((downloaded / total) * 100);
+            setDownloadSpeedMBs(Math.round(speedBps / (1024 * 1024)));
+          },
+        })
+          .then(finishOnboarding)
+          .catch((err: unknown) => {
+            const kind = err instanceof ModelDownloadError ? err.kind : 'network_error';
+            if (kind === 'cancelled') {
+              return;
+            }
+            const msg =
+              kind === 'wifi_required'
+                ? 'Wi-Fi required. Connect to Wi-Fi or enable cellular download.'
+                : kind === 'checksum_mismatch'
+                  ? 'Download corrupted. Please try again.'
+                  : kind === 'storage_full'
+                    ? 'Not enough storage. Free up space and try again.'
+                    : 'Download failed. You can try again or continue without the model.';
+            setDownloadError(msg);
+          });
+        return;
+      }
+
+      // Catalog fields not yet populated — fall back to simulated progress.
+      // TODO(model-catalog-engineer): populate downloadUrl + checksum + format in
+      // @agiworkforce/local-llm catalog to activate the real path above.
+      let progress = 0;
+      downloadTimerRef.current = setInterval(() => {
+        progress += 1.2;
+        const clamped = Math.min(progress, 100);
+        setDownloadProgress(clamped);
+        setDownloadSpeedMBs(Math.round(8 + Math.random() * 6));
+        if (progress >= 100) {
+          clearInterval(downloadTimerRef.current!);
+          downloadTimerRef.current = null;
+          setTimeout(finishOnboarding, 600);
+        }
+      }, 80);
+    },
+    [recommendedModel, finishOnboarding],
+  );
 
   const handleSkipToChat = useCallback(() => {
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
+    cancelDownload(recommendedModel.id);
     finishOnboarding();
-  }, [finishOnboarding]);
+  }, [recommendedModel.id, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
@@ -293,6 +319,7 @@ export default function OnboardingScreen() {
             speedMBs={downloadSpeedMBs}
             model={recommendedModel}
             onSkip={handleSkipToChat}
+            error={downloadError}
           />
         )}
       </Reanimated.View>
@@ -419,7 +446,7 @@ function DeviceTierScreen({
   colors: ReturnType<typeof useThemeColors>;
   deviceInfo: DeviceTierInfo;
   model: RecommendedModel;
-  onDownload: () => void;
+  onDownload: (cellularEnabled: boolean) => void;
 }) {
   const tierLabel = deviceInfo.tier === 1 ? 'Tier 1' : deviceInfo.tier === 2 ? 'Tier 2' : 'Tier 3';
   const [cellularEnabled, setCellularEnabled] = useState(false);
@@ -517,7 +544,7 @@ function DeviceTierScreen({
       {/* Primary CTA */}
       <Pressable
         testID="device-tier-download-btn"
-        onPress={onDownload}
+        onPress={() => onDownload(cellularEnabled)}
         accessibilityRole="button"
         accessibilityLabel={model.needsDownload ? 'Download model' : 'Continue'}
         style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
@@ -556,12 +583,14 @@ function DownloadScreen({
   speedMBs,
   model,
   onSkip,
+  error,
 }: {
   colors: ReturnType<typeof useThemeColors>;
   progress: number;
   speedMBs: number;
   model: RecommendedModel;
   onSkip: () => void;
+  error?: string | null;
 }) {
   const pct = Math.round(progress);
   const bytesDownloaded = (progress / 100) * model.fileSizeBytes;
@@ -606,6 +635,19 @@ function DownloadScreen({
       <Text style={[styles.downloadHint, { color: colors.textMuted }]}>
         You can leave this screen — download continues in the background.
       </Text>
+
+      {error && (
+        <Text
+          testID="download-error"
+          style={[
+            styles.downloadMeta,
+            { color: colors.agentError, textAlign: 'center', marginTop: 4 },
+          ]}
+          accessibilityRole="alert"
+        >
+          {error}
+        </Text>
+      )}
 
       <Pressable
         testID="download-skip-btn"
