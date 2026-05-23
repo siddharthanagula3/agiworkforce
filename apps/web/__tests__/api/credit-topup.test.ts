@@ -11,9 +11,7 @@
  * - amount_cents is a float (non-integer) → 400 VALIDATION_ERROR
  * - amount_cents below $10 minimum (999 cents) → 400 VALIDATION_ERROR
  * - amount_cents above $1000 maximum (100001 cents) → 400 VALIDATION_ERROR
- * - amount_cents = 1000 (minimum valid) → passes validation (200 with url)
- * - amount_cents = 100000 (maximum valid) → passes validation (200 with url)
- * - amount_cents = 5000 (typical mid-range) → passes validation (200 with url)
+ * - amount_cents = 1000/100000/5000 → passes validation, then private-beta gate returns 403
  * - Unauthenticated request (no user) → 401 UNAUTHORIZED
  * - Invalid JSON body → 400 VALIDATION_ERROR
  * - CSRF: Bearer token bypasses CSRF check so tests can reach validation logic
@@ -381,7 +379,7 @@ describe('POST /api/credit-topup — invalid amount_cents numeric values', () =>
   });
 });
 
-describe('POST /api/credit-topup — valid amount_cents values', () => {
+describe('POST /api/credit-topup — private beta gate for valid amount_cents values', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetUser.mockResolvedValue({
@@ -394,38 +392,36 @@ describe('POST /api/credit-topup — valid amount_cents values', () => {
     });
   });
 
-  it('returns 200 with a checkout URL for the minimum valid amount (1000 cents = $10)', async () => {
+  it('returns 403 for the minimum valid amount while managed credits are private beta', async () => {
     const response = await POST(makeRequest({ amount_cents: 1000 }));
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.url).toBeDefined();
-    expect(typeof data.url).toBe('string');
-    expect(data.url.length).toBeGreaterThan(0);
+    expect(response.status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
   });
 
-  it('returns 200 with a checkout URL for the maximum valid amount (100000 cents = $1000)', async () => {
+  it('returns 403 for the maximum valid amount while managed credits are private beta', async () => {
     const response = await POST(makeRequest({ amount_cents: 100000 }));
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.url).toBeDefined();
+    expect(response.status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
   });
 
-  it('returns 200 with a checkout URL for a mid-range amount (5000 cents = $50)', async () => {
+  it('returns 403 for a mid-range amount while managed credits are private beta', async () => {
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.url).toBeDefined();
+    expect(response.status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
   });
 
-  it('returns 200 for a typical top-up amount (2500 cents = $25)', async () => {
+  it('returns 403 for a typical top-up amount while managed credits are private beta', async () => {
     const response = await POST(makeRequest({ amount_cents: 2500 }));
     const data = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(data.url).toMatch(/^https:\/\//);
+    expect(response.status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
   });
 });
 
@@ -442,9 +438,9 @@ describe('POST /api/credit-topup — boundary values', () => {
     });
   });
 
-  it('1000 (exactly $10) passes — minimum valid amount', async () => {
+  it('1000 (exactly $10) passes validation, then private-beta gate blocks checkout', async () => {
     const res = await POST(makeRequest({ amount_cents: 1000 }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   it('999 (one below minimum) fails', async () => {
@@ -452,9 +448,9 @@ describe('POST /api/credit-topup — boundary values', () => {
     expect(res.status).toBe(400);
   });
 
-  it('100000 (exactly $1000) passes — maximum valid amount', async () => {
+  it('100000 (exactly $1000) passes validation, then private-beta gate blocks checkout', async () => {
     const res = await POST(makeRequest({ amount_cents: 100000 }));
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(403);
   });
 
   it('100001 (one above maximum) fails', async () => {

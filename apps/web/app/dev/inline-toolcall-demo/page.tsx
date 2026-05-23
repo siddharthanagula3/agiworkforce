@@ -14,7 +14,7 @@
 //
 // Read-only on app code — this is the only new mount we add for the smoke test.
 
-import { notFound } from 'next/navigation';
+'use client';
 
 import {
   InlineToolCall,
@@ -23,15 +23,10 @@ import {
   type WebSearchResultItem,
 } from '@agiworkforce/unified-chat';
 
-// Gate the demo route behind NODE_ENV — never ship to production.
-if (process.env.NODE_ENV === 'production') {
-  notFound();
-}
-
 const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   {
     url: 'https://www.anthropic.com/news/claude-4-7',
-    title: 'Introducing Claude Opus 4.7 — the next generation of agentic AI',
+    title: 'Introducing a new provider model release',
     domain: 'anthropic.com',
     faviconUrl: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=32',
   },
@@ -62,6 +57,10 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
 ];
 
 export default function InlineToolCallDemoPage() {
+  if (process.env.NODE_ENV === 'production') {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-white text-stone-900 dark:bg-stone-950 dark:text-stone-100">
       <div className="mx-auto max-w-3xl px-8 py-12 font-sans">

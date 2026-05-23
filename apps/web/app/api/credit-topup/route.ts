@@ -24,8 +24,11 @@ function getStripeClient(): Stripe {
 
 /**
  * POST /api/credit-topup
- * Create a Stripe Checkout session for purchasing additional credits
- * This is primarily for Max plan users who need more credits
+ * Create a Stripe Checkout session for private-beta managed credits.
+ *
+ * Public managed credits/top-ups stay waitlisted until metering, fraud,
+ * refunds, chargebacks, abuse controls, provider terms, retention, and
+ * deletion controls are proven.
  */
 async function handleCreditTopup(request: NextRequest) {
   // CSRF protection for state-changing endpoint
@@ -40,7 +43,6 @@ async function handleCreditTopup(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const stripe = getStripeClient();
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -75,6 +77,14 @@ async function handleCreditTopup(request: NextRequest) {
   if (!Number.isInteger(creditAmount) || creditAmount < 1000 || creditAmount > 100000) {
     throw createError.validation('Invalid top-up amount. Must be between $10 and $1,000.');
   }
+
+  if (!isManagedCreditPrivateBetaEnabled()) {
+    throw createError.forbidden(
+      'Managed credit top-ups are private beta only. Join the Cloud Managed waitlist.',
+    );
+  }
+
+  const stripe = getStripeClient();
 
   // Get user's profile to check for existing Stripe customer
   const { data: profile, error: profileError } = await supabase
@@ -208,4 +218,8 @@ export const POST = withErrorHandler(handleCreditTopup);
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   return preflightResponse || new NextResponse(null, { status: 204 });
+}
+
+function isManagedCreditPrivateBetaEnabled(): boolean {
+  return process.env['AGI_MANAGED_CREDITS_PRIVATE_BETA'] === 'true';
 }
