@@ -83,6 +83,8 @@
     "check:readme-ownership": "node scripts/check-readme-ownership.mjs",
     "check:doc-status": "node scripts/check-doc-status.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
+    "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
+    "check:lock-drift": "node scripts/check-lock-build-drift.mjs",
     "check:llm-operability": "pnpm check:agent-context && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:report-retention && pnpm check:supabase-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks",
     "audit:file-ledger": "node scripts/generate-surface-file-ledger.mjs",
     "format": "prettier --write .",
