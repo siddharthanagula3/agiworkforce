@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ChatHeader - Clean, minimal header
  *
@@ -40,10 +42,13 @@ import {
   LogOut,
   ArrowUpRight,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { ChatSession } from '../../types';
 import { ThemeToggle } from '@shared/ui/theme-toggle';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { PLAN_LABEL, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import { useChatStore } from '@/stores/chatStore';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -190,10 +195,69 @@ function cn(...classes: (string | false | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }
 
+// ---------------------------------------------------------------------------
+// Share conversation hook
+// ---------------------------------------------------------------------------
+
+function useShareConversation(session: ChatSession | null) {
+  const [isSharing, setIsSharing] = React.useState(false);
+  const messages = useChatStore((s) => s.messages);
+  const hasMessages = messages.length > 0;
+
+  const share = React.useCallback(async () => {
+    if (!session || isSharing) return;
+    setIsSharing(true);
+    try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const payload = {
+        title: session.title || 'Shared conversation',
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })),
+      };
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
+        throw new Error(msg);
+      }
+      const data = (await res.json()) as { shareUrl: string };
+      const shareUrl = data.shareUrl;
+      toast.success('Share link created', {
+        description: shareUrl,
+        duration: 8000,
+        action: {
+          label: 'Copy link',
+          onClick: () => {
+            void navigator.clipboard.writeText(shareUrl);
+            toast.success('Link copied');
+          },
+        },
+      });
+    } catch (err) {
+      toast.error('Could not share conversation', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setIsSharing(false);
+    }
+  }, [session, messages, isSharing]);
+
+  return { share, isSharing, hasMessages };
+}
+
 interface ChatHeaderProps {
   session: ChatSession | null;
   onRename: (title: string) => void;
-  onShare: () => void;
+  /** @deprecated Share is handled internally. This prop is ignored. */
+  onShare?: () => void;
   onExport: () => void;
   onSettings: () => void;
   onToggleSidebar: () => void;
@@ -206,7 +270,6 @@ interface ChatHeaderProps {
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   session,
   onRename,
-  onShare,
   onExport,
   onSettings,
   onToggleSidebar,
@@ -217,6 +280,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTitle, setEditTitle] = React.useState(session?.title || '');
+  const { share, isSharing, hasMessages } = useShareConversation(session);
 
   React.useEffect(() => {
     setEditTitle(session?.title || '');
@@ -311,6 +375,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </Button>
         )}
 
+        {/* Share button - only shown when conversation has messages */}
+        {hasMessages && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void share()}
+            disabled={isSharing}
+            className="hidden gap-1.5 sm:flex"
+            aria-label="Share conversation"
+          >
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden text-xs lg:inline">Share</span>
+          </Button>
+        )}
+
         {/* Theme Toggle */}
         <ThemeToggle />
 
@@ -348,10 +427,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem onClick={onShare}>
-              <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
-              Share
-            </DropdownMenuItem>
+            {hasMessages && (
+              <DropdownMenuItem onClick={() => void share()} disabled={isSharing}>
+                <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Share
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem onClick={onExport}>
               <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
