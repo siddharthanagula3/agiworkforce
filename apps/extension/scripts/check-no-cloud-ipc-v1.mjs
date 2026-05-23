@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global URL, console, process */
 /**
  * AP-10: Scan extension src for direct cloud-IPC calls that bypass InviteCodeModal.
  * v1 LOCAL ONLY rule — cloud feature paths must go through InviteCodeModal gate.

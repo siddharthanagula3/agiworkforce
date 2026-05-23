@@ -29,7 +29,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/mobile/`. Re
 - **Tiers**: profile shows `subscriptionPlan` from API. Hobby+ unlocks Cloud mode.
 - **Modes**: Local (private, BYOK) + Cloud (shared chats, requires Hobby+). User can transfer Local↔Cloud.
 - **About screen runtime**: derived from `package.json` `dependencies.expo` + `dependencies['react-native']`. Don't hardcode versions.
-- Models in code: each provider's canonical format (no `gpt-4o`, no `gpt-5.2`).
+- Models in code: use `packages/types/src/models.json` and provider capability metadata; do not paste model IDs from memory.
 
 ## Verification gates
 
@@ -40,7 +40,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/mobile/`. Re
 
 - Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - Read versions/SDK strings from `package.json` or `expo-constants`, never hardcode
-- Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
+- Commit format: lowercase, ≤100 chars, Conventional Commits. Do not invent model/version footers.
 - Don't push.
 
 ## When to escalate

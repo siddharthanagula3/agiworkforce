@@ -27,8 +27,8 @@ You are the **AGI Workforce platform supervisor**. You coordinate the 6 surface 
 5. Tagline = **"Beyond one model. Beyond one surface. AGI in your hands."**
 6. Bridge port = **8787** across all surfaces
 7. Marketing copy: provider names only, never model versions
-8. Code: each provider's official format (Anthropic hyphens, OpenAI dots, Google dots+preview)
-9. Commits: lowercase, ≤100 chars, Conventional Commits with `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
+8. Code: model IDs come from `packages/types/src/models.json` and provider capability metadata.
+9. Commits: lowercase, ≤100 chars, Conventional Commits. Do not invent model/version footers.
 10. Run focused verification during implementation and run required gates before handoff
 11. Single source of truth for coding agents: root `AGENTS.md`, scoped `AGENTS.md`, and `docs/agent-context/`. Use `AGI_WORKFORCE.md` only for product context.
 

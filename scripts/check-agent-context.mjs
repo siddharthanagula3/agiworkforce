@@ -145,11 +145,38 @@ requireIncludes('AGENTS.md', 'docs/engineering/service-layer-architecture.md');
 requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
 
+const agentCriticalRules = [
+  'These rules must stay mirrored in `CLAUDE.md`',
+  'Verify current facts from repo files, official docs, web search, or configured plugins/MCP',
+  'Read model IDs from `packages/types/src/models.json`',
+  'Next.js 16 uses `proxy.ts`',
+  'Local, BYOK, and Managed Cloud are separate trust boundaries.',
+  'Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.',
+  'Local to BYOK must be an explicit fork/continuation',
+  'Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta',
+  'Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status.',
+  'Do not mark work complete from build success alone.',
+  'Use the nearest path-scoped `AGENTS.md`',
+];
+
+const claudeCriticalRules = [
+  'These rules must stay mirrored in `AGENTS.md`',
+  ...agentCriticalRules.slice(1),
+];
+
+for (const phrase of agentCriticalRules) {
+  requireIncludes('AGENTS.md', phrase);
+}
+
+for (const phrase of claudeCriticalRules) {
+  requireIncludes('CLAUDE.md', phrase);
+}
+
 const claudeMd = readText('CLAUDE.md');
 for (const forbiddenSection of ['## Repo Map', '## Product Lock', '## Commands']) {
   if (claudeMd.includes(forbiddenSection)) {
     errors.push(
-      `CLAUDE.md must stay a thin Claude-specific adapter; move ${forbiddenSection} content to AGENTS.md or docs/agent-context/.`,
+      `CLAUDE.md must not duplicate full repo truth; move ${forbiddenSection} content to AGENTS.md or docs/agent-context/.`,
     );
   }
 }
