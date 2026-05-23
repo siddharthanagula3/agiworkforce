@@ -14,6 +14,7 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
+import { hasByokEnvKeys } from '@/lib/byok-access';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
@@ -30,6 +31,7 @@ import {
 import type { Message, MessageMetadata } from '@/stores/chatStore';
 import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
+import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
 
 type SendMeta = {
   agentMode?: string;
@@ -134,20 +136,39 @@ export default function WebChatPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Pre-emptive subscription gate: redirect to /byok before the composer
-  // renders if the user has no active plan. Without this check, the first
-  // message attempt hits auth-gate.ts:91 with a 403 inside the chat UI.
+  // Model from the model store — needed by the access gate below before the composer hooks.
+  const selectedModelId = useModelStore((s) => s.selectedModelId);
+  const selectedModel = useModelStore((s) =>
+    s.availableModels.find((m) => m.id === s.selectedModelId),
+  );
+
+  // Pre-emptive access gate: redirect to /byok only when the user has neither
+  // an active subscription, a local model selected, nor any BYOK env keys set.
+  // BYOK users (plan_tier='free' with env keys) and local-model users must not
+  // be redirected -- only truly unconfigured visitors should hit /byok.
   useEffect(() => {
     let cancelled = false;
-    refreshSubscriptionStatus().then((sub) => {
-      if (!cancelled && !isSubscriptionValid(sub)) {
+
+    async function checkAccess() {
+      const selectedProviderKey = selectedModel?.providerKey ?? '';
+      if (LOCAL_PROVIDER_KEYS.has(selectedProviderKey)) return;
+
+      const [sub, byokAvailable] = await Promise.all([
+        refreshSubscriptionStatus(),
+        hasByokEnvKeys(),
+      ]);
+
+      if (!cancelled && !isSubscriptionValid(sub) && !byokAvailable) {
         router.replace('/byok');
       }
-    });
+    }
+
+    void checkAccess();
     return () => {
       cancelled = true;
     };
-  }, [router]);
+  }, [router, selectedModel]);
+
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
@@ -164,12 +185,6 @@ export default function WebChatPage() {
   const addMessage = useChatStore((s) => s.addMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const isLoading = useChatStore((s) => s.isLoading);
-
-  // Model from the model store (kept in sync by ComposerFooter)
-  const selectedModelId = useModelStore((s) => s.selectedModelId);
-  const selectedModel = useModelStore((s) =>
-    s.availableModels.find((m) => m.id === s.selectedModelId),
-  );
 
   // SendPreview presentation — privacy-disclosure card rendered above the
   // composer so users always see where the next turn is going (local device,
