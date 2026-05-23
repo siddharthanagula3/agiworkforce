@@ -304,7 +304,15 @@ export default function WebChatPage() {
           )
         : undefined;
 
-      await sendMessage(content, {
+      // Prepend a style directive when the user has selected a non-default style.
+      // This keeps the feature entirely client-side with no API contract changes.
+      const styleMode = options.meta?.styleMode;
+      const styledContent =
+        styleMode && styleMode !== 'normal'
+          ? `[Respond in a ${styleMode} style.]\n\n${content}`
+          : content;
+
+      await sendMessage(styledContent, {
         model: selectedModelId,
         conversationId: convId,
         attachments: resolvedAttachments,
