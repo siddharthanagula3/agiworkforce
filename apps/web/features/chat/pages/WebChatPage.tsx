@@ -15,10 +15,9 @@ import {
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
 import { hasByokEnvKeys } from '@/lib/byok-access';
-import { toast } from 'sonner';
 import { Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { useShareConversation } from '../hooks/use-share-conversation';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
@@ -133,60 +132,6 @@ async function saveSystemMessage(params: {
     createdAt: raw.created_at ?? new Date().toISOString(),
     metadata: raw.metadata ?? params.metadata,
   };
-}
-
-function useShareConversation(conversationTitle: string | undefined) {
-  const [isSharing, setIsSharing] = React.useState(false);
-  const messages = useChatStore((s) => s.messages);
-  const hasMessages = messages.length > 0;
-
-  const share = React.useCallback(async () => {
-    if (isSharing) return;
-    setIsSharing(true);
-    try {
-      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
-      const payload = {
-        title: conversationTitle || 'Shared conversation',
-        messages: messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-          createdAt: m.createdAt,
-        })),
-      };
-      const res = await fetch('/api/share', {
-        method: 'POST',
-        headers,
-        credentials: 'include',
-        body: JSON.stringify(payload),
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
-        throw new Error(msg);
-      }
-      const data = (await res.json()) as { shareUrl: string };
-      const shareUrl = data.shareUrl;
-      toast.success('Share link created', {
-        description: shareUrl,
-        duration: 8000,
-        action: {
-          label: 'Copy link',
-          onClick: () => {
-            void navigator.clipboard.writeText(shareUrl);
-            toast.success('Link copied');
-          },
-        },
-      });
-    } catch (err) {
-      toast.error('Could not share conversation', {
-        description: err instanceof Error ? err.message : 'Please try again.',
-      });
-    } finally {
-      setIsSharing(false);
-    }
-  }, [conversationTitle, messages, isSharing]);
-
-  return { share, isSharing, hasMessages };
 }
 
 export default function WebChatPage() {
@@ -369,21 +314,14 @@ export default function WebChatPage() {
           )
         : undefined;
 
-      // Prepend a style directive when the user has selected a non-default style.
-      // This keeps the feature entirely client-side with no API contract changes.
-      const styleMode = options.meta?.styleMode;
-      const styledContent =
-        styleMode && styleMode !== 'normal'
-          ? `[Respond in a ${styleMode} style.]\n\n${content}`
-          : content;
-
-      await sendMessage(styledContent, {
+      await sendMessage(content, {
         model: selectedModelId,
         conversationId: convId,
         attachments: resolvedAttachments,
         webSearch: options.meta?.webSearchEnabled,
         thinkingEnabled: options.meta?.thinkingEnabled,
         codeExecution: options.meta?.codeExecutionEnabled,
+        styleMode: options.meta?.styleMode,
       });
     },
     [
