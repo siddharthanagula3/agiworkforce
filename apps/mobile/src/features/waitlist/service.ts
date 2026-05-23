@@ -1,5 +1,10 @@
 import { supabase } from '@/services/supabase';
+import { api } from '@/services/api';
 import type { InviteCodeError } from '@/src/features/cloud-bridge/types';
+import type {
+  WaitlistSubmission,
+  WaitlistResult,
+} from '@/src/features/waitlist/CloudWaitlistSheet';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -146,4 +151,16 @@ export async function redeemInviteCode(
   } catch {
     return { success: false, error: 'rpc_error' };
   }
+}
+
+/**
+ * Submit a CloudWaitlistSheet submission for a specific source surface.
+ * Mechanics: posts to `/api/waitlist` with the source tag attached so
+ * UI files stay orchestration-only (no direct I/O).
+ */
+export async function submitWaitlistForSource(
+  submission: WaitlistSubmission,
+  source: string,
+): Promise<WaitlistResult> {
+  return api.post<WaitlistResult>('/api/waitlist', { ...submission, source });
 }
