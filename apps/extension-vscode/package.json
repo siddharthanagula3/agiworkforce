@@ -402,6 +402,21 @@
         "command": "agi-workforce.openInviteCodeModal",
         "title": "AGI Workforce: Unlock Cloud Features",
         "icon": "$(cloud)"
+      },
+      {
+        "command": "agi-workforce.cycleAgentMode",
+        "title": "AGI Workforce: Cycle Agent Mode",
+        "icon": "$(robot)"
+      },
+      {
+        "command": "agi-workforce.showAccountUsage",
+        "title": "AGI Workforce: Account & Usage",
+        "icon": "$(account)"
+      },
+      {
+        "command": "agi-workforce.mentionFileFromProject",
+        "title": "AGI Workforce: Mention File from Project",
+        "icon": "$(mention)"
       }
     ],
     "chatParticipants": [
@@ -907,6 +922,11 @@
         "key": "ctrl+shift+alt+u",
         "mac": "cmd+shift+alt+u",
         "when": "agi-workforce.hasDiff"
+      },
+      {
+        "command": "agi-workforce.cycleAgentMode",
+        "key": "shift+tab",
+        "when": "agi-workforce.sidebarFocus || agi-workforce.chatFocus"
       }
     ]
   },
