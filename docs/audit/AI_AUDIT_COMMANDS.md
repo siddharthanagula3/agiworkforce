@@ -42,3 +42,18 @@
 | `cargo test`   | Missing system libraries              |
 | `cargo audit`  | Missing system libraries for build    |
 | E2E tests      | Requires browser + database           |
+
+## Wave D: Billing/Checkout Audit (Read-Only Inspection)
+
+| File Inspected                                       | Result                                                                                          |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `apps/web/app/api/checkout/route.ts`                 | Auth + CSRF + rate-limit + Zod. Duplicate subscription → billing portal. Stripe customer dedup. |
+| `apps/web/app/api/stripe-webhook/route.ts`           | Signature verification (60s window). Idempotency. Service-role client. Generic error messages.  |
+| `apps/web/app/api/stripe-webhook/lib/verify.ts`      | HMAC verification, 60s replay window, invalid signature logging                                 |
+| `apps/web/app/api/stripe-webhook/lib/idempotency.ts` | RPC-based idempotent event processing                                                           |
+| `apps/web/app/api/stripe-webhook/lib/handlers.ts`    | Full lifecycle: checkout/payment/subscription/refund/cancellation                               |
+| `apps/web/app/api/stripe-webhook/lib/db.ts`          | PaymentIntent amount verification, credit allocation via RPC, subscription upsert               |
+| `apps/web/app/api/credit-topup/route.ts`             | Auth + CSRF + rate-limit. Amount bounds ($10-$1000).                                            |
+| `apps/web/lib/services/credit-service.ts`            | Atomic deduction via RPC, idempotency key support                                               |
+
+**Result: No issues found. Billing flow is well-secured.**
