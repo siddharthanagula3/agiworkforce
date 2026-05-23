@@ -922,15 +922,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     }),
 
     vscode.commands.registerCommand('agi-workforce.rewindLast', () => {
-      vscode.window.showInformationMessage(
-        'AGI Workforce: Rewind — coming soon in a future release.',
-      );
+      sidebarProvider.rewindLast();
     }),
 
     vscode.commands.registerCommand('agi-workforce.openActionSheet', async () => {
       const currentModel = normalizeConfiguredModelId(Config.model());
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
+      const currentThinking = Config.agentThinking();
 
       function cap(s: string): string {
         return s.charAt(0).toUpperCase() + s.slice(1);
@@ -959,6 +958,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           label: `$(brain) Effort: ${cap(currentEffort)}`,
           description: 'Set reasoning effort (Low / Medium / High / Max)',
           detail: 'effort',
+        },
+        {
+          label: `$(lightbulb) Thinking: ${currentThinking ? 'On' : 'Off'}`,
+          description: 'Extended thinking — model shows reasoning before responding',
+          detail: 'thinking',
         },
         {
           label: `$(robot) Mode: ${cap(currentMode)}`,
@@ -1073,6 +1077,16 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
               `AGI Workforce agent mode set to: ${cap(modePick.detail)}`,
             );
           }
+          break;
+        }
+        case 'thinking': {
+          const newThinking = !Config.agentThinking();
+          await vscode.workspace
+            .getConfiguration('agiWorkforce')
+            .update('agent.thinking', newThinking, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage(
+            `AGI Workforce thinking ${newThinking ? 'enabled' : 'disabled'}.`,
+          );
           break;
         }
         case 'account':

@@ -729,6 +729,11 @@
           "default": "medium",
           "description": "Reasoning effort for providers that support it (Anthropic, OpenAI, Google). Ignored when provider does not support an explicit effort axis."
         },
+        "agiWorkforce.agent.thinking": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable extended thinking for providers that support it (e.g. Claude claude-opus-4-6 and above). When enabled, the model will show its reasoning before responding."
+        },
         "agiWorkforce.agent.maxIterations": {
           "type": "number",
           "default": 25,
