@@ -942,6 +942,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           description: 'Add a workspace file to conversation context',
           detail: 'attach-file',
         },
+        {
+          label: '$(mention) Mention file from project',
+          description: 'Open file picker and insert mention into @agi chat',
+          detail: 'mention-file-project',
+        },
         { label: '$(history) Rewind', description: 'Undo the last AI turn', detail: 'rewind' },
         {
           label: '$(trash) Clear conversation',
@@ -1090,7 +1095,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           break;
         }
         case 'account':
-          await vscode.commands.executeCommand('agi-workforce.showTierStatus');
+          await vscode.commands.executeCommand('agi-workforce.showAccountUsage');
+          break;
+        case 'mention-file-project':
+          await vscode.commands.executeCommand('agi-workforce.mentionFileFromProject');
           break;
       }
     }),
@@ -1383,4 +1391,129 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await openInviteCodeModal(context, { source: 'other' });
     }),
   );
+
+  // ── W6-07: Shift+Tab mode cycle ──────────────────────────────────────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.cycleAgentMode', async () => {
+      const modes: ReadonlyArray<'ask' | 'auto' | 'plan' | 'bypass'> = [
+        'ask',
+        'auto',
+        'plan',
+        'bypass',
+      ];
+      const current = Config.agentMode();
+      const idx = modes.indexOf(current);
+      const next: 'ask' | 'auto' | 'plan' | 'bypass' = modes[(idx + 1) % modes.length] ?? 'auto';
+      await vscode.workspace
+        .getConfiguration('agiWorkforce')
+        .update('agent.mode', next, vscode.ConfigurationTarget.Global);
+      vscode.window.setStatusBarMessage(
+        `$(robot) AGI mode: ${next.charAt(0).toUpperCase() + next.slice(1)}`,
+        2000,
+      );
+    }),
+  );
+
+  // ── W6-02: Account & usage panel ─────────────────────────────────────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.showAccountUsage', async () => {
+      const { getTokenCounter } = await import('../data/tokenCounter');
+      const { fetchTierInfo } = await import('../utils/api');
+
+      const counter = getTokenCounter();
+      const tierInfo = await fetchTierInfo(context.secrets);
+      const tier =
+        tierInfo?.tier ?? context.globalState.get<string>('tierStatus.cachedTier') ?? 'local';
+
+      const items: vscode.QuickPickItem[] = [
+        { label: 'Session usage', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: `$(request-changes) Requests this session`,
+          description: `${counter.requestCount}`,
+        },
+        {
+          label: `$(arrow-up) Input tokens`,
+          description: formatK(counter.promptTokens),
+        },
+        {
+          label: `$(arrow-down) Output tokens`,
+          description: formatK(counter.completionTokens),
+        },
+        {
+          label: `$(graph) Total tokens`,
+          description: formatK(counter.totalTokens),
+        },
+        {
+          label: `$(credit-card) Est. cost`,
+          description: `$${counter.estimatedCostUsd.toFixed(4)}`,
+        },
+      ];
+
+      if (tierInfo?.tokensUsed !== undefined && tierInfo.tokenCap !== undefined) {
+        const pct = Math.round((tierInfo.tokensUsed / tierInfo.tokenCap) * 100);
+        items.push(
+          { label: 'Cloud quota', kind: vscode.QuickPickItemKind.Separator },
+          {
+            label: `$(pulse) Cloud usage: ${formatK(tierInfo.tokensUsed)} / ${formatK(tierInfo.tokenCap)} (${pct}%)`,
+            description: `Plan: ${tier}`,
+          },
+        );
+      }
+
+      items.push(
+        { label: '', kind: vscode.QuickPickItemKind.Separator },
+        {
+          label: '$(cloud) Cloud features locked — enter invite code',
+          description: 'Unlock cloud routing with an invitation code',
+          detail: 'open-invite',
+        },
+        {
+          label: '$(trash) Reset session counter',
+          detail: 'reset-counter',
+        },
+      );
+
+      const pick = await vscode.window.showQuickPick(items, {
+        title: `AGI Workforce — Account & Usage (${tier})`,
+        placeHolder: 'Session stats',
+        matchOnDescription: true,
+      });
+
+      if (pick?.detail === 'open-invite') {
+        await vscode.commands.executeCommand('agi-workforce.openInviteCodeModal');
+      } else if (pick?.detail === 'reset-counter') {
+        counter.reset();
+        vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
+      }
+    }),
+  );
+
+  // ── W6 P2: Mention file from project ─────────────────────────────────────────
+  context.subscriptions.push(
+    vscode.commands.registerCommand('agi-workforce.mentionFileFromProject', async () => {
+      const uris = await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        openLabel: 'Mention in Chat',
+        title: 'AGI Workforce — Mention File from Project',
+      });
+      if (uris === undefined || uris.length === 0 || uris[0] === undefined) return;
+      const relPath = vscode.workspace.asRelativePath(uris[0]);
+      const query = `@agi #file:${relPath} `;
+      try {
+        await vscode.commands.executeCommand('workbench.action.chat.open', { query });
+      } catch {
+        try {
+          await vscode.commands.executeCommand('workbench.panel.chat.view.copilot.focus');
+        } catch {
+          sidebarProvider.reveal();
+        }
+      }
+    }),
+  );
+}
+
+function formatK(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
 }
