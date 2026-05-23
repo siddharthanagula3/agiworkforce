@@ -64,7 +64,5 @@ describe.skipIf(skip)('OpenAI adapter live', () => {
 });
 
 describe.skipIf(!skip)('OpenAI adapter live (skipped)', () => {
-  it('skipped — set AGIWORKFORCE_LIVE_TEST=1 + OPENAI_API_KEY to run', () => {
-    expect(true).toBe(true);
-  });
+  it.skip('set AGIWORKFORCE_LIVE_TEST=1 + OPENAI_API_KEY to run', () => {});
 });

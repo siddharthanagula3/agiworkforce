@@ -941,6 +941,9 @@ pub fn run() {
                     }
                 });
             }
+            app.manage(crate::sys::commands::realtime::RealtimeServerHandle(
+                realtime_server.clone(),
+            ));
             app.manage(crate::sys::commands::RealtimeState::new(
                 presence_manager.clone(),
                 websocket_port,

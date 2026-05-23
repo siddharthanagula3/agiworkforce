@@ -20,15 +20,38 @@ export class MCPTransportError extends Error {
   }
 }
 
+const BLOCKED_ENV_KEYS = new Set([
+  'PATH', 'HOME', 'SHELL', 'USER', 'LOGNAME', 'TMPDIR', 'TEMP', 'TMP',
+  'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT',
+  'DYLD_INSERT_LIBRARIES', 'DYLD_LIBRARY_PATH', 'DYLD_FRAMEWORK_PATH',
+  'NODE_OPTIONS', 'NODE_PATH', 'NODE_EXTRA_CA_CERTS', 'NODE_DEBUG',
+  'ELECTRON_RUN_AS_NODE',
+  'PYTHONPATH', 'PYTHONSTARTUP', 'PYTHONHOME',
+  'RUBYOPT', 'RUBYLIB', 'PERL5OPT', 'PERL5LIB', 'PERLLIB',
+  'JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS',
+  'BASH_ENV', 'ENV', 'CDPATH', 'GLOBIGNORE', 'PROMPT_COMMAND',
+  'PS1', 'PS2', 'PS4', 'IFS', 'ZDOTDIR', 'RUST_LOG',
+]);
+
+function isBlockedEnvKey(key: string): boolean {
+  if (BLOCKED_ENV_KEYS.has(key.toUpperCase())) return true;
+  if (key.toUpperCase().startsWith('BASH_FUNC_')) return true;
+  return false;
+}
+
 function coerceEnv(
   env: Record<string, string | number | boolean> | undefined,
 ): Record<string, string> | undefined {
   if (!env) return undefined;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
+    if (isBlockedEnvKey(key)) {
+      console.warn(`[MCP transport] Blocked dangerous env var '${key}' from MCP server config.`);
+      continue;
+    }
     out[key] = String(value);
   }
-  return out;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function coerceHeaders(

@@ -189,7 +189,7 @@ test.describe('Windows: Title Bar', () => {
     }
     // If the component is absent (fully native OS chrome), the test passes
     // because decorations: true means the OS provides all chrome.
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });
 
@@ -326,7 +326,7 @@ test.describe('Windows: File Dialogs', () => {
       await expect(importButton).toBeEnabled();
     }
     // Import button absence is acceptable in this build — test still passes.
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });
 
@@ -386,7 +386,7 @@ test.describe('Windows: Keyboard Shortcuts', () => {
       await page.keyboard.press('Escape');
     }
     // Same graceful fallback as above
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('Escape dismisses an open command palette', async ({ page }) => {
@@ -401,7 +401,7 @@ test.describe('Windows: Keyboard Shortcuts', () => {
       await page.keyboard.press('Escape');
       await expect(palette).not.toBeVisible({ timeout: 2000 });
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });
 
@@ -561,7 +561,7 @@ test.describe('Windows: Auto-Updater', () => {
         await expect(checkUpdatesBtn).toBeEnabled();
       }
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('update-available toast shows "Update Now" and "Later" actions', async ({ page }) => {
@@ -592,7 +592,7 @@ test.describe('Windows: Auto-Updater', () => {
       expect(atLeastOne).toBe(true);
     }
     // If the toast didn't show (non-Tauri env) the test still passes
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });
 
@@ -629,7 +629,7 @@ test.describe('Windows: Terminal Component', () => {
         await expect(terminalPane).toBeVisible();
       }
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('Tauri invoke create_terminal_session uses PowerShell on Windows', async ({ page }) => {
@@ -708,7 +708,7 @@ test.describe('Windows: Toast Notifications', () => {
     if (toastVisible) {
       await expect(toast).toBeVisible();
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('Tauri native notification command is reachable on Windows', async ({ page }) => {
@@ -905,7 +905,7 @@ test.describe('Windows: Theme Rendering', () => {
       const lightApplied = (htmlClass ?? '').includes('light') || (htmlTheme ?? '') === 'light';
       expect(lightApplied).toBe(true);
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('switching to dark theme updates the DOM class', async ({ page }) => {
@@ -933,7 +933,7 @@ test.describe('Windows: Theme Rendering', () => {
       const darkApplied = (htmlClass ?? '').includes('dark') || (htmlTheme ?? '') === 'dark';
       expect(darkApplied).toBe(true);
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('app survives a rapid light/dark toggle without crashing', async ({ page }) => {
@@ -1024,7 +1024,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
 
       expect(isHighlighted).toBe(true);
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('Windows download button links to the .exe installer', async ({ page }) => {
@@ -1051,7 +1051,7 @@ test.describe('Web: Download Page — Windows Detection', () => {
       // The button/card should mention Windows and/or .exe extension
       expect(btnText).toMatch(/windows|\.exe/i);
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 
   test('non-Windows OS does not highlight the Windows download card', async ({ page, context }) => {
@@ -1091,6 +1091,6 @@ test.describe('Web: Download Page — Windows Detection', () => {
       const badgeVisible = await detectedBadge.isVisible({ timeout: 1000 }).catch(() => false);
       expect(badgeVisible).toBe(false);
     }
-    expect(true).toBe(true);
+    // Platform-conditional: absence of element is valid on this OS configuration
   });
 });

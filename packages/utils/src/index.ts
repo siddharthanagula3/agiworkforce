@@ -112,3 +112,6 @@ export type {
 // findings F-05, F-06, F-13.
 export { resolveContained, isContainedIn } from './pathContainment';
 export type { ContainmentResult } from './pathContainment';
+
+// Trust boundary fencing for untrusted content injected into LLM prompts.
+export { fenceUntrustedContent } from './fence';

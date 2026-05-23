@@ -165,12 +165,8 @@ pub fn dispatch_hmac_sign(
 pub fn dispatch_hmac_reset(state: State<'_, DispatchHmacState>) -> Result<(), String> {
     let mut inner = state.inner.lock().map_err(|_| "state lock poisoned".to_string())?;
     if let Some(mut k) = inner.session_key.take() {
-        // Best-effort key zeroization — Rust doesn't guarantee no compiler
-        // optimization erasure here, but writing zeros is enough to keep
-        // a casual heap-dump attacker from reading the key.
-        for b in k.iter_mut() {
-            *b = 0;
-        }
+        use zeroize::Zeroize;
+        k.zeroize();
     }
     inner.cache = NonceCache::new();
     Ok(())

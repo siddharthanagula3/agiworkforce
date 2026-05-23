@@ -673,7 +673,13 @@ impl ToolExecutor {
                 path_str
             ));
         }
-        Ok(PathBuf::from(path_str))
+        // Fail-closed: reject all file access when no app_handle (and thus
+        // no settings/allowed-directories) is available. The old code
+        // returned Ok(path) here, silently bypassing the directory check.
+        Err(anyhow!(
+            "Access denied: Cannot validate path '{}' without application context.",
+            path_str
+        ))
     }
 
     pub async fn execute_tool_call(&self, tool_call: &ToolCall) -> Result<ToolResult> {
@@ -1830,14 +1836,17 @@ impl ToolExecutor {
         action_id: &str,
         _start_time: Instant,
     ) -> Result<()> {
-        // Get the ToolConfirmationState from app handle
         let confirmation_state = match app_handle.try_state::<ToolConfirmationState>() {
             Some(state) => state,
             None => {
-                tracing::warn!(
-                    "[ToolExecutor] ToolConfirmationState not available, skipping safety check"
+                tracing::error!(
+                    "[ToolExecutor] ToolConfirmationState not available — fail-closed for '{}'",
+                    tool_name
                 );
-                return Ok(());
+                return Err(anyhow!(
+                    "Cannot execute '{}': safety confirmation system unavailable.",
+                    tool_name
+                ));
             }
         };
 

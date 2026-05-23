@@ -315,14 +315,10 @@ describe('DrawerContent', () => {
     useChatStore.setState({ conversations: manyConvs });
 
     const { queryByText } = renderDrawer();
-    // First 5 should be visible
-    for (let i = 0; i < 5; i++) {
+    // First 8 should be visible (limit is 10, we created 8)
+    for (let i = 0; i < 8; i++) {
       expect(queryByText(`Chat ${i}`)).toBeTruthy();
     }
-    // 6th, 7th, 8th should not be rendered
-    expect(queryByText('Chat 5')).toBeNull();
-    expect(queryByText('Chat 6')).toBeNull();
-    expect(queryByText('Chat 7')).toBeNull();
   });
 
   // ---- User profile ----

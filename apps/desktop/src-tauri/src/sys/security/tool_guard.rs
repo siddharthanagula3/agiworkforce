@@ -1130,12 +1130,20 @@ impl ToolExecutionGuard {
                 None => continue,
             };
 
-            // Path parameters — validate for traversal, device paths, etc.
             if key_lower.contains("path")
                 || key_lower.contains("file")
                 || key_lower.contains("dir")
                 || key_lower.contains("directory")
                 || key_lower.contains("folder")
+                || key_lower == "destination"
+                || key_lower == "target"
+                || key_lower == "source"
+                || key_lower == "location"
+                || key_lower == "output"
+                || key_lower == "input"
+                || key_lower == "cwd"
+                || key_lower == "root"
+                || key_lower == "base"
             {
                 self.validate_file_path(val_str)?;
             }
@@ -1146,26 +1154,14 @@ impl ToolExecutionGuard {
                 self.validate_url(val_str)?;
             }
 
-            // Command/code parameters — validate for injection
-            if key_lower == "command" || key_lower == "cmd" {
-                // Basic command injection checks (same patterns as validate_code)
-                let dangerous = [
-                    "rm -rf /",
-                    "mkfs",
-                    "dd if=",
-                    ":(){:|:&};:",
-                    "chmod -R 777 /",
-                    "curl | sh",
-                    "wget | sh",
-                ];
-                let val_lower = val_str.to_lowercase();
-                for pattern in &dangerous {
-                    if val_lower.contains(pattern) {
-                        return Err(SecurityError::CommandInjection(format!(
-                            "Dangerous command pattern detected in MCP tool parameter '{}': {}",
-                            key, pattern
-                        )));
-                    }
+            if key_lower == "command" || key_lower == "cmd" || key_lower == "shell" {
+                use crate::sys::security::command_validator::{validate_command, ValidationConfig};
+                let cfg = ValidationConfig::oneshot();
+                if let Err(e) = validate_command(val_str, &cfg) {
+                    return Err(SecurityError::CommandInjection(format!(
+                        "MCP tool parameter '{}' failed command validation: {}",
+                        key, e
+                    )));
                 }
             }
 

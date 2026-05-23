@@ -33,16 +33,9 @@
     "allowUnreachableCode": false,
     "useUnknownInCatchVariables": true,
     "allowJs": false,
-    "downlevelIteration": true, // Required for MapIterator and spread operations on ES2020
 
     /* Completeness */
     "skipLibCheck": true,
-
-    // FIX-017 follow-up (Sprint 3): silence the TS 6.0 deprecation
-    // errors for `baseUrl` + `downlevelIteration` introduced when the
-    // pnpm overrides bumped TypeScript from 5.6 to 5.9. TS 5.x accepts
-    // "5.0" as the version-skew ignore string.
-    "ignoreDeprecations": "5.0",
 
     /* Interop Constraints */
     "esModuleInterop": true,
@@ -53,12 +46,11 @@
     "incremental": true,
     "composite": true,
 
-    /* Path Mappings */
-    "baseUrl": ".",
+    /* Path Mappings — paths are resolved relative to tsconfig.json location */
     "paths": {
-      "@types/*": ["packages/types/src/*"],
-      "@utils/*": ["packages/utils/src/*"],
-      "@desktop/*": ["apps/desktop/src/*"]
+      "@types/*": ["./packages/types/src/*"],
+      "@utils/*": ["./packages/utils/src/*"],
+      "@desktop/*": ["./apps/desktop/src/*"]
     }
   },
   "exclude": [
