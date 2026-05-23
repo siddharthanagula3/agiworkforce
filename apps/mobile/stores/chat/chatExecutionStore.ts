@@ -138,6 +138,57 @@ function getMsgStore() {
   return useChatMessageStore;
 }
 
+/**
+ * Dark-mode accent palette used when persisting artifacts to the store.
+ * These values match agiNativeColors.dark and are imported as constants to
+ * avoid a React hook call outside a component context. The gallery re-derives
+ * the live color from useThemeColors() at render time, so the persisted value
+ * is only a stable fallback.
+ */
+const _artifactThemeColors = {
+  teal: '#21808d',
+  terraCotta: '#da7756',
+  agentThinking: '#a855f7',
+  agentActive: '#3b82f6',
+} as const;
+
+/**
+ * Extract fenced code blocks from a completed assistant response and push any
+ * qualifying ones to the artifact store.
+ *
+ * Kept non-blocking: any failure is swallowed so artifact capture never
+ * interrupts the chat flow. Called after onDone / local finalContent — not
+ * per-token.
+ */
+function captureArtifactsFromMessage(
+  content: string,
+  messageId: string,
+  conversationId: string,
+  conversationTitle: string,
+  createdAt: string,
+): void {
+  try {
+    /* eslint-disable @typescript-eslint/no-require-imports */
+    const { useArtifactStore, extractCodeBlocks, codeBlocksToMobileArtifacts } =
+      require('@/src/features/artifacts/store') as typeof import('@/src/features/artifacts/store');
+    /* eslint-enable @typescript-eslint/no-require-imports */
+    const blocks = extractCodeBlocks(content);
+    if (blocks.length === 0) return;
+    const mobileArtifacts = codeBlocksToMobileArtifacts(
+      blocks,
+      messageId,
+      createdAt,
+      conversationTitle,
+      _artifactThemeColors,
+    );
+    if (mobileArtifacts.length > 0) {
+      useArtifactStore.getState().addArtifacts(mobileArtifacts);
+    }
+  } catch {
+    // Non-fatal — artifact capture must never block the chat flow.
+  }
+}
+
 export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   isStreaming: false,
   streamingContent: '',
@@ -412,6 +463,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
         abortControllers.delete(conversationId);
         streamingConversations.delete(conversationId);
+
+        // Extract code-block artifacts from the completed local response.
+        const localConvTitle =
+          currentMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
+          '';
+        captureArtifactsFromMessage(
+          finalContent,
+          assistantMessageId,
+          conversationId,
+          localConvTitle,
+          new Date().toISOString(),
+        );
+
         currentMsgStore.setState((s) => ({
           messages: { ...s.messages, [conversationId]: updatedMsgs },
           conversations: s.conversations.map((c) =>
@@ -495,6 +559,18 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
+
+            // Extract code-block artifacts from the completed remote response.
+            const remoteConvTitle =
+              currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
+                ?.title ?? '';
+            captureArtifactsFromMessage(
+              finalContent,
+              assistantMessageId,
+              conversationId,
+              remoteConvTitle,
+              new Date().toISOString(),
+            );
 
             currentMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
