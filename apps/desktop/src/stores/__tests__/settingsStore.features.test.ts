@@ -183,13 +183,11 @@ describe('settingsStore — features capability toggles', () => {
 
       if (!storeConfig?.getOptions) {
         // If the internal API is not available, skip via a soft assertion
-        expect(true).toBe(true);
         return;
       }
 
       const options = storeConfig.getOptions();
       if (!options.migrate) {
-        expect(true).toBe(true);
         return;
       }
 
@@ -223,13 +221,11 @@ describe('settingsStore — features capability toggles', () => {
       ).persist;
 
       if (!storeConfig?.getOptions) {
-        expect(true).toBe(true);
         return;
       }
 
       const options = storeConfig.getOptions();
       if (!options.migrate) {
-        expect(true).toBe(true);
         return;
       }
 
@@ -257,13 +253,11 @@ describe('settingsStore — features capability toggles', () => {
       ).persist;
 
       if (!storeConfig?.getOptions) {
-        expect(true).toBe(true);
         return;
       }
 
       const options = storeConfig.getOptions();
       if (!options.merge) {
-        expect(true).toBe(true);
         return;
       }
 

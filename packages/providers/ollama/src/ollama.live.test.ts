@@ -91,7 +91,5 @@ afterAll(() => {
 });
 
 describe.skipIf(!skip)('Ollama adapter live (skipped)', () => {
-  it('skipped — set AGIWORKFORCE_LIVE_TEST=1 to run', () => {
-    expect(true).toBe(true);
-  });
+  it.skip('set AGIWORKFORCE_LIVE_TEST=1 to run', () => {});
 });

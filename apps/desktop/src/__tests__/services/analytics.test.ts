@@ -147,7 +147,9 @@ describe('AnalyticsService', () => {
         app_version: '1.0.0',
       });
 
-      expect(true).toBe(true);
+      expect(() =>
+        service.setUserProperties({ plan_tier: 'pro', app_version: '1.0.0' }),
+      ).not.toThrow();
     });
   });
 
