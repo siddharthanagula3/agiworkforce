@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: '/pricing', key: 'navPricing' },
   { href: '/compare', key: 'navCompare' },
   { href: '/about', key: 'navAbout' },
+  { href: '/contact-sales', key: 'navContactSales' },
 ] as const;
 
 export function Header() {
