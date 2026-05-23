@@ -169,6 +169,20 @@ impl CostCalculator {
         Provider::Zhipu,
     ];
 
+    fn model_pricing(&self, provider: Provider, model: &str) -> Option<&Pricing> {
+        self.pricing
+            .get(&(provider, model.to_string()))
+            .or_else(|| {
+                if provider == Provider::ManagedCloud {
+                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
+                        .iter()
+                        .find_map(|&p| self.pricing.get(&(p, model.to_string())))
+                } else {
+                    None
+                }
+            })
+    }
+
     pub fn calculate(
         &self,
         provider: Provider,
@@ -180,26 +194,19 @@ impl CostCalculator {
             return 0.0;
         }
 
-        // AUDIT-FIX: bug_010 — resolve aliases (e.g. "deepseek-chat" → "deepseek-v4-flash",
-        // "kimi-k2.5" → "kimi-k2.6") so the lookup hits registered pricing instead of
-        // falling through to provider-default. Mirrors thinking.rs:229, llm_router.rs:177,
-        // provider_adapter.rs:396/2153/2886, managed_cloud_provider.rs:60.
+        // Prefer exact catalog SKU pricing before alias canonicalization. Routing may
+        // intentionally forward deprecated model IDs to current models, but cost
+        // reporting must preserve exact pricing when the requested SKU still exists.
+        let exact_model = model;
         let canonical = super::models_config::get_canonicalized_id(model);
-        let model = canonical.as_str();
 
-        let key = (provider, model.to_string());
         let pricing = self
-            .pricing
-            .get(&key)
+            .model_pricing(provider, exact_model)
             .or_else(|| {
-                // ManagedCloud routes to models from other providers, so look up
-                // pricing under the model's original provider before falling back.
-                if provider == Provider::ManagedCloud {
-                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
-                        .iter()
-                        .find_map(|&p| self.pricing.get(&(p, model.to_string())))
-                } else {
+                if canonical == exact_model {
                     None
+                } else {
+                    self.model_pricing(provider, canonical.as_str())
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
@@ -209,7 +216,7 @@ impl CostCalculator {
             Some(p) => p.cost(input_tokens, output_tokens),
             None => {
                 tracing::warn!(
-                    model = %model,
+                    model = %canonical,
                     provider = ?provider,
                     input_tokens,
                     output_tokens,
@@ -237,22 +244,16 @@ impl CostCalculator {
             return 0.0;
         }
 
-        // AUDIT-FIX: bug_010 — see calculate(); same alias-resolution applied here so
-        // cache-aware cost paths also honor the canonicalization map.
+        let exact_model = model;
         let canonical = super::models_config::get_canonicalized_id(model);
-        let model = canonical.as_str();
 
-        let key = (provider, model.to_string());
         let pricing = self
-            .pricing
-            .get(&key)
+            .model_pricing(provider, exact_model)
             .or_else(|| {
-                if provider == Provider::ManagedCloud {
-                    Self::MANAGED_CLOUD_ORIGIN_PROVIDERS
-                        .iter()
-                        .find_map(|&p| self.pricing.get(&(p, model.to_string())))
-                } else {
+                if canonical == exact_model {
                     None
+                } else {
+                    self.model_pricing(provider, canonical.as_str())
                 }
             })
             .or_else(|| self.provider_defaults.get(&provider))
@@ -262,7 +263,7 @@ impl CostCalculator {
             Some(p) => p,
             None => {
                 tracing::warn!(
-                    model = %model,
+                    model = %canonical,
                     provider = ?provider,
                     prompt_tokens,
                     completion_tokens,
@@ -297,7 +298,7 @@ impl CostCalculator {
                 let output_cost = completion_tokens as f64 * output_rate;
                 input_cost + output_cost
             }
-            _ => self.calculate(provider, model, prompt_tokens, completion_tokens),
+            _ => self.calculate(provider, exact_model, prompt_tokens, completion_tokens),
         }
     }
 
