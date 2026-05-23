@@ -71,6 +71,7 @@ export type WebviewToExtMessage =
   | { type: 'proposeDiff'; payload: { code: string; language: string } }
   | { type: 'openFilePicker' }
   | { type: 'openHistory' }
+  | { type: 'openCloudHistory' }
   | { type: 'newChat' }
   | {
       type: 'attachFiles';
@@ -329,6 +330,11 @@ export class ChatStateManager {
 
       case 'openHistory': {
         await vscode.commands.executeCommand('agi-workforce.showSessionsHistory');
+        break;
+      }
+
+      case 'openCloudHistory': {
+        await vscode.commands.executeCommand('agi-workforce.openInviteCodeModal');
         break;
       }
 

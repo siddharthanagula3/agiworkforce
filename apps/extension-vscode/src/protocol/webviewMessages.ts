@@ -56,6 +56,7 @@ const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
+const openCloudHistory = z.object({ type: z.literal('openCloudHistory') });
 const newChat = z.object({ type: z.literal('newChat') });
 
 /**
@@ -152,6 +153,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   proposeDiff,
   openFilePicker,
   openHistory,
+  openCloudHistory,
   newChat,
   attachFiles,
 ]);
