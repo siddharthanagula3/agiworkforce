@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
@@ -9,11 +9,15 @@ import { summarizeProjectHeader, formatChatExecutionModeLabel } from '@agiworkfo
 import type { ProjectRecord } from '@agiworkforce/types';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { ProjectHeader } from '@/src/features/projects/components/ProjectHeader';
+import { ProjectChatsTab } from '@/src/features/projects/components/ProjectChatsTab';
+import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSourcesTab';
 import { Text } from '@/components/ui/text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { fetchProject } from '@/src/features/projects/service';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+
+type TabId = 'chats' | 'sources';
 
 type FetchState =
   | { kind: 'idle' }
@@ -77,12 +81,76 @@ function LocalOnlyFallback({
   );
 }
 
+/** Segmented tab bar with Chats / Sources segments. */
+function TabBar({
+  activeTab,
+  onTabChange,
+  colors,
+}: {
+  activeTab: TabId;
+  onTabChange: (tab: TabId) => void;
+  colors: ReturnType<typeof useThemeColors>;
+}) {
+  const tabs: { id: TabId; label: string }[] = [
+    { id: 'chats', label: 'Chats' },
+    { id: 'sources', label: 'Sources' },
+  ];
+
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        marginHorizontal: 16,
+        marginTop: 12,
+        marginBottom: 4,
+        borderRadius: 10,
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 3,
+      }}
+    >
+      {tabs.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <Pressable
+            key={tab.id}
+            onPress={() => onTabChange(tab.id)}
+            style={{
+              flex: 1,
+              paddingVertical: 7,
+              borderRadius: 8,
+              alignItems: 'center',
+              backgroundColor: isActive ? colors.surfaceOverlay : 'transparent',
+            }}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: isActive }}
+          >
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: isActive ? '600' : '500',
+                color: isActive ? colors.textPrimary : colors.textMuted,
+              }}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function ProjectDetailScreen() {
   const colors = useThemeColors();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const router = useRouter();
   const navigation = useNavigation();
+
+  const [activeTab, setActiveTab] = useState<TabId>('chats');
 
   const localProject = useProjectStore((s) => s.projects.find((p) => p.id === id));
 
@@ -120,7 +188,6 @@ export default function ProjectDetailScreen() {
   }, [navigation]);
 
   const handleJoinWaitlist = useCallback(() => {
-    // Cloud waitlist is gated — navigate to tabs which surfaces the ModeToggle waitlist CTA
     router.push('/(app)' as Parameters<typeof router.push>[0]);
   }, [router]);
 
@@ -140,7 +207,10 @@ export default function ProjectDetailScreen() {
     );
   }
 
-  const renderContent = () => {
+  const screenTitle =
+    fetchState.kind === 'success' ? fetchState.project.name : (localProject?.name ?? 'Project');
+
+  const renderHeader = () => {
     if (fetchState.kind === 'loading') {
       return (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -160,17 +230,13 @@ export default function ProjectDetailScreen() {
         lastUsedRelativeLabel,
       });
       return (
-        <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-          showsVerticalScrollIndicator={false}
-          testID="project-detail-scroll"
-        >
+        <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
           <ProjectHeader presentation={presentation} />
-        </ScrollView>
+        </View>
       );
     }
 
-    // error or idle — show local-only fallback
+    // error or idle — show local-only fallback (also shows tab bar below)
     return (
       <LocalOnlyFallback
         projectId={id}
@@ -181,8 +247,7 @@ export default function ProjectDetailScreen() {
     );
   };
 
-  const screenTitle =
-    fetchState.kind === 'success' ? fetchState.project.name : (localProject?.name ?? 'Project');
+  const isLoading = fetchState.kind === 'loading';
 
   return (
     <SafeAreaView
@@ -190,7 +255,7 @@ export default function ProjectDetailScreen() {
       edges={['top']}
       testID="project-detail-screen"
     >
-      {/* Header */}
+      {/* Header bar */}
       <View
         style={{
           flexDirection: 'row',
@@ -235,7 +300,24 @@ export default function ProjectDetailScreen() {
         </Pressable>
       </View>
 
-      {renderContent()}
+      {isLoading ? (
+        renderHeader()
+      ) : (
+        <View style={{ flex: 1 }} testID="project-detail-scroll">
+          {/* Project header card */}
+          {renderHeader()}
+
+          {/* Tab bar — always visible */}
+          <TabBar activeTab={activeTab} onTabChange={setActiveTab} colors={colors} />
+
+          {/* Tab content */}
+          {activeTab === 'chats' ? (
+            <ProjectChatsTab projectId={id} />
+          ) : (
+            <ProjectSourcesTab projectId={id} />
+          )}
+        </View>
+      )}
     </SafeAreaView>
   );
 }
