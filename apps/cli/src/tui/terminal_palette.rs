@@ -51,6 +51,26 @@ pub fn v3_danger() -> Color {
     best_color(V3_DANGER)
 }
 
+/// Return a muted mid-grey for secondary/hint text (≈ CSS `text-muted`).
+pub fn v3_muted() -> Color {
+    best_color((128, 128, 128))
+}
+
+/// Return a dark charcoal background for the status bar row.
+pub fn v3_status_bar_bg() -> Color {
+    best_color((48, 48, 48))
+}
+
+/// Return white-on-dark contrast colour for mode badge with dark background.
+pub fn v3_on_dark() -> Color {
+    best_color((255, 255, 255))
+}
+
+/// Return black-on-light contrast colour for mode badge with light background.
+pub fn v3_on_light() -> Color {
+    best_color((15, 15, 14))
+}
+
 static DEFAULT_PALETTE_VERSION: AtomicU64 = AtomicU64::new(0);
 
 fn bump_palette_version() {

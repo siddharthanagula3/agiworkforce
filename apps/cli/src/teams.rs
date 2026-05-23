@@ -362,6 +362,34 @@ impl TeamManager {
         teammates.values().cloned().collect()
     }
 
+    /// Update a teammate's status. Fires `TeammateIdle` hook when status is `Idle`.
+    pub async fn update_teammate_status(&self, name: &str, status: TeammateStatus) {
+        {
+            let mut teammates = self.teammates.write().await;
+            if let Some(tm) = teammates.get_mut(name) {
+                tm.status = status.clone();
+            }
+        }
+        if status == TeammateStatus::Idle {
+            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            crate::hooks::run_hooks(
+                &hcfg,
+                crate::hooks::HookEvent::TeammateIdle,
+                &crate::hooks::HookInput {
+                    event: "TeammateIdle".to_string(),
+                    session_id: None,
+                    model: None,
+                    tool_name: None,
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(name.to_string()),
+                    tool_execution: None,
+                },
+            )
+            .await;
+        }
+    }
+
     /// Print a formatted summary of the team state to stderr.
     /// Will be wired into the /team REPL command for team status display.
     #[allow(dead_code)]

@@ -401,9 +401,39 @@ pub async fn run_repl(
                     input.to_string()
                 };
 
+                crate::hooks::run_hooks(
+                    &hooks_config,
+                    crate::hooks::HookEvent::UserPromptSubmit,
+                    &crate::hooks::HookInput {
+                        event: "UserPromptSubmit".to_string(),
+                        session_id: None,
+                        model: Some(session.model.clone()),
+                        tool_name: None,
+                        tool_args: None,
+                        tool_output: None,
+                        message: Some(full_input.clone()),
+                        tool_execution: None,
+                    },
+                )
+                .await;
                 run_prompt_turn(&mut session, config, full_input).await;
             }
             Err(ReadlineError::Interrupted) => {
+                crate::hooks::run_hooks(
+                    &hooks_config,
+                    crate::hooks::HookEvent::Stop,
+                    &crate::hooks::HookInput {
+                        event: "Stop".to_string(),
+                        session_id: None,
+                        model: Some(session.model.clone()),
+                        tool_name: None,
+                        tool_args: None,
+                        tool_output: None,
+                        message: Some("Ctrl-C".to_string()),
+                        tool_execution: None,
+                    },
+                )
+                .await;
                 eprintln!("{}", "(Ctrl-C to cancel, /exit to quit)".dimmed());
                 continue;
             }

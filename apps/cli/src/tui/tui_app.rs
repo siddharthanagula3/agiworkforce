@@ -806,11 +806,13 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
 }
 
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
-    // For Default (grey) use white fg so text is legible on the dark badge.
+    use crate::tui::terminal_palette::{
+        v3_danger, v3_muted, v3_on_dark, v3_on_light, v3_status_bar_bg, v3_success,
+    };
     let badge_fg = if app.mode == InteractionMode::Chat {
-        Color::White
+        v3_on_dark()
     } else {
-        Color::Black
+        v3_on_light()
     };
     let mode_span = Span::styled(
         format!(" {} ", app.mode.label()),
@@ -825,33 +827,35 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let effort_str = format!("effort:{}", app.effort.label());
 
-    // Sandbox indicator: green when a sandbox backend is active, red when
-    // disabled via --no-sandbox or when no supported backend is detected.
+    // Sandbox indicator: success-green when a sandbox backend is active, danger-red otherwise.
     let (sandbox_label, sandbox_color) = match app.sandbox_type {
-        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", Color::Green),
-        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", Color::Green),
-        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", Color::Green),
-        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => ("sandbox: win", Color::Green),
-        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", Color::Red),
+        Some(crate::sandbox::SandboxType::MacosSeatbelt) => ("sandbox: seatbelt", v3_success()),
+        Some(crate::sandbox::SandboxType::LinuxBubblewrap) => ("sandbox: bwrap", v3_success()),
+        Some(crate::sandbox::SandboxType::LinuxLandlock) => ("sandbox: landlock", v3_success()),
+        Some(crate::sandbox::SandboxType::WindowsRestrictedToken) => {
+            ("sandbox: win", v3_success())
+        }
+        Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", v3_danger()),
     };
 
     let status = Line::from(vec![
         mode_span,
         Span::raw(" "),
-        Span::styled(cost_str, Style::default().fg(Color::DarkGray)),
+        Span::styled(cost_str, Style::default().fg(v3_muted())),
         Span::raw("  "),
-        Span::styled(effort_str, Style::default().fg(Color::DarkGray)),
+        Span::styled(effort_str, Style::default().fg(v3_muted())),
         Span::raw("  "),
         Span::styled(sandbox_label, Style::default().fg(sandbox_color)),
         Span::raw("  "),
-        Span::styled("Shift+Tab: mode", Style::default().fg(Color::DarkGray)),
+        Span::styled("Shift+Tab: mode", Style::default().fg(v3_muted())),
         Span::raw("  "),
-        Span::styled("/: commands", Style::default().fg(Color::DarkGray)),
+        Span::styled("/: commands", Style::default().fg(v3_muted())),
         Span::raw("  "),
-        Span::styled("Esc: quit", Style::default().fg(Color::DarkGray)),
+        Span::styled("Esc: quit", Style::default().fg(v3_muted())),
     ]);
 
-    let bar = Paragraph::new(status).style(Style::default().bg(Color::DarkGray).fg(Color::White));
+    let bar =
+        Paragraph::new(status).style(Style::default().bg(v3_status_bar_bg()).fg(v3_on_dark()));
     frame.render_widget(bar, area);
 }
 
@@ -2304,6 +2308,22 @@ async fn run_event_loop(
 
                 match action {
                     InputAction::Quit => {
+                        let hcfg = app.session.hooks_config().clone();
+                        crate::hooks::run_hooks(
+                            &hcfg,
+                            crate::hooks::HookEvent::Stop,
+                            &crate::hooks::HookInput {
+                                event: "Stop".to_string(),
+                                session_id: None,
+                                model: Some(app.session.model.clone()),
+                                tool_name: None,
+                                tool_args: None,
+                                tool_output: None,
+                                message: Some("Esc".to_string()),
+                                tool_execution: None,
+                            },
+                        )
+                        .await;
                         app.should_quit = true;
                     }
 
@@ -2333,12 +2353,44 @@ async fn run_event_loop(
                             role: ChatRole::System,
                             text: msg,
                         });
+                        let hcfg = app.session.hooks_config().clone();
+                        crate::hooks::run_hooks(
+                            &hcfg,
+                            crate::hooks::HookEvent::PlanModeChanged,
+                            &crate::hooks::HookInput {
+                                event: "PlanModeChanged".to_string(),
+                                session_id: None,
+                                model: Some(app.session.model.clone()),
+                                tool_name: None,
+                                tool_args: None,
+                                tool_output: None,
+                                message: Some(new_mode.label().to_string()),
+                                tool_execution: None,
+                            },
+                        )
+                        .await;
                     }
 
                     InputAction::SendMessage(text) => {
                         // Detect natural language mode switches
                         if let Some(new_mode) = detect_mode_intent(&text) {
                             apply_mode(app, new_mode);
+                            let hcfg = app.session.hooks_config().clone();
+                            crate::hooks::run_hooks(
+                                &hcfg,
+                                crate::hooks::HookEvent::PlanModeChanged,
+                                &crate::hooks::HookInput {
+                                    event: "PlanModeChanged".to_string(),
+                                    session_id: None,
+                                    model: Some(app.session.model.clone()),
+                                    tool_name: None,
+                                    tool_args: None,
+                                    tool_output: None,
+                                    message: Some(new_mode.label().to_string()),
+                                    tool_execution: None,
+                                },
+                            )
+                            .await;
                             app.chat_messages.push(ChatMessage {
                                 role: ChatRole::System,
                                 text: format!(
@@ -2455,6 +2507,23 @@ async fn send_message(
     app: &mut TuiApp,
     user_text: &str,
 ) -> Result<()> {
+    let hooks_cfg = app.session.hooks_config().clone();
+    crate::hooks::run_hooks(
+        &hooks_cfg,
+        crate::hooks::HookEvent::UserPromptSubmit,
+        &crate::hooks::HookInput {
+            event: "UserPromptSubmit".to_string(),
+            session_id: None,
+            model: Some(app.session.model.clone()),
+            tool_name: None,
+            tool_args: None,
+            tool_output: None,
+            message: Some(user_text.to_string()),
+            tool_execution: None,
+        },
+    )
+    .await;
+
     app.chat_messages.push(ChatMessage {
         role: ChatRole::User,
         text: user_text.to_string(),
