@@ -12,22 +12,28 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const SRC_DIR = join(ROOT, 'src');
 
 const EXCLUDE_DIRS = new Set([
+  // The cloud-bridge directory IS the gate — exempt by design
   join(SRC_DIR, 'features', 'cloud-bridge'),
   join(ROOT, '__tests__'),
   join(ROOT, 'dist'),
   join(ROOT, 'node_modules'),
 ]);
 
+// Patterns that indicate a direct cloud-IPC call
 const CLOUD_IPC_PATTERNS = [
+  // Named IPC action strings matching cloud_<verb>_*
   { re: /['"`]cloud_(?:get|create|delete|update)_[a-z_]+['"`]/g, label: 'cloud CRUD IPC literal' },
+  // Known specific identifiers
   { re: /\blistCloudConversations\b/g, label: 'listCloudConversations call' },
   { re: /\bhandleCloudWebCommand\b/g, label: 'handleCloudWebCommand call' },
+  // Any string literal cloud_<name> passed to sendMessage (catch-all)
   {
     re: /chrome\.runtime\.sendMessage\s*\([^)]*['"`]cloud_[a-z_]+['"`]/g,
     label: 'sendMessage with cloud_ action',
   },
 ];
 
+// A line is exempt if it is behind a cloud-unlock check
 const UNLOCK_GUARD_RE = /checkCloudUnlocked|agi_cloud_unlocked|cloudUnlocked/;
 
 function collectFiles(dir) {
@@ -50,10 +56,13 @@ let violations = 0;
 
 for (const file of files) {
   const relPath = relative(ROOT, file);
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const content = readFileSync(file, 'utf8');
+  const lines = content.split('\n');
 
   lines.forEach((line, idx) => {
+    // Skip comment lines
     if (/^\s*(\/\/|\*|\/\*)/.test(line)) return;
+    // Skip lines that are behind a known unlock guard on the same line
     if (UNLOCK_GUARD_RE.test(line)) return;
 
     for (const { re, label } of CLOUD_IPC_PATTERNS) {
