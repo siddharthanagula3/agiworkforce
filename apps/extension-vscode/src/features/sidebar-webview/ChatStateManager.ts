@@ -118,7 +118,8 @@ export type ExtToWebviewMessage =
         added: string[];
         skipped: Array<{ name: string; reason: string }>;
       };
-    };
+    }
+  | { type: 'rewindComplete' };
 
 export interface UsageMeterWebviewPayload {
   source: UsageMeter['source'];
@@ -656,6 +657,24 @@ export class ChatStateManager {
     this._currentCancelSource?.cancel();
     this._currentCancelSource?.dispose();
     delete this._currentCancelSource;
+  }
+
+  rewindLast(): void {
+    const h = this._conversationHistory;
+    let removed = 0;
+    // Remove last assistant message, then last user message before it
+    for (const role of ['assistant', 'user'] as const) {
+      for (let i = h.length - 1; i >= 0; i--) {
+        if (h[i]?.role === role) {
+          h.splice(i, 1);
+          removed++;
+          break;
+        }
+      }
+    }
+    if (removed > 0) {
+      this._post({ type: 'rewindComplete' });
+    }
   }
 
   private _postProviderBadge(modelId: string): void {

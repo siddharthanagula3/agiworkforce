@@ -1812,6 +1812,19 @@ export function getWebviewContent(
         }
         renderAttachmentStrip();
       }
+
+      else if (msg.type === 'rewindComplete') {
+        // Remove last assistant bubble then last user bubble from the DOM
+        var allMsgs = messagesEl.querySelectorAll('.message');
+        var toRemove = [];
+        for (var r = allMsgs.length - 1; r >= 0 && toRemove.length < 2; r--) {
+          var cls = allMsgs[r].className;
+          if (cls.indexOf('assistant') !== -1 || cls.indexOf('user') !== -1) {
+            toRemove.push(allMsgs[r]);
+          }
+        }
+        toRemove.forEach(function(el) { el.remove(); });
+      }
     });
 
     // ── @mention autocomplete ─────────────────────────────────────────────────

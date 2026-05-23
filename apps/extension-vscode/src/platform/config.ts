@@ -28,6 +28,7 @@ const DEFAULTS = {
   agentPlanMode: false,
   agentMode: 'auto',
   agentEffort: 'medium',
+  agentThinking: false,
   codeLensEnabled: true,
   hoverEnabled: false,
   inlineCompletionsEnabled: true,
@@ -77,6 +78,9 @@ export const Config = {
     const raw = get<string>('agent.effort', DEFAULTS.agentEffort);
     if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
     return 'medium';
+  },
+  agentThinking(): boolean {
+    return get<boolean>('agent.thinking', DEFAULTS.agentThinking);
   },
 
   // ── Hover actions ───────────────────────────────────────────────────────
