@@ -2,11 +2,11 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-23
 
 Canonical tool-neutral agent entry point for AGI Workforce.
 
-This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth.
+This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth. They may mirror the critical rules below so agents do not miss safety/product invariants.
 
 Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
 
@@ -28,6 +28,21 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 14. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
+
+## Critical Rules
+
+These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-context`.
+
+- Verify current facts from repo files, official docs, web search, or configured plugins/MCP before changing fast-moving APIs, model IDs, pricing, App Store rules, provider terms, framework behavior, or release claims.
+- Read model IDs from `packages/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data.
+- Next.js 16 uses `proxy.ts` and an exported `proxy` function. Do not rename it back to `middleware.ts`.
+- Local, BYOK, and Managed Cloud are separate trust boundaries.
+- Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
+- Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
+- Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
+- Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
+- Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
+- Use the nearest path-scoped `AGENTS.md` before editing high-risk areas.
 
 ## Product Lock
 

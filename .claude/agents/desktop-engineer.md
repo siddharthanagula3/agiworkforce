@@ -1,6 +1,6 @@
 ---
 name: desktop-engineer
-description: Owns the apps/desktop Tauri surface (Rust backend + React frontend). Use for any change inside apps/desktop/ — UI, IPC commands, settings, onboarding, MCP, computer use, plugins, models, security. ~700 .rs files, ~430 .tsx files, 84 stores, 38 hooks, 1,469 #[tauri::command] across 151 files. Active chat = packages/chat (UnifiedAgenticChat is dead code in App.tsx).
+description: Owns the apps/desktop Tauri surface (Rust backend + React frontend). Use for any change inside apps/desktop/: UI, IPC commands, settings, onboarding, MCP, computer use, plugins, models, and security. Verify source counts and active chat wiring before repeating them.
 tools: Read, Edit, Write, Bash, Grep, Glob, NotebookEdit, TodoWrite
 model: sonnet
 ---
@@ -16,7 +16,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 - Backend: Rust + Tauri v2 (`apps/desktop/src-tauri/`)
 - Frontend: React + Vite + TypeScript + Tailwind (`apps/desktop/src/`)
 - Storage: SQLite (local), Supabase (cloud mode)
-- Active chat surface: `packages/chat`'s `ChatInterface` — NOT `UnifiedAgenticChat` (commented out in App.tsx)
+- Active chat surface: verify current `App.tsx` and package imports before changing chat wiring.
 - 12 i18n locales under `apps/desktop/src/i18n/locales/`
 
 ## Locked platform facts you must respect
@@ -28,7 +28,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 - **Tagline**: "Beyond one model. Beyond one surface. AGI in your hands."
 - **Bridge port** (Chrome ext + VSCode ext talk to desktop): **8787**
 - **Onboarding**: ONE flow only — `OnboardingWizard.tsx`. (`ModeSelectionDialog.tsx` was deleted.)
-- Models in code: each provider's official format (`claude-sonnet-4-6` hyphens, `gpt-5.5` dots, `gemini-3.1-pro-preview` dots+preview)
+- Models in code: use `packages/types/src/models.json` and provider capability metadata; do not paste model IDs from memory.
 - Models in marketing copy: just provider names, no version numbers
 
 ## Verification gates (run before commit)
@@ -41,7 +41,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/desktop/`. R
 
 - Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: Rust full edit access; no permission prompts inside `apps/desktop/src-tauri/`.
-- Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
+- Commit format: lowercase, ≤100 chars, Conventional Commits. Do not invent model/version footers.
 - One PR-style commit per logical task
 - Don't push (the supervisor or user authorizes pushes)
 
