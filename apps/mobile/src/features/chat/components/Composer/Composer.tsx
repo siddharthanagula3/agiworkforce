@@ -17,6 +17,8 @@ interface ComposerProps {
   attachRef?: React.RefObject<{ addAttachments: (items: Attachment[]) => void } | null>;
   /** Whether to show 6 task chips above the input (shown on empty chat) */
   showChips?: boolean;
+  /** When false, thread has messages and placeholder reads "Reply to AGI" */
+  isThreadActive?: boolean;
 }
 
 export function Composer({
@@ -31,6 +33,7 @@ export function Composer({
   queueSize,
   attachRef,
   showChips = false,
+  isThreadActive,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
 
@@ -64,6 +67,7 @@ export function Composer({
         isOnline={isOnline}
         queueSize={queueSize}
         attachRef={attachRef}
+        isThreadActive={isThreadActive ?? !showChips}
       />
     </View>
   );
