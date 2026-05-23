@@ -49,8 +49,6 @@ const CreateSSOConnectionSchema = z.object({
   attribute_mapping: z.record(z.string(), z.string()).optional(),
 });
 
-type CreateSSOConnectionBody = z.infer<typeof CreateSSOConnectionSchema>;
-
 type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 function getSupabaseAdmin(): SupabaseClient {
