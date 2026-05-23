@@ -301,6 +301,35 @@ impl RealtimeServer {
         failures.remove(&ip);
     }
 
+    pub async fn disconnect_all_clients(&self) {
+        let ids: Vec<String> = {
+            let clients = self.clients.lock().await;
+            clients.keys().cloned().collect()
+        };
+        let count = ids.len();
+        if count == 0 {
+            return;
+        }
+        {
+            let mut senders = self.senders.lock().await;
+            for id in &ids {
+                if let Some(mut sender) = senders.remove(id) {
+                    let _ = futures::SinkExt::close(&mut sender).await;
+                }
+            }
+        }
+        {
+            let mut clients = self.clients.lock().await;
+            for id in &ids {
+                clients.remove(id);
+            }
+        }
+        tracing::info!(
+            "Token rotation: disconnected {} authenticated client(s)",
+            count
+        );
+    }
+
     pub async fn broadcast_to_user(
         &self,
         user_id: &str,

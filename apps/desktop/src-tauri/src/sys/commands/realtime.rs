@@ -1,7 +1,9 @@
-use crate::integrations::realtime::{PresenceManager, UserActivity, UserPresence};
+use crate::integrations::realtime::{PresenceManager, RealtimeServer, UserActivity, UserPresence};
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::RwLock as TokioRwLock;
+
+pub struct RealtimeServerHandle(pub Arc<RealtimeServer>);
 
 #[derive(serde::Serialize)]
 pub struct RealtimeConnectionInfo {
@@ -120,12 +122,12 @@ pub async fn bridge_get_token(
 /// any registered global listener), which leaked the secret beyond the
 /// onboarding flow. Callers receive the new token only via the return value.
 ///
-/// Existing authenticated WebSocket sessions are NOT terminated immediately;
-/// they will receive auth errors on their next re-auth attempt or when the
-/// connection is cycled.  Clients must re-fetch the token via onboarding.
+/// Existing authenticated WebSocket sessions are disconnected immediately
+/// so a compromised token cannot be used on active connections.
 #[tauri::command]
 pub async fn bridge_rotate_token(
     state: State<'_, RealtimeState>,
+    server_handle: State<'_, RealtimeServerHandle>,
     app: tauri::AppHandle,
 ) -> Result<String, String> {
     use std::io::Write;
@@ -146,6 +148,8 @@ pub async fn bridge_rotate_token(
     // window exists where the old token is accepted but the new one
     // would have been "the truth".
     *state.token.write().await = new_token.clone();
+
+    server_handle.0.disconnect_all_clients().await;
 
     // Persist with restricted permissions.
     let app_data_dir = app
