@@ -106,7 +106,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
           <View style={styles.topBar}>
             <Pressable
               onPress={onClose}
-              style={[styles.iconBtn, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+              style={[styles.iconBtn, { backgroundColor: c.scrim }]}
               accessibilityRole="button"
               accessibilityLabel="Close image view"
             >
@@ -116,7 +116,7 @@ export function ImageWithQuestion({ imageUri, onClose }: ImageWithQuestionProps)
             {answer ? (
               <Pressable
                 onPress={handleReset}
-                style={[styles.iconBtn, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                style={[styles.iconBtn, { backgroundColor: c.scrim }]}
                 accessibilityRole="button"
                 accessibilityLabel="Ask a new question"
               >

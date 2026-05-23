@@ -211,6 +211,7 @@ export const agiNativeColors = {
     white: '#ffffff',
     black: '#000000',
     transparent: 'transparent',
+    scrim: 'rgba(0, 0, 0, 0.55)',
   },
   dark: {
     terraCotta: agiPalette.dark.accent.secondary,
@@ -237,6 +238,7 @@ export const agiNativeColors = {
     white: '#ffffff',
     black: '#000000',
     transparent: 'transparent',
+    scrim: 'rgba(0, 0, 0, 0.55)',
   },
 } as const;
 

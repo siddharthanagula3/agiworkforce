@@ -120,7 +120,7 @@ export function CloudWaitlistSheet({
       <Pressable
         onPress={handleClose}
         accessibilityLabel="Close waitlist sheet"
-        style={{ flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.55)', justifyContent: 'flex-end' }}
+        style={{ flex: 1, backgroundColor: colors.scrim, justifyContent: 'flex-end' }}
       >
         <Pressable
           onPress={() => {
