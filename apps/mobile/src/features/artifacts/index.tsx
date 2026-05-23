@@ -45,9 +45,9 @@ const HORIZONTAL_PADDING = 16;
 // Kind → badge config
 // ---------------------------------------------------------------------------
 
-type BadgeColor = 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
+type BadgeTone = 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
 
-const KIND_BADGE: Record<MobileArtifactKind, BadgeColor> = {
+const KIND_BADGE: Record<MobileArtifactKind, BadgeTone> = {
   code: 'teal',
   chart: 'yellow',
   research: 'purple',
@@ -254,7 +254,7 @@ function GetInspiredCard() {
       <View className="w-[132px] h-[42px] items-center justify-center">
         <View
           className="absolute w-16 h-9 rounded-md -rotate-6"
-          style={{ backgroundColor: '#8eb8e8', left: 8 }}
+          style={{ backgroundColor: c.agentActive, left: 8 }}
         >
           <Text className="text-[7px] mt-2 ml-2" style={{ color: c.black }}>
             Hi
@@ -262,7 +262,7 @@ function GetInspiredCard() {
         </View>
         <View
           className="absolute w-16 h-9 rounded-md border"
-          style={{ backgroundColor: '#f8f8f3', borderColor: '#e2ded4', left: 42 }}
+          style={{ backgroundColor: c.white, borderColor: c.border, left: 42 }}
         >
           <View className="flex-row gap-0.5 mt-4 ml-3">
             {[4, 8, 12, 7, 10].map((height, index) => (
@@ -276,7 +276,7 @@ function GetInspiredCard() {
         </View>
         <View
           className="absolute w-16 h-9 rounded-md rotate-6 items-center justify-center"
-          style={{ backgroundColor: '#ffc979', right: 4 }}
+          style={{ backgroundColor: c.agentWarning, right: 4 }}
         >
           <Text className="text-[6px] font-semibold" style={{ color: c.black }}>
             How petty are you?
