@@ -869,6 +869,19 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (next === 'ask' || next === 'act') actionModeCache = next;
 });
 
+// W5-06: quick mode cache — when true, model resolution uses the fast-status slot.
+let quickModeCache = false;
+chrome.storage.local
+  .get({ agi_quick_mode: false })
+  .then((res) => {
+    quickModeCache = res['agi_quick_mode'] === true;
+  })
+  .catch(() => {});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes['agi_quick_mode']) return;
+  quickModeCache = changes['agi_quick_mode'].newValue === true;
+});
+
 // BLOCKER-02: pending permission requests waiting for user decision.
 const pendingPermissionRequests = new Map<
   string,
@@ -1590,6 +1603,18 @@ async function handleMessageAsync(
       actionModeCache = newMode;
       await chrome.storage.local.set({ agi_action_mode: newMode });
       return { success: true, mode: newMode } as ExtensionResponse;
+    }
+
+    // W5-06: quick mode get/set
+    case 'GET_QUICK_MODE' as ExtensionMessage['type']: {
+      return { success: true, enabled: quickModeCache } as ExtensionResponse;
+    }
+
+    case 'SET_QUICK_MODE' as ExtensionMessage['type']: {
+      const qmMsg = message as import('./types').SetQuickModeMessage;
+      quickModeCache = qmMsg.enabled === true;
+      await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
+      return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
     // BLOCKER-02: user decision arriving from the side panel for a pending permission request
@@ -2778,6 +2803,10 @@ function inferProviderFromModel(modelId: string | undefined): ProviderStreamProv
 }
 
 async function getSelectedModel(): Promise<string> {
+  // W5-06: quick mode bypasses user-selected model with the fast-status slot.
+  if (quickModeCache) {
+    return getDefaultModelFor('free', 'fast-status');
+  }
   return new Promise((resolve) => {
     chrome.storage.local.get('agi_model', (result) => {
       const defaultModel = getDefaultModelFor('free', 'chat');
@@ -3285,15 +3314,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     return;
   }
 
-  // Handle scheduled task alarms (Gap 6)
+  // Handle scheduled task alarms (Gap 6 / W5-03)
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
     void loadScheduledTasks()
       .then((tasks) => {
         const task = tasks.find((t) => t.id === taskId);
-        if (task?.enabled) {
-          void executeScheduledTask(task);
-        }
+        if (!task?.enabled) return;
+        chrome.notifications.create(`agi_task_notif_${taskId}`, {
+          type: 'basic',
+          iconUrl: 'icons/icon48.png',
+          title: 'AGI Task Running',
+          message: task.name,
+          priority: 0,
+        });
+        void executeScheduledTask(task);
       })
       .catch((err) => {
         logger.warn(`Failed to load/execute scheduled task ${taskId}`, err);
