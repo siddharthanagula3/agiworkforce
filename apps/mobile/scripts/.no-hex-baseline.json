@@ -1,0 +1,3777 @@
+{
+  "_description": "Grandfathered hardcoded color literals as of AP-02 Stage 3 baseline seed (2026-05-23). New violations will fail CI. Reduce this list incrementally; do not add to it. Scrim-shaped rgba(0,0,0,...) entries should be migrated to useThemeColors().scrim.",
+  "violations": [
+    {
+      "file": "apps/mobile/app/(app)/(tabs)/agents.tsx",
+      "line": 93,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/(tabs)/agents.tsx",
+      "line": 95,
+      "literal": "color=\"red\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/app/(app)/_layout.tsx",
+      "line": 27,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/account.tsx",
+      "line": 151,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 47,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 90,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 120,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 122,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 146,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 178,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 178,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 179,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 179,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 434,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 462,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 489,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 509,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 511,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 533,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 535,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 565,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 567,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 590,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/agents/[id].tsx",
+      "line": 611,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 135,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 198,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 214,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 279,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 302,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/billing/index.tsx",
+      "line": 307,
+      "literal": "#ffffffcc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 187,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 302,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 319,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 342,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 365,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 392,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/camera.tsx",
+      "line": 395,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 724,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 727,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 730,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 731,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 850,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 860,
+      "literal": "#1e2025",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 864,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 868,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 873,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 877,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 879,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/chat/[id].tsx",
+      "line": 886,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/dispatch/index.tsx",
+      "line": 195,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/dispatch/index.tsx",
+      "line": 416,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/notifications/index.tsx",
+      "line": 91,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/notifications/index.tsx",
+      "line": 91,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/notifications/index.tsx",
+      "line": 93,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/notifications/index.tsx",
+      "line": 123,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 294,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 455,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 456,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 487,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 504,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 548,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 556,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 561,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 627,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 633,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 658,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 690,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 695,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 705,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/scan.tsx",
+      "line": 708,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/auto-approve.tsx",
+      "line": 102,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/auto-approve.tsx",
+      "line": 104,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/auto-approve.tsx",
+      "line": 156,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "line": 79,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "line": 81,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "line": 371,
+      "literal": "#3b82f6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "line": 402,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/integrations.tsx",
+      "line": 434,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/memory.tsx",
+      "line": 187,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/performance.tsx",
+      "line": 570,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/performance.tsx",
+      "line": 810,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/performance.tsx",
+      "line": 811,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/performance.tsx",
+      "line": 816,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/settings/storage.tsx",
+      "line": 217,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/app/(app)/translate.tsx",
+      "line": 331,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/translate.tsx",
+      "line": 337,
+      "literal": "#f87171",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/translate.tsx",
+      "line": 395,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 69,
+      "literal": "#2a1010",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 70,
+      "literal": "#0e0808",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 71,
+      "literal": "#050305",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 346,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 391,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 391,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 399,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 405,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 415,
+      "literal": "#050305",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 424,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 436,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 464,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 480,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 482,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 486,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(app)/voice.tsx",
+      "line": 504,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(auth)/reset-password.tsx",
+      "line": 181,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(public)/age-gate.tsx",
+      "line": 136,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(public)/age-gate.tsx",
+      "line": 137,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/age-gate.tsx",
+      "line": 145,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(public)/age-gate.tsx",
+      "line": 190,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 413,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 466,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 476,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 513,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 642,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 689,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 734,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/(public)/onboarding.tsx",
+      "line": 868,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/_layout.tsx",
+      "line": 545,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 51,
+      "literal": "#0f0f0f",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 62,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 67,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 75,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 81,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 88,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 99,
+      "literal": "#14b8a6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 106,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/error.tsx",
+      "line": 115,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/legal/_layout.tsx",
+      "line": 7,
+      "literal": "#0f1012",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/legal/_layout.tsx",
+      "line": 8,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/legal/_layout.tsx",
+      "line": 9,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/legal/_layout.tsx",
+      "line": 10,
+      "literal": "#0f1012",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/legal/article-50.tsx",
+      "line": 21,
+      "literal": "#0f1012",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/legal/article-50.tsx",
+      "line": 70,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 32,
+      "literal": "#0f0f0f",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 43,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 49,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 55,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 63,
+      "literal": "#14b8a6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/app/not-found.tsx",
+      "line": 69,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/components/ui/badge.tsx",
+      "line": 31,
+      "literal": "color = 'gray'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/components/ui/bottom-sheet.tsx",
+      "line": 38,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/components/ui/input.tsx",
+      "line": 18,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 64,
+      "literal": "#10a37f",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 65,
+      "literal": "#d4a27f",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 66,
+      "literal": "#4285f4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 67,
+      "literal": "#1da1f2",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 68,
+      "literal": "#536dfe",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 69,
+      "literal": "#f5c542",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 70,
+      "literal": "#6c5ce7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 71,
+      "literal": "#00bfa5",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 72,
+      "literal": "#20b2aa",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/lib/models.ts",
+      "line": 81,
+      "literal": "#888",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 23,
+      "literal": "#3b82f6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 24,
+      "literal": "#8b5cf6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 25,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 26,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 27,
+      "literal": "#06b6d4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 28,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 29,
+      "literal": "#ec4899",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/autotag.ts",
+      "line": 30,
+      "literal": "#6b7280",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 232,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 234,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 236,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 261,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 263,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 265,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/companion.ts",
+      "line": 267,
+      "literal": "#6b7280",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 51,
+      "literal": "#1a1a2e",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 51,
+      "literal": "#e0e0e0",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 55,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 56,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 57,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 68,
+      "literal": "#f0f0f0",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 121,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 127,
+      "literal": "#21808d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 133,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 138,
+      "literal": "#666",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 143,
+      "literal": "#e0e0e0",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/fileCreation.ts",
+      "line": 145,
+      "literal": "#999",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 45,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 54,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 61,
+      "literal": "#21808d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 67,
+      "literal": "#21808d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 586,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 588,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 590,
+      "literal": "#21808d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/services/notifications.ts",
+      "line": 592,
+      "literal": "#6b7280",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/agents/components/ToolTimeline.tsx",
+      "line": 177,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 10,
+      "literal": "#e4b16a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 25,
+      "literal": "#7db8e8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 40,
+      "literal": "#9a8cf2",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 55,
+      "literal": "#f39a7a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 70,
+      "literal": "#6bcf9f",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 85,
+      "literal": "#d7c77d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 100,
+      "literal": "#b8a0e8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/data.ts",
+      "line": 115,
+      "literal": "#82c7d1",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/index.tsx",
+      "line": 125,
+      "literal": "#8eb8e8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/index.tsx",
+      "line": 133,
+      "literal": "#f8f8f3",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/index.tsx",
+      "line": 133,
+      "literal": "#e2ded4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/artifacts/index.tsx",
+      "line": 147,
+      "literal": "#ffc979",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/billing/components/UpsellCard.tsx",
+      "line": 51,
+      "literal": "#1a2428",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 93,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 97,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 98,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 316,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 316,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 317,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 317,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 675,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 691,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 691,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 692,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 693,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 755,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 914,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 915,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 916,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 958,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 958,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 959,
+      "literal": "#94a3b8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 959,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 960,
+      "literal": "#94a3b8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 960,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 961,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AddToChatSheet.tsx",
+      "line": 961,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
+      "line": 243,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
+      "line": 257,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ApprovalCard.tsx",
+      "line": 281,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 133,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 163,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 165,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 174,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 193,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 208,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 226,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 258,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ArtifactFullScreen.tsx",
+      "line": 290,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AttachmentPreview.tsx",
+      "line": 145,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AutoApproveToggle.tsx",
+      "line": 8,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AutoApproveToggle.tsx",
+      "line": 9,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/AutoApproveToggle.tsx",
+      "line": 10,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatEmptyState.tsx",
+      "line": 80,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatEmptyState.tsx",
+      "line": 82,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatEmptyState.tsx",
+      "line": 99,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatEmptyState.tsx",
+      "line": 109,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+      "line": 269,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ChatInput.tsx",
+      "line": 269,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CodeBlockCopyButton.tsx",
+      "line": 37,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CodeBlockCopyButton.tsx",
+      "line": 43,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CodeBlockCopyButton.tsx",
+      "line": 45,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+      "line": 50,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+      "line": 50,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+      "line": 51,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+      "line": 51,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/CollapsibleSources.tsx",
+      "line": 150,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+      "line": 162,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+      "line": 210,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+      "line": 221,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationExportSheet.tsx",
+      "line": 221,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
+      "line": 18,
+      "literal": "#3b82f6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
+      "line": 23,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
+      "line": 29,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
+      "line": 35,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ConversationStarters.tsx",
+      "line": 41,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/FileExportButton.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/FileExportButton.tsx",
+      "line": 221,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 32,
+      "literal": "#fb7185",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 35,
+      "literal": "#38bdf8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 43,
+      "literal": "#34d399",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 46,
+      "literal": "#fbbf24",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 49,
+      "literal": "#d4d4d8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 52,
+      "literal": "#f0abfc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 55,
+      "literal": "#fb923c",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 57,
+      "literal": "#a1a1aa",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 61,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 65,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 69,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 73,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 118,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 138,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/GeneratedFileCard.tsx",
+      "line": 157,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+      "line": 148,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+      "line": 170,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+      "line": 184,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+      "line": 184,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageFullScreen.tsx",
+      "line": 198,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
+      "line": 71,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
+      "line": 146,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ImageGenProgress.tsx",
+      "line": 201,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 25,
+      "literal": "Color: 'teal'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 32,
+      "literal": "Color: 'gray'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 33,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 40,
+      "literal": "Color: 'teal'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 41,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 46,
+      "literal": "Color: 'blue'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 47,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 52,
+      "literal": "Color: 'purple'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 53,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 58,
+      "literal": "Color: 'green'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 59,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 64,
+      "literal": "Color: 'yellow'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 65,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 70,
+      "literal": "Color: 'gray'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 71,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 138,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 179,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/InlineArtifactCard.tsx",
+      "line": 202,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+      "line": 294,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+      "line": 301,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+      "line": 302,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageBubble.tsx",
+      "line": 489,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 27,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 77,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 90,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 201,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 209,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 249,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 289,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 308,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 361,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 390,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 396,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageContentRenderer.tsx",
+      "line": 405,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 44,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 76,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 83,
+      "literal": "#1e2025",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 87,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 92,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 96,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 100,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageEditModal.tsx",
+      "line": 105,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageList.tsx",
+      "line": 153,
+      "literal": "#2dd4bf",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageList.tsx",
+      "line": 170,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageList.tsx",
+      "line": 185,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/MessageList.tsx",
+      "line": 233,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 123,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 162,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 163,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 167,
+      "literal": "#fca5a5",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 177,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 179,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 186,
+      "literal": "#f87171",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 192,
+      "literal": "#fca5a5",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModeSwitchModal.tsx",
+      "line": 279,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ModelSelectorButton.tsx",
+      "line": 56,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+      "line": 130,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+      "line": 158,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+      "line": 163,
+      "literal": "#FBbf24",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+      "line": 207,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/PaywallBottomSheet.tsx",
+      "line": 235,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+      "line": 128,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+      "line": 148,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+      "line": 161,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+      "line": 187,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ProjectSelectorBar.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/QuotedReplyBar.tsx",
+      "line": 26,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/QuotedReplyBar.tsx",
+      "line": 52,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/QuotedReplyBar.tsx",
+      "line": 65,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+      "line": 155,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+      "line": 195,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ReportFlagButton.tsx",
+      "line": 281,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 25,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 26,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 57,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 61,
+      "literal": "#ffffff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 86,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 86,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendButton.tsx",
+      "line": 87,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 27,
+      "literal": "#7dd3fc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 32,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 32,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 35,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 35,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 37,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 37,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/SendPreview.tsx",
+      "line": 93,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+      "line": 60,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/StyleSelector.tsx",
+      "line": 60,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/TaskChips.tsx",
+      "line": 91,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+      "line": 9,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/TemporaryChatToggle.tsx",
+      "line": 10,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ThinkingBottomSheet.tsx",
+      "line": 81,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ThinkingBottomSheet.tsx",
+      "line": 136,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolAccessSelector.tsx",
+      "line": 63,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolAccessSelector.tsx",
+      "line": 63,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 71,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 109,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 152,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 180,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 182,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/chat/components/ToolCallCard.tsx",
+      "line": 197,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/code-sessions/components/CodeSessionMoreMenu.tsx",
+      "line": 41,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/code-sessions/components/EnvironmentOptionsSheet.tsx",
+      "line": 44,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/code-sessions/components/ModeSelectSheet.tsx",
+      "line": 38,
+      "literal": "rgba(",
+      "rule": "rgba",
+      "_note": "scrim-shaped — convert to colors.scrim or similar token in follow-up"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 298,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 299,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 300,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 304,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 305,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 306,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 420,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 430,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 783,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 841,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 841,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/AgentDashboard.tsx",
+      "line": 1066,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 39,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 50,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 61,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 72,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 125,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 188,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 205,
+      "literal": "#1a1a1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 212,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 290,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/CompanionDemoWalkthrough.tsx",
+      "line": 296,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/DesktopInfoCard.tsx",
+      "line": 37,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 167,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 212,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 212,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/ExecutionStream.tsx",
+      "line": 313,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/QRScanner.tsx",
+      "line": 149,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/companion/components/QRScanner.tsx",
+      "line": 159,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/compare/index.tsx",
+      "line": 383,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/compare/index.tsx",
+      "line": 429,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/compare/index.tsx",
+      "line": 430,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 39,
+      "literal": "#3b82f6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 40,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 41,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 42,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 56,
+      "literal": "#4285F4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 56,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 57,
+      "literal": "#0061FF",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 57,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 58,
+      "literal": "#0078D4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 58,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 59,
+      "literal": "#8B5CF6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 59,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 60,
+      "literal": "#5E6AD2",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 60,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 61,
+      "literal": "#0052CC",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 61,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 62,
+      "literal": "#FFFFFF",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 62,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 63,
+      "literal": "#4A154B",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 63,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 64,
+      "literal": "#6264A7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 64,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 65,
+      "literal": "#EA4335",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 65,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 66,
+      "literal": "#4285F4",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/connectors/components/connectorData.ts",
+      "line": 66,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/BatteryLowModal.tsx",
+      "line": 32,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/CloudTeaseModal.tsx",
+      "line": 41,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/FileTooLargeModal.tsx",
+      "line": 29,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/FileUnreadableModal.tsx",
+      "line": 29,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/ImageTooLargeModal.tsx",
+      "line": 29,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/ModelLoadingFirstRunModal.tsx",
+      "line": 77,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/StorageFullModal.tsx",
+      "line": 41,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/edge-cases/components/ThermalThrottleModal.tsx",
+      "line": 30,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/feedback/index.tsx",
+      "line": 122,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/feedback/index.tsx",
+      "line": 130,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/image/components/ImageWithQuestion.tsx",
+      "line": 106,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/image/components/ImageWithQuestion.tsx",
+      "line": 116,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/image/components/ImageWithQuestion.tsx",
+      "line": 180,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/image/components/ImageWithQuestion.tsx",
+      "line": 182,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+      "line": 111,
+      "literal": "#10b981",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+      "line": 113,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+      "line": 167,
+      "literal": "#ef4444",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+      "line": 168,
+      "literal": "#3b82f6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/DeviceIntegrationStatus.tsx",
+      "line": 169,
+      "literal": "#a855f7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 50,
+      "literal": "#7C3AED",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 55,
+      "literal": "#5B5EA6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 60,
+      "literal": "#5865F2",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 65,
+      "literal": "#25D366",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 70,
+      "literal": "#0088cc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 75,
+      "literal": "#EA4335",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/integrations/components/PlatformCard.tsx",
+      "line": 80,
+      "literal": "#0072C6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformCard.tsx",
+      "line": 21,
+      "literal": "#25D366",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformCard.tsx",
+      "line": 26,
+      "literal": "#0088cc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformCard.tsx",
+      "line": 31,
+      "literal": "#7C3AED",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformSetupSheet.tsx",
+      "line": 26,
+      "literal": "#25D366",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformSetupSheet.tsx",
+      "line": 27,
+      "literal": "#0088cc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformSetupSheet.tsx",
+      "line": 28,
+      "literal": "#7C3AED",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/messaging/components/PlatformSetupSheet.tsx",
+      "line": 130,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/AutoModeCard.tsx",
+      "line": 40,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+      "line": 248,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx",
+      "line": 274,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 136,
+      "literal": "color=\"green\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 139,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 149,
+      "literal": "color=\"yellow\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 150,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 151,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 154,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 160,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 160,
+      "literal": "#f59e0b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 188,
+      "literal": "#a78bfa",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 201,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 201,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 202,
+      "literal": "#a78bfa",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ModelRow.tsx",
+      "line": 202,
+      "literal": "#666",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/components/ProviderLogo.tsx",
+      "line": 60,
+      "literal": "#888888",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/service.ts",
+      "line": 150,
+      "literal": "#14b8a6",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/model-picker/service.ts",
+      "line": 156,
+      "literal": "#64748b",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/ByokConsentModal.tsx",
+      "line": 167,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx",
+      "line": 32,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx",
+      "line": 121,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/FirstRunDisclosureModal.tsx",
+      "line": 181,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/ModeCard.tsx",
+      "line": 60,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/onboarding/components/ModeCard.tsx",
+      "line": 82,
+      "literal": "#000",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 96,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 125,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 130,
+      "literal": "#FBbf24",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 186,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 191,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/paywall/components/ProPlusPaywall.tsx",
+      "line": 221,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 21,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 22,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 23,
+      "literal": "#6ee7b7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 26,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 27,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 28,
+      "literal": "#7dd3fc",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 31,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 32,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 33,
+      "literal": "#fcd34d",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 36,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 37,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 38,
+      "literal": "#fda4af",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 41,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 42,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 43,
+      "literal": "#c4b5fd",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 46,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 47,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 48,
+      "literal": "#d4d4d8",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 56,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 57,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 58,
+      "literal": "#6ee7b7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 61,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 62,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/projects/components/ProjectHeader.tsx",
+      "line": 63,
+      "literal": "#e4e4e7",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/QuickSchedule.tsx",
+      "line": 282,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 94,
+      "literal": "Color = 'green'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 101,
+      "literal": "color: 'green'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 103,
+      "literal": "color: 'red'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 105,
+      "literal": "color: 'yellow'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 107,
+      "literal": "color: 'gray'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleCard.tsx",
+      "line": 168,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/schedules/components/ScheduleRunHistory.tsx",
+      "line": 165,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/components/AddMemorySheet.tsx",
+      "line": 68,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/components/AddMemorySheet.tsx",
+      "line": 79,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/components/MemoryItem.tsx",
+      "line": 136,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/index.tsx",
+      "line": 289,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/index.tsx",
+      "line": 291,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/index.tsx",
+      "line": 377,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+      "line": 160,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/notifications/index.tsx",
+      "line": 427,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "line": 52,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "line": 52,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "line": 285,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/permissions/index.tsx",
+      "line": 176,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+      "line": 153,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/settings/personalization/index.tsx",
+      "line": 155,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/share-preview/index.tsx",
+      "line": 179,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/share-preview/index.tsx",
+      "line": 180,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 136,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 157,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 185,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 200,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 209,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 209,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 246,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 271,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 271,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 281,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 301,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationItem.tsx",
+      "line": 359,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationList.tsx",
+      "line": 119,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationList.tsx",
+      "line": 206,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/ConversationList.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/SidebarHeader.tsx",
+      "line": 65,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/TagFilter.tsx",
+      "line": 68,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/TagFilter.tsx",
+      "line": 69,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/TagFilter.tsx",
+      "line": 72,
+      "literal": "backgroundColor: 'transparent'",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/features/sidebar/components/TagFilter.tsx",
+      "line": 73,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/RecordingOverlay.tsx",
+      "line": 103,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 79,
+      "literal": "#1a1040",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 80,
+      "literal": "#0d0d1a",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 81,
+      "literal": "#050508",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 130,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 362,
+      "literal": "#050508",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 431,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceConversationScreen.tsx",
+      "line": 431,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceRecording.tsx",
+      "line": 155,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceRecording.tsx",
+      "line": 175,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceRecording.tsx",
+      "line": 200,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceRecording.tsx",
+      "line": 213,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 93,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 128,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 144,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 157,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 164,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 167,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 187,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceReview.tsx",
+      "line": 195,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 94,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 96,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 127,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 197,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 198,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 200,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/features/voice/components/VoiceSelector.tsx",
+      "line": 200,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 108,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 144,
+      "literal": "color=\"gray\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 162,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 182,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 191,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 201,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ApprovalModal.tsx",
+      "line": 204,
+      "literal": "#fff",
+      "rule": "hex"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ConnectionStatus.tsx",
+      "line": 22,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ConnectionStatus.tsx",
+      "line": 29,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ConnectionStatus.tsx",
+      "line": 36,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/ConnectionStatus.tsx",
+      "line": 44,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/DesktopCompanionWidget.tsx",
+      "line": 118,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/DesktopCompanionWidget.tsx",
+      "line": 193,
+      "literal": "color=\"teal\"",
+      "rule": "named-color"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/DesktopCompanionWidget.tsx",
+      "line": 211,
+      "literal": "rgba(",
+      "rule": "rgba"
+    },
+    {
+      "file": "apps/mobile/src/shared/components/DesktopCompanionWidget.tsx",
+      "line": 212,
+      "literal": "rgba(",
+      "rule": "rgba"
+    }
+  ]
+}
