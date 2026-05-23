@@ -238,7 +238,10 @@ export const PLAN_DISPLAY_NAMES: Record<PlanTier, string> = {
 export type Tables = Database['public']['Tables'];
 export type Profile = Tables['profiles']['Row'];
 export type Subscription = Tables['subscriptions']['Row'];
-export type BetaInvite = Tables['beta_invites']['Row'];
+// BetaInvite is defined in waitlistService.ts; the generated Database type
+// for beta_invites still has stale v2 billing columns. Re-export the
+// authoritative interface instead of the generated row type.
+export type { BetaInvite } from '../services/waitlistService';
 export type Waitlist = Tables['waitlist']['Row'];
 export type EmailPreferences = Tables['email_preferences']['Row'];
 export type PricingPlan = Tables['pricing_plans']['Row'];
