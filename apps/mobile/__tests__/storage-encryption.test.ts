@@ -143,7 +143,7 @@ describe('PRAGMA key application', () => {
     const db = await getMockDb();
     const calls = db.execAsync.mock.calls as string[][];
     const keyCall = calls.find((args) => args[0]?.includes('PRAGMA key ='));
-    expect(keyCall?.[0]).toContain(`PRAGMA key = '${testKey}'`);
+    expect(keyCall?.[0]).toContain(`PRAGMA key = "x'${testKey}'"`);
   });
 });
 
