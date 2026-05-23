@@ -15,10 +15,10 @@
  * Era-current model IDs shown in the marketing model-pill carousel on the
  * homepage. These are intentionally stable display values, not runtime model
  * selectors. Update here when the provider era advances.
- * Current era: GPT-5.4, Claude 4.7 (Opus), Gemini 3.1 Pro.
+ * Current era: GPT-5.5, Claude 4.7 (Opus), Gemini 3.1 Pro.
  */
 export const MARKETING_MODEL_PILLS = [
-  'gpt-5.4',
+  'gpt-5.5',
   'claude-opus-4-7',
   'gemini-3.1-pro-preview',
   'llama-3.3-70b',

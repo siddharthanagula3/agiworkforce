@@ -132,7 +132,7 @@ async function upgradeToPlan(data: {
     throw new Error('User not authenticated. Please log in to upgrade.');
   }
 
-  const billingInterval = data.billingPeriod === 'yearly' ? 'annual' : 'monthly';
+  const billingInterval = data.billingPeriod === 'yearly' ? 'yearly' : 'monthly';
 
   const response = await fetch('/api/checkout', {
     method: 'POST',

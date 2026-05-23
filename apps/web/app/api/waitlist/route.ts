@@ -9,14 +9,14 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
 type WaitlistPlan = 'pro' | 'max';
-type BillingInterval = 'monthly' | 'annual';
+type BillingInterval = 'monthly' | 'yearly';
 
 function isWaitlistPlan(value: unknown): value is WaitlistPlan {
   return value === 'pro' || value === 'max';
 }
 
 function isBillingInterval(value: unknown): value is BillingInterval {
-  return value === 'monthly' || value === 'annual';
+  return value === 'monthly' || value === 'yearly';
 }
 
 async function requireAuth() {
@@ -80,7 +80,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const billingInterval = isBillingInterval(payload.billingInterval)
     ? payload.billingInterval
-    : ('annual' as const);
+    : ('yearly' as const);
   const source = typeof payload.source === 'string' ? payload.source.slice(0, 100) : 'pricing';
 
   const { error } = await supabase.from('waitlist').upsert(
