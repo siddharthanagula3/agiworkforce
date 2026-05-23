@@ -8,10 +8,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the MCP SDK transports before importing our module.
-const mockStdioTransport = vi.fn();
-const mockSSETransport = vi.fn();
-const mockStreamableTransport = vi.fn();
+const { mockStdioTransport, mockSSETransport, mockStreamableTransport } = vi.hoisted(() => ({
+  mockStdioTransport: vi.fn(),
+  mockSSETransport: vi.fn(),
+  mockStreamableTransport: vi.fn(),
+}));
 
 vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
   StdioClientTransport: mockStdioTransport,
