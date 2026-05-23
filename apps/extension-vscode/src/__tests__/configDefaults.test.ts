@@ -33,6 +33,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   agentPlanMode: 'agiWorkforce.agent.planMode',
   agentMode: 'agiWorkforce.agent.mode',
   agentEffort: 'agiWorkforce.agent.effort',
+  agentThinking: 'agiWorkforce.agent.thinking',
   codeLensEnabled: 'agiWorkforce.codeLensEnabled',
   hoverEnabled: 'agiWorkforce.hoverEnabled',
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
