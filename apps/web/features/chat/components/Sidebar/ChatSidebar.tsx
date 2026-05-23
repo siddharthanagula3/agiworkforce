@@ -14,6 +14,8 @@ import {
   LogOut,
   ChevronUp,
   CheckSquare,
+  Folder,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
@@ -392,6 +394,7 @@ function ChatSidebarContent({
   onToggleSidebar,
   collapsed = false,
 }: ChatSidebarProps) {
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -523,6 +526,26 @@ function ChatSidebarContent({
             <X className="h-3.5 w-3.5" />
           </button>
         )}
+      </div>
+
+      {/* Nav items: Projects and Artifacts */}
+      <div className="mx-1 border-b border-[var(--chat-border-strong)] pb-1 mb-1">
+        <button
+          onClick={() => router.push('/projects')}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-foreground transition-colors"
+          aria-label="Projects"
+        >
+          <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Projects
+        </button>
+        <button
+          onClick={() => router.push('/gallery')}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-foreground transition-colors"
+          aria-label="Artifacts"
+        >
+          <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Artifacts
+        </button>
       </div>
 
       {/* Session list */}
