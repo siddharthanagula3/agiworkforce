@@ -19,17 +19,35 @@ pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Re
     let target_dir = args.get("target_dir").map(std::path::PathBuf::from);
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let opts = crate::runtime::worktree::WorktreeOptions {
-        branch,
+        branch: branch.clone(),
         base,
         target_dir,
     };
     match crate::runtime::worktree::enter_worktree(&repo, opts) {
-        Ok(wt) => Ok(ToolResult {
-            tool_name: "enter_worktree".into(),
-            success: true,
-            output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()})
-                .to_string(),
-        }),
+        Ok(wt) => {
+            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            crate::hooks::run_hooks(
+                &hcfg,
+                crate::hooks::HookEvent::WorktreeCreate,
+                &crate::hooks::HookInput {
+                    event: "WorktreeCreate".to_string(),
+                    session_id: None,
+                    model: None,
+                    tool_name: Some("enter_worktree".to_string()),
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!("branch={} path={}", wt.branch, wt.path.display())),
+                    tool_execution: None,
+                },
+            )
+            .await;
+            Ok(ToolResult {
+                tool_name: "enter_worktree".into(),
+                success: true,
+                output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()})
+                    .to_string(),
+            })
+        }
         Err(e) => Ok(ToolResult {
             tool_name: "enter_worktree".into(),
             success: false,
@@ -51,11 +69,29 @@ pub(super) async fn execute_exit_worktree(args: &HashMap<String, String>) -> Res
     };
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     match crate::runtime::worktree::exit_worktree(&repo, &path) {
-        Ok(()) => Ok(ToolResult {
-            tool_name: "exit_worktree".into(),
-            success: true,
-            output: format!("Removed worktree at {}", path.display()),
-        }),
+        Ok(()) => {
+            let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+            crate::hooks::run_hooks(
+                &hcfg,
+                crate::hooks::HookEvent::WorktreeRemove,
+                &crate::hooks::HookInput {
+                    event: "WorktreeRemove".to_string(),
+                    session_id: None,
+                    model: None,
+                    tool_name: Some("exit_worktree".to_string()),
+                    tool_args: None,
+                    tool_output: None,
+                    message: Some(format!("path={}", path.display())),
+                    tool_execution: None,
+                },
+            )
+            .await;
+            Ok(ToolResult {
+                tool_name: "exit_worktree".into(),
+                success: true,
+                output: format!("Removed worktree at {}", path.display()),
+            })
+        }
         Err(e) => Ok(ToolResult {
             tool_name: "exit_worktree".into(),
             success: false,

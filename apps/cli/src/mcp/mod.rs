@@ -1039,8 +1039,39 @@ impl McpConnection {
                                     elicitation::ElicitationRequest,
                                 >(params)
                                 {
+                                    let hcfg = crate::hooks::load_hooks().unwrap_or_default();
+                                    crate::hooks::run_hooks(
+                                        &hcfg,
+                                        crate::hooks::HookEvent::Elicitation,
+                                        &crate::hooks::HookInput {
+                                            event: "Elicitation".to_string(),
+                                            session_id: None,
+                                            model: None,
+                                            tool_name: None,
+                                            tool_args: None,
+                                            tool_output: None,
+                                            message: Some(server_name.clone()),
+                                            tool_execution: None,
+                                        },
+                                    )
+                                    .await;
                                     let resp =
                                         elicitation_handler.handle(&server_name, elicit_req).await;
+                                    crate::hooks::run_hooks(
+                                        &hcfg,
+                                        crate::hooks::HookEvent::ElicitationResult,
+                                        &crate::hooks::HookInput {
+                                            event: "ElicitationResult".to_string(),
+                                            session_id: None,
+                                            model: None,
+                                            tool_name: None,
+                                            tool_args: None,
+                                            tool_output: None,
+                                            message: Some(server_name.clone()),
+                                            tool_execution: None,
+                                        },
+                                    )
+                                    .await;
                                     let reply = serde_json::json!({
                                         "jsonrpc": "2.0",
                                         "id": req_id,

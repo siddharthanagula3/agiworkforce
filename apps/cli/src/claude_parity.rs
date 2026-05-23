@@ -81,6 +81,9 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "pr-comments",
         "ultrareview",
         "think-back",
+        "remote-control",
+        "rc",
+        "debug",
     ]
 }
 
@@ -183,6 +186,10 @@ pub fn handle_shared_command(
         "/pr-comments" => ParityCommandResult::Prompt(pr_comments_prompt(arg)),
         "/ultrareview" => ParityCommandResult::Prompt(ultrareview_prompt(arg)),
         "/think-back" => ParityCommandResult::Prompt(think_back_prompt(arg)),
+        "/remote-control" | "/rc" => {
+            ParityCommandResult::SystemMessage(render_remote_control())
+        }
+        "/debug" => ParityCommandResult::SystemMessage(handle_debug(session)),
         _ => ParityCommandResult::NotHandled,
     }
 }
@@ -898,6 +905,22 @@ pub fn think_back_prompt(arg: &str) -> String {
     format!(
         "Create a concise Think Back recap for {focus}: key goals, major decisions, files changed, tests run, unresolved risks, and the next best actions."
     )
+}
+
+pub fn render_remote_control() -> String {
+    "AGI desktop bridge listens on port 8787. Launch the desktop companion first, then reconnect \
+     this CLI session to mirror commands and share context. Use /desktop to open the companion \
+     or run `agiworkforce bridge --port 8787` for a manual connection."
+        .to_string()
+}
+
+pub fn handle_debug(session: &mut AgentSession) -> String {
+    session.debug_mode = !session.debug_mode;
+    if session.debug_mode {
+        "Debug mode ON — verbose tool output and hook traces enabled.".to_string()
+    } else {
+        "Debug mode OFF.".to_string()
+    }
 }
 
 pub fn split_shell_words(input: &str) -> Vec<String> {
