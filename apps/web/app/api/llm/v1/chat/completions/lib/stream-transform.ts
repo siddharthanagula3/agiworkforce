@@ -7,7 +7,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { reconcileUsage } from '@/lib/assert-quota';
-import { recordModelUsage } from '@/lib/cost-tracker';
+import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import type { ProcessedRequest } from './request-processor';
 // ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. — no extra imports needed
 
@@ -467,15 +467,25 @@ export async function buildStreamResponse(
         });
       }
 
-      // Fire-and-forget cost tracking (must not block the stream flush).
+      // Fire-and-forget cost tracking + OTel attribute emit (must not block the stream flush).
       try {
-        recordModelUsage(userId, modelUsed, {
+        const usage = {
           inputTokens,
           outputTokens,
           reasoningOutputTokens,
           cacheReadInputTokens,
           cacheCreationInputTokens,
-        });
+        };
+        recordModelUsage(userId, modelUsed, usage);
+        logger.info(
+          {
+            event: 'gen_ai_usage_recorded',
+            userId,
+            requestId,
+            ...toOtelAttributes(providerUsed, modelUsed, usage),
+          },
+          'GenAI usage attributes recorded (streaming)',
+        );
       } catch (trackingError) {
         logger.warn({ error: trackingError, userId, requestId }, 'Stream cost tracking failed');
       }
