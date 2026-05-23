@@ -73,6 +73,7 @@
   "side_panel": {
     "default_path": "src/side_panel.html"
   },
+  "options_page": "src/options.html",
   "web_accessible_resources": [
     {
       "resources": ["icons/providers/*.svg"],

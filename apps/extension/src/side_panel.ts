@@ -1188,6 +1188,31 @@ function injectStyles(): void {
     }
     #sp-action-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
+    /* W5-06: quick mode toggle */
+    #sp-quick-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      background: var(--agi-ext-overlay);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    #sp-quick-mode-toggle:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    #sp-quick-mode-toggle.sp-quick-mode-active {
+      color: var(--agi-ext-accent);
+      border-color: var(--agi-ext-accent);
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+    }
+    #sp-quick-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
     /* ── Inline permission consent card (BLOCKER-02) ── */
     .sp-permission-card {
       display: flex;
@@ -4133,6 +4158,29 @@ function buildUI(): void {
       .catch((err: unknown) => console.warn('[SidePanel] Failed to set action mode:', err));
   });
   composerBar.appendChild(actionModeToggle);
+
+  // W5-06: quick mode toggle — overrides model with fast-status slot for low-latency replies
+  const quickModeToggle = el('button', {
+    id: 'sp-quick-mode-toggle',
+    title: 'Quick mode: use fast model for low-latency replies',
+    'data-active': 'false',
+  });
+  quickModeToggle.textContent = 'Quick';
+  chrome.storage.local.get({ agi_quick_mode: false }, (items) => {
+    const active = items['agi_quick_mode'] === true;
+    quickModeToggle.setAttribute('data-active', active ? 'true' : 'false');
+    quickModeToggle.classList.toggle('sp-quick-mode-active', active);
+  });
+  quickModeToggle.addEventListener('click', () => {
+    const current = quickModeToggle.getAttribute('data-active') === 'true';
+    const next = !current;
+    quickModeToggle.setAttribute('data-active', next ? 'true' : 'false');
+    quickModeToggle.classList.toggle('sp-quick-mode-active', next);
+    chrome.runtime
+      .sendMessage({ type: 'SET_QUICK_MODE', enabled: next })
+      .catch((err: unknown) => console.warn('[SidePanel] Failed to set quick mode:', err));
+  });
+  composerBar.appendChild(quickModeToggle);
 
   const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
   for (const cmd of ['/summarize', '/explain', '/extract', '/code']) {

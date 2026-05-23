@@ -1,0 +1,15 @@
+/*
+ * options.css — minimal static reset for the options page.
+ * Most styles are injected at runtime via Constructable Stylesheets
+ * (options.ts:injectStyles) using getExtensionTokensCss from tokens.ts.
+ */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+html,
+body {
+  min-height: 100vh;
+  background: var(--agi-ext-bg, #1a1915);
+}

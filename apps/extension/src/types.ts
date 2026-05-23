@@ -71,6 +71,8 @@ export type NativeMessageType =
   | 'DELETE_MEMORY'
   | 'GET_ACTION_MODE'
   | 'SET_ACTION_MODE'
+  | 'GET_QUICK_MODE'
+  | 'SET_QUICK_MODE'
   | 'PERMISSION_RESPONSE';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
@@ -897,6 +899,22 @@ export interface GetActionModeResponse {
   error?: string;
 }
 
+/** Quick mode: when true, model resolution uses the fast-status slot for low-latency replies. */
+export interface GetQuickModeMessage extends BaseMessage {
+  type: 'GET_QUICK_MODE';
+}
+
+export interface SetQuickModeMessage extends BaseMessage {
+  type: 'SET_QUICK_MODE';
+  enabled: boolean;
+}
+
+export interface GetQuickModeResponse {
+  success: boolean;
+  enabled?: boolean;
+  error?: string;
+}
+
 /** Sent from background → side panel when mode='ask' and an action targets a new domain. */
 export interface PermissionRequiredMessage {
   type: 'PERMISSION_REQUIRED';
@@ -980,6 +998,8 @@ export type ExtensionMessage =
   | DeleteScheduledTaskMessage
   | GetActionModeMessage
   | SetActionModeMessage
+  | GetQuickModeMessage
+  | SetQuickModeMessage
   | PermissionResponseMessage;
 
 export type ExtensionResponse =
@@ -1019,7 +1039,8 @@ export type ExtensionResponse =
   | ClearConsoleLogsResponse
   | ShortcutResponse
   | ScheduledTaskResponse
-  | GetActionModeResponse;
+  | GetActionModeResponse
+  | GetQuickModeResponse;
 
 export interface PopupState {
   sessionStartTime: number;
