@@ -15,6 +15,10 @@ import {
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
 import { hasByokEnvKeys } from '@/lib/byok-access';
+import { toast } from 'sonner';
+import { Share2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
@@ -131,6 +135,60 @@ async function saveSystemMessage(params: {
   };
 }
 
+function useShareConversation(conversationTitle: string | undefined) {
+  const [isSharing, setIsSharing] = React.useState(false);
+  const messages = useChatStore((s) => s.messages);
+  const hasMessages = messages.length > 0;
+
+  const share = React.useCallback(async () => {
+    if (isSharing) return;
+    setIsSharing(true);
+    try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const payload = {
+        title: conversationTitle || 'Shared conversation',
+        messages: messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          createdAt: m.createdAt,
+        })),
+      };
+      const res = await fetch('/api/share', {
+        method: 'POST',
+        headers,
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const msg = (err as { error?: { message?: string } }).error?.message ?? 'Failed to share';
+        throw new Error(msg);
+      }
+      const data = (await res.json()) as { shareUrl: string };
+      const shareUrl = data.shareUrl;
+      toast.success('Share link created', {
+        description: shareUrl,
+        duration: 8000,
+        action: {
+          label: 'Copy link',
+          onClick: () => {
+            void navigator.clipboard.writeText(shareUrl);
+            toast.success('Link copied');
+          },
+        },
+      });
+    } catch (err) {
+      toast.error('Could not share conversation', {
+        description: err instanceof Error ? err.message : 'Please try again.',
+      });
+    } finally {
+      setIsSharing(false);
+    }
+  }, [conversationTitle, messages, isSharing]);
+
+  return { share, isSharing, hasMessages };
+}
+
 export default function WebChatPage() {
   const router = useRouter();
   const params = useParams();
@@ -231,6 +289,13 @@ export default function WebChatPage() {
     deleteConversation,
     updateConversation,
   } = useConversations();
+
+  // Share current conversation
+  const activeConversationTitle = useMemo(
+    () => conversations.find((c) => c.id === activeConversationId)?.title,
+    [conversations, activeConversationId],
+  );
+  const { share, isSharing, hasMessages } = useShareConversation(activeConversationTitle);
 
   // Session creation guard
   const creationPending = React.useRef(false);
@@ -588,7 +653,22 @@ export default function WebChatPage() {
       {/* Main area + artifact workbench */}
       <div className="flex min-w-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex h-11 shrink-0 items-center justify-end border-b border-border/30 px-4">
+          <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/30 px-4">
+            <div className="flex items-center gap-1">
+              {hasMessages && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void share()}
+                  disabled={isSharing}
+                  className="gap-1.5"
+                  aria-label="Share conversation"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden text-xs sm:inline">Share</span>
+                </Button>
+              )}
+            </div>
             <ArtifactsToggleButton />
           </div>
 
