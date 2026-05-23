@@ -3,6 +3,7 @@
 import { Suspense, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
 import { getSupabaseClient } from '../../services/supabase';
 import { Header } from '../../components/layout/Header';
@@ -31,6 +32,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 function LoginForm() {
+  const { t } = useTranslation('auth');
   const searchParams = useSearchParams();
   const appUrl = useMemo(() => getAppUrl(), []);
   const redirectTo = useMemo(
@@ -73,7 +75,7 @@ function LoginForm() {
         },
       });
       if (error) throw error;
-      setMessage({ text: 'Check your email for a sign-in link.', type: 'info' });
+      setMessage({ text: t('checkEmailMagicLink'), type: 'info' });
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : 'Magic link failed', type: 'error' });
     } finally {
@@ -102,9 +104,9 @@ function LoginForm() {
       className="agi-section"
       style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
     >
-      <p className="agi-section-eyebrow">Sign in</p>
+      <p className="agi-section-eyebrow">{t('signInEyebrow')}</p>
       <h1 className="agi-page-h1" style={{ marginBottom: 32 }}>
-        Welcome back.
+        {t('welcomeBackHeading')}
       </h1>
 
       <form
@@ -112,7 +114,7 @@ function LoginForm() {
         style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
       >
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>Email</span>
+          <span style={labelStyle}>{t('email')}</span>
           <input
             type="email"
             value={email}
@@ -123,7 +125,7 @@ function LoginForm() {
           />
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>Password</span>
+          <span style={labelStyle}>{t('password')}</span>
           <input
             type="password"
             value={password}
@@ -150,7 +152,7 @@ function LoginForm() {
           className="agi-cta-primary"
           style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
         >
-          {loading ? 'Signing in...' : 'Sign in'}
+          {loading ? t('signingIn') : t('signIn')}
         </button>
       </form>
 
@@ -168,7 +170,7 @@ function LoginForm() {
           padding: 0,
         }}
       >
-        {magicLoading ? 'Sending magic link...' : 'Email me a sign-in link →'}
+        {magicLoading ? t('sendingMagicLink') : `${t('emailMagicLinkCta')} →`}
       </button>
 
       <div
@@ -182,7 +184,7 @@ function LoginForm() {
         }}
       >
         <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-        OR
+        {t('orContinueWith')}
         <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
       </div>
 
@@ -194,7 +196,7 @@ function LoginForm() {
           className="agi-tier-cta agi-tier-cta--ghost"
           style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
         >
-          {oauthLoading === 'google' ? 'Redirecting...' : 'Continue with Google'}
+          {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
         </button>
         <button
           type="button"
@@ -203,18 +205,18 @@ function LoginForm() {
           className="agi-tier-cta agi-tier-cta--ghost"
           style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
         >
-          {oauthLoading === 'github' ? 'Redirecting...' : 'Continue with GitHub'}
+          {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
         </button>
       </div>
 
       <p style={{ marginTop: 32, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        New here?{' '}
+        {t('newHere')}{' '}
         <Link href="/signup" style={{ color: 'var(--agi-ink)' }}>
-          Create an account
+          {t('createAccount')}
         </Link>
         {' · '}
         <Link href="/forgot-password" style={{ color: 'var(--agi-ink-2)' }}>
-          Forgot password?
+          {t('forgotPassword')}
         </Link>
       </p>
     </section>

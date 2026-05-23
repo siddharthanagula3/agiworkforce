@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslation } from 'react-i18next';
 import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -29,6 +30,7 @@ function CheckIcon() {
 }
 
 export default function PricingPage() {
+  const { t } = useTranslation('pricing');
   const [annual, setAnnual] = useState(false);
   const localLabel = formatPrivacyModeLabel('local');
   const byokLabel = formatPrivacyModeLabel('byok');
@@ -37,7 +39,7 @@ export default function PricingPage() {
   const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
   const hobbyAnnualPerMonth = hobbyYearly / 12;
   const hobbyPrice = annual ? `$${hobbyAnnualPerMonth.toFixed(2)}` : `$${hobbyMonthly}`;
-  const hobbySub = annual ? 'per month, billed annually' : 'per month, billed monthly';
+  const hobbySub = annual ? t('perMonthBilledAnnually') : t('perMonthBilledMonthly');
   const proMonthly = BILLING_PLAN_PRICING.pro.monthlyPriceUsd;
   const proPlusMonthly = BILLING_PLAN_PRICING.pro_plus.monthlyPriceUsd;
   const maxMonthly = BILLING_PLAN_PRICING.max.monthlyPriceUsd;
@@ -49,12 +51,15 @@ export default function PricingPage() {
         <Header />
 
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Simple pricing.</h1>
+          <h1 className="agi-page-h1">{t('pageTitle')}</h1>
           <p className="agi-page-lede">
-            {localLabel} and {byokLabel} are free forever. Hobby is the only paid tier shipping
-            today - {managedLabel.toLowerCase()} cloud at ${hobbyMonthly}/mo, or $
-            {hobbyAnnualPerMonth.toFixed(2)}/mo if you pay annually.{' '}
-            <strong>Pro, Pro+, and Max are on the waitlist</strong> until our security audit closes.
+            {t('pageLedePart1', { localLabel, byokLabel })}{' '}
+            {t('pageLedePart2', {
+              managedLabel: managedLabel.toLowerCase(),
+              hobbyMonthly,
+              hobbyAnnualPerMonth: hobbyAnnualPerMonth.toFixed(2),
+            })}{' '}
+            <strong>{t('pageLedePart3')}</strong>
           </p>
         </section>
 
@@ -69,7 +74,7 @@ export default function PricingPage() {
                 annual ? 'agi-tier-toggle-btn' : 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
               }
             >
-              Monthly
+              {t('monthly')}
             </button>
             <button
               type="button"
@@ -80,7 +85,10 @@ export default function PricingPage() {
                 annual ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active' : 'agi-tier-toggle-btn'
               }
             >
-              Annual <span className="agi-tier-toggle-save">save {hobbySavingsPct}% on Hobby</span>
+              {t('annual')}{' '}
+              <span className="agi-tier-toggle-save">
+                {t('annualSave', { pct: hobbySavingsPct })}
+              </span>
             </button>
           </div>
 
@@ -88,99 +96,93 @@ export default function PricingPage() {
             <article className="agi-tier">
               <h2 className="agi-tier-name">{localLabel}</h2>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">Free</span>
-                <span className="agi-tier-price-sub">forever</span>
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
               </p>
-              <p className="agi-tier-body">
-                Run Ollama or LM Studio offline on your laptop. No keys, no quotas, no internet.
-              </p>
+              <p className="agi-tier-body">{t('localTierBody')}</p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  {localLabel} LLMs only - fully offline
+                  {t('localFeature1', { localLabel })}
                 </li>
                 <li>
                   <CheckIcon />
-                  SQLite storage on disk
+                  {t('localFeature2')}
                 </li>
                 <li>
                   <CheckIcon />
-                  No telemetry, no auth
+                  {t('localFeature3')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Desktop app only
+                  {t('localFeature4')}
                 </li>
               </ul>
               <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                Install
+                {t('installCta')}
               </Link>
             </article>
 
             <article className="agi-tier">
               <h2 className="agi-tier-name">{byokLabel}</h2>
               <p className="agi-tier-price">
-                <span className="agi-tier-price-num">Free</span>
-                <span className="agi-tier-price-sub">forever</span>
+                <span className="agi-tier-price-num">{t('free')}</span>
+                <span className="agi-tier-price-sub">{t('foreverLabel')}</span>
               </p>
-              <p className="agi-tier-body">
-                Bring your own keys to any cloud provider. Pay them directly. We add zero markup.
-              </p>
+              <p className="agi-tier-body">{t('byokTierBody')}</p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  10+ providers supported
+                  {t('byokFeature1')}
                 </li>
                 <li>
                   <CheckIcon />
-                  AES-256-GCM encryption at rest
+                  {t('byokFeature2')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Optional cloud sync via Supabase
+                  {t('byokFeature3')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Available on every surface
+                  {t('byokFeature4')}
                 </li>
               </ul>
               <Link href="/download" className="agi-tier-cta agi-tier-cta--ghost">
-                Install
+                {t('installCta')}
               </Link>
             </article>
 
             <article className="agi-tier">
-              <h2 className="agi-tier-name">Hobby</h2>
+              <h2 className="agi-tier-name">{t('hobby')}</h2>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">{hobbyPrice}</span>
                 <span className="agi-tier-price-sub">{hobbySub}</span>
               </p>
-              <p className="agi-tier-body">
-                Managed cloud, basic models. We handle the keys; you just chat.
-              </p>
+              <p className="agi-tier-body">{t('hobbyTierBody')}</p>
               <ul className="agi-tier-features">
                 <li>
                   <CheckIcon />
-                  Auto-routing across our managed pool
+                  {t('hobbyFeature1')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Cross-device sync included
+                  {t('hobbyFeature2')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Email support, 48h response
+                  {t('hobbyFeature3')}
                 </li>
                 <li>
                   <CheckIcon />
-                  Limited daily credits
+                  {t('hobbyFeature4')}
                 </li>
               </ul>
               <div className="agi-tier-cta-group">
                 <Link href="/login" className="agi-tier-cta">
-                  Subscribe
+                  {t('subscribeCta')}
                 </Link>
-                <p className="agi-tier-cta-note">No commitment. Cancel anytime.</p>
+                <p className="agi-tier-cta-note">{t('noCommitment')}</p>
               </div>
             </article>
           </div>
@@ -190,10 +192,10 @@ export default function PricingPage() {
               <strong style={{ color: 'var(--agi-ink)' }}>Pro</strong> ${proMonthly}/mo
               &nbsp;·&nbsp; <strong style={{ color: 'var(--agi-ink)' }}>Pro+</strong> $
               {proPlusMonthly}/mo &nbsp;·&nbsp;{' '}
-              <strong style={{ color: 'var(--agi-ink)' }}>Max</strong> ${maxMonthly}/mo - all on the
-              waitlist until the security audit closes.
+              <strong style={{ color: 'var(--agi-ink)' }}>Max</strong> ${maxMonthly}/mo -{' '}
+              {t('waitlistNote')}
             </span>
-            <Link href="/contact-sales">Enterprise - contact sales</Link>
+            <Link href="/contact-sales">{t('enterpriseCta')}</Link>
           </p>
         </section>
 

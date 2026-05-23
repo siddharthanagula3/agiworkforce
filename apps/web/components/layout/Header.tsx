@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { getSupabaseClient } from '../../services/supabase';
 import { AgiMark } from '../agi/AgiMark';
 
@@ -11,14 +12,15 @@ import { AgiMark } from '../agi/AgiMark';
  * the rendered output changes. Auth wiring (Supabase session) preserved.
  */
 
-const NAV = [
-  { href: '/providers', label: 'Providers' },
-  { href: '/pricing', label: 'Pricing' },
-  { href: '/compare', label: 'Compare' },
-  { href: '/about', label: 'About' },
-];
+const NAV_ITEMS = [
+  { href: '/providers', key: 'navProviders' },
+  { href: '/pricing', key: 'navPricing' },
+  { href: '/compare', key: 'navCompare' },
+  { href: '/about', key: 'navAbout' },
+] as const;
 
 export function Header() {
+  const { t } = useTranslation('common');
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -51,7 +53,7 @@ export function Header() {
         className="agi-top"
         style={{ position: 'relative', maxWidth: 1180, margin: '0 auto', padding: '22px 28px' }}
       >
-        <Link href="/" className="agi-mark" aria-label="AGI home">
+        <Link href="/" className="agi-mark" aria-label={t('agiHome')}>
           <AgiMark size={20} />
           <span style={{ marginLeft: 8 }}>
             agi<span className="agi-mark-dot">.</span>workforce
@@ -65,9 +67,9 @@ export function Header() {
         >
           {/* Desktop nav links */}
           <span className="agi-top-nav-desktop" style={{ display: 'inline-flex', gap: 24 }}>
-            {NAV.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <Link key={item.href} href={item.href} className="agi-top-link">
-                {item.label}
+                {t(item.key)}
               </Link>
             ))}
           </span>
@@ -75,26 +77,26 @@ export function Header() {
           {userEmail ? (
             <>
               <Link href="/chat" className="agi-top-link">
-                Chat
+                {t('navChat')}
               </Link>
               <button type="button" onClick={handleSignOut} className="agi-top-link">
-                Sign out
+                {t('navSignOut')}
               </button>
             </>
           ) : (
             <Link href="/login" className="agi-top-link">
-              Sign in
+              {t('navSignIn')}
             </Link>
           )}
           <Link href="/download" className="agi-top-cta">
-            Install
+            {t('navInstall')}
           </Link>
 
           {/* Mobile menu toggle */}
           <button
             type="button"
             className="agi-top-link agi-top-mobile-toggle"
-            aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+            aria-label={isMenuOpen ? t('menuClose') : t('menuOpen')}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen((v) => !v)}
             style={{ display: 'none' }}
@@ -121,14 +123,14 @@ export function Header() {
               zIndex: 50,
             }}
           >
-            {NAV.map((item) => (
+            {NAV_ITEMS.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 className="agi-top-link"
                 onClick={() => setIsMenuOpen(false)}
               >
-                {item.label}
+                {t(item.key)}
               </Link>
             ))}
           </div>
