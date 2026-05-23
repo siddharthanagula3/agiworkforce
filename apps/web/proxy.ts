@@ -40,7 +40,7 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // Run Supabase session refresh and auth-gating first (may return a redirect)
   const supabaseResponse = await updateSession(request);
 
