@@ -1,5 +1,6 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
+import { agiNativeColors } from '@agiworkforce/design-tokens';
 import { QueueFullError } from '@agiworkforce/runtime';
 import { localGenerate } from '@agiworkforce/local-llm';
 import { getMobileSendQueue } from '@/lib/sendQueue';
@@ -140,17 +141,11 @@ function getMsgStore() {
 
 /**
  * Dark-mode accent palette used when persisting artifacts to the store.
- * These values match agiNativeColors.dark and are imported as constants to
- * avoid a React hook call outside a component context. The gallery re-derives
- * the live color from useThemeColors() at render time, so the persisted value
- * is only a stable fallback.
+ * Sourced from the shared design-token package so no hex values are hardcoded.
+ * The gallery re-derives the live color from useThemeColors() at render time,
+ * so the persisted value is only a stable fallback.
  */
-const _artifactThemeColors = {
-  teal: '#21808d',
-  terraCotta: '#da7756',
-  agentThinking: '#a855f7',
-  agentActive: '#3b82f6',
-} as const;
+const _artifactThemeColors = agiNativeColors.dark;
 
 /**
  * Extract fenced code blocks from a completed assistant response and push any
