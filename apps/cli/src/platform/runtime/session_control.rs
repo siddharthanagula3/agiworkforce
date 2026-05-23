@@ -391,6 +391,13 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 1, 1, 10, 30, 0).unwrap(),
             messages: vec![message("first")],
             fork: None,
+            permission_mode: None,
+            plan_mode: None,
+            plan_approved: None,
+            current_plan: None,
+            fast_mode: None,
+            output_style: None,
+            fallback_model_ids: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -402,6 +409,13 @@ mod tests {
             updated_at: Utc.with_ymd_and_hms(2025, 1, 2, 11, 0, 0).unwrap(),
             messages: vec![message("second"), message("third")],
             fork: None,
+            permission_mode: None,
+            plan_mode: None,
+            plan_approved: None,
+            current_plan: None,
+            fast_mode: None,
+            output_style: None,
+            fallback_model_ids: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));
