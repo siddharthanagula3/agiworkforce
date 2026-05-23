@@ -1,4 +1,5 @@
 import { getSupabase } from '../lib/supabase';
+import type { InviteCodeError } from '../features/cloud-bridge/types';
 
 export interface WaitlistEntry {
   email: string;
@@ -32,16 +33,8 @@ export interface WaitlistStats {
   converted: number;
 }
 
-// Typed error codes returned by validate_and_redeem_invite_code RPC.
-// InviteCodeModal currently pattern-matches prose strings; a follow-up
-// (Stage 0c) should switch it to these discriminated codes.
-export type InviteCodeError =
-  | 'invalid_code'
-  | 'expired'
-  | 'fully_redeemed'
-  | 'already_redeemed_by_user'
-  | 'anon_signin_failed'
-  | 'rpc_error';
+// InviteCodeError is the cross-surface contract type — re-exported from features/cloud-bridge/types.ts.
+export type { InviteCodeError } from '../features/cloud-bridge/types';
 
 class WaitlistService {
   private static instance: WaitlistService;
@@ -123,8 +116,7 @@ class WaitlistService {
   // Under the current v1 schema, beta_invites has RLS set to block direct SELECT
   // for anon/authenticated roles — all flows go through the RPC. This method will
   // always return valid=false in v1 unless called from a service-role context.
-  // Kept to avoid breaking the InviteCodeModal call at InviteCodeModal.tsx:67;
-  // Stage 0c will migrate the modal to call redeemInviteCode directly.
+  // InviteCodeModal now calls redeemInviteCode directly (Stage 0b-fix).
   async validateInviteCode(
     code: string,
   ): Promise<{ valid: boolean; invite?: BetaInvite; error?: string }> {

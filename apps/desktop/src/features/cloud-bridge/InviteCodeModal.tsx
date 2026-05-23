@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { waitlistService } from '../../services/waitlistService';
-import type { InviteCodeModalProps } from './types';
+import type { InviteCodeError, InviteCodeModalProps } from './types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -19,24 +19,23 @@ import type { InviteCodeModalProps } from './types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/**
- * Map the free-form error strings returned by waitlistService.validateInviteCode
- * to the user-friendly copy required by the v1-cloud-bridge-strategy lock.
- *
- * The service returns English prose today; discriminated codes are not yet
- * implemented server-side (see docs/audit/2026-05-23-r27-v1-backlog.md §2.1).
- * Pattern-matching on the existing strings is the correct bridge until the
- * service gains typed error codes.
- */
-function friendlyInviteError(raw: string): string {
-  const lower = raw.toLowerCase();
-  if (lower.includes('expired')) {
-    return 'That code has expired. Join the waitlist to get a fresh one.';
+function friendlyInviteError(code?: InviteCodeError): string {
+  switch (code) {
+    case 'invalid_code':
+      return "That code doesn't look right. Double-check and try again.";
+    case 'expired':
+      return 'That code has expired. Join the waitlist to get a fresh one.';
+    case 'fully_redeemed':
+      return 'That code is fully redeemed. Try another or join the waitlist.';
+    case 'already_redeemed_by_user':
+      return "You've already used this code. Cloud should be unlocked.";
+    case 'anon_signin_failed':
+      return "Couldn't create your session. Try again in a moment.";
+    case 'rpc_error':
+      return 'Something went wrong on our end. Try again.';
+    default:
+      return 'Something went wrong. Try again or join the waitlist.';
   }
-  if (lower.includes('limit') || lower.includes('usage') || lower.includes('redeemed')) {
-    return 'That code is fully redeemed. Try another or join the waitlist.';
-  }
-  return "That code doesn't look right. Double-check and try again.";
 }
 
 // ---------------------------------------------------------------------------
@@ -46,12 +45,13 @@ function friendlyInviteError(raw: string): string {
 type InviteState = 'idle' | 'loading' | 'success' | 'error';
 
 interface InviteTabProps {
+  source: InviteCodeModalProps['source'];
   onSwitchToWaitlist: () => void;
   onRedeemed?: (inviteId: string) => void;
   onClose: () => void;
 }
 
-function InviteTab({ onSwitchToWaitlist, onRedeemed, onClose }: InviteTabProps) {
+function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTabProps) {
   const [code, setCode] = useState('');
   const [state, setState] = useState<InviteState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -64,16 +64,16 @@ function InviteTab({ onSwitchToWaitlist, onRedeemed, onClose }: InviteTabProps) 
     setError(null);
     setState('loading');
 
-    const result = await waitlistService.validateInviteCode(trimmedCode);
+    const result = await waitlistService.redeemInviteCode(trimmedCode, source);
 
-    if (!result.valid || !result.invite) {
-      setError(friendlyInviteError(result.error ?? 'Invalid invite code'));
+    if (!result.success) {
+      setError(friendlyInviteError(result.error));
       setState('error');
       return;
     }
 
     setState('success');
-    onRedeemed?.(result.invite.id);
+    if (result.inviteId) onRedeemed?.(result.inviteId);
     setTimeout(() => {
       onClose();
     }, 1500);
@@ -357,6 +357,7 @@ export function InviteCodeModal({
 
             <TabsContent value="invite">
               <InviteTab
+                source={source}
                 onSwitchToWaitlist={() => setActiveTab('waitlist')}
                 onRedeemed={onRedeemed}
                 onClose={onClose}
