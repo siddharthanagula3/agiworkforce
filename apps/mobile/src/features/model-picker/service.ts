@@ -81,11 +81,11 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
   // Cloud providers (shown as locked in v1 — informational only)
   // Anthropic
   // eslint-disable-next-line no-restricted-syntax
-  'claude-opus-4-6': 'Most capable for ambitious work',
+  'claude-opus-4.6': 'Most capable for ambitious work',
   // eslint-disable-next-line no-restricted-syntax
-  'claude-sonnet-4-6': 'Most efficient for everyday tasks',
+  'claude-sonnet-4.6': 'Most efficient for everyday tasks',
   // eslint-disable-next-line no-restricted-syntax
-  'claude-haiku-4-5': 'Fastest for quick answers',
+  'claude-haiku-4.5': 'Fastest for quick answers',
   // OpenAI
   // eslint-disable-next-line no-restricted-syntax
   'gpt-5.5': 'Most capable OpenAI model',
