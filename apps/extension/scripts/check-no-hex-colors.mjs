@@ -10,7 +10,7 @@ import { join, relative } from 'path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const SRC_DIRS = [join(ROOT, 'src')];
-const EXTRA_FILES = [join(ROOT, 'src', 'popup.html'), join(ROOT, 'src', 'side_panel.html')];
+const EXTRA_FILES = [join(ROOT, 'popup.html'), join(ROOT, 'side_panel.html')];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.html', '.css']);
 
 const EXCLUDE_DIRS = new Set([
@@ -20,27 +20,28 @@ const EXCLUDE_DIRS = new Set([
   join(ROOT, 'node_modules'),
 ]);
 
+// Patterns that indicate a hardcoded color literal (not inside a comment)
 const COLOR_PATTERNS = [
+  // hex colors: #rgb #rrggbb #rgba #rrggbbaa
   { re: /#[0-9a-fA-F]{3,8}\b/g, label: 'hex color' },
+  // rgb() / rgba()
   { re: /rgba?\s*\(/g, label: 'rgb/rgba()' },
+  // hsl() / hsla()
   { re: /hsla?\s*\(/g, label: 'hsl/hsla()' },
 ];
 
+// Lines that should be exempt regardless of match:
+// - pure CSS/HTML comments
+// - <meta name="theme-color" ...> or similar meta color references
 const EXEMPT_LINE_RE = [
-  /^\s*\/\//,
-  /^\s*\*/,
-  /^\s*\/\*/,
-  /<!/,
-  /theme-color/,
-  /color-scheme/,
-  /<meta[^>]+content/,
+  /^\s*\/\//, // single-line TS/JS comment
+  /^\s*\*/, // JSDoc / block comment continuation
+  /^\s*\/\*/, // block comment open
+  /<!--/, // HTML comment
+  /theme-color/, // <meta name="theme-color" ...>
+  /color-scheme/, // <meta name="color-scheme" ...>
+  /<meta[^>]+content/, // any <meta> with content attribute (covers theme-color meta)
 ];
-
-// Strip HTML numeric entities (&#NNN; or &#xHHH;) before color matching to
-// avoid false positives like &#8635; being matched as hex color #8635.
-function stripHtmlEntities(line) {
-  return line.replace(/&#x?[0-9a-fA-F]+;/g, '');
-}
 
 function isExemptLine(line) {
   return EXEMPT_LINE_RE.some((re) => re.test(line));
@@ -78,10 +79,9 @@ for (const file of files) {
   const lines = readFileSync(file, 'utf8').split('\n');
   lines.forEach((line, idx) => {
     if (isExemptLine(line)) return;
-    const scanLine = stripHtmlEntities(line);
     for (const { re, label } of COLOR_PATTERNS) {
       re.lastIndex = 0;
-      const matches = scanLine.match(re);
+      const matches = line.match(re);
       if (matches) {
         for (const match of matches) {
           console.error(
