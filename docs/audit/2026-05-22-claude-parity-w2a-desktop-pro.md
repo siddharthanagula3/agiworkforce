@@ -329,7 +329,105 @@ Legend: ✅ Parity | 🟡 Partial | ❌ Gap (missing) | 🔄 Chose differently (
 
 ---
 
-## 3. Where AGI Is Ahead of Claude
+## 3. User-Flow Reality Check
+
+For each flow cataloged in section 2, this section reasons from source code about what a user who just installed `/Applications/AGI Workforce.app` would actually experience, beyond "does the code exist?".
+
+Severity key: **BROKEN** = user-facing failure at the path, **STALE** = data shown is outdated/mock/not live, **DEGRADED** = feature works but worse than expected, **OK** = works as shown.
+
+---
+
+### 3.1 Model Picker — live from models.json or stale hardcoded?
+
+**Verdict: OK — catalog-resolved at build time, accurate for the installed version.**
+
+`ModelPopover.tsx` calls `getTaskModelForProvider` / `getProviderDefaultModel` from `packages/types/src/model-catalog.ts:1235,1351`. Those helpers read from `import modelsCatalogJson from './models.json'` (`model-catalog.ts:24`) — a static import bundled at build time, also embedded in the Rust binary via `include_str!` per the file header. The catalog is not fetched at runtime; it is accurate at the moment of the build but will not update until the app is updated. This matches Claude's behavior (Claude also ships a fixed model list per release). No stale/mock risk for a fresh install.
+
+One gap: `resolveName()` prefers `store → metadata → bare ID` (`ModelPopover.tsx:132-138`), meaning the Zustand `modelStore` state is checked first. If `modelStore` has not been populated (e.g., first launch before any BYOK key is entered), names degrade to the bare catalog ID. This is cosmetic, not broken.
+
+---
+
+### 3.2 Conversation list — auto-refreshes? Persists across sessions? User-scoped?
+
+**Verdict: BROKEN for v1 LOCAL ONLY users who have no cloud account.**
+
+The conversation list is loaded via `chat_get_conversations(user_id)` (Rust: `conversation.rs:31`), which hard-rejects an empty `user_id` with `"User ID cannot be empty"`. The TypeScript side derives `user_id` from `useUnifiedAuthStore.getState().user?.id ?? ''` (`TauriRuntime.ts:168`). In v1 LOCAL ONLY mode there is no Supabase session, so `user?.id` is `undefined` → `''`.
+
+Consequence: on first launch after onboarding, `TauriRuntime.ensureBackendConversation()` at line 182 throws `"Please sign in to send messages."` before any message can be sent. The conversation list also stays empty because `loadConversations('')` logs a warning and returns early (`chatStore.ts:555-556`). A local-only user cannot send a message or see persisted history.
+
+Fix required: generate a stable local user UUID at onboarding time (via `machine_key::get_install_id()` which already exists in `master_password.rs:783`) and set it as a synthetic `user.id` in `useUnifiedAuthStore` for local-only mode.
+
+For cloud-authenticated users: conversations persist to SQLite via `chat_create_conversation` / `chat_create_message` IPC calls and are reloaded on mode change at `chatStore.ts:1964`. Cross-session persistence is real for that path. The sidebar auto-subscribes to Zustand store and reflects changes without page reload.
+
+---
+
+### 3.3 Settings toggles — actually persist? Take effect without restart?
+
+**Verdict: OK for most toggles; hotkey combo change requires restart.**
+
+Settings are saved via `invoke('settings_save', {...})` (`settingsStore.ts:1327`) which writes to disk through the Rust `settings_save` command. The save is triggered explicitly by `saveSettings()`. On next launch, `settings_load_from_disk` rehydrates. Zustand `persist` middleware also writes to `localStorage` as a secondary cache (`settingsStore.ts:1386`).
+
+- **Theme**: Applies immediately — `setTheme` calls `applyTheme(theme)` synchronously after store update (`settingsStore.ts:873`). No restart needed.
+- **Language**: Applies immediately — `I18nProvider.tsx:41` calls `i18n.changeLanguage(language)` synchronously when the store updates. No restart needed.
+- **Adaptive thinking toggle**: Applies to the next message send — `ModelPopover.tsx` reads from store, no IPC restart needed.
+- **Global hotkey combo** (`globalHotkeyPreferences.combo`): The combo is saved to disk but the in-process Tauri global hotkey listener (`App.tsx:918`) is registered once at startup. Changing the combo in Settings persists it but does **not** re-register the hotkey with the OS for the running session. The new combo only takes effect after restart. No restart warning is shown in the Settings UI — this is a silent degraded experience.
+- **Crash reporting toggle**: Reads from `errorTracking.getConfig()` (`Privacy/index.tsx:302`). Toggle updates the store but whether Sentry is actually deinitialized mid-session depends on the errorTracking service implementation (not audited). No "restart required" indicator shown.
+
+---
+
+### 3.4 Free-tier ceilings — enforced in IPC or just shown in UI?
+
+**Verdict: DEGRADED — budget gate is real but subscription gate is compile-time disabled.**
+
+`send_message.rs:57-65` calls `check_billing_and_budget()`. Under `#[cfg(feature = "billing")]` the function checks `billing_state.check_cloud_access()` and returns an error if no cloud subscription exists. Under `#[cfg(not(feature = "billing"))]` (the default dev/local build), the billing gate is entirely skipped — only the user-set `billing.monthly_budget` SQLite setting is checked.
+
+For a typical app build without the `billing` feature flag compiled in: the CapModal UI exists and shows tier limits, but the Rust backend will not block any message regardless of the user's tier. A "free" user who exhausts their UI-shown limit can keep sending messages; the backend won't stop them.
+
+The `plan_tier` passed to `build_router_preferences` defaults to `"free"` when `billing` is not compiled in (`send_message.rs:85`). This affects routing preferences but not whether the request is blocked.
+
+This is consistent with v1 LOCAL ONLY — there is no billing gate by design. But it means the tier ceiling UX (CapModal) is cosmetic for the current build.
+
+---
+
+### 3.5 File attachments — actually upload? Or mock-only?
+
+**Verdict: BROKEN — `upload_file` IPC command is not registered in the Tauri backend.**
+
+`TauriRuntime.uploadFile()` (`TauriRuntime.ts:524`) calls `invoke('upload_file', {...})`. Searching `lib.rs` for registered commands finds only `browser_upload_file` (`lib.rs:1394`) — not a plain `upload_file`. The `upload_file` symbol exists in various feature modules (Slack, browser automation, MCP) but is not wired as a standalone Tauri command.
+
+When a user drops a file into the composer and the frontend calls `uploadFile()`, the IPC call will return a Tauri "command not found" error. The file attachment flow is silently broken for all users.
+
+Evidence: `TauriRuntime.ts:524` `invoke('upload_file', ...)`, `lib.rs:1394` only has `browser_upload_file`.
+
+---
+
+### 3.6 Tool-call display — Claude verbose-by-default or AGI badge hot path?
+
+**Verdict: OK — AGI deliberately uses `iconStyle="badge"` which matches Claude's compact disclosure style; this is parity, not a gap.**
+
+`ToolCallCard.tsx:296` passes `iconStyle="badge"` to `InlineToolCall`. The `InlineToolCall` component (`packages/unified-chat/src/components/InlineToolCall.tsx:57`) documents `'badge'` as "Claude-parity mode: round 24px badge with single uppercase letter as leading icon". The `'lucide'` style would use full Lucide icons — a divergence from Claude. The current `"badge"` choice is intentional Claude-parity.
+
+The tool-call result body is collapsed by default (`defaultOpen={requiresApproval}` — only open when approval is needed). Claude's desktop UI also shows tool calls collapsed unless in progress. This matches P65-P67 reference screenshots (filesystem tool result as table, shown after tool completes). The one behavioral difference: Claude shows a `"Result"` sub-label below the badge row when `iconStyle === 'badge'` and `subLabel` is set (`InlineToolCall.tsx:122`). AGI passes no `subLabel` in `ToolCallCard.tsx`. Sub-label is cosmetically absent — a minor gap, not broken.
+
+---
+
+### 3.7 Summary: flows broken vs degraded vs OK
+
+| Flow                                | User-facing reality                                                                                  | Severity                | Key evidence                                        |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------- |
+| Model picker                        | Shows catalog-resolved models; names may show bare IDs if modelStore empty                           | OK                      | `model-catalog.ts:24`, `ModelPopover.tsx:131-138`   |
+| Conversation list (local-only user) | Empty; "Please sign in" error on first send                                                          | **BROKEN**              | `TauriRuntime.ts:168,182`, `conversation.rs:35-41`  |
+| Conversation list (cloud user)      | Persists to SQLite, reloads on mode change, auto-refreshes via Zustand                               | OK                      | `chatStore.ts:1964`, `conversation.rs:31`           |
+| Theme setting                       | Takes effect immediately                                                                             | OK                      | `settingsStore.ts:873`                              |
+| Language setting                    | Takes effect immediately                                                                             | OK                      | `I18nProvider.tsx:41`                               |
+| Global hotkey combo change          | New combo not registered until restart; no warning shown                                             | DEGRADED                | `App.tsx:918` (single registration at startup)      |
+| Free-tier ceiling enforcement       | Backend gate compile-time disabled (billing feature flag); UI shows limits but backend doesn't block | DEGRADED                | `send_message.rs:62-65`, `provider_access.rs:17-24` |
+| File attachments (drop in composer) | IPC call fails — `upload_file` not registered as Tauri command                                       | **BROKEN**              | `TauriRuntime.ts:524`, `lib.rs:1394`                |
+| Tool-call display style             | Matches Claude badge style by design; sub-label absent                                               | OK (minor cosmetic gap) | `ToolCallCard.tsx:296`, `InlineToolCall.tsx:57`     |
+
+---
+
+## 4. Where AGI Is Ahead of Claude
 
 | Area                                          | Evidence                                                                                                        | Claude reference                                                                                                               |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -350,10 +448,14 @@ Legend: ✅ Parity | 🟡 Partial | ❌ Gap (missing) | 🔄 Chose differently (
 
 ### P0 — Critical gaps that block daily use claims
 
-| ID                        | Recommendation                                                                                                                                                                                                                                                       | Evidence                                                                                                |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| R26-PARITY-DESKTOP-PRO-01 | **Starred messages panel** — Implement `StarredMessages` feature (panel accessible from sidebar or chat message action bar). Currently no component exists in `apps/desktop/src/`.                                                                                   | No screenshot in batches (feature inferred from Claude web UI; not shipped in captured desktop batches) |
-| R26-PARITY-DESKTOP-PRO-02 | **Wire PlusMenu flyouts to live stores** — `PlusMenu.tsx` uses static hardcoded `SKILLS_LIST`, `INSTALLED_PLUGINS`, and `CONNECTORS` data. Wire `skillMarketplaceStore` and `connectorsStore` so the composer Plus menu reflects actual installed skills/connectors. | `PlusMenu.tsx:20-43` hardcoded arrays vs P28-P32 (real screenshots show live skill/connector lists)     |
+Two additional P0 items were found by the User-Flow Reality Check (section 3) that are not visible from UI screenshots alone:
+
+| ID                         | Recommendation                                                                                                                                                                                                                                                                                                                                                                        | Evidence                                                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| R26-PARITY-DESKTOP-PRO-00A | **LOCAL ONLY users cannot send messages** — `TauriRuntime.getCurrentUserId()` returns `''` when no Supabase session exists. `ensureBackendConversation()` throws "Please sign in to send messages." Fix: generate stable install-scoped UUID at onboarding and set it as synthetic `user.id` in `useUnifiedAuthStore` for local mode. `machine_key::get_install_id()` already exists. | `apps/desktop/src/runtime/TauriRuntime.ts:168,182`; `apps/desktop/src-tauri/src/sys/commands/chat/conversation.rs:35-41` |
+| R26-PARITY-DESKTOP-PRO-00B | **File attachments fail silently** — `TauriRuntime.uploadFile()` calls `invoke('upload_file', ...)` but this command is not registered in Tauri. Only `browser_upload_file` is registered (`lib.rs:1394`). Dropping a file into the composer produces a "command not found" IPC error. Register a `upload_file` command that stores the payload locally and returns a `FileRef`.      | `apps/desktop/src/runtime/TauriRuntime.ts:524`; `apps/desktop/src-tauri/src/lib.rs:1394`                                 |
+| R26-PARITY-DESKTOP-PRO-01  | **Starred messages panel** — Implement `StarredMessages` feature (panel accessible from sidebar or chat message action bar). Currently no component exists in `apps/desktop/src/`.                                                                                                                                                                                                    | No screenshot in batches (feature inferred from Claude web UI; not shipped in captured desktop batches)                  |
+| R26-PARITY-DESKTOP-PRO-02  | **Wire PlusMenu flyouts to live stores** — `PlusMenu.tsx` uses static hardcoded `SKILLS_LIST`, `INSTALLED_PLUGINS`, and `CONNECTORS` data. Wire `skillMarketplaceStore` and `connectorsStore` so the composer Plus menu reflects actual installed skills/connectors.                                                                                                                  | `PlusMenu.tsx:20-43` hardcoded arrays vs P28-P32 (real screenshots show live skill/connector lists)                      |
 
 ### P1 — Visible gaps that degrade parity against Pro
 
@@ -387,11 +489,11 @@ Legend: ✅ Parity | 🟡 Partial | ❌ Gap (missing) | 🔄 Chose differently (
 | 🔄 Chose differently (locked) | 8      |
 | **Total areas assessed**      | **82** |
 
-**P0 gaps:** 2 (Starred messages, PlusMenu live data wiring)  
+**P0 gaps:** 4 (LOCAL ONLY user cannot send messages [BROKEN], file attachments unregistered IPC [BROKEN], starred messages missing, PlusMenu live data wiring)  
 **P1 gaps:** 6 (Cowork UI, Code UI, Projects depth, OAuth dialog, .mcpb drag install, Artifacts gallery)  
-**P2 gaps:** 4 (Voice wiring, model gating, search coverage, crash reporting default)
+**P2 gaps:** 5 (Voice wiring, model gating, search coverage, crash reporting default, global hotkey combo change requires restart)
 
-**Net parity score:** ~74% full parity, ~12% partial, ~4% missing/gap, ~10% intentional divergence per lock.
+**Net parity score:** ~74% full parity on static feature presence, but 2 BROKEN flows mean the app is not shippable to local-only users in current state.
 
 ---
 
