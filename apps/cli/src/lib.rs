@@ -146,7 +146,7 @@ pub struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-5.5, gemini-3.1-flash-lite, llama3.1:8b)
+    /// Model to use (must match the shared model catalog/provider metadata)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
@@ -541,6 +541,8 @@ enum Command {
     AppServer {
         #[arg(long, default_value = "stdio")]
         listen: String,
+        #[arg(long)]
+        allow_public_listen: bool,
     },
     /// Continue previous session.
     Resume { session_id: Option<String> },
@@ -1220,23 +1222,30 @@ pub async fn run_main() -> Result<()> {
                 std::process::exit(out.status.code().unwrap_or(1));
             }
             Command::McpServer => app_server::run_mcp_server().await,
-            Command::AppServer { listen } => {
+            Command::AppServer {
+                listen,
+                allow_public_listen,
+            } => {
                 const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
                 let cfg = if listen == "stdio" {
                     app_server::AppServerConfig::default()
                 } else {
-                    app_server::AppServerConfig {
-                        transport: app_server::AppServerTransport::WebSocket {
-                            addr: listen
-                                .trim_start_matches("ws://")
+                    let addr: std::net::SocketAddr = listen
+                        .trim_start_matches("ws://")
+                        .parse()
+                        // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
+                        .unwrap_or_else(|_| {
+                            DEFAULT_APP_SERVER_ADDR
                                 .parse()
-                                // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
-                                .unwrap_or_else(|_| {
-                                    DEFAULT_APP_SERVER_ADDR.parse().expect(
-                                        "const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr",
-                                    )
-                                }),
-                        },
+                                .expect("const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr")
+                        });
+                    if !allow_public_listen && !addr.ip().is_loopback() {
+                        anyhow::bail!(
+                            "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
+                        );
+                    }
+                    app_server::AppServerConfig {
+                        transport: app_server::AppServerTransport::WebSocket { addr },
                         ..Default::default()
                     }
                 };
@@ -1882,7 +1891,9 @@ pub async fn run_main() -> Result<()> {
     // Resolve model.
     //
     // Priority (highest first):
-    //   1. `--auto` flag → use "auto-economy" sentinel (server-side routing).
+    //   1. `--auto` flag → use an explicit auto-routing sentinel. Downstream
+    //      responses must disclose the selected provider/model; this must never
+    //      become silent managed routing.
     //   2. Explicit `--model` CLI flag.
     //   3. Tier-aware default: if no model specified AND user has a managed-cloud
     //      JWT, resolve the tier (cache-first, 1 h TTL) and use the economy-tier
@@ -1890,7 +1901,7 @@ pub async fn run_main() -> Result<()> {
     //      error so startup is never blocked.
     //   4. `config.toml` default.model.
     let model: String = if cli.auto {
-        // --auto: delegate routing entirely to the managed-cloud API classifier.
+        // --auto: request explainable routing via the auto sentinel.
         "auto-economy".to_string()
     } else if let Some(ref explicit_model) = cli.model {
         explicit_model.clone()
