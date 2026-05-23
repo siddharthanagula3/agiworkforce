@@ -8,4 +8,6 @@
  */
 export * from './service';
 export * from './store';
-export * from './CloudWaitlistSheet';
+// CloudWaitlistSheet has been consolidated into InviteCodeModal (cloud-bridge feature).
+// Thin re-export kept for test compatibility until test suite is fully migrated.
+export { CloudWaitlistSheet } from './CloudWaitlistSheet';
