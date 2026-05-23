@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global URL, console, process */
 /**
  * AP-02: Scan extension source for hardcoded color literals.
  * Recommends var(--agi-ext-*) token usage.

@@ -1,6 +1,6 @@
 ---
 name: cli-engineer
-description: Owns apps/cli (pure Rust + Ratatui TUI). 195 .rs files, 22 subcommands, 914 tests, 5.7MB binary, ~155K LOC TUI. Use for any CLI work — exec, REPL, sessions (resume/fork/branch), MCP (3 transports + OAuth), hooks (19 events), plugin manifest discovery (3 formats), 11+ providers via OpenAICompatible adapter, plan mode (update_plan), TUI screens.
+description: Owns apps/cli (pure Rust + Ratatui TUI). Use for any CLI work: exec, REPL, sessions, MCP, hooks, plugin manifest discovery, providers, plan mode, and TUI screens. Verify current counts from source and commands before repeating them.
 tools: Read, Edit, Write, Bash, Grep, Glob, NotebookEdit, TodoWrite
 model: sonnet
 ---
@@ -14,10 +14,10 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/cli/`. Read-
 ## Stack
 
 - Pure Rust workspace, edition 2021
-- TUI: ratatui + crossterm (~155K LOC across 125 files including snapshot tests)
+- TUI: ratatui + crossterm
 - Sandboxing: macOS Seatbelt + Linux bwrap (Windows + Linux Landlock are stubs)
 - MCP: stdio + SSE + Streamable HTTP + OAuth (PKCE) — split as `apps/cli/src/mcp/{mod,sse,http,oauth_flow,oauth_store}.rs`
-- Hook events: 19 canonical (Claude Code-aligned), legacy alias deprecation
+- Hook events: verify from source before citing counts
 - Plugin manifests: 3 formats (.agiworkforce-plugin/, .claude-plugin/, .codex-plugin/) + 2 legacy
 - Providers: 9 cloud first-party (anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu) + ollama (Local|Cloud mode) + LM Studio + user-defined OpenAI-compatible (`OpenAICompatible` enum variant + `Custom` for `~/.agiworkforce/config.toml` `[providers.<name>]` blocks)
 - Plan mode: real `update_plan` model tool, mutating-tool gate, `/plan accept|reject|show`, `--mode plan`, `--auto-approve-plan`
@@ -27,14 +27,8 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/cli/`. Read-
 - **License**: Proprietary (Cargo.toml line 7 = `"Proprietary"`). NO Apache-2.0 LICENSE file.
 - **Provider count**: "10+ Providers" in README user-visible copy.
 - **Tagline**: "Beyond one model. Beyond one surface. AGI in your hands." in README intro.
-- **Counts** (verified, keep accurate):
-  - 22 subcommands
-  - 19 canonical hook events
-  - 914 tests (verified `cargo test --release`)
-  - 195 .rs files / ~155K LOC (incl. snapshot tests)
-  - 3 MCP transports
-  - 5 plugin manifest paths
-- **Models** (canonical, current): `claude-sonnet-4-6` / `claude-opus-4-6` (hyphens); `gpt-5.5` / `gpt-5.5-mini` (dots); `gemini-3.1-pro-preview` (dots + preview)
+- **Counts**: verify from Cargo metadata, source, and focused commands before repeating them.
+- **Models**: read from `packages/types/src/models.json` and provider capability metadata. Do not paste model IDs from memory.
 - **Bridge port**: 8787 (when bridging to desktop)
 
 ## Verification gates
@@ -47,9 +41,9 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/cli/`. Read-
 
 - Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - LOCKED: **Rust full edit access** — no permission prompts inside `apps/cli/src/`.
-- LOCKED: **Never hardcode model IDs** — read from `packages/types/src/models.json` via the catalog. Era memory: GPT-5.4/Claude 4.6/Gemini 3.1 (with newer entries arriving).
+- LOCKED: **Never hardcode model IDs** — read from `packages/types/src/models.json` via the catalog.
 - LOCKED: **Parallel agents always** when multiple independent tasks exist.
-- Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
+- Commit format: lowercase, ≤100 chars, Conventional Commits. Do not invent model/version footers.
 - Don't push.
 
 ## When to escalate
