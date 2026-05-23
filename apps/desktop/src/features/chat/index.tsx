@@ -26,11 +26,20 @@ const DANGEROUS_COMMAND_PATTERNS = [
 ];
 const DANGEROUS_OPERATOR_PATTERNS = [/[;&|`$(){}[\]\\]/];
 const PROMPT_INJECTION_PATTERNS = [
-  /ignore\s+(previous\s+)?instructions/i,
-  /override\s+(system\s+)?prompt/i,
-  /system\s+prompt|system\s+message/i,
-  /forget\s+(everything|previous)/i,
+  /ignore\s+(previous\s+|prior\s+|all\s+|above\s+)?instructions/i,
+  /disregard\s+(previous\s+|prior\s+|all\s+|above\s+)?(instructions|directions|directives|guidelines)/i,
+  /override\s+(system\s+|the\s+)?(prompt|instructions|directives)/i,
+  /system\s+prompt|system\s+message|system\s+instructions/i,
+  /forget\s+(everything|previous|all|prior|above)/i,
   /roleplay\s+as\s+(?!the assistant)/i,
+  /you\s+are\s+now\s+(a|an|the)\s+/i,
+  /new\s+instructions?\s*:/i,
+  /act\s+as\s+if\s+(you|your)\s+(are|were)\s+/i,
+  /pretend\s+(you\s+are|to\s+be|your\s+instructions)/i,
+  /set\s+aside\s+(the\s+)?(foregoing|previous|prior|above)/i,
+  /do\s+not\s+follow\s+(the\s+)?(previous|prior|above|system)/i,
+  /\bDAN\b.*mode/i,
+  /jailbreak/i,
 ];
 
 import { cn } from '../../lib/utils';

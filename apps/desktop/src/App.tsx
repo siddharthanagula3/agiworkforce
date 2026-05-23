@@ -509,7 +509,7 @@ const DesktopShell = () => {
                 await invoke('set_supabase_credentials', {
                   url: import.meta.env['VITE_SUPABASE_URL'] ?? '',
                   anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? '',
-                }).catch(() => {});
+                }).catch((e) => console.warn('[App] set_supabase_credentials failed:', e));
               }
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
               await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });

@@ -448,7 +448,7 @@ export function bridgeLogoutCleanup(): void {
           .then(({ initialAppState }) => {
             appStateStore.setState(() => initialAppState);
           })
-          .catch(() => {});
+          .catch((e) => console.warn('[stateBridge] runtime import failed:', e));
       });
     })
     .catch(() => {

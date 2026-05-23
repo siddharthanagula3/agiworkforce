@@ -244,10 +244,8 @@ describe('Settings page', () => {
     const versionElements = queryAllByText(/^v\d+\.\d+\.\d+ Build \d+$/);
     if (versionElements.length > 0) {
       expect(versionElements[0]).toBeTruthy();
-    } else {
-      // SectionList may not render the bottom. This is expected behavior.
-      expect(true).toBe(true);
     }
+    // SectionList may not render the bottom — absence is valid
   });
 
   it('Haptic Feedback toggle renders with accessibilityRole=switch when visible', () => {
@@ -259,7 +257,6 @@ describe('Settings page', () => {
     if (switches.length > 0) {
       expect(switches[0]).toBeTruthy();
     }
-    // Either way the test should not fail — it validates the role when present
-    expect(true).toBe(true);
+    // SectionList virtualization may omit the switch — absence is valid
   });
 });

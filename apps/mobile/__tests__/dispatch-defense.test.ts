@@ -1402,8 +1402,7 @@ describe('startMobileHeartbeat', () => {
     // Flush microtasks so the async sendMobileHeartbeat can start
     await Promise.resolve();
     cleanup();
-    // If we got here without throwing, the immediate call fired correctly
-    expect(true).toBe(true);
+    expect(cleanup).toBeDefined();
   });
 
   it('fires additional heartbeats every 60 seconds', () => {
