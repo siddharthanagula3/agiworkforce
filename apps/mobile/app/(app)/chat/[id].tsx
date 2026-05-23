@@ -37,6 +37,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
+import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -765,6 +766,9 @@ export default function ChatScreen() {
 
         {/* Quoted reply bar */}
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
+
+        {/* Model-tier warning — shown when Opus-class model selected on free tier */}
+        <ModelTierWarningBanner />
 
         {/* Composer — shows TaskChips when conversation is empty */}
         <Composer

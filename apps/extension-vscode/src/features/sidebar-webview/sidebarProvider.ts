@@ -123,4 +123,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   public resetConversation(): void {
     this._stateManager.resetConversation();
   }
+
+  /** Remove the last user+assistant pair and notify the webview. */
+  public rewindLast(): void {
+    this._stateManager.rewindLast();
+  }
 }

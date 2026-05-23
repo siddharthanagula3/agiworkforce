@@ -38,6 +38,7 @@ interface ChatCompletionRequest {
   stream?: boolean;
   temperature?: number;
   max_tokens?: number;
+  thinking?: boolean;
   metadata?: Record<string, string | number | boolean>;
 }
 
@@ -254,6 +255,10 @@ function getModel(): string {
 function isStreamingEnabled(): boolean {
   const config = vscode.workspace.getConfiguration('agiWorkforce');
   return config.get<boolean>('streamingEnabled') ?? true;
+}
+
+function isThinkingEnabled(): boolean {
+  return vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.thinking') ?? false;
 }
 
 function getFeatureFlags(): {
@@ -501,6 +506,7 @@ export async function streamChatCompletion(
   const model = overrideModel ?? getModel();
   const streaming = isStreamingEnabled();
   const features = getFeatureFlags();
+  const thinking = isThinkingEnabled();
 
   const requestBody: ChatCompletionRequest = {
     model,
@@ -508,6 +514,7 @@ export async function streamChatCompletion(
     stream: streaming,
     temperature: 0.2,
     max_tokens: 4096,
+    ...(thinking ? { thinking: true } : {}),
     metadata: {
       mcp_enabled: features.mcpEnabled,
       desktop_bridge_enabled: features.desktopBridgeEnabled,
