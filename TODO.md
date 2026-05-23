@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-22 (post R25 failure-mode verification sweep).
+Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped).
 
 This is the active checklist for the transition described in `PLAN.md`. Keep it short enough to operate from daily; move evidence and long analysis to `audit/anthropic-apps-parity/`.
 
@@ -20,6 +20,48 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 - [x] V6 random-sample failure-mode audit — severity histogram + 8-item R26 list (`a1f79472a`)
 - [x] V7 desktop ToolCallCard dedup — 4 consumers migrated (`12f00467f`)
 - [x] R25 synthesis (`9b80e801f`)
+
+## 2026-05-23 R27-PARITY — Phase D close-out
+
+R27 Phase D landed all 5 stages on origin/main (42 commits, 137 files, +14267/-808):
+
+- [x] Stage 0 — Cloud-bridge foundation (Supabase migration + RPC + canonical `InviteCodeModal` + 4 surface ports)
+- [x] Stage 1 — 6 P0 release blockers (boot hang, mobile billing → InviteCodeModal, CLI hooks 33 events, 49 Color literals tokenized, web stale IDs)
+- [x] Stage 1.5 — Cleanup (BYOK 3-way gate, i18n on 4 components/61 keys, scrim token + 6 sites)
+- [x] Stage 2 — Desktop sidebar UpdatePill + Help menu for in-app updater
+- [x] Stage 3 — 7 CI gate scripts (AP-02 through AP-10)
+- [x] Stage 4 — P1 parity batch across all 6 surfaces (~25 items)
+
+CI gates added (all on origin/main):
+
+- [x] `check:marketing-models` — AP-03 model-ID drift (web)
+- [x] `check:hook-fire-sites` — AP-07 (cli, 32 variants verified)
+- [x] `check:no-hex-mobile` — AP-02 (627 grandfathered)
+- [x] `check:no-hex-web` — AP-02 (70 violations, continue-on-error)
+- [x] `apps/extension check:no-hex` — AP-02 (0 violations)
+- [x] `apps/extension check:no-cloud-ipc` — AP-10 (0 violations)
+- [x] `apps/extension-vscode check:vscode-theme-tokens` — AP-02 (37 grandfathered)
+- [x] `check:hardcoded-arrays` — AP-08 (1 finding flagged)
+- [x] `check:lock-drift` — AP-09 (9 advisory, non-blocking)
+
+## R28 Deferred backlog (next round candidates)
+
+Multi-day features explicitly deferred from Stage 4:
+
+- [ ] **W2a-03 — Cowork mode UI** (major new desktop surface)
+- [ ] **W2a-04 — Code mode UI** (major new desktop surface)
+- [ ] **W2b-04 — Artifact creation wizard** (7-category picker + guided question flow)
+- [ ] **W2c-06 — PDF artifact renderer** (9th renderer type)
+- [ ] **W2b-03 — Notify-when-done banner** during long-running generation
+- [ ] **W2b-10 — Connectors directory** (expose 49 coming-soon connectors)
+- [ ] **W3-PUSH-BACKEND** — Mobile push notification backend endpoint
+- [ ] **W1-WEB-00C i18n follow-up** — verify Spanish runtime rendering end-to-end
+
+R27 cleanup carryovers (incremental future PRs):
+
+- [ ] Mobile `scripts/.no-hex-baseline.json` — 627 grandfathered (10 scrim-shaped annotated)
+- [ ] Web 70 pre-existing color literals (continue-on-error CI; cleanup pass needed)
+- [ ] VS Code 37 grandfathered hex literals in webview HTML
 
 ## 2026-05-22 R26 — Remediation Backlog
 
