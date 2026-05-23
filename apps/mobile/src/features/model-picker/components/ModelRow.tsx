@@ -127,7 +127,12 @@ export function ModelRow({
           >
             {model.name}
           </Text>
-          <Text className="text-[11px] text-white/40 mt-0.5" numberOfLines={1}>
+          {model.description ? (
+            <Text className="text-[11px] text-white/50 mt-0.5" numberOfLines={1}>
+              {model.description}
+            </Text>
+          ) : null}
+          <Text className="text-[11px] text-white/30 mt-0.5" numberOfLines={1}>
             {model.detailLabel}
           </Text>
         </View>

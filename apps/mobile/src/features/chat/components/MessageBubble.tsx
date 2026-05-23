@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Avatar } from '@/components/ui/avatar';
 import { StreamingIndicator } from './StreamingIndicator';
-import { ThinkingLine } from './ThinkingLine';
+import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { InlineToolCall } from './InlineToolCall';
@@ -338,12 +338,12 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             )}
 
-            {/* Thinking line (before main content, assistant only) */}
+            {/* Inline thinking chip (before main content, assistant only) */}
             {isAssistant && message.reasoning ? (
-              <ThinkingLine
+              <ThinkingChip
+                thinkingText={message.reasoning}
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
-                onPress={handleOpenThinkingSheet}
               />
             ) : null}
 
