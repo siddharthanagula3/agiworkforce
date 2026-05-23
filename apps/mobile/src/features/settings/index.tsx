@@ -576,6 +576,14 @@ export default function SettingsTabScreen() {
           badge: 'Waitlist',
           badgeTone: 'waitlist',
         },
+        {
+          key: 'shared-links',
+          icon: Link2,
+          label: 'Shared Links',
+          type: 'navigation',
+          description: 'Publish and share conversations (Cloud feature).',
+          onPress: push('/(app)/settings/shared-links'),
+        },
       ],
     },
     {

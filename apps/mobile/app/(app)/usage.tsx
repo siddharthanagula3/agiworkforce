@@ -113,44 +113,42 @@ function ProgressBar({ percentage, label }: { percentage: number; label: string 
 // Usage cards
 // ---------------------------------------------------------------------------
 
-function SessionUsageCard({ summary }: { summary: UsageSummary }) {
+function UsageLimitsCard({ summary }: { summary: UsageSummary }) {
   const SESSION_TOKEN_LIMIT = 100_000;
   const sessionPercent =
     summary.totalTokens > 0
       ? Math.min(100, Math.round((summary.totalTokens / SESSION_TOKEN_LIMIT) * 100))
       : 0;
 
-  return (
-    <Card>
-      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-3">
-        Current Session
-      </Text>
-      <ProgressBar
-        percentage={sessionPercent}
-        label={`${formatNumber(summary.totalTokens)} / ${formatNumber(SESSION_TOKEN_LIMIT)} tokens`}
-      />
-      <Text className="text-[11px] text-white/30 mt-1">Resets periodically</Text>
-    </Card>
-  );
-}
-
-function MonthlyUsageCard({ summary }: { summary: UsageSummary }) {
-  // Monthly usage — derive percentage from conversation count or token budget
-  const monthlyBudget = 50; // $50 default budget
+  const monthlyBudget = 50;
   const monthlyPercent = Math.min(100, Math.round((summary.totalCost / monthlyBudget) * 100));
 
-  // Reset date — first of next month
   const now = new Date();
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const monthlyResetAt = nextMonth.toISOString();
 
   return (
     <Card>
-      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-3">
-        Monthly Limits
+      <Text className="text-[13px] text-white/50 uppercase tracking-wider font-semibold mb-4">
+        Usage Limits
       </Text>
-      <ProgressBar percentage={monthlyPercent} label={`${monthlyPercent}% used`} />
-      <Text className="text-[11px] text-white/30 mt-1">{formatResetDate(monthlyResetAt)}</Text>
+      <View className="gap-4">
+        <View>
+          <Text className="text-[12px] text-white/60 mb-2">Context window</Text>
+          <ProgressBar
+            percentage={sessionPercent}
+            label={`${formatNumber(summary.totalTokens)} / ${formatNumber(SESSION_TOKEN_LIMIT)} tokens`}
+          />
+        </View>
+        <View>
+          <Text className="text-[12px] text-white/60 mb-2">Monthly quota</Text>
+          <ProgressBar
+            percentage={monthlyPercent}
+            label={`${monthlyPercent}% of $${monthlyBudget} used`}
+          />
+          <Text className="text-[11px] text-white/30 mt-1">{formatResetDate(monthlyResetAt)}</Text>
+        </View>
+      </View>
     </Card>
   );
 }
@@ -464,16 +462,12 @@ export default function UsageScreen() {
           </Animated.View>
         ) : (
           <>
-            {/* Progress bars */}
+            {/* Dual progress bars */}
             <Animated.View entering={FadeInDown.duration(250)}>
-              <SessionUsageCard summary={summary} />
+              <UsageLimitsCard summary={summary} />
             </Animated.View>
 
             <Animated.View entering={FadeInDown.duration(250).delay(40)}>
-              <MonthlyUsageCard summary={summary} />
-            </Animated.View>
-
-            <Animated.View entering={FadeInDown.duration(250).delay(80)}>
               <ApiSpendCard summary={summary} />
             </Animated.View>
 

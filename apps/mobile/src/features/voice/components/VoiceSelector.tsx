@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
-import { View, Pressable, ActivityIndicator } from 'react-native';
+import { View, Pressable, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
 import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { Play, Check } from 'lucide-react-native';
+import { Play, Check, ChevronDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
@@ -22,6 +22,9 @@ import type { VoiceInfo } from '@/src/features/voice/services/tts';
 export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_props, ref) {
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [availableLanguages, setAvailableLanguages] = useState<
+    { code: string; label: string; locale: string }[]
+  >([]);
 
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
@@ -30,18 +33,40 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
   const setSpeechPitch = useSettingsStore((s) => s.setSpeechPitch);
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
+  const speechLanguage = useSettingsStore((s) => s.speechLanguage);
+  const setSpeechLanguage = useSettingsStore((s) => s.setSpeechLanguage);
+
+  const loadVoices = useCallback(async (lang: string) => {
+    setLoading(true);
+    try {
+      const v = await TTS.getVoicesForLanguage(lang);
+      setVoices(v);
+    } catch (err) {
+      console.warn('[VoiceSelector] Failed to fetch voices:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    TTS.getEnglishVoices()
-      .then((v) => {
-        setVoices(v);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.warn('[VoiceSelector] Failed to fetch voices:', err);
-        setLoading(false);
-      });
+    void loadVoices(speechLanguage);
+  }, [speechLanguage, loadVoices]);
+
+  useEffect(() => {
+    TTS.getAvailableLanguages()
+      .then(setAvailableLanguages)
+      .catch((err) => console.warn('[VoiceSelector] Failed to fetch languages:', err));
   }, []);
+
+  const handleSelectLanguage = useCallback(
+    (code: string) => {
+      setSpeechLanguage(code);
+      // Clear voice selection when language changes — old voice likely incompatible
+      setSelectedVoiceId(null);
+      setSelectedPresetId(null);
+    },
+    [setSpeechLanguage, setSelectedVoiceId, setSelectedPresetId],
+  );
 
   const handleSelectPreset = useCallback(
     (presetId: string) => {
@@ -168,8 +193,66 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             marginBottom: 16,
           }}
         >
-          Select Voice
+          Voice & Language
         </Text>
+
+        {/* Language picker */}
+        {availableLanguages.length > 1 && (
+          <View style={{ marginBottom: 20 }}>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: colors.textMuted,
+                textTransform: 'uppercase',
+                letterSpacing: 0.8,
+                marginBottom: 10,
+              }}
+            >
+              Language
+            </Text>
+            <RNScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingBottom: 4 }}
+            >
+              {availableLanguages.map((lang) => {
+                const selected = speechLanguage === lang.code;
+                return (
+                  <Pressable
+                    key={lang.code}
+                    onPress={() => handleSelectLanguage(lang.code)}
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 20,
+                      backgroundColor: selected
+                        ? 'rgba(33, 128, 141, 0.18)'
+                        : 'rgba(255, 255, 255, 0.06)',
+                      borderWidth: 1,
+                      borderColor: selected
+                        ? 'rgba(33, 128, 141, 0.5)'
+                        : 'rgba(255, 255, 255, 0.1)',
+                    }}
+                    accessibilityLabel={`${lang.label} language`}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 13,
+                        fontWeight: '500',
+                        color: selected ? colors.teal : colors.textSecondary,
+                      }}
+                    >
+                      {lang.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </RNScrollView>
+          </View>
+        )}
 
         {/* Branded voice presets grid */}
         <Text
@@ -262,7 +345,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
           <ActivityIndicator color={colors.teal} style={{ marginTop: 24 }} />
         ) : voices.length === 0 ? (
           <Text style={{ color: colors.textMuted, textAlign: 'center', marginTop: 24 }}>
-            No English voices available
+            No voices available for this language
           </Text>
         ) : (
           voices.map((item) => <View key={item.identifier}>{renderVoiceItem({ item })}</View>)
