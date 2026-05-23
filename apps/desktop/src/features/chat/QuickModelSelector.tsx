@@ -2,8 +2,11 @@ import {
   Brain,
   Check,
   Loader2,
+  Rabbit,
+  Scale,
   Search,
   Sparkles,
+  Star,
   Wand2,
   X,
   Zap,
@@ -24,7 +27,12 @@ import {
 } from '../../constants/llm';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading } from '../../stores/auth';
-import { useModelStore, selectLastRoutingDecision } from '../../stores/modelStore';
+import {
+  useModelStore,
+  selectLastRoutingDecision,
+  selectSpeedQualityMode,
+  type SpeedQualityMode,
+} from '../../stores/modelStore';
 import type { Provider } from '../../stores/settingsStore';
 import { Button } from '@/components/ui/Button';
 
@@ -62,6 +70,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
     setThinkingBudget,
     perTurnAdaptiveThinking,
     togglePerTurnAdaptiveThinking,
+    speedQualityMode,
+    setSpeedQualityMode,
   } = useModelStore(
     useShallow((state) => ({
       selectedModel: state.selectedModel,
@@ -71,6 +81,8 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
       setThinkingBudget: state.setThinkingBudget,
       perTurnAdaptiveThinking: state.perTurnAdaptiveThinking,
       togglePerTurnAdaptiveThinking: state.togglePerTurnAdaptiveThinking,
+      speedQualityMode: selectSpeedQualityMode(state),
+      setSpeedQualityMode: state.setSpeedQualityMode,
     })),
   );
 
@@ -263,6 +275,59 @@ export const QuickModelSelector = ({ className, onClose }: QuickModelSelectorPro
               <X size={12} />
             </button>
           )}
+        </div>
+      )}
+
+      {/* Effort-level matrix picker */}
+      {!effectiveSearchQuery && (
+        <div className="mb-2">
+          <div className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Effort
+          </div>
+          <div className="grid grid-cols-3 gap-1">
+            {(
+              [
+                {
+                  id: 'fast' as SpeedQualityMode,
+                  label: 'Quick',
+                  icon: Rabbit,
+                  desc: 'Fast answer',
+                },
+                {
+                  id: 'balanced' as SpeedQualityMode,
+                  label: 'Standard',
+                  icon: Scale,
+                  desc: 'Balanced',
+                },
+                {
+                  id: 'quality' as SpeedQualityMode,
+                  label: 'Deep',
+                  icon: Star,
+                  desc: 'Best answer',
+                },
+              ] as const
+            ).map(({ id, label, icon: Icon, desc }) => {
+              const active = speedQualityMode === id;
+              return (
+                <button
+                  type="button"
+                  key={id}
+                  onClick={() => setSpeedQualityMode(id)}
+                  className={cn(
+                    'flex flex-col items-center gap-0.5 rounded-lg border px-2 py-1.5 text-[10px] transition-colors',
+                    active
+                      ? 'border-primary bg-primary/10 text-primary dark:border-primary/50 dark:bg-primary/20'
+                      : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-muted-foreground hover:border-primary/50 hover:bg-[hsl(var(--accent))] hover:text-foreground',
+                  )}
+                  aria-pressed={active}
+                  title={desc}
+                >
+                  <Icon size={12} className={active ? 'text-primary' : undefined} />
+                  <span className="font-medium">{label}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 

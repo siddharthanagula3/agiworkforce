@@ -14,7 +14,9 @@ import {
   Code2,
   Copy,
   Download,
+  ExternalLink,
   Eye,
+  FolderOpen,
   Globe,
   History,
   Maximize2,
@@ -28,7 +30,9 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { open as shellOpen } from '@tauri-apps/plugin-shell';
 import { toast } from 'sonner';
+import { isTauri } from '@/lib/tauri-mock';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -402,6 +406,63 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     }
   }, [activeArtifactId, getRenderedArtifact]);
 
+  const handleOpenInSystemApp = useCallback(async () => {
+    if (!renderedArtifact) return;
+    try {
+      const artifact = await getArtifact(renderedArtifact.id);
+      if (!artifact) return;
+      const ext = getArtifactFileExtension(artifact.artifact_type);
+      const blob = new Blob([artifact.content], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const filename = `${artifact.title}.${ext}`;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      if (isTauri) {
+        // After saving, open the file location via shell
+        await shellOpen(filename).catch(() => {
+          // Silently ignore — file may not be discoverable by path alone
+        });
+      }
+      toast.success(`Saved and opening ${filename}`);
+    } catch (err: unknown) {
+      console.error('Failed to open artifact in system app:', err);
+      toast.error('Failed to open in system app');
+    }
+  }, [renderedArtifact, getArtifact]);
+
+  const handleDownloadAll = useCallback(async () => {
+    if (artifacts.length === 0) return;
+    let succeeded = 0;
+    for (const summary of artifacts) {
+      try {
+        const artifact = await getArtifact(summary.id);
+        if (!artifact) continue;
+        const blob = new Blob([artifact.content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${artifact.title}.${getArtifactFileExtension(artifact.artifact_type)}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        succeeded++;
+      } catch (err: unknown) {
+        console.error(`Failed to download artifact ${summary.id}:`, err);
+      }
+    }
+    if (succeeded > 0) {
+      toast.success(`Downloaded ${succeeded} artifact${succeeded > 1 ? 's' : ''}`);
+    } else {
+      toast.error('No artifacts could be downloaded');
+    }
+  }, [artifacts, getArtifact]);
+
   const handleInnerTabChange = useCallback(
     (value: InnerTab) => {
       if (isEditing) {
@@ -438,6 +499,22 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
             )}
           </div>
           <div className="flex items-center gap-1">
+            {artifacts.length > 1 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => void handleDownloadAll()}
+                    aria-label="Download all artifacts"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Download all ({artifacts.length})</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -615,6 +692,19 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>Download</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => void handleOpenInSystemApp()}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Open in system app</TooltipContent>
                         </Tooltip>
                         <Tooltip>
                           <TooltipTrigger asChild>

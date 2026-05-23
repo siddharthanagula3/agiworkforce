@@ -18,6 +18,11 @@ const LazyToolsPanel = lazy(() =>
 const LazyResearchSettings = lazy(() =>
   import('../../ResearchSettings').then((m) => ({ default: m.ResearchSettings })),
 );
+const LazySkillMarketplace = lazy(() =>
+  import('@/features/skill-marketplace/SkillMarketplace').then((m) => ({
+    default: m.SkillMarketplace,
+  })),
+);
 
 function Fallback({ label }: { label: string }) {
   return (
@@ -97,6 +102,13 @@ export function McpSkillsTab({ isBusy, onOpenConnectors }: McpSkillsTabProps) {
           ))}
         </div>
       </div>
+
+      <Suspense fallback={<Fallback label="Loading skill catalog..." />}>
+        <div>
+          <h3 className="text-lg font-semibold mb-4">Skill Catalog</h3>
+          <LazySkillMarketplace />
+        </div>
+      </Suspense>
 
       <Suspense fallback={<Fallback label="Loading customization settings..." />}>
         <>
