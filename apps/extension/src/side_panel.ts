@@ -1161,6 +1161,114 @@ function injectStyles(): void {
     .sp-context-chip:hover::before { background: var(--agi-ext-accent); }
     .sp-context-chip.loading { opacity: 0.6; cursor: wait; }
 
+    /* ── Autonomy toggle (BLOCKER-01) ── */
+    #sp-action-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: auto;
+      background: var(--agi-ext-overlay);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+    }
+    #sp-action-mode-toggle:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); }
+    #sp-action-mode-toggle[data-mode="act"] {
+      color: var(--agi-ext-accent);
+      border-color: var(--agi-ext-accent);
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+    }
+    #sp-action-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
+    /* ── Inline permission consent card (BLOCKER-02) ── */
+    .sp-permission-card {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border: 1px solid var(--agi-ext-warning);
+      border-radius: 10px;
+      background: var(--agi-ext-warning-bg, color-mix(in srgb, var(--agi-ext-warning) 10%, var(--agi-ext-surface)));
+      padding: 10px 12px;
+      margin: 4px 0;
+      align-self: stretch;
+    }
+    .sp-permission-card-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--agi-ext-warning);
+    }
+    .sp-permission-card-desc {
+      font-size: 11px;
+      color: var(--agi-ext-text-muted);
+      line-height: 1.4;
+    }
+    .sp-permission-card-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .sp-permission-btn {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--agi-ext-border);
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+    .sp-permission-btn:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-permission-btn-allow {
+      background: var(--agi-ext-accent);
+      color: var(--agi-ext-on-accent);
+      border-color: var(--agi-ext-accent);
+    }
+    .sp-permission-btn-allow:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
+    .sp-permission-btn-always {
+      border-color: var(--agi-ext-accent);
+      color: var(--agi-ext-accent);
+    }
+    .sp-permission-btn-always:hover { background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent); }
+
+    /* ── Offline onboarding screen (BLOCKER-02b) ── */
+    #sp-offline-onboarding {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      text-align: center;
+      padding: 32px 20px;
+    }
+    #sp-offline-onboarding.visible { display: flex; }
+    #sp-offline-onboarding-icon {
+      width: 48px;
+      height: 48px;
+      opacity: 0.5;
+    }
+    #sp-offline-onboarding-title { font-size: 14px; font-weight: 600; color: var(--agi-ext-text); }
+    #sp-offline-onboarding-desc { font-size: 12px; color: var(--agi-ext-text-muted); line-height: 1.55; max-width: 220px; }
+    #sp-offline-onboarding-cta {
+      font-size: 12px;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--agi-ext-accent);
+      background: transparent;
+      color: var(--agi-ext-accent);
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    #sp-offline-onboarding-cta:hover { background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent); }
+
     /* ── Settings bar ── */
     #sp-settings-bar {
       display: none; /* shown when settings are open */
@@ -2249,6 +2357,85 @@ function updateConnectionStatus(): void {
   }
 }
 
+// BLOCKER-02b: show/hide the offline onboarding screen
+function setOfflineOnboardingVisible(visible: boolean): void {
+  const el2 = document.getElementById('sp-offline-onboarding');
+  const msgsEl = document.getElementById('sp-messages');
+  if (!el2) return;
+  if (visible) {
+    el2.classList.add('visible');
+    // Hide other message-area content while onboarding is shown
+    if (msgsEl) {
+      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
+        (n as HTMLElement).style.display = 'none';
+      });
+    }
+  } else {
+    el2.classList.remove('visible');
+    if (msgsEl) {
+      msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
+        (n as HTMLElement).style.display = '';
+      });
+    }
+  }
+}
+
+// BLOCKER-02: render inline permission consent card in the messages area
+function renderPermissionCard(requestId: string, domain: string, actionDescription: string): void {
+  const msgsEl = document.getElementById('sp-messages');
+  if (!msgsEl) return;
+
+  // Remove any existing card with the same requestId (idempotent)
+  const existing = document.querySelector(`[data-permission-id="${CSS.escape(requestId)}"]`);
+  if (existing) existing.remove();
+
+  const card = document.createElement('div');
+  card.className = 'sp-permission-card';
+  card.setAttribute('data-permission-id', requestId);
+
+  const titleEl = document.createElement('div');
+  titleEl.className = 'sp-permission-card-title';
+  titleEl.textContent = 'Permission required';
+  card.appendChild(titleEl);
+
+  const descEl = document.createElement('div');
+  descEl.className = 'sp-permission-card-desc';
+  descEl.textContent = `AGI wants to ${actionDescription}. Allow?`;
+  card.appendChild(descEl);
+
+  const actionsRow = document.createElement('div');
+  actionsRow.className = 'sp-permission-card-actions';
+
+  const sendDecision = (decision: 'allow' | 'deny' | 'always'): void => {
+    card.remove();
+    chrome.runtime
+      .sendMessage({ type: 'PERMISSION_RESPONSE', requestId, decision })
+      .catch((err: unknown) => console.warn('[SidePanel] PERMISSION_RESPONSE failed:', err));
+  };
+
+  const allowBtn = document.createElement('button');
+  allowBtn.className = 'sp-permission-btn sp-permission-btn-allow';
+  allowBtn.textContent = 'Allow this action';
+  allowBtn.addEventListener('click', () => sendDecision('allow'));
+  actionsRow.appendChild(allowBtn);
+
+  const alwaysBtn = document.createElement('button');
+  alwaysBtn.className = 'sp-permission-btn sp-permission-btn-always';
+  alwaysBtn.textContent = `Always allow on ${domain}`;
+  alwaysBtn.addEventListener('click', () => sendDecision('always'));
+  actionsRow.appendChild(alwaysBtn);
+
+  const denyBtn = document.createElement('button');
+  denyBtn.className = 'sp-permission-btn';
+  denyBtn.textContent = 'Decline';
+  denyBtn.addEventListener('click', () => sendDecision('deny'));
+  actionsRow.appendChild(denyBtn);
+
+  card.appendChild(actionsRow);
+  msgsEl.appendChild(card);
+  card.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
 async function validateAndSaveApiKey(key: string): Promise<void> {
   const trimmed = key.trim();
   if (!trimmed) return;
@@ -3160,6 +3347,36 @@ function buildUI(): void {
   );
   msgsArea.appendChild(blockedState);
 
+  // BLOCKER-02b: offline onboarding — shown when bridge is unreachable on first open
+  const offlineOnboarding = el('div', { id: 'sp-offline-onboarding' });
+  const offlineIcon = el('div', { id: 'sp-offline-onboarding-icon' });
+  const offlineIconSvg = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
+    <rect width="40" height="40" rx="10" fill="url(#ofGrad)" opacity="0.18"/>
+    <circle cx="20" cy="15" r="5" stroke="url(#ofGrad)" stroke-width="1.75"/>
+    <path d="M10 32c0-5.523 4.477-8.5 10-8.5s10 2.977 10 8.5" stroke="url(#ofGrad)" stroke-width="1.75" stroke-linecap="round"/>
+    <defs><linearGradient id="ofGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+      <stop stop-color="var(--agi-ext-text-muted)"/><stop offset="1" stop-color="var(--agi-ext-text-muted)"/>
+    </linearGradient></defs>
+  </svg>`;
+  appendSvgString(offlineIcon, offlineIconSvg);
+  offlineOnboarding.appendChild(offlineIcon);
+  offlineOnboarding.appendChild(
+    el('div', { id: 'sp-offline-onboarding-title' }, 'Desktop app not running'),
+  );
+  offlineOnboarding.appendChild(
+    el(
+      'div',
+      { id: 'sp-offline-onboarding-desc' },
+      'AGI runs locally. Open the AGI desktop app to connect, then refresh this panel.',
+    ),
+  );
+  const offlineCta = el('button', { id: 'sp-offline-onboarding-cta' }, 'Download AGI Desktop');
+  offlineCta.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'https://agi.build/download' }).catch(() => {});
+  });
+  offlineOnboarding.appendChild(offlineCta);
+  msgsArea.appendChild(offlineOnboarding);
+
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 
@@ -3893,6 +4110,30 @@ function buildUI(): void {
   });
   composerBar.appendChild(contextBtn);
 
+  // BLOCKER-01: autonomy toggle — persists to agi_action_mode in chrome.storage.local
+  const actionModeToggle = el('button', {
+    id: 'sp-action-mode-toggle',
+    title: 'Toggle automation permission mode',
+    'data-mode': 'ask',
+  });
+  actionModeToggle.textContent = 'Ask before acting';
+  chrome.storage.local.get({ agi_action_mode: 'ask' }, (items) => {
+    const stored = items['agi_action_mode'];
+    const mode = stored === 'ask' || stored === 'act' ? stored : 'ask';
+    actionModeToggle.setAttribute('data-mode', mode);
+    actionModeToggle.textContent = mode === 'act' ? 'Act without asking' : 'Ask before acting';
+  });
+  actionModeToggle.addEventListener('click', () => {
+    const current = actionModeToggle.getAttribute('data-mode') as 'ask' | 'act';
+    const next = current === 'ask' ? 'act' : 'ask';
+    actionModeToggle.setAttribute('data-mode', next);
+    actionModeToggle.textContent = next === 'act' ? 'Act without asking' : 'Ask before acting';
+    chrome.runtime
+      .sendMessage({ type: 'SET_ACTION_MODE', mode: next })
+      .catch((err: unknown) => console.warn('[SidePanel] Failed to set action mode:', err));
+  });
+  composerBar.appendChild(actionModeToggle);
+
   const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
   for (const cmd of ['/summarize', '/explain', '/extract', '/code']) {
     const chip = el('span', { class: 'sp-cmd-chip' }, cmd);
@@ -4233,6 +4474,13 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
+  // BLOCKER-02: inline permission card
+  if (envelope.type === 'PERMISSION_REQUIRED') {
+    const permMsg = msg as { requestId: string; domain: string; actionDescription: string };
+    renderPermissionCard(permMsg.requestId, permMsg.domain, permMsg.actionDescription);
+    return;
+  }
+
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
   if (chunk.id !== _ctx.currentStreamId) return;
@@ -4330,9 +4578,19 @@ async function probeBridgeStatus(): Promise<void> {
         _ctx.isConnected = true;
         updateConnectionStatus();
       }
+      // Connected — mark ever-connected so we don't show onboarding on future opens
+      chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
+      setOfflineOnboardingVisible(false);
     }
   } catch {
-    // Bridge not running — leave connection status as-is
+    // BLOCKER-02b: bridge not running. Show offline onboarding on first use
+    // (agi_ever_connected not set). Returning users see the standard "Not Connected"
+    // status pill — they know how to start the app.
+    chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
+      if (!items['agi_ever_connected']) {
+        setOfflineOnboardingVisible(true);
+      }
+    });
   }
 }
 
