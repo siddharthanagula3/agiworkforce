@@ -48,11 +48,11 @@ fn slash_palette_matches_golden() {
 }
 
 #[test]
-fn slash_palette_has_83_commands() {
+fn slash_palette_has_87_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 83,
-        "Expected 83 built-in slash commands after adding Local/BYOK privacy-boundary commands; got {count}"
+        count, 87,
+        "Expected 87 built-in slash commands after the current command-registry audit; got {count}"
     );
 }
 
