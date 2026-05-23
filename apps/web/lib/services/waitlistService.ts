@@ -3,6 +3,14 @@
  *
  * Web-surface waitlist and invite-code service.
  *
+ * # v1 scope
+ *
+ * v1 ships two methods only: joinWaitlist + validateInviteCode.
+ * checkWaitlistStatus is deferred to v2 — it needs a rank RPC for
+ * cloud_managed_waitlist. The rank RPC that exists today (cloud_waitlist_rank)
+ * targets the older cloud_waitlist table, not cloud_managed_waitlist, so the
+ * two don't compose correctly.
+ *
  * # Client injection contract
  *
  * Methods that act on behalf of an authenticated user accept a `client:
@@ -26,11 +34,6 @@ import { logger } from '@/lib/logger';
 export interface WaitlistEntry {
   email: string;
   source?: 'byok' | 'sync' | 'billing' | 'other';
-}
-
-export interface WaitlistStatus {
-  onWaitlist: boolean;
-  rank?: number;
 }
 
 export type InviteCodeError =
@@ -73,29 +76,6 @@ export async function joinWaitlist(
   }
 
   return { success: true };
-}
-
-// ---------------------------------------------------------------------------
-// checkWaitlistStatus
-// Uses the cloud_waitlist_rank security-definer RPC (migration 20260518000001).
-// Returns onWaitlist=false when the email is not present.
-// ---------------------------------------------------------------------------
-
-export async function checkWaitlistStatus(
-  client: SupabaseClient,
-  email: string,
-): Promise<WaitlistStatus> {
-  const normalised = email.toLowerCase().trim();
-
-  const { data, error } = await client.rpc('cloud_waitlist_rank', {
-    p_email: normalised,
-  });
-
-  if (error || data === null || data === undefined) {
-    return { onWaitlist: false };
-  }
-
-  return { onWaitlist: true, rank: (data as number) + 1 };
 }
 
 // ---------------------------------------------------------------------------
