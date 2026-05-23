@@ -91,7 +91,5 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
 });
 
 describe.skipIf(!skip)('provider stream route — anthropic e2e (skipped)', () => {
-  it('skipped — set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {
-    expect(true).toBe(true);
-  });
+  it.skip('set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {});
 });
