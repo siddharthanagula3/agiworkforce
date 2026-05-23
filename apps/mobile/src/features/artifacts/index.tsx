@@ -29,11 +29,11 @@ import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
+import { useArtifactStore, accentColorForKind } from './store';
 import { RECEIVED_ARTIFACTS } from './data';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
 interface ArtifactsGalleryScreenProps {
-  artifacts?: MobileArtifact[];
   initialLoading?: boolean;
 }
 
@@ -70,15 +70,26 @@ function badgeLabel(artifact: MobileArtifact): string {
 // Main screen
 // ---------------------------------------------------------------------------
 
-export function ArtifactsGalleryScreen({
-  artifacts = RECEIVED_ARTIFACTS,
-  initialLoading = false,
-}: ArtifactsGalleryScreenProps) {
+export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGalleryScreenProps) {
   const c = useThemeColors();
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
   const [isLoading] = useState(initialLoading);
+
+  // Live artifact list from the persistent store — user-created artifacts, newest first.
+  const storedArtifacts = useArtifactStore((s) => s.artifacts);
+
+  // Re-derive accentColor from the current theme so cards respect light/dark mode,
+  // even if the color was stored under the opposite palette.
+  const userArtifacts = useMemo(
+    () =>
+      storedArtifacts.map((a) => ({
+        ...a,
+        accentColor: accentColorForKind(a.kind, c),
+      })),
+    [storedArtifacts, c],
+  );
 
   const openDrawer = useCallback(() => {
     const parent = navigation.getParent?.();
@@ -118,8 +129,13 @@ export function ArtifactsGalleryScreen({
     [cardWidth],
   );
 
-  const ListHeader = useMemo(() => <GetInspiredCard />, []);
+  // Inspiration section always appears below user artifacts.
+  const ListFooter = useMemo(
+    () => <InspirationSection cardWidth={cardWidth} onPress={setSelectedArtifact} />,
+    [cardWidth],
+  );
 
+  // Empty state shows only when user has no artifacts; Inspiration still renders via footer.
   const ListEmpty = useMemo(
     () => (isLoading ? <ArtifactsSkeletonGrid cardWidth={cardWidth} /> : <ArtifactsEmptyState />),
     [isLoading, cardWidth],
@@ -150,14 +166,14 @@ export function ArtifactsGalleryScreen({
       </View>
 
       <FlatList
-        data={isLoading ? [] : artifacts}
+        data={isLoading ? [] : userArtifacts}
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         numColumns={NUM_COLUMNS}
         testID="artifacts-grid"
         contentContainerStyle={listContentStyle}
-        ListHeaderComponent={ListHeader}
         ListEmptyComponent={ListEmpty}
+        ListFooterComponent={ListFooter}
         showsVerticalScrollIndicator={false}
       />
 
@@ -167,7 +183,55 @@ export function ArtifactsGalleryScreen({
 }
 
 // ---------------------------------------------------------------------------
-// GetInspiredCard (unchanged visual, extracted as pure component)
+// InspirationSection — mock data as an "Inspiration" footer below user artifacts
+// ---------------------------------------------------------------------------
+
+interface InspirationSectionProps {
+  cardWidth: number;
+  onPress: (artifact: MobileArtifact) => void;
+}
+
+function InspirationSection({ cardWidth, onPress }: InspirationSectionProps) {
+  const c = useThemeColors();
+
+  return (
+    <View testID="artifacts-inspiration-section">
+      {/* Divider + section label */}
+      <View className="flex-row items-center gap-3 mb-5 mt-8">
+        <View className="flex-1 h-px" style={{ backgroundColor: c.border }} />
+        <View className="flex-row items-center gap-2">
+          <Lightbulb size={14} color={c.textMuted} />
+          <Text
+            className="text-[12px] font-semibold tracking-widest uppercase"
+            style={{ color: c.textMuted }}
+          >
+            Inspiration
+          </Text>
+        </View>
+        <View className="flex-1 h-px" style={{ backgroundColor: c.border }} />
+      </View>
+
+      {/* GetInspired call-to-action card */}
+      <GetInspiredCard />
+
+      {/* 2-column grid of mock examples */}
+      <View className="flex-row flex-wrap" style={{ gap: CARD_GAP }}>
+        {RECEIVED_ARTIFACTS.map((artifact, index) => (
+          <ArtifactCard
+            key={artifact.id}
+            artifact={artifact}
+            width={cardWidth}
+            onPress={onPress}
+            style={index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// GetInspiredCard (unchanged visual)
 // ---------------------------------------------------------------------------
 
 function GetInspiredCard() {
@@ -479,12 +543,12 @@ function ArtifactPreviewModal({
             <View className="flex-row items-center gap-2 mb-2">
               <FileText size={16} color={artifact.accentColor} />
               <Text className="text-[12px] font-semibold" style={{ color: artifact.accentColor }}>
-                Received artifact
+                Artifact preview
               </Text>
             </View>
             <Text className="text-[12px] leading-[18px]" style={{ color: c.textMuted }}>
-              Mobile only previews, copies, and shares this artifact. Regeneration and execution
-              stay on Desktop or Cloud Managed environments.
+              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on
+              Desktop or Cloud Managed environments.
             </Text>
           </View>
 
