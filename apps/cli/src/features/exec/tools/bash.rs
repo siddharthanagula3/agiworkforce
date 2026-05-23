@@ -89,8 +89,20 @@ pub(super) async fn execute_run_command(
         }
     }
 
+    let no_sandbox_override = std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok();
     let sandbox_supported = cfg!(any(target_os = "macos", target_os = "linux"));
-    let use_sandbox = sandbox_supported && std::env::var("AGIWORKFORCE_NO_SANDBOX").is_err();
+
+    if !sandbox_supported && !no_sandbox_override {
+        return Ok(ToolResult {
+            tool_name: "run_command".to_string(),
+            success: false,
+            output: "Command execution refused: sandbox not available on this platform. \
+                     Set AGIWORKFORCE_NO_SANDBOX=1 to allow unsandboxed execution."
+                .to_string(),
+        });
+    }
+
+    let use_sandbox = sandbox_supported && !no_sandbox_override;
 
     let result: std::result::Result<
         std::result::Result<std::process::Output, std::io::Error>,
@@ -98,13 +110,29 @@ pub(super) async fn execute_run_command(
     > = if use_sandbox {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let cmd = command.to_string();
-        tokio::time::timeout(COMMAND_TIMEOUT, async move {
+        let sandbox_result = tokio::time::timeout(COMMAND_TIMEOUT, async move {
             let mgr = crate::sandbox::SandboxManager::full_auto(cwd.clone());
             crate::sandbox::execute_sandboxed(&mgr, &cmd, Some(&cwd))
                 .await
                 .map_err(|e| std::io::Error::other(e.to_string()))
         })
-        .await
+        .await;
+        if let Ok(Err(ref e)) = sandbox_result {
+            let msg = e.to_string();
+            if (msg.contains("sandbox") || msg.contains("bwrap") || msg.contains("Seatbelt"))
+                && !no_sandbox_override
+            {
+                return Ok(ToolResult {
+                    tool_name: "run_command".to_string(),
+                    success: false,
+                    output: format!(
+                        "Sandbox unavailable ({}). Set AGIWORKFORCE_NO_SANDBOX=1 to bypass.",
+                        msg,
+                    ),
+                });
+            }
+        }
+        sandbox_result
     } else {
         tokio::time::timeout(
             COMMAND_TIMEOUT,

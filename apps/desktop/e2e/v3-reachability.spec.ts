@@ -224,8 +224,7 @@ test.describe('@reachability v3 surface', () => {
 
   test('keyboard: Escape on a closed search modal is a no-op (no crash)', async ({ page }) => {
     await page.keyboard.press('Escape');
-    // If we got here the page didn't blow up.
-    expect(true).toBe(true);
+    await expect(page.locator('body')).toBeVisible();
   });
 
   // ── document title ───────────────────────────────────────────────────────

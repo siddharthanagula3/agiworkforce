@@ -243,8 +243,11 @@ impl RealtimeServer {
             if Instant::now() < until {
                 return true;
             }
-            // Lockout expired — reset so a previously locked-out client gets
-            // a fresh failure budget after the cooldown.
+            tracing::info!(
+                "SEV-DESK-01: auth lockout expired for IP {} (was locked for {}s)",
+                ip,
+                LOCKOUT_DURATION.as_secs()
+            );
             rec.lockout_until = None;
             rec.count = 0;
             rec.first_failure_at = None;
@@ -296,6 +299,35 @@ impl RealtimeServer {
     ) {
         let mut failures = map.lock().await;
         failures.remove(&ip);
+    }
+
+    pub async fn disconnect_all_clients(&self) {
+        let ids: Vec<String> = {
+            let clients = self.clients.lock().await;
+            clients.keys().cloned().collect()
+        };
+        let count = ids.len();
+        if count == 0 {
+            return;
+        }
+        {
+            let mut senders = self.senders.lock().await;
+            for id in &ids {
+                if let Some(mut sender) = senders.remove(id) {
+                    let _ = futures::SinkExt::close(&mut sender).await;
+                }
+            }
+        }
+        {
+            let mut clients = self.clients.lock().await;
+            for id in &ids {
+                clients.remove(id);
+            }
+        }
+        tracing::info!(
+            "Token rotation: disconnected {} authenticated client(s)",
+            count
+        );
     }
 
     pub async fn broadcast_to_user(

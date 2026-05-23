@@ -3,7 +3,6 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "ignoreDeprecations": "5.0",
     "composite": true,
     "declaration": true,
     "declarationMap": true,

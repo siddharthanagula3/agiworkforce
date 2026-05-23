@@ -41,7 +41,7 @@ export { default } from './desktop-stubs';
 let _projectStore: Record<string, unknown> = {
   currentFolder: null as string | null,
   recentFolders: [] as string[],
-  projects: [] as any[],
+  projects: [] as unknown[],
   setCurrentFolder: (folder: string | null) => {
     _projectStore = { ..._projectStore, currentFolder: folder };
   },
@@ -67,7 +67,7 @@ export const useProjectStore = _useProjectStoreFn;
 export const selectCurrentFolder = (state: any) => (state?.currentFolder ?? null) as string | null;
 export const selectRecentFolders = (state: any) => (state?.recentFolders ?? []) as string[];
 export const formatFolderPath = (p: string) => p;
-export const selectActiveProjects = () => [] as any[];
-export const selectArchivedProjects = () => [] as any[];
+export const selectActiveProjects = () => [] as unknown[];
+export const selectArchivedProjects = () => [] as unknown[];
 export type Project = any;
 export type ProjectFile = any;
