@@ -19,20 +19,14 @@ import { useRouter } from 'next/navigation';
 export default function ProjectsPage() {
   const router = useRouter();
 
-  // The hub is rendered against the warm-dark site background by design
-  // (matches the marketing/app shell). Tokens are hardcoded against the dark
-  // palette so this page reads correctly even when the `.dark` class isn't
-  // applied to <html> — which is the case for the cloud-web build that lands
-  // on /projects from marketing links. Round-10 visual-verification fix
-  // (2026-05-21): the earlier code referenced undefined `--text-1` /
-  // `--text-3` tokens and rendered as near-black-on-black.
   return (
     <main
+      data-design="agi"
       style={{
         minHeight: '100vh',
-        background: '#0d0c0a',
+        background: 'var(--agi-bg-2)',
         padding: '48px 32px',
-        color: '#e8e4db',
+        color: 'var(--agi-ink)',
       }}
     >
       <div
@@ -50,7 +44,7 @@ export default function ProjectsPage() {
               fontFamily: 'var(--serif)',
               fontSize: 28,
               fontWeight: 500,
-              color: '#e8e4db',
+              color: 'var(--agi-ink)',
               margin: 0,
             }}
           >
@@ -59,7 +53,7 @@ export default function ProjectsPage() {
           <p
             style={{
               fontSize: 14,
-              color: '#b3aea4',
+              color: 'var(--agi-ink-2)',
               margin: 0,
               maxWidth: 640,
               lineHeight: 1.55,
@@ -73,9 +67,9 @@ export default function ProjectsPage() {
 
         <section
           style={{
-            border: '1px solid rgba(255, 235, 205, 0.08)',
+            border: '1px solid var(--agi-rule)',
             borderRadius: 16,
-            background: '#1a1915',
+            background: 'var(--agi-bg-3)',
             padding: '20px 24px',
             minHeight: 480,
           }}
