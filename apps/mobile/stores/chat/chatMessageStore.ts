@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
@@ -60,6 +61,7 @@ export const useChatMessageStore = create<MessageState>()(
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
+          if (!isCloudChatEnabled()) return;
           const data = await api.get<{ conversations: ConversationSummary[] }>(
             '/api/chat/conversations',
           );
@@ -74,6 +76,9 @@ export const useChatMessageStore = create<MessageState>()(
       createConversation: async (title?: string, projectId?: string) => {
         const effectiveProjectId =
           projectId ?? useProjectStore.getState().activeProjectId ?? undefined;
+        if (!isCloudChatEnabled()) {
+          return createLocalConversation(set, title, effectiveProjectId);
+        }
         try {
           const data = await api.post<{ conversation: ConversationSummary }>(
             '/api/chat/conversations',
@@ -87,22 +92,7 @@ export const useChatMessageStore = create<MessageState>()(
           }));
           return conversation.id;
         } catch {
-          const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          const localConversation: ConversationSummary = {
-            id: localId,
-            title: title ?? 'New Chat',
-            updatedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            messageCount: 0,
-            pinned: false,
-            projectId: effectiveProjectId,
-          };
-          set((state) => ({
-            conversations: [localConversation, ...state.conversations],
-            currentConversationId: localId,
-            messages: { ...state.messages, [localId]: [] },
-          }));
-          return localId;
+          return createLocalConversation(set, title, effectiveProjectId);
         }
       },
 
@@ -164,6 +154,7 @@ export const useChatMessageStore = create<MessageState>()(
               state.currentConversationId === id ? null : state.currentConversationId,
           };
         });
+        if (!isCloudChatEnabled()) return;
         try {
           await api.delete(`/api/chat/conversations/${id}`);
         } catch {
@@ -177,6 +168,7 @@ export const useChatMessageStore = create<MessageState>()(
 
         set({ isLoadingMessages: true });
         try {
+          if (!isCloudChatEnabled()) return;
           const data = await api.get<{ messages: ChatMessage[] }>(
             `/api/chat/conversations/${conversationId}`,
           );
@@ -199,6 +191,7 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
+        if (!isCloudChatEnabled()) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { title });
         } catch {
@@ -213,6 +206,7 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
         }));
+        if (!isCloudChatEnabled()) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { pinned });
         } catch {
@@ -322,6 +316,37 @@ export const useChatMessageStore = create<MessageState>()(
     },
   ),
 );
+
+function isCloudChatEnabled(): boolean {
+  return FEATURES.cloudChat && !FEATURES.v1LocalOnly;
+}
+
+function createLocalConversation(
+  set: (
+    partial: Partial<MessageState> | ((state: MessageState) => Partial<MessageState>),
+    replace?: false,
+  ) => void,
+  title: string | undefined,
+  projectId: string | undefined,
+): string {
+  const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const now = new Date().toISOString();
+  const localConversation: ConversationSummary = {
+    id: localId,
+    title: title ?? 'New Chat',
+    updatedAt: now,
+    createdAt: now,
+    messageCount: 0,
+    pinned: false,
+    projectId,
+  };
+  set((state) => ({
+    conversations: [localConversation, ...state.conversations],
+    currentConversationId: localId,
+    messages: { ...state.messages, [localId]: [] },
+  }));
+  return localId;
+}
 
 // TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
 // @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
