@@ -12,7 +12,7 @@
  * @module fence
  */
 
-const ZERO_WIDTH_AND_BIDI_RE = /[​-‍﻿‪-‮⁦-⁩]/g;
+const ZERO_WIDTH_AND_BIDI_RE = new RegExp('[\u200B-\u200D\uFEFF\u202A-\u202E\u2066-\u2069]', 'g');
 
 /**
  * Wrap untrusted content in a trust-boundary fence.
@@ -23,11 +23,7 @@ const ZERO_WIDTH_AND_BIDI_RE = /[​-‍﻿‪-‮⁦-⁩]/g;
  *                     explaining the content is untrusted.
  * @returns The fenced string, safe for concatenation into a system prompt.
  */
-export function fenceUntrustedContent(
-  content: string,
-  tag: string,
-  sentinel: string,
-): string {
+export function fenceUntrustedContent(content: string, tag: string, sentinel: string): string {
   if (!content || content.trim().length === 0) return '';
 
   const safe = content
