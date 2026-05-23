@@ -100,6 +100,13 @@ jobs:
         # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
         run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
 
+      - name: VS Code ext AP-02 — no hardcoded color literals
+        # R27-PARITY Phase D Stage 3: VS Code webviews must use var(--vscode-*)
+        # theme tokens; no bare hex/rgb/hsl literals outside var() fallbacks.
+        # Baseline at apps/extension-vscode/scripts/.no-hex-baseline.json grandfathers
+        # legacy violations; only literals added after baseline creation fail CI.
+        run: pnpm --filter agi-workforce check:vscode-theme-tokens
+
       - name: Type check
         run: pnpm typecheck:all
 
