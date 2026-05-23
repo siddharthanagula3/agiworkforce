@@ -67,5 +67,16 @@
   "refresh": "Actualizar",
   "share": "Compartir",
   "export": "Exportar",
-  "import": "Importar"
+  "import": "Importar",
+  "navProviders": "Proveedores",
+  "navPricing": "Precios",
+  "navCompare": "Comparar",
+  "navAbout": "Acerca de",
+  "navChat": "Chat",
+  "navSignIn": "Iniciar sesion",
+  "navSignOut": "Cerrar sesion",
+  "navInstall": "Instalar",
+  "menuOpen": "Abrir menu",
+  "menuClose": "Cerrar menu",
+  "agiHome": "Inicio de AGI"
 }
