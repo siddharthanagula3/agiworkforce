@@ -77,7 +77,9 @@ async function runMigrations(db: DbHandle): Promise<void> {
   for (const migration of MIGRATION_SQL) {
     if (migration.version <= currentVersion) continue;
     await db.execAsync(migration.sql);
-    await db.execAsync(`PRAGMA user_version = ${migration.version};`);
+    const ver = Math.floor(Number(migration.version));
+    if (!Number.isFinite(ver) || ver < 0) throw new Error(`Invalid migration version: ${migration.version}`);
+    await db.execAsync(`PRAGMA user_version = ${ver};`);
   }
 }
 
@@ -86,7 +88,7 @@ async function openEncryptedDb(): Promise<DbHandle> {
   const sqliteDb = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: false });
   const db = asDbHandle(sqliteDb);
 
-  await db.execAsync(`PRAGMA key = '${key}';`);
+  await db.execAsync(`PRAGMA key = "x'${key}'";`);
   await db.execAsync('PRAGMA journal_mode = WAL;');
   await db.execAsync('PRAGMA foreign_keys = ON;');
   await runMigrations(db);
@@ -115,7 +117,7 @@ export async function rekeyDb(newKey: string): Promise<void> {
     throw new Error('SQLCipher key must be a 64-character lowercase hex string.');
   }
   const db = await getDb();
-  await db.execAsync(`PRAGMA rekey = '${newKey}';`);
+  await db.execAsync(`PRAGMA rekey = "x'${newKey}'";`);
   await SecureStore.setItemAsync(DB_KEY_STORAGE_ID, newKey, {
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
