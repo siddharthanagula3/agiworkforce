@@ -2009,6 +2009,19 @@
   text-transform: uppercase;
   margin-top: auto;
 }
+[data-design='agi'] .agi-provider-pricing {
+  font-size: 11px;
+  color: var(--agi-accent);
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0;
+}
+[data-design='agi'] .agi-provider-pricing-sep {
+  color: var(--agi-ink-quiet);
+}
 
 /* steps (BYOK, mobile) */
 [data-design='agi'] .agi-steps {

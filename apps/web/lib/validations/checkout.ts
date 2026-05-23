@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const PlanTierSchema = z.enum(['hobby', 'free', 'pro', 'pro_plus', 'max', 'enterprise']);
 
-export const BillingIntervalSchema = z.enum(['monthly', 'annual']);
+export const BillingIntervalSchema = z.enum(['monthly', 'yearly']);
 
 export const CheckoutRequestSchema = z.object({
   plan: PlanTierSchema,

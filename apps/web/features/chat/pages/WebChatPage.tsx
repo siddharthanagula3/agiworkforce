@@ -13,6 +13,7 @@ import {
   type ProviderMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
+import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
@@ -132,6 +133,21 @@ export default function WebChatPage() {
   const urlConversationId = params?.['sessionId'] as string | undefined;
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Pre-emptive subscription gate: redirect to /byok before the composer
+  // renders if the user has no active plan. Without this check, the first
+  // message attempt hits auth-gate.ts:91 with a 403 inside the chat UI.
+  useEffect(() => {
+    let cancelled = false;
+    refreshSubscriptionStatus().then((sub) => {
+      if (!cancelled && !isSubscriptionValid(sub)) {
+        router.replace('/byok');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);

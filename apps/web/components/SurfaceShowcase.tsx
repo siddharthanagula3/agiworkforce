@@ -60,7 +60,7 @@ function DesktopMockup() {
             <div className="flex items-center gap-2 border-b border-white/5 px-3 py-1.5">
               <div className="flex items-center gap-1 rounded-md bg-white/5 px-2 py-0.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-[#c8892a]" />
-                <span className="text-[8px] font-medium text-zinc-300">Claude Opus 4</span>
+                <span className="text-[8px] font-medium text-zinc-300">Claude Opus</span>
                 <span className="text-[8px] text-zinc-600">&#9662;</span>
               </div>
             </div>
