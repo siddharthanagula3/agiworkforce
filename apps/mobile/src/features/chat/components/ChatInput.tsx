@@ -38,6 +38,8 @@ interface ChatInputProps {
    * "Add per-file privacy labels".
    */
   attachmentPrivacyShortLabel?: string;
+  /** When true, composer placeholder reads "Reply to AGI" instead of "Ask anything..." */
+  isThreadActive?: boolean;
 }
 
 export function ChatInput({
@@ -52,6 +54,7 @@ export function ChatInput({
   queueSize = 0,
   attachRef,
   attachmentPrivacyShortLabel,
+  isThreadActive = false,
 }: ChatInputProps) {
   const [text, setText] = useState('');
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -233,7 +236,9 @@ export function ChatInput({
     ? `Reply to ${modelName}...`
     : !isOnline
       ? `Offline — message will send on reconnect${queueLabel}`
-      : 'Ask anything...';
+      : isThreadActive
+        ? 'Reply to AGI'
+        : 'Ask anything...';
 
   return (
     <View className="px-4 pb-4 pt-2">
