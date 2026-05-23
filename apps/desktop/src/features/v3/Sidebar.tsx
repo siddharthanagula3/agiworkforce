@@ -22,6 +22,7 @@ import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
 import { useUnifiedAuthStore, selectUser, selectPlanDisplayName } from '../../stores/auth';
 import type { V3Mode } from './DesktopShellV3';
+import { UpdatePill } from '../updates';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -523,6 +524,16 @@ export function Sidebar({
           })}
         </div>
       )}
+
+      {/* Update pill — shown above avatar when update is available */}
+      <div
+        style={{
+          flexShrink: 0,
+          padding: '0 8px 4px',
+        }}
+      >
+        <UpdatePill collapsed={collapsed} />
+      </div>
 
       {/* Footer: avatar + tier badge */}
       <div
