@@ -7,7 +7,7 @@ import { secureToken } from '@/lib/secure-random';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { calculateCacheSavings, logCacheAnalytics } from '@/lib/prompt-cache-helper';
-import { recordModelUsage } from '@/lib/cost-tracker';
+import { recordModelUsage, toOtelAttributes } from '@/lib/cost-tracker';
 import { getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { reconcileUsage } from '@/lib/assert-quota';
 import type { ProcessedRequest } from './request-processor';
@@ -117,15 +117,25 @@ export async function buildNonStreamResponse(
     logger.warn({ error: analyticsError, userId, requestId }, 'Cache analytics logging failed');
   }
 
-  // Fire-and-forget cost tracking (must not block response).
+  // Fire-and-forget cost tracking + OTel attribute emit (must not block response).
   try {
-    recordModelUsage(userId, llmResponse.model, {
+    const usage = {
       inputTokens: llmResponse.promptTokens,
       outputTokens: llmResponse.completionTokens,
       reasoningOutputTokens: llmResponse.reasoningOutputTokens,
       cacheReadInputTokens: llmResponse.cachedInputTokens,
       cacheCreationInputTokens: llmResponse.cacheCreationInputTokens,
-    });
+    };
+    recordModelUsage(userId, llmResponse.model, usage);
+    logger.info(
+      {
+        event: 'gen_ai_usage_recorded',
+        userId,
+        requestId,
+        ...toOtelAttributes(provider, llmResponse.model, usage),
+      },
+      'GenAI usage attributes recorded',
+    );
   } catch (trackingError) {
     logger.warn({ error: trackingError, userId, requestId }, 'Cost tracking failed');
   }
