@@ -88,8 +88,26 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     )?;
     let get_support =
         MenuItem::with_id(app, "menu_support", "Get Support", true, None::<&str>)?;
-    let help_menu =
-        Submenu::with_items(app, "Help", true, &[&agi_help, &troubleshoot, &get_support])?;
+    let sep_help_update = PredefinedMenuItem::separator(app)?;
+    let restart_to_update = MenuItem::with_id(
+        app,
+        "menu_restart_to_update",
+        "Check for Updates\u{2026}",
+        true,
+        None::<&str>,
+    )?;
+    let help_menu = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[
+            &agi_help,
+            &troubleshoot,
+            &get_support,
+            &sep_help_update,
+            &restart_to_update,
+        ],
+    )?;
 
     // App menu (macOS "AGI Workforce" menu)
     let settings = MenuItem::with_id(
@@ -159,6 +177,9 @@ fn handle_window_menu_event(app: &AppHandle, event: MenuEvent) {
         }
         "menu_help" | "menu_troubleshoot" | "menu_support" => {
             let _ = app.emit("menu_action", id);
+        }
+        "menu_restart_to_update" => {
+            let _ = app.emit("menu_action", "restart_to_update");
         }
         _ => {}
     }

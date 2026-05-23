@@ -92,7 +92,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
               </>
             ) : isDownloadComplete ? (
               <>
-                <Check className="h-5 w-5 text-green-500" />
+                <Check className="h-5 w-5 text-[var(--chat-success)]" />
                 Update Ready
               </>
             ) : (
