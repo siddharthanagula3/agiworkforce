@@ -113,12 +113,14 @@ DECLARE
     v_invite        public.beta_invites%ROWTYPE;
     v_already_used  boolean := false;
 BEGIN
-    -- 1. Look up the invite code (case-insensitive)
+    -- 1. Look up the invite code (case-insensitive); FOR UPDATE serializes
+    --    concurrent redemptions so the use-count check can't race.
     SELECT *
     INTO v_invite
     FROM public.beta_invites
     WHERE lower(code) = lower(p_code)
-      AND is_active = true;
+      AND is_active = true
+    FOR UPDATE;
 
     -- 2. Not found
     IF NOT FOUND THEN
