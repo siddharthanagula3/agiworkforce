@@ -5369,7 +5369,12 @@ fn apply_migration_v63(conn: &Connection) -> Result<()> {
 fn apply_migration_v64(conn: &Connection) -> Result<()> {
     ensure_column(conn, "projects", "icon_emoji", "icon_emoji TEXT")?;
     ensure_column(conn, "projects", "accent_color", "accent_color TEXT")?;
-    ensure_column(conn, "projects", "default_privacy_mode", "default_privacy_mode TEXT")?;
+    ensure_column(
+        conn,
+        "projects",
+        "default_privacy_mode",
+        "default_privacy_mode TEXT",
+    )?;
     Ok(())
 }
 
@@ -5595,6 +5600,23 @@ mod tests {
             [],
         )
         .unwrap();
+        conn.execute(
+            "CREATE TABLE projects (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                custom_instructions TEXT NOT NULL DEFAULT '',
+                files TEXT NOT NULL DEFAULT '[]',
+                conversation_ids TEXT NOT NULL DEFAULT '[]',
+                color TEXT,
+                icon TEXT,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )
+        .unwrap();
 
         conn.execute(
             "CREATE TABLE auth_sessions (
@@ -5731,6 +5753,23 @@ mod tests {
             [],
         )
         .unwrap();
+        conn.execute(
+            "CREATE TABLE projects (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                custom_instructions TEXT NOT NULL DEFAULT '',
+                files TEXT NOT NULL DEFAULT '[]',
+                conversation_ids TEXT NOT NULL DEFAULT '[]',
+                color TEXT,
+                icon TEXT,
+                is_archived INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )",
+            [],
+        )
+        .unwrap();
 
         conn.execute(
             "CREATE TABLE auth_sessions (
@@ -5847,7 +5886,11 @@ mod tests {
                     |row| row.get(0),
                 )
                 .unwrap();
-            assert_eq!(cnt, 0, "v63 should have purged remembered_tool_choices.{}", name);
+            assert_eq!(
+                cnt, 0,
+                "v63 should have purged remembered_tool_choices.{}",
+                name
+            );
         }
         // Safe rows must remain.
         for (name, _) in safe_rows.iter() {
@@ -5858,7 +5901,11 @@ mod tests {
                     |row| row.get(0),
                 )
                 .unwrap();
-            assert_eq!(cnt, 1, "v63 must not touch safe remembered_tool_choices.{}", name);
+            assert_eq!(
+                cnt, 1,
+                "v63 must not touch safe remembered_tool_choices.{}",
+                name
+            );
         }
 
         // And the never_remember column must exist.

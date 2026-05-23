@@ -823,16 +823,20 @@ async fn test_file_read_binary_pdf_mime_type() {
 
 #[tokio::test]
 async fn test_file_read_binary_missing_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing_path = dir.path().join("definitely_nonexistent_file_abc123.bin");
+
     let tool_call = ToolCall {
         id: "test_file_read_binary_missing".to_string(),
         name: "file_read_binary".to_string(),
         arguments: serde_json::json!({
-            "path": "/tmp/definitely_nonexistent_file_abc123.bin"
+            "path": missing_path.to_string_lossy()
         })
         .to_string(),
     };
 
-    let executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    let mut executor = ToolExecutor::new(create_registry_with_file_read_binary());
+    executor.set_project_folder(Some(dir.path().to_string_lossy().to_string()));
     let result = executor.execute_tool_call(&tool_call).await.unwrap();
 
     assert!(!result.success, "should fail for missing file");
