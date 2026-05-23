@@ -17,6 +17,11 @@ import {
   Monitor,
   Key,
   Lock,
+  FileCode,
+  Layout,
+  Mic,
+  Camera,
+  ChevronRight,
   type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -24,19 +29,21 @@ import { Switch } from '@/components/ui/switch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 
-type CapabilityState = 'active' | 'toggle' | 'waitlist' | 'locked';
+type CapabilityState = 'active' | 'toggle' | 'waitlist' | 'locked' | 'nav';
+type CapabilityKey = 'memory' | 'artifacts' | 'codeExecution' | 'voice' | 'camera';
 
 interface CapabilityMeta {
   key: string;
-  storeKey?: 'memory';
+  storeKey?: CapabilityKey;
   icon: LucideIcon;
   state: CapabilityState;
   label: string;
   description: string;
   stateLabel: string;
+  onPress?: () => void;
 }
 
-const CAPABILITIES: CapabilityMeta[] = [
+const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
   {
     key: 'local-llms',
     icon: Brain,
@@ -46,6 +53,24 @@ const CAPABILITIES: CapabilityMeta[] = [
     stateLabel: 'Active',
   },
   {
+    key: 'artifacts',
+    storeKey: 'artifacts',
+    icon: Layout,
+    state: 'toggle',
+    label: 'Artifacts',
+    description: 'Render rich code, HTML, and React artifacts in-line.',
+    stateLabel: 'On',
+  },
+  {
+    key: 'code-execution',
+    storeKey: 'codeExecution',
+    icon: FileCode,
+    state: 'toggle',
+    label: 'Code Execution',
+    description: 'Run code snippets locally in a sandboxed environment.',
+    stateLabel: 'On',
+  },
+  {
     key: 'memory',
     storeKey: 'memory',
     icon: Brain,
@@ -53,6 +78,40 @@ const CAPABILITIES: CapabilityMeta[] = [
     label: 'Memory',
     description: 'Use local memory facts stored on this device.',
     stateLabel: 'Local',
+  },
+  {
+    key: 'view-memory',
+    icon: Brain,
+    state: 'nav',
+    label: 'View your memory',
+    description: 'Browse and manage what AGI remembers about you.',
+    stateLabel: '',
+  },
+  {
+    key: 'tool-access',
+    icon: Key,
+    state: 'nav',
+    label: 'Tool access',
+    description: 'Configure which tools and integrations can run automatically.',
+    stateLabel: '',
+  },
+  {
+    key: 'voice',
+    storeKey: 'voice',
+    icon: Mic,
+    state: 'toggle',
+    label: 'Voice',
+    description: 'Enable voice input and text-to-speech output.',
+    stateLabel: 'On',
+  },
+  {
+    key: 'camera',
+    storeKey: 'camera',
+    icon: Camera,
+    state: 'toggle',
+    label: 'Camera',
+    description: 'Allow image capture from your camera.',
+    stateLabel: 'On',
   },
   {
     key: 'web-search',
@@ -106,6 +165,7 @@ function stateColors(state: CapabilityState, c: ReturnType<typeof useThemeColors
         border: `${c.agentWarning}2E`,
       };
     case 'locked':
+    case 'nav':
       return {
         icon: c.textMuted,
         text: c.textMuted,
@@ -122,13 +182,24 @@ function stateColors(state: CapabilityState, c: ReturnType<typeof useThemeColors
 export default function CapabilitiesScreen() {
   const router = useRouter();
   const c = useThemeColors();
-  const memoryEnabled = useSettingsStore((s) => s.capabilities.memory);
+  const capabilities = useSettingsStore((s) => s.capabilities);
   const setCapability = useSettingsStore((s) => s.setCapability);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  const push = useCallback(
+    (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
+    [router],
+  );
+
+  const CAPABILITIES: CapabilityMeta[] = BASE_CAPABILITIES.map((cap) => {
+    if (cap.key === 'view-memory') return { ...cap, onPress: push('/(app)/settings/memory') };
+    if (cap.key === 'tool-access') return { ...cap, onPress: push('/(app)/settings/auto-approve') };
+    return cap;
+  });
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -190,8 +261,8 @@ export default function CapabilitiesScreen() {
               key={cap.key}
               cap={cap}
               isLast={idx === CAPABILITIES.length - 1}
-              memoryEnabled={memoryEnabled}
-              onToggleMemory={(value) => setCapability('memory', value)}
+              capabilities={capabilities}
+              onToggle={(key, value) => setCapability(key, value)}
             />
           ))}
         </View>
@@ -200,23 +271,37 @@ export default function CapabilitiesScreen() {
   );
 }
 
+type Capabilities = {
+  webSearch: boolean;
+  imageGen: boolean;
+  memory: boolean;
+  desktopControl: boolean;
+  artifacts: boolean;
+  codeExecution: boolean;
+  voice: boolean;
+  camera: boolean;
+};
+
 function CapabilityRow({
   cap,
   isLast,
-  memoryEnabled,
-  onToggleMemory,
+  capabilities,
+  onToggle,
 }: {
   cap: CapabilityMeta;
   isLast: boolean;
-  memoryEnabled: boolean;
-  onToggleMemory: (value: boolean) => void;
+  capabilities: Capabilities;
+  onToggle: (key: CapabilityKey, value: boolean) => void;
 }) {
   const c = useThemeColors();
   const Icon = cap.icon;
   const tone = stateColors(cap.state, c);
   const disabled = cap.state === 'waitlist' || cap.state === 'locked';
+  const isToggle = cap.state === 'toggle';
+  const isNav = cap.state === 'nav';
+  const toggleValue = cap.storeKey ? (capabilities[cap.storeKey] ?? false) : false;
 
-  return (
+  const inner = (
     <View
       style={{
         borderBottomWidth: isLast ? 0 : 1,
@@ -225,13 +310,11 @@ function CapabilityRow({
         paddingVertical: 14,
       }}
       accessible
-      accessibilityRole={cap.state === 'toggle' ? 'switch' : 'text'}
+      accessibilityRole={isToggle ? 'switch' : isNav ? 'button' : 'text'}
       accessibilityState={
-        cap.state === 'toggle'
-          ? { checked: memoryEnabled }
-          : { disabled, selected: cap.state === 'active' }
+        isToggle ? { checked: toggleValue } : { disabled, selected: cap.state === 'active' }
       }
-      accessibilityLabel={`${cap.label}. ${cap.description}. ${cap.stateLabel}`}
+      accessibilityLabel={`${cap.label}. ${cap.description}${cap.stateLabel ? `. ${cap.stateLabel}` : ''}`}
     >
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
         <View
@@ -254,8 +337,13 @@ function CapabilityRow({
           </Text>
         </View>
 
-        {cap.state === 'toggle' ? (
-          <Switch value={memoryEnabled} onValueChange={onToggleMemory} />
+        {isToggle && cap.storeKey ? (
+          <Switch
+            value={toggleValue}
+            onValueChange={(value) => onToggle(cap.storeKey as CapabilityKey, value)}
+          />
+        ) : isNav ? (
+          <ChevronRight size={16} color={c.textMuted} />
         ) : (
           <View
             style={{
@@ -275,4 +363,13 @@ function CapabilityRow({
       </View>
     </View>
   );
+
+  if (isNav && cap.onPress) {
+    return (
+      <Pressable onPress={cap.onPress} className="active:bg-white/5">
+        {inner}
+      </Pressable>
+    );
+  }
+  return inner;
 }
