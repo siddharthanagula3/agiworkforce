@@ -16,7 +16,7 @@ import {
   type WaitlistSubmission,
   type WaitlistResult,
 } from '@/src/features/waitlist/CloudWaitlistSheet';
-import { api } from '@/services/api';
+import { submitWaitlistForSource } from '@/src/features/waitlist/service';
 
 export default function SharedLinksScreen() {
   const router = useRouter();
@@ -29,13 +29,8 @@ export default function SharedLinksScreen() {
   }, [router]);
 
   const handleWaitlistSubmit = useCallback(
-    async (submission: WaitlistSubmission): Promise<WaitlistResult> => {
-      const result = await api.post<WaitlistResult>('/api/waitlist', {
-        ...submission,
-        source: 'shared-links',
-      });
-      return result;
-    },
+    (submission: WaitlistSubmission): Promise<WaitlistResult> =>
+      submitWaitlistForSource(submission, 'shared-links'),
     [],
   );
 
