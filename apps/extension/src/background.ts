@@ -854,6 +854,27 @@ chrome.storage.onChanged.addListener((changes, area) => {
   siteAllowlistCache = new Set(Array.isArray(next) ? (next as string[]) : []);
 });
 
+// BLOCKER-01: autonomy mode cache. Default 'ask' — user must opt in to unconfirmed execution.
+let actionModeCache: import('./types').ActionMode = 'ask';
+chrome.storage.local
+  .get({ agi_action_mode: 'ask' })
+  .then((res) => {
+    const stored = res['agi_action_mode'];
+    if (stored === 'ask' || stored === 'act') actionModeCache = stored;
+  })
+  .catch(() => {});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes['agi_action_mode']) return;
+  const next = changes['agi_action_mode'].newValue;
+  if (next === 'ask' || next === 'act') actionModeCache = next;
+});
+
+// BLOCKER-02: pending permission requests waiting for user decision.
+const pendingPermissionRequests = new Map<
+  string,
+  { resolve: (decision: 'allow' | 'deny' | 'always') => void }
+>();
+
 function isAllowlistedSender(
   sender: chrome.runtime.MessageSender,
   messageType: string | undefined,
@@ -1555,6 +1576,48 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
+    // BLOCKER-01: autonomy mode get/set
+    case 'GET_ACTION_MODE' as ExtensionMessage['type']: {
+      return { success: true, mode: actionModeCache } as ExtensionResponse;
+    }
+
+    case 'SET_ACTION_MODE' as ExtensionMessage['type']: {
+      const modeMsg = message as import('./types').SetActionModeMessage;
+      const newMode = modeMsg.mode;
+      if (newMode !== 'ask' && newMode !== 'act') {
+        return { success: false, error: 'Invalid action mode' } as ExtensionResponse;
+      }
+      actionModeCache = newMode;
+      await chrome.storage.local.set({ agi_action_mode: newMode });
+      return { success: true, mode: newMode } as ExtensionResponse;
+    }
+
+    // BLOCKER-02: user decision arriving from the side panel for a pending permission request
+    case 'PERMISSION_RESPONSE' as ExtensionMessage['type']: {
+      const resp = message as import('./types').PermissionResponseMessage;
+      const pending = pendingPermissionRequests.get(resp.requestId);
+      if (!pending) return { success: false, error: 'No pending request' } as ExtensionResponse;
+      pendingPermissionRequests.delete(resp.requestId);
+      pending.resolve(resp.decision);
+      if (resp.decision === 'always' && resp.requestId) {
+        // Persist to site allowlist using the domain encoded in the requestId prefix
+        const domainMatch = /^perm_([^_]+(?:_[^_]+)*)_\d+$/.exec(resp.requestId);
+        const domain = domainMatch?.[1] ? domainMatch[1].replace(/_dot_/g, '.') : null;
+        if (domain) {
+          const origin = `https://${domain}`;
+          const stored = await chrome.storage.local.get('agi_site_allowlist');
+          const list: string[] = Array.isArray(stored['agi_site_allowlist'])
+            ? (stored['agi_site_allowlist'] as string[])
+            : [];
+          if (!list.includes(origin)) {
+            list.push(origin);
+            await chrome.storage.local.set({ agi_site_allowlist: list });
+          }
+        }
+      }
+      return { success: true } as ExtensionResponse;
+    }
+
     case 'BRIDGE_URL_CHANGED': {
       // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
@@ -2010,6 +2073,53 @@ async function syncTabContextWithDesktop(
       taskId,
       actionsDispatched: 0,
     } as ExtensionResponse;
+  }
+
+  // BLOCKER-01/02: gate execution on autonomy mode. When mode='ask', prompt
+  // the user with an inline consent card before executing page actions.
+  if (actionModeCache === 'ask') {
+    // Derive the domain from the first action's URL or fall back to the tab URL.
+    let actionDomain = '';
+    try {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (activeTab?.url) actionDomain = new URL(activeTab.url).hostname;
+    } catch {
+      // ignore — domain is best-effort for display only
+    }
+    if (!siteAllowlistCache.has(`https://${actionDomain}`)) {
+      const requestId = `perm_${actionDomain.replace(/\./g, '_dot_')}_${Date.now()}`;
+      const actionSummary =
+        actions.length === 1
+          ? `run 1 action on ${actionDomain}`
+          : `run ${actions.length} actions on ${actionDomain}`;
+      const permMsg: import('./types').PermissionRequiredMessage = {
+        type: 'PERMISSION_REQUIRED',
+        requestId,
+        domain: actionDomain,
+        actionDescription: actionSummary,
+      };
+      chrome.runtime.sendMessage(permMsg).catch(() => {});
+      // Wait up to 60 s for the user to respond; decline silently on timeout.
+      const decision = await new Promise<'allow' | 'deny' | 'always'>((resolve) => {
+        const timer = setTimeout(() => {
+          pendingPermissionRequests.delete(requestId);
+          resolve('deny');
+        }, 60_000);
+        pendingPermissionRequests.set(requestId, {
+          resolve: (d) => {
+            clearTimeout(timer);
+            resolve(d);
+          },
+        });
+      });
+      if (decision === 'deny') {
+        return {
+          success: false,
+          error: 'User declined permission for this action.',
+        } as ExtensionResponse;
+      }
+      // 'allow' or 'always' — proceed with execution
+    }
   }
 
   const executionResponse = (await forwardToContentScript(tabId, {

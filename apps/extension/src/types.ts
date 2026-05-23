@@ -68,12 +68,15 @@ export type NativeMessageType =
   | 'LIST_MEMORIES'
   | 'ADD_MEMORY'
   | 'UPDATE_MEMORY'
-  | 'DELETE_MEMORY';
+  | 'DELETE_MEMORY'
+  | 'GET_ACTION_MODE'
+  | 'SET_ACTION_MODE'
+  | 'PERMISSION_RESPONSE';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
-export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT';
+export type InternalMessageType = 'CHAT_CHUNK' | 'PAYWALL_HIT' | 'PERMISSION_REQUIRED';
 
-export type InternalMessage = ChatChunkMessage | PaywallHitMessage;
+export type InternalMessage = ChatChunkMessage | PaywallHitMessage | PermissionRequiredMessage;
 
 // Base message structure
 export interface BaseMessage {
@@ -876,6 +879,39 @@ export interface ScheduledTaskResponse {
   error?: string;
 }
 
+/** Autonomy mode: 'ask' requires per-action confirmation; 'act' executes without prompting. */
+export type ActionMode = 'ask' | 'act';
+
+export interface GetActionModeMessage extends BaseMessage {
+  type: 'GET_ACTION_MODE';
+}
+
+export interface SetActionModeMessage extends BaseMessage {
+  type: 'SET_ACTION_MODE';
+  mode: ActionMode;
+}
+
+export interface GetActionModeResponse {
+  success: boolean;
+  mode?: ActionMode;
+  error?: string;
+}
+
+/** Sent from background → side panel when mode='ask' and an action targets a new domain. */
+export interface PermissionRequiredMessage {
+  type: 'PERMISSION_REQUIRED';
+  requestId: string;
+  domain: string;
+  actionDescription: string;
+}
+
+/** Sent from side panel → background in response to a PERMISSION_REQUIRED prompt. */
+export interface PermissionResponseMessage extends BaseMessage {
+  type: 'PERMISSION_RESPONSE';
+  requestId: string;
+  decision: 'allow' | 'deny' | 'always';
+}
+
 export type ExtensionMessage =
   | CaptureScreenshotMessage
   | ClickMessage
@@ -941,7 +977,10 @@ export type ExtensionMessage =
   | CreateScheduledTaskMessage
   | ListScheduledTasksMessage
   | UpdateScheduledTaskMessage
-  | DeleteScheduledTaskMessage;
+  | DeleteScheduledTaskMessage
+  | GetActionModeMessage
+  | SetActionModeMessage
+  | PermissionResponseMessage;
 
 export type ExtensionResponse =
   | CaptureScreenshotResponse
@@ -979,7 +1018,8 @@ export type ExtensionResponse =
   | GetConsoleLogsResponse
   | ClearConsoleLogsResponse
   | ShortcutResponse
-  | ScheduledTaskResponse;
+  | ScheduledTaskResponse
+  | GetActionModeResponse;
 
 export interface PopupState {
   sessionStartTime: number;
