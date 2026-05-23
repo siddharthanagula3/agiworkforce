@@ -391,14 +391,14 @@ export function ModelsKeysTab({
       <div className="pt-4 text-xs text-muted-foreground">
         <h4 className="font-medium mb-2">Supported Providers</h4>
         <ul className="list-disc list-inside space-y-1">
-          <li>OpenAI (GPT-5.4, GPT-5.4 Mini, o3)</li>
-          <li>Anthropic (Claude Opus 4.6, Sonnet 4.6, Haiku 4.5)</li>
-          <li>Google (Gemini 3.1 Flash Lite, Gemini 3.1 Pro)</li>
-          <li>xAI (Grok 4, Grok 4.1 Fast)</li>
-          <li>DeepSeek (R1, V3.2)</li>
+          <li>OpenAI</li>
+          <li>Anthropic</li>
+          <li>Google</li>
+          <li>xAI</li>
+          <li>DeepSeek</li>
           <li>Mistral (Large, Codestral)</li>
-          <li>Qwen (Qwen3.5 Plus, Qwen3.5 Flash)</li>
-          <li>Kimi (K2.5, K2.5 Thinking)</li>
+          <li>Qwen</li>
+          <li>Kimi</li>
           <li>Perplexity (Sonar Pro, Sonar Reasoning)</li>
           <li>NVIDIA NIM (Nemotron Ultra, Super, Nano — free tier)</li>
           <li>OpenRouter (200+ models, generous free tier)</li>
