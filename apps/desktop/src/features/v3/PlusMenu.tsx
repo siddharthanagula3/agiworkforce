@@ -15,32 +15,9 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { cn } from '@agiworkforce/unified-chat';
-
-// Static placeholder catalogs — real data comes from store/Tauri IPC at runtime
-const INSTALLED_PLUGINS = [
-  { id: 'legal', name: 'Legal Assistant', icon: 'L', color: '#7c3aed' },
-  { id: 'finance', name: 'Finance Pro', icon: 'F', color: '#0369a1' },
-];
-
-const PLUGIN_COMMANDS: Record<string, { cmd: string }[]> = {
-  legal: [{ cmd: '/summarize' }, { cmd: '/redline' }, { cmd: '/compare' }],
-  finance: [{ cmd: '/analyze' }, { cmd: '/forecast' }, { cmd: '/chart' }],
-};
-
-const SKILLS_LIST = [
-  { id: 'translate', name: 'Translate', icon: '🌐', tone: '#0891b2' },
-  { id: 'summarize', name: 'Summarize', icon: '📋', tone: '#7c3aed' },
-  { id: 'proofread', name: 'Proofread', icon: '✏️', tone: '#059669' },
-  { id: 'explain', name: 'Explain', icon: '💡', tone: '#d97706' },
-];
-
-const CONNECTORS = {
-  connected: [
-    { id: 'gdrive', name: 'Google Drive', abbr: 'GD', color: '#4285f4' },
-    { id: 'github', name: 'GitHub', abbr: 'GH', color: '#1a1a2e' },
-    { id: 'notion', name: 'Notion', abbr: 'N', color: '#000' },
-  ],
-};
+import { useSkillMarketplaceStore } from '../../stores/skillMarketplaceStore';
+import { useConnectorsStore } from '../../stores/connectorsStore';
+import { CONNECTORS as CONNECTOR_DEFS } from '../connectors/connectorDefinitions';
 
 export type SubMenu = 'plugins' | 'skills' | 'connectors' | null;
 
@@ -55,12 +32,19 @@ export function PlusMenu({
   onClose,
   webSearchOn,
   onWebSearchToggle,
-  onInsertCommand,
+  onInsertCommand: _onInsertCommand,
 }: PlusMenuProps) {
   const { t } = useTranslation('v3');
   const [openSub, setOpenSub] = useState<SubMenu>(null);
   const [pluginHover, setPluginHover] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Live store data
+  const allSkills = useSkillMarketplaceStore((s) => s.skills);
+  const activeSkills = allSkills.filter((s) => s.isActive).slice(0, 8);
+
+  const connectedIds = useConnectorsStore((s) => s.connectedIds);
+  const connectedDefs = CONNECTOR_DEFS.filter((c) => connectedIds.includes(c.id)).slice(0, 6);
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -171,7 +155,10 @@ export function PlusMenu({
           onMouseLeave={() => setPluginHover(null)}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {INSTALLED_PLUGINS.map((p) => (
+          <p className="px-3 py-2 text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+            {t('plusMenu.noPlugins', 'No plugins installed')}
+          </p>
+          {([] as { id: string; name: string; icon: string; color: string }[]).map((p) => (
             <button
               key={p.id}
               type="button"
@@ -213,34 +200,7 @@ export function PlusMenu({
         </div>
       )}
 
-      {/* Plugin → commands flyout */}
-      {openSub === 'plugins' && pluginHover && (
-        <div
-          className="absolute left-[calc(100%+13rem)] top-0 ml-1 w-36 rounded-xl border py-1 shadow-lg"
-          style={{
-            background: 'var(--chat-surface-elevated)',
-            borderColor: 'var(--chat-border)',
-          }}
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          {(PLUGIN_COMMANDS[pluginHover] ?? PLUGIN_COMMANDS['legal'] ?? []).map((c) => (
-            <button
-              key={c.cmd}
-              type="button"
-              className="flex w-full items-center px-3 py-2 text-sm transition-colors hover:bg-[var(--chat-surface-hover)]"
-              style={{ color: 'var(--chat-text-primary)' }}
-              onClick={() => {
-                onInsertCommand?.(c.cmd);
-                onClose();
-              }}
-            >
-              <code className="text-xs font-mono" style={{ color: 'var(--chat-accent-primary)' }}>
-                {c.cmd}
-              </code>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Plugin → commands flyout (reserved for when plugin store is wired) */}
 
       {/* Skills flyout */}
       {openSub === 'skills' && (
@@ -252,9 +212,14 @@ export function PlusMenu({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {SKILLS_LIST.map((s) => (
+          {activeSkills.length === 0 && (
+            <p className="px-3 py-2 text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+              {t('plusMenu.noSkillsActive', 'No active skills')}
+            </p>
+          )}
+          {activeSkills.map((s) => (
             <button
-              key={s.id}
+              key={s.name}
               type="button"
               className="flex w-full items-center gap-2.5 px-3 py-2 text-sm transition-colors hover:bg-[var(--chat-surface-hover)]"
               style={{ color: 'var(--chat-text-primary)' }}
@@ -262,9 +227,9 @@ export function PlusMenu({
             >
               <div
                 className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-bold"
-                style={{ color: s.tone }}
+                style={{ color: 'var(--chat-accent-primary)' }}
               >
-                {s.icon}
+                Z
               </div>
               <span>{s.name}</span>
             </button>
@@ -292,7 +257,12 @@ export function PlusMenu({
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {CONNECTORS.connected.map((c) => (
+          {connectedDefs.length === 0 && (
+            <p className="px-3 py-2 text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+              {t('plusMenu.noConnectors', 'No connectors linked')}
+            </p>
+          )}
+          {connectedDefs.map((c) => (
             <button
               key={c.id}
               type="button"
@@ -304,7 +274,7 @@ export function PlusMenu({
                 className="flex h-4 w-4 shrink-0 items-center justify-center rounded text-[9px] font-bold text-white"
                 style={{ background: c.color }}
               >
-                {c.abbr}
+                {c.icon.slice(0, 2).toUpperCase()}
               </div>
               <span className="flex-1 text-left">{c.name}</span>
               <Check size={12} style={{ color: 'var(--chat-accent-primary)' }} />

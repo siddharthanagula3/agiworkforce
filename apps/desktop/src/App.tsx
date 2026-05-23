@@ -220,6 +220,20 @@ const DesktopShell = () => {
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
 
+  // Hard 8 s boot timeout: if sessionValidated is still false (e.g. Supabase
+  // unreachable and the auth-state listener never fires), force it true so
+  // the skeleton never hangs indefinitely. Uses setSessionValidated so that
+  // the clearAuth path already ran — this is a last-resort guard only.
+  useEffect(() => {
+    if (sessionValidated) return;
+    const id = window.setTimeout(() => {
+      if (!useAuthStore.getState().sessionValidated) {
+        useAuthStore.getState().setSessionValidated(true);
+      }
+    }, 8_000);
+    return () => window.clearTimeout(id);
+  }, [sessionValidated]);
+
   // Mode selection is handled inside the OnboardingWizard (single onboarding flow).
   // The legacy `hasSelectedMode` flag is still flipped by the wizard for any
   // downstream consumers that read it from the appModeStore.
@@ -774,6 +788,54 @@ const DesktopShell = () => {
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
+  }, [openSettingsDialog]);
+
+  // Listen for native menu events from Tauri window menu
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let isMounted = true;
+    let unlistenFn: (() => void) | null = null;
+
+    const setupMenuListener = async () => {
+      try {
+        const unlisten = await listen<string>('menu_action', (event) => {
+          if (!isMounted) return;
+          const action = event.payload;
+          switch (action) {
+            case 'open_settings':
+              openSettingsDialog();
+              break;
+            case 'find':
+              useSearchModal.getState().open();
+              break;
+            case 'zoom_in':
+              document.documentElement.style.fontSize = `${parseFloat(getComputedStyle(document.documentElement).fontSize) * 1.1}px`;
+              break;
+            case 'zoom_out':
+              document.documentElement.style.fontSize = `${parseFloat(getComputedStyle(document.documentElement).fontSize) / 1.1}px`;
+              break;
+            case 'actual_size':
+              document.documentElement.style.fontSize = '';
+              break;
+          }
+        });
+        if (isMounted) unlistenFn = unlisten;
+        else unlisten();
+      } catch (error) {
+        console.error('[App] Failed to setup menu listener:', error);
+      }
+    };
+
+    void setupMenuListener();
+
+    return () => {
+      isMounted = false;
+      if (unlistenFn) {
+        unlistenFn();
+        unlistenFn = null;
+      }
+    };
   }, [openSettingsDialog]);
 
   // Listen for timeout warning events from Tauri backend
@@ -1428,6 +1490,23 @@ const App = () => {
         if (supabaseAuth.isAuthenticated()) {
           console.debug('[App] Store hydrated, forcing account sync with backend...');
           await useAccountStore.getState().syncWithBackend();
+        } else if (isTauri && !useAuthStore.getState().isAuthenticated) {
+          // W2a-PRO-00A: local-only users have no Supabase session — synthesize a
+          // stable user.id from the machine install ID so downstream chat stores
+          // can own conversations without crashing on a null user.
+          try {
+            const localId = await invoke<string>('get_local_user_id');
+            if (!cancelled && localId && !useAuthStore.getState().isAuthenticated) {
+              useAuthStore.getState().setUser({ id: localId, email: '', name: 'Local User' });
+            }
+          } catch (e) {
+            console.warn('[App] get_local_user_id failed, using fallback id:', e);
+            if (!cancelled && !useAuthStore.getState().isAuthenticated) {
+              useAuthStore
+                .getState()
+                .setUser({ id: 'local-fallback', email: '', name: 'Local User' });
+            }
+          }
         }
       } catch (error) {
         if (!cancelled) {
