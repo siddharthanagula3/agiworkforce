@@ -53,17 +53,17 @@ export class ApiPaywallError extends Error {
 
 /** Prevent concurrent token refresh races */
 let _refreshing: Promise<boolean> | null = null;
-
-/**
- * Attempt to refresh the Supabase access token.
- * Returns true if the refresh succeeded and we have a new token.
- * Serialises concurrent callers so only one network call is made.
- */
-/** Maximum time to wait for a token refresh before giving up (ms). */
+let _refreshFailures = 0;
+let _refreshBackoffUntil = 0;
+const MAX_REFRESH_FAILURES = 3;
 const REFRESH_TIMEOUT_MS = 10_000;
 
 async function tryRefreshToken(): Promise<boolean> {
   if (_refreshing) return _refreshing;
+
+  if (_refreshFailures >= MAX_REFRESH_FAILURES && Date.now() < _refreshBackoffUntil) {
+    return false;
+  }
 
   _refreshing = (async () => {
     try {
@@ -72,8 +72,17 @@ async function tryRefreshToken(): Promise<boolean> {
         setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
       );
       const { data, error } = await Promise.race([refreshPromise, timeoutPromise]);
-      return !error && !!data.session;
+      if (!error && !!data.session) {
+        _refreshFailures = 0;
+        _refreshBackoffUntil = 0;
+        return true;
+      }
+      _refreshFailures++;
+      _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
+      return false;
     } catch {
+      _refreshFailures++;
+      _refreshBackoffUntil = Date.now() + Math.min(2 ** _refreshFailures * 1000, 60_000);
       return false;
     } finally {
       _refreshing = null;
