@@ -33,8 +33,6 @@ interface MessageListProps {
   /** Called when user reacts to a message */
   onReaction?: (messageId: string, reaction: 'thumbsUp' | 'thumbsDown' | null) => void;
   onPairDesktop?: () => void;
-  /** Called to open the shared thinking bottom sheet */
-  onOpenThinking?: (content: string, duration?: number) => void;
 }
 
 /**
@@ -53,7 +51,6 @@ export function MessageList({
   onQuoteReply,
   onReaction,
   onPairDesktop,
-  onOpenThinking,
 }: MessageListProps) {
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
@@ -103,20 +100,10 @@ export function MessageList({
           onRetryMessage={onRetryMessage}
           onEditMessage={onEditMessage}
           onReaction={onReaction}
-          onOpenThinking={onOpenThinking}
         />
       </SwipeReplyWrapper>
     ),
-    [
-      onApprove,
-      onReject,
-      onDeleteMessage,
-      onRetryMessage,
-      onEditMessage,
-      onQuoteReply,
-      onReaction,
-      onOpenThinking,
-    ],
+    [onApprove, onReject, onDeleteMessage, onRetryMessage, onEditMessage, onQuoteReply, onReaction],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
