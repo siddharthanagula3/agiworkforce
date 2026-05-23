@@ -131,6 +131,11 @@ const UpdateChecker = lazy(() =>
     default: m.UpdateChecker,
   })),
 );
+const UpdateDialog = lazy(() =>
+  import('./features/updates').then((m) => ({
+    default: m.UpdateDialog,
+  })),
+);
 const AutomationPermissionsModal = lazy(() =>
   import('./features/settings/AutomationPermissionsModal').then((m) => ({
     default: m.AutomationPermissionsModal,
@@ -183,6 +188,7 @@ const DesktopShell = () => {
   const closeSettingsDialog = useSettingsDialogStore((s) => s.closeSettings);
   const [quickQueryOpen, setQuickQueryOpen] = useState(false);
   const [plansModalOpen, setPlansModalOpen] = useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
   const [subscriptionFetchFailed, setSubscriptionFetchFailed] = useState(false);
@@ -818,6 +824,9 @@ const DesktopShell = () => {
             case 'actual_size':
               document.documentElement.style.fontSize = '';
               break;
+            case 'restart_to_update':
+              setUpdateDialogOpen(true);
+              break;
           }
         });
         if (isMounted) unlistenFn = unlisten;
@@ -1419,6 +1428,11 @@ const DesktopShell = () => {
         {isTauri && (
           <Suspense fallback={null}>
             <UpdateChecker onUpdateNow={openSettings} />
+          </Suspense>
+        )}
+        {isTauri && (
+          <Suspense fallback={null}>
+            <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
           </Suspense>
         )}
         {isTauri && (
