@@ -35,7 +35,8 @@ import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useAgentStore } from '@/stores/agentStore';
-import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
+import { useWaitlistStore } from '@/src/features/waitlist';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -433,30 +434,10 @@ export default function ChatScreen() {
 
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
-  const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
 
   const handleOpenWaitlist = useCallback(() => {
     setWaitlistSheetVisible(true);
   }, []);
-
-  const handleCloseWaitlist = useCallback(() => {
-    setWaitlistSheetVisible(false);
-  }, []);
-
-  const handleWaitlistSubmit = useCallback(
-    async (submission: { email: string; country: string | null }) => {
-      const result = await joinWaitlist({
-        email: submission.email,
-        country: submission.country ?? undefined,
-      });
-      markWaitlistJoined(
-        { email: submission.email, country: submission.country ?? undefined },
-        result,
-      );
-      return result;
-    },
-    [markWaitlistJoined],
-  );
 
   const handleNewChat = useCallback(() => {
     router.push('/(app)' as Parameters<typeof router.push>[0]);
@@ -842,11 +823,12 @@ export default function ChatScreen() {
           onDismiss={clearPaywallError}
         />
 
-        {/* Cloud waitlist sheet — shown when user taps locked Cloud in ModeToggle */}
-        <CloudWaitlistSheet
-          visible={waitlistSheetVisible}
-          onClose={handleCloseWaitlist}
-          onSubmit={handleWaitlistSubmit}
+        {/* Cloud gate modal — shown when user taps locked Cloud in ModeToggle */}
+        <InviteCodeModal
+          open={waitlistSheetVisible}
+          onClose={() => setWaitlistSheetVisible(false)}
+          source="other"
+          defaultTab="waitlist"
         />
 
         {/* Mid-conversation mode-switch confirmation */}

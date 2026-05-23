@@ -1,4 +1,5 @@
 import { supabase } from '@/services/supabase';
+import type { InviteCodeError } from '@/src/features/cloud-bridge/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -100,4 +101,49 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
 
   const rank = typeof rankData === 'number' ? rankData : 0;
   return { rank };
+}
+
+/**
+ * Atomic validate + redeem via security-definer RPC `validate_and_redeem_invite_code`.
+ * Creates an anonymous Supabase session inline if none exists — no account required from user.
+ * Passes surface='mobile' to the RPC for attribution.
+ */
+export async function redeemInviteCode(
+  code: string,
+  source: string = 'other',
+): Promise<{ success: boolean; inviteId?: string; error?: InviteCodeError }> {
+  try {
+    let {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+      if (anonError || !anonData.session) {
+        return { success: false, error: 'anon_signin_failed' };
+      }
+      session = anonData.session;
+    }
+
+    const { data, error } = await supabase.rpc('validate_and_redeem_invite_code', {
+      p_code: code.toUpperCase().trim(),
+      p_surface: 'mobile',
+      p_source: source,
+    });
+
+    if (error) {
+      return { success: false, error: 'rpc_error' };
+    }
+
+    const result = Array.isArray(data) ? data[0] : data;
+
+    if (!result?.valid) {
+      const errCode = (result?.error ?? 'rpc_error') as InviteCodeError;
+      return { success: false, error: errCode };
+    }
+
+    return { success: true, inviteId: result.invite_id as string };
+  } catch {
+    return { success: false, error: 'rpc_error' };
+  }
 }

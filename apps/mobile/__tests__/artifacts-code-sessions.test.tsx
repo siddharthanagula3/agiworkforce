@@ -79,15 +79,20 @@ jest.mock('@/src/ui/theme', () => ({
 }));
 
 jest.mock('@/src/features/waitlist', () => {
-  const { View } = require('react-native');
-
   return {
-    CloudWaitlistSheet: ({ visible }: { visible: boolean }) =>
-      visible ? <View testID="cloud-waitlist-modal" /> : null,
     joinWaitlist: jest.fn().mockResolvedValue({ rank: 0 }),
     useWaitlistStore: (
       selector: (state: { markJoined: typeof mockMarkWaitlistJoined }) => unknown,
     ) => selector({ markJoined: mockMarkWaitlistJoined }),
+  };
+});
+
+jest.mock('@/src/features/cloud-bridge', () => {
+  const { View } = require('react-native');
+
+  return {
+    InviteCodeModal: ({ open }: { open: boolean }) =>
+      open ? <View testID="invite-code-modal" /> : null,
   };
 });
 

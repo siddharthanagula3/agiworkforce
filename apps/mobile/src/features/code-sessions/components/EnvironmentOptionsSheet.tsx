@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { Cloud, Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface EnvironmentOptionsSheetProps {
@@ -19,7 +19,6 @@ export function EnvironmentOptionsSheet({
 }: EnvironmentOptionsSheetProps) {
   const c = useThemeColors();
   const [waitlistVisible, setWaitlistVisible] = useState(false);
-  const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
 
   const openDesktop = useCallback(() => {
     onClose();
@@ -30,21 +29,6 @@ export function EnvironmentOptionsSheet({
     onClose();
     setWaitlistVisible(true);
   }, [onClose]);
-
-  const handleWaitlistSubmit = useCallback(
-    async (submission: { email: string; country: string | null }) => {
-      const result = await joinWaitlist({
-        email: submission.email,
-        country: submission.country ?? undefined,
-      });
-      markWaitlistJoined(
-        { email: submission.email, country: submission.country ?? undefined },
-        result,
-      );
-      return result;
-    },
-    [markWaitlistJoined],
-  );
 
   return (
     <>
@@ -105,10 +89,11 @@ export function EnvironmentOptionsSheet({
         </Pressable>
       </Modal>
 
-      <CloudWaitlistSheet
-        visible={waitlistVisible}
+      <InviteCodeModal
+        open={waitlistVisible}
         onClose={() => setWaitlistVisible(false)}
-        onSubmit={handleWaitlistSubmit}
+        source="other"
+        defaultTab="waitlist"
       />
     </>
   );

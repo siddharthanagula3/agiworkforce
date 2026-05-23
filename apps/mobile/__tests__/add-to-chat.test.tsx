@@ -107,13 +107,18 @@ const mockWaitlistStoreState = {
 };
 
 jest.mock('../src/features/waitlist', () => {
-  const { View } = require('react-native');
   return {
-    CloudWaitlistSheet: ({ visible }: { visible: boolean }) =>
-      visible ? <View testID="cloud-waitlist-sheet" /> : null,
     joinWaitlist: mockJoinWaitlist,
     useWaitlistStore: (selector: (state: typeof mockWaitlistStoreState) => unknown) =>
       selector(mockWaitlistStoreState),
+  };
+});
+
+jest.mock('../src/features/cloud-bridge', () => {
+  const { View } = require('react-native');
+  return {
+    InviteCodeModal: ({ open }: { open: boolean }) =>
+      open ? <View testID="invite-code-modal" /> : null,
   };
 });
 
@@ -275,7 +280,7 @@ describe('AddToChatSheet', () => {
       fireEvent.press(getByLabelText('Web search, Waitlist'));
 
       expect(useChatStore.getState().features.webSearch).toBe(false);
-      expect(getByTestId('cloud-waitlist-sheet')).toBeTruthy();
+      expect(getByTestId('invite-code-modal')).toBeTruthy();
     });
 
     it('keeps health disabled and alerts when Health data is unavailable', async () => {
