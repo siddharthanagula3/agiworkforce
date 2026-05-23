@@ -42,50 +42,41 @@ export type Database = {
         ];
       };
       beta_invites: {
+        // Schema: supabase/migrations/20260523000000_beta_invites.sql
+        // v2 billing columns (plan_tier, trial_days, discount_percent, stripe_coupon_id)
+        // are stored in metadata jsonb, not as top-level columns.
         Row: {
           code: string;
           created_at: string;
           created_by: string | null;
-          current_uses: number | null;
-          discount_percent: number | null;
-          email: string | null;
+          current_uses: number;
           expires_at: string | null;
           id: string;
-          is_active: boolean | null;
-          max_uses: number | null;
-          plan_tier: string;
-          stripe_coupon_id: string | null;
-          trial_days: number | null;
+          is_active: boolean;
+          max_uses: number;
+          metadata: Record<string, unknown>;
         };
         Insert: {
           code: string;
           created_at?: string;
           created_by?: string | null;
-          current_uses?: number | null;
-          discount_percent?: number | null;
-          email?: string | null;
+          current_uses?: number;
           expires_at?: string | null;
           id?: string;
-          is_active?: boolean | null;
-          max_uses?: number | null;
-          plan_tier?: string;
-          stripe_coupon_id?: string | null;
-          trial_days?: number | null;
+          is_active?: boolean;
+          max_uses?: number;
+          metadata?: Record<string, unknown>;
         };
         Update: {
           code?: string;
           created_at?: string;
           created_by?: string | null;
-          current_uses?: number | null;
-          discount_percent?: number | null;
-          email?: string | null;
+          current_uses?: number;
           expires_at?: string | null;
           id?: string;
-          is_active?: boolean | null;
-          max_uses?: number | null;
-          plan_tier?: string;
-          stripe_coupon_id?: string | null;
-          trial_days?: number | null;
+          is_active?: boolean;
+          max_uses?: number;
+          metadata?: Record<string, unknown>;
         };
         Relationships: [
           {
@@ -102,18 +93,24 @@ export type Database = {
           id: string;
           invite_id: string;
           redeemed_at: string;
+          source: string;
+          surface: string;
           user_id: string;
         };
         Insert: {
           id?: string;
           invite_id: string;
           redeemed_at?: string;
+          source: string;
+          surface: string;
           user_id: string;
         };
         Update: {
           id?: string;
           invite_id?: string;
           redeemed_at?: string;
+          source?: string;
+          surface?: string;
           user_id?: string;
         };
         Relationships: [
@@ -614,7 +611,18 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      validate_and_redeem_invite_code: {
+        Args: {
+          p_code: string;
+          p_surface: string;
+          p_source: string;
+        };
+        Returns: {
+          valid: boolean;
+          invite_id: string | null;
+          error: string | null;
+        }[];
+      };
     };
     Enums: {
       [_ in never]: never;

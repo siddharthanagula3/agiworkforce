@@ -14,14 +14,15 @@ export interface WaitlistEntry {
 export interface BetaInvite {
   id: string;
   code: string;
-  planTier: 'free' | 'pro' | 'enterprise';
-  trialDays: number;
-  discountPercent: number;
-  stripeCouponId: string | null;
   maxUses: number;
   currentUses: number;
   expiresAt: string | null;
   isActive: boolean;
+  // v2-compat: read from metadata jsonb when present; undefined in v1
+  planTier?: 'free' | 'pro' | 'enterprise';
+  trialDays?: number;
+  discountPercent?: number;
+  stripeCouponId?: string;
 }
 
 export interface WaitlistStats {
@@ -31,10 +32,16 @@ export interface WaitlistStats {
   converted: number;
 }
 
-export const STRIPE_PAYMENT_LINKS = {
-  pro: 'https://buy.stripe.com/test_pro',
-  enterprise: 'https://buy.stripe.com/test_enterprise',
-};
+// Typed error codes returned by validate_and_redeem_invite_code RPC.
+// InviteCodeModal currently pattern-matches prose strings; a follow-up
+// (Stage 0c) should switch it to these discriminated codes.
+export type InviteCodeError =
+  | 'invalid_code'
+  | 'expired'
+  | 'fully_redeemed'
+  | 'already_redeemed_by_user'
+  | 'anon_signin_failed'
+  | 'rpc_error';
 
 class WaitlistService {
   private static instance: WaitlistService;
@@ -111,6 +118,13 @@ class WaitlistService {
     }
   }
 
+  // validateInviteCode is kept as a read-only helper for callers that need to
+  // inspect invite metadata without redeeming (e.g. admin UI, pre-flight UI hints).
+  // Under the current v1 schema, beta_invites has RLS set to block direct SELECT
+  // for anon/authenticated roles — all flows go through the RPC. This method will
+  // always return valid=false in v1 unless called from a service-role context.
+  // Kept to avoid breaking the InviteCodeModal call at InviteCodeModal.tsx:67;
+  // Stage 0c will migrate the modal to call redeemInviteCode directly.
   async validateInviteCode(
     code: string,
   ): Promise<{ valid: boolean; invite?: BetaInvite; error?: string }> {
@@ -119,89 +133,100 @@ class WaitlistService {
     try {
       const { data, error } = await supabase
         .from('beta_invites')
-        .select('*')
+        .select('id, code, max_uses, current_uses, expires_at, is_active, metadata')
         .eq('code', code.toUpperCase().trim())
         .eq('is_active', true)
         .single();
 
       if (error || !data) {
-        return { valid: false, error: 'Invalid invite code' };
+        return { valid: false, error: 'invalid_code' };
       }
 
       if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        return { valid: false, error: 'This invite code has expired' };
+        return { valid: false, error: 'expired' };
       }
 
       if ((data.current_uses ?? 0) >= (data.max_uses ?? 1)) {
-        return { valid: false, error: 'This invite code has reached its usage limit' };
+        return { valid: false, error: 'fully_redeemed' };
       }
+
+      const meta = (data.metadata ?? {}) as Record<string, unknown>;
 
       return {
         valid: true,
         invite: {
           id: data.id,
           code: data.code,
-          planTier: (data.plan_tier as 'free' | 'pro' | 'enterprise') ?? 'free',
-          trialDays: data.trial_days ?? 0,
-          discountPercent: data.discount_percent ?? 0,
-          stripeCouponId: data.stripe_coupon_id,
           maxUses: data.max_uses ?? 1,
           currentUses: data.current_uses ?? 0,
           expiresAt: data.expires_at,
           isActive: data.is_active ?? false,
+          planTier:
+            typeof meta['plan_tier'] === 'string'
+              ? (meta['plan_tier'] as 'free' | 'pro' | 'enterprise')
+              : undefined,
+          trialDays: typeof meta['trial_days'] === 'number' ? meta['trial_days'] : undefined,
+          discountPercent:
+            typeof meta['discount_percent'] === 'number' ? meta['discount_percent'] : undefined,
+          stripeCouponId:
+            typeof meta['stripe_coupon_id'] === 'string' ? meta['stripe_coupon_id'] : undefined,
         },
       };
     } catch (error) {
       console.error('[Waitlist] Error validating invite:', error);
-      return { valid: false, error: 'Failed to validate invite code' };
+      return { valid: false, error: 'rpc_error' };
     }
   }
 
+  // redeemInviteCode — atomic validate + redeem via security-definer RPC.
+  // userId parameter removed: auth session (anonymous or linked) provides identity.
+  // For v1 local-only users, an anonymous Supabase session is created inline per
+  // the v1-local-only-cloud-waitlist lock (no account required; anon row upgradeable
+  // via linkIdentity() in v2).
   async redeemInviteCode(
     code: string,
-    userId: string,
-  ): Promise<{ success: boolean; error?: string }> {
+    source: string = 'cloud_unlock',
+  ): Promise<{ success: boolean; inviteId?: string; error?: InviteCodeError }> {
     const supabase = getSupabase();
 
     try {
-      const validation = await this.validateInviteCode(code);
-      if (!validation.valid || !validation.invite) {
-        return { success: false, error: validation.error };
+      // Ensure an auth session — anonymous is fine for v1.
+      let {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+        if (anonError || !anonData.session) {
+          console.error('[Waitlist] Anonymous sign-in failed:', anonError);
+          return { success: false, error: 'anon_signin_failed' };
+        }
+        session = anonData.session;
       }
 
-      const { error: redemptionError } = await supabase.from('beta_redemptions').insert({
-        invite_id: validation.invite.id,
-        user_id: userId,
+      // Atomic validate + redeem: FOR UPDATE lock prevents concurrent double-spend.
+      const { data, error } = await supabase.rpc('validate_and_redeem_invite_code', {
+        p_code: code.toUpperCase().trim(),
+        p_surface: 'desktop',
+        p_source: source,
       });
 
-      if (redemptionError) {
-        if (redemptionError.code === '23505') {
-          return { success: false, error: 'You have already used this invite code' };
-        }
-        throw redemptionError;
+      if (error) {
+        console.error('[Waitlist] RPC error:', error);
+        return { success: false, error: 'rpc_error' };
       }
 
-      const { error: subscriptionError } = await supabase
-        .from('subscriptions')
-        .update({
-          plan_tier: validation.invite.planTier,
-          status: 'trialing',
-          current_period_start: new Date().toISOString(),
-          current_period_end: new Date(
-            Date.now() + validation.invite.trialDays * 24 * 60 * 60 * 1000,
-          ).toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
+      const result = Array.isArray(data) ? data[0] : data;
 
-      if (subscriptionError) {
-        throw subscriptionError;
+      if (!result?.valid) {
+        const errCode = (result?.error ?? 'rpc_error') as InviteCodeError;
+        return { success: false, error: errCode };
       }
 
-      return { success: true };
+      return { success: true, inviteId: result.invite_id as string };
     } catch (error) {
       console.error('[Waitlist] Error redeeming invite:', error);
-      return { success: false, error: 'Failed to redeem invite code' };
+      return { success: false, error: 'rpc_error' };
     }
   }
 
@@ -250,16 +275,6 @@ class WaitlistService {
       console.error('[Waitlist] Error getting referral stats:', error);
       return { total: 0, converted: 0, rewarded: 0 };
     }
-  }
-
-  getPaymentLink(plan: 'pro' | 'enterprise', couponCode?: string): string {
-    let url = STRIPE_PAYMENT_LINKS[plan];
-
-    if (couponCode) {
-      url += `?prefilled_promo_code=${encodeURIComponent(couponCode)}`;
-    }
-
-    return url;
   }
 
   async updateEmailPreferences(
