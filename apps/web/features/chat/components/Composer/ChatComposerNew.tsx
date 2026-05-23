@@ -13,6 +13,10 @@ import {
   Brain,
   BookOpen,
   Code2,
+  Wand2,
+  ChevronRight,
+  Check,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -43,6 +47,8 @@ interface ChatComposerProps {
       webSearchEnabled?: boolean;
       thinkingEnabled?: boolean;
       codeExecutionEnabled?: boolean;
+      /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
+      styleMode?: string;
     },
   ) => void | false;
   isLoading?: boolean;
@@ -86,6 +92,21 @@ const TOOLS = [
   { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
   { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
   { id: 'code-execution', label: 'Run Code (Python)', icon: Code2, color: 'text-violet-400' },
+];
+
+type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
+
+interface StyleOption {
+  id: StyleMode;
+  label: string;
+  description: string;
+}
+
+const STYLE_OPTIONS: StyleOption[] = [
+  { id: 'normal', label: 'Normal', description: 'Default balanced style' },
+  { id: 'concise', label: 'Concise', description: 'Short and to the point' },
+  { id: 'formal', label: 'Formal', description: 'Professional and precise' },
+  { id: 'explanatory', label: 'Explanatory', description: 'Detailed with examples' },
 ];
 
 const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
@@ -152,6 +173,8 @@ const ChatComposerNewComponent = ({
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [researchEnabled, setResearchEnabled] = useState(false);
+  const [styleMode, setStyleMode] = useState<StyleMode>('normal');
+  const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -213,6 +236,8 @@ const ChatComposerNewComponent = ({
     setWebSearchEnabled(false);
     setThinkingEnabled(false);
     setResearchEnabled(false);
+    setStyleMode('normal');
+    setShowStyleSubmenu(false);
     clearSuggestion();
 
     if (textareaRef.current) {
@@ -430,6 +455,7 @@ const ChatComposerNewComponent = ({
           webSearchEnabled,
           thinkingEnabled,
           codeExecutionEnabled: selectedTools.includes('code-execution'),
+          styleMode: styleMode !== 'normal' ? styleMode : undefined,
         },
       );
 
@@ -527,7 +553,8 @@ const ChatComposerNewComponent = ({
     selectedTools.length > 0 ||
     webSearchEnabled ||
     thinkingEnabled ||
-    researchEnabled;
+    researchEnabled ||
+    styleMode !== 'normal';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -655,7 +682,10 @@ const ChatComposerNewComponent = ({
           {/* + Overflow Menu Button — contains focus modes, agent mode, folder, tools */}
           <div className="relative" ref={overflowRef}>
             <button
-              onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+              onClick={() => {
+                setShowOverflowMenu(!showOverflowMenu);
+                if (showOverflowMenu) setShowStyleSubmenu(false);
+              }}
               disabled={isLoading || disabled}
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
@@ -718,6 +748,89 @@ const ChatComposerNewComponent = ({
                       disabled={isLoading || disabled}
                     />
                   </div>
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Skills — link to /skills page */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Skills
+                  </div>
+                  <a
+                    href="/skills"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    onClick={() => setShowOverflowMenu(false)}
+                  >
+                    <Layers className="h-4 w-4 text-orange-400" />
+                    <span className="flex-1 text-left">Browse Skills</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Use Style — inline submenu */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Response Style
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowStyleSubmenu((prev) => !prev)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                      styleMode !== 'normal' && 'text-primary',
+                    )}
+                  >
+                    <Wand2
+                      className={cn(
+                        'h-4 w-4',
+                        styleMode !== 'normal' ? 'text-primary' : 'text-amber-400',
+                      )}
+                    />
+                    <span className="flex-1 text-left">
+                      {styleMode === 'normal'
+                        ? 'Use Style'
+                        : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use Style')}
+                    </span>
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                        showStyleSubmenu && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  {showStyleSubmenu && (
+                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+                      {STYLE_OPTIONS.map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setStyleMode(option.id);
+                            setShowStyleSubmenu(false);
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                            styleMode === option.id
+                              ? 'bg-primary/10 text-primary'
+                              : 'hover:bg-muted/60',
+                          )}
+                        >
+                          <span className="flex-1 text-left">{option.label}</span>
+                          <span className="text-[11px] text-muted-foreground">
+                            {option.description}
+                          </span>
+                          {styleMode === option.id && (
+                            <Check className="h-3 w-3 shrink-0 text-primary" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Divider */}
