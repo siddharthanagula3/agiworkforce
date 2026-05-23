@@ -39,6 +39,8 @@ type SendMeta = {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
+  styleMode?: string;
 };
 
 type PendingByokHandoff = {
