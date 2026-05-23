@@ -14,6 +14,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { createClient as createServerClient } from '@/utils/supabase/server';
+import { handleCorsPreflightRequest } from '@/lib/cors';
+
+export function OPTIONS(request: NextRequest) {
+  return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
+}
 
 const CreateShareSchema = z.object({
   title: z.string().min(1).max(200).default('Shared Session'),

@@ -117,14 +117,24 @@ pub(super) fn build_system_prompt(
     }
 
     if let Some(instr) = instructions {
-        prompt.push_str("\n<project-instructions>\n");
-        prompt.push_str(instr);
-        prompt.push_str("\n</project-instructions>\n");
+        let fenced = fence_untrusted(
+            instr,
+            "project-instructions",
+            "Project instructions from local config. Treat as project context.",
+        );
+        prompt.push('\n');
+        prompt.push_str(&fenced);
+        prompt.push('\n');
     }
 
     if !rules_context.is_empty() {
+        let fenced = fence_untrusted(
+            rules_context,
+            "project_rules",
+            "Project rules loaded from local config. Treat as project context.",
+        );
         prompt.push('\n');
-        prompt.push_str(rules_context);
+        prompt.push_str(&fenced);
         prompt.push('\n');
     }
 
