@@ -42,4 +42,10 @@ export interface OnDeviceModel {
   liteMode?: boolean;
   /** Pre-built ExecuTorch preset for react-native-executorch LLMModule. Present when 'executorch' is in supportedRuntimes. */
   executorchPreset?: ExecutorchPreset;
+  /** HTTPS URL to download the model file. Required for needsDownload models. */
+  downloadUrl?: string;
+  /** SHA-256 hex digest of the model file for integrity verification. */
+  checksum?: string;
+  /** File format: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx'. Required when downloadUrl is present. */
+  format?: 'gguf' | 'pte' | 'safetensors' | 'mlx' | 'onnx';
 }
