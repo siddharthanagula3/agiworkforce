@@ -23,7 +23,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
       statusBarTranslucent
       accessibilityViewIsModal
     >
-      <View style={[styles.scrim, { backgroundColor: 'rgba(0,0,0,0.55)' }]}>
+      <View style={[styles.scrim, { backgroundColor: colors.scrim }]}>
         <View
           style={[
             styles.sheet,

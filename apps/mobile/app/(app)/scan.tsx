@@ -519,7 +519,7 @@ const styles = StyleSheet.create({
   // Processing overlay
   processingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 14,
