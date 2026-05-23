@@ -1,0 +1,57 @@
+{
+  "audit_id": "PR379-security-review-2026-05-23",
+  "branch": "claude/jolly-goldberg-JXa65",
+  "pr": 379,
+  "started_at": "2026-05-23T16:30:00Z",
+  "current_phase": "PHASE 3 — Parallel discovery",
+  "phases_completed": ["PHASE 0", "PHASE 1", "PHASE 2"],
+  "baseline_results": {
+    "typecheck": "PASS (0 errors)",
+    "lint": "PASS (0 errors)",
+    "llm_operability": "PASS (17/17 sub-checks)",
+    "rust_build": "BLOCKED (missing system C libs in container)",
+    "e2e_tests": "BLOCKED (requires browser + DB)",
+    "ci_check": "PENDING (waiting for latest push)"
+  },
+  "repo_stats": {
+    "total_files": 6753,
+    "apps": 7,
+    "packages": 20,
+    "crates": 17,
+    "services": 2,
+    "ci_workflows": 11,
+    "supabase_migrations": 52,
+    "test_files": 645,
+    "todo_fixme_hack": 146,
+    "as_any": 147,
+    "ts_ignore": 22,
+    "unsafe_rust": 148,
+    "unwrap_calls": 2452,
+    "panic_todo_unimplemented": 119,
+    "localstorage_usage": 204
+  },
+  "agents_spawned": [
+    { "id": "ai-slop-reviewer", "status": "running", "phase": 3 },
+    { "id": "dependency-supply-chain-auditor", "status": "running", "phase": 3 },
+    { "id": "test-quality-auditor", "status": "running", "phase": 3 }
+  ],
+  "fixes_committed": {
+    "commit_1": "5 critical security fixes (middleware, path validation, tool confirmation, MCP params, command validator)",
+    "commit_2": "4 systemic fixes (prompt fencing, env filtering, sandbox fail-closed, Redis rate limiting)",
+    "commit_3": "CLI fencing, CORS handler, unit tests",
+    "commit_4": "6 cross-surface fixes (SQLCipher, zeroize, lockout logging, app permissions, Zod validation)",
+    "commit_5": "Revert proxy.ts (Next.js 16 convention)",
+    "commit_6": "CLAUDE.md update",
+    "commit_7": "Pre-existing CI fixes (tsconfig deprecations, Intl.Segmenter, lint, lockfile)"
+  },
+  "unresolved_blockers": [
+    "Rust build requires GTK/GDK/ALSA system libraries not in container",
+    "E2E tests require browser and database not in container"
+  ],
+  "next_actions": [
+    "Consolidate discovery agent findings",
+    "Create risk register",
+    "Plan fix waves for remaining issues",
+    "Write final audit report"
+  ]
+}

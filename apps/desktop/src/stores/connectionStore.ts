@@ -169,13 +169,17 @@ export const useConnectionStore = create<MobileCompanionState>()(
             break;
           case 'peer_left':
             set({ peerConnected: false });
-            resetDispatchSession().catch(() => {});
+            resetDispatchSession().catch((e) =>
+              console.warn('[connection] dispatch reset failed:', e),
+            );
             break;
           case 'session_expired':
           case 'terminated':
             resetConnection();
             set(IDLE_CONNECTION_STATE);
-            resetDispatchSession().catch(() => {});
+            resetDispatchSession().catch((e) =>
+              console.warn('[connection] dispatch reset failed:', e),
+            );
             break;
           case 'error':
             set({ status: 'error', error: event.error });

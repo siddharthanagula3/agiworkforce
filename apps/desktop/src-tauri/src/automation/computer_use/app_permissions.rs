@@ -87,22 +87,24 @@ pub const ALWAYS_BLOCKED_URL_HOSTS: &[&str] = &[
 ];
 
 /// Returns `true` if the given bundle id (or process name) is on the
-/// always-blocked list. Case-insensitive substring matching against the
-/// listed identifiers.
+/// always-blocked list. Case-insensitive check: matches if any blocked
+/// identifier is a dot-delimited component suffix of the candidate.
 pub fn is_always_blocked_bundle(identifier: &str) -> bool {
     let lowered = identifier.to_lowercase();
-    ALWAYS_BLOCKED_BUNDLE_IDS
-        .iter()
-        .any(|blocked| lowered.contains(&blocked.to_lowercase()))
+    ALWAYS_BLOCKED_BUNDLE_IDS.iter().any(|blocked| {
+        let b = blocked.to_lowercase();
+        lowered == b || lowered.ends_with(&format!(".{}", b))
+    })
 }
 
 /// Returns `true` if the given URL host is on the always-blocked list.
-/// Case-insensitive substring matching.
+/// Case-insensitive exact-match or parent-domain match (the candidate
+/// is blocked if it equals the entry or ends with `.` + entry).
 pub fn is_always_blocked_host(host: &str) -> bool {
     let lowered = host.to_lowercase();
-    ALWAYS_BLOCKED_URL_HOSTS
-        .iter()
-        .any(|blocked| lowered.contains(blocked))
+    ALWAYS_BLOCKED_URL_HOSTS.iter().any(|blocked| {
+        lowered == *blocked || lowered.ends_with(&format!(".{}", blocked))
+    })
 }
 
 /// Permission status for an application.

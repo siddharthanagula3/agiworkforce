@@ -18,6 +18,7 @@ The repo is a pnpm + cargo monorepo with seven surfaces under `apps/` (cli, desk
 - Follow `docs/engineering/service-layer-architecture.md` when extracting repeated route/action/command mechanics into shared services.
 - Read all model IDs from `packages/types/src/models.json` (the canonical catalog). Never invent or hardcode a model ID from training data; the catalog drifts faster than training cutoffs.
 - Knowledge cutoff is January 2026; the repo runs months ahead of that. Web-search before stating current facts about competitors, third-party libraries, provider APIs, or platform features.
+- **Next.js 16 uses `proxy.ts` (not `middleware.ts`).** The exported function must be named `proxy`. This was renamed upstream by Vercel in Next.js 16 — do NOT rename it back to `middleware.ts`. See: https://nextjs.org/docs/app/api-reference/file-conventions/proxy
 - Keep Claude memory and `.claude/` project files as tool-specific context, not the repo source of truth.
 - Do not duplicate repo maps or command lists here. Update `AGENTS.md` and `docs/agent-context/*` instead.
 - If Claude Code finds a repeated bug class, update `docs/agent-context/known-flaws.md`.
