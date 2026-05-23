@@ -14,7 +14,7 @@
  * can be migrated by swapping import + component name.
  */
 
-import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { ChatMessage } from '../../stores/chat-store';
 import { MessageBubble } from './MessageBubble';
@@ -91,6 +91,51 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 
   return groups;
 }
+
+/**
+ * Formats a date as a human-readable divider label.
+ * - "Today" for today's date
+ * - "Yesterday" for yesterday's date
+ * - "Mar 18" for older dates
+ */
+export function formatDateDivider(date: Date, now: Date = new Date()): string {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (startOfDay.getTime() === startOfToday.getTime()) return 'Today';
+  if (startOfDay.getTime() === startOfYesterday.getTime()) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Returns the ISO date string (YYYY-MM-DD) for a Date, used as a grouping key.
+ */
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Date divider component
+// ---------------------------------------------------------------------------
+
+const DateDivider = memo(({ label }: { label: string }) => (
+  <div
+    className="flex items-center gap-3 px-4 py-3 md:px-12 lg:px-20"
+    role="separator"
+    aria-label={label}
+  >
+    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
+    <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--chat-text-secondary)' }}>
+      {label}
+    </span>
+    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
+  </div>
+));
+DateDivider.displayName = 'DateDivider';
 
 // ---------------------------------------------------------------------------
 // Scroll-to-bottom button
@@ -368,17 +413,28 @@ const ChatMessageListComponent = ({
 
         {/* Message groups */}
         <div className="space-y-0.5 pb-2">
-          {groups.map((group, groupIdx) => (
-            <MessageGroupRow
-              key={group.firstId}
-              group={group}
-              isLastGroup={groupIdx === groups.length - 1}
-              onRegenerate={handleRegenerate}
-              onDelete={handleDelete}
-              onPaywallUpgrade={handlePaywallUpgrade}
-              onPaywallDismiss={handlePaywallDismiss}
-            />
-          ))}
+          {groups.map((group, groupIdx) => {
+            const firstMsg = group.messages[0];
+            const groupDateKey = firstMsg ? toDateKey(firstMsg.createdAt) : '';
+            const prevGroup = groupIdx > 0 ? groups[groupIdx - 1] : null;
+            const prevFirstMsg = prevGroup?.messages[0];
+            const prevDateKey = prevFirstMsg ? toDateKey(prevFirstMsg.createdAt) : '';
+            const showDivider = firstMsg && groupDateKey !== prevDateKey;
+
+            return (
+              <React.Fragment key={group.firstId}>
+                {showDivider && <DateDivider label={formatDateDivider(firstMsg.createdAt)} />}
+                <MessageGroupRow
+                  group={group}
+                  isLastGroup={groupIdx === groups.length - 1}
+                  onRegenerate={handleRegenerate}
+                  onDelete={handleDelete}
+                  onPaywallUpgrade={handlePaywallUpgrade}
+                  onPaywallDismiss={handlePaywallDismiss}
+                />
+              </React.Fragment>
+            );
+          })}
 
           {/* Typing indicator while waiting for the first streaming chunk */}
           <AnimatePresence>

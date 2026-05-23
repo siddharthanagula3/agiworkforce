@@ -1,39 +1,19 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
-import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { GalleryClient } from './GalleryClient';
 
 export const metadata: Metadata = {
   title: 'Gallery | AGI',
-  description: 'A gallery of artifacts users have built with AGI. Coming soon.',
+  description:
+    'Browse artifacts you have built with AGI, or explore curated examples to spark your next idea.',
   alternates: { canonical: 'https://agiworkforce.com/gallery' },
 };
 
 export default function GalleryPage() {
   return (
     <div data-design="agi">
-      <main className="agi-shell">
-        <Header />
-        <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Gallery.</h1>
-          <p className="agi-page-lede">
-            A gallery of artifacts users have built with AGI. <strong>Not live yet</strong> — we
-            want a real collection before we ship a gallery, not stock examples.
-          </p>
-        </section>
-        <section className="agi-section">
-          <p className="agi-section-eyebrow">In the meantime</p>
-          <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
-              Build something
-            </Link>
-            <Link href="/changelog" className="agi-cta-ghost">
-              See what shipped →
-            </Link>
-          </div>
-        </section>
-        <MarketingFooter />
-      </main>
+      <Header />
+      <GalleryClient />
     </div>
   );
 }

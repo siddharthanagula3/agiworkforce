@@ -1,6 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { ArtifactData } from '../components/artifacts/ArtifactPreview';
 
@@ -177,105 +178,126 @@ function artifactsEqual(a: Artifact, b: Artifact): boolean {
 // ============================================================================
 
 export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
-  immer((set, get) => ({
-    // State
-    artifacts: [],
-    selectedArtifactId: null,
-    panelOpen: false,
+  persist(
+    immer((set, get) => ({
+      // State
+      artifacts: [],
+      selectedArtifactId: null,
+      panelOpen: false,
 
-    // Actions
-    addArtifact: (artifact) => {
-      const id = artifact.id || crypto.randomUUID();
-      set((state) => {
-        state.artifacts.push(normalizeArtifact({ ...artifact, id }));
-        // Auto-select the first artifact added
-        if (!state.selectedArtifactId) {
-          state.selectedArtifactId = id;
-        }
-      });
-      return id;
-    },
-
-    upsertArtifact: (artifact) => {
-      set((state) => {
-        const normalized = normalizeArtifact(artifact);
-        const index = state.artifacts.findIndex((item) => item.id === normalized.id);
-        if (index === -1) {
-          state.artifacts.push(normalized);
-          if (!state.selectedArtifactId) {
-            state.selectedArtifactId = normalized.id;
-          }
-          return;
-        }
-        const existing = state.artifacts[index]!;
-        if (!artifactsEqual(existing, normalized)) {
-          state.artifacts[index] = { ...existing, ...normalized, createdAt: existing.createdAt };
-        }
-      });
-    },
-
-    removeArtifact: (id) => {
-      set((state) => {
-        state.artifacts = state.artifacts.filter((a) => a.id !== id);
-        // Validate selectedArtifactId still exists after removal (covers stale selections too)
-        if (!state.artifacts.some((a) => a.id === state.selectedArtifactId)) {
-          state.selectedArtifactId = state.artifacts[0]?.id ?? null;
-        }
-        // Close panel if no artifacts remain
-        if (state.artifacts.length === 0) {
-          state.panelOpen = false;
-        }
-      });
-    },
-
-    selectArtifact: (id) => {
-      set((state) => {
-        state.selectedArtifactId = id;
-      });
-    },
-
-    togglePanel: () => {
-      set((state) => {
-        state.panelOpen = !state.panelOpen;
-      });
-    },
-
-    setPanelOpen: (open) => {
-      set((state) => {
-        state.panelOpen = open;
-      });
-    },
-
-    clearArtifacts: () => {
-      set((state) => {
-        state.artifacts = [];
-        state.selectedArtifactId = null;
-        state.panelOpen = false;
-      });
-    },
-
-    extractArtifactsFromContent: (content, messageId) => {
-      const existing = get().artifacts;
-      // Avoid re-extracting from the same message
-      if (existing.some((a) => a.messageId === messageId)) return;
-
-      const parsed = parseCodeBlocks(content, messageId);
-      if (parsed.length === 0) return;
-
-      set((state) => {
-        for (const item of parsed) {
-          const id = crypto.randomUUID();
-          state.artifacts.push({
-            ...item,
-            id,
-            createdAt: new Date(),
-          });
-          // Auto-select the first one if nothing is selected
+      // Actions
+      addArtifact: (artifact) => {
+        const id = artifact.id || crypto.randomUUID();
+        set((state) => {
+          state.artifacts.push(normalizeArtifact({ ...artifact, id }));
+          // Auto-select the first artifact added
           if (!state.selectedArtifactId) {
             state.selectedArtifactId = id;
           }
-        }
-      });
+        });
+        return id;
+      },
+
+      upsertArtifact: (artifact) => {
+        set((state) => {
+          const normalized = normalizeArtifact(artifact);
+          const index = state.artifacts.findIndex((item) => item.id === normalized.id);
+          if (index === -1) {
+            state.artifacts.push(normalized);
+            if (!state.selectedArtifactId) {
+              state.selectedArtifactId = normalized.id;
+            }
+            return;
+          }
+          const existing = state.artifacts[index]!;
+          if (!artifactsEqual(existing, normalized)) {
+            state.artifacts[index] = { ...existing, ...normalized, createdAt: existing.createdAt };
+          }
+        });
+      },
+
+      removeArtifact: (id) => {
+        set((state) => {
+          state.artifacts = state.artifacts.filter((a) => a.id !== id);
+          // Validate selectedArtifactId still exists after removal (covers stale selections too)
+          if (!state.artifacts.some((a) => a.id === state.selectedArtifactId)) {
+            state.selectedArtifactId = state.artifacts[0]?.id ?? null;
+          }
+          // Close panel if no artifacts remain
+          if (state.artifacts.length === 0) {
+            state.panelOpen = false;
+          }
+        });
+      },
+
+      selectArtifact: (id) => {
+        set((state) => {
+          state.selectedArtifactId = id;
+        });
+      },
+
+      togglePanel: () => {
+        set((state) => {
+          state.panelOpen = !state.panelOpen;
+        });
+      },
+
+      setPanelOpen: (open) => {
+        set((state) => {
+          state.panelOpen = open;
+        });
+      },
+
+      clearArtifacts: () => {
+        set((state) => {
+          state.artifacts = [];
+          state.selectedArtifactId = null;
+          state.panelOpen = false;
+        });
+      },
+
+      extractArtifactsFromContent: (content, messageId) => {
+        const existing = get().artifacts;
+        // Avoid re-extracting from the same message
+        if (existing.some((a) => a.messageId === messageId)) return;
+
+        const parsed = parseCodeBlocks(content, messageId);
+        if (parsed.length === 0) return;
+
+        set((state) => {
+          for (const item of parsed) {
+            const id = crypto.randomUUID();
+            state.artifacts.push({
+              ...item,
+              id,
+              createdAt: new Date(),
+            });
+            // Auto-select the first one if nothing is selected
+            if (!state.selectedArtifactId) {
+              state.selectedArtifactId = id;
+            }
+          }
+        });
+      },
+    })),
+    {
+      name: 'agi-artifacts-store',
+      version: 1,
+      storage: createJSONStorage(() => localStorage),
+      // Only persist artifacts list; panel open state is session-scoped
+      partialize: (state) => ({
+        artifacts: state.artifacts,
+        selectedArtifactId: state.selectedArtifactId,
+      }),
+      // Rehydrate createdAt strings back to Date objects
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        state.artifacts = state.artifacts.map((a) => ({
+          ...a,
+          createdAt:
+            a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt as unknown as string),
+        }));
+      },
     },
-  })),
+  ),
 );

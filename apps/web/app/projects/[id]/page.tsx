@@ -92,11 +92,12 @@ export default function ProjectDetailPage() {
   if (!project || !headerPresentation) {
     return (
       <main
+        data-design="agi"
         style={{
           minHeight: '100vh',
-          background: '#0d0c0a',
+          background: 'var(--agi-bg-2)',
           padding: '48px 32px',
-          color: '#e8e4db',
+          color: 'var(--agi-ink)',
         }}
       >
         <div style={{ maxWidth: 1040, margin: '0 auto' }}>
@@ -104,9 +105,9 @@ export default function ProjectDetailPage() {
             type="button"
             onClick={() => router.push('/projects')}
             style={{
-              border: '1px solid rgba(255, 235, 205, 0.16)',
+              border: '1px solid var(--agi-rule-strong)',
               background: 'transparent',
-              color: '#b3aea4',
+              color: 'var(--agi-ink-2)',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -120,14 +121,14 @@ export default function ProjectDetailPage() {
             style={{
               fontFamily: 'var(--serif)',
               fontSize: 22,
-              color: '#e8e4db',
+              color: 'var(--agi-ink)',
               margin: '24px 0 8px',
             }}
           >
             Project not found
           </h1>
-          <p style={{ fontSize: 13, color: '#b3aea4', margin: 0 }}>
-            This project doesn’t exist on this device. It may live on another device, or it was
+          <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
+            This project doesn't exist on this device. It may live on another device, or it was
             deleted. Cloud sync arrives with Cloud Managed.
           </p>
         </div>
@@ -139,11 +140,12 @@ export default function ProjectDetailPage() {
 
   return (
     <main
+      data-design="agi"
       style={{
         minHeight: '100vh',
-        background: '#0d0c0a',
+        background: 'var(--agi-bg-2)',
         padding: '48px 32px',
-        color: '#e8e4db',
+        color: 'var(--agi-ink)',
       }}
     >
       <div
@@ -160,9 +162,9 @@ export default function ProjectDetailPage() {
           onClick={() => router.push('/projects')}
           style={{
             alignSelf: 'flex-start',
-            border: '1px solid rgba(255, 235, 205, 0.16)',
+            border: '1px solid var(--agi-rule-strong)',
             background: 'transparent',
-            color: '#b3aea4',
+            color: 'var(--agi-ink-2)',
             padding: '6px 12px',
             borderRadius: 8,
             fontSize: 12,
@@ -200,9 +202,9 @@ export default function ProjectDetailPage() {
               style={{
                 padding: '6px 14px',
                 borderRadius: 9999,
-                border: '1px solid rgba(255, 235, 205, 0.16)',
-                background: tab === entry.id ? '#1a1915' : 'transparent',
-                color: tab === entry.id ? '#e8e4db' : '#b3aea4',
+                border: '1px solid var(--agi-rule-strong)',
+                background: tab === entry.id ? 'var(--agi-bg-3)' : 'transparent',
+                color: tab === entry.id ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
                 fontSize: 12,
                 fontWeight: 500,
                 cursor: 'pointer',
@@ -216,9 +218,9 @@ export default function ProjectDetailPage() {
         <section
           data-testid={`project-detail-panel-${tab}`}
           style={{
-            border: '1px solid rgba(255, 235, 205, 0.08)',
+            border: '1px solid var(--agi-rule)',
             borderRadius: 16,
-            background: '#1a1915',
+            background: 'var(--agi-bg-3)',
             padding: '20px 24px',
             minHeight: 240,
           }}
@@ -243,7 +245,7 @@ export default function ProjectDetailPage() {
                     key={conversationId}
                     style={{
                       listStyle: 'none',
-                      border: '1px solid rgba(255, 235, 205, 0.08)',
+                      border: '1px solid var(--agi-rule)',
                       borderRadius: 12,
                       padding: '10px 14px',
                     }}
@@ -261,7 +263,7 @@ export default function ProjectDetailPage() {
                         background: 'transparent',
                         border: 0,
                         padding: 0,
-                        color: '#e8e4db',
+                        color: 'var(--agi-ink)',
                         fontSize: 13,
                         cursor: 'pointer',
                       }}
@@ -291,11 +293,13 @@ interface EmptyStateProps {
 function EmptyState({ title, detail, primaryLabel, onPrimary }: EmptyStateProps) {
   return (
     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
-      <p style={{ fontSize: 14, fontWeight: 600, color: '#e8e4db', margin: '0 0 6px' }}>{title}</p>
+      <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
+        {title}
+      </p>
       <p
         style={{
           fontSize: 12,
-          color: '#b3aea4',
+          color: 'var(--agi-ink-2)',
           margin: '0 auto',
           maxWidth: 480,
           lineHeight: 1.55,
@@ -312,8 +316,8 @@ function EmptyState({ title, detail, primaryLabel, onPrimary }: EmptyStateProps)
             padding: '8px 16px',
             borderRadius: 9999,
             border: 'none',
-            background: '#da7756',
-            color: '#fff',
+            background: 'var(--color-terra-cotta)',
+            color: 'var(--agi-ink)',
             fontSize: 12,
             fontWeight: 500,
             cursor: 'pointer',
