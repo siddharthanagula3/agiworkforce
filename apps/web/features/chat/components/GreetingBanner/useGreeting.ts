@@ -77,7 +77,20 @@ function getTimeBand(hour: number): TimeBand {
 
 export function useGreeting(): GreetingResult {
   const { user } = useAuthStore();
-  const userName = user?.name;
+
+  // localStorage key takes precedence over auth-store display name so users
+  // can set a preferred name without changing their account name.
+  const localPreferredName = React.useMemo(() => {
+    try {
+      return typeof window !== 'undefined'
+        ? (window.localStorage.getItem('agi.profile.preferredName') ?? undefined)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const userName = localPreferredName ?? user?.name;
 
   // Memoize: greeting only changes when user name changes (time band is stable per page load)
   const [snapshot] = React.useState(() => {
