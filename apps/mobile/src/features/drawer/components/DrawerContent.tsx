@@ -33,6 +33,7 @@ const CHAT_NAV_ITEMS: {
   icon: LucideIcon;
   route: string;
   show: boolean;
+  badge?: string;
 }[] = [
   { key: 'chat', label: 'Chat', icon: MessageSquare, route: '/(app)/(tabs)/chat', show: true },
   { key: 'artifacts', label: 'Artifacts', icon: FileText, route: '/(app)/artifacts', show: true },
@@ -52,6 +53,7 @@ const CHAT_NAV_ITEMS: {
     icon: Monitor,
     route: '/(app)/dispatch',
     show: FEATURES.dispatch,
+    badge: 'New',
   },
   {
     key: 'connectors',
@@ -256,7 +258,7 @@ function DisabledUtilityRow({ item }: { item: Extract<UtilityItem, { type: 'disa
  *   Primary nav (Chat / Artifacts / Code / Projects / Skills, with post-v1 entries feature-gated)
  *   Local Mode status
  *   Utility strip (Models / disabled Keys-BYOK / Memory / Settings / About)
- *   Recents section (last 5 conversations)
+ *   Recents section (last 10 conversations)
  *   Local profile card at bottom
  */
 export function DrawerContent(_props: DrawerContentComponentProps) {
@@ -267,7 +269,7 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
   const createConversation = useChatStore((s) => s.createConversation);
   const user = useAuthStore((s) => s.user);
 
-  const recentConversations = conversations.slice(0, 5);
+  const recentConversations = conversations.slice(0, 10);
 
   const handleNewChat = useCallback(async () => {
     try {
@@ -392,6 +394,20 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
               >
                 {item.label}
               </Text>
+              {item.badge && (
+                <View
+                  style={{
+                    backgroundColor: colors.teal,
+                    borderRadius: 8,
+                    paddingHorizontal: 6,
+                    paddingVertical: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: colors.white }}>
+                    {item.badge}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           );
         })}
