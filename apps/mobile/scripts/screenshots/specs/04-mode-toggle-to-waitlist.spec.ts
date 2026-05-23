@@ -3,11 +3,11 @@
  *
  * Critical path:
  *   Tap the Cloud half of ModeToggle
- *   CloudWaitlistSheet appears (cloud-waitlist-modal)
- *   Enter email + country (country defaults to India — locked)
+ *   InviteCodeModal appears (invite-code-modal), defaultTab=waitlist
+ *   Enter email
  *   Tap "Join waitlist" (cloud-waitlist-submit-btn)
  *   Server mock returns rank=42 → confirmed state shows "#43 in line"
- *   Close the sheet
+ *   Close the modal
  *   Re-tap cloud → already-joined tap-tease state (lock icon gone)
  *
  * Mocks:
@@ -21,7 +21,7 @@
 
 import { device, element, by, waitFor } from 'detox';
 
-describe('Mode toggle → cloud waitlist (v1 local-only)', () => {
+describe('Mode toggle → cloud InviteCodeModal (v1 local-only)', () => {
   beforeAll(async () => {
     // Launch already past onboarding in chat screen.
     await device.launchApp({
@@ -55,9 +55,9 @@ describe('Mode toggle → cloud waitlist (v1 local-only)', () => {
       .withTimeout(4000);
   });
 
-  it('tapping the Cloud side opens the CloudWaitlistSheet', async () => {
+  it('tapping the Cloud side opens the InviteCodeModal', async () => {
     await element(by.id('mode-toggle-cloud')).tap();
-    await waitFor(element(by.id('cloud-waitlist-modal')))
+    await waitFor(element(by.id('invite-code-modal')))
       .toBeVisible()
       .withTimeout(6000);
   });
@@ -93,27 +93,25 @@ describe('Mode toggle → cloud waitlist (v1 local-only)', () => {
       .withTimeout(4000);
   });
 
-  it('tapping "Continue on-device" closes the sheet', async () => {
-    await element(by.id('cloud-waitlist-continue-btn')).tap();
-    await waitFor(element(by.id('cloud-waitlist-modal')))
+  it('tapping the close button closes the modal', async () => {
+    await element(by.id('invite-code-modal-close')).tap();
+    await waitFor(element(by.id('invite-code-modal')))
       .not.toBeVisible()
       .withTimeout(4000);
   });
 
-  it('re-tapping Cloud side shows already-joined state (no lock icon in label)', async () => {
+  it('re-tapping Cloud side re-opens the InviteCodeModal', async () => {
     // After joining: the Cloud button label changes from "Cloud" (with lock)
     // to "Cloud · ✓ #N" and is no longer in disabled state.
     await waitFor(element(by.id('mode-toggle-cloud')))
       .toBeVisible()
       .withTimeout(4000);
-    // Verify not disabled (already joined) by checking accessibility state.
-    // Detox matchers: element should have accessibilityState.disabled = false.
     await element(by.id('mode-toggle-cloud')).tap();
-    // Sheet should open again (already-joined mode still shows sheet for rank info).
-    await waitFor(element(by.id('cloud-waitlist-modal')))
+    // Modal should open again
+    await waitFor(element(by.id('invite-code-modal')))
       .toBeVisible()
       .withTimeout(6000);
     // Close again
-    await element(by.id('cloud-waitlist-close')).tap();
+    await element(by.id('invite-code-modal-close')).tap();
   });
 });

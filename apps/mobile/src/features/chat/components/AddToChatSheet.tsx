@@ -39,7 +39,8 @@ import {
   isHealthAvailable,
   requestHealthPermission,
 } from '@/src/features/integrations/services/healthData';
-import { CloudWaitlistSheet, joinWaitlist, useWaitlistStore } from '@/src/features/waitlist';
+import { useWaitlistStore } from '@/src/features/waitlist';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { getModelById } from '@/src/features/model-picker/service';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
@@ -159,7 +160,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
-  const markWaitlistJoined = useWaitlistStore((s) => s.markJoined);
 
   const haptic = useCallback(() => {
     if (hapticsEnabled) {
@@ -294,25 +294,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     closeSheet();
     setWaitlistSheetVisible(true);
   }, [haptic, waitlistJoined, waitlistRank, closeSheet]);
-
-  const handleCloseCloudWaitlist = useCallback(() => {
-    setWaitlistSheetVisible(false);
-  }, []);
-
-  const handleWaitlistSubmit = useCallback(
-    async (submission: { email: string; country: string | null }) => {
-      const result = await joinWaitlist({
-        email: submission.email,
-        country: submission.country ?? undefined,
-      });
-      markWaitlistJoined(
-        { email: submission.email, country: submission.country ?? undefined },
-        result,
-      );
-      return result;
-    },
-    [markWaitlistJoined],
-  );
 
   const handleComputerUseInfo = useCallback(() => {
     haptic();
@@ -842,10 +823,11 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
       {/* Sub-sheets for style and tool access selection */}
       <StyleSelector ref={styleSelectorRef} />
       <ToolAccessSelector ref={toolAccessSelectorRef} />
-      <CloudWaitlistSheet
-        visible={waitlistSheetVisible}
-        onClose={handleCloseCloudWaitlist}
-        onSubmit={handleWaitlistSubmit}
+      <InviteCodeModal
+        open={waitlistSheetVisible}
+        onClose={() => setWaitlistSheetVisible(false)}
+        source="other"
+        defaultTab="waitlist"
       />
     </>
   );
