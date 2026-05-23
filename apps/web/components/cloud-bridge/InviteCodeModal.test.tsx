@@ -51,7 +51,7 @@ describe('InviteCodeModal', () => {
   describe('tab switching', () => {
     it('shows invite tab by default', () => {
       render(<InviteCodeModal {...defaultProps} />);
-      expect(screen.getByLabelText(/invitation code/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('XXXXXXXX')).toBeInTheDocument();
     });
 
     it('shows waitlist tab when defaultTab="waitlist"', () => {
@@ -70,7 +70,7 @@ describe('InviteCodeModal', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<InviteCodeModal {...defaultProps} defaultTab="waitlist" />);
       await user.click(screen.getByRole('tab', { name: /enter invitation code/i }));
-      expect(screen.getByLabelText(/invitation code/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('XXXXXXXX')).toBeInTheDocument();
     });
 
     it('resets to defaultTab when modal re-opens', async () => {
@@ -78,7 +78,7 @@ describe('InviteCodeModal', () => {
         <InviteCodeModal {...defaultProps} defaultTab="invite" open={false} />,
       );
       rerender(<InviteCodeModal {...defaultProps} defaultTab="invite" open={true} />);
-      expect(screen.getByLabelText(/invitation code/i)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('XXXXXXXX')).toBeInTheDocument();
     });
   });
 
