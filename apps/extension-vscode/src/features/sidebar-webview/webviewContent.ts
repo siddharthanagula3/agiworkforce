@@ -928,6 +928,9 @@ export function getWebviewContent(
       <button class="icon-btn" id="historyBtn" title="Chat history" aria-label="Chat history">
         <span class="codicon codicon-history" aria-hidden="true"></span>
       </button>
+      <button class="icon-btn" id="cloudHistoryBtn" title="Cloud history (invite required)" aria-label="Cloud history">
+        <span class="codicon codicon-cloud" aria-hidden="true"></span>
+      </button>
       <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
         <span class="codicon codicon-add" aria-hidden="true"></span>
       </button>
@@ -1418,6 +1421,13 @@ export function getWebviewContent(
     if (historyBtn) {
       historyBtn.addEventListener('click', () => {
         vscode.postMessage({ type: 'openHistory' });
+      });
+    }
+
+    const cloudHistoryBtn = document.getElementById('cloudHistoryBtn');
+    if (cloudHistoryBtn) {
+      cloudHistoryBtn.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openCloudHistory' });
       });
     }
 
