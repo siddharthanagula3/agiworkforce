@@ -6,6 +6,87 @@ Last updated: 2026-05-22
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased — autonomous suite transformation, round 25 — failure-mode verification sweep] — 2026-05-22
+
+Round 25 dispatched 7 parallel verification lanes (V1-V7) to audit the
+R18-R24 commit window against failure modes 11-17 from the canonical
+/goal spec Appendix C (`~/.claude/plans/agi-workforce-optimized-ullman.md`).
+Full synthesis at `docs/audit/2026-05-22-r25-summary.md`.
+
+### Critical findings resolved this round
+
+- **V1 — CLI orphan tree (~118 files removed).** `apps/cli/src/tui/`
+  contained ~118 `.rs` files only 8 of which were declared in
+  `tui/mod.rs`. Paste-from-upstream-Codex with `crate::bottom_pane::*`
+  import paths that never matched the actual nesting; `cargo check`
+  passed because uncompiled files can't fail. Bulk-deleted in
+  `e3a316d39`, test-guard updated in `5c4e623c1`, rule locked in
+  `1960799ad` (apps/cli/AGENTS.md + docs/agent-context/known-flaws.md
+  CLI-TUI-ORPHAN-01).
+
+- **V3 — `toOtelAttributes` production wire-up.** Function existed in
+  `apps/web/lib/cost-tracker.ts` with full unit test coverage but was
+  never called from production. OTEL `gen_ai.*` spans were silently
+  empty. Wired in `36d39ae9e` at both call sites:
+  `apps/web/app/api/llm/v1/chat/completions/lib/response-builder.ts`
+  (non-stream) and `stream-transform.ts` (stream flush). Both now emit
+  `gen_ai.system`, `gen_ai.usage.input_tokens`,
+  `gen_ai.usage.output_tokens`, `gen_ai.usage.cache_read.input_tokens`
+  plus `codex.usage.*` vendor extensions.
+
+### Per-lane outcomes
+
+| Lane                          | Commit                                                | Outcome                                                                                                                                                 |
+| ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| V1 cli salvage                | `c8f5f95b9` + `e3a316d39` + `1960799ad` + `5c4e623c1` | ~118 orphan files removed; tui module ownership rule locked.                                                                                            |
+| V2 model-id drift             | `20bdd9cba`                                           | 4 corrections (hallucinated NVIDIA Nemotron, deprecated Mistral 2506, bare-slug codestral-2, mistral-small-3.1-24b context window); 8 regression tests. |
+| V3 cost-tracker E2E + wire    | `a48158798` + `36d39ae9e`                             | 7/7 E2E pass both OpenAI shapes; toOtelAttributes wired to prod.                                                                                        |
+| V4 BYOK negative tests        | `91068d33a`                                           | 38 NEGATIVE tests, no key-value leaks; PII + rate-limit notes for R26.                                                                                  |
+| V5 desktop sync silence       | `8d225f81a`                                           | 2 Rust integration tests; Privacy "Sync chat history" toggle removed; settings.rs coerces persisted `cloud` → `local`.                                  |
+| V6 random commit audit        | `a1f79472a`                                           | 8 commits sampled; 1×CRIT + 2×MAJ + 3×MIN + 2×CLEAN; 8-item R26 list.                                                                                   |
+| V7 desktop ToolCallCard dedup | `12f00467f`                                           | 2 dupes deleted (`features/chat/`, `features/tool-calling/`); canonical at `features/chat/MessageBubble/ToolCallCard.tsx`; 4 consumers migrated.        |
+| Synthesis                     | `9b80e801f`                                           | `docs/audit/2026-05-22-r25-summary.md`.                                                                                                                 |
+
+### Added
+
+- `docs/audit/2026-05-22-failure-mode-audit.md` — V6 random-sample audit
+  with severity histogram + 8-item R26 remediation list.
+- `docs/audit/2026-05-22-r25-summary.md` — round synthesis.
+- `apps/desktop/AGENTS.md` — Privacy toggle decision documented.
+- New rule in `apps/cli/AGENTS.md` "TUI Module Ownership" section: any
+  new `.rs` file under `apps/cli/src/tui/` MUST be declared in
+  `tui/mod.rs` in the same commit.
+- `docs/agent-context/known-flaws.md` row `CLI-TUI-ORPHAN-01` (now
+  marked Fixed).
+
+### Anti-pattern coverage (failure modes 11-17 from canonical spec)
+
+| Mode                         | Status this round                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| #11 Hallucinated contracts   | Critical CLI orphan tree fixed (V1+V6). Module-graph reachability CI check filed as R26-1. |
+| #12 Semantic drift           | Two-OpenAI-codebase drift still present (V3). Consolidation filed as R26-2.                |
+| #13 Security false positives | Closed (V4 — 38 NEGATIVE tests, no leaks).                                                 |
+| #14 Edge cases               | Closed for surfaces audited (V3/V4/V5).                                                    |
+| #15 Test-overfit             | toOtelAttributes wired (V3+`36d39ae9e`).                                                   |
+| #16 Operational fragility    | toOtelAttributes silent-in-prod fixed.                                                     |
+| #17 Maintenance debt         | ToolCallCard dedup (V7).                                                                   |
+
+### Verification
+
+- 8 R25 commits + 1 V3 wire-up commit + this CHANGELOG/PLAN/TODO update.
+- Heavy verification (`cargo build --release --workspace`,
+  `cargo test --workspace --release`, full `pnpm -r build`) deferred to
+  cloud CI on push per new operating rule (local CLI reserved for
+  `~/Desktop/reference/`-touching work).
+- 65+ commits ahead of `origin/main` (R18-R24 + R25 lanes + V3 wire-up
+  - this docs update).
+
+### R26 remediation backlog (next round)
+
+See `TODO.md` for the full list. Top 3: module-graph reachability CI
+(R26-1), web/packages OpenAI consolidation (R26-2), waitlist email
+hashing + tighter rate-limit (R26-3).
+
 ## [Unreleased — autonomous suite transformation, round 21 — 80% acceptance test PASS all 6 surfaces] — 2026-05-22
 
 Round 21 dispatched 4 parallel lanes to address the Stop-hook's R20
