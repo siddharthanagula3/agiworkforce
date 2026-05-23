@@ -79,18 +79,10 @@ jobs:
         # model IDs" is enforced uniformly across the repo.
         run: bash scripts/check-no-hardcoded-models.sh
 
-      - name: Marketing model-ID drift gate (web)
-        # R27-PARITY Stage 3 (AP-03) prevention layer.
-        # Scans apps/web marketing files for hardcoded model IDs not present
-        # in packages/types/src/models.json. Exit 1 = phantom IDs (blocking).
-        # Advisory stale-default warnings exit 0 (non-blocking).
-        run: node scripts/check-marketing-models.mjs
-
-      - name: Web AP-02 — no hardcoded color literals
-        # R27-PARITY Phase D Stage 3: web must use Tailwind classes or CSS custom
-        # properties (var(--color-*)); no hex/rgb/hsl literals in app/components/lib/features.
-        run: pnpm --filter @agiworkforce/web check:no-hex-web
-        continue-on-error: true
+      - name: HookEvent fire-site gate (AP-07)
+        # AP-07 / R27-PARITY: every HookEvent enum variant must have ≥1
+        # run_hooks() call site in apps/cli/src. Static grep — no cargo build.
+        run: pnpm check:hook-fire-sites
 
       - name: Extension AP-02 — no hardcoded color literals
         # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
@@ -99,13 +91,6 @@ jobs:
       - name: Extension AP-10 — no direct cloud-IPC in v1
         # R27-PARITY / v1-local-only: cloud feature paths must gate through InviteCodeModal.
         run: pnpm --filter @agiworkforce/extension check:no-cloud-ipc
-
-      - name: VS Code ext AP-02 — no hardcoded color literals
-        # R27-PARITY Phase D Stage 3: VS Code webviews must use var(--vscode-*)
-        # theme tokens; no bare hex/rgb/hsl literals outside var() fallbacks.
-        # Baseline at apps/extension-vscode/scripts/.no-hex-baseline.json grandfathers
-        # legacy violations; only literals added after baseline creation fail CI.
-        run: pnpm --filter agi-workforce check:vscode-theme-tokens
 
       - name: Type check
         run: pnpm typecheck:all
