@@ -13,7 +13,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { UpdateConversationSchema } from '@/lib/validations/chat';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import {
+  getNeonChatDb,
+  requireCurrentUserId,
+  type ChatConversationRow,
+  type ChatMessageRow,
+} from '@/lib/server/neon-chat';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,41 +26,43 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
-  // Get conversation
-  const { data: conversation, error: convError } = await supabase
-    .from('web_conversations')
-    .select('id, title, model, created_at, updated_at')
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-    .single();
+  const db = getNeonChatDb();
+  const [conversation] = await db.query<ChatConversationRow>(
+    `
+      select id, title, model, created_at, updated_at
+      from web_conversations
+      where id = $1 and user_id = $2 and deleted_at is null
+      limit 1
+    `,
+    [id, userId],
+  );
 
-  if (convError || !conversation) {
+  if (!conversation) {
     throw createError.notFound('Conversation not found');
   }
 
-  // Get messages
-  const { data: messages, error: msgError } = await supabase
-    .from('web_messages')
-    .select(
-      'id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata',
-    )
-    .eq('conversation_id', id)
-    .order('created_at', { ascending: true });
+  try {
+    const messages = await db.query<ChatMessageRow>(
+      `
+        select id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+        from web_messages
+        where conversation_id = $1
+        order by created_at asc
+      `,
+      [id],
+    );
 
-  if (msgError) {
-    logger.error({ error: msgError, conversationId: id }, 'Failed to fetch messages');
+    return NextResponse.json({
+      conversation,
+      messages,
+    });
+  } catch (error) {
+    logger.error({ error, conversationId: id }, 'Failed to fetch messages');
     throw createError.internal('Failed to fetch messages');
   }
-
-  return NextResponse.json({
-    conversation,
-    messages: messages || [],
-  });
 }
 
 async function handleUpdateConversation(request: NextRequest, context: RouteContext) {
@@ -66,8 +73,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
   let rawBody: unknown;
@@ -88,20 +94,24 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (body['title']) updates['title'] = body['title'];
   if (body['model']) updates['model'] = body['model'];
 
-  const { data, error } = await supabase
-    .from('web_conversations')
-    .update(updates)
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-    .select()
-    .single();
+  const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
+    `
+      update web_conversations
+      set
+        title = coalesce($3, title),
+        model = coalesce($4, model),
+        updated_at = now()
+      where id = $1 and user_id = $2 and deleted_at is null
+      returning id, title, model, created_at, updated_at
+    `,
+    [id, userId, updates['title'] ?? null, updates['model'] ?? null],
+  );
 
-  if (error || !data) {
+  if (!conversation) {
     throw createError.notFound('Conversation not found');
   }
 
-  return NextResponse.json({ conversation: data });
+  return NextResponse.json({ conversation });
 }
 
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
@@ -112,19 +122,19 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
-  // Soft delete
-  const { error } = await supabase
-    .from('web_conversations')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .is('deleted_at', null);
-
-  if (error) {
+  try {
+    await getNeonChatDb().execute(
+      `
+        update web_conversations
+        set deleted_at = now(), updated_at = now()
+        where id = $1 and user_id = $2 and deleted_at is null
+      `,
+      [id, userId],
+    );
+  } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');
     throw createError.internal('Failed to delete conversation');
   }

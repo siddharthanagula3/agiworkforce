@@ -1,17 +1,14 @@
+import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { createSupabaseServerClient } from '@/services/supabase-server';
 
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { userId } = await auth();
 
-  if (!user) {
-    redirect('/login?next=/admin');
+  if (!userId) {
+    redirect('/login?redirectTo=/admin');
   }
 
   return children;

@@ -10,9 +10,13 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { CreditService } from '@/lib/services/credit-service';
 import { CreateMessageSchema } from '@/lib/validations/chat';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import {
+  getNeonChatDb,
+  normalizeMessageMetadata,
+  requireCurrentUserId,
+  type ChatMessageRow,
+} from '@/lib/server/neon-chat';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -30,13 +34,8 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client for all DB ops.
-  // userDb is also used as the creditClient so credit reads/writes are RLS-enforced too.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
   const { id: conversationId } = await context.params;
-
-  // creditClient is the same RLS-bound client — satisfies CreditService.checkAvailable overload.
-  const creditClient = supabase;
 
   let rawBody: unknown;
   try {
@@ -53,86 +52,90 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
 
   const { content, metadata, model, role, skipLlm } = validationResult.data;
 
-  // Verify conversation ownership
-  const { data: conversation, error: convError } = await supabase
-    .from('web_conversations')
-    .select('id, model')
-    .eq('id', conversationId)
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-    .single();
+  const db = getNeonChatDb();
+  const [conversation] = await db.query<{ id: string; model: string | null }>(
+    `
+      select id, model
+      from web_conversations
+      where id = $1 and user_id = $2 and deleted_at is null
+      limit 1
+    `,
+    [conversationId, userId],
+  );
 
-  if (convError || !conversation) {
+  if (!conversation) {
     throw createError.notFound('Conversation not found');
   }
 
   // If skipLlm is true, just save the message and return (used for streaming where LLM is called separately)
   if (skipLlm) {
-    const { data: message, error: msgError } = await supabase
-      .from('web_messages')
-      .insert({
-        conversation_id: conversationId,
-        role,
-        content: content.trim(),
-        model: role === 'assistant' ? model : undefined,
-        metadata,
-      })
-      .select()
-      .single();
-
-    if (msgError) {
-      logger.error({ error: msgError }, 'Failed to save message');
+    let message: ChatMessageRow | undefined;
+    try {
+      [message] = await db.query<ChatMessageRow>(
+        `
+          insert into web_messages (conversation_id, role, content, model, metadata)
+          values ($1, $2, $3, $4, $5::jsonb)
+          returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+        `,
+        [
+          conversationId,
+          role,
+          content.trim(),
+          role === 'assistant' ? (model ?? null) : null,
+          JSON.stringify(normalizeMessageMetadata(metadata) ?? {}),
+        ],
+      );
+    } catch (error) {
+      logger.error({ error }, 'Failed to save message');
       throw createError.internal('Failed to save message');
     }
 
     // Auto-title conversation from first user message
     if (role === 'user') {
-      const { count } = await supabase
-        .from('web_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('conversation_id', conversationId);
+      const [row] = await db.query<{ count: string }>(
+        'select count(*)::text as count from web_messages where conversation_id = $1',
+        [conversationId],
+      );
 
-      if (count && count <= 1) {
+      if (Number(row?.count ?? 0) <= 1) {
         // First message - generate title
         const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
-        await supabase.from('web_conversations').update({ title }).eq('id', conversationId);
+        await db.execute(
+          'update web_conversations set title = $1, updated_at = now() where id = $2 and user_id = $3',
+          [title, conversationId, userId],
+        );
       }
     }
 
     return NextResponse.json({ message });
   }
 
-  // Normal flow: save user message, call LLM, save assistant message
-
-  // Check credits
-  const hasCredits = await CreditService.checkAvailable(creditClient, user.id, 0.01);
-  if (!hasCredits) {
-    throw createError.paymentRequired('Insufficient credits');
-  }
-
   // Save user message
-  const { data: userMessage, error: userMsgError } = await supabase
-    .from('web_messages')
-    .insert({
-      conversation_id: conversationId,
-      role: 'user',
-      content: content.trim(),
-    })
-    .select()
-    .single();
+  const [userMessage] = await db.query<ChatMessageRow>(
+    `
+      insert into web_messages (conversation_id, role, content)
+      values ($1, 'user', $2)
+      returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+    `,
+    [conversationId, content.trim()],
+  );
 
-  if (userMsgError) {
-    logger.error({ error: userMsgError }, 'Failed to save user message');
+  if (!userMessage) {
+    logger.error({ conversationId }, 'Failed to save user message');
     throw createError.internal('Failed to save message');
   }
 
   // Get conversation history for context
-  const { data: history } = await supabase
-    .from('web_messages')
-    .select('role, content')
-    .eq('conversation_id', conversationId)
-    .order('created_at', { ascending: true })
-    .limit(20);
+  const history = await db.query<LlmTurnMessage>(
+    `
+      select role, content
+      from web_messages
+      where conversation_id = $1
+      order by created_at asc
+      limit 20
+    `,
+    [conversationId],
+  );
 
   const messages: LlmTurnMessage[] = (history || []).map((m) => ({
     role: m.role as 'user' | 'assistant' | 'system',
@@ -149,7 +152,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   if (actualOrigin !== trustedOrigin) {
     logger.error({ llmEndpoint, trustedOrigin, actualOrigin }, 'LLM endpoint origin mismatch');
     // Rollback: delete the user message we already saved
-    await supabase.from('web_messages').delete().eq('id', userMessage.id);
+    await db.execute('delete from web_messages where id = $1', [userMessage.id]);
     throw createError.internal('LLM API configuration error');
   }
 
@@ -171,7 +174,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     const errorData = await llmResponse.json().catch(() => ({}));
     logger.error({ status: llmResponse.status, error: errorData }, 'LLM API error');
     // Rollback: delete the user message so the conversation stays consistent
-    await supabase.from('web_messages').delete().eq('id', userMessage.id);
+    await db.execute('delete from web_messages where id = $1', [userMessage.id]);
     throw createError.internal('Failed to get AI response');
   }
 
@@ -181,36 +184,43 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const usage = llmData.usage || {};
 
   // Save assistant message
-  const { data: assistantMessage, error: asstMsgError } = await supabase
-    .from('web_messages')
-    .insert({
-      conversation_id: conversationId,
-      role: 'assistant',
-      content: assistantContent,
-      model: llmData.model || model,
-      provider: llmData.provider,
-      input_tokens: usage.prompt_tokens || 0,
-      output_tokens: usage.completion_tokens || 0,
-      cost_cents: llmData.cost_cents || 0,
-    })
-    .select()
-    .single();
+  const [assistantMessage] = await db.query<ChatMessageRow>(
+    `
+      insert into web_messages (
+        conversation_id, role, content, model, provider, input_tokens, output_tokens, cost_cents
+      )
+      values ($1, 'assistant', $2, $3, $4, $5, $6, $7)
+      returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+    `,
+    [
+      conversationId,
+      assistantContent,
+      llmData.model || model || null,
+      llmData.provider || null,
+      usage.prompt_tokens || 0,
+      usage.completion_tokens || 0,
+      llmData.cost_cents || 0,
+    ],
+  );
 
-  if (asstMsgError) {
-    logger.error({ error: asstMsgError, conversationId }, 'Failed to save assistant message');
+  if (!assistantMessage) {
+    logger.error({ conversationId }, 'Failed to save assistant message');
     throw createError.internal('Failed to save AI response');
   }
 
   // Auto-title conversation from first message
-  const { count } = await supabase
-    .from('web_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('conversation_id', conversationId);
+  const [row] = await db.query<{ count: string }>(
+    'select count(*)::text as count from web_messages where conversation_id = $1',
+    [conversationId],
+  );
 
-  if (count && count <= 2) {
+  if (Number(row?.count ?? 0) <= 2) {
     // First exchange - generate title
     const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
-    await supabase.from('web_conversations').update({ title }).eq('id', conversationId);
+    await db.execute(
+      'update web_conversations set title = $1, updated_at = now() where id = $2 and user_id = $3',
+      [title, conversationId, userId],
+    );
   }
 
   return NextResponse.json({

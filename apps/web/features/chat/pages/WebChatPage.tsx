@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
-import { getSupabaseClient } from '@/services/supabase';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { SendPreview } from '@agiworkforce/unified-chat';
@@ -85,28 +85,15 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
   };
 }
 
-async function getAuthToken(): Promise<string> {
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-
-  return session.access_token;
-}
-
 async function saveSystemMessage(params: {
   conversationId: string;
   content: string;
   metadata: MessageMetadata;
+  authToken: string;
 }): Promise<Message> {
-  const authToken = await getAuthToken();
   const headers = await addCsrfHeaders({
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${authToken}`,
+    Authorization: `Bearer ${params.authToken}`,
   });
   const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
     method: 'POST',
@@ -137,6 +124,7 @@ async function saveSystemMessage(params: {
 }
 
 export default function WebChatPage() {
+  const { getToken } = useAuth();
   const router = useRouter();
   const params = useParams();
   const urlConversationId = params?.['sessionId'] as string | undefined;
@@ -458,6 +446,10 @@ export default function WebChatPage() {
         conversationId: fork.id,
         content: buildAcceptedHandoffSystemMessage(handoffPreview),
         metadata,
+        authToken: await getToken().then((token) => {
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        }),
       });
 
       addMessage(systemMessage);
@@ -481,6 +473,7 @@ export default function WebChatPage() {
   }, [
     addMessage,
     createConversation,
+    getToken,
     handoffPreview,
     pendingByokHandoff,
     router,

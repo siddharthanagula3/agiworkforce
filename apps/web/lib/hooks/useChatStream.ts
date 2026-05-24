@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import {
   useChatStore,
   type Message,
@@ -78,6 +79,7 @@ async function saveMessageToDb(
  * Hook for handling SSE streaming chat with the LLM API
  */
 export function useChatStream(): UseChatStreamReturn {
+  const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Store actions
@@ -126,7 +128,10 @@ export function useChatStream(): UseChatStreamReturn {
       abortControllerRef.current = new AbortController();
 
       const model = options.model || selectedModel;
-      const authToken = await getAuthToken();
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Not authenticated');
+      }
 
       // Add user message to UI immediately
       const userMessageId = crypto.randomUUID();
@@ -569,6 +574,7 @@ export function useChatStream(): UseChatStreamReturn {
       stopStreaming,
       setLoading,
       setError,
+      getToken,
     ],
   );
 
@@ -586,22 +592,4 @@ export function useChatStream(): UseChatStreamReturn {
     stopGeneration,
     isStreaming,
   };
-}
-
-/**
- * Get the current auth token from Supabase
- */
-async function getAuthToken(): Promise<string> {
-  // For client-side, we need to get the token from the Supabase client
-  const { getSupabaseClient } = await import('@/services/supabase');
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-
-  return session.access_token;
 }
