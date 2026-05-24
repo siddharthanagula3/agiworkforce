@@ -5,7 +5,7 @@
  */
 
 import { logger } from '@shared/lib/logger';
-import { getAuthToken } from './get-auth-token';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // All API calls use Netlify proxy functions for security
 // Proxy endpoints: /.netlify/functions/llm-proxies/google-proxy

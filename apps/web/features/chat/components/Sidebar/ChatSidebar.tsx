@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   ChevronUp,
+  ChevronRight,
   CheckSquare,
   Folder,
   Layers,
@@ -18,6 +19,7 @@ import {
   HelpCircle,
   CreditCard,
   Keyboard,
+  Globe,
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
@@ -29,6 +31,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
@@ -321,18 +326,28 @@ const UserProfileArea = React.memo(function UserProfileArea() {
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Globe className="mr-2 h-4 w-4" />
+              Language
+              <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-40">
+              <DropdownMenuItem>English</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuItem onClick={() => router.push('/help')}>
             <HelpCircle className="mr-2 h-4 w-4" />
-            Help &amp; Support
+            Get help
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => router.push('/pricing')}>
             <CreditCard className="mr-2 h-4 w-4" />
-            View plans
+            View all plans
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/download')}>
             <Download className="mr-2 h-4 w-4" />
-            Get apps
+            Get apps and extensions
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
@@ -349,7 +364,7 @@ const UserProfileArea = React.memo(function UserProfileArea() {
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Sign out
+            Log out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

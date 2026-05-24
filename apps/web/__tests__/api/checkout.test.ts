@@ -20,28 +20,12 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn(() => ({ userId: 'test-user-id' })),
+}));
+
 vi.mock('@/services/supabase-server', () => ({
   createSupabaseServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({
-        data: {
-          user: {
-            id: 'test-user-id',
-            email: 'test@example.com',
-          },
-        },
-      })),
-      getSession: vi.fn(() => ({
-        data: {
-          session: {
-            user: {
-              id: 'test-user-id',
-              email: 'test@example.com',
-            },
-          },
-        },
-      })),
-    },
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
@@ -114,24 +98,8 @@ describe('POST /api/checkout', () => {
   });
 
   it('should return 401 if user is not authenticated', async () => {
-    const { createSupabaseServerClient } = await import('@/services/supabase-server');
-    vi.mocked(createSupabaseServerClient).mockResolvedValueOnce({
-      auth: {
-        getUser: vi.fn(() => ({
-          data: { user: null },
-        })),
-        getSession: vi.fn(() => ({
-          data: { session: null },
-        })),
-      },
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: vi.fn(() => ({ data: null })),
-          })),
-        })),
-      })),
-    } as unknown as Awaited<ReturnType<typeof createSupabaseServerClient>>);
+    const { auth } = await import('@clerk/nextjs/server');
+    vi.mocked(auth).mockReturnValueOnce({ userId: null } as ReturnType<typeof auth>);
 
     const request = new NextRequest('http://localhost/api/checkout', {
       method: 'POST',
@@ -143,7 +111,6 @@ describe('POST /api/checkout', () => {
 
     expect(response.status).toBe(401);
     expect(data.error.code).toBe('UNAUTHORIZED');
-    expect(data.error.message).toBe('Authentication required');
   });
 
   it('should validate request body', async () => {

@@ -116,9 +116,16 @@ function partitionModels(
   const inTierManual = manualModels.filter((m) => isModelAllowedForTier(m.id, tier));
   const lockedManual = manualModels.filter((m) => !isModelAllowedForTier(m.id, tier));
 
-  // Show up to 1 locked flagship at the top of recommended; fill remaining 2 slots with in-tier.
-  const flagshipLocked = lockedManual.slice(0, 1);
-  const remainingSlots = 3 - flagshipLocked.length;
+  // Always surface the Opus model in recommended so free users see the Anthropic flagship upsell.
+  // Show up to 2 locked flagships: the first locked model in provider order, plus the Opus model
+  // if it isn't already included. Fill remaining slots with in-tier models.
+  const opusModel = lockedManual.find((m) => m.name.toLowerCase().includes('opus'));
+  const firstLocked = lockedManual.slice(0, 1);
+  const flagshipLocked =
+    opusModel && !firstLocked.some((m) => m.id === opusModel.id)
+      ? [...firstLocked, opusModel]
+      : firstLocked;
+  const remainingSlots = Math.max(0, 3 - flagshipLocked.length);
   const inTierSlice = inTierManual.slice(0, remainingSlots);
   const recommendedManual = [...flagshipLocked, ...inTierSlice];
 

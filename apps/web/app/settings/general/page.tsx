@@ -5,7 +5,7 @@ import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@/stores/unified/auth';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { getSupabaseClient } from '@/services/supabase';
+import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
@@ -89,6 +89,7 @@ function savePrefs(prefs: PreferenceSettings): void {
 export default function GeneralSettingsPage() {
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const user = useBillingStore((s) => s.user);
+  const { user: clerkUser } = useUser();
   const logout = useAuthStore((s) => s.logout);
   const router = useRouter();
 
@@ -186,17 +187,15 @@ export default function GeneralSettingsPage() {
       window.localStorage.setItem(LS_WORK_KEY, workDescription);
       window.localStorage.setItem(LS_INSTRUCTIONS_KEY, instructions);
 
-      if (user) {
-        const supabase = getSupabaseClient();
-        const { error } = await supabase.auth.updateUser({
-          data: {
+      if (clerkUser) {
+        await clerkUser.update({
+          unsafeMetadata: {
             full_name: trimmedFull,
             preferred_name: trimmedPreferred,
             work_description: workDescription,
             instructions: instructions.slice(0, 2000),
           },
         });
-        if (error) throw new Error(error.message);
       }
       setSavedAt(Date.now());
     } catch (err) {

@@ -37,8 +37,6 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
 
   try {
     const supabase = await createSupabaseServerClient();
-    // Use getUser() for server-side JWT validation - getSession() reads from
-    // the cookie without server verification and must not be trusted for auth.
     const {
       data: { user },
       error: userError,

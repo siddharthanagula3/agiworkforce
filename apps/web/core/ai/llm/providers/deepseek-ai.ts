@@ -6,7 +6,7 @@
  */
 
 import { logger } from '@shared/lib/logger';
-import { getAuthToken } from './get-auth-token';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // SECURITY: All API calls go through Netlify proxy functions
 // Environment variables with VITE_ prefix are exposed to the browser (security risk)
