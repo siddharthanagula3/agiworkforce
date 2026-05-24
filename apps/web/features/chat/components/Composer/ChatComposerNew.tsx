@@ -830,7 +830,7 @@ const ChatComposerNewComponent = ({
                           onClick={closeMenu}
                           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
-                          Add connector
+                          + Add connector
                         </a>
                         <a
                           href="/connectors/permissions"
