@@ -1,87 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { logSecurityEvent, getClientIp } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 
 // ---------------------------------------------------------------------------
-// Environment
-// ---------------------------------------------------------------------------
-
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-
-// ---------------------------------------------------------------------------
-// Admin auth verification (mirrors /api/admin/security pattern)
+// Admin auth verification
 // ---------------------------------------------------------------------------
 
 async function verifyAdminAccess(
   request: NextRequest,
 ): Promise<{ isAdmin: boolean; userId?: string; organizationId?: string; error?: string }> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { isAdmin: false, error: 'Server configuration error' };
-  }
-
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { isAdmin: false, error: 'Missing authorization header' };
-  }
-
-  const token = authHeader.slice(7);
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
-
-  // Verify the JWT and get the user
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
-
-  if (error || !user) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
     return { isAdmin: false, error: 'Invalid or expired token' };
   }
 
-  // Check admin via app_metadata (secure - only modifiable via service role)
-  const isAdminFromAppMetadata = user.app_metadata?.['role'] === 'admin';
+  const supabase = getServiceClient();
 
-  if (!isAdminFromAppMetadata) {
-    // Not a global admin - check if they are an org owner/admin.
-    // NOTE: profiles.is_admin is intentionally NOT used as a fallback here because
-    // profiles is user-editable and could allow privilege escalation. Only
-    // app_metadata.role (service-role-only writable) grants global admin status.
-    const { data: membership } = await supabase
-      .from('organization_members')
-      .select('organization_id, role')
-      .eq('user_id', user.id)
-      .in('role', ['owner', 'admin'])
-      .limit(1)
-      .maybeSingle();
-
-    if (!membership) {
-      return { isAdmin: false, error: 'Insufficient privileges - org admin or owner required' };
-    }
-
-    return {
-      isAdmin: true,
-      userId: user.id,
-      organizationId: membership.organization_id,
-    };
-  }
-
-  // Global admin - resolve their organization
+  // Check if caller is an org owner/admin.
+  // NOTE: The previous Supabase-era app_metadata.role === 'admin' global-admin
+  // shortcut has been removed. Access is now gated exclusively on org membership
+  // role (owner or admin), which is stored in the database and auditable.
   const { data: membership } = await supabase
     .from('organization_members')
-    .select('organization_id')
-    .eq('user_id', user.id)
+    .select('organization_id, role')
+    .eq('user_id', userId)
+    .in('role', ['owner', 'admin'])
     .limit(1)
     .maybeSingle();
 
+  if (!membership) {
+    return { isAdmin: false, error: 'Insufficient privileges - org admin or owner required' };
+  }
+
   return {
     isAdmin: true,
-    userId: user.id,
-    organizationId: membership?.organization_id ?? undefined,
+    userId,
+    organizationId: membership.organization_id,
   };
 }
 
@@ -109,13 +69,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
+    const supabaseAdmin = getServiceClient();
 
     const { data: connections, error: fetchError } = await supabaseAdmin
       .from('directory_sync_connections')
@@ -173,10 +127,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-
     const body = await request.json();
     const { provider, directory_id, display_name } = body as {
       provider?: string;
@@ -200,9 +150,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
+    const supabaseAdmin = getServiceClient();
 
     const { data: connection, error: insertError } = await supabaseAdmin
       .from('directory_sync_connections')
@@ -288,10 +236,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('id');
 
@@ -302,9 +246,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
+    const supabaseAdmin = getServiceClient();
 
     // Verify the connection belongs to the admin's organization
     const { data: existing } = await supabaseAdmin

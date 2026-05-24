@@ -13,7 +13,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { createClient as createServerClient } from '@/utils/supabase/server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
 export function OPTIONS(request: NextRequest) {
@@ -52,17 +53,9 @@ async function handleCreateShare(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'share-create');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth via SSR client (cookie-based) — the SSR client is already RLS-bound
-  // via the user's session, so we can use it for the insert too. RLS policy on
-  // shared_sessions enforces owner_id = auth.uid().
-  const supabase = await createServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    throw createError.unauthorized();
-  }
+  // Auth via Clerk (handles both cookie session and Bearer token).
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = getServiceClient();
 
   // Validate body
   let rawBody: unknown = {};
@@ -88,7 +81,7 @@ async function handleCreateShare(request: NextRequest) {
     .from('shared_sessions')
     .insert({
       token,
-      owner_id: user.id,
+      owner_id: userId,
       title,
       model_id,
       provider,
@@ -100,7 +93,7 @@ async function handleCreateShare(request: NextRequest) {
     .single();
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create shared session');
+    logger.error({ error, userId: userId }, 'Failed to create shared session');
     throw createError.internal('Failed to create share');
   }
 
