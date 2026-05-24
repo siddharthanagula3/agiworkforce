@@ -138,6 +138,14 @@ async function handleCreateConnector(request: NextRequest) {
 
   const supabase = getScopedClient(request);
 
+  // NOTE: Real OAuth integration is deferred. For connectors with authType
+  // 'oauth', this endpoint currently only records intent (is_active: true)
+  // without performing an OAuth redirect, token exchange, or storing provider
+  // credentials. The UI already gates OAuth connectors behind a "Coming Soon"
+  // state so users cannot reach this path for oauth connectors in practice.
+  // When real OAuth ships, add: redirect to provider, exchange code for token,
+  // encrypt + store credentials, then set is_active: true.
+  //
   // Upsert: if user reconnects a previously disconnected connector, reactivate it
   const { data, error } = await supabase
     .from('user_connectors')
