@@ -830,7 +830,12 @@ const ChatComposerNewComponent = ({
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                   >
                     <Puzzle className="h-4 w-4 text-violet-400" />
-                    <span className="flex-1 text-left">Browse available plugins</span>
+                    <span className="flex-1 text-left">
+                      Browse available plugins
+                      <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+                        Coming soon
+                      </span>
+                    </span>
                     <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </a>
                 </div>
