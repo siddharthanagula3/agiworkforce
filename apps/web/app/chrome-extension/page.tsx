@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Chrome Extension — AI alongside every webpage | AGI',
+  title: 'Chrome Extension: AI alongside every webpage | AGI',
   description:
     'A side panel that lives on top of any tab. Read the page, ask a question. Your desktop is the brain. No model runs in the browser.',
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
@@ -171,7 +171,7 @@ export default function ChromeExtensionPage() {
             }}
           >
             <ScreenshotPlaceholder
-              label="Side panel — chat alongside any tab"
+              label="Side panel: chat alongside any tab"
               description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
             />
             <ScreenshotPlaceholder
@@ -264,11 +264,11 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Browser model</td>
-                <td>None — desktop runs all inference</td>
+                <td>None; desktop runs all inference</td>
               </tr>
               <tr>
                 <td>Web Store</td>
-                <td>Coming soon — join the waitlist for early access</td>
+                <td>Coming soon. Join the waitlist for early access.</td>
               </tr>
             </tbody>
           </table>
