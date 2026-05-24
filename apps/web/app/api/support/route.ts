@@ -18,7 +18,7 @@ const SubmitTicketSchema = z.object({
 
 type TicketRow = {
   id: string;
-  user_id: string | null;
+  user_id: string;
   name: string;
   email: string;
   subject: string;
@@ -57,16 +57,7 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Support ticket submission is allowed for unauthenticated users (contact form),
-  // but we attempt to associate with user if authenticated.
-  let userId: string | null = null;
-  try {
-    const auth = await getClerkAuthUser(request);
-    userId = auth.userId;
-  } catch {
-    // Not authenticated - allow anonymous ticket submission
-  }
-
+  const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
   const body = await request.json();
