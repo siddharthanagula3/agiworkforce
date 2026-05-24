@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Brain } from 'lucide-react';
+import { ChevronDown, Brain, Lock, ChevronRight } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
-import { Command, CommandList, CommandItem, CommandGroup, CommandInput } from '@shared/ui/command';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
 import { PROVIDER_DISPLAY, EFFORT_LABEL, type ProviderId, type Effort } from '@agiworkforce/types';
 import { MARKETING } from '@/lib/marketing-constants';
+import { useBillingStore } from '@/stores/unified/auth';
+import { isModelAllowedForTier } from '@/constants/llm';
 
 /**
  * Map a model-store providerKey (from models.json) to a ProviderId
@@ -40,12 +41,43 @@ function providerSupportsEffort(providerKey: string): boolean {
   return id ? PROVIDER_DISPLAY[id].supportsEffort : false;
 }
 
-function groupByProvider(models: AIModel[]): Record<string, AIModel[]> {
-  return models.reduce<Record<string, AIModel[]>>((acc, model) => {
-    if (!acc[model.providerKey]) acc[model.providerKey] = [];
-    acc[model.providerKey]!.push(model);
-    return acc;
-  }, {});
+/**
+ * Partition models into "recommended" (top ~4 for the user's tier, in-tier
+ * models first with auto-modes at the top) and "more" (the rest).
+ *
+ * When a search query is present we skip partitioning so the user sees all
+ * matching results in a flat list.
+ */
+function partitionModels(
+  models: AIModel[],
+  tier: string,
+  searchQuery: string,
+): { recommended: AIModel[]; more: AIModel[]; isSearching: boolean } {
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    const matches = models.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q),
+    );
+    return { recommended: matches, more: [], isSearching: true };
+  }
+
+  const inTier = models.filter(
+    (m) => m.providerKey === 'managed_cloud' || isModelAllowedForTier(m.id, tier),
+  );
+  const outOfTier = models.filter(
+    (m) => m.providerKey !== 'managed_cloud' && !isModelAllowedForTier(m.id, tier),
+  );
+
+  // Top recommended: auto-modes first (managed_cloud), then up to 3 in-tier manual models
+  const autoModels = inTier.filter((m) => m.providerKey === 'managed_cloud');
+  const manualInTier = inTier.filter((m) => m.providerKey !== 'managed_cloud');
+  const recommended = [...autoModels, ...manualInTier.slice(0, 3)];
+  const more = [...manualInTier.slice(3), ...outOfTier];
+
+  return { recommended, more, isSearching: false };
 }
 
 /** Provider logo: img when SVG exists, brand-color dot as fallback. */
@@ -80,6 +112,68 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: 
   );
 }
 
+/** Renders a single model row in the selector. Locked rows show an Upgrade badge linking to /pricing. */
+function ModelRow({
+  model,
+  isSelected,
+  isLocked,
+  onSelect,
+}: {
+  model: AIModel;
+  isSelected: boolean;
+  isLocked: boolean;
+  onSelect?: () => void;
+}) {
+  return (
+    <div
+      className={[
+        'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
+        isLocked ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-muted/60',
+        isSelected ? 'bg-muted/40' : '',
+      ].join(' ')}
+      onClick={isLocked ? undefined : onSelect}
+      role={isLocked ? undefined : 'button'}
+      tabIndex={isLocked ? -1 : 0}
+      onKeyDown={
+        isLocked
+          ? undefined
+          : (e) => {
+              if (e.key === 'Enter' || e.key === ' ') onSelect?.();
+            }
+      }
+    >
+      <ProviderLogo providerKey={model.providerKey} size={14} />
+      <span className="min-w-0 flex-1">
+        <span
+          className={[
+            'block truncate text-sm',
+            isSelected ? 'font-medium text-foreground' : 'text-foreground/80',
+          ].join(' ')}
+        >
+          {model.name}
+        </span>
+        {model.description && (
+          <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
+        )}
+      </span>
+      {isLocked && (
+        <a
+          href="/pricing"
+          onClick={(e) => e.stopPropagation()}
+          className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 hover:bg-amber-400/25"
+          aria-label="Upgrade to unlock this model"
+        >
+          <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+          Upgrade
+        </a>
+      )}
+      {isSelected && !isLocked && (
+        <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+      )}
+    </div>
+  );
+}
+
 const EFFORT_ORDER: Effort[] = ['low', 'medium', 'high', 'max'];
 
 interface ComposerFooterProps {
@@ -92,6 +186,8 @@ export function ComposerFooter({
   showModelSelector = true,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [moreExpanded, setMoreExpanded] = useState(false);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
@@ -99,18 +195,17 @@ export function ComposerFooter({
   const setThinkingEnabled = useModelStore((s) => s.setThinkingEnabled);
   const thinkingBudget = useModelStore((s) => s.thinkingBudget);
   const setThinkingBudget = useModelStore((s) => s.setThinkingBudget);
+  const subscription = useBillingStore((s) => s.subscription);
+  const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
 
-  // Group models by providerKey (raw key from models.json, e.g. "anthropic", "managed_cloud")
-  const grouped = groupByProvider(AVAILABLE_MODELS);
+  // Partition into recommended / more, respecting current tier and search
+  const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
 
-  // Derive display order: managed_cloud (auto modes) first, then remaining providers
-  const providerOrder = Object.keys(grouped).sort((a, b) => {
-    if (a === 'managed_cloud') return -1;
-    if (b === 'managed_cloud') return 1;
-    return 0;
-  });
+  // Auto-expand "More models" section when the selected model lives there
+  const selectedInMore = more.some((m) => m.id === selectedModelId);
+  const showMore = moreExpanded || selectedInMore || isSearching;
 
   const selectedProviderKey = selectedModel.providerKey;
   const supportsEffort = providerSupportsEffort(selectedProviderKey);
@@ -202,7 +297,16 @@ export function ComposerFooter({
 
           {/* Model selector */}
           {showModelSelector && (
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover
+              open={open}
+              onOpenChange={(o) => {
+                setOpen(o);
+                if (!o) {
+                  setSearchQuery('');
+                  setMoreExpanded(false);
+                }
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   id="model-selector"
@@ -215,72 +319,96 @@ export function ComposerFooter({
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
-                <Command>
-                  <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
-                    <span className="text-xs font-medium text-foreground">Models</span>
-                    <span className="ml-auto text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                      {MARKETING.providers.display} providers
-                    </span>
-                  </div>
-                  <CommandInput placeholder="Search models..." className="h-9" />
-                  <CommandList className="max-h-[320px]">
-                    {providerOrder.map((providerKey) => {
-                      const models = grouped[providerKey];
-                      if (!models || models.length === 0) return null;
-                      const id = toProviderId(providerKey);
-                      const providerLabel = id
-                        ? PROVIDER_DISPLAY[id].label
-                        : (models[0]?.provider ?? providerKey);
-                      const isAuto = providerKey === 'managed_cloud';
+                <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
+                  <span className="text-xs font-medium text-foreground">Models</span>
+                  <span className="ml-auto rounded bg-muted/50 px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {MARKETING.providers.display} providers
+                  </span>
+                </div>
+                {/* Search input */}
+                <div className="border-b border-border/40 px-3 py-1.5">
+                  <input
+                    className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                    placeholder="Search models..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Search models"
+                  />
+                </div>
+                <div className="max-h-[320px] overflow-y-auto py-1">
+                  {/* Recommended section */}
+                  {!isSearching && (
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      Recommended
+                    </div>
+                  )}
+                  {recommended.map((model) => {
+                    const isSelected = model.id === selectedModelId;
+                    return (
+                      <ModelRow
+                        key={model.id}
+                        model={model}
+                        isSelected={isSelected}
+                        isLocked={false}
+                        onSelect={() => {
+                          setSelectedModelId(model.id);
+                          setOpen(false);
+                        }}
+                      />
+                    );
+                  })}
 
-                      return (
-                        <CommandGroup
-                          key={providerKey}
-                          heading={
-                            <span className="flex items-center gap-1.5">
-                              <ProviderLogo providerKey={providerKey} size={12} />
-                              {isAuto ? 'Auto (Best)' : providerLabel}
-                            </span>
-                          }
-                        >
-                          {models.map((model) => {
-                            const isSelected = model.id === selectedModelId;
-                            return (
-                              <CommandItem
-                                key={model.id}
-                                value={`${model.provider} ${model.name} ${model.id}`}
-                                onSelect={() => {
-                                  setSelectedModelId(model.id);
-                                  setOpen(false);
-                                }}
-                                className="flex cursor-pointer items-center gap-2 py-1.5"
-                              >
-                                <span className="flex-1 min-w-0">
-                                  <span
-                                    className={[
-                                      'block truncate text-sm',
-                                      isSelected ? 'font-medium text-foreground' : '',
-                                    ].join(' ')}
-                                  >
-                                    {model.name}
-                                  </span>
-                                  {model.description && (
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {model.description}
-                                    </span>
-                                  )}
-                                </span>
-                                {isSelected && (
-                                  <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                                )}
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
-                      );
-                    })}
-                  </CommandList>
-                </Command>
+                  {/* More models section — only shown when not searching */}
+                  {!isSearching && more.length > 0 && (
+                    <>
+                      <div className="my-1 border-t border-border/40" />
+                      <button
+                        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                        onClick={() => setMoreExpanded((v) => !v)}
+                        aria-expanded={showMore}
+                      >
+                        <ChevronRight
+                          className={[
+                            'h-3 w-3 shrink-0 transition-transform',
+                            showMore ? 'rotate-90' : '',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                        More models
+                        <span className="ml-auto rounded bg-muted/50 px-1 text-[10px]">
+                          {more.length}
+                        </span>
+                      </button>
+                      {showMore &&
+                        more.map((model) => {
+                          const locked = !isModelAllowedForTier(model.id, tier);
+                          const isSelected = model.id === selectedModelId;
+                          return (
+                            <ModelRow
+                              key={model.id}
+                              model={model}
+                              isSelected={isSelected}
+                              isLocked={locked}
+                              onSelect={
+                                locked
+                                  ? undefined
+                                  : () => {
+                                      setSelectedModelId(model.id);
+                                      setOpen(false);
+                                    }
+                              }
+                            />
+                          );
+                        })}
+                    </>
+                  )}
+
+                  {recommended.length === 0 && isSearching && (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                      No models match
+                    </p>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           )}
