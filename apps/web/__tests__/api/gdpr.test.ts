@@ -1,17 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock environment variables
-const mockEnv = {
-  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: 'test_anon_key',
-  SUPABASE_SERVICE_ROLE_KEY: 'test_service_key',
-};
-
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', mockEnv.NEXT_PUBLIC_SUPABASE_URL);
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY', mockEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', mockEnv.SUPABASE_SERVICE_ROLE_KEY);
-
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   logger: {
@@ -64,16 +53,33 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-// Test user data
+// ── Clerk auth mock ───────────────────────────────────────────────────────────
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// ── Neon DB mock ──────────────────────────────────────────────────────────────
+const mockNeonQuery = vi.fn();
+const mockNeonExecute = vi.fn();
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
+}));
+
+// ── Test fixtures ─────────────────────────────────────────────────────────────
+
 const mockUser = {
   id: 'user_test_123',
   email: 'test@example.com',
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-15T00:00:00Z',
-  email_confirmed_at: '2024-01-01T00:00:00Z',
-  last_sign_in_at: '2024-01-15T10:00:00Z',
-  app_metadata: {},
-  user_metadata: { name: 'Test User' },
 };
 
 const mockProfile = {
@@ -95,90 +101,18 @@ const mockSubscription = {
   current_period_end: '2024-02-01T00:00:00Z',
 };
 
-// Create chainable mock for Supabase client
-const createChainableMock = (returnData: unknown = null, returnError: unknown = null) => {
-  const mock: Record<string, ReturnType<typeof vi.fn>> = {};
-
-  const chainMethods = ['select', 'eq', 'single', 'maybeSingle', 'order', 'limit', 'delete'];
-
-  chainMethods.forEach((method) => {
-    mock[method] = vi.fn().mockReturnValue(mock);
-  });
-
-  mock['single'] = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
-  mock['maybeSingle'] = vi.fn().mockResolvedValue({ data: returnData, error: returnError });
-  mock['delete'] = vi.fn().mockReturnValue(mock);
-
-  return mock;
-};
-
-// Mock Supabase
-const mockSupabaseClient = {
-  auth: {
-    getSession: vi.fn().mockResolvedValue({
-      data: { session: { user: mockUser } },
-      error: null,
-    }),
-    getUser: vi.fn().mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    }),
-  },
-  from: vi.fn((table: string) => {
-    const chainable = createChainableMock();
-
-    if (table === 'profiles') {
-      chainable['single'] = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
-    } else if (table === 'subscriptions') {
-      chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
-    } else {
-      chainable['single'] = vi.fn().mockResolvedValue({ data: null, error: null });
-    }
-
-    // For order().limit() chains, return array
-    chainable['limit'] = vi.fn().mockResolvedValue({ data: [], error: null });
-    chainable['order'] = vi.fn().mockReturnValue(chainable);
-
-    return chainable;
-  }),
-  rpc: vi.fn().mockResolvedValue({ data: true, error: null }),
-};
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseClient),
-}));
-
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => mockSupabaseClient),
-}));
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
-      error: null,
-    });
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
-    // Re-establish rpc mock after clearAllMocks (mockReset: true clears implementations)
-    mockSupabaseClient.rpc.mockResolvedValue({ data: true, error: null });
-    // Re-establish from mock for fallback deletion paths
-    mockSupabaseClient.from.mockImplementation((table: string) => {
-      const chainable = createChainableMock();
-      if (table === 'profiles') {
-        chainable['single'] = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
-      } else if (table === 'subscriptions') {
-        chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
-      } else {
-        chainable['single'] = vi.fn().mockResolvedValue({ data: null, error: null });
-      }
-      chainable['limit'] = vi.fn().mockResolvedValue({ data: [], error: null });
-      chainable['order'] = vi.fn().mockReturnValue(chainable);
-      return chainable;
-    });
+
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
+
+    // Default: RPC succeeds
+    mockNeonQuery.mockResolvedValue([{ success: true }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   afterEach(() => {
@@ -187,11 +121,9 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
   describe('Authentication', () => {
     it('should reject unauthenticated requests', async () => {
-      // Mock no user — the route calls auth.getUser(), not auth.getSession()
-      mockSupabaseClient.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'No session found' },
-      });
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Unauthorized'), { statusCode: 401 }),
+      );
 
       const { DELETE } = await import('@/app/api/user/data/route');
 
@@ -230,10 +162,9 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
     });
 
     it('should reject invalid Bearer tokens', async () => {
-      mockSupabaseClient.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid token' },
-      });
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Invalid token'), { statusCode: 401 }),
+      );
 
       const { DELETE } = await import('@/app/api/user/data/route');
 
@@ -273,7 +204,7 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
   });
 
   describe('Data Deletion', () => {
-    it('should call delete_user_data RPC function', async () => {
+    it('should call delete_user_data SQL function via Neon', async () => {
       const { DELETE } = await import('@/app/api/user/data/route');
 
       const request = new NextRequest('http://localhost/api/user/data', {
@@ -285,9 +216,10 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
       await DELETE(request);
 
-      expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('delete_user_data', {
-        target_user_id: mockUser.id,
-      });
+      // Route calls: db.query('select * from delete_user_data($1)', [userId])
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('delete_user_data'), [
+        mockUser.id,
+      ]);
     });
 
     it('should return success response with deletion timestamp', async () => {
@@ -310,10 +242,12 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
     });
 
     it('should handle RPC function not found and use fallback deletion', async () => {
-      mockSupabaseClient.rpc.mockResolvedValue({
-        data: null,
-        error: { message: 'function not found', code: 'PGRST202' },
-      });
+      // RPC throws "function not found" error — route falls back to manual deletion
+      mockNeonQuery.mockRejectedValueOnce(
+        Object.assign(new Error('function delete_user_data does not exist'), { code: '42883' }),
+      );
+      // Fallback execute calls succeed
+      mockNeonExecute.mockResolvedValue(1);
 
       const { DELETE } = await import('@/app/api/user/data/route');
 
@@ -333,20 +267,10 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
     });
 
     it('should handle database errors gracefully', async () => {
-      mockSupabaseClient.rpc.mockResolvedValue({
-        data: null,
-        error: { message: 'Database error', code: 'DB001' },
-      });
-
-      // Re-mock from() for fallback to also fail
-      mockSupabaseClient.from.mockReturnValue({
-        delete: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: 'Delete failed', code: 'DB002' },
-          }),
-        }),
-      });
+      // RPC throws a non-missing-function error
+      mockNeonQuery.mockRejectedValueOnce(
+        Object.assign(new Error('Database error'), { code: 'DB001' }),
+      );
 
       const { DELETE } = await import('@/app/api/user/data/route');
 
@@ -368,8 +292,7 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
   describe('Audit Logging', () => {
     beforeEach(() => {
-      // Reset mock to success state after the previous database error test
-      mockSupabaseClient.rpc.mockResolvedValue({ data: { success: true }, error: null });
+      mockNeonQuery.mockResolvedValue([{ success: true }]);
     });
 
     it('should log deletion request for audit purposes', async () => {
@@ -397,8 +320,7 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 
   describe('CORS Support', () => {
     beforeEach(() => {
-      // Reset mock to success state
-      mockSupabaseClient.rpc.mockResolvedValue({ data: { success: true }, error: null });
+      mockNeonQuery.mockResolvedValue([{ success: true }]);
     });
 
     it('should include CORS headers in response', async () => {
@@ -422,23 +344,20 @@ describe('GDPR Data Deletion API (DELETE /api/user/data)', () => {
 describe('GDPR Data Export API (GET /api/user/export)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
-      error: null,
-    });
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
-    mockSupabaseClient.rpc.mockResolvedValue({
-      data: {
+
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
+
+    // Default: RPC returns export data
+    mockNeonQuery.mockResolvedValue([
+      {
         profile: mockProfile,
         subscription: mockSubscription,
         token_credits: [],
         credit_transactions: [],
       },
-      error: null,
-    });
+    ]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   afterEach(() => {
@@ -447,11 +366,9 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
 
   describe('Authentication', () => {
     it('should reject unauthenticated requests', async () => {
-      // Mock no user — the route calls auth.getUser(), not auth.getSession()
-      mockSupabaseClient.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'No session found' },
-      });
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Unauthorized'), { statusCode: 401 }),
+      );
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -487,7 +404,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
   });
 
   describe('Data Export', () => {
-    it('should call export_user_data RPC function', async () => {
+    it('should call export_user_data SQL function via Neon', async () => {
       const { GET } = await import('@/app/api/user/export/route');
 
       const request = new NextRequest('http://localhost/api/user/export', {
@@ -499,9 +416,10 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
 
       await GET(request);
 
-      expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('export_user_data', {
-        target_user_id: mockUser.id,
-      });
+      // Route calls: db.query('select * from export_user_data($1)', [userId])
+      expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('export_user_data'), [
+        mockUser.id,
+      ]);
     });
 
     it('should return JSON response with export data', async () => {
@@ -558,23 +476,10 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     });
 
     it('should use fallback when RPC function not found', async () => {
-      mockSupabaseClient.rpc.mockResolvedValue({
-        data: null,
-        error: { message: 'function not found', code: 'PGRST202' },
-      });
-
-      // Setup mock for fallback data fetching
-      mockSupabaseClient.from.mockImplementation((table: string) => {
-        const chainable = createChainableMock();
-
-        if (table === 'profiles') {
-          chainable['single'] = vi.fn().mockResolvedValue({ data: mockProfile, error: null });
-        } else if (table === 'subscriptions') {
-          chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
-        }
-
-        return chainable;
-      });
+      // RPC throws "function not found" error
+      mockNeonQuery.mockRejectedValueOnce(
+        Object.assign(new Error('export_user_data function does not exist'), { code: '42883' }),
+      );
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -593,10 +498,10 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     });
 
     it('should include GDPR metadata in export', async () => {
-      mockSupabaseClient.rpc.mockResolvedValue({
-        data: null,
-        error: { message: 'function not found' },
-      });
+      // Force fallback path
+      mockNeonQuery.mockRejectedValueOnce(
+        Object.assign(new Error('function not found'), { code: '42883' }),
+      );
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -615,20 +520,12 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
     });
 
     it('should redact sensitive information in export', async () => {
-      mockSupabaseClient.rpc.mockResolvedValue({
-        data: null,
-        error: { message: 'function not found' },
-      });
-
-      mockSupabaseClient.from.mockImplementation((table: string) => {
-        const chainable = createChainableMock();
-
-        if (table === 'subscriptions') {
-          chainable['single'] = vi.fn().mockResolvedValue({ data: mockSubscription, error: null });
-        }
-
-        return chainable;
-      });
+      // Force fallback path that fetches from DB tables
+      mockNeonQuery.mockRejectedValueOnce(
+        Object.assign(new Error('function not found'), { code: '42883' }),
+      );
+      // Fallback query for profiles/subscriptions returns subscription with Stripe IDs
+      mockNeonQuery.mockResolvedValueOnce([mockSubscription]);
 
       const { GET } = await import('@/app/api/user/export/route');
 
@@ -695,33 +592,23 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
 describe('GDPR Compliance Requirements', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockSupabaseClient.auth.getSession.mockResolvedValue({
-      data: { session: { user: mockUser } },
-      error: null,
-    });
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
+    mockNeonQuery.mockResolvedValue([{ success: true }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('should support Article 17 - Right to Erasure', async () => {
-    // Test that deletion endpoint exists and works
     const { DELETE } = await import('@/app/api/user/data/route');
     expect(DELETE).toBeDefined();
   });
 
   it('should support Article 20 - Right to Data Portability', async () => {
-    // Test that export endpoint exists and works
     const { GET } = await import('@/app/api/user/export/route');
     expect(GET).toBeDefined();
   });
 
   it('should provide machine-readable format for exports', async () => {
-    mockSupabaseClient.rpc.mockResolvedValue({
-      data: { profile: mockProfile },
-      error: null,
-    });
+    mockNeonQuery.mockResolvedValueOnce([{ profile: mockProfile }]);
 
     const { GET } = await import('@/app/api/user/export/route');
 
@@ -743,15 +630,14 @@ describe('GDPR Compliance Requirements', () => {
   });
 
   it('should delete all user-related data on deletion request', async () => {
-    mockSupabaseClient.rpc.mockResolvedValue({
-      data: {
+    mockNeonQuery.mockResolvedValueOnce([
+      {
         profiles_deleted: 1,
         subscriptions_deleted: 1,
         credits_deleted: 5,
         devices_deleted: 2,
       },
-      error: null,
-    });
+    ]);
 
     const { DELETE } = await import('@/app/api/user/data/route');
 
@@ -766,8 +652,9 @@ describe('GDPR Compliance Requirements', () => {
     const data = await response.json();
 
     expect(data.success).toBe(true);
-    expect(mockSupabaseClient.rpc).toHaveBeenCalledWith('delete_user_data', {
-      target_user_id: mockUser.id,
-    });
+    // Route calls delete_user_data via Neon query
+    expect(mockNeonQuery).toHaveBeenCalledWith(expect.stringContaining('delete_user_data'), [
+      mockUser.id,
+    ]);
   });
 });

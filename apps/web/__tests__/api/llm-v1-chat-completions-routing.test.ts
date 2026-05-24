@@ -80,34 +80,21 @@ vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
 }));
 
-// Mock Supabase auth
-const mockSupabaseClient = {
-  auth: {
-    getUser: vi.fn(),
-  },
-};
+// Mock Clerk auth — auth-gate.ts uses getClerkAuthUser
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseClient),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// Mock Supabase server client (auth-gate creates one for subscription lookup)
+vi.mock('@/services/supabase-server', () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 vi.mock('@/lib/supabase-server', () => ({
   getUserClient: vi.fn().mockReturnValue({}),
-  getServiceClient: vi.fn(() => mockSupabaseClient),
-}));
-
-// auth-gate now calls getAuthenticatedUserWithClient (api-auth.ts) which wraps
-// the service-role JWT-verify + getUserClient pattern previously inlined.
-// Mock it to return the same shape so the route handler keeps working.
-vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: vi.fn(async () => ({
-    id: 'pro-user-id',
-    email: 'pro@example.com',
-  })),
-  getAuthenticatedUserWithClient: vi.fn(async () => ({
-    user: { id: 'pro-user-id', email: 'pro@example.com' },
-    userDb: {},
-  })),
+  getServiceClient: vi.fn(() => ({})),
 }));
 
 // Mock subscription + credit services
@@ -193,10 +180,7 @@ describe('POST /api/llm/v1/chat/completions — Pro-tier routing wiring (Task #2
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'pro-user-id', email: 'pro@example.com' } },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'pro-user-id', email: 'pro@example.com' });
 
     mockGetSubscription.mockResolvedValue(makeProSubscription());
 

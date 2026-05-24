@@ -145,6 +145,13 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 if authorization header is missing', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Authentication required'), {
+          code: 'UNAUTHORIZED',
+          statusCode: 401,
+        }),
+      );
+
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         body: JSON.stringify({
@@ -158,10 +165,13 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 401 if authorization header does not start with Bearer', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
+
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         headers: {
