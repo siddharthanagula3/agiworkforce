@@ -137,6 +137,8 @@ export interface ChatSession {
   userId?: string;
   isPinned?: boolean;
   isArchived?: boolean;
+  /** Project this session belongs to (client-side only; not persisted to vibe_sessions). */
+  projectId?: string | null;
 }
 
 interface ChatState {
@@ -160,6 +162,7 @@ interface ChatActions {
   unpinSession: (sessionId: string) => void;
   archiveSession: (sessionId: string) => void;
   unarchiveSession: (sessionId: string) => void;
+  moveToProject: (sessionId: string, projectId: string | null) => void;
   setActiveSession: (sessionId: string | null) => void;
   addMessage: (
     sessionId: string,
@@ -321,6 +324,13 @@ export const useChatStore = create<ChatState & ChatActions>()(
         set((state) => {
           const session = state.sessions.find((s) => s.id === sessionId);
           if (session) session.isArchived = false;
+        });
+      },
+
+      moveToProject: (sessionId, projectId) => {
+        set((state) => {
+          const session = state.sessions.find((s) => s.id === sessionId);
+          if (session) session.projectId = projectId;
         });
       },
 
