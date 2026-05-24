@@ -83,7 +83,7 @@ describe('ComparisonResponse', () => {
   it('shows confirmation text for choice=b', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="b" />);
     expect(screen.getByText(/you chose option b/i).textContent).toBe(
-      'You chose option B. The other response has been dimmed.',
+      'You chose option B. Tap the other tab to compare.',
     );
   });
 
