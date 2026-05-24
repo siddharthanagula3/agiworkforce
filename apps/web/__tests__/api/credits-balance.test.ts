@@ -40,6 +40,16 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
+// Mock errors — real implementations so createError.* returns proper AppError instances
+vi.mock('@/lib/errors', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  return {
+    createError: actual.createError,
+    AppError: actual.AppError,
+    isAppError: actual.isAppError,
+  };
+});
+
 // Mock Clerk auth
 const mockGetClerkAuthUser = vi.fn();
 
@@ -98,9 +108,8 @@ describe('Credits Balance API', () => {
   describe('GET /api/llm/v1/credits/balance', () => {
     describe('Authentication', () => {
       it('should return 401 without authorization header', async () => {
-        mockGetClerkAuthUser.mockRejectedValueOnce(
-          Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-        );
+        const { createError } = await import('@/lib/errors');
+        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance');
 
@@ -109,9 +118,8 @@ describe('Credits Balance API', () => {
       });
 
       it('should return 401 with invalid authorization header format', async () => {
-        mockGetClerkAuthUser.mockRejectedValueOnce(
-          Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-        );
+        const { createError } = await import('@/lib/errors');
+        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Basic invalid' },
@@ -122,9 +130,8 @@ describe('Credits Balance API', () => {
       });
 
       it('should return 401 with invalid token', async () => {
-        mockGetClerkAuthUser.mockRejectedValueOnce(
-          Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-        );
+        const { createError } = await import('@/lib/errors');
+        mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer invalid-token' },
