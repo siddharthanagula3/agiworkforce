@@ -10,6 +10,143 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
 
+/** Inline screenshot placeholder card — no images needed at launch. */
+function ScreenshotPlaceholder({ label, description }: { label: string; description: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule-strong)',
+        borderRadius: 12,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Mock browser chrome bar */}
+      <div
+        style={{
+          background: 'var(--agi-bg-3)',
+          borderBottom: '1px solid var(--agi-rule)',
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            color: 'var(--agi-ink-quiet)',
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      {/* Placeholder body */}
+      <div
+        style={{
+          padding: '32px 24px',
+          minHeight: 160,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
+        }}
+      >
+        <p
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: 'var(--agi-amber)',
+            margin: 0,
+          }}
+        >
+          Screenshot
+        </p>
+        <p
+          style={{
+            fontSize: 14,
+            color: 'var(--agi-ink-2)',
+            textAlign: 'center',
+            maxWidth: 320,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const FEATURES = [
+  {
+    label: 'Side panel chat',
+    body: 'Persistent side panel alongside any tab. The conversation carries page context automatically.',
+  },
+  {
+    label: 'Page reader',
+    body: 'Content scripts extract structured text from articles, docs, and tickets. No copy-paste.',
+  },
+  {
+    label: 'Platform assistants',
+    body: 'Context-aware on Slack, Gmail, Google Calendar, Google Docs, and GitHub. Triggered by URL pattern.',
+  },
+  {
+    label: 'Job autofill',
+    body: 'One-click application autofill on LinkedIn and Lever. Pulls profile context from your settings.',
+  },
+  {
+    label: 'Quick popup',
+    body: 'Click the toolbar icon for one-off questions without opening the side panel.',
+  },
+  {
+    label: 'Desktop bridge',
+    body: 'Native messaging to AGI Desktop on localhost:8787. All inference runs on your machine.',
+  },
+  {
+    label: 'BYOK across providers',
+    body: 'No model runs in the browser. Keys stay on your desktop; the extension never touches them.',
+  },
+  {
+    label: 'Privacy by design',
+    body: 'Zero telemetry on AI screens. Page text never sent to a server — it goes to your desktop only.',
+  },
+];
+
 export default function ChromeExtensionPage() {
   return (
     <div data-design="agi">
@@ -29,10 +166,36 @@ export default function ChromeExtensionPage() {
               Install dev build
             </Link>
             <Link href="/desktop" className="agi-cta-ghost">
-              Pair with desktop →
+              Pair with desktop &rarr;
             </Link>
           </div>
         </section>
+
+        {/* ---- SCREENSHOTS ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            <ScreenshotPlaceholder
+              label="Side panel — chat alongside any tab"
+              description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
+            />
+            <ScreenshotPlaceholder
+              label="Platform assistant — Gmail"
+              description="Context card appears automatically on Gmail. Summarize thread, draft reply, or extract action items in one click."
+            />
+            <ScreenshotPlaceholder
+              label="Quick popup — one-off questions"
+              description="Toolbar icon popup for fast queries. No side panel needed. Answer streams back in under a second over the desktop bridge."
+            />
+          </div>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">The architecture</p>
           <ol className="agi-steps">
@@ -62,6 +225,20 @@ export default function ChromeExtensionPage() {
             </li>
           </ol>
         </section>
+
+        {/* ---- FEATURES GRID ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Features</p>
+          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="Extension features">
+            {FEATURES.map((f) => (
+              <li key={f.label} className="agi-perk-card">
+                <p className="agi-perk-title">{f.label}</p>
+                <p className="agi-perk-description">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">Built-in</p>
           <ul className="agi-reasons">

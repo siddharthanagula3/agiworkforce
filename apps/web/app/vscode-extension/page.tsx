@@ -19,6 +19,129 @@ const SLASH: { cmd: string; desc: string }[] = [
   { cmd: '/model', desc: 'Switch the active provider and model' },
 ];
 
+const FEATURES = [
+  {
+    label: '@agi chat participant',
+    body: 'Use @agi inside Copilot Chat on VS Code and editors that support the Chat Participant API (Cursor, Windsurf). Ask questions, request refactors, run slash commands.',
+  },
+  {
+    label: 'Inline completions',
+    body: 'Ghost-text as you type, powered by whichever provider you pick. Switch providers per file, per project, or globally via the status bar.',
+  },
+  {
+    label: 'Code lens',
+    body: 'Inline actions above every function: Explain, Fix, Refactor, Add Tests, Add Docs. One click, no selection needed.',
+  },
+  {
+    label: 'Hover provider',
+    body: 'Hover any symbol for an inline explanation from your chosen model. Works across all languages.',
+  },
+  {
+    label: 'Multi-provider switching',
+    body: '10+ providers available. Status-bar picker lets you swap model mid-session without leaving the editor.',
+  },
+  {
+    label: 'Cursor compatibility',
+    body: 'The @agi chat participant works in Cursor and other VS Code forks that support the Chat Participant API surface.',
+  },
+  {
+    label: 'BYOK',
+    body: 'Bring your own keys. Pay providers directly. No AGI subscription required to use the editor extension.',
+  },
+  {
+    label: 'Desktop bridge (optional)',
+    body: 'Connect to AGI Desktop on localhost:8787 to unlock computer-use, full tool call routing, and multi-model pipelines.',
+  },
+];
+
+/** Inline screenshot placeholder — styled to look like a code editor panel. */
+function EditorScreenshot({ label, description }: { label: string; description: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule-strong)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Editor title bar */}
+      <div
+        style={{
+          background: 'var(--agi-bg-3)',
+          borderBottom: '1px solid var(--agi-rule)',
+          padding: '8px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            width: 10,
+            height: 10,
+            borderRadius: 2,
+            background: 'var(--agi-amber-soft)',
+            border: '1px solid var(--agi-amber)',
+            display: 'inline-block',
+            flexShrink: 0,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 11,
+            color: 'var(--agi-ink-2)',
+            fontFamily: 'var(--mono)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      {/* Content area */}
+      <div
+        style={{
+          padding: '28px 20px',
+          minHeight: 140,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          background: `linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)`,
+        }}
+      >
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: 'var(--agi-amber)',
+            margin: 0,
+          }}
+        >
+          Screenshot
+        </p>
+        <p
+          style={{
+            fontSize: 13,
+            color: 'var(--agi-ink-2)',
+            textAlign: 'center',
+            maxWidth: 300,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function VscodeExtensionPage() {
   return (
     <div data-design="agi">
@@ -41,10 +164,53 @@ export default function VscodeExtensionPage() {
               Install via VSIX
             </a>
             <Link href="/providers" className="agi-cta-ghost">
-              See the providers →
+              See the providers &rarr;
             </Link>
           </div>
         </section>
+
+        {/* ---- SCREENSHOTS ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            <EditorScreenshot
+              label="@agi in Copilot Chat"
+              description="@agi chat participant answering a question about the open file. Works in VS Code, Cursor, and other editors with the Chat Participant API."
+            />
+            <EditorScreenshot
+              label="Code lens actions"
+              description="Inline Explain, Fix, Refactor, Tests, Docs buttons above a TypeScript function. One click triggers the action with full file context."
+            />
+            <EditorScreenshot
+              label="Provider switcher"
+              description="Status-bar model picker showing available providers. Switch mid-session without leaving the editor or touching a config file."
+            />
+          </div>
+        </section>
+
+        {/* ---- FEATURES GRID ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Features</p>
+          <ul
+            className="agi-perks-grid"
+            style={{ marginTop: 24 }}
+            aria-label="VS Code extension features"
+          >
+            {FEATURES.map((f) => (
+              <li key={f.label} className="agi-perk-card">
+                <p className="agi-perk-title">{f.label}</p>
+                <p className="agi-perk-description">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">What you get</p>
           <ul className="agi-reasons">
@@ -93,6 +259,10 @@ export default function VscodeExtensionPage() {
               <tr>
                 <td>Marketplace</td>
                 <td>Listing in review — install via VSIX from GitHub Releases</td>
+              </tr>
+              <tr>
+                <td>Cursor / forks</td>
+                <td>Supported via the Chat Participant API — install the same VSIX</td>
               </tr>
               <tr>
                 <td>Desktop bridge</td>

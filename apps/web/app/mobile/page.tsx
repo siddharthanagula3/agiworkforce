@@ -302,6 +302,101 @@ export default function MobilePage() {
           </p>
         </section>
 
+        {/* ---- 1b. SCREENSHOTS ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: 16,
+            }}
+          >
+            {/* Phone mockup placeholders */}
+            {[
+              {
+                title: 'Chat — on-device, offline',
+                desc: 'Conversation screen with streaming response from Apple Foundation Models. No network activity indicator visible.',
+              },
+              {
+                title: 'Image Q&A — point and ask',
+                desc: 'Camera feed with AGI overlay. User pointed at a handwritten recipe. AI extracted ingredients and suggested substitutions.',
+              },
+              {
+                title: 'Voice mode',
+                desc: 'Voice input active. Waveform animation shows live transcription. Response reads back in the selected voice.',
+              },
+            ].map((shot) => (
+              <div
+                key={shot.title}
+                style={{
+                  background: 'var(--agi-card)',
+                  border: '1px solid var(--agi-rule-strong)',
+                  borderRadius: 16,
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Phone status bar mock */}
+                <div
+                  style={{
+                    background: 'var(--agi-bg-3)',
+                    borderBottom: '1px solid var(--agi-rule)',
+                    padding: '8px 16px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    fontSize: 10,
+                    color: 'var(--agi-ink-quiet)',
+                    fontFamily: 'var(--mono)',
+                  }}
+                >
+                  <span>9:41 AM</span>
+                  <span>{shot.title}</span>
+                  <span>100%</span>
+                </div>
+                <div
+                  style={{
+                    padding: '28px 16px',
+                    minHeight: 160,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    background:
+                      'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 600,
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                      color: 'var(--agi-amber)',
+                      margin: 0,
+                    }}
+                  >
+                    Screenshot
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      color: 'var(--agi-ink-2)',
+                      textAlign: 'center',
+                      maxWidth: 240,
+                      lineHeight: 1.5,
+                      margin: 0,
+                    }}
+                  >
+                    {shot.desc}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
         {/* ---- 2. WHAT'S DIFFERENT (3 cards) ---- */}
         <section className="agi-section">
           <p className="agi-section-eyebrow">{COPY.diffEyebrow}</p>
