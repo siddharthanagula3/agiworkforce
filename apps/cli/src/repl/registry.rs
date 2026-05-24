@@ -835,9 +835,9 @@ pub(super) fn parse_tier_and_text(input: &str) -> (MemoryTier, &str) {
 // ---------------------------------------------------------------------------
 
 pub fn handle_init_project() {
-    let claude_md = std::path::Path::new("CLAUDE.md");
-    if claude_md.exists() {
-        output::print_info("CLAUDE.md already exists in current directory.");
+    let agents_md = std::path::Path::new("AGENTS.md");
+    if agents_md.exists() {
+        output::print_info("AGENTS.md already exists in current directory.");
         return;
     }
 
@@ -853,9 +853,9 @@ pub fn handle_init_project() {
                     ## Development Rules\n\n\
                     - Add your coding conventions here\n";
 
-    match std::fs::write(claude_md, template) {
-        Ok(()) => output::print_info("Created CLAUDE.md in current directory."),
-        Err(e) => output::print_error(&format!("Failed to create CLAUDE.md: {}", e)),
+    match std::fs::write(agents_md, template) {
+        Ok(()) => output::print_info("Created AGENTS.md in current directory."),
+        Err(e) => output::print_error(&format!("Failed to create AGENTS.md: {}", e)),
     }
 }
 
