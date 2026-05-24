@@ -29,32 +29,11 @@ vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
-// Mock Supabase
-const mockSupabaseClient = {
-  auth: {
-    getUser: vi.fn(),
-  },
-};
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseClient),
-}));
+// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
+const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: vi.fn(async (req: Request) => {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized();
-    }
-    const token = authHeader.substring(7);
-    const { data, error } = await mockSupabaseClient.auth.getUser(token);
-    if (error || !data?.user) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized('Invalid token');
-    }
-    return data.user;
-  }),
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 // Capture what messages are passed to the LLM
@@ -117,10 +96,7 @@ describe('POST /api/completion — fence-strip regression', () => {
       content: 'A helpful completion.',
       model: 'claude-haiku-4-5',
     });
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: { user: { id: 'test-user-id', email: 'test@example.com' } },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'test-user-id', email: 'test@example.com' });
   });
 
   afterEach(() => {

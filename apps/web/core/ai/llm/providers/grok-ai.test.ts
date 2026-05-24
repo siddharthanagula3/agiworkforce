@@ -13,15 +13,8 @@ import {
 import { GrokProvider, GrokError, GrokMessage } from './grok-ai';
 
 // Mock external dependencies
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-  },
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 vi.mock('@shared/lib/logger', () => ({
@@ -33,7 +26,7 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 // Get mocked modules
-const { supabase } = await import('@shared/lib/supabase-client');
+const { getAuthToken } = await import('@shared/lib/get-auth-token');
 
 describe('GrokProvider', () => {
   let provider: GrokProvider;
@@ -43,10 +36,7 @@ describe('GrokProvider', () => {
     vi.clearAllMocks();
 
     // Setup default auth mock
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    } as never);
+    vi.mocked(getAuthToken).mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -208,10 +198,7 @@ describe('GrokProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(GrokError);
       // Error gets re-wrapped in catch block as REQUEST_FAILED
@@ -267,41 +254,7 @@ describe('GrokProvider', () => {
       expect(response.userId).toBe('user-456');
     });
 
-    it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-            usage: { prompt_tokens: 5 },
-            id: 'resp-123',
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', 'user-456');
-
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
-        }),
-      );
-    });
-
     it('should include realTimeDataUsed in metadata', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>

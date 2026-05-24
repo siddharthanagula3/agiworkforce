@@ -11,15 +11,8 @@ import {
 import { PerplexityProvider, PerplexityError, PerplexityMessage } from './perplexity-ai';
 
 // Mock external dependencies
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-  },
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 vi.mock('@shared/lib/logger', () => ({
@@ -31,7 +24,7 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 // Get mocked modules
-const { supabase } = await import('@shared/lib/supabase-client');
+const { getAuthToken } = await import('@shared/lib/get-auth-token');
 
 describe('PerplexityProvider', () => {
   let provider: PerplexityProvider;
@@ -41,10 +34,7 @@ describe('PerplexityProvider', () => {
     vi.clearAllMocks();
 
     // Setup default auth mock
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    } as never);
+    vi.mocked(getAuthToken).mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -195,10 +185,7 @@ describe('PerplexityProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(PerplexityError);
       // Error gets re-wrapped in catch block as REQUEST_FAILED (message doesn't match special patterns)

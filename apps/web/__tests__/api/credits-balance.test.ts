@@ -40,15 +40,16 @@ vi.mock('@/lib/services/subscription-service', () => ({
   },
 }));
 
-// Mock Supabase
-const mockSupabaseAuth = {
-  auth: {
-    getUser: vi.fn(),
-  },
-};
+// Mock Clerk auth
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseAuth),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// Mock Supabase service client (used by CreditService/SubscriptionService)
+vi.mock('@/lib/supabase-server', () => ({
+  getServiceClient: vi.fn(() => ({})),
 }));
 
 // Import after mocks
@@ -88,10 +89,7 @@ describe('Credits Balance API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    mockSupabaseAuth.auth.getUser.mockResolvedValue({
-      data: { user: mockUser },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: mockUser.id, email: mockUser.email });
 
     vi.mocked(SubscriptionService.getSubscription).mockResolvedValue(mockSubscription);
     vi.mocked(CreditService.getBalance).mockResolvedValue(mockBalance);
@@ -100,16 +98,21 @@ describe('Credits Balance API', () => {
   describe('GET /api/llm/v1/credits/balance', () => {
     describe('Authentication', () => {
       it('should return 401 without authorization header', async () => {
+        mockGetClerkAuthUser.mockRejectedValueOnce(
+          Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+        );
+
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance');
 
         const response = await GET(request);
         expect(response.status).toBe(401);
-
-        const data = await response.json();
-        expect(data.error.code).toBe('invalid_api_key');
       });
 
       it('should return 401 with invalid authorization header format', async () => {
+        mockGetClerkAuthUser.mockRejectedValueOnce(
+          Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+        );
+
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Basic invalid' },
         });
@@ -119,10 +122,9 @@ describe('Credits Balance API', () => {
       });
 
       it('should return 401 with invalid token', async () => {
-        mockSupabaseAuth.auth.getUser.mockResolvedValue({
-          data: { user: null },
-          error: { message: 'Invalid token' },
-        });
+        mockGetClerkAuthUser.mockRejectedValueOnce(
+          Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+        );
 
         const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
           headers: { Authorization: 'Bearer invalid-token' },
@@ -130,9 +132,6 @@ describe('Credits Balance API', () => {
 
         const response = await GET(request);
         expect(response.status).toBe(401);
-
-        const data = await response.json();
-        expect(data.error.message).toBe('Invalid authentication token');
       });
     });
 

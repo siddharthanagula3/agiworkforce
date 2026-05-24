@@ -56,37 +56,19 @@ vi.mock('@/lib/cors', () => ({
 
 // Mock env utility
 vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    const envMap: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-test',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key-test',
-    };
-    return envMap[key] ?? `test-${key}`;
-  }),
+  requireEnv: vi.fn((key: string) => `test-${key}`),
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-// Mock Supabase client
-const mockGetUser = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-  })),
+// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock @supabase/ssr for cookie-based auth path
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(() => ({
-        data: { user: null },
-        error: new Error('No session'),
-      })),
-    },
-  })),
+// Mock Supabase server client (the route creates one for credit service calls)
+vi.mock('@/services/supabase-server', () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 // Mock CreditService
@@ -219,11 +201,8 @@ describe('POST /api/agents/execute', () => {
     mockFsAccess.mockResolvedValue(undefined);
     mockFsReadFile.mockResolvedValue('You are a helpful AI assistant.');
 
-    // Default: authenticated user
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-123', email: 'test@example.com' } },
-      error: null,
-    });
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
     // Default: sufficient credits
     mockCheckAvailable.mockResolvedValue(true);
@@ -242,9 +221,12 @@ describe('POST /api/agents/execute', () => {
     });
   });
 
-  it('should return 401 when no authorization header is provided and no session cookie', async () => {
+  it('should return 401 when no authorization header is provided and no session', async () => {
+    mockGetClerkAuthUser.mockRejectedValueOnce(
+      Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+    );
+
     const request = makeRequest({ message: 'Hello' }); // no auth header
-    // Cookie-based auth fallback is mocked to return no user (see @supabase/ssr mock)
     const response = await POST(request);
     expect(response.status).toBe(401);
     const data = await response.json();
@@ -252,10 +234,9 @@ describe('POST /api/agents/execute', () => {
   });
 
   it('should return 401 when Bearer token is invalid', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: new Error('Invalid token'),
-    });
+    mockGetClerkAuthUser.mockRejectedValueOnce(
+      Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+    );
 
     const request = makeRequest({ message: 'Hello' }, FAKE_BEARER);
     const response = await POST(request);
