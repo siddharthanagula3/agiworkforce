@@ -192,6 +192,11 @@ interface Message {
     };
     /** Which A/B option the user selected */
     comparisonChoice?: 'a' | 'b';
+    /**
+     * True when this user message was pasted (not typed).
+     * Set by the composer paste handler; renders a "PASTED" badge (Fix 42).
+     */
+    isPasted?: boolean;
   };
 }
 
@@ -511,6 +516,66 @@ const MessageBubbleComponent = function MessageBubble({
               <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
             )}
           </div>
+
+          {/* Attachments (Fix 43) — image thumbnails or file-type icons */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {message.attachments.map((attachment) => {
+                const isImage = attachment.type.startsWith('image/');
+                const isDoc =
+                  attachment.type === 'application/pdf' ||
+                  attachment.type.includes('word') ||
+                  attachment.type.includes('document');
+                return (
+                  <a
+                    key={attachment.id}
+                    href={attachment.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border border-border/50 overflow-hidden',
+                      'bg-muted/40 hover:bg-muted/70 transition-colors text-left no-underline',
+                      isImage ? 'p-0' : 'px-2.5 py-1.5',
+                    )}
+                    title={attachment.name}
+                  >
+                    {isImage ? (
+                      <div className="relative h-24 w-24 overflow-hidden rounded-lg">
+                        <img
+                          src={attachment.thumbnailUrl ?? attachment.url}
+                          alt={attachment.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {isDoc ? (
+                          <FileText
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : attachment.type.startsWith('image/') ? (
+                          <FileImage
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <File
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="max-w-[160px] truncate text-xs text-foreground">
+                          {attachment.name}
+                        </span>
+                      </>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          )}
 
           {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
           {!isUser && cleanedContent.trim() && (
