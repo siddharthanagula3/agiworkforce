@@ -54,7 +54,7 @@ vi.mock('@/lib/cors', () => ({
 // Clerk mock — provides authenticated user for getClerkAuthUser
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-test-id' }));
 vi.mock('@clerk/nextjs/server', () => ({
-  auth: (...args: unknown[]) => mockClerkAuth(...args),
+  auth: () => mockClerkAuth(),
 }));
 
 // Neon DB mock — query returns profile with stripe_customer_id
@@ -142,7 +142,7 @@ describe('POST /api/credit-topup — authentication', () => {
   });
 
   it('returns 401 when there is no authenticated user', async () => {
-    mockClerkAuth.mockResolvedValueOnce({ userId: null });
+    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
@@ -152,7 +152,7 @@ describe('POST /api/credit-topup — authentication', () => {
   });
 
   it('returns 401 when auth returns no userId', async () => {
-    mockClerkAuth.mockResolvedValueOnce({ userId: null });
+    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
