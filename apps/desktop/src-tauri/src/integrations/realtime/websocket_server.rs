@@ -588,6 +588,10 @@ impl RealtimeServer {
         // RT-04 fix: validate Origin header during the WebSocket handshake.
         // `accept_hdr_async_with_config` lets us inspect the HTTP upgrade request
         // before the connection is established AND cap per-frame size.
+        #[allow(
+            clippy::result_large_err,
+            reason = "tungstenite handshake callbacks require ErrorResponse by value"
+        )]
         let callback = |request: &Request, response: Response| -> Result<Response, ErrorResponse> {
             let origin = request
                 .headers()
