@@ -505,7 +505,7 @@ const MessageBubbleComponent = function MessageBubble({
           {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
           {!isUser && cleanedContent.trim() && (
             <div className="mt-1">
-              <ArtifactBlock content={cleanedContent} isStreaming={message.isStreaming} />
+              <ArtifactBlock content={cleanedContent} />
             </div>
           )}
 
