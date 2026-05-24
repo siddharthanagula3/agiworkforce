@@ -350,8 +350,10 @@ export function ArtifactPreview({
   const handleOpenInNewTab = () => {
     // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke the blob
     // URL after a minute so the GC can reclaim the HTML body.
+    // getPreviewHTML() always returns a full <!DOCTYPE html> document regardless
+    // of artifact.type, so text/html is always correct here.
     const html = getPreviewHTML();
-    const blob = new Blob([html], { type: 'text/plain' });
+    const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
