@@ -14,6 +14,9 @@ import {
   PanelLeft,
   Plus,
   Download,
+  HelpCircle,
+  CreditCard,
+  Keyboard,
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
@@ -271,10 +274,32 @@ const UserProfileArea = React.memo(function UserProfileArea() {
             />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-52 mb-1">
+        <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
           <DropdownMenuItem onClick={() => router.push('/settings/general')}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/help')}>
+            <HelpCircle className="mr-2 h-4 w-4" />
+            Help &amp; Support
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => router.push('/pricing')}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            View plans
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => router.push('/download')}>
+            <Download className="mr-2 h-4 w-4" />
+            Get apps
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              /* keyboard shortcuts — show hint inline */
+            }}
+          >
+            <Keyboard className="mr-2 h-4 w-4" />
+            Keyboard shortcuts
+            <span className="ml-auto text-[10px] text-muted-foreground">?</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -282,7 +307,7 @@ const UserProfileArea = React.memo(function UserProfileArea() {
             className="text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Sign Out
+            Sign out
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -334,7 +359,12 @@ function CollapsedSidebar({
         <Search className="h-[18px] w-[18px]" />
       </button>
 
-      <button className={RAIL_BTN} title="Chats" aria-label="Chats">
+      <button
+        onClick={() => router.push('/chats')}
+        className={RAIL_BTN}
+        title="Chats"
+        aria-label="Chats"
+      >
         <MessageSquare className="h-[18px] w-[18px]" />
       </button>
 
@@ -522,6 +552,14 @@ function ChatSidebarContent({
         >
           <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           New chat
+        </button>
+        <button
+          onClick={() => router.push('/chats')}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
+          aria-label="Chats"
+        >
+          <MessageSquare className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Chats
         </button>
         <button
           onClick={() => router.push('/projects')}
