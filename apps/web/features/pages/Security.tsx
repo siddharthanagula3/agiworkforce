@@ -38,7 +38,7 @@ const SecurityPage: React.FC = () => {
       icon: Database,
       title: 'Secure Data Storage',
       description:
-        'Data is stored in Supabase with Row Level Security (RLS) policies ensuring users can only access their own data.',
+        'Data is stored in a managed database with Row Level Security (RLS) policies ensuring users can only access their own data.',
       color: 'from-green-500 to-emerald-500',
     },
     {
@@ -52,7 +52,7 @@ const SecurityPage: React.FC = () => {
       icon: Shield,
       title: 'Authentication',
       description:
-        'Supabase Auth provides secure authentication with email verification, password reset, and session management.',
+        'Managed auth provides secure authentication with email verification, password reset, and session management.',
       color: 'from-orange-500 to-red-500',
     },
     {
@@ -66,7 +66,7 @@ const SecurityPage: React.FC = () => {
       icon: Server,
       title: 'Infrastructure Security',
       description:
-        'Hosted on Netlify and Supabase with SOC 2 Type II compliance, regular security audits, and DDoS protection.',
+        'Hosted on managed cloud infrastructure with regular security reviews and DDoS protection.',
       color: 'from-teal-500 to-cyan-500',
     },
   ];

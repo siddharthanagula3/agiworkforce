@@ -8,6 +8,7 @@ import {
   type MessageMetadata,
   type MessageToolEntry,
 } from '@/stores/chatStore';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 interface SendMessageOptions {
   model?: string;
@@ -44,12 +45,13 @@ async function saveMessageToDb(
   authToken: string,
 ): Promise<{ id: string } | null> {
   try {
+    const headers = await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    });
     const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      },
+      headers,
       body: JSON.stringify({
         role: message.role,
         content: message.content,
@@ -309,12 +311,13 @@ export function useChatStream(): UseChatStreamReturn {
           }
         }
 
+        const headers = await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        });
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
+          headers,
           body: JSON.stringify({
             model,
             messages: apiMessages,

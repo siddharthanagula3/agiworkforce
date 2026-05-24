@@ -6,6 +6,7 @@ import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { getSupabaseClient } from '@/services/supabase';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { SendPreview } from '@agiworkforce/unified-chat';
 import {
@@ -103,12 +104,13 @@ async function saveSystemMessage(params: {
   metadata: MessageMetadata;
 }): Promise<Message> {
   const authToken = await getAuthToken();
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${authToken}`,
+  });
   const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    },
+    headers,
     body: JSON.stringify({
       role: 'system',
       content: params.content,

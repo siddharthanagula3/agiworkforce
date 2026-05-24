@@ -168,19 +168,16 @@ export default async function RootLayout({
       <head>
         {/* Organization Schema */}
         <script
-          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
         {/* SoftwareApplication Schema */}
         <script
-          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
         />
         {/* WebSite Schema with SearchAction */}
         <script
-          nonce={nonce}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
         />
@@ -189,7 +186,7 @@ export default async function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <SkipLinks />
-        <Providers>{children}</Providers>
+        <Providers nonce={nonce}>{children}</Providers>
         {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
         {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
       </body>

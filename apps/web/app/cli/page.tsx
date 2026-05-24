@@ -22,7 +22,7 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'session', desc: 'Inspect or branch sessions' },
   { cmd: 'plugin', desc: 'Manage plugins' },
   { cmd: 'history', desc: 'Browse session history' },
-  { cmd: 'login', desc: 'Sign in to a provider or our managed cloud' },
+  { cmd: 'login', desc: 'Sign in to a provider or configure BYOK' },
   { cmd: 'auth-status', desc: 'Show auth status for every provider' },
   { cmd: 'init', desc: 'Initialize ~/.agiworkforce/' },
   { cmd: 'onboarding', desc: 'Re-run the first-run onboarding' },

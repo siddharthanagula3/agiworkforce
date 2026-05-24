@@ -3,6 +3,7 @@
 import { useCallback, useEffect } from 'react';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
 import { getSupabaseClient } from '@/services/supabase';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // API response types
 interface ApiConversation {
@@ -112,7 +113,7 @@ export function useConversations(): UseConversationsReturn {
       setError(null);
 
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch('/api/chat/conversations', {
           method: 'POST',
           headers,
@@ -204,7 +205,7 @@ export function useConversations(): UseConversationsReturn {
   const updateConversation = useCallback(
     async (id: string, updates: { title?: string; model?: string }): Promise<boolean> => {
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(`/api/chat/conversations/${id}`, {
           method: 'PUT',
           headers,
@@ -235,7 +236,7 @@ export function useConversations(): UseConversationsReturn {
   const deleteConversation = useCallback(
     async (id: string): Promise<boolean> => {
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(`/api/chat/conversations/${id}`, {
           method: 'DELETE',
           headers,

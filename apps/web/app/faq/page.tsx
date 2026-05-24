@@ -28,7 +28,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does Hobby cost?',
-    a: '$10/mo, or $5/mo if you pay annually. The only paid tier shipping today. Pro / Pro+ / Max are on the waitlist until our security audit closes.',
+    a: 'Hobby managed cloud is waitlisted. Local and BYOK are the MVP paths until metering, fraud controls, refunds, deletion, and provider terms are proven.',
   },
   {
     q: 'Do you train on my data?',
@@ -44,7 +44,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Where do you host data?',
-    a: 'us-east-2 by default (Supabase). EU on the roadmap. Custom regions on Enterprise contracts.',
+    a: 'United States by default. EU residency and custom regions are on the Enterprise roadmap.',
   },
 ];
 

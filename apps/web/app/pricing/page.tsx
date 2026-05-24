@@ -47,8 +47,6 @@ export default function PricingPage() {
   const hobbyMonthly = BILLING_PLAN_PRICING.hobby.monthlyPriceUsd;
   const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
   const hobbyAnnualPerMonth = hobbyYearly / 12;
-  const hobbyPrice = annual ? `$${hobbyAnnualPerMonth.toFixed(2)}` : `$${hobbyMonthly}`;
-  const hobbySub = annual ? t('perMonthBilledAnnually') : t('perMonthBilledMonthly');
   const hobbySavingsPct = Math.round((1 - hobbyAnnualPerMonth / hobbyMonthly) * 100);
 
   const comparisonRows = MARKETING_FEATURE_MATRIX[activeTab];
@@ -111,8 +109,8 @@ export default function PricingPage() {
             ))}
           </div>
 
-          {/* Billing cadence toggle — only relevant for individual/team */}
-          {activeTab !== 'api' && (
+          {/* Billing cadence toggle — only relevant for waitlisted team tiers. */}
+          {activeTab === 'team' && (
             <div className="agi-tier-toggle" role="tablist" aria-label={t('billingCadenceLabel')}>
               <button
                 type="button"
@@ -208,8 +206,8 @@ export default function PricingPage() {
               <article className="agi-tier">
                 <h2 className="agi-tier-name">{t('hobby')}</h2>
                 <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{hobbyPrice}</span>
-                  <span className="agi-tier-price-sub">{hobbySub}</span>
+                  <span className="agi-tier-price-num">{t('waitlistBadge')}</span>
+                  <span className="agi-tier-price-sub">{t('managedWaitlistSub')}</span>
                 </p>
                 <p className="agi-tier-body">{t('hobbyTierBody')}</p>
                 <ul className="agi-tier-features">
@@ -231,10 +229,10 @@ export default function PricingPage() {
                   </li>
                 </ul>
                 <div className="agi-tier-cta-group">
-                  <Link href="/login" className="agi-tier-cta">
-                    {t('subscribeCta')}
+                  <Link href="/pricing#waitlist" className="agi-tier-cta">
+                    {t('joinWaitlistCta')}
                   </Link>
-                  <p className="agi-tier-cta-note">{t('noCommitment')}</p>
+                  <p className="agi-tier-cta-note">{t('managedWaitlistNote')}</p>
                 </div>
               </article>
             </div>

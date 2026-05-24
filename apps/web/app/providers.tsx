@@ -13,7 +13,13 @@ import { seoService } from '@core/monitoring/seo-optimizer';
 // i18n is initialized synchronously at module import time (see app/i18n/index.ts).
 // No async gate needed — rendering immediately prevents the blank-screen flash
 // that occurred when this component returned null on its first render cycle.
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({
+  children,
+  nonce,
+}: {
+  children: React.ReactNode;
+  nonce?: string;
+}) {
   // Initialize SEO service for marketing pages (structured data, meta tags)
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -23,7 +29,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <QueryProvider>
-      <ThemeProvider>
+      <ThemeProvider nonce={nonce}>
         <I18nextProvider i18n={i18n}>
           {children}
           <CommandPaletteProvider />
