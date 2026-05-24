@@ -29,6 +29,7 @@ import {
 } from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
 import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
+import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { getCsrfToken } from '@/lib/client/csrf';
 import Image from 'next/image';
 
@@ -1209,43 +1210,33 @@ interface AddCustomConnectorDialogProps {
 function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDialogProps) {
   const [mcpUrl, setMcpUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
-  const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleRegister = useCallback(async () => {
+  // MCP server registration is coming soon. For now, save the URL to
+  // localStorage so we can pre-populate when the backend ships, and
+  // open the MCP docs so the user can verify their server URL format.
+  const handleRegister = useCallback(() => {
     if (!mcpUrl.trim()) {
       setError('MCP server URL is required.');
       return;
     }
     setError(null);
-    setRegistering(true);
     try {
-      const res = await fetch('/api/connectors/mcp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: mcpUrl.trim(), token: authToken.trim() || undefined }),
-      });
-      if (!res.ok) {
-        // MCP registration API may not exist yet; fall back to opening docs.
-        window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
-        onOpenChange(false);
-        return;
+      const pending = JSON.parse(
+        localStorage.getItem('agi.mcp.pendingServers') ?? '[]',
+      ) as string[];
+      if (!pending.includes(mcpUrl.trim())) {
+        pending.push(mcpUrl.trim());
+        localStorage.setItem('agi.mcp.pendingServers', JSON.stringify(pending));
       }
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        setMcpUrl('');
-        setAuthToken('');
-        onOpenChange(false);
-      }, 1500);
     } catch {
-      window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
-      onOpenChange(false);
-    } finally {
-      setRegistering(false);
+      // localStorage unavailable; proceed without saving
     }
-  }, [mcpUrl, authToken, onOpenChange]);
+    window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+    setMcpUrl('');
+    setAuthToken('');
+    onOpenChange(false);
+  }, [mcpUrl, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1291,17 +1282,10 @@ function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDial
               <Button
                 size="sm"
                 className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => void handleRegister()}
-                disabled={registering}
+                onClick={handleRegister}
               >
-                {registering ? (
-                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                ) : success ? (
-                  <Check className="mr-1.5 h-3 w-3 text-emerald-400" />
-                ) : (
-                  <Plus className="mr-1.5 h-3 w-3" />
-                )}
-                {success ? 'Connected!' : 'Connect server'}
+                <Plus className="mr-1.5 h-3 w-3" />
+                Connect server
               </Button>
             </div>
           </div>
@@ -1590,6 +1574,240 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
   );
 };
 
+// ─── ConnectorListRow ─────────────────────────────────────────────────────────
+// Compact left-panel list row: icon + name + connected status dot
+
+interface ConnectorListRowProps {
+  connector: Connector;
+  selected: boolean;
+  connected: boolean;
+  onClick: () => void;
+}
+
+const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
+  connector,
+  selected,
+  connected,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-100',
+      selected
+        ? 'bg-primary/10 text-foreground'
+        : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+    )}
+  >
+    <ConnectorLogo connector={connector} />
+    <span className="min-w-0 flex-1 truncate text-xs font-medium">{connector.name}</span>
+    {connected ? (
+      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+    ) : connector.exclusive ? (
+      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/60" />
+    ) : null}
+  </button>
+);
+
+// ─── ConnectorDetailPanel ─────────────────────────────────────────────────────
+// Right-side detail view for the selected connector
+
+interface ConnectorDetailPanelProps {
+  connector: Connector;
+  connected: boolean;
+  mutating: boolean;
+  connectedAt?: string;
+  onBack: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onOpenPermissions: () => void;
+}
+
+// Inline tool lookup — avoids a second import statement at top-level that
+// would duplicate the existing `getConnectorTools` used by ToolPermissionsPanel.
+function useConnectorTools(connectorId: string): string[] {
+  return React.useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('../config/connector-logos') as {
+      getConnectorTools: (id: string) => string[];
+    };
+    return mod.getConnectorTools(connectorId);
+  }, [connectorId]);
+}
+
+const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
+  connector,
+  connected,
+  mutating,
+  connectedAt,
+  onBack,
+  onConnect,
+  onDisconnect,
+  onOpenPermissions,
+}) => {
+  const isComingSoon = connector.phase > 1;
+  const isOAuth = connector.authType === 'oauth';
+  const hasRealCredentials = connected && !isOAuth;
+  const tools = useConnectorTools(connector.id);
+
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-card p-5">
+      {/* Mobile back button */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground lg:hidden"
+      >
+        Back
+      </button>
+
+      {/* Header row */}
+      <div className="mb-4 flex flex-wrap items-start gap-3">
+        <ConnectorLogo connector={connector} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{connector.name}</h2>
+            {connector.exclusive && (
+              <Badge className="border-0 bg-amber-500/20 px-1.5 py-0 text-[10px] font-semibold text-amber-400">
+                EXCLUSIVE
+              </Badge>
+            )}
+            {isComingSoon && !connector.exclusive && (
+              <Badge
+                variant="outline"
+                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+              >
+                Phase {connector.phase}
+              </Badge>
+            )}
+            {!isComingSoon && isOAuth && !connector.exclusive && (
+              <Badge
+                variant="outline"
+                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+              >
+                Coming Soon
+              </Badge>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {connector.authType === 'oauth'
+              ? 'OAuth 2.0'
+              : connector.authType === 'api_key'
+                ? 'API Key'
+                : connector.authType === 'pat'
+                  ? 'Personal Access Token'
+                  : 'Connection String'}{' '}
+            &middot; {connector.actionCount} actions
+          </p>
+        </div>
+
+        {/* Primary action */}
+        <div className="shrink-0">
+          {hasRealCredentials ? (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={onOpenPermissions}
+                aria-label="Tool permissions"
+              >
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                onClick={onDisconnect}
+                disabled={mutating}
+              >
+                {mutating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
+              </Button>
+            </div>
+          ) : (isComingSoon && !connector.exclusive) || isOAuth ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 cursor-not-allowed px-3 text-xs text-muted-foreground opacity-50"
+              disabled
+            >
+              <Lock className="mr-1.5 h-3 w-3" />
+              Coming Soon
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className={cn(
+                'h-7 px-3 text-xs',
+                connector.exclusive
+                  ? 'bg-amber-500 text-black hover:bg-amber-400'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
+              )}
+              onClick={onConnect}
+              disabled={mutating}
+            >
+              {mutating ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : connector.exclusive ? (
+                <>
+                  <Zap className="mr-1.5 h-3 w-3" />
+                  Enable
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-1.5 h-3 w-3" />
+                  Connect
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {hasRealCredentials && connectedAt && (
+        <p className="mb-3 text-[10px] text-muted-foreground/60">
+          Connected {formatRelativeTime(connectedAt)}
+        </p>
+      )}
+
+      {/* Description */}
+      <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+
+      {/* Tools */}
+      {tools.length > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
+            {hasRealCredentials && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={onOpenPermissions}
+              >
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
+                Permissions
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {tools.map((tool) => (
+              <Badge
+                key={tool}
+                variant="outline"
+                className="border-white/[0.08] px-2 py-0.5 text-[11px] text-muted-foreground"
+              >
+                {tool}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── ConnectorsPage ────────────────────────────────────────────────────────────
 
 export function ConnectorsPage() {
@@ -1606,6 +1824,10 @@ export function ConnectorsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [permissionsConnector, setPermissionsConnector] = useState<Connector | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  // Master-detail: which connector row is selected in the left list
+  const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
+  // Overview dialog: shown before connecting
+  const [overviewConnector, setOverviewConnector] = useState<Connector | null>(null);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -1853,127 +2075,148 @@ export function ConnectorsPage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Master-detail layout */}
         <div className="mx-auto max-w-6xl px-6 py-6">
-          {/* Loading skeleton */}
-          {loading && (
+          {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          )}
+          ) : (
+            <div className="flex gap-0 lg:gap-4">
+              {/* ── Left: scrollable compact list ───────────────────────────── */}
+              <div
+                className={cn(
+                  'w-full lg:w-64 xl:w-72 shrink-0',
+                  // On mobile, hide list when a connector is selected (drill-down)
+                  selectedConnector ? 'hidden lg:block' : 'block',
+                )}
+              >
+                {/* Connected group */}
+                {connectedConnectors.length > 0 && (
+                  <div className="mb-4">
+                    <div className="mb-1.5 flex items-center gap-1.5 px-1">
+                      <Check className="h-3 w-3 text-emerald-400" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Connected ({connectedConnectors.length})
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {connectedConnectors.map((connector) => (
+                        <ConnectorListRow
+                          key={connector.id}
+                          connector={connector}
+                          selected={selectedConnector?.id === connector.id}
+                          connected
+                          onClick={() => setSelectedConnector(connector)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          {/* Connected Section */}
-          {connectedConnectors.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <Check className="h-4 w-4 text-emerald-400" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Connected ({connectedConnectors.length})
-                </h2>
+                {/* Available group */}
+                {availableConnectors.length > 0 && (
+                  <div className="mb-4">
+                    <div className="mb-1.5 px-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Available ({availableConnectors.length})
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {pagedAvailableConnectors.map((connector) => (
+                        <ConnectorListRow
+                          key={connector.id}
+                          connector={connector}
+                          selected={selectedConnector?.id === connector.id}
+                          connected={false}
+                          onClick={() => setSelectedConnector(connector)}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalAvailablePages > 1 && (
+                      <div className="mt-3 flex items-center justify-between px-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage <= 1}
+                        >
+                          Prev
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          {currentPage}/{totalAvailablePages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          onClick={() =>
+                            setCurrentPage((p) => Math.min(totalAvailablePages, p + 1))
+                          }
+                          disabled={currentPage >= totalAvailablePages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty states */}
+                {activeStatus === 'connected' && filteredConnectors.length === 0 && (
+                  <div className="py-10 text-center">
+                    <p className="text-xs text-muted-foreground">No connected connectors yet.</p>
+                  </div>
+                )}
+                {filteredConnectors.length === 0 && activeStatus !== 'connected' && (
+                  <div className="py-10 text-center">
+                    <p className="text-xs text-muted-foreground">No connectors found.</p>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {connectedConnectors.map((connector) => (
-                  <ConnectorCard
-                    key={connector.id}
-                    connector={connector}
-                    connected={true}
-                    mutating={mutatingIds.has(connector.id)}
-                    connectedAt={connectedAtMap[connector.id]}
-                    onConnect={() => void handleConnect(connector.id)}
-                    onDisconnect={() => void handleDisconnect(connector.id)}
-                    onOpenPermissions={() => setPermissionsConnector(connector)}
+
+              {/* ── Right: detail panel ──────────────────────────────────────── */}
+              <div
+                className={cn(
+                  'min-w-0 flex-1',
+                  // On mobile show detail panel only when something is selected
+                  selectedConnector ? 'block' : 'hidden lg:block',
+                )}
+              >
+                {selectedConnector ? (
+                  <ConnectorDetailPanel
+                    connector={selectedConnector}
+                    connected={connectedIds.has(selectedConnector.id)}
+                    mutating={mutatingIds.has(selectedConnector.id)}
+                    connectedAt={connectedAtMap[selectedConnector.id]}
+                    onBack={() => setSelectedConnector(null)}
+                    onConnect={() => setOverviewConnector(selectedConnector)}
+                    onDisconnect={() => void handleDisconnect(selectedConnector.id)}
+                    onOpenPermissions={() => setPermissionsConnector(selectedConnector)}
                   />
-                ))}
+                ) : (
+                  /* Placeholder shown on desktop when nothing is selected */
+                  <div className="hidden h-full items-center justify-center lg:flex">
+                    <div className="text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04]">
+                        <Zap className="h-5 w-5 text-muted-foreground/60" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Select a connector to view details
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </section>
-          )}
-
-          {/* Available Section */}
-          {availableConnectors.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Available
-                  {activeCategory === 'All' || activeCategory === 'Exclusive'
-                    ? ''
-                    : ` - ${activeCategory}`}
-                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                    ({availableConnectors.length})
-                  </span>
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {pagedAvailableConnectors.map((connector) => (
-                  <ConnectorCard
-                    key={connector.id}
-                    connector={connector}
-                    connected={false}
-                    mutating={mutatingIds.has(connector.id)}
-                    onConnect={() => void handleConnect(connector.id)}
-                    onDisconnect={() => void handleDisconnect(connector.id)}
-                    onOpenPermissions={() => setPermissionsConnector(connector)}
-                  />
-                ))}
-              </div>
-
-              {/* Pagination controls */}
-              {totalAvailablePages > 1 && (
-                <div className="mt-6 flex items-center justify-between">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 border-white/[0.08] text-xs disabled:opacity-40"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage <= 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-xs text-muted-foreground">
-                    Page {currentPage} of {totalAvailablePages}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 gap-1.5 border-white/[0.08] text-xs disabled:opacity-40"
-                    onClick={() => setCurrentPage((p) => Math.min(totalAvailablePages, p + 1))}
-                    disabled={currentPage >= totalAvailablePages}
-                  >
-                    Next
-                  </Button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* Empty state for "Connected" filter with no results */}
-          {activeStatus === 'connected' && filteredConnectors.length === 0 && !loading && (
-            <div className="py-20 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-                <Check className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-medium text-foreground">No connected connectors yet</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Switch to &ldquo;Available&rdquo; to browse connectors you can add.
-              </p>
             </div>
           )}
 
-          {/* Empty state */}
-          {filteredConnectors.length === 0 && activeStatus !== 'connected' && (
-            <div className="py-20 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-                <Search className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-medium text-foreground">No connectors found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Try a different search term or category.
-              </p>
-            </div>
-          )}
-
-          {/* Roadmap Callout */}
-          {(activeCategory === 'All' || activeCategory !== 'Exclusive') && (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+          {/* Roadmap Callout - shown below master-detail */}
+          {!loading && (activeCategory === 'All' || activeCategory !== 'Exclusive') && (
+            <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <Zap className="h-5 w-5 text-primary" />
@@ -2022,6 +2265,17 @@ export function ConnectorsPage() {
       </div>
 
       <AddCustomConnectorDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+
+      <ConnectorOverviewDialog
+        connector={overviewConnector}
+        open={overviewConnector !== null}
+        onOpenChange={(open) => {
+          if (!open) setOverviewConnector(null);
+        }}
+        onConnect={() => {
+          if (overviewConnector) void handleConnect(overviewConnector.id);
+        }}
+      />
 
       <ToolPermissionsPanel
         connector={permissionsConnector}

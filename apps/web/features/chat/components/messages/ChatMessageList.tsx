@@ -173,8 +173,6 @@ interface MessageGroupRowProps {
 
 interface MessageRowProps {
   message: ChatMessage;
-  isFirst: boolean;
-  isLast: boolean;
   onRegenerate?: (id: string) => void;
   onDelete?: (id: string) => void;
   onPaywallUpgrade?: (messageId: string) => void;
@@ -186,8 +184,6 @@ interface MessageRowProps {
 // stream or update.
 const MessageRow = ({
   message,
-  isFirst,
-  isLast,
   onRegenerate,
   onDelete,
   onPaywallUpgrade,
@@ -232,9 +228,6 @@ const MessageRow = ({
         isStreaming: message.isStreaming,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
-      showAvatar={isFirst}
-      showTimestamp={isFirst}
-      enableActions={isLast && !message.isStreaming}
       onRegenerate={onRegenerate && message.role === 'assistant' ? handleRegenerate : undefined}
       onDelete={onDelete ? handleDelete : undefined}
     />
@@ -254,12 +247,10 @@ const MessageGroupRow = memo(
       <div
         className={cn('message-group', group.role === 'user' ? 'user-group' : 'assistant-group')}
       >
-        {group.messages.map((message, idx) => (
+        {group.messages.map((message) => (
           <MessageRow
             key={message.id}
             message={message}
-            isFirst={idx === 0}
-            isLast={idx === group.messages.length - 1}
             onRegenerate={onRegenerate}
             onDelete={onDelete}
             onPaywallUpgrade={onPaywallUpgrade}

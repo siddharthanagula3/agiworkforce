@@ -5,8 +5,6 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 
 interface GreetingResult {
   headline: string;
-  emoji: string;
-  subtext: string;
 }
 
 type TimeBand = 'earlyMorning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'lateNight';
@@ -120,7 +118,5 @@ export function useGreeting(): GreetingResult {
 
   return {
     headline,
-    emoji: config.emoji,
-    subtext: 'What can I help you with today?',
   };
 }
