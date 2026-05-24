@@ -3,7 +3,17 @@
 import { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import type React from 'react';
-import { ArrowLeft, FileText, Code, Tag, MapPin, Database } from 'lucide-react';
+import {
+  ArrowLeft,
+  FileText,
+  Code,
+  Tag,
+  MapPin,
+  Database,
+  Terminal,
+  Hash,
+  User,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import MarkdownContent from '@/features/chat/components/messages/MarkdownContent';
 
@@ -14,6 +24,15 @@ interface SkillMeta {
   description: string;
   location: string;
   source: string;
+}
+
+// Source label mapping (mirrors DirectoryModal helper)
+function skillSourceLabel(source: string): string {
+  if (source === 'bundled' || source === 'managed-local') return 'Built-in';
+  if (source === 'personal') return 'Personal';
+  if (source === 'plugin' || source === 'mcp') return 'Plugin';
+  if (source === 'project' || source === 'workspace') return 'Project';
+  return source;
 }
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
@@ -211,7 +230,10 @@ export default function SkillDetailPage({ params }: { params: Promise<{ name: st
                 Metadata
               </h2>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <MetaRow icon={Hash} label="Trigger" value={`/${meta.name}`} />
+                <MetaRow icon={User} label="Added by" value={skillSourceLabel(meta.source)} />
                 <MetaRow icon={Database} label="Source" value={meta.source} />
+                <MetaRow icon={Terminal} label="Allowed tools" value="Not specified" />
                 <MetaRow icon={MapPin} label="Location" value={meta.location} />
                 <MetaRow icon={Tag} label="Name" value={meta.name} />
               </div>
