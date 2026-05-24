@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_PLATFORMS = ['whatsapp', 'telegram', 'slack'] as const;
 
@@ -19,7 +19,7 @@ async function handleGetStats(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // Authenticate the user to ensure they have access
-  await getAuthenticatedUser(request);
+  await getClerkAuthUser(request);
   const { platform } = await context.params;
 
   if (!VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {

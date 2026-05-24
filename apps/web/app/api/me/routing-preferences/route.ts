@@ -15,22 +15,17 @@
 
 import 'server-only';
 
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { requireEnv } from '@/utils/env';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { createSupabaseServerClient } from '@/services/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import type { User } from '@supabase/supabase-js';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 const RoutingPreferencesSchema = z.object({
   us_only: z.boolean().optional(),
@@ -39,91 +34,22 @@ const RoutingPreferencesSchema = z.object({
 
 type RoutingPreferences = z.infer<typeof RoutingPreferencesSchema>;
 
-async function authenticate(
-  request: NextRequest,
-): Promise<{ user: User; userClient: SupabaseClient }> {
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false, flowType: 'pkce' },
-    });
-    const { data, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !data.user) {
-      throw createError.unauthorized('Invalid authentication token');
-    }
-    return { user: data.user, userClient: getUserClient(token) };
-  }
-
-  // Cookie-based auth (web).
-  const cookieStore = await cookies();
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    auth: { flowType: 'pkce' },
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value, ...options });
-        } catch {
-          /* ignore */
-        }
-      },
-      remove(name: string, options: CookieOptions) {
-        try {
-          cookieStore.set({ name, value: '', ...options });
-        } catch {
-          /* ignore */
-        }
-      },
-    },
-  });
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-  if (!user || userError) {
-    throw createError.unauthorized('Please sign in to continue');
-  }
-
-  // For cookie auth we still need a Bearer-token-based client to enforce RLS
-  // correctly on writes. Pull the access token off the session.
-  // WEB-18 (audit 2026-05-19): explicitly re-check expires_at to defend
-  // against a TOCTOU window where getUser() succeeds but the session expires
-  // before downstream RLS-bound writes run.
-  const { data: sessionData } = await supabase.auth.getSession();
-  const session = sessionData.session;
-  const accessToken = session?.access_token;
-  if (!accessToken) {
-    throw createError.unauthorized('Session expired');
-  }
-  if (session?.expires_at && session.expires_at * 1000 <= Date.now()) {
-    throw createError.unauthorized('Session expired');
-  }
-
-  return { user, userClient: getUserClient(accessToken) };
-}
-
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userClient } = await authenticate(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await userClient
+  const { data, error } = await supabase
     .from('profiles')
     .select('routing_preferences')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle();
 
   if (error) {
     logger.warn(
-      { userId: user.id, error: error.message },
+      { userId, error: error.message },
       '[routing-preferences] read failed — returning {}',
     );
     return NextResponse.json({});
@@ -144,7 +70,8 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userClient } = await authenticate(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await createSupabaseServerClient();
 
   let raw: unknown;
   try {
@@ -163,21 +90,19 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
 
   const next: RoutingPreferences = parsed.data;
 
-  // `count: 'exact'` lets us detect the rare "no profile row" case so it
-  // surfaces as 404 instead of a silent success that loses the preference.
-  const { error, count } = await userClient
+  const { error, count } = await supabase
     .from('profiles')
     .update({ routing_preferences: next }, { count: 'exact' })
-    .eq('id', user.id);
+    .eq('id', userId);
 
   if (error) {
-    logger.error({ userId: user.id, error: error.message }, '[routing-preferences] update failed');
+    logger.error({ userId: userId, error: error.message }, '[routing-preferences] update failed');
     throw createError.internal('Failed to save routing preferences');
   }
 
   if (count === 0) {
     logger.warn(
-      { userId: user.id },
+      { userId: userId },
       '[routing-preferences] no profile row matched — handle_new_user trigger may have failed',
     );
     throw createError.notFound('Profile not found');

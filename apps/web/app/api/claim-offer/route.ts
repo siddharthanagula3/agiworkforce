@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -23,14 +24,8 @@ async function handleClaimOffer(request: NextRequest) {
     return rateLimitResponse;
   }
 
+  const { userId } = await getClerkAuthUser(request);
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw createError.unauthorized();
-  }
 
   // Parse and validate request body
   let body: unknown;
@@ -59,7 +54,7 @@ async function handleClaimOffer(request: NextRequest) {
     if (inviteError || !invite) {
       logger.warn(
         {
-          userId: user.id,
+          userId: userId,
           code: trimmedCode,
           error: inviteError,
         },
@@ -70,13 +65,13 @@ async function handleClaimOffer(request: NextRequest) {
 
     // Atomic claim via RPC (prevents race conditions and enforces one-offer-per-user)
     const { data: claimResult, error: claimError } = await supabase.rpc('claim_beta_invite', {
-      p_user_id: user.id,
+      p_user_id: userId,
       p_invite_id: invite.id,
       p_plan_tier: invite.plan_tier,
     });
 
     if (claimError) {
-      logger.error({ userId: user.id, error: claimError }, 'Error calling claim_beta_invite RPC');
+      logger.error({ userId: userId, error: claimError }, 'Error calling claim_beta_invite RPC');
       throw createError.internal('Failed to claim invite code');
     }
 
@@ -102,13 +97,13 @@ async function handleClaimOffer(request: NextRequest) {
     const { data: updatedSubscription, error: fetchError } = await supabase
       .from('subscriptions')
       .select('id, plan_tier, status, current_period_start, current_period_end')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .single();
 
     if (fetchError) {
       logger.warn(
         {
-          userId: user.id,
+          userId: userId,
           error: fetchError,
         },
         'Error fetching updated subscription',
@@ -123,7 +118,7 @@ async function handleClaimOffer(request: NextRequest) {
     ) {
       try {
         await SubscriptionService.allocateCreditsForPeriod(
-          user.id,
+          userId,
           updatedSubscription.id,
           updatedSubscription.plan_tier,
           new Date(updatedSubscription.current_period_start),
@@ -131,7 +126,7 @@ async function handleClaimOffer(request: NextRequest) {
         );
         logger.info(
           {
-            userId: user.id,
+            userId: userId,
             subscriptionId: updatedSubscription.id,
             planTier: updatedSubscription.plan_tier,
             trialDays: invite.trial_days,
@@ -143,7 +138,7 @@ async function handleClaimOffer(request: NextRequest) {
         logger.error(
           {
             error: creditError,
-            userId: user.id,
+            userId: userId,
             subscriptionId: updatedSubscription.id,
             planTier: invite.plan_tier,
           },
@@ -154,7 +149,7 @@ async function handleClaimOffer(request: NextRequest) {
 
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         inviteId: invite.id,
         planTier: updatedSubscription?.plan_tier || invite.plan_tier,
       },
@@ -183,7 +178,7 @@ async function handleClaimOffer(request: NextRequest) {
     logger.error(
       {
         error: error instanceof Error ? error.message : String(error),
-        userId: user.id,
+        userId: userId,
       },
       'Error in claim-offer',
     );

@@ -1,9 +1,9 @@
 import 'server-only';
 
 import { auth } from '@clerk/nextjs/server';
-import { createDatabaseClient } from '@agiworkforce/data-layer';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 export type ChatConversationRow = {
   id: string;
@@ -26,16 +26,8 @@ export type ChatMessageRow = {
   metadata: Record<string, unknown> | null;
 };
 
-let chatDb: DatabaseAdapter | null = null;
-
 export function getNeonChatDb(): DatabaseAdapter {
-  if (!chatDb) {
-    chatDb = createDatabaseClient({
-      provider: 'neon',
-      applicationName: 'agi-web-chat',
-    });
-  }
-  return chatDb;
+  return getNeonDb();
 }
 
 export async function requireCurrentUserId(): Promise<string> {

@@ -1,8 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -20,38 +19,10 @@ async function handleSyncSubscription(request: NextRequest): Promise<Response> {
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    let userId: string | null = null;
-    let email: string | null = null;
+    const { userId, email } = await getClerkAuthUser(request);
 
-    // Support Bearer tokens (desktop/mobile) and cookie sessions (web)
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const { data, error } = await getServiceClient().auth.getUser(token);
-      if (error || !data.user) {
-        logger.warn({ error }, 'sync-subscription: bearer token auth failed');
-        throw createError.unauthorized('Invalid authentication token');
-      }
-
-      userId = data.user.id;
-      email = data.user.email ?? null;
-    } else {
-      const supabase = await createSupabaseServerClient();
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        throw createError.unauthorized('Please sign in to continue');
-      }
-
-      userId = user.id;
-      email = user.email ?? null;
-    }
-
-    if (!userId || !email) {
-      throw createError.unauthorized('Unable to resolve user identity');
+    if (!email) {
+      throw createError.unauthorized('Unable to resolve user email');
     }
 
     const subscription = await SubscriptionService.syncWithStripe(userId, email);

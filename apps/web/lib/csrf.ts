@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto';
 import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
 import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
+import { auth } from '@clerk/nextjs/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation.
 //
@@ -181,9 +182,17 @@ function constantTimeSignatureMatch(
  * cookie when one does not already exist.
  */
 export async function getSessionIdFromRequest(_request: Request): Promise<string> {
-  // Option 1 (preferred): Use Supabase server client to get verified user ID
-  // This avoids parsing raw cookie bytes and ensures the session ID is
-  // cryptographically verified through Supabase Auth.
+  // Option 0 (preferred): Use Clerk auth to get verified user ID
+  try {
+    const { userId } = await auth();
+    if (userId) {
+      return userId;
+    }
+  } catch {
+    // Clerk may fail in non-route-handler contexts; fall through
+  }
+
+  // Option 1 (Supabase fallback — transition period for non-Clerk surfaces)
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -234,7 +243,17 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
 export async function getOrCreateAnonSession(
   request: Request,
 ): Promise<{ id: string; newCookie?: string }> {
-  // Option 1 (preferred): Use Supabase server client for verified user ID
+  // Option 0 (preferred): Use Clerk auth for verified user ID
+  try {
+    const { userId } = await auth();
+    if (userId) {
+      return { id: userId };
+    }
+  } catch {
+    // Clerk may fail in non-route-handler contexts; fall through
+  }
+
+  // Option 1 (Supabase fallback — transition period)
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -311,10 +330,23 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return false;
   }
   const token = authHeader.slice(7);
-  // Validate token length to avoid excessive work on garbage inputs
   if (token.length < 20 || token.length > 4096) {
     return false;
   }
+
+  // Try Clerk token verification first
+  try {
+    const { verifyToken } = await import('@clerk/backend');
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (secretKey) {
+      const claims = await verifyToken(token, { secretKey });
+      if (claims.sub) return true;
+    }
+  } catch {
+    // Not a Clerk token — try Supabase fallback
+  }
+
+  // Supabase fallback (transition period)
   try {
     const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
     const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];

@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -19,27 +20,14 @@ function isBillingInterval(value: unknown): value is BillingInterval {
   return value === 'monthly' || value === 'yearly';
 }
 
-async function requireAuth() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw createError.unauthorized('Please sign in to join the waitlist');
-  }
-
-  return { supabase, user };
-}
-
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { supabase, user } = await requireAuth();
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await createSupabaseServerClient();
 
-  const { data, error } = await supabase.from('waitlist').select('plan').eq('user_id', user.id);
+  const { data, error } = await supabase.from('waitlist').select('plan').eq('user_id', userId);
 
   if (error) {
     throw createError.internal('Failed to load waitlist status');
@@ -53,7 +41,8 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
-  const { supabase, user } = await requireAuth();
+  const { userId, email } = await getClerkAuthUser(request);
+  const supabase = await createSupabaseServerClient();
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -85,8 +74,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const { error } = await supabase.from('waitlist').upsert(
     {
-      user_id: user.id,
-      email: user.email ?? null,
+      user_id: userId,
+      email: email ?? null,
       plan: payload.plan,
       billing_interval: billingInterval,
       source,
