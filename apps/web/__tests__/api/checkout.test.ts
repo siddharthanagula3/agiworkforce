@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { POST } from '@/app/api/checkout/route';
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
@@ -95,10 +94,23 @@ vi.mock('@/lib/pricing', () => ({
   },
 }));
 
+// STRIPE_CHECKOUT_ENABLED is read at module-scope in the route, so it must be
+// set before the import. Use vi.hoisted to run this before the static import
+// resolution so the env var is present when the module first loads.
+const envSetup = vi.hoisted(() => {
+  process.env['STRIPE_CHECKOUT_ENABLED'] = 'true';
+  process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
+  return {};
+});
+void envSetup;
+
+import { POST } from '@/app/api/checkout/route';
+
 describe('POST /api/checkout', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_key';
+    process.env['STRIPE_CHECKOUT_ENABLED'] = 'true';
   });
 
   it('should return 401 if user is not authenticated', async () => {
