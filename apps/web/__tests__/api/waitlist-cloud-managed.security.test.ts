@@ -56,17 +56,16 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mockWithRateLimit(...args),
 }));
 
-// ─── Supabase mock ────────────────────────────────────────────────────────────
-const mockUpsert = vi.fn().mockResolvedValue({ error: null });
-const mockFrom = vi.fn(() => ({ upsert: mockUpsert }));
-
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn(() =>
-    Promise.resolve({
-      from: mockFrom,
-      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null } }) },
-    }),
-  ),
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+const mockExecute = vi.fn().mockResolvedValue(1);
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi.fn().mockResolvedValue([]),
+    execute: mockExecute,
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // ─── Import route under test ──────────────────────────────────────────────────
@@ -103,10 +102,10 @@ function rateLimitExceededResponse(): NextResponse {
 describe('POST /api/waitlist/cloud-managed — security tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: CSRF passes, rate limit passes, upsert succeeds
+    // Default: CSRF passes, rate limit passes, execute succeeds
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
-    mockUpsert.mockResolvedValue({ error: null });
+    mockExecute.mockResolvedValue(1);
   });
 
   // ─── CSRF protection ────────────────────────────────────────────────────────
@@ -139,14 +138,14 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       expect(response.status).toBe(403);
     });
 
-    it('calls requireCsrfToken before any Supabase operation', async () => {
+    it('calls requireCsrfToken before any DB operation', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       await POST(request);
 
-      // Supabase should not have been touched when CSRF fails
-      expect(mockFrom).not.toHaveBeenCalled();
+      // DB should not have been touched when CSRF fails
+      expect(mockExecute).not.toHaveBeenCalled();
     });
 
     it('proceeds when CSRF token is valid', async () => {
@@ -241,10 +240,10 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // source defaults to 'other' — verify upsert was called with source 'other'
-      expect(mockUpsert).toHaveBeenCalledWith(
-        expect.objectContaining({ source: 'other' }),
-        expect.anything(),
+      // source defaults to 'other' — verify execute was called with source 'other' in params
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('cloud_managed_waitlist'),
+        expect.arrayContaining(['other']),
       );
     });
 
@@ -263,10 +262,11 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  // ─── Supabase error paths — no internal state leaked ─────────────────────
-  describe('(d) Supabase error paths — no internal state in response', () => {
+  // ─── DB error paths — no internal state leaked ───────────────────────────
+  describe('(d) DB error paths — no internal state in response', () => {
     it('returns ok:true with queued:true when table does not exist (42P01)', async () => {
-      mockUpsert.mockResolvedValueOnce({ error: { code: '42P01', message: 'table not found' } });
+      const pgErr = Object.assign(new Error('table not found'), { code: '42P01' });
+      mockExecute.mockRejectedValueOnce(pgErr);
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       const response = await POST(request);
@@ -278,7 +278,8 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
 
     it('42P01 response does not expose table name or SQL error code', async () => {
-      mockUpsert.mockResolvedValueOnce({ error: { code: '42P01', message: 'table not found' } });
+      const pgErr = Object.assign(new Error('table not found'), { code: '42P01' });
+      mockExecute.mockRejectedValueOnce(pgErr);
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       const response = await POST(request);
@@ -289,17 +290,14 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       expect(body).not.toContain('table not found');
     });
 
-    it('generic Supabase error returns 500 without internal details', async () => {
-      mockUpsert.mockResolvedValueOnce({
-        error: { code: '23505', message: 'duplicate key constraint' },
-      });
+    it('generic DB error returns queued stub without internal details', async () => {
+      const pgErr = Object.assign(new Error('duplicate key constraint'), { code: '23505' });
+      mockExecute.mockRejectedValueOnce(pgErr);
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       const response = await POST(request);
 
-      // Any non-42P01 error returns a safe internal error
-      // The waitlist uses upsert, so duplicates should not error — but if they do,
-      // verify no SQL detail is exposed
+      // Any non-42P01 DB error falls through to the stub return — verify no SQL detail exposed
       const body = await response.text();
       expect(body).not.toContain('23505');
       expect(body).not.toContain('duplicate key constraint');

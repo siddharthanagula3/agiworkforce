@@ -92,7 +92,7 @@ describe('POST /api/checkout', () => {
 
   it('should return 401 if user is not authenticated', async () => {
     const { auth } = await import('@clerk/nextjs/server');
-    vi.mocked(auth).mockReturnValueOnce({ userId: null } as ReturnType<typeof auth>);
+    vi.mocked(auth).mockReturnValueOnce({ userId: null } as unknown as ReturnType<typeof auth>);
 
     const request = new NextRequest('http://localhost/api/checkout', {
       method: 'POST',
