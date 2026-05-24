@@ -1,5 +1,5 @@
+import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '../../services/supabase-server';
 import type { ReactNode } from 'react';
 import { SettingsNavActive } from './SettingsNavActive';
 
@@ -49,16 +49,10 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
-  // WEB-18 (audit 2026-05-19): getUser() re-validates the JWT against the
-  // auth server. getSession() only reads cookie state without revalidation
-  // and must not be the auth gate.
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { userId } = await auth();
 
-  if (!user) {
-    redirect('/login?next=/settings/general');
+  if (!userId) {
+    redirect('/login?redirectTo=/settings/general');
   }
 
   return (

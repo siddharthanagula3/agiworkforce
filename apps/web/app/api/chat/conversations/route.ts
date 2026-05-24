@@ -12,29 +12,34 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { CreateConversationSchema } from '@/lib/validations/chat';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import {
+  getNeonChatDb,
+  requireCurrentUserId,
+  type ChatConversationRow,
+} from '@/lib/server/neon-chat';
 
 async function handleGetConversations(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client so RLS enforces ownership.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
 
-  const { data, error } = await supabase
-    .from('web_conversations')
-    .select('id, title, model, created_at, updated_at')
-    .eq('user_id', user.id)
-    .is('deleted_at', null)
-    .order('updated_at', { ascending: false })
-    .limit(50);
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch conversations');
+  try {
+    const conversations = await getNeonChatDb().query<ChatConversationRow>(
+      `
+        select id, title, model, created_at, updated_at
+        from web_conversations
+        where user_id = $1 and deleted_at is null
+        order by updated_at desc
+        limit 50
+      `,
+      [userId],
+    );
+    return NextResponse.json({ conversations });
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch conversations');
     throw createError.internal('Failed to fetch conversations');
   }
-
-  return NextResponse.json({ conversations: data || [] });
 }
 
 async function handleCreateConversation(request: NextRequest) {
@@ -44,8 +49,7 @@ async function handleCreateConversation(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client so RLS enforces ownership.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
 
   // AUDIT-008-003: Validate input with Zod schema
   let rawBody: unknown = {};
@@ -61,22 +65,20 @@ async function handleCreateConversation(request: NextRequest) {
   }
   const body = validationResult.data;
 
-  const { data, error } = await supabase
-    .from('web_conversations')
-    .insert({
-      user_id: user.id,
-      title: body.title,
-      model: body.model,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create conversation');
+  try {
+    const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
+      `
+        insert into web_conversations (user_id, title, model)
+        values ($1, $2, $3)
+        returning id, title, model, created_at, updated_at
+      `,
+      [userId, body.title, body.model ?? null],
+    );
+    return NextResponse.json({ conversation }, { status: 201 });
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to create conversation');
     throw createError.internal('Failed to create conversation');
   }
-
-  return NextResponse.json({ conversation: data }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleGetConversations);
