@@ -51,44 +51,24 @@ vi.mock('@/lib/cors', () => ({
   isOriginAllowed: vi.fn(() => true),
 }));
 
-// Default Supabase mock — authenticated user with email and existing stripe customer
-const mockGetUser = vi.fn(() =>
-  Promise.resolve({
-    data: {
-      user: {
-        id: 'user-test-id',
-        email: 'test@example.com',
-      },
-    },
-    error: null,
-  }),
-);
+// Clerk mock — provides authenticated user for getClerkAuthUser
+const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-test-id' }));
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: (...args: unknown[]) => mockClerkAuth(...args),
+}));
 
-const mockMaybeSingle = vi.fn(() =>
-  Promise.resolve({
-    data: { stripe_customer_id: 'cus_existing123' },
-    error: null,
-  }),
-);
+// Neon DB mock — query returns profile with stripe_customer_id
+const mockNeonQuery = vi.fn(() => Promise.resolve([{ stripe_customer_id: 'cus_existing123' }]));
+const mockNeonExecute = vi.fn(() => Promise.resolve(1));
 
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn(() =>
-    Promise.resolve({
-      auth: {
-        getUser: mockGetUser,
-      },
-      from: vi.fn(() => ({
-        select: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            maybeSingle: mockMaybeSingle,
-          })),
-        })),
-        update: vi.fn(() => ({
-          eq: vi.fn(() => Promise.resolve({ error: null })),
-        })),
-      })),
-    }),
-  ),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockNeonQuery,
+    execute: mockNeonExecute,
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // Stripe mock — returns a session with a URL
@@ -155,22 +135,14 @@ function makeRawRequest(rawBody: string): NextRequest {
 describe('POST /api/credit-topup — authentication', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Restore default authenticated state for auth tests
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    // Restore default Clerk auth and Neon DB state after clearAllMocks
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 401 when there is no authenticated user', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null as unknown as { id: string; email: string } },
-      error: { message: 'Not authenticated' } as unknown as null,
-    });
+    mockClerkAuth.mockResolvedValueOnce({ userId: null });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
@@ -179,11 +151,8 @@ describe('POST /api/credit-topup — authentication', () => {
     expect(data.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 401 when getUser returns null user with no error', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null as unknown as { id: string; email: string } },
-      error: null,
-    });
+  it('returns 401 when auth returns no userId', async () => {
+    mockClerkAuth.mockResolvedValueOnce({ userId: null });
 
     const response = await POST(makeRequest({ amount_cents: 5000 }));
     const data = await response.json();
@@ -196,14 +165,9 @@ describe('POST /api/credit-topup — authentication', () => {
 describe('POST /api/credit-topup — invalid JSON body', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 400 when the request body is not valid JSON', async () => {
@@ -218,14 +182,9 @@ describe('POST /api/credit-topup — invalid JSON body', () => {
 describe('POST /api/credit-topup — missing amount_cents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 400 when amount_cents is absent from the body', async () => {
@@ -258,14 +217,9 @@ describe('POST /api/credit-topup — missing amount_cents', () => {
 describe('POST /api/credit-topup — invalid amount_cents types', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 400 when amount_cents is a string', async () => {
@@ -324,14 +278,9 @@ describe('POST /api/credit-topup — invalid amount_cents types', () => {
 describe('POST /api/credit-topup — invalid amount_cents numeric values', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 400 when amount_cents is negative', async () => {
@@ -382,14 +331,9 @@ describe('POST /api/credit-topup — invalid amount_cents numeric values', () =>
 describe('POST /api/credit-topup — private beta gate for valid amount_cents values', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('returns 403 for the minimum valid amount while managed credits are private beta', async () => {
@@ -428,14 +372,9 @@ describe('POST /api/credit-topup — private beta gate for valid amount_cents va
 describe('POST /api/credit-topup — boundary values', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-test-id', email: 'test@example.com' } },
-      error: null,
-    });
-    mockMaybeSingle.mockResolvedValue({
-      data: { stripe_customer_id: 'cus_existing123' },
-      error: null,
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-test-id' });
+    mockNeonQuery.mockResolvedValue([{ stripe_customer_id: 'cus_existing123' }]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   it('1000 (exactly $10) passes validation, then private-beta gate blocks checkout', async () => {
