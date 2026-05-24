@@ -27,6 +27,7 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
+import { getCsrfToken } from '@/lib/client/csrf';
 import Image from 'next/image';
 
 // ─── Connector Data ────────────────────────────────────────────────────────────
@@ -705,12 +706,20 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
   onDisconnect,
 }) => {
   const isComingSoon = connector.phase > 1;
+  // OAuth connectors do not yet have a real auth flow. Showing "Connected" for
+  // them would be a false positive because the API only sets is_active: true
+  // without exchanging tokens or storing credentials. Mark them as coming soon
+  // until real OAuth integration ships.
+  const isOAuth = connector.authType === 'oauth';
+  // Only show as genuinely connected when the connector uses a non-OAuth auth
+  // type (api_key, pat, connection_string) AND the DB row reports is_active.
+  const hasRealCredentials = connected && !isOAuth;
 
   return (
     <div
       className={cn(
         'group relative flex flex-col rounded-xl border bg-card p-5 transition-all duration-200',
-        connected
+        hasRealCredentials
           ? 'border-primary/30 bg-primary/5'
           : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]',
         connector.exclusive && 'border-amber-500/20 bg-amber-500/5 hover:border-amber-500/30',
@@ -725,14 +734,26 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
         </div>
       )}
 
-      {/* Coming Soon overlay */}
-      {isComingSoon && (
+      {/* Coming Soon badge for phase > 1 non-exclusive connectors */}
+      {isComingSoon && !connector.exclusive && (
         <div className="absolute right-3 top-3">
           <Badge
             variant="outline"
             className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
           >
             Phase {connector.phase}
+          </Badge>
+        </div>
+      )}
+
+      {/* Coming Soon badge for phase-1 OAuth connectors (no real auth flow yet) */}
+      {!isComingSoon && isOAuth && !connector.exclusive && (
+        <div className="absolute right-3 top-3">
+          <Badge
+            variant="outline"
+            className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+          >
+            Coming Soon
           </Badge>
         </div>
       )}
@@ -751,8 +772,8 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
         {connector.description}
       </p>
 
-      {/* Activity timestamp */}
-      {connected && connectedAt && (
+      {/* Activity timestamp - only shown when credentials are real */}
+      {hasRealCredentials && connectedAt && (
         <p className="mb-3 text-[10px] text-muted-foreground/60">
           Connected {formatRelativeTime(connectedAt)}
         </p>
@@ -760,7 +781,7 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
 
       {/* Action Row */}
       <div className="flex items-center justify-between">
-        {connected ? (
+        {hasRealCredentials ? (
           <>
             <div className="flex items-center gap-1.5">
               {mutating ? (
@@ -791,7 +812,9 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
               </Button>
             </div>
           </>
-        ) : isComingSoon && !connector.exclusive ? (
+        ) : (isComingSoon && !connector.exclusive) || isOAuth ? (
+          // OAuth connectors and future-phase non-exclusive connectors are not
+          // yet actionable. Show a disabled "Coming Soon" button.
           <Button
             variant="ghost"
             size="sm"
@@ -927,9 +950,10 @@ export function ConnectorsPage() {
     setMutatingIds((prev) => new Set([...prev, id]));
 
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
         body: JSON.stringify({ connectorId: id, authType: connector.authType }),
       });
       if (!res.ok) {
@@ -966,8 +990,10 @@ export function ConnectorsPage() {
     setMutatingIds((prev) => new Set([...prev, id]));
 
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
         method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
       });
       if (!res.ok) {
         // Revert on failure
