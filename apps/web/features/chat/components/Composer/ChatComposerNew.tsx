@@ -16,6 +16,9 @@ import {
   Wand2,
   ChevronRight,
   Check,
+  CheckCircle2,
+  Clock,
+  Link2,
   Layers,
   Library,
   Puzzle,
@@ -38,6 +41,7 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
 import type { ChatMode } from '@features/chat/types';
+import { CONNECTORS } from '@features/connectors/data/connectors';
 
 interface ChatComposerProps {
   onSend: (
@@ -90,6 +94,8 @@ interface ChatComposerProps {
    */
   attachmentPrivacyShortLabel?: string;
 }
+
+const CONNECTOR_PREVIEW = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
 
 const TOOLS = [
   { id: 'image', label: 'Generate Image', icon: ImageIcon, color: 'text-purple-400' },
@@ -183,6 +189,7 @@ const ChatComposerNewComponent = ({
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
+  const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -701,6 +708,7 @@ const ChatComposerNewComponent = ({
                 if (showOverflowMenu) {
                   setShowStyleSubmenu(false);
                   setShowSkillsSubmenu(false);
+                  setShowConnectorsSubmenu(false);
                 }
               }}
               disabled={isLoading || disabled}
@@ -812,6 +820,57 @@ const ChatComposerNewComponent = ({
                         }}
                         onClose={() => setShowSkillsSubmenu(false)}
                       />
+                    </div>
+                  )}
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Connectors — inline expandable submenu */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Connectors
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectorsSubmenu((prev) => !prev)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                  >
+                    <Link2 className="h-4 w-4 text-cyan-400" />
+                    <span className="flex-1 text-left">Browse Connectors</span>
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                        showConnectorsSubmenu && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  {showConnectorsSubmenu && (
+                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+                      {CONNECTOR_PREVIEW.map((connector) => (
+                        <div
+                          key={connector.id}
+                          className="flex items-center gap-2 rounded-md px-3 py-1.5"
+                        >
+                          <span className="text-sm" aria-hidden="true">
+                            {connector.iconEmoji ?? '🔗'}
+                          </span>
+                          <span className="flex-1 truncate text-sm">{connector.name}</span>
+                          <span className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-400">
+                            <CheckCircle2 className="h-3 w-3" />
+                            Connected
+                          </span>
+                        </div>
+                      ))}
+                      <a
+                        href="/connectors"
+                        onClick={() => setShowOverflowMenu(false)}
+                        className="mt-1 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                      >
+                        <Clock className="h-3 w-3 text-muted-foreground/60" />
+                        More coming soon
+                      </a>
                     </div>
                   )}
                 </div>
