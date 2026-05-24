@@ -88,17 +88,6 @@ export interface TokenBalance {
 }
 
 /**
- * Raw token usage record from database
- */
-interface TokenUsageRecord {
-  provider: string;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  total_cost: number;
-}
-
-/**
  * Processed session data for analytics
  */
 export interface AnalyticsSession {
