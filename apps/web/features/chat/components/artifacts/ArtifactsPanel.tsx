@@ -1,14 +1,10 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Code2, X, Copy, Check, Download, FileCode, PanelRightOpen } from 'lucide-react';
-import { toast } from 'sonner';
+import { Code2, X, FileCode, PanelRightOpen } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { ArtifactPreview } from './ArtifactPreview';
 
 // ============================================================================
 // Artifact Tab
@@ -61,103 +57,14 @@ function EmptyState() {
 }
 
 // ============================================================================
-// Artifact Content Viewer
+// Artifact Content Viewer — delegates to ArtifactPreview for full
+// Preview/Code tabs, versioning, sharing, and download functionality.
 // ============================================================================
 
 function ArtifactViewer({ artifact }: { artifact: Artifact }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(artifact.content);
-      setCopied(true);
-      toast.success('Copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Failed to copy');
-    }
-  }, [artifact.content]);
-
-  const handleDownload = useCallback(() => {
-    const extensionMap: Record<string, string> = {
-      typescript: 'ts',
-      javascript: 'js',
-      python: 'py',
-      rust: 'rs',
-      ruby: 'rb',
-      csharp: 'cs',
-      cpp: 'cpp',
-      markdown: 'md',
-    };
-
-    const ext = extensionMap[artifact.language] || artifact.language || 'txt';
-
-    // Use title as filename if it looks like a filename (has extension)
-    const filename = artifact.title.includes('.') ? artifact.title : `artifact.${ext}`;
-
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(`Downloaded ${filename}`);
-  }, [artifact]);
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Code display */}
-      <ScrollArea className="flex-1">
-        <SyntaxHighlighter
-          language={artifact.language}
-          style={vscDarkPlus}
-          customStyle={{
-            margin: 0,
-            borderRadius: 0,
-            fontSize: '13px',
-            lineHeight: '1.6',
-            padding: '16px',
-            background: 'transparent',
-          }}
-          showLineNumbers
-          lineNumberStyle={{
-            minWidth: '2.5em',
-            paddingRight: '1em',
-            color: 'rgba(255,255,255,0.2)',
-            userSelect: 'none',
-          }}
-          wrapLongLines
-        >
-          {artifact.content}
-        </SyntaxHighlighter>
-      </ScrollArea>
-
-      {/* Action bar */}
-      <div className="flex items-center gap-2 border-t border-border/30 px-3 py-2">
-        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs">
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              Copy
-            </>
-          )}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleDownload} className="h-8 gap-1.5 text-xs">
-          <Download className="h-3.5 w-3.5" />
-          Download
-        </Button>
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/50">
-          {artifact.language}
-        </span>
-      </div>
+      <ArtifactPreview artifact={artifact} className="mt-0 rounded-none border-0" />
     </div>
   );
 }

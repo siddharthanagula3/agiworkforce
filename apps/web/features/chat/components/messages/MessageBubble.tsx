@@ -52,8 +52,7 @@ const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
-import { useArtifactsStore as useChatArtifactsStore } from '../../stores/artifacts-store';
-import { useArtifactStore } from '@shared/stores/artifact-store';
+import { useArtifactsStore } from '../../stores/artifacts-store';
 import { SearchResults } from '../search/SearchResults';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
@@ -237,8 +236,9 @@ const MessageBubbleComponent = function MessageBubble({
   const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
 
-  const { addArtifact, getMessageArtifacts } = useArtifactStore();
-  const upsertPanelArtifact = useChatArtifactsStore((state) => state.upsertArtifact);
+  const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
+  const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
+  const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
   const setComparisonChoice = useChatStore((state) => state.setComparisonChoice);
 
   // Artifact handling
@@ -288,20 +288,20 @@ const MessageBubbleComponent = function MessageBubble({
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
-    extractedArtifacts.forEach((artifact) => addArtifact(message.id, artifact));
-  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifact]);
+    extractedArtifacts.forEach((artifact) => addArtifactForMessage(message.id, artifact));
+  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifactForMessage]);
 
   useEffect(() => {
     if (isUser || artifacts.length === 0) return;
     for (const artifact of artifacts) {
-      upsertPanelArtifact({
+      upsertArtifact({
         ...artifact,
         title: artifact.title || 'Untitled',
         language: artifact.language || artifact.type,
         messageId: message.id,
       });
     }
-  }, [artifacts, isUser, message.id, upsertPanelArtifact]);
+  }, [artifacts, isUser, message.id, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
