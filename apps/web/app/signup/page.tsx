@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { getSupabaseClient } from '../../services/supabase';
+import {
+  OAuthProviderButtons,
+  type OAuthProvider,
+} from '../../components/auth/OAuthProviderButtons';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
@@ -46,7 +50,7 @@ function SignupForm() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
@@ -75,7 +79,7 @@ function SignupForm() {
     }
   }
 
-  async function onOAuth(provider: 'google' | 'github') {
+  async function onOAuth(provider: OAuthProvider) {
     setOauthLoading(provider);
     try {
       const supabase = getSupabaseClient();
@@ -100,6 +104,23 @@ function SignupForm() {
       <h1 className="agi-page-h1" style={{ marginBottom: 32 }}>
         {t('getStartedHeading')}
       </h1>
+
+      <OAuthProviderButtons loadingProvider={oauthLoading} onOAuth={onOAuth} />
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          margin: '28px 0',
+          color: 'var(--agi-ink-quiet)',
+          fontSize: 12,
+        }}
+      >
+        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+        {t('orContinueWithEmail')}
+        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+      </div>
 
       <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -155,42 +176,6 @@ function SignupForm() {
           {loading ? t('creatingAccount') : t('createAccount')}
         </button>
       </form>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          margin: '28px 0',
-          color: 'var(--agi-ink-quiet)',
-          fontSize: 12,
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-        {t('orContinueWith')}
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button
-          type="button"
-          onClick={() => onOAuth('google')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOAuth('github')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
-        </button>
-      </div>
 
       <p
         style={{ marginTop: 32, fontSize: 13, color: 'var(--agi-ink-quiet)', textAlign: 'center' }}
