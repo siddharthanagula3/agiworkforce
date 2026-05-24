@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ProjectHeader, useChatProjectStore as useProjectStore } from '@agiworkforce/unified-chat';
 import {
@@ -10,6 +10,7 @@ import {
   type ProjectAccentColor,
 } from '@agiworkforce/types';
 import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFilesPanel';
+import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
 
 /**
  * /projects/[id] — per-project detail view on web.
@@ -24,6 +25,7 @@ import { KnowledgeFilesPanel } from '@/features/projects/components/KnowledgeFil
  * (zustand) on this device only — same as the /projects hub.
  *
  * Round-10 visual-verification follow-up, 2026-05-21.
+ * Feature 2: embedded project-scoped composer, 2026-05-24.
  */
 
 type Tab = 'chats' | 'sources';
@@ -48,13 +50,13 @@ function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
  * Format a conversation id as a readable label. The project store only
  * tracks ids — titles live in the chat store and aren't joined here in
  * v1 LOCAL ONLY. Show a short, human-friendly form so users see
- * "Conversation 01h8x9…" instead of an opaque 36-character UUID.
+ * "Conversation 01h8x9..." instead of an opaque 36-character UUID.
  */
 function conversationLabel(conversationId: string): string {
   const trimmed = conversationId.trim();
   if (!trimmed) return 'Untitled conversation';
   const head = trimmed.slice(0, 8);
-  return `Conversation ${head}${trimmed.length > 8 ? '…' : ''}`;
+  return `Conversation ${head}${trimmed.length > 8 ? '...' : ''}`;
 }
 
 export default function ProjectDetailPage() {
@@ -65,6 +67,26 @@ export default function ProjectDetailPage() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
   const [tab, setTab] = useState<Tab>('chats');
+
+  /**
+   * When the user sends a message from the project-scoped composer, stash the
+   * pending message in sessionStorage so that WebChatPage can pre-fill the
+   * composer on arrival, then navigate to the chat shell scoped to this project.
+   */
+  const handleProjectSend = useCallback(
+    (content: string) => {
+      if (!project) return;
+      try {
+        sessionStorage.setItem('agi.project.pendingMessage', content);
+        sessionStorage.setItem('agi.project.pendingProjectId', project.id);
+      } catch {
+        // sessionStorage unavailable -- proceed anyway
+      }
+      setActiveProject(project.id);
+      router.push(`/chat?project=${encodeURIComponent(project.id)}`);
+    },
+    [project, router, setActiveProject],
+  );
 
   const headerPresentation = useMemo(() => {
     if (!project) return null;
@@ -115,7 +137,7 @@ export default function ProjectDetailPage() {
             }}
             data-testid="project-detail-back"
           >
-            ← Back to projects
+            Back to projects
           </button>
           <h1
             style={{
@@ -128,7 +150,7 @@ export default function ProjectDetailPage() {
             Project not found
           </h1>
           <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
-            This project doesn't exist on this device. It may live on another device, or it was
+            This project does not exist on this device. It may live on another device, or it was
             deleted. Cloud sync arrives with Cloud Managed.
           </p>
         </div>
@@ -172,7 +194,7 @@ export default function ProjectDetailPage() {
           }}
           data-testid="project-detail-back"
         >
-          ← Back to projects
+          Back to projects
         </button>
 
         <ProjectHeader presentation={headerPresentation} />
@@ -215,6 +237,37 @@ export default function ProjectDetailPage() {
           ))}
         </nav>
 
+        {/* Embedded composer -- only shown on the Chats tab */}
+        {tab === 'chats' && (
+          <div
+            data-testid="project-detail-composer"
+            style={{
+              border: '1px solid var(--agi-rule)',
+              borderRadius: 16,
+              background: 'var(--agi-bg-3)',
+              padding: '12px 16px',
+            }}
+          >
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: 'var(--agi-ink-2)',
+                margin: '0 0 8px',
+              }}
+            >
+              Start a new chat in this project
+            </p>
+            <ChatComposerNew
+              onSend={handleProjectSend}
+              placeholder="Message this project..."
+              promptCompletionEnabled={false}
+            />
+          </div>
+        )}
+
         <section
           data-testid={`project-detail-panel-${tab}`}
           style={{
@@ -229,12 +282,7 @@ export default function ProjectDetailPage() {
             conversationIds.length === 0 ? (
               <EmptyState
                 title="No chats in this project yet"
-                detail="Start a conversation — project instructions and files will be carried in."
-                primaryLabel="Start a chat"
-                onPrimary={() => {
-                  setActiveProject(project.id);
-                  router.push(`/chat?project=${encodeURIComponent(project.id)}`);
-                }}
+                detail="Use the composer above to start a conversation. Project instructions and files will be carried in automatically."
               />
             ) : (
               <ul
@@ -286,11 +334,9 @@ export default function ProjectDetailPage() {
 interface EmptyStateProps {
   title: string;
   detail: string;
-  primaryLabel?: string;
-  onPrimary?: () => void;
 }
 
-function EmptyState({ title, detail, primaryLabel, onPrimary }: EmptyStateProps) {
+function EmptyState({ title, detail }: EmptyStateProps) {
   return (
     <div style={{ textAlign: 'center', padding: '32px 16px' }}>
       <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--agi-ink)', margin: '0 0 6px' }}>
@@ -307,25 +353,6 @@ function EmptyState({ title, detail, primaryLabel, onPrimary }: EmptyStateProps)
       >
         {detail}
       </p>
-      {primaryLabel && onPrimary ? (
-        <button
-          type="button"
-          onClick={onPrimary}
-          style={{
-            marginTop: 16,
-            padding: '8px 16px',
-            borderRadius: 9999,
-            border: 'none',
-            background: 'var(--color-terra-cotta)',
-            color: 'var(--agi-ink)',
-            fontSize: 12,
-            fontWeight: 500,
-            cursor: 'pointer',
-          }}
-        >
-          {primaryLabel}
-        </button>
-      ) : null}
     </div>
   );
 }

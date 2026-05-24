@@ -54,6 +54,25 @@ fn process_session_allow_snapshot() -> HashSet<String> {
         .clone()
 }
 
+/// A rule entry for per-invocation or workspace-scoped permissions.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PermissionRule {
+    /// Tool or command prefix this rule applies to.
+    pub pattern: String,
+    /// Optional human-readable note attached when the rule was created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+impl PermissionRule {
+    pub fn new(pattern: impl Into<String>) -> Self {
+        Self {
+            pattern: pattern.into(),
+            note: None,
+        }
+    }
+}
+
 /// Persistent permission store for command approvals.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct PermissionStore {
@@ -68,6 +87,20 @@ pub struct PermissionStore {
     /// Session-scoped approvals (not persisted, but tracked in memory).
     #[serde(skip)]
     pub session_allow: HashSet<String>,
+
+    /// Tools that require per-invocation approval each time they run (Ask mode).
+    /// Persisted so the preference survives across sessions.
+    #[serde(default)]
+    pub ask_list: Vec<PermissionRule>,
+
+    /// Workspace-scoped rules: apply only within the current project directory.
+    #[serde(default)]
+    pub workspace_rules: Vec<PermissionRule>,
+
+    /// Ring buffer of the last 50 tool invocations that were denied during the
+    /// current or past sessions. Not persisted — session-only.
+    #[serde(skip)]
+    pub recently_denied: Vec<String>,
 }
 
 impl PermissionStore {
@@ -210,11 +243,41 @@ impl PermissionStore {
         removed_local || removed_process
     }
 
+    /// Record a denied tool invocation in the session ring buffer (max 50 entries).
+    pub fn record_denied(&mut self, command: &str) {
+        const MAX_RECENT: usize = 50;
+        if self.recently_denied.len() >= MAX_RECENT {
+            self.recently_denied.remove(0);
+        }
+        self.recently_denied.push(command.to_string());
+    }
+
+    /// Add a rule to the ask list (per-invocation approval).
+    #[allow(dead_code)]
+    pub fn ask_always(&mut self, pattern: &str) {
+        let rule = PermissionRule::new(pattern);
+        if !self.ask_list.contains(&rule) {
+            self.ask_list.push(rule);
+        }
+    }
+
+    /// Add a rule scoped to the current workspace.
+    #[allow(dead_code)]
+    pub fn allow_workspace(&mut self, pattern: &str) {
+        let rule = PermissionRule::new(pattern);
+        if !self.workspace_rules.contains(&rule) {
+            self.workspace_rules.push(rule);
+        }
+    }
+
     /// Reset all permissions.
     pub fn reset(&mut self) {
         self.always_allow.clear();
         self.always_deny.clear();
         self.session_allow.clear();
+        self.ask_list.clear();
+        self.workspace_rules.clear();
+        self.recently_denied.clear();
         PROCESS_SESSION_ALLOW
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -239,11 +302,13 @@ impl PermissionStore {
     ///
     ///   /  tab switch · return · Esc cancel
     pub fn display_tab(&self, tab: &str) -> String {
-        let tabs = ["recently-denied", "allow", "session", "deny", "workspace"];
+        // Five tabs matching the /permissions UX spec:
+        // Recently denied | Allow | Ask | Deny | Workspace
+        let tabs = ["recently-denied", "allow", "ask", "deny", "workspace"];
         let active = match tab.to_lowercase().as_str() {
             "allow" | "always-allow" => "allow",
             "deny" | "always-deny" => "deny",
-            "session" => "session",
+            "ask" | "session" => "ask",
             "workspace" => "workspace",
             "recently-denied" | "recent" => "recently-denied",
             _ => "allow",
@@ -256,7 +321,7 @@ impl PermissionStore {
                 let label = match t {
                     "recently-denied" => "Recently denied",
                     "allow" => "Allow",
-                    "session" => "Session",
+                    "ask" => "Ask",
                     "deny" => "Deny",
                     "workspace" => "Workspace",
                     _ => t,
@@ -272,7 +337,7 @@ impl PermissionStore {
         let hint = match active {
             "allow" => "AGI Workforce won't ask before using allowed tools.",
             "deny" => "AGI Workforce will never use denied tools.",
-            "session" => "Session-scoped approvals (cleared on exit).",
+            "ask" => "AGI Workforce will ask before using these tools each time.",
             "workspace" => "Workspace rules apply only in this directory.",
             "recently-denied" => "Tools denied during this session.",
             _ => "",
@@ -289,11 +354,19 @@ impl PermissionStore {
                 v.sort();
                 v
             }
-            "session" => {
-                let mut v: Vec<String> = self.session_allow.iter().cloned().collect();
+            "ask" => {
+                let mut v: Vec<String> =
+                    self.ask_list.iter().map(|r| r.pattern.clone()).collect();
                 v.sort();
                 v
             }
+            "workspace" => {
+                let mut v: Vec<String> =
+                    self.workspace_rules.iter().map(|r| r.pattern.clone()).collect();
+                v.sort();
+                v
+            }
+            "recently-denied" => self.recently_denied.iter().rev().cloned().collect(),
             _ => vec![],
         };
 
@@ -395,11 +468,12 @@ mod tests {
     }
 
     #[test]
-    fn test_display_tab_session() {
+    fn test_display_tab_ask() {
         let mut store = PermissionStore::default();
-        store.allow_session("cargo test");
-        let display = store.display_tab("session");
-        assert!(display.contains("[Session]"));
+        store.ask_always("cargo test");
+        // "session" is a legacy alias that maps to the Ask tab.
+        let display = store.display_tab("ask");
+        assert!(display.contains("[Ask]"));
         assert!(display.contains("cargo test"));
     }
 
@@ -496,5 +570,53 @@ mod tests {
         assert_eq!(store.check("cargo test"), None);
         assert_eq!(store.check("rm -rf target"), None);
         assert_eq!(store.check("npm test"), None);
+    }
+
+    #[test]
+    fn test_record_denied_ring_buffer() {
+        let mut store = PermissionStore::default();
+        for i in 0..55 {
+            store.record_denied(&format!("cmd-{}", i));
+        }
+        // Ring buffer is capped at 50.
+        assert_eq!(store.recently_denied.len(), 50);
+        // Most recent entries are present; oldest are evicted.
+        assert!(store.recently_denied.iter().any(|s| s == "cmd-54"));
+        assert!(!store.recently_denied.iter().any(|s| s == "cmd-0"));
+    }
+
+    #[test]
+    fn test_display_tab_recently_denied() {
+        let mut store = PermissionStore::default();
+        store.record_denied("curl evil.test");
+        let display = store.display_tab("recently-denied");
+        assert!(display.contains("[Recently denied]"));
+        assert!(display.contains("curl evil.test"));
+    }
+
+    #[test]
+    fn test_display_tab_workspace() {
+        let mut store = PermissionStore::default();
+        store.allow_workspace("cargo build");
+        let display = store.display_tab("workspace");
+        assert!(display.contains("[Workspace]"));
+        assert!(display.contains("cargo build"));
+        assert!(display.contains("Workspace rules apply only in this directory."));
+    }
+
+    #[test]
+    fn test_reset_clears_all_fields() {
+        let mut store = PermissionStore::default();
+        store.allow_always("npm");
+        store.deny_always("rm");
+        store.ask_always("curl");
+        store.allow_workspace("cargo");
+        store.record_denied("evil");
+        store.reset();
+        assert!(store.always_allow.is_empty());
+        assert!(store.always_deny.is_empty());
+        assert!(store.ask_list.is_empty());
+        assert!(store.workspace_rules.is_empty());
+        assert!(store.recently_denied.is_empty());
     }
 }

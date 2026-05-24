@@ -12,13 +12,9 @@
 //! (discovered agents, skills, mcp servers, permission rules) is passed in
 //! by the caller so the renderer stays pure and snapshot-friendly.
 //!
-//! `#![allow(dead_code)]` at module level — most renderers are exercised by
-//! the inline snapshot tests and only some have live dispatch sites in
-//! `tui_app.rs` today. As more dispatch arms re-land (S5/M23 follow-up and
-//! interactive overlay milestones), specific items will lose this lint
-//! exemption naturally.
-
-#![allow(dead_code)]
+//! Most renderers are exercised by the inline snapshot tests; some have live
+//! dispatch sites in `tui_app.rs`. Items that are structurally complete but not
+//! yet wired carry per-item `#[allow(dead_code)]` annotations.
 
 use std::path::Path;
 
@@ -320,7 +316,7 @@ pub fn render_skills(skills: &[SkillSummary]) -> String {
     let body = if skills.is_empty() {
         vec![
             "  No skills found.".to_string(),
-            "  Create skills in .agiworkforce/skills/, .claude/skills/, or ~/.claude/skills/."
+            "  Create skills in .agiworkforce/skills/ or ~/.agiworkforce/skills/."
                 .to_string(),
         ]
     } else {
@@ -1024,7 +1020,7 @@ mod tests {
         let s = render_skills(&[]);
         assert!(s.contains("No skills found."));
         assert!(s.contains(".agiworkforce/skills/"));
-        assert!(s.contains(".claude/skills/"));
+        assert!(s.contains("~/.agiworkforce/skills/"));
     }
 
     #[test]

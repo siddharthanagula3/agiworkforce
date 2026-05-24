@@ -2,8 +2,21 @@
 
 import { useBillingStore } from '@/stores/unified/auth';
 import { getSupabaseClient } from '@/services/supabase';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTheme } from 'next-themes';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/AlertDialog';
 
 /**
  * /settings/profile — display name, persona context, appearance. When signed
@@ -11,6 +24,7 @@ import { useTheme } from 'next-themes';
  * persists via next-themes (next-themes ThemeProvider is wired at app root).
  * Round-20 parity pass: added persona fields + theme dropdown to match Claude
  * desktop profile panel IA.
+ * Feature 8: Danger Zone / account deletion (GDPR/CCPA), 2026-05-24.
  */
 
 const WORK_DESCRIPTIONS = [
@@ -38,6 +52,8 @@ const LS_INSTRUCTIONS_KEY = 'agi.profile.instructions';
 
 export default function ProfileSettingsPage() {
   const user = useBillingStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
+  const router = useRouter();
 
   const initialFullName =
     (user?.user_metadata?.['full_name'] as string | undefined) ??
@@ -77,12 +93,43 @@ export default function ProfileSettingsPage() {
     return window.localStorage.getItem(LS_INSTRUCTIONS_KEY) ?? '';
   });
 
-  // next-themes hook — same source as /settings/general theme toggle.
+  // next-themes hook -- same source as /settings/general theme toggle.
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const selectedTheme =
     !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
+
+  // Account deletion state
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeleteAccount = useCallback(async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+      const res = await fetch('/api/user/delete-account', {
+        method: 'DELETE',
+        headers,
+      });
+      if (!res.ok) {
+        const data: unknown = await res.json().catch(() => ({}));
+        const msg =
+          data !== null && typeof data === 'object' && 'error' in data
+            ? String((data as { error?: unknown }).error)
+            : 'Account deletion failed.';
+        throw new Error(msg);
+      }
+      await logout();
+      router.replace('/');
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Account deletion failed.');
+      setIsDeleting(false);
+    }
+  }, [logout, router]);
 
   async function handleSave() {
     const trimmedFull = displayName.trim();
@@ -388,6 +435,142 @@ export default function ProfileSettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* Danger Zone -- account deletion (GDPR/CCPA) */}
+      <section
+        data-testid="danger-zone"
+        style={{
+          border: '1px solid var(--destructive, #ef4444)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--destructive, #ef4444)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--destructive, #ef4444)',
+          }}
+        >
+          Danger Zone
+        </div>
+        <div
+          style={{
+            padding: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: '0 0 4px' }}>
+              Delete account
+            </p>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+              Permanently remove your account and all associated data. This action cannot be undone.
+            </p>
+          </div>
+          <button
+            type="button"
+            data-testid="delete-account-trigger"
+            onClick={() => {
+              setDeleteConfirmInput('');
+              setDeleteError(null);
+              setShowDeleteDialog(true);
+            }}
+            style={{
+              flexShrink: 0,
+              padding: '8px 16px',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--destructive-foreground, #fff)',
+              background: 'var(--destructive, #ef4444)',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              cursor: 'pointer',
+            }}
+          >
+            Delete account
+          </button>
+        </div>
+      </section>
+
+      {/* Deletion confirmation dialog */}
+      <AlertDialog
+        open={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (!isDeleting) setShowDeleteDialog(open);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete your account and all associated data. There is a 24-hour
+              grace window before deletion completes. After that, this action cannot be reversed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div style={{ padding: '4px 0' }}>
+            <label
+              htmlFor="delete-confirm-input"
+              style={{
+                display: 'block',
+                fontSize: 13,
+                color: 'var(--text-2)',
+                marginBottom: 8,
+              }}
+            >
+              Type <strong>DELETE</strong> to confirm:
+            </label>
+            <input
+              id="delete-confirm-input"
+              type="text"
+              value={deleteConfirmInput}
+              onChange={(e) => setDeleteConfirmInput(e.target.value)}
+              placeholder="DELETE"
+              autoComplete="off"
+              data-testid="delete-confirm-input"
+              style={{
+                width: '100%',
+                fontSize: 14,
+                padding: '8px 12px',
+                background: 'var(--bg-base)',
+                color: 'var(--text-1)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                boxSizing: 'border-box',
+              }}
+            />
+            {deleteError !== null && (
+              <p style={{ fontSize: 12, color: 'var(--destructive, #ef4444)', margin: '8px 0 0' }}>
+                {deleteError}
+              </p>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="delete-account-confirm"
+              onClick={(e) => {
+                e.preventDefault();
+                setShowDeleteDialog(false);
+                void handleDeleteAccount();
+              }}
+              disabled={deleteConfirmInput !== 'DELETE' || isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+            >
+              {isDeleting ? 'Deleting...' : 'Delete account'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
