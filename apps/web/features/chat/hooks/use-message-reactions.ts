@@ -27,11 +27,15 @@ export const reactionQueryKeys = queryKeys.reactions;
 /**
  * Get current authenticated user
  */
-async function getCurrentUser() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  try {
+    const clerk = (window as Record<string, unknown>)['Clerk'] as
+      | { user?: { id: string } | null }
+      | undefined;
+    return clerk?.user?.id ? { id: clerk.user.id } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
