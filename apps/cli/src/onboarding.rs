@@ -207,7 +207,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
         "Local model                      Run AI locally — no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
-        "Other providers                  ChatGPT, Claude, GitHub Copilot OAuth",
+        "Other providers                  ChatGPT, Anthropic, GitHub Copilot OAuth",
         "AGI cloud                        Waitlist only — join at agiworkforce.com",
         "Skip for now                     Configure later with /login",
     ];
@@ -231,7 +231,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
 fn select_other_provider() -> Result<AuthChoice> {
     let choices = &[
         "Sign in with ChatGPT             Usage included with Plus, Pro, Business, Enterprise",
-        "Sign in with Claude              Usage included with Pro, Max, Team, Enterprise",
+        "Sign in with Anthropic           Usage included with Pro, Max, Team, Enterprise",
         "Sign in with GitHub Copilot      Usage included with Copilot subscription",
         "OpenRouter                       API key — access 200+ models",
         "NVIDIA NIM                       API key — NVIDIA hosted models",
