@@ -241,7 +241,7 @@ export default function PricingPage() {
           {/* Team tab: waitlisted tier cards */}
           {activeTab === 'team' && (
             <div className="agi-tier-grid">
-              {(['pro', 'pro_plus', 'max'] as const).map((planId) => {
+              {(['pro', 'max'] as const).map((planId) => {
                 const plan = BILLING_PLAN_PRICING[planId];
                 const monthlyPrice = plan.monthlyPriceUsd;
                 const yearlyPerMonth = plan.yearlyPriceUsd / 12;

@@ -14,52 +14,51 @@ const CAPABILITIES: CapRow[] = [
   {
     label: 'Voice transcription',
     description: 'Push-to-talk Whisper transcription with AI cleanup.',
-    tiers: ['hobby', 'pro', 'pro_plus', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
     link: '/settings/voice',
   },
   {
     label: 'Image generation',
     description: 'Generate images via managed cloud or BYOK.',
-    tiers: ['hobby', 'pro', 'pro_plus', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
   },
   {
     label: 'Video generation',
     description: 'Runway Gen-4, Veo-3, and Sora 2 routing.',
-    tiers: ['pro', 'pro_plus', 'max'],
+    tiers: ['pro', 'max'],
   },
   {
     label: 'Computer use',
     description: 'Automated browser and desktop actions.',
-    tiers: ['pro', 'pro_plus', 'max'],
+    tiers: ['pro', 'max'],
   },
   {
     label: 'Extended thinking',
     description: 'Adaptive reasoning for complex tasks.',
-    tiers: ['hobby', 'pro', 'pro_plus', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
   },
   {
     label: 'Web search',
     description: 'Real-time search across 10+ providers.',
-    tiers: ['hobby', 'pro', 'pro_plus', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
   },
   {
     label: 'MCP connectors',
     description: 'Connect external tools via Model Context Protocol.',
-    tiers: ['pro', 'pro_plus', 'max'],
+    tiers: ['pro', 'max'],
   },
   {
     label: 'BYOK (any tier)',
     description: 'Bring your own API keys to bypass all managed caps.',
-    tiers: ['free', 'hobby', 'pro', 'pro_plus', 'max'],
+    tiers: ['free', 'hobby', 'pro', 'max'],
   },
 ];
 
-const TIER_ORDER = ['free', 'hobby', 'pro', 'pro_plus', 'max'];
+const TIER_ORDER = ['free', 'hobby', 'pro', 'max'];
 const TIER_LABEL: Record<string, string> = {
   free: 'Free',
   hobby: 'Hobby',
   pro: 'Pro',
-  pro_plus: 'Pro+',
   max: 'Max',
 };
 
@@ -100,7 +99,7 @@ export default function CapabilitiesSettingsPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr repeat(5, 60px)',
+            gridTemplateColumns: '1fr repeat(4, 60px)',
             padding: '10px 20px',
             borderBottom: '1px solid var(--border)',
             gap: 4,
@@ -130,7 +129,7 @@ export default function CapabilitiesSettingsPage() {
               key={cap.label}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr repeat(5, 60px)',
+                gridTemplateColumns: '1fr repeat(4, 60px)',
                 padding: '12px 20px',
                 borderBottom: i < CAPABILITIES.length - 1 ? '1px solid var(--border)' : undefined,
                 gap: 4,

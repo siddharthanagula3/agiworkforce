@@ -121,7 +121,7 @@ export interface ChatMessage {
         | 'token_cap'
         | 'mcp'
         | 'web_search';
-      requiredTier: 'hobby' | 'pro' | 'pro_plus' | 'max';
+      requiredTier: 'hobby' | 'pro' | 'max';
       reason?: string;
     };
   };

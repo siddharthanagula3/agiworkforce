@@ -17,10 +17,7 @@ import {
 import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 import { BillingInfo, normalizePlan, normalizeStatus } from './types';
 
-function formatPlanPrice(
-  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
-  billingPeriod: 'monthly' | 'yearly',
-) {
+function formatPlanPrice(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
   if (billingPeriod === 'monthly') {
     return `$${getPlanPriceUsd(plan, 'monthly')}`;
   }
@@ -28,17 +25,14 @@ function formatPlanPrice(
 }
 
 function formatPlanBilledAmount(
-  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
+  plan: 'hobby' | 'pro' | 'max',
   billingPeriod: 'monthly' | 'yearly',
 ) {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   return `$${getPlanPriceUsd(plan, interval).toFixed(2).replace(/\.00$/, '')}`;
 }
 
-function formatUsageBudgetLine(
-  plan: 'hobby' | 'pro' | 'pro_plus' | 'max',
-  billingPeriod: 'monthly' | 'yearly',
-) {
+function formatUsageBudgetLine(plan: 'hobby' | 'pro' | 'max', billingPeriod: 'monthly' | 'yearly') {
   const interval = billingPeriod === 'yearly' ? 'yearly' : 'monthly';
   const budgetCents = getPlanUsageBudgetCents(plan, interval);
   return `${budgetCents.toLocaleString()} credits/${billingPeriod === 'yearly' ? 'year' : 'month'} ($${(budgetCents / 100).toFixed(2)} in AI usage)`;
@@ -53,8 +47,6 @@ function getPlanIcon(plan: string) {
       return <Star className="h-5 w-5" />;
     case 'pro':
       return <Crown className="h-5 w-5" />;
-    case 'pro_plus':
-      return <Crown className="h-5 w-5 text-violet-500" />;
     case 'max':
       return <Crown className="h-5 w-5 text-amber-500" />;
     case 'enterprise':
@@ -92,7 +84,7 @@ interface SubscriptionProps {
   onBillingPeriodChange: (period: 'monthly' | 'yearly') => void;
   onManageBilling: () => void;
   onUpgrade: (
-    plan: 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise',
+    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
     billingPeriod?: 'monthly' | 'yearly',
   ) => void;
   formatCurrency: (amount: number, currency: string) => string;
