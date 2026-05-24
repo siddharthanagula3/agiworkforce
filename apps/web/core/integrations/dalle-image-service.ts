@@ -6,7 +6,7 @@
  * to keep API keys secure on the server side. Never expose API keys client-side.
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
 
 export interface DallEGenerationRequest {
@@ -37,22 +37,6 @@ export interface ImageGenerationResult {
   style?: string;
   model: string;
   createdAt: Date;
-}
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    logger.error('[DallEImageService] Failed to get auth token:', error);
-    return null;
-  }
 }
 
 /**
