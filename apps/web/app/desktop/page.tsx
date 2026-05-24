@@ -14,7 +14,7 @@ const SPECS: { k: string; v: string }[] = [
   { k: 'Engine', v: 'Pure Rust, Tauri' },
   { k: 'Size', v: '~35 MB installed' },
   { k: 'Modes', v: 'Local · Cloud (BYOK or managed)' },
-  { k: 'Storage', v: 'SQLite local · Supabase cloud' },
+  { k: 'Storage', v: 'SQLite local · optional cloud sync' },
   { k: 'Computer use', v: 'Browser · files · terminal · screen' },
   { k: 'MCP plugins', v: 'stdio · SSE · streamable HTTP' },
   { k: 'Skills', v: 'Markdown + frontmatter, layered precedence' },

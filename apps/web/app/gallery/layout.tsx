@@ -40,22 +40,5 @@ export const metadata: Metadata = {
 };
 
 export default function GalleryLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'CollectionPage',
-            name: 'Gallery',
-            description:
-              'See what AGI can do. Real examples of AI automation, code generation, research, and desktop control.',
-            url: 'https://agiworkforce.com/gallery',
-          }),
-        }}
-      />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

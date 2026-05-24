@@ -60,9 +60,9 @@ export default function GetStartedPage() {
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Hobby cloud</h3>
+              <h3 className="agi-reason-h">Managed cloud waitlist</h3>
               <p className="agi-reason-p">
-                Sign in to our managed cloud. We handle the keys; you just chat.
+                Join the waitlist if you want AGI-hosted compute later. V1 stays local and BYOK.
               </p>
             </li>
           </ul>

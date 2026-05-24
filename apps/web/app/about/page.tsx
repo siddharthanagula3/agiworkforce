@@ -11,15 +11,15 @@ export const metadata: Metadata = {
 
 const COLOPHON: { key: string; val: string }[] = [
   { key: 'Headquarters', val: 'Austin, Texas, USA' },
-  { key: 'Founded', val: '2026' },
+  { key: 'Founded', val: 'August 2025' },
   { key: 'License', val: 'Proprietary' },
-  { key: 'Region', val: 'us-east-2 (Supabase)' },
+  { key: 'Region', val: 'United States' },
   { key: 'Set in', val: 'Geist Sans' },
   { key: 'Engine', val: 'Pure Rust CLI' },
   { key: 'Surfaces', val: 'Desktop · Web · Mobile · CLI · Chrome · VS Code' },
   { key: 'Providers', val: 'Multi-provider — 10+ wired, BYO endpoints supported' },
   { key: 'Data policy', val: 'We do not train on your data.' },
-  { key: 'Compliance', val: 'SOC 2 in progress · GDPR DPA on request' },
+  { key: 'Compliance', val: 'Security review in progress' },
 ];
 
 export default function AboutPage() {

@@ -46,30 +46,9 @@ export const metadata: Metadata = {
   },
 };
 
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'AGI',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'macOS, Windows, Linux',
-  featureList: [
-    `${MARKETING.providers.display} AI providers in one chat thread`,
-    `${MARKETING.surfaces.display} surfaces: Desktop, Web, Mobile, CLI, VS Code, Chrome`,
-    'BYOK: bring your own API keys',
-    'Run fully offline with Ollama or LM Studio',
-    'Cross-provider session continuity: switch models mid-conversation',
-    'AES-256-GCM encrypted key storage',
-    'No training on your data',
-  ],
-};
-
 export default function Home() {
   return (
     <div data-design="agi">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -82,8 +61,8 @@ export default function Home() {
 
           <p className="agi-lede">
             {MARKETING.providers.display} providers in one thread. Switch mid-conversation; the
-            history follows. Bring your own keys, run fully offline, or use our managed cloud.{' '}
-            <strong>One platform. Every model. Your choice.</strong>
+            history follows. Bring your own keys, run fully offline, or join the managed-cloud
+            waitlist. <strong>One platform. Every model. Your choice.</strong>
           </p>
 
           <div className="agi-cta-row">
@@ -123,13 +102,13 @@ export default function Home() {
                   margin: '0 0 8px',
                 }}
               >
-                Launching 2026-08-16
+                Mobile-first MVP
               </p>
               <h2 className="agi-callout-h" style={{ marginBottom: 6 }}>
                 AGI Mobile is coming.
               </h2>
               <p className="agi-callout-p">
-                Free. On-device AI for iOS and Android. Works in airplane mode. No subscription.
+                Local-first and BYOK-first AI for iOS and Android, with managed compute waitlisted.
               </p>
             </div>
             <a

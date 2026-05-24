@@ -21,7 +21,7 @@ const COMPONENTS: {
     note: 'Express on Fly.io. BYOK + managed routing.',
   },
   { name: 'Signaling server', status: 'ok', note: 'WebRTC signaling, deployed on Fly.io.' },
-  { name: 'Supabase (us-east-2)', status: 'ok', note: 'Auth, storage, Realtime.' },
+  { name: 'Core cloud services', status: 'ok', note: 'Auth, storage, and sync services.' },
   {
     name: 'Providers (BYOK passthrough)',
     status: 'ok',

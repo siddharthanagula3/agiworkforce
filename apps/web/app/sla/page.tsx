@@ -46,7 +46,7 @@ export default function SlaPage() {
                 <td>Monthly</td>
               </tr>
               <tr>
-                <td>Auth (Supabase)</td>
+                <td>Auth</td>
                 <td>99.9%</td>
                 <td>Monthly</td>
               </tr>

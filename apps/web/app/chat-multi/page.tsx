@@ -8,7 +8,7 @@
  * and see the streaming response with token usage. Three providers can each
  * stream independently against the same prompt for a side-by-side feel.
  *
- * Auth: pulls the Supabase session token at request time and forwards it as
+ * Auth: pulls the browser session token at request time and forwards it as
  * a Bearer to the proxy. If you're not signed in, the api-gateway will
  * 401 and the chunk surface here will show the error.
  */
@@ -67,7 +67,7 @@ export default function MultiProviderChatPage(): ReactElement {
     } catch (err) {
       return {
         client: null,
-        error: err instanceof Error ? err.message : 'Supabase client unavailable',
+        error: err instanceof Error ? err.message : 'Auth client unavailable',
       };
     }
   }, []);

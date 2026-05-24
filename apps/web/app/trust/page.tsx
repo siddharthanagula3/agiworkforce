@@ -47,7 +47,7 @@ const SECURITY: { item: string; detail: string }[] = [
   {
     item: 'Auth',
     detail:
-      'Supabase auth, JWT cookies with strict same-site, CSRF tokens on state-changing endpoints.',
+      'Managed auth, JWT cookies with strict same-site, CSRF tokens on state-changing endpoints.',
   },
   {
     item: 'Database',
