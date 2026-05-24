@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'CLI — The operator’s command line | AGI',
+  title: "CLI — The operator's command line | AGI",
   description:
     'Pure Rust. Ratatui TUI. Same engine that powers every other surface. The CLI is the product; the apps are surfaces over it.',
   alternates: { canonical: 'https://agiworkforce.com/cli' },
@@ -28,6 +28,141 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'onboarding', desc: 'Re-run the first-run onboarding' },
 ];
 
+const FEATURES = [
+  {
+    label: 'Non-interactive exec',
+    body: 'agiworkforce exec is the headless mode. Pipe a task in, get an answer out. Ships to CI without a TUI.',
+  },
+  {
+    label: 'Ratatui TUI',
+    body: 'Full interactive terminal UI in 256-color. Model switcher, tool call trace, and diff viewer built in.',
+  },
+  {
+    label: 'Session replay',
+    body: 'Every tool call is journaled. Resume, fork, and branch any past session. Full reproducibility.',
+  },
+  {
+    label: 'Sandboxed by default',
+    body: 'macOS Seatbelt + Linux bwrap on by default for dangerous tools: file writes, shell exec, network.',
+  },
+  {
+    label: 'MCP server mode',
+    body: 'Run as an MCP server over stdio. Connects AGI to Claude Code, Cursor, and any MCP client.',
+  },
+  {
+    label: 'Plugin system',
+    body: '150+ built-in skills. Extend with your own plugins via the plugin manifest format.',
+  },
+  {
+    label: 'BYOK across providers',
+    body: '10+ providers. Keys stored in system keychain. Switch provider per session with --provider flag.',
+  },
+  {
+    label: 'Multi-platform',
+    body: 'macOS, Linux, WSL. Install via Homebrew, cargo, or the one-line curl installer.',
+  },
+];
+
+/** Terminal-style screenshot placeholder. */
+function TerminalScreenshot({ title, description }: { title: string; description: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule-strong)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--agi-bg-3)',
+          borderBottom: '1px solid var(--agi-rule)',
+          padding: '8px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            color: 'var(--agi-ink-quiet)',
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          zsh &mdash; {title}
+        </span>
+      </div>
+      <div
+        style={{
+          padding: '28px 20px',
+          minHeight: 140,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
+        }}
+      >
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: 'var(--agi-amber)',
+            margin: 0,
+          }}
+        >
+          Screenshot
+        </p>
+        <p
+          style={{
+            fontSize: 13,
+            color: 'var(--agi-ink-2)',
+            textAlign: 'center',
+            maxWidth: 300,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function CliPage() {
   return (
     <div data-design="agi">
@@ -49,10 +184,36 @@ export default function CliPage() {
               rel="noopener noreferrer"
               className="agi-cta-ghost"
             >
-              Source on GitHub →
+              Source on GitHub &rarr;
             </a>
           </div>
         </section>
+
+        {/* ---- SCREENSHOTS ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            <TerminalScreenshot
+              title="interactive TUI"
+              description="Ratatui interactive mode with model switcher, streaming output, and tool call trace visible in the sidebar."
+            />
+            <TerminalScreenshot
+              title="agiworkforce exec"
+              description="Headless exec mode running a code review task in CI. stdin task, stdout structured diff, exit 0."
+            />
+            <TerminalScreenshot
+              title="agiworkforce session"
+              description="Session browser showing past runs with fork and resume options. Every tool call is journaled and replayable."
+            />
+          </div>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">Install — pick one</p>
           <div className="agi-terminal">
@@ -84,6 +245,20 @@ export default function CliPage() {
             </pre>
           </div>
         </section>
+
+        {/* ---- FEATURES GRID ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Features</p>
+          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="CLI features">
+            {FEATURES.map((f) => (
+              <li key={f.label} className="agi-perk-card">
+                <p className="agi-perk-title">{f.label}</p>
+                <p className="agi-perk-description">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">What it does</p>
           <ul className="agi-reasons">

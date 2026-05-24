@@ -1,7 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { ProjectGallery } from '@agiworkforce/unified-chat';
+import type { Project } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
+import { ProjectSettingsDialog } from '@features/projects/components/ProjectSettingsDialog';
+import { useProjectStore } from '@features/projects/stores/project-store';
 
 /**
  * /projects — top-level Projects hub on web. Mounts the shared
@@ -18,6 +22,10 @@ import { useRouter } from 'next/navigation';
  */
 export default function ProjectsPage() {
   const router = useRouter();
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const removeProject = useProjectStore((s) => s.removeProject);
+
+  const [editProject, setEditProject] = useState<Project | null>(null);
 
   return (
     <main
@@ -81,9 +89,31 @@ export default function ProjectsPage() {
             onSelect={(project) => {
               router.push(`/projects/${encodeURIComponent(project.id)}`);
             }}
+            onEditProject={(project) => setEditProject(project)}
+            onArchiveProject={() => {
+              /* store mutation handled inside gallery; no server sync in v1 */
+            }}
+            onDeleteProject={() => {
+              /* store mutation handled inside gallery; no server sync in v1 */
+            }}
           />
         </section>
       </div>
+
+      {editProject && (
+        <ProjectSettingsDialog
+          open={!!editProject}
+          onOpenChange={(open) => {
+            if (!open) setEditProject(null);
+          }}
+          project={editProject}
+          onUpdate={(id, updates) => updateProject(id, updates)}
+          onDelete={(id) => {
+            removeProject(id);
+            setEditProject(null);
+          }}
+        />
+      )}
     </main>
   );
 }
