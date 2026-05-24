@@ -34,35 +34,19 @@ vi.mock('@/lib/cors', () => ({
 
 // Mock env utility
 vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    const envMap: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'service-role-key-test',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key-test',
-    };
-    return envMap[key] ?? `test-${key}`;
-  }),
+  requireEnv: vi.fn((key: string) => `test-${key}`),
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-// Mock Supabase client
-const mockGetUser = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-  })),
+// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock @supabase/ssr for cookie-based auth path
-const mockSsrGetUser = vi.fn();
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: mockSsrGetUser,
-    },
-  })),
+// Mock Supabase server client (used for service calls)
+vi.mock('@/services/supabase-server', () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 // Mock CreditService
@@ -147,24 +131,19 @@ describe('GET /api/usage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user via Bearer token
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-123', email: 'test@example.com' } },
-      error: null,
-    });
-
-    // Default: no cookie-based session
-    mockSsrGetUser.mockResolvedValue({
-      data: { user: null },
-      error: new Error('No session'),
-    });
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
     // Default: successful service responses
     mockGetBalance.mockResolvedValue(MOCK_BALANCE);
     mockGetSubscription.mockResolvedValue(MOCK_SUBSCRIPTION);
   });
 
-  it('should return 401 when no authorization header is provided and no cookie session', async () => {
+  it('should return 401 when no authorization and no Clerk session', async () => {
+    mockGetClerkAuthUser.mockRejectedValueOnce(
+      Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+    );
+
     const request = makeGetRequest(); // no auth header
     const response = await GET(request);
 
@@ -174,10 +153,9 @@ describe('GET /api/usage', () => {
   });
 
   it('should return 401 when Bearer token is invalid', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: new Error('Invalid token'),
-    });
+    mockGetClerkAuthUser.mockRejectedValueOnce(
+      Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+    );
 
     const request = makeGetRequest(FAKE_BEARER);
     const response = await GET(request);
@@ -187,18 +165,17 @@ describe('GET /api/usage', () => {
     expect(data.error.code).toBe('UNAUTHORIZED');
   });
 
-  it('should authenticate via cookie session when no Bearer token is provided', async () => {
-    mockSsrGetUser.mockResolvedValueOnce({
-      data: { user: { id: 'cookie-user-456', email: 'cookie@example.com' } },
-      error: null,
+  it('should authenticate via Clerk session and call services with userId', async () => {
+    mockGetClerkAuthUser.mockResolvedValueOnce({
+      userId: 'cookie-user-456',
+      email: 'cookie@example.com',
     });
 
-    const request = makeGetRequest(); // no Bearer token — falls through to SSR cookie auth
+    const request = makeGetRequest(); // no Bearer token — Clerk session auth
     const response = await GET(request);
 
     expect(response.status).toBe(200);
-    // CreditService and SubscriptionService should have been called with the cookie
-    // user's ID. Signature: (userClient, userId).
+    // CreditService and SubscriptionService should have been called with the user's ID.
     expect(mockGetBalance).toHaveBeenCalledWith(expect.anything(), 'cookie-user-456');
     expect(mockGetSubscription).toHaveBeenCalledWith(expect.anything(), 'cookie-user-456');
   });

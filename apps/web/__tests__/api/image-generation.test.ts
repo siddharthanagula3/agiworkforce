@@ -43,10 +43,15 @@ vi.mock('@/lib/error-handler', () => ({
     handler(req),
 }));
 
-// ─── Supabase ───────────────────────────────────────────────────────────────
-const mockGetUser = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({ auth: { getUser: mockGetUser } })),
+// ─── Clerk auth ─────────────────────────────────────────────────────────────
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// ─── Supabase service client (used by SubscriptionService/CreditService) ────
+vi.mock('@/lib/supabase-server', () => ({
+  getServiceClient: vi.fn(() => ({})),
 }));
 
 // ─── SubscriptionService ────────────────────────────────────────────────────
@@ -80,11 +85,11 @@ global.fetch = mockFetch;
 import { POST } from '@/app/api/media/image/generate/route';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
-const TEST_USER = { id: 'user-credit-test', email: 'credit@test.com' };
+const TEST_USER = { userId: 'user-credit-test', email: 'credit@test.com' };
 
 const PRO_SUBSCRIPTION = {
   id: 'sub_pro',
-  user_id: TEST_USER.id,
+  user_id: TEST_USER.userId,
   status: 'active',
   plan_tier: 'pro',
   current_period_start: new Date('2026-01-01'),
@@ -120,13 +125,11 @@ describe('POST /api/media/image/generate — credit deduction', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Defaults: authenticated pro user
-    mockGetUser.mockResolvedValue({ data: { user: TEST_USER }, error: null });
+    // Defaults: authenticated pro user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
 
     // Env vars
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     delete process.env['GOOGLE_API_KEY'];
     delete process.env['STABILITY_API_KEY'];
