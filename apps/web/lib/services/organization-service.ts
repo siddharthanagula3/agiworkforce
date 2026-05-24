@@ -3,170 +3,165 @@
  *
  * # Client injection contract (WEB-RLS-BYPASS mitigation)
  *
- * All methods are USER-CONTEXT and accept a `client: SupabaseClient` parameter.
- * Callers pass `getUserClient(jwt)` from `@/lib/supabase-server`.
- * RLS policies enforce organization membership visibility and mutability.
+ * All methods are USER-CONTEXT and accept a `db: DatabaseAdapter` parameter.
+ * RLS policies enforce organization membership visibility and mutability via
+ * `db.withUser(jwt)` on the caller side.
  *
- * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ * Never add a private `getDatabase()` here. See lib/services/README.md.
  */
 import 'server-only';
 
-import { type SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import type { OrganizationRow, OrganizationMemberRow } from '@/lib/server/neon-types';
 import { Organization, OrganizationMember } from '@/types/saas';
+
+interface OrgMemberWithProfile extends OrganizationMemberRow {
+  profile_email: string | null;
+  profile_display_name: string | null;
+  profile_avatar_url: string | null;
+}
 
 export class OrganizationService {
   /**
    * Create a new organization.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so inserts are
-   * authorized as the authenticated user. RLS policies enforce that only
-   * authenticated users can create organizations.
+   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
+   * RLS policies enforce that only authenticated users can create organizations.
    */
   static async createOrganization(
-    client: SupabaseClient,
+    db: DatabaseAdapter,
     userId: string,
     name: string,
     slug: string,
   ): Promise<Organization> {
     // 1. Create Org
-    const { data: org, error: orgError } = await client
-      .from('organizations')
-      .insert({
-        name,
-        slug,
-        created_by: userId,
-      })
-      .select()
-      .single();
+    const [org] = await db
+      .query<OrganizationRow>(
+        `insert into organizations (name, slug, created_by)
+         values ($1, $2, $3)
+         returning *`,
+        [name, slug, userId],
+      )
+      .catch((orgError: unknown) => {
+        logger.error({ error: orgError, userId, name }, 'Failed to create organization');
+        throw orgError;
+      });
 
-    if (orgError) {
-      logger.error({ error: orgError, userId, name }, 'Failed to create organization');
-      throw orgError;
+    if (!org) {
+      throw new Error('Organization insert returned no row');
     }
 
     // 2. Add creator as Owner
-    const { error: memberError } = await client.from('organization_members').insert({
-      organization_id: org.id,
-      user_id: userId,
-      role: 'owner',
-    });
-
-    if (memberError) {
+    try {
+      await db.execute(
+        `insert into organization_members (organization_id, user_id, role)
+         values ($1, $2, $3)`,
+        [org.id, userId, 'owner'],
+      );
+    } catch (memberError) {
       logger.error({ error: memberError, orgId: org.id }, 'Failed to add owner to organization');
 
       // Cleanup: Delete the orphaned organization
-      const { error: cleanupError } = await client.from('organizations').delete().eq('id', org.id);
-
-      if (cleanupError) {
+      try {
+        await db.execute(`delete from organizations where id = $1`, [org.id]);
+        logger.info({ orgId: org.id }, 'Cleaned up orphaned organization after member add failure');
+      } catch (cleanupError) {
         logger.error(
           { error: cleanupError, orgId: org.id },
           'Failed to cleanup orphaned organization after member add failure',
         );
-      } else {
-        logger.info({ orgId: org.id }, 'Cleaned up orphaned organization after member add failure');
       }
 
       throw memberError;
     }
 
-    return org as Organization;
+    return org as unknown as Organization;
   }
 
   /**
    * Get user's organizations.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only organizations
-   * the authenticated user is a member of are returned.
+   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
+   * RLS policies enforce that only organizations the user is a member of are returned.
    */
-  static async getUserOrganizations(
-    client: SupabaseClient,
-    userId: string,
-  ): Promise<Organization[]> {
-    const { data, error } = await client
-      .from('organization_members')
-      .select(
-        `
-        organization:organizations (*)
-      `,
+  static async getUserOrganizations(db: DatabaseAdapter, userId: string): Promise<Organization[]> {
+    const rows = await db
+      .query<OrganizationRow>(
+        `select o.*
+         from organizations o
+         inner join organization_members om on om.organization_id = o.id
+         where om.user_id = $1`,
+        [userId],
       )
-      .eq('user_id', userId);
+      .catch((error: unknown) => {
+        logger.error({ error, userId }, 'Failed to fetch user organizations');
+        throw error;
+      });
 
-    if (error) {
-      logger.error({ error, userId }, 'Failed to fetch user organizations');
-      throw error;
-    }
-
-    // Flatten structure - Supabase returns { organization: Organization }[]
-    // The nested select returns the organization object directly
-    // Use unknown first to handle Supabase's generic return type
-    return (data as unknown as { organization: Organization | null }[])
-      .map((d) => d.organization)
-      .filter((org): org is Organization => org !== null);
+    return rows as unknown as Organization[];
   }
 
   /**
    * Get members of an organization.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only members
-   * of organizations the authenticated user can access are returned.
+   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
+   * RLS policies enforce that only members of accessible organizations are returned.
+   *
+   * SEV-WEB-08 / WEB-31: explicit column list to limit blast radius.
    */
   static async getOrganizationMembers(
-    client: SupabaseClient,
+    db: DatabaseAdapter,
     orgId: string,
   ): Promise<OrganizationMember[]> {
-    // SEV-WEB-08 / WEB-31 (audit 2026-05-19): explicit column list matching
-    // the OrganizationMember type. The previous `select('*, profile:profiles(...)')`
-    // returned every column on organization_members (including internal flags /
-    // metadata columns) to any caller — even role='viewer' members. RLS doesn't
-    // help because the service-role client bypasses it. Listing only the
-    // columns the UI needs limits the blast radius of any future column added
-    // with sensitive semantics (e.g. invitation tokens, mfa state, etc.).
-    const { data, error } = await client
-      .from('organization_members')
-      .select(
-        `
-        organization_id,
-        user_id,
-        role,
-        joined_at,
-        profile:profiles (
-          email,
-          display_name,
-          avatar_url
-        )
-      `,
+    const rows = await db
+      .query<OrgMemberWithProfile>(
+        `select
+           om.organization_id,
+           om.user_id,
+           om.role,
+           om.joined_at,
+           p.email      as profile_email,
+           p.display_name as profile_display_name,
+           p.avatar_url as profile_avatar_url
+         from organization_members om
+         left join profiles p on p.id = om.user_id
+         where om.organization_id = $1`,
+        [orgId],
       )
-      .eq('organization_id', orgId);
+      .catch((error: unknown) => {
+        logger.error({ error, orgId }, 'Failed to fetch organization members');
+        throw error;
+      });
 
-    if (error) {
-      logger.error({ error, orgId }, 'Failed to fetch organization members');
-      throw error;
-    }
-
-    // Supabase's generated PostgrestResponse types model FK joins as arrays
-    // even when the relationship is single-row. Cast through unknown to bridge
-    // the structural mismatch — runtime shape is consistent with
-    // OrganizationMember thanks to the column-by-column select above.
-    return data as unknown as OrganizationMember[];
+    return rows.map((row) => ({
+      organization_id: row.organization_id,
+      user_id: row.user_id,
+      role: row.role,
+      joined_at: row.joined_at,
+      profile: {
+        email: row.profile_email,
+        display_name: row.profile_display_name,
+        avatar_url: row.profile_avatar_url,
+      },
+    })) as OrganizationMember[];
   }
 
   /**
    * Add member to organization.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the insert
-   * is authorized as the authenticated user. RLS policies enforce that only
-   * org admins/owners can add members.
+   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
+   * RLS policies enforce that only org admins/owners can add members.
    */
   static async addMember(
-    client: SupabaseClient,
+    db: DatabaseAdapter,
     orgId: string,
     userId: string,
     role: 'admin' | 'member' | 'viewer',
   ): Promise<void> {
-    const { error } = await client.from('organization_members').insert({
-      organization_id: orgId,
-      user_id: userId,
-      role,
-    });
-
-    if (error) {
+    try {
+      await db.execute(
+        `insert into organization_members (organization_id, user_id, role)
+         values ($1, $2, $3)`,
+        [orgId, userId, role],
+      );
+    } catch (error) {
       logger.error({ error, orgId, userId }, 'Failed to add member');
       throw error;
     }
@@ -174,18 +169,16 @@ export class OrganizationService {
 
   /**
    * Remove member.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the delete
-   * is authorized as the authenticated user. RLS policies enforce that only
-   * org admins/owners can remove members.
+   * USER-CONTEXT: caller passes a db scoped to the authenticated user.
+   * RLS policies enforce that only org admins/owners can remove members.
    */
-  static async removeMember(client: SupabaseClient, orgId: string, userId: string): Promise<void> {
-    const { error } = await client
-      .from('organization_members')
-      .delete()
-      .eq('organization_id', orgId)
-      .eq('user_id', userId);
-
-    if (error) {
+  static async removeMember(db: DatabaseAdapter, orgId: string, userId: string): Promise<void> {
+    try {
+      await db.execute(
+        `delete from organization_members where organization_id = $1 and user_id = $2`,
+        [orgId, userId],
+      );
+    } catch (error) {
       logger.error({ error, orgId, userId }, 'Failed to remove member');
       throw error;
     }
