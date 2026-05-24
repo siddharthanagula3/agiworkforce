@@ -125,7 +125,7 @@ export function ComparisonResponse({
 
       {chosen && (
         <p className="text-xs text-muted-foreground">
-          You chose option {chosen.toUpperCase()}. The other response has been dimmed.
+          You chose option {chosen.toUpperCase()}. Tap the other tab to compare.
         </p>
       )}
     </div>
