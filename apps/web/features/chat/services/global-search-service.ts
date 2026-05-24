@@ -5,7 +5,8 @@ import { logger } from '@shared/lib/logger';
  * Includes search history tracking and analytics
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface SearchResult {
   type: 'session' | 'message';
@@ -56,21 +57,43 @@ export interface SearchSuggestion {
   score: number;
 }
 
-interface MessageWithSession {
-  id: string;
-  conversation_id: string;
-  role: string;
+interface APISearchResult {
+  type: 'session' | 'message';
+  sessionId: string;
+  sessionTitle: string;
+  messageId?: string;
   content: string;
-  created_at: string;
-  updated_at: string;
-  web_conversations: {
-    id: string;
-    title: string | null;
-  } | null;
+  role?: 'user' | 'assistant' | 'system';
+  createdAt: string;
+  updatedAt: string;
+  matchedText: string;
+  contextBefore?: string;
+  contextAfter?: string;
+}
+
+interface APISearchStats {
+  totalResults: number;
+  sessionMatches: number;
+  messageMatches: number;
+}
+
+async function buildMutateHeaders(): Promise<HeadersInit> {
+  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': csrf,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function buildReadHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 class GlobalSearchService {
-  private readonly CONTEXT_LENGTH = 50; // Characters of context before/after match
   private readonly DEFAULT_LIMIT = 50;
 
   /**
@@ -78,105 +101,77 @@ class GlobalSearchService {
    * Automatically tracks the search in history
    */
   async search(
-    userId: string,
+    _userId: string,
     filters: SearchFilters,
-    options: { trackSearch?: boolean } = { trackSearch: true },
+    _options: { trackSearch?: boolean } = { trackSearch: true },
   ): Promise<{ results: SearchResult[]; stats: SearchStats }> {
     const startTime = Date.now();
     const limit = filters.limit || this.DEFAULT_LIMIT;
 
-    try {
-      // Search in parallel for better performance
-      const [sessionResults, messageResults] = await Promise.all([
-        this.searchSessions(userId, filters),
-        this.searchMessages(userId, filters),
-      ]);
+    const params = new URLSearchParams();
+    params.set('q', filters.query);
+    params.set('limit', String(limit));
+    if (filters.includeArchived) params.set('includeArchived', 'true');
+    if (filters.role) params.set('role', filters.role);
+    if (filters.startDate) params.set('startDate', filters.startDate.toISOString());
+    if (filters.endDate) params.set('endDate', filters.endDate.toISOString());
 
-      // Combine and sort by relevance (most recent first)
-      const allResults = [...sessionResults, ...messageResults].sort(
-        (a, b) => b.updatedAt.getTime() - a.updatedAt.getTime(),
-      );
+    const headers = await buildReadHeaders();
+    const res = await fetch(`/api/search?${params.toString()}`, { headers });
 
-      // Apply limit
-      const limitedResults = allResults.slice(0, limit);
-
-      const stats: SearchStats = {
-        totalResults: allResults.length,
-        sessionMatches: sessionResults.length,
-        messageMatches: messageResults.length,
-        searchTime: Date.now() - startTime,
-      };
-
-      // Track search in history (fire and forget, don't block)
-      if (options.trackSearch && filters.query.trim()) {
-        this.trackSearch(userId, filters.query, stats.totalResults, filters).catch((err) =>
-          logger.warn('[GlobalSearch] Failed to track search:', err),
-        );
-      }
-
-      return { results: limitedResults, stats };
-    } catch (error) {
-      logger.error('[GlobalSearch] Search failed:', error);
-      throw new Error(`Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[GlobalSearch] Search failed:', err);
+      throw new Error(`Search failed: ${(err as { error?: string }).error ?? res.statusText}`);
     }
-  }
 
-  /**
-   * Track a search query in history and update analytics
-   */
-  private async trackSearch(
-    userId: string,
-    query: string,
-    resultCount: number,
-    filters: SearchFilters,
-  ): Promise<void> {
-    try {
-      const filtersJson = {
-        role: filters.role,
-        startDate: filters.startDate?.toISOString(),
-        endDate: filters.endDate?.toISOString(),
-        includeArchived: filters.includeArchived,
-      };
+    const data = (await res.json()) as {
+      results: APISearchResult[];
+      stats: APISearchStats;
+    };
 
-      const { error } = await supabase.rpc(
-        'track_search' as never,
-        {
-          p_user_id: userId,
-          p_query: query,
-          p_result_count: resultCount,
-          p_filters: filtersJson,
-        } as never,
-      );
+    const results: SearchResult[] = (data.results || []).map((r) => ({
+      type: r.type,
+      sessionId: r.sessionId,
+      sessionTitle: r.sessionTitle,
+      messageId: r.messageId,
+      content: r.content,
+      role: r.role,
+      createdAt: new Date(r.createdAt),
+      updatedAt: new Date(r.updatedAt),
+      matchedText: r.matchedText,
+      contextBefore: r.contextBefore,
+      contextAfter: r.contextAfter,
+    }));
 
-      if (error) {
-        logger.warn('[GlobalSearch] track_search RPC failed:', error);
-      }
-    } catch (error) {
-      logger.warn('[GlobalSearch] Failed to track search:', error);
-    }
+    const stats: SearchStats = {
+      totalResults: data.stats?.totalResults ?? results.length,
+      sessionMatches: data.stats?.sessionMatches ?? 0,
+      messageMatches: data.stats?.messageMatches ?? 0,
+      searchTime: Date.now() - startTime,
+    };
+
+    return { results, stats };
   }
 
   /**
    * Get recent searches for a user (deduplicated)
    */
-  async getRecentSearches(userId: string, limit: number = 10): Promise<RecentSearch[]> {
+  async getRecentSearches(_userId: string, limit: number = 10): Promise<RecentSearch[]> {
     try {
-      const { data, error } = await supabase.rpc(
-        'get_recent_searches' as never,
-        {
-          p_user_id: userId,
-          p_limit: limit,
-        } as never,
-      );
+      const headers = await buildReadHeaders();
+      const res = await fetch(`/api/search?type=recent&limit=${limit}`, { headers });
 
-      if (error) {
-        logger.error('[GlobalSearch] get_recent_searches RPC failed:', error);
+      if (!res.ok) {
+        logger.error('[GlobalSearch] get_recent_searches failed:', res.statusText);
         return [];
       }
 
-      return (
-        (data || []) as Array<{ query: string; result_count: number; created_at: string }>
-      ).map((row: { query: string; result_count: number; created_at: string }) => ({
+      const data = (await res.json()) as {
+        searches: Array<{ query: string; result_count: number; created_at: string }>;
+      };
+
+      return (data.searches || []).map((row) => ({
         query: row.query,
         resultCount: row.result_count,
         createdAt: new Date(row.created_at),
@@ -192,22 +187,19 @@ class GlobalSearchService {
    */
   async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
     try {
-      const { data, error } = await supabase.rpc(
-        'get_popular_searches' as never,
-        {
-          p_limit: limit,
-          p_days: days,
-        } as never,
-      );
+      const headers = await buildReadHeaders();
+      const res = await fetch(`/api/search?type=popular&limit=${limit}&days=${days}`, { headers });
 
-      if (error) {
-        logger.error('[GlobalSearch] get_popular_searches RPC failed:', error);
+      if (!res.ok) {
+        logger.error('[GlobalSearch] get_popular_searches failed:', res.statusText);
         return [];
       }
 
-      return (
-        (data || []) as Array<{ query: string; search_count: number; avg_results: number }>
-      ).map((row: { query: string; search_count: number; avg_results: number }) => ({
+      const data = (await res.json()) as {
+        searches: Array<{ query: string; search_count: number; avg_results: number }>;
+      };
+
+      return (data.searches || []).map((row) => ({
         query: row.query,
         searchCount: row.search_count,
         avgResults: row.avg_results || 0,
@@ -221,21 +213,21 @@ class GlobalSearchService {
   /**
    * Clear all search history for a user
    */
-  async clearSearchHistory(userId: string): Promise<number> {
+  async clearSearchHistory(_userId: string): Promise<number> {
     try {
-      const { data, error } = await supabase.rpc(
-        'clear_search_history' as never,
-        {
-          p_user_id: userId,
-        } as never,
-      );
+      const headers = await buildMutateHeaders();
+      const res = await fetch('/api/search', {
+        method: 'DELETE',
+        headers,
+      });
 
-      if (error) {
-        logger.error('[GlobalSearch] clear_search_history RPC failed:', error);
+      if (!res.ok) {
+        logger.error('[GlobalSearch] clear_search_history failed:', res.statusText);
         return 0;
       }
 
-      return data || 0;
+      const data = (await res.json()) as { cleared: number };
+      return data.cleared ?? 0;
     } catch (error) {
       logger.error('[GlobalSearch] Failed to clear search history:', error);
       return 0;
@@ -243,214 +235,38 @@ class GlobalSearchService {
   }
 
   /**
-   * Search in session titles
-   */
-  private async searchSessions(userId: string, filters: SearchFilters): Promise<SearchResult[]> {
-    if (!filters.query.trim()) return [];
-
-    let query = supabase
-      .from('web_conversations')
-      .select('id, title, created_at, updated_at, is_archived')
-      .eq('user_id', userId)
-      .ilike('title', `%${filters.query}%`);
-
-    // Apply filters
-    if (!filters.includeArchived) {
-      query = query.eq('is_active', true);
-    }
-
-    if (filters.sessionIds && filters.sessionIds.length > 0) {
-      query = query.in('id', filters.sessionIds);
-    }
-
-    if (filters.startDate) {
-      query = query.gte('created_at', filters.startDate.toISOString());
-    }
-
-    if (filters.endDate) {
-      query = query.lte('created_at', filters.endDate.toISOString());
-    }
-
-    const { data, error } = await query.order('updated_at', {
-      ascending: false,
-    });
-
-    if (error) {
-      logger.error('[GlobalSearch] Session search failed:', error);
-      return [];
-    }
-
-    return (data || []).map((rawSession) => {
-      const session = rawSession as {
-        id: string;
-        title: string | null;
-        created_at: string;
-        updated_at: string;
-      };
-      return {
-        type: 'session' as const,
-        sessionId: session.id,
-        sessionTitle: session.title || 'Untitled Chat',
-        content: session.title || '',
-        createdAt: new Date(session.created_at),
-        updatedAt: new Date(session.updated_at),
-        matchedText: this.extractMatch(session.title || '', filters.query).matched,
-        contextBefore: this.extractMatch(session.title || '', filters.query).before,
-        contextAfter: this.extractMatch(session.title || '', filters.query).after,
-      };
-    });
-  }
-
-  /**
-   * Search in message content
-   */
-  private async searchMessages(userId: string, filters: SearchFilters): Promise<SearchResult[]> {
-    if (!filters.query.trim()) return [];
-
-    // First, get user's session IDs to filter messages
-    let sessionQuery = supabase.from('web_conversations').select('id').eq('user_id', userId);
-
-    if (!filters.includeArchived) {
-      sessionQuery = sessionQuery.eq('is_active', true);
-    }
-
-    if (filters.sessionIds && filters.sessionIds.length > 0) {
-      sessionQuery = sessionQuery.in('id', filters.sessionIds);
-    }
-
-    const { data: sessions, error: sessionError } = await sessionQuery;
-
-    if (sessionError) {
-      logger.error('[GlobalSearch] Failed to get user sessions:', sessionError);
-      return [];
-    }
-
-    if (!sessions || sessions.length === 0) return [];
-
-    const sessionIds = sessions.map((s: { id: string }) => s.id);
-
-    // Search messages
-    let messageQuery = supabase
-      .from('web_messages')
-      .select(
-        `
-        id,
-        conversation_id,
-        role,
-        content,
-        created_at,
-        updated_at,
-        web_conversations!inner (
-          id,
-          title
-        )
-      `,
-      )
-      .in('conversation_id', sessionIds)
-      .ilike('content', `%${filters.query}%`);
-
-    // Apply role filter
-    if (filters.role) {
-      messageQuery = messageQuery.eq('role', filters.role);
-    }
-
-    // Apply date filters
-    if (filters.startDate) {
-      messageQuery = messageQuery.gte('created_at', filters.startDate.toISOString());
-    }
-
-    if (filters.endDate) {
-      messageQuery = messageQuery.lte('created_at', filters.endDate.toISOString());
-    }
-
-    const { data, error } = await messageQuery.order('created_at', { ascending: false }).limit(100); // Limit raw query results to prevent overload
-
-    if (error) {
-      logger.error('[GlobalSearch] Message search failed:', error);
-      return [];
-    }
-
-    return ((data || []) as unknown as MessageWithSession[]).map((message) => {
-      const match = this.extractMatch(message.content, filters.query);
-
-      return {
-        type: 'message' as const,
-        sessionId: message.conversation_id,
-        sessionTitle: message.web_conversations?.title || 'Untitled Chat',
-        messageId: message.id,
-        content: message.content,
-        role: message.role as 'user' | 'assistant' | 'system',
-        createdAt: new Date(message.created_at),
-        updatedAt: new Date(message.updated_at),
-        matchedText: match.matched,
-        contextBefore: match.before,
-        contextAfter: match.after,
-      };
-    });
-  }
-
-  /**
-   * Extract matched text with surrounding context
-   */
-  private extractMatch(
-    text: string,
-    query: string,
-  ): { matched: string; before: string; after: string } {
-    const lowerText = text.toLowerCase();
-    const lowerQuery = query.toLowerCase();
-    const matchIndex = lowerText.indexOf(lowerQuery);
-
-    if (matchIndex === -1) {
-      return {
-        matched: text.substring(0, this.CONTEXT_LENGTH),
-        before: '',
-        after: '',
-      };
-    }
-
-    const matchEnd = matchIndex + query.length;
-    const beforeStart = Math.max(0, matchIndex - this.CONTEXT_LENGTH);
-    const afterEnd = Math.min(text.length, matchEnd + this.CONTEXT_LENGTH);
-
-    return {
-      matched: text.substring(matchIndex, matchEnd),
-      before: text.substring(beforeStart, matchIndex),
-      after: text.substring(matchEnd, afterEnd),
-    };
-  }
-
-  /**
    * Get search suggestions based on user history and popular searches
    */
   async getSearchSuggestions(
-    userId: string,
+    _userId: string,
     partialQuery: string,
     limit: number = 5,
   ): Promise<SearchSuggestion[]> {
     if (partialQuery.trim().length < 2) return [];
 
     try {
-      const { data, error } = await supabase.rpc(
-        'get_search_suggestions' as never,
-        {
-          p_user_id: userId,
-          p_partial_query: partialQuery,
-          p_limit: limit,
-        } as never,
-      );
+      const params = new URLSearchParams({
+        type: 'suggestions',
+        q: partialQuery,
+        limit: String(limit),
+      });
+      const headers = await buildReadHeaders();
+      const res = await fetch(`/api/search?${params.toString()}`, { headers });
 
-      if (error) {
-        logger.error('[GlobalSearch] get_search_suggestions RPC failed:', error);
+      if (!res.ok) {
+        logger.error('[GlobalSearch] get_search_suggestions failed:', res.statusText);
         return [];
       }
 
-      return ((data || []) as Array<{ suggestion: string; source: string; score: number }>).map(
-        (row: { suggestion: string; source: string; score: number }) => ({
-          suggestion: row.suggestion,
-          source: row.source as 'recent' | 'popular',
-          score: row.score,
-        }),
-      );
+      const data = (await res.json()) as {
+        suggestions: Array<{ suggestion: string; source: string; score: number }>;
+      };
+
+      return (data.suggestions || []).map((row) => ({
+        suggestion: row.suggestion,
+        source: row.source as 'recent' | 'popular',
+        score: row.score,
+      }));
     } catch (error) {
       logger.error('[GlobalSearch] Failed to get search suggestions:', error);
       return [];
@@ -460,27 +276,12 @@ class GlobalSearchService {
   /**
    * Search with autocomplete
    */
-  async autocomplete(userId: string, partialQuery: string, limit: number = 5): Promise<string[]> {
+  async autocomplete(_userId: string, partialQuery: string, limit: number = 5): Promise<string[]> {
     if (partialQuery.trim().length < 2) return [];
 
     try {
-      // Get recent unique words/phrases from session titles
-      const { data, error } = await supabase
-        .from('web_conversations')
-        .select('title')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-        .ilike('title', `%${partialQuery}%`)
-        .order('updated_at', { ascending: false })
-        .limit(limit);
-
-      if (error || !data) return [];
-
-      return [
-        ...new Set(
-          data.map((s: { title: string | null }) => s.title).filter((t): t is string => Boolean(t)),
-        ),
-      ].slice(0, limit);
+      const suggestions = await this.getSearchSuggestions(_userId, partialQuery, limit);
+      return suggestions.map((s) => s.suggestion).slice(0, limit);
     } catch (error) {
       logger.error('[GlobalSearch] Autocomplete failed:', error);
       return [];
