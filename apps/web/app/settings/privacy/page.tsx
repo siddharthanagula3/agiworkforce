@@ -252,7 +252,9 @@ export default function PrivacySettingsPage() {
             {exporting ? 'Preparing...' : 'Export all data'}
           </button>
           {exportError && (
-            <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{exportError}</span>
+            <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
+              {exportError}
+            </span>
           )}
         </div>
       </section>
@@ -272,7 +274,7 @@ export default function PrivacySettingsPage() {
             borderBottom: '1px solid rgba(218,119,86,0.25)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--terracotta, #da7756)',
+            color: 'var(--chat-accent-primary, #c8892a)',
           }}
         >
           Danger zone
@@ -304,7 +306,7 @@ export default function PrivacySettingsPage() {
                     padding: '7px 14px',
                     fontSize: 12,
                     fontWeight: 600,
-                    color: 'var(--terracotta, #da7756)',
+                    color: 'var(--chat-accent-primary, #c8892a)',
                     background: 'transparent',
                     border: '1px solid rgba(218,119,86,0.5)',
                     borderRadius: 'var(--radius-md)',
@@ -356,7 +358,7 @@ export default function PrivacySettingsPage() {
                         background:
                           deleteInput !== 'DELETE' || deleting
                             ? 'rgba(218,119,86,0.4)'
-                            : 'var(--terracotta, #da7756)',
+                            : 'var(--chat-accent-primary, #c8892a)',
                         border: 'none',
                         borderRadius: 'var(--radius-md)',
                         cursor: deleteInput !== 'DELETE' || deleting ? 'not-allowed' : 'pointer',
@@ -385,7 +387,7 @@ export default function PrivacySettingsPage() {
                     </button>
                   </div>
                   {deleteError && (
-                    <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
                       {deleteError}
                     </span>
                   )}

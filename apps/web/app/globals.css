@@ -537,7 +537,9 @@
     --chat-text-secondary: #636363;
     --chat-accent: #21808d;
     --chat-accent-secondary: #da7756;
-    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border, --chat-accent-primary,
+    /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
+    --chat-accent-primary: #c8892a;
+    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
        @agiworkforce/design-tokens/chat.css (imported above) */
@@ -627,7 +629,9 @@
     --chat-text-secondary: #a1a1a6;
     --chat-accent: #21808d;
     --chat-accent-secondary: #da7756;
-    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border, --chat-accent-primary,
+    /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
+    --chat-accent-primary: #c8892a;
+    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
        @agiworkforce/design-tokens/chat.css (imported above) */
