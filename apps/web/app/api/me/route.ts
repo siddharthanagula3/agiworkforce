@@ -3,6 +3,8 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow } from '@/lib/server/neon-types';
 import { getServiceClient } from '@/lib/supabase-server';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -20,11 +22,9 @@ async function handleGetMe(request: NextRequest) {
     // Auth: supports both Clerk session (cookie) and Bearer token paths.
     const { userId, email } = await getClerkAuthUser(request);
 
-    // Service-role client for DB reads. The queries below filter by userId so
-    // there is no cross-tenant data leak even without RLS.
+    const db = getNeonDb();
     const userClient = getServiceClient();
 
-    // Three independent reads — fan out in parallel.
     const [subscription, credits, routing_preferences] = await Promise.all([
       SubscriptionService.getSubscription(userClient, userId).catch(
         (subscriptionError: unknown) => {
@@ -38,12 +38,11 @@ async function handleGetMe(request: NextRequest) {
       }),
       (async (): Promise<{ us_only?: boolean; geo_overlay?: string }> => {
         try {
-          const { data: profileRow } = await userClient
-            .from('profiles')
-            .select('routing_preferences')
-            .eq('id', userId)
-            .maybeSingle();
-          const raw = (profileRow as { routing_preferences?: unknown } | null)?.routing_preferences;
+          const [profileRow] = await db.query<ProfileRow>(
+            'select routing_preferences from profiles where id = $1 limit 1',
+            [userId],
+          );
+          const raw = profileRow?.routing_preferences;
           if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
             return raw as { us_only?: boolean; geo_overlay?: string };
           }

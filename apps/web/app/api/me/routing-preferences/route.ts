@@ -19,7 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -39,28 +40,25 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('routing_preferences')
-    .eq('id', userId)
-    .maybeSingle();
-
-  if (error) {
+  try {
+    const [row] = await db.query<ProfileRow>(
+      'select routing_preferences from profiles where id = $1 limit 1',
+      [userId],
+    );
+    const raw = row?.routing_preferences;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return NextResponse.json({});
+    }
+    return NextResponse.json(raw);
+  } catch (error) {
     logger.warn(
-      { userId, error: error.message },
+      { userId, error: error instanceof Error ? error.message : String(error) },
       '[routing-preferences] read failed — returning {}',
     );
     return NextResponse.json({});
   }
-
-  const raw = (data as { routing_preferences?: unknown } | null)?.routing_preferences;
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return NextResponse.json({});
-  }
-
-  return NextResponse.json(raw);
 }
 
 async function handlePut(request: NextRequest): Promise<NextResponse> {
@@ -71,7 +69,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
   let raw: unknown;
   try {
@@ -90,21 +88,13 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
 
   const next: RoutingPreferences = parsed.data;
 
-  const { error, count } = await supabase
-    .from('profiles')
-    .update({ routing_preferences: next }, { count: 'exact' })
-    .eq('id', userId);
-
-  if (error) {
-    logger.error({ userId: userId, error: error.message }, '[routing-preferences] update failed');
-    throw createError.internal('Failed to save routing preferences');
-  }
+  const count = await db.execute(
+    'update profiles set routing_preferences = $1::jsonb, updated_at = now() where id = $2',
+    [JSON.stringify(next), userId],
+  );
 
   if (count === 0) {
-    logger.warn(
-      { userId: userId },
-      '[routing-preferences] no profile row matched — handle_new_user trigger may have failed',
-    );
+    logger.warn({ userId }, '[routing-preferences] no profile row matched');
     throw createError.notFound('Profile not found');
   }
 
