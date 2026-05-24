@@ -14,11 +14,10 @@ import {
   Square,
   ChevronLeft,
 } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@features/chat/stores/chat-store';
 import { useProjectStore } from '@features/projects/stores/project-store';
-import { FolderManagement } from '@features/chat/components/Sidebar/FolderManagement';
+import { ConversationListItem } from '@features/chat/components/Sidebar/ConversationListItem';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -71,7 +70,6 @@ export default function ChatsIndexPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   // Load sessions on mount
   useEffect(() => {
@@ -181,27 +179,6 @@ export default function ChatsIndexPage() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Left filter sidebar */}
-      <aside className="hidden w-[220px] shrink-0 flex-col border-r border-border md:flex">
-        <div className="flex items-center gap-2 px-4 py-4 border-b border-border">
-          <button
-            onClick={() => router.back()}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            aria-label="Go back"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
-          <span className="text-sm font-semibold text-foreground">Chats</span>
-        </div>
-        <ScrollArea className="flex-1 py-2">
-          <FolderManagement
-            selectedFolderId={selectedFolderId}
-            onFolderSelect={setSelectedFolderId}
-            onMoveSession={() => {}}
-          />
-        </ScrollArea>
-      </aside>
-
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Top bar */}
@@ -371,26 +348,26 @@ export default function ChatsIndexPage() {
                       const safeDate = isNaN(updatedAt.getTime()) ? new Date(0) : updatedAt;
                       const isChecked = selectedIds.has(session.id);
 
-                      return (
-                        <div
-                          key={session.id}
-                          onClick={() => handleSessionClick(session.id)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleSessionClick(session.id);
-                            }
-                          }}
-                          aria-label={session.title}
-                          className={cn(
-                            'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3 transition-colors',
-                            isChecked ? 'bg-primary/10' : 'hover:bg-accent',
-                          )}
-                        >
-                          {/* Bulk checkbox */}
-                          {bulkMode && (
+                      // Bulk mode: checkbox row only
+                      if (bulkMode) {
+                        return (
+                          <div
+                            key={session.id}
+                            onClick={() => toggleCheck(session.id)}
+                            role="button"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleCheck(session.id);
+                              }
+                            }}
+                            aria-label={session.title}
+                            className={cn(
+                              'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
+                              isChecked ? 'bg-primary/10' : 'hover:bg-accent',
+                            )}
+                          >
                             <span className="flex-shrink-0">
                               {isChecked ? (
                                 <CheckSquare className="h-4 w-4 text-primary" aria-hidden="true" />
@@ -401,31 +378,27 @@ export default function ChatsIndexPage() {
                                 />
                               )}
                             </span>
-                          )}
-
-                          {/* Content */}
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate text-sm font-medium text-foreground">
-                                {session.title || 'Untitled'}
-                              </span>
-                              <span className="flex-shrink-0 text-xs text-muted-foreground">
-                                {formatDistanceToNow(safeDate, { addSuffix: true })}
-                              </span>
-                            </div>
-                            {session.preview && (
-                              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                                {session.preview}
-                              </p>
-                            )}
-                            {session.messageCount !== undefined && session.messageCount > 0 && (
-                              <p className="mt-0.5 text-xs text-muted-foreground/60">
-                                {session.messageCount} message
-                                {session.messageCount !== 1 ? 's' : ''}
-                              </p>
-                            )}
+                            <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                              {session.title || 'Untitled'}
+                            </span>
                           </div>
-                        </div>
+                        );
+                      }
+
+                      // Normal mode: use ConversationListItem for full hover menu
+                      return (
+                        <ConversationListItem
+                          key={session.id}
+                          id={session.id}
+                          title={session.title || 'Untitled'}
+                          updatedAt={safeDate}
+                          totalMessages={session.messageCount ?? 0}
+                          isActive={false}
+                          onClick={() => handleSessionClick(session.id)}
+                          onDelete={() => deleteSession(session.id)}
+                          onArchive={() => archiveSession(session.id)}
+                          onMoveToProject={(projectId) => moveToProject(session.id, projectId)}
+                        />
                       );
                     })}
                   </div>

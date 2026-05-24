@@ -447,6 +447,7 @@ function ChatSidebarContent({
   onArchiveSession,
   onShareSession,
   onDuplicateSession,
+  onMoveToProjectSession,
 }: ChatSidebarProps) {
   const router = useRouter();
   const openDirectory = useDirectoryStore((s) => s.setOpen);
@@ -655,6 +656,7 @@ function ChatSidebarContent({
                   onArchive={onArchiveSession}
                   onShare={onShareSession}
                   onDuplicate={onDuplicateSession}
+                  onMoveToProject={onMoveToProjectSession}
                   bulkMode={bulkMode}
                   isChecked={selectedIds.has(session.id)}
                   onToggleCheck={toggleCheck}
