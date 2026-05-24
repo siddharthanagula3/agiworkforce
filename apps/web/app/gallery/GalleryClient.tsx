@@ -1055,7 +1055,7 @@ export function GalleryClient() {
                 margin: 0,
               }}
             >
-              Gallery.
+              Artifacts
             </h1>
             <button
               type="button"
