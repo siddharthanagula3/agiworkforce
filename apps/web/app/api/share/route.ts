@@ -8,13 +8,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { z } from 'zod';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
 export function OPTIONS(request: NextRequest) {
@@ -46,6 +46,12 @@ function sanitizeMessages(
   });
 }
 
+type SharedSessionRow = {
+  token: string;
+  expires_at: string;
+  total_messages: number;
+};
+
 async function handleCreateShare(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -55,7 +61,7 @@ async function handleCreateShare(request: NextRequest) {
 
   // Auth via Clerk (handles both cookie session and Bearer token).
   const { userId } = await getClerkAuthUser(request);
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
   // Validate body
   let rawBody: unknown = {};
@@ -77,23 +83,25 @@ async function handleCreateShare(request: NextRequest) {
   const sanitizedMessages = sanitizeMessages(messages);
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  const { data, error } = await supabase
-    .from('shared_sessions')
-    .insert({
+  const [data] = await db.query<SharedSessionRow>(
+    `insert into shared_sessions
+       (token, owner_id, title, model_id, provider, messages, total_messages, expires_at)
+     values ($1, $2, $3, $4, $5, $6::jsonb, $7, $8)
+     returning token, expires_at, total_messages`,
+    [
       token,
-      owner_id: userId,
+      userId,
       title,
-      model_id,
-      provider,
-      messages: sanitizedMessages,
-      total_messages: sanitizedMessages.length,
-      expires_at: expiresAt,
-    })
-    .select('token, expires_at, total_messages')
-    .single();
+      model_id ?? null,
+      provider ?? null,
+      JSON.stringify(sanitizedMessages),
+      sanitizedMessages.length,
+      expiresAt,
+    ],
+  );
 
-  if (error) {
-    logger.error({ error, userId: userId }, 'Failed to create shared session');
+  if (!data) {
+    logger.error({ userId: userId }, 'Failed to create shared session');
     throw createError.internal('Failed to create share');
   }
 

@@ -3,7 +3,8 @@ import 'server-only';
 import { readFile } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -115,13 +116,12 @@ async function handleDownloadBeta(request: NextRequest) {
   }
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('status')
-    .eq('user_id', userId)
-    .maybeSingle();
+  const [subscription] = await db.query<Pick<SubscriptionRow, 'status'>>(
+    'select status from subscriptions where user_id = $1 limit 1',
+    [userId],
+  );
 
   const activeStatuses = ['active', 'trialing'];
   const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);

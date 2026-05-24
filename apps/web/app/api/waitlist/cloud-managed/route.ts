@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -55,36 +55,29 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   const source: WaitlistSource = isValidSource(payload.source) ? payload.source : 'other';
   const email = payload.email.toLowerCase().trim();
-
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
   try {
-    const { error } = await supabase.from('cloud_managed_waitlist').upsert(
-      {
-        email,
-        source,
-        joined_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'email,source' },
+    await db.execute(
+      `insert into cloud_managed_waitlist (email, source, joined_at, updated_at)
+       values ($1, $2, $3, $4)
+       on conflict (email, source)
+       do update set updated_at = excluded.updated_at`,
+      [email, source, now, now],
     );
-
-    if (error) {
-      // Table may not exist yet (migration pending) — stub to console and succeed
-      if (error.code === '42P01') {
-        console.warn('[waitlist/cloud-managed] Table not yet migrated; queuing entry stub.', {
-          source,
-        });
-        return NextResponse.json({ ok: true, queued: true });
-      }
-      throw createError.internal('Failed to join waitlist');
-    }
   } catch (err) {
-    // Non-Supabase error (e.g. network) — re-throw
+    const pgErr = err as { code?: string };
+    // Table may not exist yet (migration pending) — stub to console and succeed
+    if (pgErr?.code === '42P01') {
+      console.warn('[waitlist/cloud-managed] Table not yet migrated; queuing entry stub.', {
+        source,
+      });
+      return NextResponse.json({ ok: true, queued: true });
+    }
+    // Re-throw AppErrors (rate limit, CSRF, etc.) as-is
     if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.warn('[waitlist/cloud-managed] Supabase unreachable; returning queued stub.', {
-      source,
-    });
+    console.warn('[waitlist/cloud-managed] DB unreachable; returning queued stub.', { source });
     return NextResponse.json({ ok: true, queued: true });
   }
 

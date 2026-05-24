@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { GitHubInstallationRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -18,22 +19,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('github_installations')
-    .select(
-      'id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at',
-    )
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    logger.error({ error, userId }, 'Failed to fetch GitHub installations');
+  let installations: GitHubInstallationRow[];
+  try {
+    installations = await db.query<GitHubInstallationRow>(
+      `select id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at
+       from github_installations
+       where user_id = $1
+       order by created_at desc`,
+      [userId],
+    );
+  } catch (err) {
+    logger.error({ err, userId }, 'Failed to fetch GitHub installations');
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
 
-  return NextResponse.json({ installations: data ?? [] });
+  return NextResponse.json({ installations });
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
@@ -51,7 +53,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
   let installationId: number;
   try {
@@ -64,14 +66,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from('github_installations')
-    .delete()
-    .eq('installation_id', installationId)
-    .eq('user_id', userId);
-
-  if (error) {
-    logger.error({ error, userId, installationId }, 'Failed to delete GitHub installation');
+  try {
+    await db.execute(
+      'delete from github_installations where installation_id = $1 and user_id = $2',
+      [installationId, userId],
+    );
+  } catch (err) {
+    logger.error({ err, userId, installationId }, 'Failed to delete GitHub installation');
     return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 });
   }
 
