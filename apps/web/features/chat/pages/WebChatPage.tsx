@@ -784,6 +784,7 @@ export default function WebChatPage() {
                   onStop={stopGeneration}
                   isLoading={isLoading}
                   isGenerating={isStreaming}
+                  placeholder="How can I help you today?"
                   prefillText={composerPrefill}
                   onPrefillConsumed={() => setComposerPrefill(undefined)}
                   clearSignal={composerClearSignal}
