@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 
 /**
  * Admin SSO Management API
@@ -52,43 +51,22 @@ const CreateSSOConnectionSchema = z.object({
 type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 function getSupabaseAdmin(): SupabaseClient {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase service role not configured');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false },
-  });
+  return getServiceClient();
 }
 
 /**
  * Verify the caller is authenticated and return their user ID.
- * Uses the service role key to safely validate the JWT.
+ * Uses Clerk auth (cookie session or Bearer token).
  */
 async function verifyAuth(
   request: NextRequest,
 ): Promise<{ userId: string; error?: never } | { userId?: never; error: string }> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return { error: 'Server configuration error' };
-  }
-
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return { error: 'Missing authorization header' };
-  }
-
-  const token = authHeader.slice(7);
-  const supabase = getSupabaseAdmin();
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser(token);
-
-  if (error || !user) {
+  try {
+    const { userId } = await getClerkAuthUser(request);
+    return { userId };
+  } catch {
     return { error: 'Invalid or expired token' };
   }
-
-  return { userId: user.id };
 }
 
 /**

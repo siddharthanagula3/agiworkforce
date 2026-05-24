@@ -1,14 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
@@ -321,37 +320,14 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     return rateLimitResponse;
   }
 
-  // Authentication via Bearer token
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw createError.unauthorized('Missing or invalid authorization header');
-  }
+  // Authentication
+  const { userId } = await getClerkAuthUser(request);
 
-  const token = authHeader.substring(7);
-
-  // Verify user with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    logger.warn({ error: authError }, 'Video generation auth failed');
-    throw createError.unauthorized('Invalid authentication token');
-  }
-
-  // RLS-bound client for all downstream DB ops on behalf of this user.
-  const userClient = getUserClient(token);
+  // Service-role client for all downstream DB ops.
+  const userClient = getServiceClient();
 
   // Get subscription and check tier
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, userId);
 
   if (!subscription) {
     throw createError.forbidden(
@@ -398,11 +374,11 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Cost pre-check: verify the user has enough credits before starting the task
   const estimatedCostCents = VIDEO_COST_CENTS[provider];
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, user.id);
+    const balance = await CreditService.getBalance(userClient, userId);
     logger.warn(
-      { userId: user.id, provider, estimatedCostCents, balance },
+      { userId: userId, provider, estimatedCostCents, balance },
       'Insufficient credits for video generation',
     );
     throw createError.forbidden(
@@ -412,10 +388,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Reserve credits before invoking the provider to prevent race conditions
   const requestId = randomUUID();
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation: video generation (${provider})`,
     { provider, type: 'reservation', requestId },
@@ -424,7 +400,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   if (!reserveResult.success) {
     logger.warn(
-      { userId: user.id, estimatedCostCents, reserveResult },
+      { userId: userId, estimatedCostCents, reserveResult },
       'Failed to reserve video generation credits',
     );
     throw createError.forbidden(
@@ -434,7 +410,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       provider,
       durationSecs: duration_secs,
       resolution,
@@ -459,17 +435,17 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     }
   } catch (error) {
     // Refund the reserved credits since the task was never created
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
       userClient,
-      user.id,
+      userId,
       -estimatedCostCents,
       `Refund: video generation failed (${provider})`,
       { provider, type: 'refund', reason: 'task_creation_failure', requestId },
       refundKey,
     );
     logger.warn(
-      { userId: user.id, provider, requestId },
+      { userId: userId, provider, requestId },
       'Video task creation failed - credits refunded',
     );
 
@@ -484,10 +460,10 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   // Store task_id → user_id mapping in-process memory with TTL for ownership verification.
   // This allows the status endpoint to verify the requesting user owns the task.
   // In a distributed/serverless deployment, replace with Redis or Supabase persistence.
-  storeVideoTask(taskId, user.id);
+  storeVideoTask(taskId, userId);
 
   logger.info(
-    { userId: user.id, provider, taskId, estimatedCostCents, requestId },
+    { userId: userId, provider, taskId, estimatedCostCents, requestId },
     'Video generation credits reserved',
   );
 
@@ -501,7 +477,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       taskId,
       provider,
       estimatedDuration,

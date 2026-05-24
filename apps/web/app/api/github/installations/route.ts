@@ -1,57 +1,35 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
-
-async function getAuthenticatedSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    },
-  );
-}
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getServiceClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const supabase = await getAuthenticatedSupabase();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const supabase = getServiceClient();
 
   const { data, error } = await supabase
     .from('github_installations')
     .select(
       'id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at',
     )
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch GitHub installations');
+    logger.error({ error, userId }, 'Failed to fetch GitHub installations');
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
 
@@ -66,15 +44,14 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const supabase = await getAuthenticatedSupabase();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const supabase = getServiceClient();
 
   let installationId: number;
   try {
@@ -91,13 +68,10 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     .from('github_installations')
     .delete()
     .eq('installation_id', installationId)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   if (error) {
-    logger.error(
-      { error, userId: user.id, installationId },
-      'Failed to delete GitHub installation',
-    );
+    logger.error({ error, userId, installationId }, 'Failed to delete GitHub installation');
     return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 });
   }
 

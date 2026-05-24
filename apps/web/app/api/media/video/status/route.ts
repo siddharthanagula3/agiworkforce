@@ -1,12 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getVideoTaskOwner } from '@/lib/video-task-store';
 
@@ -291,31 +290,8 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
     return rateLimitResponse;
   }
 
-  // Authentication via Bearer token
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    throw createError.unauthorized('Missing or invalid authorization header');
-  }
-
-  const token = authHeader.substring(7);
-
-  // Verify user with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    logger.warn({ error: authError }, 'Video status auth failed');
-    throw createError.unauthorized('Invalid authentication token');
-  }
+  // Authentication
+  const { userId } = await getClerkAuthUser(request);
 
   // Get task_id from query params
   const { searchParams } = new URL(request.url);
@@ -332,9 +308,9 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
   // Tasks created in a different serverless instance won't be in this store - in that
   // case we allow the request through to avoid blocking legitimate cross-instance polls.
   const taskOwner = getVideoTaskOwner(taskId);
-  if (taskOwner && taskOwner !== user.id) {
+  if (taskOwner && taskOwner !== userId) {
     logger.warn(
-      { taskId, requestingUser: user.id, taskOwner },
+      { taskId, requestingUser: userId, taskOwner },
       'Video task ownership mismatch - rejecting status request',
     );
     throw createError.forbidden('You do not have permission to check this task');
@@ -342,7 +318,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       taskId,
       provider,
     },
@@ -369,7 +345,7 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       taskId,
       status: statusResponse.status,
       hasVideoUrl: !!statusResponse.video_url,
