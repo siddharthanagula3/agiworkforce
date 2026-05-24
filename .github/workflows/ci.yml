@@ -348,6 +348,13 @@ jobs:
       - name: Ensure clippy is available
         run: rustup component add clippy --toolchain 1.94.0
 
+      - name: Prepare native messaging sidecar placeholder
+        run: |
+          triple="$(rustc -vV | awk '/^host: / {print $2}')"
+          mkdir -p apps/desktop/src-tauri/binaries
+          printf '#!/usr/bin/env sh\nexit 1\n' > "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+          chmod +x "apps/desktop/src-tauri/binaries/native_messaging_host-${triple}"
+
       - name: Clippy (extended features, includes optional OCR/vision)
         # M28: -D warnings matches [lints] table in Cargo.toml; keeps CI and local linting consistent.
         #
