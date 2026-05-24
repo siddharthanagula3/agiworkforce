@@ -5,7 +5,6 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@shared/stores/query-client';
-import { supabase } from '@shared/lib/supabase-client';
 import {
   searchHistoryService,
   type RecentSearch,
