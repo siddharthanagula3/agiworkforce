@@ -17,13 +17,7 @@ import { createHmac } from 'crypto';
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/utils/env', () => ({
-  requireEnv: (key: string) => {
-    const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-    };
-    return map[key] ?? '';
-  },
+  requireEnv: (_key: string) => '',
 }));
 
 const { mockLogger } = vi.hoisted(() => ({
@@ -76,17 +70,16 @@ vi.mock('@/lib/github-app', () => ({
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
 }));
 
-// ─── Supabase mock ────────────────────────────────────────────────────────────
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: vi.fn().mockReturnValue({
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({
-        data: { user_id: 'user-1', pr_review_enabled: true, review_model: null },
-        error: null,
-      }),
-    }),
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi
+      .fn()
+      .mockResolvedValue([{ user_id: 'user-1', pr_review_enabled: true, review_model: null }]),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
