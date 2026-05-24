@@ -486,17 +486,16 @@ class ToolInvocationService {
     }
 
     // Get current user for security - all operations must be user-scoped
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const clerkUserId =
+      (window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })?.Clerk?.user
+        ?.id ?? null;
 
-    if (authError || !user) {
+    if (!clerkUserId) {
       throw new Error('User authentication required for database operations');
     }
 
     // Extract user context from parameters or context object
-    const userId = (context as { userId?: string })?.userId || user.id;
+    const userId = (context as { userId?: string })?.userId || clerkUserId;
 
     // Security: For user-specific tables, always filter by user_id
     const userScopedTables = [

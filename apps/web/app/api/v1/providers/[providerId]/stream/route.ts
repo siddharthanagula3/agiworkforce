@@ -111,13 +111,13 @@ export async function POST(
 
   // 6. Deduct credits up-front (fire-and-forget on success; refund path below)
   const idempotencyKey = CreditService.generateIdempotencyKey(
-    user.id,
+    userId,
     'reservation',
     `stream-${Date.now()}`,
   );
   const deductResult = await CreditService.deductCredits(
-    userClient,
-    user.id,
+    db,
+    userId,
     MIN_STREAM_COST_CENTS,
     'Provider stream request',
     { providerId, model: parsedBody.model },
@@ -165,8 +165,8 @@ export async function POST(
     logger.error({ fetchErr, providerId }, 'Upstream fetch failed');
     // Refund on hard failure
     void CreditService.deductCredits(
-      userClient,
-      user.id,
+      db,
+      userId,
       -MIN_STREAM_COST_CENTS,
       'Stream refund (upstream error)',
       { idempotencyKey },
@@ -178,8 +178,8 @@ export async function POST(
     const errText = await upstream.text().catch(() => '');
     // Refund on upstream error
     void CreditService.deductCredits(
-      userClient,
-      user.id,
+      db,
+      userId,
       -MIN_STREAM_COST_CENTS,
       'Stream refund (upstream error)',
       { idempotencyKey },

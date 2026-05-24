@@ -86,15 +86,14 @@ class SupportService {
     message: string;
   }): Promise<{ data: SupportTicket | null; error?: string }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const userId = (window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })
+        ?.Clerk?.user?.id;
 
       const { data, error } = await (
         supabase.from('support_tickets') as ReturnType<typeof supabase.from>
       )
         .insert({
-          user_id: user?.id,
+          user_id: userId,
           name: ticket.name,
           email: ticket.email,
           subject: ticket.subject,
@@ -133,17 +132,16 @@ class SupportService {
     error?: string;
   }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const userId = (window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })
+        ?.Clerk?.user?.id;
+      if (!userId) {
         return { data: [], error: 'User not authenticated' };
       }
 
       const { data, error } = await supabase
         .from('support_tickets')
         .select('*')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -225,10 +223,9 @@ class SupportService {
     message: string,
   ): Promise<{ data: TicketReply | null; error?: string }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const userId = (window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })
+        ?.Clerk?.user?.id;
+      if (!userId) {
         return { data: null, error: 'User not authenticated' };
       }
 
@@ -237,7 +234,7 @@ class SupportService {
       )
         .insert({
           ticket_id: ticketId,
-          user_id: user.id,
+          user_id: userId,
           message,
           is_staff: false,
           created_at: new Date().toISOString(),

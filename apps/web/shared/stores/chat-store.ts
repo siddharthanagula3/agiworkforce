@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
   getPickerModels,
@@ -530,11 +530,9 @@ export const useChatStore = create<ChatStore>()(
           });
 
           try {
-            // Get auth session for API calls
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            if (!session) {
+            // Get auth token for API calls
+            const token = await getAuthToken();
+            if (!token) {
               set((state) => {
                 state.isStreamingResponse = false;
                 state.activeStreamId = null;
@@ -569,7 +567,7 @@ export const useChatStore = create<ChatStore>()(
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${session.access_token}`,
+                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 model: modelId,
