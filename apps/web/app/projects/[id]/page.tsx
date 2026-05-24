@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ProjectHeader,
@@ -68,7 +68,10 @@ export default function ProjectDetailPage() {
   const updateProject = useProjectStore((s) => s.updateProject);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
 
-  // Per-project model selection
+  // Per-project model selection.
+  // On mount: apply any saved per-project model to the global model store so
+  // the ModelSelector and inference layer both pick it up.
+  // On every global model change: persist back to the per-project store.
   const globalModelId = useChatModelStore((s) => s.selectedModelId);
   const setGlobalModel = useChatModelStore((s) => s.selectModel);
   const projectModelId = useProjectMetaStore((s) =>
@@ -76,19 +79,24 @@ export default function ProjectDetailPage() {
   );
   const setProjectModel = useProjectMetaStore((s) => s.setProjectModel);
 
-  // Active model for this project: project-specific > global
-  const activeModelId = projectModelId ?? globalModelId;
+  // Sync project's saved model into global store on mount
+  useEffect(() => {
+    if (projectId && projectModelId) {
+      setGlobalModel(projectModelId);
+    }
+    // Only run on mount (projectId/projectModelId are stable on first render)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
-  const handleModelSelect = useCallback(
-    (modelId: string) => {
-      if (!projectId) return;
-      // Store per-project preference and also drive the global store so the
-      // composer and inference layer picks it up.
-      setProjectModel(projectId, modelId);
-      setGlobalModel(modelId);
-    },
-    [projectId, setProjectModel, setGlobalModel],
-  );
+  // Persist global model changes back to per-project store
+  useEffect(() => {
+    if (projectId && globalModelId) {
+      setProjectModel(projectId, globalModelId);
+    }
+  }, [projectId, globalModelId, setProjectModel]);
+
+  // Active model for this project: project-specific > global (for display only)
+  const activeModelId = projectModelId ?? globalModelId;
 
   const [tab, setTab] = useState<Tab>('chats');
   const [editingInstructions, setEditingInstructions] = useState(false);

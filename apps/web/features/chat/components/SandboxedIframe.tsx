@@ -103,13 +103,14 @@ export function SandboxedIframe({
   }
 
   // Fallback — no sandbox subdomain configured.
+  // allow-modals: lets window.print() and alert/confirm/prompt work inside artifacts.
   return (
     <iframe
       ref={iframeRef}
       key={refreshKey}
       title={title}
       srcDoc={fallbackSrcDoc}
-      sandbox="allow-scripts"
+      sandbox="allow-scripts allow-modals"
       className={className}
       style={style}
     />
