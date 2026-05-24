@@ -251,6 +251,20 @@ const UserProfileArea = React.memo(function UserProfileArea() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { signOut: clerkSignOut } = useClerk();
+  const subscription = useBillingStore((s) => s.subscription);
+  const tier = subscription?.tier ?? 'free';
+  const tierLabel =
+    tier === 'free'
+      ? 'Free'
+      : tier === 'hobby'
+        ? 'Hobby'
+        : tier === 'pro'
+          ? 'Pro'
+          : tier === 'max'
+            ? 'Max'
+            : tier === 'enterprise'
+              ? 'Enterprise'
+              : null;
 
   const handleLogout = useCallback(async () => {
     // Run store cleanup first (clears localStorage before browser navigation).
@@ -276,7 +290,22 @@ const UserProfileArea = React.memo(function UserProfileArea() {
               {initial}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+              <div className="flex items-center gap-1.5">
+                <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+                {tierLabel && tier === 'free' ? (
+                  <a
+                    href="/pricing"
+                    onClick={(e) => e.stopPropagation()}
+                    className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20"
+                  >
+                    Upgrade
+                  </a>
+                ) : tierLabel ? (
+                  <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    {tierLabel}
+                  </span>
+                ) : null}
+              </div>
               {user?.email && (
                 <p className="truncate text-[11px] text-muted-foreground">{user.email}</p>
               )}

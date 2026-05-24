@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
@@ -16,7 +16,7 @@ import {
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
 import { hasByokEnvKeys } from '@/lib/byok-access';
-import { Share2 } from 'lucide-react';
+import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
@@ -196,6 +196,52 @@ export default function WebChatPage() {
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
+
+  // Notification banner: appears after 3s of streaming if the user hasn't
+  // already granted/denied the Notification permission in this session.
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const notifBannerDismissedRef = useRef(false);
+  const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (notifBannerDismissedRef.current) return;
+    if (Notification.permission !== 'default') return;
+
+    if (isStreaming) {
+      if (!notifBannerTimerRef.current) {
+        notifBannerTimerRef.current = setTimeout(() => {
+          if (!notifBannerDismissedRef.current) {
+            setShowNotifBanner(true);
+          }
+        }, 3000);
+      }
+    } else {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+        notifBannerTimerRef.current = null;
+      }
+      setShowNotifBanner(false);
+    }
+
+    return () => {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+      }
+    };
+  }, [isStreaming]);
+
+  const handleRequestNotifPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined') return;
+    notifBannerDismissedRef.current = true;
+    setShowNotifBanner(false);
+    await Notification.requestPermission();
+  }, []);
+
+  const handleDismissNotifBanner = useCallback(() => {
+    notifBannerDismissedRef.current = true;
+    setShowNotifBanner(false);
+  }, []);
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const addMessage = useChatStore((s) => s.addMessage);
@@ -658,6 +704,35 @@ export default function WebChatPage() {
               <ArtifactsToggleButton />
             </div>
           </div>
+
+          {/* Notification permission banner — shown during long generations */}
+          {showNotifBanner && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                <span className="text-[var(--chat-text-secondary)]">
+                  Get notified when the response is ready.
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRequestNotifPermission()}
+                  className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  Enable
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDismissNotifBanner}
+                  className="text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                  aria-label="Dismiss notification prompt"
+                >
+                  <XIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Message list */}
           {isEmptyChat ? (
