@@ -116,11 +116,16 @@ interface DuplicateSessionResult {
 /**
  * Hook to get current authenticated user
  */
-async function getCurrentUser(): Promise<User | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  try {
+    const clerk = (window as Record<string, unknown>)['Clerk'] as
+      | { user?: { id: string } | null }
+      | undefined;
+    if (clerk?.user?.id) return { id: clerk.user.id };
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
