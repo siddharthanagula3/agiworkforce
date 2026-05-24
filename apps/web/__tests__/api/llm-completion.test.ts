@@ -40,6 +40,16 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   shouldEnablePromptCache: vi.fn(() => false),
 }));
 
+// Mock errors — real implementations so createError.* returns proper AppError instances
+vi.mock('@/lib/errors', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  return {
+    createError: actual.createError,
+    AppError: actual.AppError,
+    isAppError: actual.isAppError,
+  };
+});
+
 // Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
 const mockGetClerkAuthUser = vi.fn();
 
@@ -100,8 +110,12 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 import { POST } from '@/app/api/llm/completion/route';
 
 describe('POST /api/llm/completion', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Re-setup Supabase server client mock after clearAllMocks() resets it
+    const { createSupabaseServerClient } = await import('@/services/supabase-server');
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({} as never);
 
     // Default mock implementations
     mockGetProviderFromModel.mockReturnValue('deepseek');
@@ -145,11 +159,9 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 if authorization header is missing', async () => {
+      const { createError } = await import('@/lib/errors');
       mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Authentication required'), {
-          code: 'UNAUTHORIZED',
-          statusCode: 401,
-        }),
+        createError.unauthorized('Authentication required'),
       );
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
@@ -168,9 +180,8 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should return 401 if authorization header does not start with Bearer', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
@@ -191,9 +202,8 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should return 401 if token is invalid', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',

@@ -524,7 +524,10 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
       mockNeonQuery.mockRejectedValueOnce(
         Object.assign(new Error('function not found'), { code: '42883' }),
       );
-      // Fallback query for profiles/subscriptions returns subscription with Stripe IDs
+      // collectUserData queries: profiles → subscriptions → ...
+      // 2nd call: profiles query returns empty (no profile)
+      mockNeonQuery.mockResolvedValueOnce([]);
+      // 3rd call: subscriptions query returns subscription with Stripe IDs
       mockNeonQuery.mockResolvedValueOnce([mockSubscription]);
 
       const { GET } = await import('@/app/api/user/export/route');

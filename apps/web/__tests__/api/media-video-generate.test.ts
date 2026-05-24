@@ -198,9 +198,8 @@ describe('POST /api/media/video/generate', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest(BASE_URL, {
         method: 'POST',
@@ -216,9 +215,8 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 401 when authorization does not start with Bearer', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest(BASE_URL, {
         method: 'POST',
@@ -237,9 +235,8 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 401 when Clerk token is invalid', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -249,9 +246,8 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 401 when Clerk returns no userId', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
 

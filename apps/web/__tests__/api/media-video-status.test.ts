@@ -143,9 +143,8 @@ describe('GET /api/media/video/status', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Unauthorized'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await GET(makeUnauthRequest('runway_task-abc'));
       const data = await response.json();
@@ -155,9 +154,8 @@ describe('GET /api/media/video/status', () => {
     });
 
     it('should return 401 when authorization does not start with Bearer', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Unauthorized'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest(`${BASE_URL}?task_id=runway_abc`, {
         method: 'GET',
@@ -172,9 +170,8 @@ describe('GET /api/media/video/status', () => {
     });
 
     it('should return 401 when Clerk token is invalid', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const response = await GET(makeRequest('runway_task-abc'));
       const data = await response.json();
@@ -184,9 +181,8 @@ describe('GET /api/media/video/status', () => {
     });
 
     it('should return 401 when Clerk returns no userId', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Unauthorized'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await GET(makeRequest('runway_task-abc'));
       await response.json();
