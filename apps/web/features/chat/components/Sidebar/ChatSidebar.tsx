@@ -40,6 +40,7 @@ import {
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import { ConversationListItem } from './ConversationListItem';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,6 +66,12 @@ export interface ChatSidebarProps {
   onRenameSession: (sessionId: string, title: string) => void;
   onToggleSidebar?: () => void;
   collapsed?: boolean;
+  /** Optional rich-action callbacks — rendered in ConversationListItem when provided */
+  onPinSession?: (sessionId: string) => void;
+  onStarSession?: (sessionId: string) => void;
+  onArchiveSession?: (sessionId: string) => void;
+  onShareSession?: (sessionId: string) => void;
+  onDuplicateSession?: (sessionId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,6 +127,11 @@ const SessionItem = React.memo(function SessionItem({
   onSelect,
   onDelete,
   onRename,
+  onPin,
+  onStar,
+  onArchive,
+  onShare,
+  onDuplicate,
   bulkMode = false,
   isChecked = false,
   onToggleCheck,
@@ -129,13 +141,17 @@ const SessionItem = React.memo(function SessionItem({
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onRename: (id: string, title: string) => void;
+  onPin?: (id: string) => void;
+  onStar?: (id: string) => void;
+  onArchive?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
   bulkMode?: boolean;
   isChecked?: boolean;
   onToggleCheck?: (id: string) => void;
 }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(session.title);
-  const [deleteOpen, setDeleteOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -152,135 +168,75 @@ const SessionItem = React.memo(function SessionItem({
     setIsRenaming(false);
   }, [renameValue, session.title, session.id, onRename]);
 
-  const timestamp = useMemo(() => {
+  const updatedAtDate = useMemo(() => {
     const raw = session.updatedAt;
     const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
-    if (isNaN(d.getTime())) return '';
-    const now = new Date();
-    const diffMs = now.getTime() - d.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return 'now';
-    if (diffMins < 60) return `${diffMins}m`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h`;
-    const diffDays = Math.floor(diffHrs / 24);
-    if (diffDays < 7) return `${diffDays}d`;
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return isNaN(d.getTime()) ? new Date(0) : d;
   }, [session.updatedAt]);
 
-  return (
-    <>
+  // Bulk-mode: show a checkbox row, no rich menu
+  if (bulkMode) {
+    return (
       <div
         className={cn(
           'group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1 cursor-pointer transition-colors',
-          isActive && !bulkMode
-            ? 'bg-black/[0.06] dark:bg-white/[0.08]'
-            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
-          bulkMode && isChecked && 'bg-primary/10',
+          isChecked ? 'bg-primary/10' : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]',
         )}
-        onClick={() => {
-          if (bulkMode) {
-            onToggleCheck?.(session.id);
-          } else if (!isRenaming) {
-            onSelect(session.id);
-          }
-        }}
+        onClick={() => onToggleCheck?.(session.id)}
       >
-        {bulkMode && (
-          <input
-            type="checkbox"
-            checked={isChecked}
-            onChange={() => onToggleCheck?.(session.id)}
-            onClick={(e) => e.stopPropagation()}
-            className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
-          />
-        )}
-        {isRenaming ? (
-          <input
-            ref={inputRef}
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRenameSubmit();
-              if (e.key === 'Escape') setIsRenaming(false);
-            }}
-            onBlur={handleRenameSubmit}
-            className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
-            onClick={(e) => e.stopPropagation()}
-          />
-        ) : (
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
-            {session.title || 'Untitled'}
-          </span>
-        )}
-
-        {!isRenaming && !bulkMode && (
-          <>
-            <span className="shrink-0 text-[10px] text-muted-foreground/60 opacity-0 group-hover:opacity-100 transition-opacity">
-              {timestamp}
-            </span>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/10 dark:hover:bg-white/10 hover:text-foreground"
-                  aria-label="Session actions"
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsRenaming(true);
-                  }}
-                >
-                  <Pencil className="mr-2 h-3.5 w-3.5" />
-                  Rename
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteOpen(true);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-3.5 w-3.5" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
-        )}
+        <input
+          type="checkbox"
+          checked={isChecked}
+          onChange={() => onToggleCheck?.(session.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="h-3.5 w-3.5 shrink-0 cursor-pointer accent-primary"
+        />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-foreground">
+          {session.title || 'Untitled'}
+        </span>
       </div>
+    );
+  }
 
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation?</AlertDialogTitle>
-            <AlertDialogDescription>
-              &ldquo;{session.title || 'Untitled'}&rdquo; will be permanently deleted. This action
-              cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => {
-                setDeleteOpen(false);
-                onDelete(session.id);
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+  // Inline-rename mode: plain text input, no rich menu
+  if (isRenaming) {
+    return (
+      <div className="group relative flex items-center gap-2 px-2 py-1.5 rounded-lg mx-1">
+        <input
+          ref={inputRef}
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') handleRenameSubmit();
+            if (e.key === 'Escape') setIsRenaming(false);
+          }}
+          onBlur={handleRenameSubmit}
+          className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
+          onClick={(e) => e.stopPropagation()}
+        />
+      </div>
+    );
+  }
+
+  // Normal mode: delegate to ConversationListItem for rich hover actions
+  return (
+    <div className="mx-1">
+      <ConversationListItem
+        id={session.id}
+        title={session.title || 'Untitled'}
+        updatedAt={updatedAtDate}
+        totalMessages={session.messageCount ?? 0}
+        isActive={isActive}
+        onClick={() => onSelect(session.id)}
+        onRename={() => setIsRenaming(true)}
+        onDelete={() => onDelete(session.id)}
+        onPin={onPin ? () => onPin(session.id) : undefined}
+        onStar={onStar ? () => onStar(session.id) : undefined}
+        onArchive={onArchive ? () => onArchive(session.id) : undefined}
+        onShare={onShare ? () => onShare(session.id) : undefined}
+        onDuplicate={onDuplicate ? () => onDuplicate(session.id) : undefined}
+      />
+    </div>
   );
 });
 
@@ -294,10 +250,11 @@ const UserProfileArea = React.memo(function UserProfileArea() {
   const { signOut: clerkSignOut } = useClerk();
 
   const handleLogout = useCallback(async () => {
-    // Sign out from Clerk first to invalidate the Clerk session token,
-    // then run the store cleanup so in-memory state is cleared.
-    await clerkSignOut({ redirectUrl: '/login' });
+    // Run store cleanup first (clears localStorage before browser navigation).
+    // Clerk's signOut with redirectUrl triggers a location change, which may
+    // abort subsequent async work before cleanupAllStores() can complete.
     await logout();
+    await clerkSignOut({ redirectUrl: '/login' });
   }, [clerkSignOut, logout]);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';

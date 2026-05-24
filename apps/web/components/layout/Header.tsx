@@ -8,8 +8,8 @@ import { AgiMark } from '../agi/AgiMark';
 
 /*
  * Site-wide marketing header. Same exports as the previous editorial
- * version so every page that imports `Header` continues to work — only
- * the rendered output changes. Auth wiring (Supabase session) preserved.
+ * version so every page that imports `Header` continues to work.
+ * Auth wiring uses Clerk (useUser + useClerk from @clerk/nextjs).
  */
 
 const NAV_ITEMS = [
