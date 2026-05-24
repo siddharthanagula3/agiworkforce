@@ -20,25 +20,11 @@ vi.mock('server-only', () => ({}));
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const { mockUpdate, mockSelect, mockEq, mockMaybeSingle, mockFrom, mockGetUser, mockGetSession } =
-  vi.hoisted(() => {
-    const mockMaybeSingle = vi.fn();
-    const mockEq = vi.fn();
-    const mockSelect = vi.fn();
-    const mockUpdate = vi.fn();
-    const mockFrom = vi.fn();
-    const mockGetUser = vi.fn();
-    const mockGetSession = vi.fn();
-    return {
-      mockUpdate,
-      mockSelect,
-      mockEq,
-      mockMaybeSingle,
-      mockFrom,
-      mockGetUser,
-      mockGetSession,
-    };
-  });
+const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockClerkAuth(),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
@@ -61,50 +47,28 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'anon-key';
-    return 'test';
-  }),
-}));
+// ---------------------------------------------------------------------------
+// Neon DB mock
+// ---------------------------------------------------------------------------
 
-vi.mock('next/headers', () => ({
-  cookies: vi.fn().mockResolvedValue({
-    get: vi.fn(() => undefined),
-    set: vi.fn(),
-  }),
-}));
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-  })),
-}));
-
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-      getSession: mockGetSession,
-    },
-  })),
-}));
-
-vi.mock('@/lib/supabase-server', () => ({
-  getUserClient: vi.fn(() => ({
-    from: mockFrom,
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: mockExecute,
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
 const mockUser = {
   id: 'user-123',
   email: 'test@example.com',
-  user_metadata: { full_name: 'Test' },
-  created_at: '2024-01-01T00:00:00Z',
 };
+void mockUser;
 
 // Import after mocks
 import { GET, PUT } from '@/app/api/me/routing-preferences/route';
@@ -112,31 +76,14 @@ import { GET, PUT } from '@/app/api/me/routing-preferences/route';
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Auth defaults — Bearer JWT path
-  mockGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
-  mockGetSession.mockResolvedValue({
-    data: { session: { access_token: 'mock-jwt' } },
-  });
+  // Default: Clerk auth succeeds
+  mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
 
-  // Fluent chain for read path
-  mockMaybeSingle.mockResolvedValue({
-    data: { routing_preferences: {} },
-    error: null,
-  });
-  mockEq.mockReturnValue({ maybeSingle: mockMaybeSingle });
-  mockSelect.mockReturnValue({ eq: mockEq });
+  // Default GET: returns a row with routing_preferences
+  mockQuery.mockResolvedValue([{ routing_preferences: {} }]);
 
-  // Fluent chain for update path: from().update().eq() returns the result.
-  // The PUT path uses `count: 'exact'` so we return { error: null, count: 1 }.
-  const updateChain = {
-    eq: vi.fn().mockResolvedValue({ error: null, count: 1, data: null }),
-  };
-  mockUpdate.mockReturnValue(updateChain);
-
-  mockFrom.mockReturnValue({
-    select: mockSelect,
-    update: mockUpdate,
-  });
+  // Default PUT: 1 row updated
+  mockExecute.mockResolvedValue(1);
 });
 
 describe('GET /api/me/routing-preferences', () => {
@@ -148,10 +95,7 @@ describe('GET /api/me/routing-preferences', () => {
   }
 
   it('returns the stored routing_preferences object', async () => {
-    mockMaybeSingle.mockResolvedValueOnce({
-      data: { routing_preferences: { us_only: true } },
-      error: null,
-    });
+    mockQuery.mockResolvedValueOnce([{ routing_preferences: { us_only: true } }]);
 
     const response = await GET(buildBearerRequest());
     expect(response.status).toBe(200);
@@ -159,10 +103,7 @@ describe('GET /api/me/routing-preferences', () => {
   });
 
   it('returns empty object when routing_preferences is null', async () => {
-    mockMaybeSingle.mockResolvedValueOnce({
-      data: { routing_preferences: null },
-      error: null,
-    });
+    mockQuery.mockResolvedValueOnce([{ routing_preferences: null }]);
 
     const response = await GET(buildBearerRequest());
     expect(response.status).toBe(200);
@@ -170,7 +111,7 @@ describe('GET /api/me/routing-preferences', () => {
   });
 
   it('returns empty object when no profile row exists', async () => {
-    mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    mockQuery.mockResolvedValueOnce([]);
 
     const response = await GET(buildBearerRequest());
     expect(response.status).toBe(200);
@@ -178,10 +119,7 @@ describe('GET /api/me/routing-preferences', () => {
   });
 
   it('returns empty object on DB error (fail-open)', async () => {
-    mockMaybeSingle.mockResolvedValueOnce({
-      data: null,
-      error: { message: 'pg connection refused' },
-    });
+    mockQuery.mockRejectedValueOnce(new Error('pg connection refused'));
 
     const response = await GET(buildBearerRequest());
     expect(response.status).toBe(200);
@@ -189,10 +127,7 @@ describe('GET /api/me/routing-preferences', () => {
   });
 
   it('rejects unauthenticated requests with 401', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: { message: 'No session' },
-    });
+    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
     const response = await GET(buildBearerRequest());
     expect(response.status).toBe(401);
@@ -216,10 +151,9 @@ describe('PUT /api/me/routing-preferences', () => {
     const response = await PUT(buildPutRequest({ us_only: true }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ us_only: true });
-    expect(mockFrom).toHaveBeenCalledWith('profiles');
-    expect(mockUpdate).toHaveBeenCalledWith(
-      { routing_preferences: { us_only: true } },
-      { count: 'exact' },
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('update profiles set routing_preferences'),
+      expect.arrayContaining([JSON.stringify({ us_only: true }), 'user-123']),
     );
   });
 
@@ -248,30 +182,21 @@ describe('PUT /api/me/routing-preferences', () => {
   });
 
   it('returns 404 when no profile row matches (count = 0)', async () => {
-    const updateChain = {
-      eq: vi.fn().mockResolvedValue({ error: null, count: 0, data: null }),
-    };
-    mockUpdate.mockReturnValueOnce(updateChain);
+    mockExecute.mockResolvedValueOnce(0);
 
     const response = await PUT(buildPutRequest({ us_only: true }));
     expect(response.status).toBe(404);
   });
 
   it('returns 500 on DB error', async () => {
-    const updateChain = {
-      eq: vi.fn().mockResolvedValue({ error: { message: 'rls denied' }, count: null, data: null }),
-    };
-    mockUpdate.mockReturnValueOnce(updateChain);
+    mockExecute.mockRejectedValueOnce(new Error('rls denied'));
 
     const response = await PUT(buildPutRequest({ us_only: true }));
     expect(response.status).toBe(500);
   });
 
   it('rejects unauthenticated request with 401', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: { message: 'invalid token' },
-    });
+    mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
     const response = await PUT(buildPutRequest({ us_only: true }));
     expect(response.status).toBe(401);

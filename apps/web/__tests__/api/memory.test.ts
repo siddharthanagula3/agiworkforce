@@ -21,26 +21,28 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock environment variables
-vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
-    return 'test-value';
-  }),
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn(() => null),
 }));
 
-// Mock cookies — reset implementation in beforeEach because vitest config
-// `mockReset: true` clears vi.fn() implementations between tests.
-vi.mock('next/headers', () => ({
-  cookies: vi.fn(),
+// Clerk auth mock
+const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockClerkAuth(),
 }));
 
-const mockUser = {
-  id: 'user-123',
-  email: 'test@example.com',
-};
+// Neon DB mock
+const mockQuery = vi.fn();
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
+}));
 
 const mockMemoryRow = {
   id: 'mem-1',
@@ -51,110 +53,16 @@ const mockMemoryRow = {
   updated_at: '2024-06-01T00:00:00Z',
 };
 
-// Mock Supabase clients.
-// NOTE: vitest config sets `mockReset: true`, which resets `vi.fn()` instances
-// between every test. The mocks therefore need their implementations
-// re-applied in beforeEach so that each test starts from a known-good state
-// AND individual tests can still call `.mockReturnValueOnce(...)`.
-const mockSelect = vi.fn();
-const mockInsert = vi.fn();
-const mockFrom = vi.fn();
-
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(),
-}));
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
-}));
-
-// Bypass the module-level cached _serviceClient in supabase-server. Without
-// this, the first test's createClient() result is cached forever and the
-// auth.getUser vi.fn inside it goes stale after `mockReset: true` clears
-// implementations between tests. Each helper returns a client whose
-// auth.getUser implementation is configurable in beforeEach so individual
-// tests can call `.mockResolvedValueOnce(...)` to simulate auth failures.
-const mockServiceGetUser = vi.fn();
-const mockUserClientGetUser = vi.fn();
-vi.mock('@/lib/supabase-server', () => ({
-  getServiceClient: () => ({
-    auth: { getUser: mockServiceGetUser },
-    from: mockFrom,
-  }),
-  getUserClient: () => ({
-    auth: { getUser: mockUserClientGetUser },
-    from: mockFrom,
-  }),
-}));
-
 // Import after all mocks are registered
 import { GET, POST } from '@/app/api/memory/route';
 
 describe('Memory API', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-
-    // Re-establish default Supabase client impls (cleared by `mockReset: true`).
-    const { cookies } = await import('next/headers');
-    vi.mocked(cookies).mockResolvedValue({
-      get: vi.fn((name: string) =>
-        name === 'sb-test-auth-token' ? { value: 'mock-cookie-token' } : undefined,
-      ),
-      set: vi.fn(),
-    } as never);
-    const { createServerClient } = await import('@supabase/ssr');
-    const { createClient } = await import('@supabase/supabase-js');
-    vi.mocked(createServerClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
-      },
-      // Cookie-auth path returns the SSR client itself as `userDb`, so it
-      // must expose .from() the same way the JS client does.
-      from: mockFrom,
-    } as never);
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
-      },
-      from: mockFrom,
-    } as never);
-    // Default: both supabase-server helpers authenticate the user successfully.
-    mockServiceGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
-    mockUserClientGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
-
-    // Default: service-role client returns a list of memories for GET
-    // Route is RLS-bound, so it now does ONE .eq('is_deleted', false) — the
-    // user_id filter is enforced by Postgres RLS, not in code.
-    mockSelect.mockReturnValue({
-      eq: vi.fn().mockReturnValue({
-        order: vi.fn().mockReturnValue({
-          range: vi.fn().mockResolvedValue({
-            data: [mockMemoryRow],
-            error: null,
-          }),
-        }),
-      }),
-    });
-
-    // Default: service-role client insert returns one memory for POST
-    mockInsert.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        single: vi.fn().mockResolvedValue({
-          data: mockMemoryRow,
-          error: null,
-        }),
-      }),
-    });
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'user_memories') {
-        return {
-          select: mockSelect,
-          insert: mockInsert,
-        };
-      }
-      return {};
-    });
+    // Restore Clerk auth default
+    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+    // Default: GET returns a list of memories
+    mockQuery.mockResolvedValue([mockMemoryRow]);
   });
 
   // ---------------------------------------------------------------------------
@@ -183,16 +91,7 @@ describe('Memory API', () => {
     });
 
     it('should return 200 with empty array when user has no memories', async () => {
-      mockSelect.mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({
-              data: [],
-              error: null,
-            }),
-          }),
-        }),
-      });
+      mockQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -205,17 +104,8 @@ describe('Memory API', () => {
       expect(data.memories).toEqual([]);
     });
 
-    it('should return 200 with empty array when data is null', async () => {
-      mockSelect.mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({
-              data: null,
-              error: null,
-            }),
-          }),
-        }),
-      });
+    it('should return 200 with empty array when data is empty', async () => {
+      mockQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -228,16 +118,8 @@ describe('Memory API', () => {
       expect(data.memories).toEqual([]);
     });
 
-    it('should return 401 when user is not authenticated via cookie', async () => {
-      const { createServerClient } = await import('@supabase/ssr');
-      vi.mocked(createServerClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'No session' },
-          }),
-        },
-      } as never);
+    it('should return 401 when user is not authenticated', async () => {
+      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -247,12 +129,8 @@ describe('Memory API', () => {
       expect(response.status).toBe(401);
     });
 
-    it('should return 401 when Bearer token is invalid', async () => {
-      // Override the service client (used to verify the JWT in the Bearer path).
-      mockServiceGetUser.mockResolvedValueOnce({
-        data: { user: null },
-        error: { message: 'Invalid token' },
-      });
+    it('should return 401 when auth returns no userId (no session)', async () => {
+      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -263,12 +141,9 @@ describe('Memory API', () => {
 
       const response = await GET(request);
       expect(response.status).toBe(401);
-
-      const data = await response.json();
-      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/);
     });
 
-    it('should authenticate with valid Bearer token', async () => {
+    it('should authenticate successfully with valid session', async () => {
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
         headers: {
@@ -281,16 +156,7 @@ describe('Memory API', () => {
     });
 
     it('should return 500 when database query fails', async () => {
-      mockSelect.mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            range: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'DB connection failed' },
-            }),
-          }),
-        }),
-      });
+      mockQuery.mockRejectedValueOnce(new Error('DB connection failed'));
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
@@ -322,13 +188,12 @@ describe('Memory API', () => {
     });
 
     it('should respect the limit query parameter (capped at 100)', async () => {
-      // Request with limit=200 should be capped to 100
+      // Request with limit=200 should be capped to 100 and still return 200
       const request = new NextRequest('http://localhost/api/memory?limit=200', {
         method: 'GET',
       });
 
       const response = await GET(request);
-      // The route caps limit at 100 and still returns 200
       expect(response.status).toBe(200);
     });
 
@@ -357,6 +222,8 @@ describe('Memory API', () => {
 
   describe('POST /api/memory', () => {
     it('should return 201 with created memory for valid request', async () => {
+      mockQuery.mockResolvedValueOnce([mockMemoryRow]);
+
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: 'Remember to drink water daily', category: 'health' }),
@@ -432,15 +299,7 @@ describe('Memory API', () => {
     });
 
     it('should return 401 for unauthenticated request', async () => {
-      const { createServerClient } = await import('@supabase/ssr');
-      vi.mocked(createServerClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'No session' },
-          }),
-        },
-      } as never);
+      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
@@ -453,6 +312,8 @@ describe('Memory API', () => {
     });
 
     it('should default source to "web" when source is not provided', async () => {
+      mockQuery.mockResolvedValueOnce([mockMemoryRow]);
+
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: 'No source provided' }),
@@ -461,10 +322,11 @@ describe('Memory API', () => {
 
       const response = await POST(request);
       expect(response.status).toBe(201);
-      // The default source is 'web' — the inserted row reflects this
     });
 
     it('should default source to "web" when an invalid source is provided', async () => {
+      mockQuery.mockResolvedValueOnce([mockMemoryRow]);
+
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: 'Bad source', source: 'telegram' }),
@@ -477,6 +339,8 @@ describe('Memory API', () => {
 
     it('should accept valid sources: mobile, desktop, web, auto', async () => {
       for (const source of ['mobile', 'desktop', 'web', 'auto']) {
+        mockQuery.mockResolvedValueOnce([mockMemoryRow]);
+
         const request = new NextRequest('http://localhost/api/memory', {
           method: 'POST',
           body: JSON.stringify({ content: 'Valid source memory', source }),
@@ -489,14 +353,7 @@ describe('Memory API', () => {
     });
 
     it('should return 500 when database insert fails', async () => {
-      mockInsert.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: 'Insert failed' },
-          }),
-        }),
-      });
+      mockQuery.mockRejectedValueOnce(new Error('Insert failed'));
 
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
@@ -532,6 +389,8 @@ describe('Memory API', () => {
     });
 
     it('should trim content and category before saving', async () => {
+      mockQuery.mockResolvedValueOnce([mockMemoryRow]);
+
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: '  Trimmed content  ', category: '  health  ' }),
@@ -541,11 +400,13 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      // Verify insert was called (trimming is validated inside the route handler)
-      expect(mockInsert).toHaveBeenCalledTimes(1);
+      // Verify query was called (trimming is validated inside the route handler)
+      expect(mockQuery).toHaveBeenCalledTimes(1);
     });
 
     it('should store null category when category is not provided', async () => {
+      mockQuery.mockResolvedValueOnce([{ ...mockMemoryRow, category: null }]);
+
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'POST',
         body: JSON.stringify({ content: 'Memory without category' }),
@@ -555,8 +416,11 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.category).toBeNull();
+      // Verify query was called with null category
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('insert into user_memories'),
+        expect.arrayContaining([null]),
+      );
     });
   });
 });
