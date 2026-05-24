@@ -5,7 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 /**
@@ -44,14 +44,13 @@ async function handleExportUserData(request: NextRequest) {
   }
 
   try {
-    // userDb is RLS-bound: all reads below are scoped to the authenticated user.
-    const { user, userDb } = await getAuthenticatedUserWithClient(request);
+    const { userId } = await getClerkAuthUser(request);
+    const userDb = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
     // Log the export request for audit purposes
     logger.info(
       {
-        userId: user.id,
-        email: user.email,
+        userId,
         action: 'gdpr_data_export_requested',
       },
       'User requested GDPR data export',
@@ -60,24 +59,25 @@ async function handleExportUserData(request: NextRequest) {
     // Try RLS-bound RPC first. If the RPC requires elevated privileges (SECURITY DEFINER),
     // it will succeed even through an anon-key client because the function itself elevates.
     const { data: rpcData, error: rpcError } = await userDb.rpc('export_user_data', {
-      target_user_id: user.id,
+      target_user_id: userId,
     });
 
     if (!rpcError && rpcData) {
-      logger.info({ userId: user.id }, 'User data exported successfully via RPC');
-      return createExportResponse(request, user.id, rpcData);
+      logger.info({ userId }, 'User data exported successfully via RPC');
+      return createExportResponse(request, userId, rpcData);
     }
 
     if (rpcError) {
       logger.warn(
-        { error: rpcError, userId: user.id },
+        { error: rpcError, userId },
         'export_user_data RPC failed, using fallback manual export',
       );
     }
 
     // Manual data collection using the RLS-bound client — RLS ensures each
     // query returns only the authenticated user's rows without needing service-role.
-    return createExportResponse(request, user.id, await collectUserData(user, userDb));
+    const userShell = { id: userId, created_at: new Date().toISOString() };
+    return createExportResponse(request, userId, await collectUserData(userShell, userDb));
   } catch (error) {
     logger.error(
       {

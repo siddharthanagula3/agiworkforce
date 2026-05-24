@@ -18,7 +18,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_ROLES = ['admin', 'editor', 'viewer'] as const;
 type TeamRole = (typeof VALID_ROLES)[number];
@@ -89,7 +89,8 @@ async function handleInviteMember(
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -121,7 +122,7 @@ async function handleInviteMember(
 
   const name = typeof body.name === 'string' && body.name.trim().length > 0 ? body.name.trim() : '';
 
-  await requireAdminAccess(supabase, teamId, user.id);
+  await requireAdminAccess(supabase, teamId, userId);
 
   // Look up the invitee by email using a targeted profiles query (O(1) index
   // lookup) instead of loading all users via listUsers() which is O(n) and
@@ -172,7 +173,7 @@ async function handleInviteMember(
     .single();
 
   if (insertError) {
-    logger.error({ error: insertError, userId: user.id, teamId }, 'Failed to invite member');
+    logger.error({ error: insertError, userId, teamId }, 'Failed to invite member');
     throw createError.internal('Failed to invite member');
   }
 
@@ -197,7 +198,8 @@ async function handleUpdateMemberRole(
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -218,7 +220,7 @@ async function handleUpdateMemberRole(
     throw createError.validation('role must be one of: admin, editor, viewer');
   }
 
-  const callerAccess = await requireAdminAccess(supabase, teamId, user.id);
+  const callerAccess = await requireAdminAccess(supabase, teamId, userId);
 
   // Fetch the target member record
   const { data: targetMember, error: memberError } = await supabase
@@ -253,7 +255,7 @@ async function handleUpdateMemberRole(
 
   if (updateError) {
     logger.error(
-      { error: updateError, userId: user.id, teamId, memberId: body.memberId },
+      { error: updateError, userId, teamId, memberId: body.memberId },
       'Failed to update member role',
     );
     throw createError.internal('Failed to update member role');
@@ -277,7 +279,8 @@ async function handleRemoveMember(
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -291,7 +294,7 @@ async function handleRemoveMember(
     throw createError.validation('memberId query parameter is required');
   }
 
-  const callerAccess = await requireAdminAccess(supabase, teamId, user.id);
+  const callerAccess = await requireAdminAccess(supabase, teamId, userId);
 
   // Fetch the target member record
   const { data: targetMember, error: memberError } = await supabase
@@ -319,10 +322,7 @@ async function handleRemoveMember(
     .eq('team_id', teamId);
 
   if (deleteError) {
-    logger.error(
-      { error: deleteError, userId: user.id, teamId, memberId },
-      'Failed to remove member',
-    );
+    logger.error({ error: deleteError, userId, teamId, memberId }, 'Failed to remove member');
     throw createError.internal('Failed to remove member');
   }
 

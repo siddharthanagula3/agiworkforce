@@ -13,7 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 function mapRowToSchedule(row: Record<string, unknown>) {
   return {
@@ -48,14 +48,15 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { data, error } = await supabase
     .from('scheduled_tasks')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (error || !data) {
@@ -80,7 +81,8 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   let body: Record<string, unknown>;
@@ -141,7 +143,7 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
     .from('scheduled_tasks')
     .update(updates)
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .select()
     .single();
 
@@ -168,14 +170,15 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { error } = await supabase
     .from('scheduled_tasks')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   if (error) {
     logger.error({ error, scheduleId: id }, 'Failed to delete schedule');
@@ -198,7 +201,8 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   let body: { isActive?: boolean };
@@ -219,7 +223,7 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .select()
     .single();
 

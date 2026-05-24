@@ -11,7 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 function mapRowToRun(row: Record<string, unknown>) {
   return {
@@ -36,7 +36,8 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: scheduleId } = await context.params;
 
   const url = new URL(request.url);
@@ -48,7 +49,7 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
     .from('scheduled_tasks')
     .select('id')
     .eq('id', scheduleId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (scheduleError || !schedule) {
@@ -60,7 +61,7 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
     .from('schedule_runs')
     .select('*')
     .eq('schedule_id', scheduleId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('started_at', { ascending: false })
     .limit(limit);
 
@@ -87,7 +88,8 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: scheduleId } = await context.params;
 
   // Verify the schedule belongs to this user
@@ -95,7 +97,7 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
     .from('scheduled_tasks')
     .select('id')
     .eq('id', scheduleId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (scheduleError || !schedule) {
@@ -107,7 +109,7 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
     .from('schedule_runs')
     .insert({
       schedule_id: scheduleId,
-      user_id: user.id,
+      user_id: userId,
       status: 'pending',
     })
     .select()
@@ -126,7 +128,7 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
       last_run_status: 'pending',
     })
     .eq('id', scheduleId)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   return NextResponse.json({ run: mapRowToRun(data) }, { status: 201 });
 }
