@@ -1,5 +1,4 @@
 import { supabase } from '@shared/lib/supabase-client';
-import { logger } from '@shared/lib/logger';
 import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 
@@ -89,33 +88,10 @@ class ToolInvocationService {
   }
 
   // Register a new tool
+  // TODO: Add /api/agents/tools route for tool registration persistence.
   async registerTool(tool: ToolDefinition) {
     this.toolRegistry.set(tool.id, tool);
-
-    // Store in database
-    try {
-      const { error } = await db.from('ai_tools').upsert({
-        id: tool.id,
-        name: tool.name,
-        type: tool.type,
-        description: tool.description,
-        parameters: tool.parameters,
-        invocation_pattern: tool.invocationPattern,
-        integration_type: tool.integrationType,
-        config: tool.config as Record<string, string>,
-        is_active: tool.isActive,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) throw error;
-      return { success: true, error: null };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    return { success: true, error: null };
   }
 
   // Execute a tool
@@ -487,8 +463,8 @@ class ToolInvocationService {
 
     // Get current user for security - all operations must be user-scoped
     const clerkUserId =
-      (window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })?.Clerk?.user
-        ?.id ?? null;
+      (window as unknown as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })?.Clerk
+        ?.user?.id ?? null;
 
     if (!clerkUserId) {
       throw new Error('User authentication required for database operations');
@@ -610,91 +586,47 @@ class ToolInvocationService {
   }
 
   // Log tool execution
+  // TODO: Add /api/agents/tool-executions route for execution logging persistence.
   private async logToolExecution(
-    toolId: string,
-    parameters: Record<string, unknown>,
-    result: unknown,
-    context?: unknown,
+    _toolId: string,
+    _parameters: Record<string, unknown>,
+    _result: unknown,
+    _context?: unknown,
   ) {
-    try {
-      await db.from('tool_executions').insert({
-        tool_id: toolId,
-        parameters,
-        result,
-        context,
-        executed_at: new Date().toISOString(),
-        success: true,
-      });
-    } catch (error) {
-      logger.error('Failed to log tool execution:', error);
-    }
+    // no-op: client-side tool execution logging deferred pending /api/agents/tool-executions route
   }
 
   // Get tool by ID
+  // TODO: Add /api/agents/tools/:id route for persistent tool lookup.
   async getTool(toolId: string) {
     const tool = this.toolRegistry.get(toolId);
     if (tool) {
       return { data: tool, error: null };
     }
-
-    try {
-      const { data, error } = await db.from('ai_tools').select('*').eq('id', toolId).single();
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    return { data: null, error: 'Tool not found in registry' };
   }
 
   // Get all tools
+  // TODO: Add /api/agents/tools route for persistent tool listing.
   async getAllTools() {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values());
+    return { data: tools, error: null };
   }
 
   // Get tools by type
+  // TODO: Add /api/agents/tools?type= route for filtered tool listing.
   async getToolsByType(type: ToolType) {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('type', type)
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values()).filter((t) => t.type === type);
+    return { data: tools, error: null };
   }
 
   // Get tools by integration type
+  // TODO: Add /api/agents/tools?integrationType= route for filtered tool listing.
   async getToolsByIntegrationType(integrationType: IntegrationType) {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('integration_type', integrationType)
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values()).filter(
+      (t) => t.integrationType === integrationType,
+    );
+    return { data: tools, error: null };
   }
 }
 

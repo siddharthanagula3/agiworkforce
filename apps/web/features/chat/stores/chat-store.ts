@@ -576,130 +576,28 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       // ========================================================================
-      // Supabase Persistence
+      // Persistence (vibe_sessions / vibe_messages)
+      // TODO: Add /api/chat/sessions and /api/chat/sessions/[id]/messages routes
+      // for vibe_sessions/vibe_messages persistence (schema differs from web_conversations).
       // ========================================================================
 
-      loadSessionsFromDb: async (userId: string) => {
-        try {
-          const { data, error } = await supabase
-            .from('vibe_sessions')
-            .select('*')
-            .eq('user_id', userId)
-            .order('updated_at', { ascending: false });
-
-          if (error) {
-            return;
-          }
-
-          if (data && data.length > 0) {
-            const dbSessions: ChatSession[] = data.map((row: Record<string, unknown>) => ({
-              id: row['id'] as string,
-              title: (row['title'] as string) || 'Untitled',
-              createdAt: new Date(row['created_at'] as string),
-              updatedAt: new Date(row['updated_at'] as string),
-              preview: (row['preview'] as string) || '',
-              messageCount: (row['message_count'] as number) || 0,
-              userId: row['user_id'] as string,
-              isPinned: (row['is_pinned'] as boolean) || false,
-              isArchived: (row['is_archived'] as boolean) || false,
-            }));
-
-            set((state) => {
-              // Merge: DB sessions take priority, keep any local-only sessions, sort by recency
-              const dbIds = new Set(dbSessions.map((s) => s.id));
-              const localOnly = state.sessions.filter((s) => !dbIds.has(s.id));
-              state.sessions = [...dbSessions, ...localOnly].sort(
-                (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-              );
-              state.dbLoaded = true;
-            });
-          } else {
-            set((state) => {
-              state.dbLoaded = true;
-            });
-          }
-        } catch {
-          set((state) => {
-            state.dbLoaded = true;
-          });
-        }
+      loadSessionsFromDb: async (_userId: string) => {
+        // TODO: Fetch from /api/chat/sessions once route is added.
+        set((state) => {
+          state.dbLoaded = true;
+        });
       },
 
-      loadMessagesFromDb: async (sessionId: string) => {
-        try {
-          const { data, error } = await supabase
-            .from('vibe_messages')
-            .select('*')
-            .eq('session_id', sessionId)
-            .order('timestamp', { ascending: true });
-
-          if (error) {
-            return;
-          }
-
-          if (data && data.length > 0) {
-            const dbMessages: ChatMessage[] = data.map((row: Record<string, unknown>) => ({
-              id: row['id'] as string,
-              sessionId: row['session_id'] as string,
-              role: row['role'] as 'user' | 'assistant',
-              content: (row['content'] as string) || '',
-              createdAt: row['timestamp']
-                ? new Date(row['timestamp'] as string)
-                : row['created_at']
-                  ? new Date(row['created_at'] as string)
-                  : new Date(),
-              isStreaming: false,
-              metadata:
-                typeof row['metadata'] === 'object' && row['metadata'] !== null
-                  ? (row['metadata'] as ChatMessage['metadata'])
-                  : undefined,
-            }));
-
-            set((state) => {
-              state.messages[sessionId] = dbMessages;
-            });
-          }
-        } catch {
-          // error is already handled by the early return above
-        }
+      loadMessagesFromDb: async (_sessionId: string) => {
+        // TODO: Fetch from /api/chat/sessions/[id]/messages once route is added.
       },
 
-      saveMessageToDb: async (message: ChatMessage, userId: string) => {
-        try {
-          await (
-            supabase.from('vibe_messages') as unknown as ReturnType<typeof supabase.from>
-          ).upsert({
-            id: message.id,
-            session_id: message.sessionId,
-            user_id: userId,
-            role: message.role,
-            content: message.content,
-            metadata: message.metadata || {},
-            is_streaming: false,
-          });
-        } catch {
-          // fire-and-forget DB save; failure is non-fatal
-        }
+      saveMessageToDb: async (_message: ChatMessage, _userId: string) => {
+        // TODO: POST to /api/chat/sessions/[id]/messages once route is added.
       },
 
-      saveSessionToDb: async (session: ChatSession, userId: string) => {
-        try {
-          await (
-            supabase.from('vibe_sessions') as unknown as ReturnType<typeof supabase.from>
-          ).upsert({
-            id: session.id,
-            user_id: userId,
-            title: session.title,
-            preview: session.preview,
-            message_count: session.messageCount,
-            created_at: session.createdAt.toISOString(),
-            updated_at: session.updatedAt.toISOString(),
-            is_pinned: session.isPinned ?? false,
-            is_archived: session.isArchived ?? false,
-          });
-        } catch {
-          // fire-and-forget DB save; failure is non-fatal
-        }
+      saveSessionToDb: async (_session: ChatSession, _userId: string) => {
+        // TODO: POST/PUT to /api/chat/sessions once route is added.
       },
     })),
     {
