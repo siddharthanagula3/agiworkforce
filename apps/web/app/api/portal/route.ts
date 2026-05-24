@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -119,19 +120,13 @@ async function handlePortal(request: NextRequest) {
     throw createError.serviceUnavailable('Stripe is not configured. Please set STRIPE_SECRET_KEY.');
   }
 
+  const { userId, email: userEmail } = await getClerkAuthUser(request);
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    throw createError.unauthorized();
-  }
 
   const { data: subscription, error } = await supabase
     .from('subscriptions')
     .select('stripe_customer_id, stripe_subscription_id, status')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
@@ -141,14 +136,14 @@ async function handlePortal(request: NextRequest) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('stripe_customer_id')
-        .eq('id', user.id)
+        .eq('id', userId)
         .maybeSingle();
 
       let customerId: string | null = profile?.stripe_customer_id || null;
 
       if (customerId) {
         logger.info(
-          { userId: user.id, customerId },
+          { userId: userId, customerId },
           'Found stripe_customer_id in profiles (BEST PRACTICE)',
         );
       } else {
@@ -158,22 +153,22 @@ async function handlePortal(request: NextRequest) {
         // This is safer for portal access than payment processing, but still risky
         // because email addresses can be changed or associated with multiple accounts.
         // TODO(2026-Q3): Remove email fallback entirely. Track via DEPRECATION_PORTAL_EMAIL_FALLBACK metric.
-        if (!user.email) {
+        if (!userEmail) {
           throw createError.validation('User has no email address and no customer_id stored');
         }
 
         // AUDIT-008-015: Warning log for email fallback usage - track for migration
         logger.warn(
           {
-            userId: user.id,
-            email: user.email,
+            userId: userId,
+            email: userEmail,
             deprecationNotice: 'Email-based Stripe lookup is deprecated and will be removed',
           },
           'SECURITY WARNING: No stripe_customer_id in profile - using email fallback (DEPRECATED)',
         );
 
         // List customers by email - could return multiple if email was reused
-        const customers = await stripe.customers.list({ email: user.email, limit: 10 });
+        const customers = await stripe.customers.list({ email: userEmail, limit: 10 });
 
         if (customers.data.length === 0) {
           throw createError.notFound('No subscription or customer found in Stripe');
@@ -182,7 +177,7 @@ async function handlePortal(request: NextRequest) {
         // SECURITY: Check if multiple customers exist with this email
         if (customers.data.length > 1) {
           logger.warn(
-            { userId: user.id, email: user.email, count: customers.data.length },
+            { userId: userId, email: userEmail, count: customers.data.length },
             'SECURITY WARNING: Multiple Stripe customers found with same email',
           );
 
@@ -208,7 +203,7 @@ async function handlePortal(request: NextRequest) {
 
           customerId = activeCustomer.customer.id;
           logger.warn(
-            { userId: user.id, customerId, email: user.email },
+            { userId: userId, customerId, email: userEmail },
             'Selected customer with active subscription from multiple matches',
           );
         } else {
@@ -220,10 +215,10 @@ async function handlePortal(request: NextRequest) {
           const matchedCustomer = customers.data.find((c) => c.id === customerId);
           if (
             matchedCustomer?.metadata?.['supabase_user_id'] &&
-            matchedCustomer.metadata['supabase_user_id'] !== user.id
+            matchedCustomer.metadata['supabase_user_id'] !== userId
           ) {
             logger.error(
-              { userId: user.id, customerId: matchedCustomer.id },
+              { userId: userId, customerId: matchedCustomer.id },
               'Stripe customer belongs to different user - email fallback blocked',
             );
             return NextResponse.json(
@@ -234,13 +229,10 @@ async function handlePortal(request: NextRequest) {
         }
 
         // CRITICAL: Store customer_id for future lookups
-        await supabase
-          .from('profiles')
-          .update({ stripe_customer_id: customerId })
-          .eq('id', user.id);
+        await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
 
         logger.info(
-          { userId: user.id, customerId, email: user.email },
+          { userId: userId, customerId, email: userEmail },
           'Stored stripe_customer_id in profile (migration from email fallback)',
         );
       }
@@ -259,7 +251,7 @@ async function handlePortal(request: NextRequest) {
 
       logger.info(
         {
-          userId: user.id,
+          userId: userId,
           customerId: customerId,
           sessionId: session.id,
         },
@@ -272,7 +264,7 @@ async function handlePortal(request: NextRequest) {
       if (err instanceof Error && err.message.includes('No subscription')) {
         throw err;
       }
-      logger.error({ error: err, userId: user.id }, 'Self-healing portal lookup failed');
+      logger.error({ error: err, userId: userId }, 'Self-healing portal lookup failed');
       throw createError.notFound('No subscription found.');
     }
   }
@@ -292,7 +284,7 @@ async function handlePortal(request: NextRequest) {
     try {
       logger.info(
         {
-          userId: user.id,
+          userId: userId,
           subscriptionId: subscription.stripe_subscription_id,
         },
         'No customer_id found, retrieving from subscription',
@@ -307,10 +299,10 @@ async function handlePortal(request: NextRequest) {
         await supabase
           .from('subscriptions')
           .update({ stripe_customer_id: stripeCustomerId })
-          .eq('user_id', user.id);
+          .eq('user_id', userId);
         logger.info(
           {
-            userId: user.id,
+            userId: userId,
             customerId: stripeCustomerId,
           },
           'Updated subscription with customer_id',
@@ -319,7 +311,7 @@ async function handlePortal(request: NextRequest) {
     } catch (stripeError) {
       logger.error(
         {
-          userId: user.id,
+          userId: userId,
           subscriptionId: subscription.stripe_subscription_id,
           error: stripeError,
         },
@@ -331,7 +323,7 @@ async function handlePortal(request: NextRequest) {
   if (!stripeCustomerId) {
     logger.error(
       {
-        userId: user.id,
+        userId: userId,
         subscription,
       },
       'Subscription found but no stripe_customer_id',
@@ -345,7 +337,7 @@ async function handlePortal(request: NextRequest) {
   if (!allowedStatuses.includes(subscription.status)) {
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         status: subscription.status,
       },
       'Accessing portal with unusual status',
@@ -362,7 +354,7 @@ async function handlePortal(request: NextRequest) {
 
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         customerId: stripeCustomerId,
         sessionId: session.id,
       },
@@ -374,7 +366,7 @@ async function handlePortal(request: NextRequest) {
     logger.error(
       {
         error: error instanceof Error ? error.message : String(error),
-        userId: user.id,
+        userId: userId,
         customerId: stripeCustomerId,
       },
       'Failed to create Stripe portal session',

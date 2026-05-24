@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { connectMcpServer, type McpServerConfig } from '@agiworkforce/mcp';
 
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -68,7 +68,7 @@ async function handleConnect(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   let body: ConnectBody;
   try {
@@ -101,7 +101,7 @@ async function handleConnect(request: NextRequest) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.warn({ userId: user.id, serverName, message }, 'mcp.connect failed');
+    logger.warn({ userId, serverName, message }, 'mcp.connect failed');
     throw createError.serviceUnavailable(`Failed to connect to MCP server: ${message}`);
   }
 

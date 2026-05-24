@@ -8,7 +8,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { getTaskModelForProvider, getProviderDefaultModel } from '@agiworkforce/types';
 
 /**
@@ -50,7 +50,7 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
   // Authentication — verify the caller is signed in; we do not use the user
   // object here (completions are not user-scoped), but this gate prevents
   // unauthenticated access.
-  await getAuthenticatedUser(request);
+  await getClerkAuthUser(request);
 
   // Parse and validate request body
   let body: unknown;
