@@ -70,13 +70,28 @@ export interface ProjectGalleryProps {
    * a device-local project directly via `useProjectStore.addProject`.
    */
   onCreate?: (name: string) => Promise<Project> | Project;
+  /**
+   * Called when the user chooses "Edit details" from a card context menu.
+   * The host is responsible for opening the settings dialog.
+   */
+  onEditProject?: (project: Project) => void;
+  /**
+   * Called after archive is applied. The gallery marks `isArchived: true` in
+   * the store; the host can sync to a backend here.
+   */
+  onArchiveProject?: (project: Project) => void;
+  /**
+   * Called after the project is removed from the store. The host can sync to
+   * a backend here.
+   */
+  onDeleteProject?: (project: Project) => void;
   /** Optional title — defaults to "Projects". Pass null to hide. */
   title?: string | null;
   /** Optional description copy under the title. */
   description?: string;
   /** Limit visible projects to this count (sorted starred-first then by updatedAt). */
   limit?: number;
-  /** Render mode: 'grid' (default — 2 columns ≥ 768px) or 'list' (single column). */
+  /** Render mode: 'grid' (default — 2 columns >= 768px) or 'list' (single column). */
   layout?: 'grid' | 'list';
   /** Optional className for the outer container. */
   className?: string;
@@ -92,6 +107,9 @@ function generateLocalId(): string {
 export function ProjectGallery({
   onSelect,
   onCreate,
+  onEditProject,
+  onArchiveProject,
+  onDeleteProject,
   title = 'Projects',
   description = 'Group conversations, attach files, and define shared instructions per project.',
   limit,
@@ -102,6 +120,8 @@ export function ProjectGallery({
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const addProject = useProjectStore((s) => s.addProject);
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const removeProject = useProjectStore((s) => s.removeProject);
 
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
@@ -119,13 +139,15 @@ export function ProjectGallery({
 
   const visibleProjects = useMemo(() => {
     const q = query.trim().toLowerCase();
+    // Never show archived projects in the main gallery view
+    const active = projects.filter((p) => !p.isArchived);
     const filtered = q
-      ? projects.filter(
+      ? active.filter(
           (project) =>
             project.name.toLowerCase().includes(q) ||
             (project.description ?? '').toLowerCase().includes(q),
         )
-      : projects;
+      : active;
     const sorted = [...filtered].sort((a, b) => {
       if ((b.starred ?? false) !== (a.starred ?? false)) {
         return (b.starred ? 1 : 0) - (a.starred ? 1 : 0);
@@ -141,6 +163,22 @@ export function ProjectGallery({
       onSelect?.(project);
     },
     [setActiveProject, onSelect],
+  );
+
+  const handleArchive = useCallback(
+    (project: Project) => {
+      updateProject(project.id, { isArchived: true });
+      onArchiveProject?.(project);
+    },
+    [updateProject, onArchiveProject],
+  );
+
+  const handleDelete = useCallback(
+    (project: Project) => {
+      removeProject(project.id);
+      onDeleteProject?.(project);
+    },
+    [removeProject, onDeleteProject],
   );
 
   const handleCreate = useCallback(
@@ -370,6 +408,9 @@ export function ProjectGallery({
                 project={project}
                 active={project.id === activeProjectId}
                 onSelect={handleSelect}
+                onEdit={onEditProject}
+                onArchive={onArchiveProject ? handleArchive : undefined}
+                onDelete={onDeleteProject ? handleDelete : undefined}
               />
             ))}
           </div>
