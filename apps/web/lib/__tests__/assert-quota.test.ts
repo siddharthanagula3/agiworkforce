@@ -810,7 +810,8 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
       expect(result.feature).toBe('token_cap');
-      expect(result.requiredTier).toBe('pro_plus');
+      // nextTierUp('pro') now returns 'max' (pro_plus removed from locked tiers)
+      expect(result.requiredTier).toBe('max');
     }
   });
 
@@ -849,13 +850,13 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     expect(result.kind).toBe('ok');
   });
 
-  it('nextTierUp for pro resolves to pro_plus (verified via paywall.requiredTier)', async () => {
+  it('nextTierUp for pro resolves to max (pro_plus removed from locked tiers)', async () => {
     // Drive paywall outcome and check the requiredTier field which is set by nextTierUp('pro').
     seedUsageRow({ credits_used_cents: 20_000_000, credits_allocated_cents: 10_000_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 100 });
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
-      expect(result.requiredTier).toBe('pro_plus');
+      expect(result.requiredTier).toBe('max');
     }
   });
 });

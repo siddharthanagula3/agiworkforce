@@ -150,7 +150,7 @@ function nextTierUp(tier: ProductTier | string): string {
     case 'hobby':
       return 'pro';
     case 'pro':
-      return 'pro_plus';
+      return 'max';
     default:
       return 'enterprise';
   }

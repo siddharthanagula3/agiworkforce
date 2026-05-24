@@ -88,17 +88,6 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
       waitlist: true,
     },
     {
-      planId: 'pro_plus',
-      label: 'Pro+',
-      price: '$49.99/mo',
-      billingInterval: 'Monthly or annual',
-      usageCapacity: 'Large daily credits',
-      bestFor: 'Heavy daily AI workflows',
-      ctaLabel: 'Join waitlist',
-      ctaHref: '/pricing',
-      waitlist: true,
-    },
-    {
       planId: 'max',
       label: 'Max',
       price: '$299.99/mo',

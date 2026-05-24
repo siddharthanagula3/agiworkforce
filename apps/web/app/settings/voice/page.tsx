@@ -10,7 +10,6 @@ const VOICE_CAPS: Record<string, string> = {
   free: `${byokLabel} only`,
   hobby: '60 min/mo',
   pro: '300 min/mo',
-  pro_plus: '1,500 min/mo',
   max: 'Unlimited',
   enterprise: 'Unlimited',
 };

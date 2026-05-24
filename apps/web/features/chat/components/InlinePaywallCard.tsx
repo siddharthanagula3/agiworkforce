@@ -65,8 +65,8 @@ export type PaywallFeature =
   | 'mcp'
   | 'web_search';
 
-export type UserTier = 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max';
-export type RequiredTier = 'hobby' | 'pro' | 'pro_plus' | 'max';
+export type UserTier = 'free' | 'hobby' | 'pro' | 'max';
+export type RequiredTier = 'hobby' | 'pro' | 'max';
 
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
@@ -92,7 +92,6 @@ const EMPTY_REASON = '';
 const TIER_LABELS: Record<RequiredTier, string> = {
   hobby: 'Hobby',
   pro: 'Pro',
-  pro_plus: 'Pro+',
   max: 'Max',
 };
 

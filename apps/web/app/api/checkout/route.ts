@@ -26,11 +26,24 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+// Fix 6: Gate Stripe checkout for waitlisted plans.
+// All paid cloud plans are waitlist-gated per v1-local-only-cloud-waitlist lock.
+// Set STRIPE_CHECKOUT_ENABLED=true in env to open checkout (invite-only beta).
+const CHECKOUT_ENABLED = process.env['STRIPE_CHECKOUT_ENABLED'] === 'true';
+
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
+  }
+
+  // Fix 6: Reject checkout requests when plans are waitlist-gated.
+  // This prevents bypassing the waitlist by hitting the checkout API directly.
+  if (!CHECKOUT_ENABLED) {
+    throw createError.validation(
+      'Paid plans are in private beta. Join the waitlist at /pricing to be notified when checkout opens.',
+    );
   }
 
   // Rate limiting: 10 checkouts per minute per user
