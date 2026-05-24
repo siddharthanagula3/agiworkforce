@@ -5,6 +5,8 @@ import Link from 'next/link';
 
 interface CapRow {
   label: string;
+  /** Tooltip shown on hover; explains what the feature does. */
+  tooltip: string;
   description: string;
   tiers: string[];
   /** Tiers where access is granted but at a lower token cap than Pro/Max */
@@ -15,57 +17,75 @@ interface CapRow {
 const CAPABILITIES: CapRow[] = [
   {
     label: 'Voice transcription',
+    tooltip: 'Push-to-talk audio input transcribed via Whisper, with AI cleanup of filler words.',
     description: 'Push-to-talk Whisper transcription with AI cleanup.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
     link: '/settings/voice',
   },
   {
     label: 'Image generation',
+    tooltip: 'Generate images from text prompts via managed cloud providers or your own API keys.',
     description: 'Generate images via managed cloud or BYOK.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'Video generation',
+    tooltip:
+      'Generate short video clips from text or image prompts using multiple model providers.',
     description: 'Runway Gen-4, Veo-3, and Sora 2 routing.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'Computer use',
+    tooltip: 'AI-driven browser and desktop automation. The model can click, scroll, and type.',
     description: 'Automated browser and desktop actions.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'Extended thinking',
+    tooltip: 'Lets the model spend extra compute on step-by-step reasoning before answering.',
     description: 'Adaptive reasoning for complex tasks.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'Web search',
+    tooltip: 'Routes queries to live search results from 10+ providers for up-to-date answers.',
     description: 'Real-time search across 10+ providers.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'MCP connectors',
+    tooltip: 'Connect external tools and data sources using the Model Context Protocol standard.',
     description: 'Connect external tools via Model Context Protocol.',
-    tiers: ['hobby', 'pro', 'max'],
+    tiers: ['byok', 'hobby', 'pro', 'max'],
     lowerCapTiers: ['hobby'],
   },
   {
     label: 'BYOK (any tier)',
+    tooltip: 'Bring your own provider API keys. Bypasses all managed token caps on any plan.',
     description: 'Bring your own API keys to bypass all managed caps.',
-    tiers: ['free', 'hobby', 'pro', 'max'],
+    tiers: ['free', 'local', 'byok', 'hobby', 'pro', 'max'],
+  },
+  {
+    label: 'Local models',
+    tooltip:
+      'Run models entirely on your own hardware via Ollama or LM Studio. No data leaves your device.',
+    description: 'Ollama and LM Studio local inference. No data leaves your device.',
+    tiers: ['free', 'local', 'byok', 'hobby', 'pro', 'max'],
   },
 ];
 
-const TIER_ORDER = ['free', 'hobby', 'pro', 'max'];
+const TIER_ORDER = ['local', 'free', 'byok', 'hobby', 'pro', 'max'];
 const TIER_LABEL: Record<string, string> = {
+  local: 'Local',
   free: 'Free',
+  byok: 'BYOK',
   hobby: 'Hobby',
   pro: 'Pro',
   max: 'Max',
@@ -108,7 +128,7 @@ export default function CapabilitiesSettingsPage() {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr repeat(4, 60px)',
+            gridTemplateColumns: '1fr repeat(6, 56px)',
             padding: '10px 20px',
             borderBottom: '1px solid var(--border)',
             gap: 4,
@@ -138,7 +158,7 @@ export default function CapabilitiesSettingsPage() {
               key={cap.label}
               style={{
                 display: 'grid',
-                gridTemplateColumns: '1fr repeat(4, 60px)',
+                gridTemplateColumns: '1fr repeat(6, 56px)',
                 padding: '12px 20px',
                 borderBottom: i < CAPABILITIES.length - 1 ? '1px solid var(--border)' : undefined,
                 gap: 4,
@@ -155,7 +175,12 @@ export default function CapabilitiesSettingsPage() {
                     marginBottom: 2,
                   }}
                 >
-                  {cap.label}
+                  <span
+                    title={cap.tooltip}
+                    style={{ cursor: 'help', borderBottom: '1px dotted var(--text-3)' }}
+                  >
+                    {cap.label}
+                  </span>
                   {cap.link && hasFeature && (
                     <Link
                       href={cap.link}
@@ -181,13 +206,22 @@ export default function CapabilitiesSettingsPage() {
                     key={t}
                     style={{
                       textAlign: 'center',
-                      fontSize: 16,
+                      fontSize: isLowerCap ? 10 : 16,
                       color: included ? 'var(--teal)' : 'var(--text-3)',
                       fontWeight: isCurrent && included ? 700 : 400,
+                      lineHeight: 1.2,
                     }}
                     title={isLowerCap ? 'Available at a lower token cap than Pro/Max' : undefined}
                   >
-                    {included ? (isLowerCap ? '✓*' : '✓') : '·'}
+                    {included ? (
+                      isLowerCap ? (
+                        <span style={{ fontSize: 11 }}>✓ (lower cap)</span>
+                      ) : (
+                        '✓'
+                      )
+                    ) : (
+                      '·'
+                    )}
                   </div>
                 );
               })}
@@ -198,7 +232,7 @@ export default function CapabilitiesSettingsPage() {
 
       {/* Lower cap footnote */}
       <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-        * Available on Hobby at a lower token cap than Pro/Max.
+        Lower cap: available on Hobby with a smaller token quota than Pro/Max.
       </p>
 
       {/* Upgrade CTA */}
@@ -216,7 +250,7 @@ export default function CapabilitiesSettingsPage() {
               textDecoration: 'none',
             }}
           >
-            {tier === 'free' ? 'Upgrade to Hobby' : 'Upgrade to Pro'}
+            {tier === 'hobby' ? 'Upgrade to Pro' : 'Upgrade to Hobby'}
           </Link>
         </div>
       )}

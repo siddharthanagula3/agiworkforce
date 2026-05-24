@@ -22,6 +22,7 @@ import {
 import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useBillingStore } from '@/stores/unified/auth';
 import { ScrollArea } from '@shared/ui/scroll-area';
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ import {
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useDirectoryStore } from '@features/chat/stores/directory-store';
 import { ConversationListItem } from './ConversationListItem';
+import { GlobalSearchDialog } from '@features/chat/components/dialogs/GlobalSearchDialog';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -430,6 +432,26 @@ function CollapsedSidebar({
 }
 
 // ---------------------------------------------------------------------------
+// Free Plan Nudge — only shown when user is on the free tier
+// ---------------------------------------------------------------------------
+
+const FreePlanNudge = React.memo(function FreePlanNudge() {
+  const subscription = useBillingStore((s) => s.subscription);
+  const tier = subscription?.tier ?? 'free';
+  if (tier !== 'free') return null;
+  return (
+    <div className="px-3 pb-2">
+      <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
+        <span>Free plan</span>
+        <a href="/pricing" className="font-medium text-primary hover:underline">
+          Upgrade
+        </a>
+      </div>
+    </div>
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Main Sidebar Content
 // ---------------------------------------------------------------------------
 
@@ -454,6 +476,7 @@ function ChatSidebarContent({
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
@@ -549,6 +572,7 @@ function ChatSidebarContent({
           <button
             className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-white/[0.08] hover:text-[var(--chat-text-primary)] transition-colors"
             aria-label="Search"
+            onClick={() => setSearchDialogOpen(true)}
           >
             <Search className="h-4 w-4" />
           </button>
@@ -668,17 +692,13 @@ function ChatSidebarContent({
       </ScrollArea>
 
       {/* Free plan upgrade pill per design-spec §6.4 */}
-      <div className="px-3 pb-2">
-        <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
-          <span>Free plan</span>
-          <a href="/pricing" className="font-medium text-primary hover:underline">
-            Upgrade
-          </a>
-        </div>
-      </div>
+      <FreePlanNudge />
 
       {/* User profile */}
       <UserProfileArea />
+
+      {/* Global search dialog */}
+      <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
     </div>
   );
 }
