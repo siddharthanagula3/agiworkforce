@@ -52,17 +52,13 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     return rateLimitResponse;
   }
 
-  const supabase = await createSupabaseServerClient();
-  // Use getUser() for server-side JWT validation - getSession() reads from
-  // the cookie without server verification and must not be trusted for auth.
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (!user || userError) {
+  const { userId } = await (await import('@clerk/nextjs/server')).auth();
+  if (!userId) {
     throw createError.unauthorized('Please sign in to continue');
   }
+
+  const supabase = await createSupabaseServerClient();
+  const user = { id: userId, email: '' };
 
   // Type-safe request body parsing with Zod validation
   let rawBody: unknown;

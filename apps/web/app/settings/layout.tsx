@@ -14,9 +14,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/settings/billing', label: 'Billing' },
   { href: '/settings/usage', label: 'Usage' },
   { href: '/settings/capabilities', label: 'Capabilities' },
-  { href: '/settings/byok', label: 'Connectors' },
-  { href: '/settings/voice', label: 'Claude Code' },
-  { href: '/settings/connections', label: 'Cowork' },
+  { href: '/settings/connections', label: 'Connectors' },
+  { href: '/settings/voice', label: 'Voice' },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {

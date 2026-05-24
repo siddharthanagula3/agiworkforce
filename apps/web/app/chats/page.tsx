@@ -13,6 +13,7 @@ import {
   CheckSquare,
   Square,
   ChevronLeft,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useChatStore } from '@features/chat/stores/chat-store';
@@ -66,6 +67,9 @@ export default function ChatsIndexPage() {
   const setActiveSession = useChatStore((s) => s.setActiveSession);
 
   const projects = useProjectStore((s) => s.projects);
+
+  // Build a projectId -> name lookup for badges
+  const projectMap = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
@@ -181,32 +185,65 @@ export default function ChatsIndexPage() {
     <div className="flex h-screen bg-background text-foreground">
       {/* Main content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Top bar */}
-        <header className="flex items-center gap-3 border-b border-border px-6 py-4">
-          {/* Mobile back */}
-          <button
-            className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors md:hidden"
-            onClick={() => router.back()}
-            aria-label="Go back"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </button>
+        {/* Top bar — title row + full-width search row */}
+        <header className="border-b border-border px-6 pt-4 pb-3 space-y-3">
+          {/* Title row */}
+          <div className="flex items-center gap-3">
+            {/* Mobile back */}
+            <button
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors md:hidden"
+              onClick={() => router.back()}
+              aria-label="Go back"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
 
-          <h1 className="text-lg font-semibold text-foreground">Chats</h1>
+            <h1 className="text-lg font-semibold text-foreground">Chats</h1>
 
-          {/* Search */}
-          <div className="relative ml-4 flex-1 max-w-md">
+            <div className="ml-auto flex items-center gap-2">
+              {!bulkMode ? (
+                <button
+                  onClick={() => setBulkMode(true)}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  aria-label="Select conversations"
+                >
+                  <CheckSquare className="h-4 w-4" aria-hidden="true" />
+                  Select chats
+                </button>
+              ) : (
+                <button
+                  onClick={exitBulkMode}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                  aria-label="Cancel selection"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={() => router.push('/chat')}
+                className="flex items-center gap-1.5 rounded-lg bg-foreground px-3 py-1.5 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+                aria-label="New chat"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                New chat
+              </button>
+            </div>
+          </div>
+
+          {/* Full-width search row */}
+          <div className="relative">
             <Search
               className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
               aria-hidden="true"
             />
             <input
               type="search"
-              placeholder="Search conversations..."
+              placeholder="Search chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-9 w-full rounded-lg border border-input bg-background pl-9 pr-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              aria-label="Search conversations"
+              aria-label="Search chats"
             />
             {searchQuery && (
               <button
@@ -215,28 +252,6 @@ export default function ChatsIndexPage() {
                 aria-label="Clear search"
               >
                 <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-
-          <div className="ml-auto flex items-center gap-2">
-            {!bulkMode ? (
-              <button
-                onClick={() => setBulkMode(true)}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                aria-label="Select conversations"
-              >
-                <CheckSquare className="h-4 w-4" aria-hidden="true" />
-                Select
-              </button>
-            ) : (
-              <button
-                onClick={exitBulkMode}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-                aria-label="Cancel selection"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-                Cancel
               </button>
             )}
           </div>
@@ -347,6 +362,9 @@ export default function ChatsIndexPage() {
                             : new Date();
                       const safeDate = isNaN(updatedAt.getTime()) ? new Date(0) : updatedAt;
                       const isChecked = selectedIds.has(session.id);
+                      const projectName = session.projectId
+                        ? projectMap.get(session.projectId)
+                        : undefined;
 
                       // Bulk mode: checkbox row only
                       if (bulkMode) {
@@ -381,24 +399,38 @@ export default function ChatsIndexPage() {
                             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                               {session.title || 'Untitled'}
                             </span>
+                            {projectName && (
+                              <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground">
+                                {projectName}
+                              </span>
+                            )}
                           </div>
                         );
                       }
 
-                      // Normal mode: use ConversationListItem for full hover menu
+                      // Normal mode: use ConversationListItem for full hover menu,
+                      // plus project badge rendered inline after it
                       return (
-                        <ConversationListItem
-                          key={session.id}
-                          id={session.id}
-                          title={session.title || 'Untitled'}
-                          updatedAt={safeDate}
-                          totalMessages={session.messageCount ?? 0}
-                          isActive={false}
-                          onClick={() => handleSessionClick(session.id)}
-                          onDelete={() => deleteSession(session.id)}
-                          onArchive={() => archiveSession(session.id)}
-                          onMoveToProject={(projectId) => moveToProject(session.id, projectId)}
-                        />
+                        <div key={session.id} className="relative flex items-center">
+                          <div className="min-w-0 flex-1">
+                            <ConversationListItem
+                              id={session.id}
+                              title={session.title || 'Untitled'}
+                              updatedAt={safeDate}
+                              totalMessages={session.messageCount ?? 0}
+                              isActive={false}
+                              onClick={() => handleSessionClick(session.id)}
+                              onDelete={() => deleteSession(session.id)}
+                              onArchive={() => archiveSession(session.id)}
+                              onMoveToProject={(projectId) => moveToProject(session.id, projectId)}
+                            />
+                          </div>
+                          {projectName && (
+                            <span className="pointer-events-none absolute right-8 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground">
+                              {projectName}
+                            </span>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
