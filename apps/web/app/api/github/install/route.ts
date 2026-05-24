@@ -2,10 +2,10 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -43,20 +43,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
-  const { error } = await supabase.from('github_installations').upsert(
-    {
-      user_id: userId,
-      installation_id: Number(installationId),
-      account_login: accountLogin,
-      account_type: accountType,
-    },
-    { onConflict: 'installation_id' },
-  );
-
-  if (error) {
-    logger.error({ error, userId }, 'Failed to save GitHub installation');
+  try {
+    await db.execute(
+      `insert into github_installations (user_id, installation_id, account_login, account_type)
+       values ($1, $2, $3, $4)
+       on conflict (installation_id)
+       do update set
+         user_id = excluded.user_id,
+         account_login = excluded.account_login,
+         account_type = excluded.account_type`,
+      [userId, Number(installationId), accountLogin, accountType],
+    );
+  } catch (err) {
+    logger.error({ err, userId }, 'Failed to save GitHub installation');
     return NextResponse.redirect(
       new URL('/chat/integrations/github?error=save_failed', request.url),
     );

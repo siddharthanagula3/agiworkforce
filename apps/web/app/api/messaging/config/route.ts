@@ -6,6 +6,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { MessagingConnectionRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -19,22 +21,20 @@ async function handleGetConfig(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('messaging_connections')
-    .select('id, platform, is_active, connected_at, updated_at')
-    .eq('user_id', userId)
-    .order('connected_at', { ascending: false });
+  const connections = await db.query<
+    Pick<MessagingConnectionRow, 'id' | 'platform' | 'is_active' | 'connected_at' | 'updated_at'>
+  >(
+    `select id, platform, is_active, connected_at, updated_at
+     from messaging_connections
+     where user_id = $1
+     order by connected_at desc`,
+    [userId],
+  );
 
-  if (error) {
-    logger.error({ error, userId }, 'Failed to fetch messaging connections');
-    throw createError.internal('Failed to fetch messaging connections');
-  }
-
-  return NextResponse.json({ connections: data || [] });
+  return NextResponse.json({ connections });
 }
 
 async function handlePostConfig(request: NextRequest) {
@@ -45,9 +45,7 @@ async function handlePostConfig(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { platform?: string; config?: Record<string, string> };
   try {
@@ -77,24 +75,24 @@ async function handlePostConfig(request: NextRequest) {
     }
   }
 
-  const { data, error } = await supabase
-    .from('messaging_connections')
-    .upsert(
-      {
-        user_id: userId,
-        platform,
-        config,
-        is_active: true,
-        connected_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,platform' },
-    )
-    .select()
-    .single();
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
-  if (error) {
-    logger.error({ error, userId, platform }, 'Failed to upsert messaging connection');
+  const [data] = await db.query<MessagingConnectionRow>(
+    `insert into messaging_connections (user_id, platform, config, is_active, connected_at, updated_at)
+     values ($1, $2, $3::jsonb, true, $4, $5)
+     on conflict (user_id, platform)
+     do update set
+       config = excluded.config,
+       is_active = true,
+       connected_at = excluded.connected_at,
+       updated_at = excluded.updated_at
+     returning *`,
+    [userId, platform, JSON.stringify(config), now, now],
+  );
+
+  if (!data) {
+    logger.error({ userId, platform }, 'Failed to upsert messaging connection');
     throw createError.internal('Failed to save messaging connection');
   }
 

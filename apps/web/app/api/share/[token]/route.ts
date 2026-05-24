@@ -6,17 +6,29 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getServiceClient } from '@/lib/supabase-server';
 import { createClient as createServerClient } from '@/utils/supabase/server';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 
 type RouteContext = { params: Promise<{ token: string }> };
+
+type SharedSessionRow = {
+  id: string;
+  token: string;
+  title: string;
+  model_id: string | null;
+  provider: string | null;
+  messages: unknown;
+  total_messages: number;
+  expires_at: string;
+  created_at: string;
+};
 
 async function handleGetShare(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
@@ -28,18 +40,17 @@ async function handleGetShare(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'share-view');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('shared_sessions')
-    .select(
-      'id, token, title, model_id, provider, messages, total_messages, expires_at, created_at',
-    )
-    .eq('token', token)
-    .gt('expires_at', new Date().toISOString())
-    .single();
+  const [data] = await db.query<SharedSessionRow>(
+    `select id, token, title, model_id, provider, messages, total_messages, expires_at, created_at
+     from shared_sessions
+     where token = $1 and expires_at > $2
+     limit 1`,
+    [token, new Date().toISOString()],
+  );
 
-  if (error || !data) {
+  if (!data) {
     throw createError.notFound('Shared session not found or expired');
   }
 
@@ -65,16 +76,15 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
     throw createError.unauthorized();
   }
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
-  const { error } = await supabase
-    .from('shared_sessions')
-    .delete()
-    .eq('token', token)
-    .eq('owner_id', user.id);
-
-  if (error) {
-    logger.error({ error, token, userId: user.id }, 'Failed to revoke shared session');
+  try {
+    await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
+      token,
+      user.id,
+    ]);
+  } catch (err) {
+    logger.error({ err, token, userId: user.id }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 

@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -20,29 +20,27 @@ function isBillingInterval(value: unknown): value is BillingInterval {
   return value === 'monthly' || value === 'yearly';
 }
 
+type WaitlistPlanRow = { plan: string };
+
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
-  const { data, error } = await supabase.from('waitlist').select('plan').eq('user_id', userId);
-
-  if (error) {
-    throw createError.internal('Failed to load waitlist status');
-  }
-
-  const joinedPlans = Array.from(new Set((data ?? []).map((row) => row.plan))).filter(
-    isWaitlistPlan,
+  const rows = await db.query<WaitlistPlanRow>(
+    'select distinct plan from waitlist where user_id = $1',
+    [userId],
   );
+
+  const joinedPlans = rows.map((row) => row.plan).filter(isWaitlistPlan);
 
   return NextResponse.json({ joinedPlans });
 }
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const { userId, email } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
@@ -71,23 +69,20 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     ? payload.billingInterval
     : ('yearly' as const);
   const source = typeof payload.source === 'string' ? payload.source.slice(0, 100) : 'pricing';
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
-  const { error } = await supabase.from('waitlist').upsert(
-    {
-      user_id: userId,
-      email: email ?? null,
-      plan: payload.plan,
-      billing_interval: billingInterval,
-      source,
-      joined_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id,plan' },
+  await db.execute(
+    `insert into waitlist (user_id, email, plan, billing_interval, source, joined_at, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     on conflict (user_id, plan)
+     do update set
+       email = excluded.email,
+       billing_interval = excluded.billing_interval,
+       source = excluded.source,
+       updated_at = excluded.updated_at`,
+    [userId, email ?? null, payload.plan, billingInterval, source, now, now],
   );
-
-  if (error) {
-    throw createError.internal('Failed to join waitlist');
-  }
 
   return NextResponse.json({ ok: true, plan: payload.plan, joined: true });
 }

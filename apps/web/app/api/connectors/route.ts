@@ -7,34 +7,21 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-// WEB-RLS-BYPASS fix: use canonical client factories from lib/supabase-server
-// instead of a locally-defined duplicate. User-scoped connector operations use
-// getUserClient(jwt) when a Bearer token is present so RLS policies are enforced.
-// Cookie-path falls back to the canonical getServiceClient() (not a local copy)
-// with explicit .eq('user_id') filter as defense-in-depth — same pattern used
-// by other routes that cannot extract a raw JWT from SSR cookie sessions.
-import { getServiceClient, getUserClient } from '@/lib/supabase-server';
 
-/**
- * Return an RLS-bound client when the request carries a Bearer JWT, or the
- * canonical service-role client when only cookie auth is available.
- * Callers MUST still apply .eq('user_id', userId) for defense-in-depth.
- */
-function getScopedClient(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return getUserClient(authHeader.substring(7));
-  }
-  // Cookie-auth: no raw JWT accessible. Use service-role with mandatory
-  // user_id filter. This matches the established pattern in chat routes.
-  return getServiceClient();
-}
+type UserConnectorRow = {
+  id: string;
+  connector_id: string;
+  auth_type: string;
+  connected_at: string;
+  updated_at: string;
+};
 
 // Allowlist of valid connector IDs to prevent arbitrary data injection
 const VALID_CONNECTOR_IDS = new Set([
@@ -79,22 +66,18 @@ async function handleGetConnectors(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = getScopedClient(request);
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('user_connectors')
-    .select('id, connector_id, auth_type, connected_at, updated_at')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .order('connected_at', { ascending: false });
-
-  if (error) {
-    logger.error({ error, userId: userId }, 'Failed to fetch connectors');
-    throw createError.internal('Failed to fetch connectors');
-  }
+  const rows = await db.query<UserConnectorRow>(
+    `select id, connector_id, auth_type, connected_at, updated_at
+     from user_connectors
+     where user_id = $1 and is_active = true
+     order by connected_at desc`,
+    [userId],
+  );
 
   return NextResponse.json({
-    connectors: (data || []).map((c) => ({
+    connectors: rows.map((c) => ({
       id: c.id,
       connectorId: c.connector_id,
       authType: c.auth_type,
@@ -136,7 +119,8 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.validation('Invalid auth type');
   }
 
-  const supabase = getScopedClient(request);
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
   // NOTE: Real OAuth integration is deferred. For connectors with authType
   // 'oauth', this endpoint currently only records intent (is_active: true)
@@ -147,27 +131,21 @@ async function handleCreateConnector(request: NextRequest) {
   // encrypt + store credentials, then set is_active: true.
   //
   // Upsert: if user reconnects a previously disconnected connector, reactivate it
-  const { data, error } = await supabase
-    .from('user_connectors')
-    .upsert(
-      {
-        user_id: userId,
-        connector_id: body.connectorId,
-        auth_type: authType,
-        is_active: true,
-        connected_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,connector_id' },
-    )
-    .select('id, connector_id, auth_type, connected_at, updated_at')
-    .single();
+  const [data] = await db.query<UserConnectorRow>(
+    `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
+     values ($1, $2, $3, true, $4, $5)
+     on conflict (user_id, connector_id)
+     do update set
+       auth_type = excluded.auth_type,
+       is_active = true,
+       connected_at = excluded.connected_at,
+       updated_at = excluded.updated_at
+     returning id, connector_id, auth_type, connected_at, updated_at`,
+    [userId, body.connectorId, authType, now, now],
+  );
 
-  if (error) {
-    logger.error(
-      { error, userId: userId, connectorId: body.connectorId },
-      'Failed to save connector',
-    );
+  if (!data) {
+    logger.error({ userId: userId, connectorId: body.connectorId }, 'Failed to save connector');
     throw createError.internal('Failed to save connector');
   }
 
@@ -204,19 +182,15 @@ async function handleDeleteConnector(request: NextRequest) {
     throw createError.validation('Valid connectorId query param is required');
   }
 
-  const supabase = getScopedClient(request);
+  const db = getNeonDb();
 
   // Soft-delete: mark as inactive rather than removing the row
-  const { error } = await supabase
-    .from('user_connectors')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .eq('connector_id', connectorId);
-
-  if (error) {
-    logger.error({ error, userId: userId, connectorId }, 'Failed to disconnect connector');
-    throw createError.internal('Failed to disconnect connector');
-  }
+  await db.execute(
+    `update user_connectors
+     set is_active = false, updated_at = $1
+     where user_id = $2 and connector_id = $3`,
+    [new Date().toISOString(), userId, connectorId],
+  );
 
   return NextResponse.json({ success: true });
 }
