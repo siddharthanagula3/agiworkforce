@@ -8,7 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 // Zod schema for session actions
 const SessionRequestSchema = z.object({
@@ -32,8 +32,8 @@ async function handler(request: NextRequest) {
   if (csrfError) return csrfError as NextResponse;
 
   // RLS-AUDIT-FIX: replaced inline service-role auth with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
-  const userId = user.id;
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let rawBody: unknown;
   try {

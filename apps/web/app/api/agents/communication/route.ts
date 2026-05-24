@@ -8,7 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 /**
  * Agent Communication API
@@ -43,7 +43,8 @@ async function handleGetCommunication(request: NextRequest) {
 
   // RLS-bound client: agent_messages + agent_delegations are user-scoped tables.
   // The .eq('user_id', ...) filters remain as defense-in-depth; RLS is the boundary.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const url = new URL(request.url);
   const agentId = url.searchParams.get('agentId');
@@ -58,7 +59,7 @@ async function handleGetCommunication(request: NextRequest) {
     const { data, error } = await supabase
       .from('agent_delegations')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('delegate_agent_id', agentId)
       .order('created_at', { ascending: false })
       .limit(50);
@@ -68,7 +69,7 @@ async function handleGetCommunication(request: NextRequest) {
       if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
         return NextResponse.json({ delegations: [] });
       }
-      logger.error({ error, userId: user.id, agentId }, 'Failed to fetch agent delegations');
+      logger.error({ error, userId, agentId }, 'Failed to fetch agent delegations');
       throw createError.internal('Failed to fetch agent delegations');
     }
 
@@ -98,7 +99,7 @@ async function handleGetCommunication(request: NextRequest) {
   const { data, error } = await supabase
     .from('agent_messages')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('to_agent_id', agentId)
     .order('created_at', { ascending: false })
     .limit(100);
@@ -108,7 +109,7 @@ async function handleGetCommunication(request: NextRequest) {
     if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
       return NextResponse.json({ messages: [] });
     }
-    logger.error({ error, userId: user.id, agentId }, 'Failed to fetch agent messages');
+    logger.error({ error, userId, agentId }, 'Failed to fetch agent messages');
     throw createError.internal('Failed to fetch agent messages');
   }
 
@@ -143,7 +144,8 @@ async function handleSendMessage(request: NextRequest) {
 
   // RLS-bound client: agent_messages.user_id RLS policy ensures only the owner
   // can insert/read their own rows.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: unknown;
   try {
@@ -162,7 +164,7 @@ async function handleSendMessage(request: NextRequest) {
   const { data, error } = await supabase
     .from('agent_messages')
     .insert({
-      user_id: user.id,
+      user_id: userId,
       from_agent_id: from,
       to_agent_id: to,
       content,
@@ -177,17 +179,14 @@ async function handleSendMessage(request: NextRequest) {
   if (error) {
     // Table may not exist in all environments
     if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
-      logger.warn(
-        { userId: user.id, from, to },
-        'agent_messages table does not exist; message dropped',
-      );
+      logger.warn({ userId, from, to }, 'agent_messages table does not exist; message dropped');
       return NextResponse.json({ success: true, message: null });
     }
-    logger.error({ error, userId: user.id, from, to }, 'Failed to send agent message');
+    logger.error({ error, userId, from, to }, 'Failed to send agent message');
     throw createError.internal('Failed to send message');
   }
 
-  logger.info({ userId: user.id, messageId: data?.['id'], from, to }, 'Agent message sent');
+  logger.info({ userId, messageId: data?.['id'], from, to }, 'Agent message sent');
 
   return NextResponse.json({ success: true, message: data }, { status: 201 });
 }

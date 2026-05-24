@@ -13,7 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 type ConversationTag =
   | 'coding'
@@ -186,7 +186,8 @@ async function handleClassify(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { conversationId?: string };
   try {
@@ -205,7 +206,7 @@ async function handleClassify(request: NextRequest) {
     .from('web_conversations')
     .select('id')
     .eq('id', conversationId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .is('deleted_at', null)
     .single();
 
@@ -234,7 +235,7 @@ async function handleClassify(request: NextRequest) {
   const { error: upsertError } = await supabase.from('conversation_tags').upsert(
     {
       conversation_id: conversationId,
-      user_id: user.id,
+      user_id: userId,
       tag,
       confidence: 1.0,
       classified_at: new Date().toISOString(),
