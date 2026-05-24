@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { X, Code, Layers } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { X, Code, Layers, Plus } from 'lucide-react';
 import { useArtifactsStore } from '@/features/chat/stores/artifacts-store';
 import type { Artifact } from '@/features/chat/stores/artifacts-store';
 import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPreview';
@@ -90,7 +91,7 @@ class Record:
     tags: list[str] = field(default_factory=list)
 
 async def fetch_records(source: str) -> AsyncIterator[Record]:
-    """Yield records from source — replace with real I/O."""
+    """Yield records from source -- replace with real I/O."""
     for i in range(5):
         await asyncio.sleep(0.1)
         yield Record(id=f"{source}-{i}", payload={"index": i})
@@ -169,6 +170,62 @@ CREATE TRIGGER trg_accounts_updated_at
 ];
 
 // ---------------------------------------------------------------------------
+// Category picker data (Fix 35)
+// ---------------------------------------------------------------------------
+
+interface ArtifactCategory {
+  id: string;
+  label: string;
+  icon: string;
+  prompt: string;
+}
+
+const ARTIFACT_CATEGORIES: ArtifactCategory[] = [
+  {
+    id: 'apps',
+    label: 'Apps and websites',
+    icon: '🌐',
+    prompt: 'Build me a web app or website. ',
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: '📄',
+    prompt: 'Help me create a professional document. ',
+  },
+  {
+    id: 'games',
+    label: 'Games',
+    icon: '🎮',
+    prompt: 'Build a simple browser game. ',
+  },
+  {
+    id: 'productivity',
+    label: 'Productivity tools',
+    icon: '⚡',
+    prompt: 'Create a productivity tool or utility. ',
+  },
+  {
+    id: 'creative',
+    label: 'Creative projects',
+    icon: '✨',
+    prompt: 'Help me with a creative project. ',
+  },
+  {
+    id: 'quiz',
+    label: 'Quiz or survey',
+    icon: '📝',
+    prompt: 'Build an interactive quiz or survey. ',
+  },
+  {
+    id: 'scratch',
+    label: 'Start from scratch',
+    icon: '🔲',
+    prompt: '',
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -224,17 +281,83 @@ function languageLabel(lang: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Card
+// Skeleton card (Fix 38)
+// ---------------------------------------------------------------------------
+
+function SkeletonCard() {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule)',
+        borderRadius: 14,
+        padding: '20px 20px 18px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 10,
+      }}
+    >
+      {/* Thumbnail placeholder */}
+      <div
+        style={{
+          width: '100%',
+          height: 120,
+          borderRadius: 8,
+          background: 'var(--agi-rule)',
+          animation: 'agi-pulse 1.4s ease-in-out infinite',
+        }}
+      />
+      {/* Title row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+        <div
+          style={{
+            height: 14,
+            width: '60%',
+            borderRadius: 6,
+            background: 'var(--agi-rule)',
+            animation: 'agi-pulse 1.4s ease-in-out infinite',
+          }}
+        />
+        <div
+          style={{
+            height: 14,
+            width: '20%',
+            borderRadius: 6,
+            background: 'var(--agi-rule)',
+            animation: 'agi-pulse 1.4s ease-in-out 0.2s infinite',
+          }}
+        />
+      </div>
+      {/* Subtitle */}
+      <div
+        style={{
+          height: 12,
+          width: '45%',
+          borderRadius: 6,
+          background: 'var(--agi-rule)',
+          animation: 'agi-pulse 1.4s ease-in-out 0.4s infinite',
+        }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Card (Fix 34: iframe thumbnail for renderable types)
 // ---------------------------------------------------------------------------
 
 interface ArtifactCardProps {
   title: string;
   language: string;
   subtitle: string;
+  type?: 'html' | 'react' | 'svg' | 'mermaid' | 'code' | 'document';
+  content?: string;
   onClick: () => void;
 }
 
-function ArtifactCard({ title, language, subtitle, onClick }: ArtifactCardProps) {
+function ArtifactCard({ title, language, subtitle, type, content, onClick }: ArtifactCardProps) {
+  const canRender = type && content && ['html', 'react', 'svg', 'mermaid'].includes(type);
+
   return (
     <button
       type="button"
@@ -243,14 +366,15 @@ function ArtifactCard({ title, language, subtitle, onClick }: ArtifactCardProps)
         background: 'var(--agi-card)',
         border: '1px solid var(--agi-rule)',
         borderRadius: 14,
-        padding: '20px 20px 18px',
+        padding: '0',
         textAlign: 'left',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
-        gap: 10,
+        gap: 0,
         transition: 'border-color 200ms ease',
         width: '100%',
+        overflow: 'hidden',
       }}
       onMouseEnter={(e) => {
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule-strong)';
@@ -259,49 +383,418 @@ function ArtifactCard({ title, language, subtitle, onClick }: ArtifactCardProps)
         (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
       }}
     >
+      {/* Rendered thumbnail (Fix 34) */}
+      {canRender && (
+        <div
+          style={{
+            width: '100%',
+            height: 120,
+            overflow: 'hidden',
+            background: '#fff',
+            position: 'relative',
+          }}
+        >
+          <iframe
+            title={`${title} preview`}
+            sandbox="allow-scripts"
+            srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
+            style={{
+              pointerEvents: 'none',
+              width: '300%',
+              height: '300%',
+              transform: 'scale(0.333)',
+              transformOrigin: 'top left',
+              border: 'none',
+            }}
+            aria-hidden="true"
+          />
+        </div>
+      )}
+
+      {/* Text area */}
       <div
         style={{
+          padding: '14px 18px 16px',
           display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
           gap: 8,
         }}
       >
-        <span
+        <div
           style={{
-            fontSize: 14,
-            fontWeight: 600,
-            color: 'var(--agi-ink)',
-            lineHeight: 1.35,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 8,
           }}
         >
-          {title}
-        </span>
+          <span
+            style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: 'var(--agi-ink)',
+              lineHeight: 1.35,
+            }}
+          >
+            {title}
+          </span>
+          <span
+            style={{
+              fontSize: 11,
+              fontWeight: 500,
+              color: 'var(--agi-amber)',
+              background: 'var(--agi-amber-soft)',
+              borderRadius: 6,
+              padding: '2px 7px',
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
+            }}
+          >
+            {languageLabel(language)}
+          </span>
+        </div>
         <span
           style={{
-            fontSize: 11,
-            fontWeight: 500,
-            color: 'var(--agi-amber)',
-            background: 'var(--agi-amber-soft)',
-            borderRadius: 6,
-            padding: '2px 7px',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
+            fontSize: 12,
+            color: 'var(--agi-ink-quiet)',
+            lineHeight: 1.5,
           }}
         >
-          {languageLabel(language)}
+          {subtitle}
         </span>
       </div>
-      <span
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Category picker overlay (Fix 35)
+// ---------------------------------------------------------------------------
+
+interface CategoryPickerProps {
+  onClose: () => void;
+  onSelect: (category: ArtifactCategory) => void;
+}
+
+function CategoryPicker({ onClose, onSelect }: CategoryPickerProps) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <>
+      <div
+        onClick={onClose}
         style={{
-          fontSize: 12,
-          color: 'var(--agi-ink-quiet)',
-          lineHeight: 1.5,
+          position: 'fixed',
+          inset: 0,
+          zIndex: 50,
+          background: 'rgba(0,0,0,0.55)',
+        }}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose artifact type"
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 60,
+          width: 'min(560px, 92vw)',
+          background: 'var(--agi-bg-2)',
+          border: '1px solid var(--agi-rule-strong)',
+          borderRadius: 18,
+          padding: '32px 28px 28px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 20,
         }}
       >
-        {subtitle}
-      </span>
-    </button>
+        <div>
+          <h2
+            style={{
+              margin: 0,
+              fontSize: 20,
+              fontWeight: 700,
+              color: 'var(--agi-ink)',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            What do you want to create?
+          </h2>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--agi-ink-quiet)' }}>
+            Pick a starting point. You can describe the details next.
+          </p>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(152px, 1fr))',
+            gap: 10,
+          }}
+        >
+          {ARTIFACT_CATEGORIES.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => onSelect(cat)}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 6,
+                padding: '14px 14px 12px',
+                background: 'var(--agi-card)',
+                border: '1px solid var(--agi-rule)',
+                borderRadius: 12,
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'border-color 150ms',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-amber)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = 'var(--agi-rule)';
+              }}
+            >
+              <span style={{ fontSize: 22 }}>{cat.icon}</span>
+              <span
+                style={{ fontSize: 13, fontWeight: 600, color: 'var(--agi-ink)', lineHeight: 1.3 }}
+              >
+                {cat.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Creation wizard (Fix 36)
+// ---------------------------------------------------------------------------
+
+const WIZARD_STEPS = [
+  {
+    step: 1,
+    label: 'Describe your idea',
+    placeholder: 'What should it do? Be as specific or brief as you like.',
+  },
+  { step: 2, label: 'Who is it for?', placeholder: 'e.g. just me, my team, end users...' },
+  {
+    step: 3,
+    label: 'Any extra requirements?',
+    placeholder: 'e.g. dark theme, no external libraries, mobile-friendly...',
+  },
+];
+
+interface CreationWizardProps {
+  category: ArtifactCategory;
+  onClose: () => void;
+  onLaunch: (prompt: string) => void;
+}
+
+function CreationWizard({ category, onClose, onLaunch }: CreationWizardProps) {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [answers, setAnswers] = useState<string[]>(['', '', '']);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const step = WIZARD_STEPS[currentStep]!;
+  const isLast = currentStep === WIZARD_STEPS.length - 1;
+
+  const handleNext = () => {
+    if (isLast) {
+      const parts = [
+        category.prompt,
+        answers[0] ? answers[0] : '',
+        answers[1] ? `For: ${answers[1]}` : '',
+        answers[2] ? `Requirements: ${answers[2]}` : '',
+      ].filter(Boolean);
+      onLaunch(parts.join(' ').trim());
+    } else {
+      setCurrentStep((s) => s + 1);
+    }
+  };
+
+  const handleSkip = () => {
+    onLaunch(category.prompt.trim() || 'Start a new artifact.');
+  };
+
+  const updateAnswer = (val: string) => {
+    setAnswers((prev) => {
+      const next = [...prev];
+      next[currentStep] = val;
+      return next;
+    });
+  };
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.55)' }}
+        aria-hidden="true"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create artifact"
+        style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 60,
+          width: 'min(520px, 92vw)',
+          background: 'var(--agi-bg-2)',
+          border: '1px solid var(--agi-rule-strong)',
+          borderRadius: 18,
+          padding: '32px 28px 28px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 20,
+        }}
+      >
+        {/* Header with step indicator */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div>
+            <p
+              style={{
+                margin: '0 0 4px',
+                fontSize: 12,
+                color: 'var(--agi-ink-quiet)',
+                fontWeight: 600,
+                textTransform: 'uppercase',
+                letterSpacing: 0.5,
+              }}
+            >
+              Step {currentStep + 1} of {WIZARD_STEPS.length} &mdash; {category.label}
+            </p>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 19,
+                fontWeight: 700,
+                color: 'var(--agi-ink)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              {step.label}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close wizard"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--agi-ink-2)',
+              padding: 4,
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Step dots */}
+        <div style={{ display: 'flex', gap: 6 }}>
+          {WIZARD_STEPS.map((_, i) => (
+            <div
+              key={i}
+              style={{
+                height: 4,
+                flex: 1,
+                borderRadius: 4,
+                background: i <= currentStep ? 'var(--agi-amber)' : 'var(--agi-rule)',
+                transition: 'background 200ms',
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Text input */}
+        <textarea
+          value={answers[currentStep] ?? ''}
+          onChange={(e) => updateAnswer(e.target.value)}
+          placeholder={step.placeholder}
+          rows={4}
+          autoFocus
+          style={{
+            width: '100%',
+            padding: '12px 14px',
+            background: 'var(--agi-card)',
+            border: '1px solid var(--agi-rule)',
+            borderRadius: 10,
+            color: 'var(--agi-ink)',
+            fontSize: 14,
+            fontFamily: 'inherit',
+            resize: 'vertical',
+            outline: 'none',
+            boxSizing: 'border-box',
+          }}
+          onFocus={(e) => {
+            (e.target as HTMLTextAreaElement).style.borderColor = 'var(--agi-amber)';
+          }}
+          onBlur={(e) => {
+            (e.target as HTMLTextAreaElement).style.borderColor = 'var(--agi-rule)';
+          }}
+        />
+
+        {/* Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button
+            type="button"
+            onClick={handleSkip}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: 13,
+              color: 'var(--agi-ink-quiet)',
+              textDecoration: 'underline',
+              padding: 0,
+            }}
+          >
+            Skip and start now
+          </button>
+          <button
+            type="button"
+            onClick={handleNext}
+            style={{
+              padding: '9px 22px',
+              background: 'var(--agi-amber)',
+              border: 'none',
+              borderRadius: 9,
+              color: 'var(--agi-bg)',
+              fontSize: 14,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            {isLast ? 'Create' : 'Next'}
+          </button>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -315,7 +808,6 @@ interface ArtifactDrawerProps {
 }
 
 function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
-  // Escape key to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -475,24 +967,41 @@ function TabButton({
 // ---------------------------------------------------------------------------
 
 type TabId = 'yours' | 'inspiration';
+type OverlayState =
+  | { kind: 'none' }
+  | { kind: 'category' }
+  | { kind: 'wizard'; category: ArtifactCategory };
 
 export function GalleryClient() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>('yours');
   const [mounted, setMounted] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | InspirationCard | null>(null);
+  const [overlay, setOverlay] = useState<OverlayState>({ kind: 'none' });
 
-  // Avoid SSR/CSR mismatch by waiting for mount before reading the store
   useEffect(() => {
     setMounted(true);
   }, []);
 
   const artifacts = useArtifactsStore((s) => s.artifacts);
 
-  // Sort newest first
   const sortedArtifacts = useMemo(
     () => [...artifacts].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
     [artifacts],
   );
+
+  const handleCategorySelect = (category: ArtifactCategory) => {
+    if (category.id === 'scratch') {
+      router.push('/chat');
+      return;
+    }
+    setOverlay({ kind: 'wizard', category });
+  };
+
+  const handleLaunch = (prompt: string) => {
+    const encoded = encodeURIComponent(prompt);
+    router.push(`/chat?prompt=${encoded}`);
+  };
 
   const cardGridStyle: React.CSSProperties = {
     display: 'grid',
@@ -502,6 +1011,14 @@ export function GalleryClient() {
 
   return (
     <div data-design="agi">
+      {/* Pulse keyframes injected inline once */}
+      <style>{`
+        @keyframes agi-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
+
       <div
         style={{
           minHeight: '100vh',
@@ -517,18 +1034,60 @@ export function GalleryClient() {
             padding: '56px 32px 0',
           }}
         >
-          <h1
+          {/* Title row with New Artifact button (Fix 33) */}
+          <div
             style={{
-              fontFamily: 'var(--serif, Georgia, serif)',
-              fontSize: 'clamp(2rem, 4vw, 3rem)',
-              fontWeight: 500,
-              letterSpacing: '-0.02em',
-              color: 'var(--agi-ink)',
-              margin: '0 0 8px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+              marginBottom: 8,
             }}
           >
-            Gallery.
-          </h1>
+            <h1
+              style={{
+                fontFamily: 'var(--serif, Georgia, serif)',
+                fontSize: 'clamp(2rem, 4vw, 3rem)',
+                fontWeight: 500,
+                letterSpacing: '-0.02em',
+                color: 'var(--agi-ink)',
+                margin: 0,
+              }}
+            >
+              Gallery.
+            </h1>
+            <button
+              type="button"
+              onClick={() => setOverlay({ kind: 'category' })}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '9px 18px',
+                background: 'transparent',
+                border: '1px solid var(--agi-amber)',
+                borderRadius: 10,
+                color: 'var(--agi-amber)',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                marginTop: 8,
+                transition: 'background 150ms',
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'var(--agi-amber-soft)';
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = 'transparent';
+              }}
+            >
+              <Plus size={14} />
+              New Artifact
+            </button>
+          </div>
+
           <p
             style={{
               fontSize: 15,
@@ -578,7 +1137,14 @@ export function GalleryClient() {
           {/* Your artifacts tab */}
           {activeTab === 'yours' && (
             <>
-              {!mounted || sortedArtifacts.length === 0 ? (
+              {/* Loading skeleton (Fix 38) */}
+              {!mounted ? (
+                <div style={cardGridStyle}>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <SkeletonCard key={i} />
+                  ))}
+                </div>
+              ) : sortedArtifacts.length === 0 ? (
                 <div
                   style={{
                     display: 'flex',
@@ -606,18 +1172,23 @@ export function GalleryClient() {
                   <p style={{ fontSize: 13, color: 'var(--agi-ink-quiet)', margin: 0 }}>
                     Try asking AGI to build an HTML component, write a script, or create a diagram.
                   </p>
-                  <a
-                    href="/chat"
+                  <button
+                    type="button"
+                    onClick={() => setOverlay({ kind: 'category' })}
                     style={{
                       marginTop: 8,
                       fontSize: 13,
                       fontWeight: 600,
                       color: 'var(--agi-amber)',
-                      textDecoration: 'none',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontFamily: 'inherit',
                     }}
                   >
-                    Start a conversation
-                  </a>
+                    Create your first artifact
+                  </button>
                 </div>
               ) : (
                 <div style={cardGridStyle}>
@@ -627,6 +1198,8 @@ export function GalleryClient() {
                       title={artifact.title}
                       language={artifact.language}
                       subtitle={`Created ${relativeTime(artifact.createdAt)}`}
+                      type={artifact.type}
+                      content={artifact.content}
                       onClick={() => setSelectedArtifact(artifact)}
                     />
                   ))}
@@ -644,6 +1217,8 @@ export function GalleryClient() {
                   title={card.title}
                   language={card.language}
                   subtitle={card.description}
+                  type={card.type}
+                  content={card.content}
                   onClick={() => setSelectedArtifact(card)}
                 />
               ))}
@@ -655,6 +1230,23 @@ export function GalleryClient() {
       {/* Artifact detail drawer */}
       {selectedArtifact && (
         <ArtifactDrawer artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
+      )}
+
+      {/* Category picker (Fix 35) */}
+      {overlay.kind === 'category' && (
+        <CategoryPicker
+          onClose={() => setOverlay({ kind: 'none' })}
+          onSelect={handleCategorySelect}
+        />
+      )}
+
+      {/* Creation wizard (Fix 36) */}
+      {overlay.kind === 'wizard' && (
+        <CreationWizard
+          category={overlay.category}
+          onClose={() => setOverlay({ kind: 'none' })}
+          onLaunch={handleLaunch}
+        />
       )}
     </div>
   );

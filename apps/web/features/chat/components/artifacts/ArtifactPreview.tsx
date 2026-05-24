@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { Button } from '@shared/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@shared/ui/tabs';
 import {
@@ -87,6 +87,46 @@ export function ArtifactPreview({
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [securityWarning, setSecurityWarning] = useState(false);
+
+  // PDF / DOCX viewer state (Fix 39 / Fix 40)
+  const isPdf = artifact.type === 'document' && artifact.language?.toLowerCase() === 'pdf';
+  const isDocx =
+    artifact.type === 'document' &&
+    (artifact.language?.toLowerCase() === 'docx' || artifact.language?.toLowerCase() === 'doc');
+  const [docxHtml, setDocxHtml] = useState<string | null>(null);
+  const [docxError, setDocxError] = useState<string | null>(null);
+
+  // Convert DOCX base64/blob content to HTML via mammoth (Fix 40)
+  useEffect(() => {
+    if (!isDocx || !artifact.content) return;
+    let cancelled = false;
+
+    async function convertDocx() {
+      try {
+        const mammoth = (await import('mammoth')).default;
+        // content may be a base64 data-URI or raw binary string
+        let arrayBuffer: ArrayBuffer;
+        if (artifact.content.startsWith('data:')) {
+          const base64 = artifact.content.split(',')[1] ?? '';
+          const binary = atob(base64);
+          arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
+        } else {
+          // treat as raw binary string
+          const binary = artifact.content;
+          arrayBuffer = new Uint8Array(binary.length).map((_, i) => binary.charCodeAt(i)).buffer;
+        }
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        if (!cancelled) setDocxHtml(result.value);
+      } catch (err) {
+        if (!cancelled) setDocxError(err instanceof Error ? err.message : 'DOCX conversion failed');
+      }
+    }
+
+    void convertDocx();
+    return () => {
+      cancelled = true;
+    };
+  }, [isDocx, artifact.content]);
   // WEB-13 / WEB-20: bumped on refresh to force iframe re-mount.
   const [refreshKey, setRefreshKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -548,7 +588,7 @@ export function ArtifactPreview({
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
         className="w-full"
       >
-        {canPreview && (
+        {(canPreview || isPdf || isDocx) && (
           <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/30 px-4">
             <TabsTrigger value="preview" className="gap-2">
               <Eye className="h-3.5 w-3.5" />
@@ -561,7 +601,7 @@ export function ArtifactPreview({
           </TabsList>
         )}
 
-        {/* Preview Tab */}
+        {/* Preview Tab — HTML/React/SVG/Mermaid */}
         {canPreview && (
           <TabsContent value="preview" className="m-0 p-0">
             <div className={cn('bg-white', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}>
@@ -573,6 +613,44 @@ export function ArtifactPreview({
                 refreshKey={refreshKey}
               />
             </div>
+          </TabsContent>
+        )}
+
+        {/* Preview Tab — PDF inline viewer (Fix 39) */}
+        {isPdf && (
+          <TabsContent value="preview" className="m-0 p-0">
+            <div className={cn(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}>
+              <iframe
+                title={artifact.title || 'PDF Preview'}
+                src={artifact.content}
+                className="h-full w-full border-0"
+                aria-label={artifact.title || 'PDF document'}
+              />
+            </div>
+          </TabsContent>
+        )}
+
+        {/* Preview Tab — DOCX viewer via mammoth (Fix 40) */}
+        {isDocx && (
+          <TabsContent value="preview" className="m-0 p-0">
+            <ScrollArea
+              className={cn('bg-background', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
+            >
+              {docxError ? (
+                <div className="flex items-center justify-center p-8 text-sm text-destructive">
+                  Could not render document: {docxError}
+                </div>
+              ) : docxHtml ? (
+                <div
+                  className="prose dark:prose-invert max-w-none p-6"
+                  dangerouslySetInnerHTML={{ __html: docxHtml }}
+                />
+              ) : (
+                <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+                  Converting document...
+                </div>
+              )}
+            </ScrollArea>
           </TabsContent>
         )}
 
