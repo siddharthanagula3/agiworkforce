@@ -13,7 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 async function handleBatchGetTags(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for cookie-auth POST endpoint
@@ -24,7 +24,8 @@ async function handleBatchGetTags(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { conversationIds?: string[] };
   try {
@@ -52,11 +53,11 @@ async function handleBatchGetTags(request: NextRequest) {
   const { data, error } = await supabase
     .from('conversation_tags')
     .select('conversation_id, tag')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .in('conversation_id', conversationIds);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch batch tags');
+    logger.error({ error, userId }, 'Failed to fetch batch tags');
     throw createError.internal('Failed to fetch tags');
   }
 
