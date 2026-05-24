@@ -63,24 +63,7 @@ export const HireButton: React.FC<HireButtonProps> = ({
 
     startTransition(async () => {
       try {
-        // Check if already hired
-        const { data: existingHire } = await supabase
-          .from('hired_employees')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('employee_id', employeeId)
-          .maybeSingle();
-
-        if (existingHire) {
-          setIsProcessing(false);
-          toast.info('You have already hired this employee', {
-            description: 'Check your workforce page to start chatting',
-          });
-          return;
-        }
-
-        // Insert hire record
-
+        // Insert hire record — server returns 409 on duplicate
         const token = await getAuthToken();
         const res = await fetch('/api/workforce', {
           method: 'POST',
