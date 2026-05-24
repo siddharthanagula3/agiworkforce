@@ -33,6 +33,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   GitFork,
+  FileText,
+  FileImage,
+  File,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -201,9 +204,6 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, reactionType: 'up' | 'down' | 'helpful') => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
-  showAvatar?: boolean;
-  showTimestamp?: boolean;
-  enableActions?: boolean;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -483,6 +483,16 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
+          {/* Tool timeline (legacy path) — rendered before prose so it appears as
+              leading context for the response, not an afterthought appended at the end.
+              Only shown when there are no interleaved thinkingSegments (those handle
+              their own per-step tool rendering above). */}
+          {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
+            <div className="mb-3">
+              <ToolTimeline tools={toolTimeline} />
+            </div>
+          )}
+
           {/* Message Content — 15 px body matching desktop .message-text */}
           <div
             className={cn(
@@ -618,12 +628,7 @@ const MessageBubbleComponent = function MessageBubble({
               return null;
             })()}
 
-          {/* Tool timeline — only shown when not already rendered inline by the interleaved path */}
-          {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
-            <div className="mt-3">
-              <ToolTimeline tools={toolTimeline} />
-            </div>
-          )}
+          {/* Tool timeline rendered above prose (moved before message content section). */}
 
           {/* Thinking Steps (Collapsible) */}
           {hasThinkingSteps && (
