@@ -53,16 +53,16 @@ import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactsStore } from '../../stores/artifacts-store';
-import { SearchResults } from '../search/SearchResults';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
-import { CitationFooter } from './InlineCitation';
 import { ComparisonResponse } from './ComparisonResponse';
 import { useChatStore } from '../../stores/chat-store';
+import { InlineSourcesList } from '../research/ResearchPanel';
+import type { ResearchSource } from '../../stores/research-panel-store';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -138,6 +138,15 @@ interface Message {
     thinkingCompletedAt?: string;
     /** Duration of thinking phase in seconds */
     thinkingDurationSeconds?: number;
+    /** Multi-segment interleaved thinking blocks (ordered with tool calls) */
+    thinkingSegments?: Array<{
+      id: string;
+      content: string;
+      isStreaming: boolean;
+      startedAt: string;
+      completedAt: string | null;
+      durationSeconds?: number;
+    }>;
     isThinking?: boolean;
     isStreaming?: boolean;
     isCollaboration?: boolean;
@@ -388,19 +397,76 @@ const MessageBubbleComponent = function MessageBubble({
             {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
           </div>
 
-          {/* ThinkingBlock — extended reasoning content (shown above the main reply) */}
-          {!isUser && message.metadata?.thinkingContent && (
-            <div className="mb-3">
-              <ThinkingBlock
-                content={message.metadata.thinkingContent}
-                isStreaming={message.metadata.isThinkingStreaming ?? false}
-                startedAt={message.metadata.thinkingStartedAt}
-                completedAt={message.metadata.thinkingCompletedAt}
-                durationSeconds={message.metadata.thinkingDurationSeconds}
-                defaultExpanded={message.metadata.isThinkingStreaming ?? false}
-              />
-            </div>
-          )}
+          {/* Interleaved reasoning + tool flow */}
+          {!isUser &&
+            (() => {
+              const segments = message.metadata?.thinkingSegments;
+              const tools = !isUser && message.metadata?.tools ? message.metadata.tools : [];
+
+              // Multi-segment interleaved path: thinking[0], tool[0], thinking[1], tool[1], ...
+              if (segments && segments.length > 0) {
+                const maxLen = Math.max(segments.length, tools.length);
+                const blocks: React.ReactNode[] = [];
+
+                for (let i = 0; i < maxLen; i++) {
+                  const seg = segments[i];
+                  const tool = tools[i];
+
+                  if (seg) {
+                    blocks.push(
+                      <div key={`thinking-seg-${seg.id}`} className="mb-2">
+                        <ThinkingBlock
+                          content={seg.content}
+                          isStreaming={seg.isStreaming}
+                          startedAt={seg.startedAt}
+                          completedAt={seg.completedAt ?? undefined}
+                          durationSeconds={seg.durationSeconds}
+                          defaultExpanded={seg.isStreaming}
+                        />
+                      </div>,
+                    );
+                  }
+
+                  if (tool) {
+                    blocks.push(
+                      <div key={`tool-inline-${tool.id ?? i}`} className="mb-2">
+                        <ToolTimeline tools={[tool]} compact={false} />
+                      </div>,
+                    );
+                  }
+                }
+
+                // Any remaining tools beyond the last segment
+                if (tools.length > segments.length) {
+                  const remaining = tools.slice(segments.length);
+                  blocks.push(
+                    <div key="tool-remainder" className="mb-2">
+                      <ToolTimeline tools={remaining} />
+                    </div>,
+                  );
+                }
+
+                return <div className="mb-3 space-y-0">{blocks}</div>;
+              }
+
+              // Legacy single-block path
+              if (message.metadata?.thinkingContent) {
+                return (
+                  <div className="mb-3">
+                    <ThinkingBlock
+                      content={message.metadata.thinkingContent}
+                      isStreaming={message.metadata.isThinkingStreaming ?? false}
+                      startedAt={message.metadata.thinkingStartedAt}
+                      completedAt={message.metadata.thinkingCompletedAt}
+                      durationSeconds={message.metadata.thinkingDurationSeconds}
+                      defaultExpanded={message.metadata.isThinkingStreaming ?? false}
+                    />
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
 
           {/* A/B comparison response — shown instead of main content when options are present */}
           {!isUser && message.metadata?.comparisonOptions && (
@@ -439,7 +505,7 @@ const MessageBubbleComponent = function MessageBubble({
           {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
           {!isUser && cleanedContent.trim() && (
             <div className="mt-1">
-              <ArtifactBlock content={cleanedContent} />
+              <ArtifactBlock content={cleanedContent} isStreaming={message.isStreaming} />
             </div>
           )}
 
@@ -499,35 +565,64 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Search Results */}
-          {!isUser && message.metadata?.searchResults && (
-            <div className="mt-4">
-              <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
-            </div>
-          )}
+          {/* Research sources — unified panel for searchResults + citations */}
+          {!isUser &&
+            (() => {
+              // Collect sources from searchResults (legacy) and citations (server-managed tools)
+              const sources: ResearchSource[] = [];
 
-          {/* Tool timeline — compact, progressively disclosed tool activity. */}
-          {!isUser && toolTimeline.length > 0 && (
+              const sr = message.metadata?.searchResults;
+              if (sr) {
+                const query = sr.query;
+                (sr.results ?? []).forEach((r, i) => {
+                  if (r.url) {
+                    sources.push({
+                      url: r.url,
+                      title: r.title || '',
+                      snippet: r.snippet,
+                      favicon: r.favicon,
+                      citationIndex: i + 1,
+                    });
+                  }
+                });
+                // Sources array from Perplexity answer
+                (sr.sources ?? []).forEach((url) => {
+                  if (url && !sources.some((s) => s.url === url)) {
+                    sources.push({ url, title: '', citationIndex: sources.length + 1 });
+                  }
+                });
+
+                if (sources.length > 0) {
+                  return <InlineSourcesList sources={sources} query={query} />;
+                }
+              }
+
+              const citations = message.metadata?.citations;
+              if (citations && citations.length > 0) {
+                const citSources = citations
+                  .filter(
+                    (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+                      !!(c.url && c.title),
+                  )
+                  .map((c, i) => ({
+                    url: c.url,
+                    title: c.title,
+                    snippet: c.cited_text,
+                    citationIndex: i + 1,
+                  }));
+                if (citSources.length > 0) {
+                  return <InlineSourcesList sources={citSources} />;
+                }
+              }
+
+              return null;
+            })()}
+
+          {/* Tool timeline — only shown when not already rendered inline by the interleaved path */}
+          {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
             <div className="mt-3">
               <ToolTimeline tools={toolTimeline} />
             </div>
-          )}
-
-          {/* Citations (from server-managed web search tools) */}
-          {!isUser && message.metadata?.citations && message.metadata.citations.length > 0 && (
-            <CitationFooter
-              citations={message.metadata.citations
-                .filter(
-                  (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-                    !!(c.url && c.title),
-                )
-                .map((c, i) => ({
-                  index: i + 1,
-                  url: c.url,
-                  title: c.title,
-                  snippet: c.cited_text,
-                }))}
-            />
           )}
 
           {/* Thinking Steps (Collapsible) */}

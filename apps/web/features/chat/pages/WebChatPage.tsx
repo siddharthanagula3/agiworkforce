@@ -20,9 +20,12 @@ import { Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
+import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
+import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
+import { DirectoryModal } from '../components/dialogs/DirectoryModal';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -568,9 +571,23 @@ export default function WebChatPage() {
     () => messages.map((m) => toChatMessage(m, activeConversationId ?? '')),
     [messages, activeConversationId],
   );
+  const isEmptyChat = chatMessages.length === 0 && !isLoading;
+
+  // Count distinct research sources across all messages for the toggle badge.
+  // chatMessages use the chat-store shape where searchResults is a flat array.
+  const researchSourceCount = useMemo(() => {
+    let count = 0;
+    for (const m of chatMessages) {
+      const sr = m.metadata?.searchResults;
+      if (Array.isArray(sr)) {
+        count += sr.filter((r) => r.url).length;
+      }
+    }
+    return count;
+  }, [chatMessages]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Sidebar */}
       <ChatSidebar
         sessions={conversations}
@@ -584,9 +601,16 @@ export default function WebChatPage() {
       />
 
       {/* Main area + artifact workbench */}
-      <div className="flex min-w-0 flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex h-11 shrink-0 items-center justify-between border-b border-border/30 px-4">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            className={cn(
+              'flex h-11 shrink-0 items-center justify-between px-4',
+              isEmptyChat
+                ? 'border-b border-transparent'
+                : 'border-b border-[var(--chat-border-subtle)]',
+            )}
+          >
             <div className="flex items-center gap-1">
               {hasMessages && (
                 <Button
@@ -602,44 +626,75 @@ export default function WebChatPage() {
                 </Button>
               )}
             </div>
-            <ArtifactsToggleButton />
+            <div className="flex items-center gap-1.5">
+              <ResearchToggleButton count={researchSourceCount} />
+              <ArtifactsToggleButton />
+            </div>
           </div>
 
           {/* Message list */}
-          <div className="flex-1 overflow-hidden">
-            <ChatMessageList
-              messages={chatMessages}
-              isLoading={isLoading && !isStreaming}
-              onRegenerate={handleRegenerateMessage}
-              onDelete={handleDeleteMessage}
-              onSendMessage={(text) => setComposerPrefill(text)}
-            />
-          </div>
-
-          {/* Composer + Send Preview disclosure */}
-          <div
-            className={cn(
-              'mx-auto w-full max-w-3xl px-4 pb-6',
-              sidebarCollapsed ? 'max-w-4xl' : '',
-            )}
-          >
-            <div className="mb-2">
-              <SendPreview presentation={sendPreviewPresentation} />
+          {isEmptyChat ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6 pb-[8vh]">
+                <div className="mb-9">
+                  <GreetingBanner onSendMessage={(prompt) => setComposerPrefill(prompt)} />
+                </div>
+                <div className="w-full max-w-[900px]">
+                  <ChatComposerNew
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    isLoading={isLoading}
+                    isGenerating={isStreaming}
+                    placeholder="How can I help you today?"
+                    prefillText={composerPrefill}
+                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    clearSignal={composerClearSignal}
+                    emptyState
+                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                  />
+                </div>
+              </div>
             </div>
-            <ChatComposerNew
-              onSend={handleSend}
-              onStop={stopGeneration}
-              isLoading={isLoading}
-              isGenerating={isStreaming}
-              prefillText={composerPrefill}
-              onPrefillConsumed={() => setComposerPrefill(undefined)}
-              clearSignal={composerClearSignal}
-              attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-            />
-          </div>
+          ) : (
+            <>
+              <div className="min-h-0 flex-1 overflow-hidden pb-60">
+                <ChatMessageList
+                  messages={chatMessages}
+                  isLoading={isLoading && !isStreaming}
+                  onRegenerate={handleRegenerateMessage}
+                  onDelete={handleDeleteMessage}
+                  onSendMessage={(text) => setComposerPrefill(text)}
+                />
+              </div>
+
+              {/* Composer + Send Preview disclosure */}
+              <div
+                className={cn(
+                  'absolute inset-x-0 bottom-5 z-20 mx-auto w-full max-w-3xl px-4',
+                  sidebarCollapsed ? 'max-w-4xl' : '',
+                )}
+              >
+                <div className="mb-2">
+                  <SendPreview presentation={sendPreviewPresentation} />
+                </div>
+                <ChatComposerNew
+                  onSend={handleSend}
+                  onStop={stopGeneration}
+                  isLoading={isLoading}
+                  isGenerating={isStreaming}
+                  prefillText={composerPrefill}
+                  onPrefillConsumed={() => setComposerPrefill(undefined)}
+                  clearSignal={composerClearSignal}
+                  attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                />
+              </div>
+            </>
+          )}
         </div>
+        <ResearchPanel />
         <ArtifactsPanel />
       </div>
+      <DirectoryModal />
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}
