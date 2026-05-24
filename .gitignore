@@ -185,6 +185,11 @@ ms-playwright/
 .sentryclirc
 .env*.local
 
+# --- Neon local secrets ---
+.neon
+.neon.env*
+.neon.local*
+
 # --- Build outputs ---
 *.dmg
 *.exe

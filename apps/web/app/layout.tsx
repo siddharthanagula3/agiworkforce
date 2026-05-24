@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
@@ -185,10 +186,12 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <SkipLinks />
-        <Providers nonce={nonce}>{children}</Providers>
-        {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
-        {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
+        <ClerkProvider>
+          <SkipLinks />
+          <Providers nonce={nonce}>{children}</Providers>
+          {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
+          {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
+        </ClerkProvider>
       </body>
     </html>
   );

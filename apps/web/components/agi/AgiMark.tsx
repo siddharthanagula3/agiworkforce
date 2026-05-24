@@ -25,11 +25,12 @@ const STROKE_W = 1.5;
 const SPOKES = Array.from({ length: SPOKE_COUNT }, (_, i) => {
   const angle = (i * 360) / SPOKE_COUNT;
   const rad = (angle * Math.PI) / 180;
+  const round = (value: number) => Number(value.toFixed(6));
   return {
-    x1: 12 + INNER_R * Math.sin(rad),
-    y1: 12 - INNER_R * Math.cos(rad),
-    x2: 12 + OUTER_R * Math.sin(rad),
-    y2: 12 - OUTER_R * Math.cos(rad),
+    x1: round(12 + INNER_R * Math.sin(rad)),
+    y1: round(12 - INNER_R * Math.cos(rad)),
+    x2: round(12 + OUTER_R * Math.sin(rad)),
+    y2: round(12 - OUTER_R * Math.cos(rad)),
   };
 });
 
