@@ -166,7 +166,6 @@ export function DirectoryModal() {
           value={activeTab}
           onValueChange={(v) => {
             setActiveTab(v);
-            setQuery('');
           }}
           className="flex min-h-0 flex-1 flex-col"
         >
