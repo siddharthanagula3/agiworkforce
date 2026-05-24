@@ -14,6 +14,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 function mapRowToSchedule(row: Record<string, unknown>) {
   return {
@@ -47,19 +48,16 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id } = await context.params;
 
-  const { data, error } = await supabase
-    .from('scheduled_tasks')
-    .select('*')
-    .eq('id', id)
-    .eq('user_id', userId)
-    .single();
+  const [data] = await db.query<Record<string, unknown>>(
+    `select * from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
+    [id, userId],
+  );
 
-  if (error || !data) {
+  if (!data) {
     throw createError.notFound('Schedule not found');
   }
 
@@ -80,9 +78,8 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id } = await context.params;
 
   let body: Record<string, unknown>;
@@ -99,27 +96,29 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
     throw createError.validation('Prompt must be 10,000 characters or less');
   }
 
-  // Build update object from provided fields
-  const updates: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
+  // Build SET clauses dynamically from provided fields
+  const setClauses: string[] = ['updated_at = now()'];
+  const params: unknown[] = [];
 
-  if (typeof body['name'] === 'string') updates['name'] = body['name'].trim();
-  if (typeof body['prompt'] === 'string') updates['prompt'] = body['prompt'].trim();
-  if (typeof body['model'] === 'string' && body['model'].length <= 100)
-    updates['model'] = body['model'];
-  if (typeof body['recurrence'] === 'string' && VALID_RECURRENCES.includes(body['recurrence'])) {
-    updates['recurrence'] = body['recurrence'];
+  function addSet(col: string, val: unknown) {
+    params.push(val);
+    setClauses.push(`${col} = $${params.length}`);
   }
-  if (typeof body['cronExpression'] === 'string')
-    updates['cron_expression'] = body['cronExpression'];
-  if (typeof body['scheduledAt'] === 'string') updates['scheduled_at'] = body['scheduledAt'];
-  if (body['scheduledAt'] === null) updates['scheduled_at'] = null;
+
+  if (typeof body['name'] === 'string') addSet('name', body['name'].trim());
+  if (typeof body['prompt'] === 'string') addSet('prompt', body['prompt'].trim());
+  if (typeof body['model'] === 'string' && body['model'].length <= 100)
+    addSet('model', body['model']);
+  if (typeof body['recurrence'] === 'string' && VALID_RECURRENCES.includes(body['recurrence']))
+    addSet('recurrence', body['recurrence']);
+  if (typeof body['cronExpression'] === 'string') addSet('cron_expression', body['cronExpression']);
+  if (typeof body['scheduledAt'] === 'string') addSet('scheduled_at', body['scheduledAt']);
+  if (body['scheduledAt'] === null) addSet('scheduled_at', null);
   if (Array.isArray(body['daysOfWeek'])) {
     const validDays = (body['daysOfWeek'] as unknown[]).filter(
       (d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 6,
     );
-    updates['days_of_week'] = validDays;
+    addSet('days_of_week', validDays);
   }
   if (
     typeof body['dayOfMonth'] === 'number' &&
@@ -127,30 +126,35 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
     body['dayOfMonth'] >= 1 &&
     body['dayOfMonth'] <= 31
   ) {
-    updates['day_of_month'] = body['dayOfMonth'];
+    addSet('day_of_month', body['dayOfMonth']);
   }
   if (typeof body['timeOfDay'] === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(body['timeOfDay']))
-    updates['time_of_day'] = body['timeOfDay'];
+    addSet('time_of_day', body['timeOfDay']);
   if (
     typeof body['timezone'] === 'string' &&
     body['timezone'].length <= 50 &&
     /^[\w/+-]+$/.test(body['timezone'])
   )
-    updates['timezone'] = body['timezone'];
-  if (typeof body['isActive'] === 'boolean') updates['is_active'] = body['isActive'];
+    addSet('timezone', body['timezone']);
+  if (typeof body['isActive'] === 'boolean') addSet('is_active', body['isActive']);
 
-  const { data, error } = await supabase
-    .from('scheduled_tasks')
-    .update(updates)
-    .eq('id', id)
-    .eq('user_id', userId)
-    .select()
-    .single();
+  const idIdx = params.length + 1;
+  const userIdx = params.length + 2;
 
-  if (error || !data) {
-    if (error) {
-      logger.error({ error, scheduleId: id }, 'Failed to update schedule');
+  let data: Record<string, unknown>;
+  try {
+    const [updated] = await db.query<Record<string, unknown>>(
+      `update scheduled_tasks set ${setClauses.join(', ')} where id = $${idIdx} and user_id = $${userIdx} returning *`,
+      [...params, id, userId],
+    );
+    if (!updated) throw createError.notFound('Schedule not found');
+    data = updated;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'statusCode' in error) {
+      // Re-throw createError instances (e.g. notFound) directly
+      throw error;
     }
+    logger.error({ error, scheduleId: id }, 'Failed to update schedule');
     throw createError.notFound('Schedule not found');
   }
 
@@ -169,18 +173,13 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id } = await context.params;
 
-  const { error } = await supabase
-    .from('scheduled_tasks')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', userId);
-
-  if (error) {
+  try {
+    await db.execute(`delete from scheduled_tasks where id = $1 and user_id = $2`, [id, userId]);
+  } catch (error) {
     logger.error({ error, scheduleId: id }, 'Failed to delete schedule');
     throw createError.internal('Failed to delete schedule');
   }
@@ -200,9 +199,8 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id } = await context.params;
 
   let body: { isActive?: boolean };
@@ -216,18 +214,15 @@ async function handleToggleSchedule(request: NextRequest, context: RouteContext)
     throw createError.validation('isActive (boolean) is required');
   }
 
-  const { data, error } = await supabase
-    .from('scheduled_tasks')
-    .update({
-      is_active: body.isActive,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('user_id', userId)
-    .select()
-    .single();
+  const [data] = await db.query<Record<string, unknown>>(
+    `update scheduled_tasks
+     set is_active = $1, updated_at = now()
+     where id = $2 and user_id = $3
+     returning *`,
+    [body.isActive, id, userId],
+  );
 
-  if (error || !data) {
+  if (!data) {
     throw createError.notFound('Schedule not found');
   }
 

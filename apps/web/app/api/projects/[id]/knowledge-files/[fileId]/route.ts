@@ -14,6 +14,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
@@ -25,29 +26,27 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: projectId, fileId } = await context.params;
 
   // Verify project ownership
-  const { data: project, error: projectError } = await supabase
-    .from('user_projects')
-    .select('id')
-    .eq('id', projectId)
-    .eq('user_id', userId)
-    .single();
+  const [project] = await db.query<{ id: string }>(
+    `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+    [projectId, userId],
+  );
 
-  if (projectError || !project) {
+  if (!project) {
     throw createError.notFound('Project not found');
   }
 
-  const { error } = await supabase
-    .from('project_knowledge_files')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('id', fileId)
-    .eq('project_id', projectId)
-    .is('deleted_at', null);
-
-  if (error) {
+  try {
+    await db.execute(
+      `update project_knowledge_files
+       set deleted_at = now()
+       where id = $1 and project_id = $2 and deleted_at is null`,
+      [fileId, projectId],
+    );
+  } catch (error) {
     logger.error({ error, projectId, fileId }, 'Failed to delete knowledge file');
     throw createError.internal('Failed to delete knowledge file');
   }

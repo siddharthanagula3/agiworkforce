@@ -10,14 +10,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { UserMemoryRow } from '@/lib/server/neon-types';
 
 async function handleSearchMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
 
   const url = new URL(request.url);
   const query = url.searchParams.get('q')?.trim();
@@ -34,21 +35,23 @@ async function handleSearchMemories(request: NextRequest) {
   const escapedQuery = query.replace(/[%_\\]/g, '\\$&');
 
   // Simple ILIKE text search - can be upgraded to vector similarity later
-  const { data, error } = await supabase
-    .from('user_memories')
-    .select('id, content, category, source, created_at, updated_at')
-    .eq('is_deleted', false)
-    .ilike('content', `%${escapedQuery}%`)
-    .order('updated_at', { ascending: false })
-    .limit(20);
-
-  if (error) {
+  let data: UserMemoryRow[];
+  try {
+    data = await db.query<UserMemoryRow>(
+      `select id, content, category, source, created_at, updated_at
+       from user_memories
+       where user_id = $1 and is_deleted = false and content ilike $2
+       order by updated_at desc
+       limit 20`,
+      [userId, `%${escapedQuery}%`],
+    );
+  } catch (error) {
     logger.error({ error, userId }, 'Failed to search memories');
     throw createError.internal('Failed to search memories');
   }
 
   return NextResponse.json({
-    memories: (data || []).map((m) => ({
+    memories: data.map((m) => ({
       id: m.id,
       content: m.content,
       category: m.category,
