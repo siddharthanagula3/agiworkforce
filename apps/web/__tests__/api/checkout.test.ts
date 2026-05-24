@@ -24,20 +24,13 @@ vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn(() => ({ userId: 'test-user-id' })),
 }));
 
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          maybeSingle: vi.fn(() => ({
-            data: { stripe_customer_id: 'cus_test123' },
-          })),
-        })),
-      })),
-      update: vi.fn(() => ({
-        eq: vi.fn(() => ({ data: null, error: null })),
-      })),
-    })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi.fn().mockResolvedValue([{ stripe_customer_id: 'cus_test123' }]),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
