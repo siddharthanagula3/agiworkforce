@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { Globe, X, ExternalLink, Search, PanelRight, ChevronDown } from 'lucide-react';
+import { Globe, X, ExternalLink, Search, PanelRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
 import { useResearchPanelStore, type ResearchSource } from '../../stores/research-panel-store';
@@ -230,58 +230,58 @@ interface InlineSourcesListProps {
 }
 
 export function InlineSourcesList({ sources, query }: InlineSourcesListProps) {
-  const [expanded, setExpanded] = useState(false);
   const openPanel = useResearchPanelStore((s) => s.openPanel);
 
   if (sources.length === 0) return null;
 
-  const previewSources = expanded ? sources : sources.slice(0, 3);
-  const hasMore = sources.length > 3;
-
   return (
-    <div className="mt-3 space-y-2">
-      {/* Header row */}
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <div className="flex items-center gap-1.5">
-          <Globe className="h-3.5 w-3.5 text-blue-400" />
-          <span className="font-medium text-foreground">
-            {sources.length} source{sources.length !== 1 ? 's' : ''}
-          </span>
-          {query && (
-            <span className="text-muted-foreground/60 font-mono truncate max-w-[200px]">
-              &quot;{query}&quot;
+    <div
+      className="mt-2 flex flex-wrap items-center gap-1.5"
+      role="list"
+      aria-label={query ? `Sources for "${query}"` : 'Web search sources'}
+    >
+      {sources.map((source, index) => {
+        let displayHost = source.url;
+        try {
+          displayHost = new URL(source.url).hostname.replace(/^www\./, '');
+        } catch {
+          // keep raw
+        }
+
+        return (
+          <a
+            key={`${source.url}-${index}`}
+            href={source.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            role="listitem"
+            title={source.title || displayHost}
+            aria-label={`Source ${source.citationIndex ?? index + 1}: ${source.title || displayHost}`}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full border border-border/30',
+              'bg-muted/30 px-2 py-0.5 text-[11px] no-underline',
+              'text-muted-foreground hover:border-border/60 hover:bg-muted/60 hover:text-foreground',
+              'transition-colors duration-100',
+            )}
+          >
+            <span className="flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-primary/15 px-0.5 text-[9px] font-bold text-primary">
+              {source.citationIndex ?? index + 1}
             </span>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => openPanel(sources, query)}
-          className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors font-medium"
-          aria-label="Open sources panel"
-        >
-          <PanelRight className="h-3 w-3" />
-          <span>View all</span>
-        </button>
-      </div>
+            <span className="max-w-[120px] truncate">{displayHost}</span>
+          </a>
+        );
+      })}
 
-      {/* Source rows */}
-      <div className="space-y-1.5">
-        {previewSources.map((source, index) => (
-          <SourceRow key={`${source.url}-${index}`} source={source} index={index} />
-        ))}
-      </div>
-
-      {/* Show more / less toggle */}
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((p) => !p)}
-          className="flex items-center gap-1 text-xs text-primary hover:text-primary/80 transition-colors"
-        >
-          <ChevronDown className={cn('h-3 w-3 transition-transform', expanded && 'rotate-180')} />
-          {expanded ? 'Show less' : `Show all ${sources.length} sources`}
-        </button>
-      )}
+      {/* View all link -- opens the full-detail panel */}
+      <button
+        type="button"
+        onClick={() => openPanel(sources, query)}
+        className="inline-flex items-center gap-1 rounded-full border border-border/20 bg-transparent px-2 py-0.5 text-[11px] text-muted-foreground/70 transition-colors hover:border-border/50 hover:text-primary"
+        aria-label="Open all sources in panel"
+      >
+        <PanelRight className="h-2.5 w-2.5 shrink-0" aria-hidden="true" />
+        <span>All sources</span>
+      </button>
     </div>
   );
 }
