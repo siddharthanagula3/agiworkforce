@@ -1,8 +1,8 @@
 /**
- * RT-05: GitHub webhook processReview uses anon Supabase client in background task
+ * RT-05: GitHub webhook processReview uses Neon DB in background task
  *
  * Tests that:
- * - Background task uses service-role client (not anon)
+ * - Background task queries Neon DB for installation record
  * - HMAC-verified webhook finds installation and posts review
  * - Missing installation -> graceful "connect your account" comment
  * - Forged webhook (bad HMAC) rejected at route level
@@ -15,13 +15,7 @@ import { createHmac } from 'crypto';
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/utils/env', () => ({
-  requireEnv: (key: string) => {
-    const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'svc-role-key-12345',
-    };
-    return map[key] ?? '';
-  },
+  requireEnv: (_key: string) => '',
 }));
 
 const { mockLogger } = vi.hoisted(() => ({
@@ -36,40 +30,22 @@ vi.mock('@agiworkforce/types', () => ({
 
 process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test';
 
-// Track which Supabase clients were created
-interface SupabaseClientCall {
-  url: string;
-  key: string;
-}
-const supabaseClientCalls: SupabaseClientCall[] = [];
-
-// Track what the mock DB returns for installation lookups
-let mockInstallationData: unknown = {
-  user_id: 'user-1',
-  pr_review_enabled: true,
-  review_model: null,
-};
-
 const { mockPostComment } = vi.hoisted(() => ({
   mockPostComment: vi.fn().mockResolvedValue(undefined),
 }));
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn((url: string, key: string) => {
-    supabaseClientCalls.push({ url, key });
-    return {
-      from: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({
-          data: mockInstallationData,
-          error: null,
-        }),
-      }),
-    };
-  }),
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+const mockNeonQuery = vi.fn();
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // Hoist `createHmac` alongside the secret so the mock factory can verify
@@ -125,11 +101,13 @@ async function waitForBackground(): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, 50));
 }
 
-describe('RT-05: GitHub webhook uses service-role client in background task', () => {
+describe('RT-05: GitHub webhook uses Neon DB in background task', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    supabaseClientCalls.length = 0;
-    mockInstallationData = { user_id: 'user-1', pr_review_enabled: true, review_model: null };
+    // Default: installation found with pr_review_enabled
+    mockNeonQuery.mockResolvedValue([
+      { user_id: 'user-1', pr_review_enabled: true, review_model: null },
+    ]);
 
     // Default: LLM succeeds
     mockFetch.mockResolvedValue({
@@ -138,18 +116,15 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
     });
   });
 
-  it('uses service-role client (not anon) for installation lookup', async () => {
+  it('queries Neon DB for installation lookup in background task', async () => {
     const req = makeWebhookRequest(VALID_PAYLOAD);
     await POST(req);
     await waitForBackground();
 
-    // Find Supabase client calls — at least one must use the service role key
-    const usedServiceRole = supabaseClientCalls.some((c) => c.key === 'svc-role-key-12345');
-    expect(usedServiceRole).toBe(true);
-
-    // Must NOT use the anon key for any lookup
-    const usedAnonKey = supabaseClientCalls.some((c) => c.key.includes('anon'));
-    expect(usedAnonKey).toBe(false);
+    // Neon DB query should have been called for the installation lookup
+    expect(mockNeonQuery).toHaveBeenCalled();
+    const [sql] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('github_installations');
   });
 
   it('posts review comment when installation found and pr_review_enabled', async () => {
@@ -163,7 +138,7 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
   });
 
   it('posts "connect your account" when installation not found', async () => {
-    mockInstallationData = null; // No installation record
+    mockNeonQuery.mockResolvedValue([]); // No installation record
     const req = makeWebhookRequest(VALID_PAYLOAD);
     await POST(req);
     await waitForBackground();
@@ -174,7 +149,9 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
   });
 
   it('posts no comment when pr_review_enabled = false', async () => {
-    mockInstallationData = { user_id: 'user-1', pr_review_enabled: false, review_model: null };
+    mockNeonQuery.mockResolvedValue([
+      { user_id: 'user-1', pr_review_enabled: false, review_model: null },
+    ]);
     const req = makeWebhookRequest(VALID_PAYLOAD);
     await POST(req);
     await waitForBackground();
@@ -188,8 +165,8 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
     expect(res.status).toBe(401);
 
     await waitForBackground();
-    // No Supabase client should have been created (no background task)
-    expect(supabaseClientCalls.length).toBe(0);
+    // Background task should NOT have run (DB not queried)
+    expect(mockNeonQuery).not.toHaveBeenCalled();
     expect(mockPostComment).not.toHaveBeenCalled();
   });
 
@@ -203,7 +180,7 @@ describe('RT-05: GitHub webhook uses service-role client in background task', ()
   });
 
   it('handles non-existent installation_id gracefully (no-op)', async () => {
-    mockInstallationData = null;
+    mockNeonQuery.mockResolvedValue([]); // No installation record for this id
     const req = makeWebhookRequest({ ...VALID_PAYLOAD, installation: { id: 9999 } });
     await POST(req);
     await waitForBackground();
