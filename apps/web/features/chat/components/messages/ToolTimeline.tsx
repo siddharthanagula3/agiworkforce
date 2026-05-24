@@ -142,74 +142,74 @@ function formatDuration(ms: number): string {
 }
 
 /**
- * Build a compact human-readable summary from a list of tool entries.
- * Groups by canonical tool name, counts occurrences, and returns a phrase like:
- *   "Ran 5 commands, created a file, read 3 files"
+ * Build a compact semantic summary from a list of tool entries.
+ * Returns a human-readable description of what was accomplished, not a
+ * mechanical count. For example: "Read and analyzed files", "Searched the
+ * codebase", "Ran shell commands and edited code".
  */
 function buildCompactSummary(tools: ToolEntry[]): string {
-  // Normalize tool names to a canonical action phrase
-  function canonicalize(name: string): string {
+  // Bucket each tool into a semantic category
+  type Bucket =
+    | 'shell'
+    | 'file-read'
+    | 'file-write'
+    | 'web-search'
+    | 'web-fetch'
+    | 'codebase-search'
+    | 'list';
+
+  function categorize(name: string): Bucket {
     const n = name.toLowerCase();
-    if (n.includes('bash') || n.includes('command') || n.includes('exec') || n.includes('run')) {
-      return 'command';
+    if (n.includes('bash') || n.includes('exec') || n.includes('run') || n.includes('command')) {
+      return 'shell';
     }
-    if (n.includes('write') || n.includes('create') || n.includes('edit')) {
-      return 'file write';
+    if (n.includes('write') || n.includes('create') || n.includes('edit') || n.includes('patch')) {
+      return 'file-write';
     }
-    if (n.includes('read') || n.includes('view') || n.includes('cat')) {
-      return 'file read';
+    if (n.includes('read') || n.includes('view') || n.includes('cat') || n.includes('open')) {
+      return 'file-read';
     }
-    if (n.includes('search') || n.includes('grep') || n.includes('find')) {
-      return 'search';
+    if (n.includes('web') && (n.includes('search') || n.includes('query'))) {
+      return 'web-search';
+    }
+    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web')) {
+      return 'web-fetch';
+    }
+    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+      return 'codebase-search';
     }
     if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
-      return 'listing';
+      return 'list';
     }
-    if (n.includes('web') || n.includes('fetch') || n.includes('http')) {
-      return 'web request';
-    }
-    return name;
+    return 'shell';
   }
 
-  // Count by canonical name
-  const counts: Record<string, number> = {};
+  // Collect unique categories in order of first appearance
+  const seen = new Set<Bucket>();
   for (const tool of tools) {
-    const key = canonicalize(tool.name);
-    counts[key] = (counts[key] ?? 0) + 1;
+    seen.add(categorize(tool.name));
   }
+  const categories = [...seen];
 
-  // Build readable phrases
-  const phrases: string[] = [];
-  for (const [key, count] of Object.entries(counts)) {
-    switch (key) {
-      case 'command':
-        phrases.push(count === 1 ? 'ran a command' : `ran ${count} commands`);
-        break;
-      case 'file write':
-        phrases.push(count === 1 ? 'created a file' : `created ${count} files`);
-        break;
-      case 'file read':
-        phrases.push(count === 1 ? 'read a file' : `read ${count} files`);
-        break;
-      case 'search':
-        phrases.push(count === 1 ? 'searched' : `searched ${count} times`);
-        break;
-      case 'listing':
-        phrases.push(count === 1 ? 'listed files' : `listed files ${count} times`);
-        break;
-      case 'web request':
-        phrases.push(count === 1 ? 'made a web request' : `made ${count} web requests`);
-        break;
-      default:
-        phrases.push(count === 1 ? `used ${key}` : `used ${key} ${count} times`);
-    }
-  }
+  // Semantic label per bucket (no counts)
+  const semanticLabel: Record<Bucket, string> = {
+    'file-read': 'Read and analyzed files',
+    'file-write': 'Edited code',
+    shell: 'Ran shell commands',
+    'web-search': 'Searched the web',
+    'web-fetch': 'Fetched web content',
+    'codebase-search': 'Searched the codebase',
+    list: 'Listed directory contents',
+  };
 
-  if (phrases.length === 0) return `${tools.length} tool${tools.length !== 1 ? 's' : ''}`;
-  if (phrases.length === 1) return phrases[0]!;
-  if (phrases.length === 2) return `${phrases[0]} and ${phrases[1]}`;
-  const last = phrases.pop()!;
-  return `${phrases.join(', ')}, and ${last}`;
+  if (categories.length === 0) return 'Used tools';
+
+  // Combine multiple semantic labels with commas + "and"
+  const labels = categories.map((c) => semanticLabel[c]);
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  const last = labels.pop()!;
+  return `${labels.join(', ')}, and ${last}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
