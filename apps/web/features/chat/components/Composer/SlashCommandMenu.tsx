@@ -1,7 +1,14 @@
 'use client';
 
-import React, { useState, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
-import { Globe, Brain, Image, FileText, Code, Terminal } from 'lucide-react';
+import React, {
+  useState,
+  useCallback,
+  useImperativeHandle,
+  forwardRef,
+  useMemo,
+  useEffect,
+} from 'react';
+import { Globe, Brain, Image, FileText, Code, Terminal, Sparkles } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useSettingsStore } from '@/stores/settingsStore';
 
@@ -11,6 +18,8 @@ interface SlashCommand {
   description: string;
   icon: React.ElementType;
   isCustom?: boolean;
+  /** True for skill-sourced commands fetched from /api/skills. */
+  isSkill?: boolean;
 }
 
 const BUILT_IN_COMMANDS: SlashCommand[] = [
@@ -21,6 +30,16 @@ const BUILT_IN_COMMANDS: SlashCommand[] = [
   { id: 'code', label: '/code', description: 'Write or explain code', icon: Code },
 ];
 
+/** Shape returned by GET /api/skills (metadata only, no body). */
+interface SkillMeta {
+  name: string;
+  description: string;
+}
+
+interface SkillsListResponse {
+  skills: SkillMeta[];
+}
+
 export interface SlashCommandMenuHandle {
   /** Handle a keyboard key. Returns true if the event was consumed. */
   handleKey: (key: string) => boolean;
@@ -30,11 +49,47 @@ interface SlashCommandMenuProps {
   query: string;
   onSelect: (command: string) => void;
   onClose: () => void;
+  /**
+   * Called when the user selects a skill command. Receives the skill name so
+   * the composer can fetch the body and inject it as the initial message text.
+   */
+  onSkillSelect?: (skillName: string) => void;
 }
 
 export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandMenuProps>(
-  function SlashCommandMenu({ query, onSelect, onClose }, ref) {
+  function SlashCommandMenu({ query, onSelect, onClose, onSkillSelect }, ref) {
     const customCommands = useSettingsStore((s) => s.customCommands);
+
+    // Fetch skill metadata from /api/skills on mount; empty array until loaded.
+    const [skillCommands, setSkillCommands] = useState<SlashCommand[]>([]);
+    useEffect(() => {
+      let cancelled = false;
+      void (async () => {
+        try {
+          const res = await fetch('/api/skills');
+          if (!res.ok) return;
+          const json = (await res.json()) as SkillsListResponse;
+          if (cancelled) return;
+          const commands: SlashCommand[] = json.skills
+            .map(
+              (s): SlashCommand => ({
+                id: `skill:${s.name}`,
+                label: `/${s.name}`,
+                description: s.description,
+                icon: Sparkles,
+                isSkill: true,
+              }),
+            )
+            .sort((a, b) => a.label.localeCompare(b.label));
+          setSkillCommands(commands);
+        } catch {
+          // Silently ignore network errors; built-ins remain available.
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, []);
 
     const COMMANDS = useMemo<SlashCommand[]>(
       () => [
@@ -46,14 +101,15 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           icon: Terminal,
           isCustom: true as const,
         })),
+        ...skillCommands,
       ],
-      [customCommands],
+      [customCommands, skillCommands],
     );
 
     const filtered = COMMANDS.filter(
       (cmd) =>
         query === '' ||
-        cmd.id.startsWith(query.toLowerCase()) ||
+        cmd.id.replace(/^skill:/, '').startsWith(query.toLowerCase()) ||
         cmd.label.slice(1).startsWith(query.toLowerCase()),
     );
 
@@ -70,10 +126,15 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
 
     const handleSelect = useCallback(
       (id: string) => {
-        onSelect(id);
+        if (id.startsWith('skill:')) {
+          const skillName = id.slice('skill:'.length);
+          onSkillSelect?.(skillName);
+        } else {
+          onSelect(id);
+        }
         onClose();
       },
-      [onSelect, onClose],
+      [onSelect, onSkillSelect, onClose],
     );
 
     useImperativeHandle(
@@ -113,6 +174,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           {filtered.map((cmd, index) => {
             const Icon = cmd.icon;
             const isActive = index === activeIndex;
+            const isSkill = cmd.isSkill === true;
             return (
               <button
                 key={cmd.id}
@@ -131,7 +193,11 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
                 <Icon
                   className={cn(
                     'h-4 w-4 shrink-0',
-                    isActive ? 'text-primary' : 'text-muted-foreground',
+                    isActive
+                      ? 'text-primary'
+                      : isSkill
+                        ? 'text-amber-400'
+                        : 'text-muted-foreground',
                   )}
                 />
                 <span className="font-medium text-sm">{cmd.label}</span>
@@ -140,6 +206,11 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
                 >
                   {cmd.description}
                 </span>
+                {isSkill && !isActive && (
+                  <span className="ml-auto shrink-0 rounded-full bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
+                    skill
+                  </span>
+                )}
                 {isActive && (
                   <span className="ml-auto shrink-0 text-[10px] text-primary/50 font-medium">
                     Enter
@@ -151,7 +222,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         </div>
         <div className="border-t border-border/40 px-3 py-1.5">
           <span className="text-[10px] text-muted-foreground/60">
-            ↑↓ navigate · Enter select · Esc dismiss
+            up/down navigate · Enter select · Esc dismiss
           </span>
         </div>
       </div>
