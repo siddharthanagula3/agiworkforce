@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Backend/data owner
-Last updated: 2026-05-20
+Last updated: 2026-05-24
 Kind: ts-package
 Criticality: high
 
@@ -28,7 +28,7 @@ See [`docs/current/technical-architecture.md`](../../docs/current/technical-arch
 | Neon           | skeleton | —                           | —       | —        |
 | Postgres (raw) | skeleton | —                           | —       | —        |
 | Auth0          | —        | — (skeleton sketch in docs) | —       | —        |
-| Clerk          | —        | —                           | —       | —        |
+| Clerk          | —        | LIVE server verification    | —       | —        |
 | Cognito        | —        | —                           | —       | —        |
 | S3             | —        | —                           | —       | —        |
 | R2             | —        | —                           | —       | —        |
@@ -75,6 +75,12 @@ SUPABASE_URL=...
 SUPABASE_SERVICE_ROLE_KEY=...
 # OR
 DATABASE_URL=postgresql://...
+
+# Clerk auth verification, when AGI_AUTH_PROVIDER=clerk.
+# Prefer CLERK_JWT_KEY for networkless session JWT verification.
+CLERK_JWT_KEY=...
+CLERK_SECRET_KEY=...
+CLERK_AUTHORIZED_PARTIES=https://agiworkforce.com,http://localhost:3000
 ```
 
 ## Adding a new method to an interface

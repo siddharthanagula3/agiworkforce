@@ -28,6 +28,8 @@
  * | `AGI_STORAGE_PROVIDER`             | `supabase`    | Storage      |
  * | `AGI_REALTIME_PROVIDER`            | `supabase`    | Realtime     |
  * | `AGI_DATABASE_URL` / `DATABASE_URL`| —             | Neon, PG     |
+ * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`| —            | Clerk auth   |
+ * | `CLERK_AUTHORIZED_PARTIES`          | —             | Clerk auth   |
  * | `NEXT_PUBLIC_SUPABASE_URL`         | —             | Supabase     |
  * | `SUPABASE_SERVICE_ROLE_KEY`        | —             | Supabase srv |
  * | `NEXT_PUBLIC_SUPABASE_ANON_KEY`    | —             | Supabase web |
@@ -54,6 +56,7 @@ import {
   SupabaseRealtimeAdapter,
   SupabaseStorageAdapter,
 } from './adapters/supabase';
+import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter } from './adapters/neon';
 import { PostgresDatabaseAdapter } from './adapters/postgres';
 
@@ -167,12 +170,15 @@ export interface CreateAuthClientOptions {
   provider?: AuthProvider;
   supabaseUrl?: string;
   supabaseAnonKey?: string;
+  clerkSecretKey?: string;
+  clerkJwtKey?: string;
+  clerkAuthorizedParties?: string[];
 }
 
 /**
- * Build an `AuthAdapter`. Today only `supabase` is implemented; the other
- * providers' migration paths are documented in `docs/current/technical-architecture.md`
- * and the archived scaling playbook.
+ * Build an `AuthAdapter`. Supabase is the current production default. Clerk
+ * is implemented for the Supabase-to-Clerk migration path, but callers must
+ * still wire surface sign-in/session flows before flipping production env.
  */
 export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapter {
   const provider =
@@ -189,8 +195,18 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
       }
       return new SupabaseAuthAdapter({ supabaseUrl: url, supabaseAnonKey: key });
     }
+    case 'clerk': {
+      const secretKey = opts.clerkSecretKey ?? readEnv('CLERK_SECRET_KEY');
+      const jwtKey = opts.clerkJwtKey ?? readEnv('CLERK_JWT_KEY');
+      const authorizedParties =
+        opts.clerkAuthorizedParties ??
+        readEnv('CLERK_AUTHORIZED_PARTIES')
+          ?.split(',')
+          .map((party) => party.trim())
+          .filter(Boolean);
+      return new ClerkAuthAdapter({ secretKey, jwtKey, authorizedParties });
+    }
     case 'auth0':
-    case 'clerk':
     case 'cognito':
       throw new DataLayerConfigError(
         `Auth provider "${provider}" is documented in docs/current/technical-architecture.md but no adapter ships yet. ` +
