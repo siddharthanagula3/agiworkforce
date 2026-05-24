@@ -107,7 +107,7 @@ export default function MobileLegalPage() {
                   Email address and authentication token, if you create an account for the cloud
                   waitlist.
                 </td>
-                <td>Supabase (database). US region. Encrypted at rest.</td>
+                <td>Managed database. US region. Encrypted at rest.</td>
                 <td>To manage your waitlist position for cloud features.</td>
               </tr>
               <tr>

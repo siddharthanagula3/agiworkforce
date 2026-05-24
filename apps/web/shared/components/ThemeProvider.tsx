@@ -3,6 +3,10 @@ import { ThemeProvider as NextThemesProvider } from 'next-themes';
 import { type Theme, THEME_STORAGE_KEY, DEFAULT_THEME, getSystemTheme } from './ThemeConstants';
 import { ThemeContext } from './ThemeContext';
 
+const NoncedNextThemesProvider = NextThemesProvider as React.ComponentType<
+  React.ComponentProps<typeof NextThemesProvider> & { nonce?: string }
+>;
+
 /**
  * Inner context bridge: reads the resolved theme from next-themes via
  * window.document.documentElement and re-exposes it through ThemeContext.
@@ -63,16 +67,17 @@ function ThemeContextBridge({ children }: { children: React.ReactNode }) {
  * Default: 'system' (follows OS preference)
  * Storage key: THEME_STORAGE_KEY ('theme')
  */
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   return (
-    <NextThemesProvider
+    <NoncedNextThemesProvider
       attribute="class"
       defaultTheme={DEFAULT_THEME}
       storageKey={THEME_STORAGE_KEY}
       enableSystem
       disableTransitionOnChange={false}
+      nonce={nonce}
     >
       <ThemeContextBridge>{children}</ThemeContextBridge>
-    </NextThemesProvider>
+    </NoncedNextThemesProvider>
   );
 }

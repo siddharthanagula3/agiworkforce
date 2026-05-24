@@ -123,12 +123,12 @@ const COPY = {
 export const metadata: Metadata = {
   title: 'AGI Mobile — On-device AI for iOS and Android',
   description:
-    'Free AI assistant that runs on your phone. Works offline. Privacy by architecture. iOS and Android. Launching 2026-08-16.',
+    'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
     title: 'AGI Mobile — On-device AI for iOS and Android',
     description:
-      'Free AI assistant that runs on your phone. Works offline. Privacy by architecture. iOS and Android. Launching 2026-08-16.',
+      'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
     images: [{ url: '/mobile-preview.png', width: 1200, height: 630, alt: 'AGI Mobile' }],
@@ -136,40 +136,8 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile — On-device AI for iOS and Android',
-    description: 'Free. Works offline. Launches 2026-08-16.',
+    description: 'Local privacy first. BYOK explicit. Managed compute waitlisted.',
     images: ['/mobile-preview.png'],
-  },
-};
-
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'MobileApplication',
-  name: 'AGI Mobile',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'iOS, Android',
-  offers: {
-    '@type': 'Offer',
-    price: '0',
-    priceCurrency: 'USD',
-  },
-  featureList: [
-    'On-device AI inference — works offline',
-    'Apple Foundation Models integration (iPhone 15 Pro+)',
-    'Gemini Nano + Gemma + LiteRT integration (Android)',
-    'Qwen3-4B universal fallback',
-    'Text chat, image Q&A, voice, OCR, translate',
-    'Memory, Projects, Skills',
-    'HealthKit weekly recap (iOS)',
-    'Hindi language support',
-    'DPDP 2023 compliant',
-    'EU AI Act Art. 50 compliant',
-    'No training on user data',
-  ],
-  applicationSubCategory: 'AI Assistant',
-  releaseDate: '2026-08-16',
-  author: {
-    '@type': 'Organization',
-    name: 'AGI Automation LLC',
   },
 };
 
@@ -254,10 +222,6 @@ function PlayStoreBadge() {
 export default function MobilePage() {
   return (
     <div data-design="agi">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
       <main className="agi-shell">
         <Header />
 

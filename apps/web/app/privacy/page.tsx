@@ -50,7 +50,7 @@ export default function PrivacyPage() {
               <tr>
                 <td>Conversations (cloud mode)</td>
                 <td>Threads, messages, tool calls, attached files.</td>
-                <td>Cross-device sync via Supabase. RLS-enforced; only you can read your rows.</td>
+                <td>Cross-device sync. RLS-enforced; only you can read your rows.</td>
               </tr>
               <tr>
                 <td>Conversations (local mode)</td>
@@ -128,9 +128,9 @@ export default function PrivacyPage() {
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
               /subprocessors
             </Link>{' '}
-            (Supabase, Vercel, Fly.io, Stripe, Resend, Cloudflare), and only as necessary to run the
-            service. We do not sell data. We may disclose data if compelled by valid legal process;
-            we narrow such disclosures to the minimum required.
+            (hosting, database, payment, email, and security providers), and only as necessary to
+            run the service. We do not sell data. We may disclose data if compelled by valid legal
+            process; we narrow such disclosures to the minimum required.
           </p>
         </section>
 
@@ -181,10 +181,10 @@ export default function PrivacyPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">07 — International transfers and EU residency</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            <strong>EU residency status:</strong> AGI data is hosted in the United States
-            (us-east-2) by default. We do not currently offer European residency for stored data;
-            European customers&rsquo; data is transferred to and processed in the US. For EU/UK
-            personal data we use Standard Contractual Clauses through our DPA — see{' '}
+            <strong>EU residency status:</strong> AGI data is hosted in the United States by
+            default. We do not currently offer European residency for stored data; European
+            customers&rsquo; data is transferred to and processed in the US. For EU/UK personal data
+            we use Standard Contractual Clauses through our DPA — see{' '}
             <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
               /dpa
             </Link>
