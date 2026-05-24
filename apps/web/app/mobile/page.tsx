@@ -13,11 +13,9 @@ const COPY = {
   heroSubline: 'Free. Works in airplane mode.',
   heroLede:
     'Like ChatGPT, Claude, and Gemini — but it runs on your device. Your conversations never leave your phone.',
-  heroBadgeAlt_ios: 'Download on the App Store',
-  heroBadgeAlt_android: 'Get it on Google Play',
   heroChip_offline: 'Works offline',
   heroChip_ondevice: 'On-device',
-  heroChip_dpdp: 'DPDP 2023 compliant',
+  heroChip_dpdp: 'Designed for DPDP 2023',
   heroChip_free: 'Free at inference',
   heroWaitlistCta: 'Join the waitlist',
   heroWaitlistNote: 'Cloud features coming soon. Local AI is free, always.',
@@ -96,12 +94,12 @@ const COPY = {
       body: 'Crash reporting strips strings over 40 characters before transmission. Analytics is opt-in. No session replay on AI screens.',
     },
     {
-      label: 'DPDP 2023 (India)',
-      body: 'Because inference is on-device, conversation data never crosses a border. DPDP cross-border transfer requirements do not apply to your conversations.',
+      label: 'Designed for DPDP 2023 (India)',
+      body: 'Because inference is on-device, conversation data never crosses a border. Designed so that DPDP cross-border transfer requirements do not apply to your conversations. Formal compliance verification planned before launch.',
     },
     {
-      label: 'EU AI Act (Art. 50)',
-      body: 'Built-in disclosure that responses are AI-generated. Conversation exports include machine-readable markers.',
+      label: 'Planned compliance: EU AI Act (Art. 50)',
+      body: 'Planned: built-in disclosure that responses are AI-generated. Conversation exports to include machine-readable markers. Not yet certified.',
     },
     {
       label: 'GDPR',
@@ -163,62 +161,6 @@ function TrustChip({ label }: { label: string }) {
   );
 }
 
-// Placeholder app store badges (SVG text badges — no external image dep)
-function AppStoreBadge() {
-  return (
-    <a
-      href="https://apps.apple.com/app/agi/id6742817665"
-      aria-label={COPY.heroBadgeAlt_ios}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '12px 20px',
-        background: 'var(--agi-ink)',
-        color: 'var(--agi-bg)',
-        borderRadius: 10,
-        textDecoration: 'none',
-        fontWeight: 600,
-        fontSize: 14,
-        letterSpacing: '-0.01em',
-      }}
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-      </svg>
-      App Store
-    </a>
-  );
-}
-
-function PlayStoreBadge() {
-  return (
-    <a
-      href="https://play.google.com/store/apps/details?id=com.agiworkforce.app"
-      aria-label={COPY.heroBadgeAlt_android}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '12px 20px',
-        background: 'var(--agi-card)',
-        border: '1px solid var(--agi-rule-strong)',
-        color: 'var(--agi-ink)',
-        borderRadius: 10,
-        textDecoration: 'none',
-        fontWeight: 600,
-        fontSize: 14,
-        letterSpacing: '-0.01em',
-      }}
-    >
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="m3.18 23.76 11.34-11.35L3.18.24A2 2 0 0 0 2 2v20a2 2 0 0 0 1.18 1.76zM20.82 10.5l-3.3-1.85-3.54 3.54 3.54 3.55 3.31-1.86a2 2 0 0 0 0-3.38zM5.1 1.22l12.7 7.13-3.37 3.37L5.1 1.22zm0 21.56 9.33-10.5-3.37-3.38L5.1 22.78z" />
-      </svg>
-      Google Play
-    </a>
-  );
-}
-
 export default function MobilePage() {
   return (
     <div data-design="agi">
@@ -245,18 +187,30 @@ export default function MobilePage() {
           </h1>
           <p className="agi-lede">{COPY.heroLede}</p>
 
-          {/* App store badges */}
+          {/* Launch notice */}
           <div
             style={{
-              display: 'flex',
-              gap: 12,
-              flexWrap: 'wrap',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: '12px 20px',
+              background: 'var(--agi-card)',
+              border: '1px solid var(--agi-rule-strong)',
+              borderRadius: 10,
               marginTop: 32,
               marginBottom: 20,
             }}
           >
-            <AppStoreBadge />
-            <PlayStoreBadge />
+            <span
+              style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: 'var(--agi-ink)',
+                letterSpacing: '-0.01em',
+              }}
+            >
+              Coming August 2026 — iOS and Android
+            </span>
           </div>
 
           {/* Trust chips */}
