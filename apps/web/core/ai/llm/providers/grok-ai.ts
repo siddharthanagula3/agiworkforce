@@ -5,26 +5,8 @@
  * Updated: Jan 3rd 2026 - Updated to Grok-4 series
  */
 
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    logger.error('[Grok Provider] Failed to get auth token:', error);
-    return null;
-  }
-}
+import { getAuthToken } from './get-auth-token';
 
 // SECURITY: All API calls go through Netlify proxy functions
 // Environment variables with VITE_ prefix are exposed to the browser (security risk)
