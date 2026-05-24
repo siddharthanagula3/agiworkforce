@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { MARKETING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: "CLI — The operator's command line | AGI",
+  title: "CLI: The operator's command line | AGI",
   description:
     'Pure Rust. Ratatui TUI. Same engine that powers every other surface. The CLI is the product; the apps are surfaces over it.',
   alternates: { canonical: 'https://agiworkforce.com/cli' },
@@ -51,7 +52,7 @@ const FEATURES = [
   },
   {
     label: 'Plugin system',
-    body: '150+ built-in skills. Extend with your own plugins via the plugin manifest format.',
+    body: `${MARKETING.skills.display} built-in skills. Extend with your own plugins via the plugin manifest format.`,
   },
   {
     label: 'BYOK across providers',
@@ -169,7 +170,7 @@ export default function CliPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">agiworkforce — the operator&rsquo;s CLI.</h1>
+          <h1 className="agi-page-h1">agiworkforce: the operator&rsquo;s CLI.</h1>
           <p className="agi-page-lede">
             Pure Rust. Ratatui TUI. Same engine that powers every other surface.{' '}
             <strong>The CLI is the product. The apps are surfaces over it.</strong>
@@ -215,9 +216,9 @@ export default function CliPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Install — pick one</p>
+          <p className="agi-section-eyebrow">Install: pick one</p>
           <div className="agi-terminal">
-            <div className="agi-terminal-bar">~/agi-workforce — install</div>
+            <div className="agi-terminal-bar">~/agi-workforce: install</div>
             <pre className="agi-terminal-pre">
               <span className="agi-terminal-comment"># Homebrew (macOS, Linux)</span>
               {'\n'}
@@ -265,7 +266,7 @@ export default function CliPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Non-interactive runs</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce exec</code> is the headless mode — pipe a task, get an answer,
+                <code>agiworkforce exec</code> is the headless mode. Pipe a task, get an answer,
                 ship to CI. No TUI, no editor, just stdin/stdout.
               </p>
             </li>
@@ -279,8 +280,8 @@ export default function CliPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Sandboxed by default</h3>
               <p className="agi-reason-p">
-                macOS Seatbelt and Linux bwrap on by default for dangerous tools — file writes,
-                shell execution, network access.
+                macOS Seatbelt and Linux bwrap on by default for dangerous tools: file writes, shell
+                execution, network access.
               </p>
             </li>
           </ul>

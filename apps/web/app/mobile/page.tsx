@@ -8,11 +8,11 @@ import { MARKETING } from '../../lib/marketing-constants';
 // in one place. Future Hindi translation = one object swap.
 const COPY = {
   // Hero
-  heroEyebrow: 'iOS + Android — launching 2026-08-16',
+  heroEyebrow: 'iOS + Android, launching 2026-08-16',
   heroHeadline: 'AGI on your phone.',
   heroSubline: 'Free. Works in airplane mode.',
   heroLede:
-    'Like ChatGPT, Claude, and Gemini — but it runs on your device. Your conversations never leave your phone.',
+    'Like ChatGPT, Claude, and Gemini. But it runs on your device. Your conversations never leave your phone.',
   heroChip_offline: 'Works offline',
   heroChip_ondevice: 'On-device',
   heroChip_dpdp: 'Designed for DPDP 2023',
@@ -48,12 +48,12 @@ const COPY = {
   onDeviceIosLabel: 'On iPhone',
   onDeviceAndroidLabel: 'On Android',
   onDeviceIosRows: [
-    ['Apple Foundation Models', 'iPhone 15 Pro and later — on-chip, ~4K context'],
-    ['Qwen3-4B (executorch)', 'iPhone 12 and later — on-device, universal fallback'],
+    ['Apple Foundation Models', 'iPhone 15 Pro and later, on-chip, ~4K context'],
+    ['Qwen3-4B (executorch)', 'iPhone 12 and later, on-device, universal fallback'],
   ],
   onDeviceAndroidRows: [
     ['Gemini Nano (AICore)', 'Pixel 9+, Galaxy S26+, OnePlus 15+ with 12 GB RAM'],
-    ['Gemma + LiteRT', "All Android devices with 4 GB+ RAM — Google's own path"],
+    ['Gemma + LiteRT', "All Android devices with 4 GB+ RAM. Google's own path."],
     ['Qwen3-4B (universal)', 'Mid-range: Redmi Note 13, Vivo Y200, and similar'],
   ],
   onDeviceNote:
@@ -70,7 +70,11 @@ const COPY = {
     { icon: '🌐', label: 'Translate', body: '60+ language pairs, on-device, no internet needed.' },
     { icon: '🧠', label: 'Memory', body: 'Remembers facts you tell it across conversations.' },
     { icon: '📁', label: 'Projects', body: 'Topic workspaces. Keep context separate.' },
-    { icon: '⚡', label: 'Skills', body: '150+ built-in skills across 23 categories.' },
+    {
+      icon: '⚡',
+      label: 'Skills',
+      body: `${MARKETING.skills.display} built-in skills across ${MARKETING.categories.display} categories.`,
+    },
     { icon: '❤️', label: 'HealthKit', body: 'iOS: weekly activity recap in plain language.' },
     { icon: '🇮🇳', label: 'Hindi', body: 'Validated against a 60-prompt native-speaker suite.' },
   ],
@@ -110,7 +114,7 @@ const COPY = {
   // Waitlist tease
   waitlistEyebrow: 'Cloud is coming',
   waitlistHeadline: 'More power on the way.',
-  waitlistLede: `${MARKETING.providers.display} providers — Claude, GPT-5, Gemini cloud, and more — are coming to AGI Mobile. They are waitlist-gated while we get the local experience right. Local AI is free, always.`,
+  waitlistLede: `${MARKETING.providers.display} providers (Claude, GPT-5, Gemini cloud, and more) are coming to AGI Mobile. They are waitlist-gated while we get the local experience right. Local AI is free, always.`,
   waitlistCta: 'Join the cloud waitlist',
 
   // Footer section
@@ -119,12 +123,12 @@ const COPY = {
 } as const;
 
 export const metadata: Metadata = {
-  title: 'AGI Mobile — On-device AI for iOS and Android',
+  title: 'AGI Mobile: On-device AI for iOS and Android',
   description:
     'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
-    title: 'AGI Mobile — On-device AI for iOS and Android',
+    title: 'AGI Mobile: On-device AI for iOS and Android',
     description:
       'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
     type: 'website',
@@ -133,7 +137,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI Mobile — On-device AI for iOS and Android',
+    title: 'AGI Mobile: On-device AI for iOS and Android',
     description: 'Local privacy first. BYOK explicit. Managed compute waitlisted.',
     images: ['/mobile-preview.png'],
   },
@@ -209,7 +213,7 @@ export default function MobilePage() {
                 letterSpacing: '-0.01em',
               }}
             >
-              Coming August 2026 — iOS and Android
+              Coming August 2026: iOS and Android
             </span>
           </div>
 
@@ -269,11 +273,11 @@ export default function MobilePage() {
             {/* Phone mockup placeholders */}
             {[
               {
-                title: 'Chat — on-device, offline',
+                title: 'Chat: on-device, offline',
                 desc: 'Conversation screen with streaming response from Apple Foundation Models. No network activity indicator visible.',
               },
               {
-                title: 'Image Q&A — point and ask',
+                title: 'Image Q&A: point and ask',
                 desc: 'Camera feed with AGI overlay. User pointed at a handwritten recipe. AI extracted ingredients and suggested substitutions.',
               },
               {
@@ -543,7 +547,7 @@ export default function MobilePage() {
           <div className="agi-colophon">
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Developer</span>
-              <span className="agi-colophon-val">{COPY.aboutCompany} — Delaware, USA</span>
+              <span className="agi-colophon-val">{COPY.aboutCompany}, Delaware, USA</span>
             </div>
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Platform</span>

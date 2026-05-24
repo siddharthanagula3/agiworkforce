@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'VS Code Extension — Multi-provider coding assistant | AGI',
+  title: 'VS Code Extension: Multi-provider coding assistant | AGI',
   description:
     '10+ providers in one VS Code extension. A standalone AGI chat panel for code questions, refactors, and slash commands. Bring your own keys.',
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
@@ -238,19 +238,19 @@ export default function VscodeExtensionPage() {
             <tbody>
               <tr>
                 <td>Marketplace</td>
-                <td>Listing in review — install via VSIX from GitHub Releases</td>
+                <td>Listing in review; install via VSIX from GitHub Releases</td>
               </tr>
               <tr>
                 <td>Cursor / forks</td>
-                <td>Compatible with VS Code forks — install the same VSIX</td>
+                <td>Compatible with VS Code forks; install the same VSIX</td>
               </tr>
               <tr>
                 <td>Desktop bridge</td>
-                <td>Optional — connects to desktop on localhost:8787 for full computer use</td>
+                <td>Optional: connects to desktop on localhost:8787 for full computer use</td>
               </tr>
               <tr>
                 <td>Auth</td>
-                <td>BYOK across providers — no keys leave your editor unencrypted</td>
+                <td>BYOK across providers; no keys leave your editor unencrypted</td>
               </tr>
             </tbody>
           </table>
