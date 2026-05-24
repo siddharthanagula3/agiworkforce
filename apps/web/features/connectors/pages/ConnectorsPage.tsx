@@ -42,6 +42,12 @@ type ConnectorCategory =
   | 'Finance'
   | 'Social'
   | 'AI'
+  | 'Communication'
+  | 'Cloud'
+  | 'Data'
+  | 'Design'
+  | 'Storage'
+  | 'Healthcare'
   | 'Exclusive';
 type AuthType = 'oauth' | 'api_key' | 'connection_string' | 'pat';
 type Phase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -465,18 +471,722 @@ const CONNECTORS: Connector[] = [
     iconEmoji: '🦙',
     exclusive: true,
   },
+
+  // ── Productivity (additional) ──────────────────────────────────────────────
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    description: 'Manage tables, records, and views in your Airtable bases programmatically.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 2,
+    iconBg: 'from-yellow-400 to-orange-500',
+    iconText: 'AT',
+    iconEmoji: '🗂️',
+  },
+  {
+    id: 'monday',
+    name: 'Monday.com',
+    description: 'Create boards, items, and automations in your Monday.com workspace.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-rose-500 to-pink-600',
+    iconText: 'M',
+    iconEmoji: '📋',
+  },
+  {
+    id: 'clickup',
+    name: 'ClickUp',
+    description: 'Manage tasks, docs, goals, and workspaces in ClickUp.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 2,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'CU',
+    iconEmoji: '✅',
+  },
+  {
+    id: 'trello',
+    name: 'Trello',
+    description: 'Create and move cards, manage boards and lists in Trello.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-blue-500 to-cyan-500',
+    iconText: 'TR',
+    iconEmoji: '📌',
+  },
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    description: 'Create tasks, manage projects, and sync your Todoist inbox.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-red-500 to-rose-600',
+    iconText: 'TD',
+    iconEmoji: '✅',
+  },
+  {
+    id: 'basecamp',
+    name: 'Basecamp',
+    description: 'Access projects, to-dos, messages, and schedules in Basecamp.',
+    category: 'Productivity',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-600 to-emerald-700',
+    iconText: 'BC',
+    iconEmoji: '⛺',
+  },
+  {
+    id: 'evernote',
+    name: 'Evernote',
+    description: 'Search, create, and manage notes and notebooks in Evernote.',
+    category: 'Productivity',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-green-500 to-green-700',
+    iconText: 'EN',
+    iconEmoji: '🐘',
+  },
+
+  // ── Developer (additional) ─────────────────────────────────────────────────
+  {
+    id: 'vercel',
+    name: 'Vercel',
+    description: 'Trigger deployments, inspect logs, and manage projects on Vercel.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 2,
+    iconBg: 'from-gray-700 to-black',
+    iconText: 'VL',
+    iconEmoji: '▲',
+  },
+  {
+    id: 'sentry',
+    name: 'Sentry',
+    description: 'Query errors, manage issues, and inspect stack traces in Sentry.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-violet-600 to-purple-800',
+    iconText: 'SN',
+    iconEmoji: '🐛',
+  },
+  {
+    id: 'datadog',
+    name: 'Datadog',
+    description: 'Query metrics, logs, and traces; manage monitors and dashboards.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 3,
+    iconBg: 'from-purple-500 to-violet-700',
+    iconText: 'DD',
+    iconEmoji: '📊',
+  },
+  {
+    id: 'pagerduty',
+    name: 'PagerDuty',
+    description: 'Acknowledge incidents, manage on-call schedules, and view alerts.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-500 to-emerald-700',
+    iconText: 'PD',
+    iconEmoji: '🚨',
+  },
+  {
+    id: 'circleci',
+    name: 'CircleCI',
+    description: 'Trigger pipelines, inspect job results, and manage workflows.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'CI',
+    iconEmoji: '🔄',
+  },
+  {
+    id: 'gitlab',
+    name: 'GitLab',
+    description: 'Manage repos, merge requests, pipelines, and issues in GitLab.',
+    category: 'Developer',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 2,
+    iconBg: 'from-orange-500 to-red-600',
+    iconText: 'GL',
+    iconEmoji: '🦊',
+  },
+  {
+    id: 'bitbucket',
+    name: 'Bitbucket',
+    description: 'Manage pull requests, pipelines, and repositories in Bitbucket.',
+    category: 'Developer',
+    authType: 'oauth',
+    actionCount: 7,
+    phase: 3,
+    iconBg: 'from-blue-500 to-indigo-700',
+    iconText: 'BB',
+    iconEmoji: '🪣',
+  },
+
+  // ── Communication ──────────────────────────────────────────────────────────
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    description: 'Send messages, manage bots, and interact with Telegram channels.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'TG',
+    iconEmoji: '✈️',
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp Business',
+    description: 'Send messages and notifications via the WhatsApp Business API.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 4,
+    iconBg: 'from-green-500 to-emerald-600',
+    iconText: 'WA',
+    iconEmoji: '💬',
+  },
+  {
+    id: 'twilio',
+    name: 'Twilio',
+    description: 'Send SMS, WhatsApp messages, and make voice calls via Twilio.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-red-600 to-rose-700',
+    iconText: 'TW',
+    iconEmoji: '📱',
+  },
+  {
+    id: 'sendgrid',
+    name: 'SendGrid',
+    description: 'Send transactional and marketing emails via SendGrid.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-blue-500 to-cyan-600',
+    iconText: 'SG',
+    iconEmoji: '📧',
+  },
+
+  // ── Cloud / Infra ──────────────────────────────────────────────────────────
+  {
+    id: 'aws',
+    name: 'Amazon Web Services',
+    description: 'Manage S3 buckets, Lambda functions, EC2 instances, and more via AWS APIs.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 10,
+    phase: 4,
+    iconBg: 'from-orange-400 to-amber-600',
+    iconText: 'AWS',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'gcp',
+    name: 'Google Cloud',
+    description: 'Manage GCS, Pub/Sub, BigQuery, and Cloud Run via GCP APIs.',
+    category: 'Cloud',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 4,
+    iconBg: 'from-blue-400 to-green-500',
+    iconText: 'GCP',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'azure',
+    name: 'Microsoft Azure',
+    description: 'Manage Blob Storage, Functions, VMs, and Azure services.',
+    category: 'Cloud',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 4,
+    iconBg: 'from-blue-500 to-cyan-600',
+    iconText: 'AZ',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    description: 'Manage DNS, Workers, Pages, KV storage, and CDN rules via Cloudflare API.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 4,
+    iconBg: 'from-orange-500 to-amber-500',
+    iconText: 'CF',
+    iconEmoji: '🔥',
+  },
+  {
+    id: 'digitalocean',
+    name: 'DigitalOcean',
+    description: 'Create and manage Droplets, Spaces, databases, and apps on DigitalOcean.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconText: 'DO',
+    iconEmoji: '🌊',
+  },
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  {
+    id: 'snowflake',
+    name: 'Snowflake',
+    description: 'Run queries, manage warehouses, and access data in Snowflake.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'SF',
+    iconEmoji: '❄️',
+  },
+  {
+    id: 'bigquery',
+    name: 'BigQuery',
+    description: 'Run SQL queries and manage datasets in Google BigQuery.',
+    category: 'Data',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-blue-400 to-indigo-500',
+    iconText: 'BQ',
+    iconEmoji: '📊',
+  },
+  {
+    id: 'databricks',
+    name: 'Databricks',
+    description: 'Run notebooks, manage clusters, and query Delta tables in Databricks.',
+    category: 'Data',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 5,
+    iconBg: 'from-red-500 to-orange-600',
+    iconText: 'DB',
+    iconEmoji: '🧱',
+  },
+  {
+    id: 'postgresql',
+    name: 'PostgreSQL',
+    description: 'Connect to any PostgreSQL database and run queries directly.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-blue-600 to-indigo-800',
+    iconText: 'PG',
+    iconEmoji: '🐘',
+  },
+  {
+    id: 'mongodb',
+    name: 'MongoDB',
+    description: 'Query collections, insert documents, and manage indexes in MongoDB.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-500 to-emerald-700',
+    iconText: 'MG',
+    iconEmoji: '🍃',
+  },
+  {
+    id: 'redis',
+    name: 'Redis',
+    description: 'Get, set, and manage keys in Redis or Upstash.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-red-500 to-rose-700',
+    iconText: 'RD',
+    iconEmoji: '⚡',
+  },
+  {
+    id: 'elasticsearch',
+    name: 'Elasticsearch',
+    description: 'Index documents, run full-text queries, and manage Elasticsearch clusters.',
+    category: 'Data',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-yellow-400 to-amber-600',
+    iconText: 'ES',
+    iconEmoji: '🔍',
+  },
+
+  // ── CRM (additional) ───────────────────────────────────────────────────────
+  {
+    id: 'pipedrive',
+    name: 'Pipedrive',
+    description: 'Manage deals, contacts, and pipelines in your Pipedrive CRM.',
+    category: 'CRM',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 3,
+    iconBg: 'from-green-500 to-teal-600',
+    iconText: 'PD',
+    iconEmoji: '🎯',
+  },
+  {
+    id: 'zendesk',
+    name: 'Zendesk',
+    description: 'Manage tickets, users, and support workflows in Zendesk.',
+    category: 'CRM',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 3,
+    iconBg: 'from-green-600 to-teal-700',
+    iconText: 'ZD',
+    iconEmoji: '💬',
+  },
+  {
+    id: 'freshdesk',
+    name: 'Freshdesk',
+    description: 'Create and update tickets, contacts, and agents in Freshdesk.',
+    category: 'CRM',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-teal-500 to-cyan-600',
+    iconText: 'FD',
+    iconEmoji: '🎧',
+  },
+
+  // ── Design ────────────────────────────────────────────────────────────────
+  {
+    id: 'figma',
+    name: 'Figma',
+    description: 'Read files, inspect components, and export assets from Figma.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'FG',
+    iconEmoji: '🎨',
+  },
+  {
+    id: 'canva',
+    name: 'Canva',
+    description: 'Create designs, access brand assets, and manage Canva templates.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 5,
+    iconBg: 'from-cyan-400 to-blue-500',
+    iconText: 'CV',
+    iconEmoji: '🖼️',
+  },
+  {
+    id: 'adobe',
+    name: 'Adobe Creative Cloud',
+    description: 'Access Creative Cloud assets, fonts, and collaborate on projects.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-red-600 to-rose-800',
+    iconText: 'Ae',
+    iconEmoji: '🎨',
+  },
+
+  // ── Finance (additional) ───────────────────────────────────────────────────
+  {
+    id: 'quickbooks',
+    name: 'QuickBooks',
+    description: 'Manage invoices, expenses, and financial reports in QuickBooks.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 7,
+    phase: 6,
+    iconBg: 'from-green-600 to-emerald-700',
+    iconText: 'QB',
+    iconEmoji: '💰',
+  },
+  {
+    id: 'xero',
+    name: 'Xero',
+    description: 'Manage accounts, invoices, and payroll in Xero accounting.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 6,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'XR',
+    iconEmoji: '💵',
+  },
+  {
+    id: 'paypal',
+    name: 'PayPal',
+    description: 'Send payments, manage invoices, and query transactions via PayPal.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 6,
+    iconBg: 'from-blue-600 to-indigo-700',
+    iconText: 'PP',
+    iconEmoji: '💳',
+  },
+  {
+    id: 'square',
+    name: 'Square',
+    description: 'Manage payments, inventory, and customers via the Square API.',
+    category: 'Finance',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 6,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'SQ',
+    iconEmoji: '⬛',
+  },
+  {
+    id: 'plaid',
+    name: 'Plaid',
+    description: 'Connect bank accounts and access financial data via Plaid.',
+    category: 'Finance',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 7,
+    iconBg: 'from-indigo-500 to-blue-700',
+    iconText: 'PL',
+    iconEmoji: '🏦',
+  },
+
+  // ── Storage ───────────────────────────────────────────────────────────────
+  {
+    id: 'dropbox',
+    name: 'Dropbox',
+    description: 'Upload, download, and manage files in your Dropbox account.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconText: 'DX',
+    iconEmoji: '📦',
+  },
+  {
+    id: 'box',
+    name: 'Box',
+    description: 'Manage files, folders, and collaborations in Box cloud storage.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-blue-600 to-blue-800',
+    iconText: 'BX',
+    iconEmoji: '📦',
+  },
+  {
+    id: 'sharepoint',
+    name: 'SharePoint',
+    description: 'Read, write, and manage files and sites in Microsoft SharePoint.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-blue-500 to-indigo-700',
+    iconText: 'SP',
+    iconEmoji: '📁',
+  },
+
+  // ── Social (additional) ────────────────────────────────────────────────────
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    description: 'Post content, manage media, and retrieve insights via the Instagram Graph API.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 7,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'IG',
+    iconEmoji: '📸',
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    description: 'Manage pages, posts, ads, and audience insights via Facebook API.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 7,
+    iconBg: 'from-blue-600 to-blue-800',
+    iconText: 'FB',
+    iconEmoji: '👤',
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    description: 'Search videos, manage playlists, and access channel analytics.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 7,
+    iconBg: 'from-red-500 to-red-700',
+    iconText: 'YT',
+    iconEmoji: '▶️',
+  },
+
+  // ── Marketing (additional) ─────────────────────────────────────────────────
+  {
+    id: 'posthog',
+    name: 'PostHog',
+    description: 'Query events, funnels, feature flags, and analytics in PostHog.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 5,
+    iconBg: 'from-orange-500 to-red-600',
+    iconText: 'PH',
+    iconEmoji: '🦔',
+  },
+  {
+    id: 'segment',
+    name: 'Segment',
+    description: 'Track events, manage audiences, and configure destinations in Segment.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-green-500 to-teal-600',
+    iconText: 'SG',
+    iconEmoji: '📡',
+  },
+  {
+    id: 'mixpanel',
+    name: 'Mixpanel',
+    description: 'Query events, funnels, and retention data in Mixpanel.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-purple-500 to-indigo-600',
+    iconText: 'MX',
+    iconEmoji: '📊',
+  },
+
+  // ── AI / ML (additional) ──────────────────────────────────────────────────
+  {
+    id: 'huggingface',
+    name: 'Hugging Face',
+    description: 'Run inference on hosted models and browse the Hub via the Hugging Face API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 8,
+    iconBg: 'from-yellow-400 to-amber-600',
+    iconText: 'HF',
+    iconEmoji: '🤗',
+  },
+  {
+    id: 'wandb',
+    name: 'Weights and Biases',
+    description: 'Log experiments, compare runs, and manage ML artifacts in W&B.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 8,
+    iconBg: 'from-amber-500 to-yellow-600',
+    iconText: 'WB',
+    iconEmoji: '📈',
+  },
+  {
+    id: 'anthropic-api',
+    name: 'Anthropic',
+    description: 'Run Claude models and manage API usage directly via the Anthropic API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 8,
+    iconBg: 'from-orange-400 to-amber-600',
+    iconText: 'AN',
+    iconEmoji: '🤖',
+  },
+  {
+    id: 'replicate',
+    name: 'Replicate',
+    description: 'Run open-source ML models in the cloud via the Replicate API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 8,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'RC',
+    iconEmoji: '🔁',
+  },
+
+  // ── Healthcare ─────────────────────────────────────────────────────────────
+  {
+    id: 'epic-fhir',
+    name: 'Epic FHIR',
+    description: 'Access patient records, appointments, and clinical data via Epic FHIR R4.',
+    category: 'Healthcare',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 9,
+    iconBg: 'from-red-500 to-rose-700',
+    iconText: 'EP',
+    iconEmoji: '🏥',
+  },
+  {
+    id: 'cerner',
+    name: 'Cerner',
+    description: 'Query patient data, clinical events, and care plans via Cerner FHIR APIs.',
+    category: 'Healthcare',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 9,
+    iconBg: 'from-blue-600 to-indigo-800',
+    iconText: 'CN',
+    iconEmoji: '🏥',
+  },
 ];
 
 const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
   { label: 'All', value: 'All' },
   { label: 'Productivity', value: 'Productivity' },
   { label: 'Developer', value: 'Developer' },
+  { label: 'Communication', value: 'Communication' },
   { label: 'CRM', value: 'CRM' },
   { label: 'Marketing', value: 'Marketing' },
   { label: 'Finance', value: 'Finance' },
   { label: 'Social', value: 'Social' },
+  { label: 'Cloud', value: 'Cloud' },
+  { label: 'Data', value: 'Data' },
+  { label: 'Design', value: 'Design' },
+  { label: 'Storage', value: 'Storage' },
   { label: 'AI', value: 'AI' },
-  { label: '⭐ AGI Exclusive', value: 'Exclusive' },
+  { label: 'Healthcare', value: 'Healthcare' },
+  { label: 'AGI Exclusive', value: 'Exclusive' },
 ];
 
 // ─── Connection status filter ──────────────────────────────────────────────────
@@ -895,6 +1605,9 @@ export function ConnectorsPage() {
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [permissionsConnector, setPermissionsConnector] = useState<Connector | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const ITEMS_PER_PAGE = 20;
 
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
@@ -948,6 +1661,20 @@ export function ConnectorsPage() {
     };
   }, []);
 
+  // Reset to page 1 whenever filters change
+  const prevFiltersRef = React.useRef({ searchQuery, activeCategory, activeStatus });
+  React.useEffect(() => {
+    const prev = prevFiltersRef.current;
+    if (
+      prev.searchQuery !== searchQuery ||
+      prev.activeCategory !== activeCategory ||
+      prev.activeStatus !== activeStatus
+    ) {
+      setCurrentPage(1);
+      prevFiltersRef.current = { searchQuery, activeCategory, activeStatus };
+    }
+  }, [searchQuery, activeCategory, activeStatus]);
+
   const filteredConnectors = useMemo(() => {
     return CONNECTORS.filter((c) => {
       const matchesCategory = activeCategory === 'All' || c.category === activeCategory;
@@ -965,6 +1692,12 @@ export function ConnectorsPage() {
 
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
+
+  const totalAvailablePages = Math.ceil(availableConnectors.length / ITEMS_PER_PAGE);
+  const pagedAvailableConnectors = availableConnectors.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
 
   const handleConnect = useCallback(async (id: string) => {
     const connector = CONNECTORS.find((c) => c.id === id);
@@ -1170,7 +1903,7 @@ export function ConnectorsPage() {
                 </h2>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {availableConnectors.map((connector) => (
+                {pagedAvailableConnectors.map((connector) => (
                   <ConnectorCard
                     key={connector.id}
                     connector={connector}
@@ -1182,6 +1915,33 @@ export function ConnectorsPage() {
                   />
                 ))}
               </div>
+
+              {/* Pagination controls */}
+              {totalAvailablePages > 1 && (
+                <div className="mt-6 flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 border-white/[0.08] text-xs disabled:opacity-40"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    Page {currentPage} of {totalAvailablePages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5 border-white/[0.08] text-xs disabled:opacity-40"
+                    onClick={() => setCurrentPage((p) => Math.min(totalAvailablePages, p + 1))}
+                    disabled={currentPage >= totalAvailablePages}
+                  >
+                    Next
+                  </Button>
+                </div>
+              )}
             </section>
           )}
 

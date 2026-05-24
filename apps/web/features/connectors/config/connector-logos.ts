@@ -160,6 +160,312 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
 
+  // Productivity (additional)
+  airtable: {
+    url: 'https://www.google.com/s2/favicons?domain=airtable.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  monday: {
+    url: 'https://www.google.com/s2/favicons?domain=monday.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  clickup: {
+    url: 'https://www.google.com/s2/favicons?domain=clickup.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  trello: {
+    url: 'https://www.google.com/s2/favicons?domain=trello.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  todoist: {
+    url: 'https://www.google.com/s2/favicons?domain=todoist.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  basecamp: {
+    url: 'https://www.google.com/s2/favicons?domain=basecamp.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  evernote: {
+    url: 'https://www.google.com/s2/favicons?domain=evernote.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Developer (additional)
+  vercel: {
+    url: 'https://www.google.com/s2/favicons?domain=vercel.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  sentry: {
+    url: 'https://www.google.com/s2/favicons?domain=sentry.io&sz=64',
+    width: 32,
+    height: 32,
+  },
+  datadog: {
+    url: 'https://www.google.com/s2/favicons?domain=datadoghq.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  pagerduty: {
+    url: 'https://www.google.com/s2/favicons?domain=pagerduty.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  circleci: {
+    url: 'https://www.google.com/s2/favicons?domain=circleci.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  gitlab: {
+    url: 'https://www.google.com/s2/favicons?domain=gitlab.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  bitbucket: {
+    url: 'https://www.google.com/s2/favicons?domain=bitbucket.org&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Communication
+  telegram: {
+    url: 'https://www.google.com/s2/favicons?domain=telegram.org&sz=64',
+    width: 32,
+    height: 32,
+  },
+  whatsapp: {
+    url: 'https://www.google.com/s2/favicons?domain=whatsapp.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  twilio: {
+    url: 'https://www.google.com/s2/favicons?domain=twilio.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  sendgrid: {
+    url: 'https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Cloud / Infra
+  aws: {
+    url: 'https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  gcp: {
+    url: 'https://www.google.com/s2/favicons?domain=cloud.google.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  azure: {
+    url: 'https://www.google.com/s2/favicons?domain=azure.microsoft.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  cloudflare: {
+    url: 'https://www.google.com/s2/favicons?domain=cloudflare.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  digitalocean: {
+    url: 'https://www.google.com/s2/favicons?domain=digitalocean.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Data
+  snowflake: {
+    url: 'https://www.google.com/s2/favicons?domain=snowflake.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  bigquery: {
+    url: 'https://www.google.com/s2/favicons?domain=cloud.google.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  databricks: {
+    url: 'https://www.google.com/s2/favicons?domain=databricks.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  postgresql: {
+    url: 'https://www.google.com/s2/favicons?domain=postgresql.org&sz=64',
+    width: 32,
+    height: 32,
+  },
+  mongodb: {
+    url: 'https://www.google.com/s2/favicons?domain=mongodb.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  redis: {
+    url: 'https://www.google.com/s2/favicons?domain=redis.io&sz=64',
+    width: 32,
+    height: 32,
+  },
+  elasticsearch: {
+    url: 'https://www.google.com/s2/favicons?domain=elastic.co&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // CRM (additional)
+  pipedrive: {
+    url: 'https://www.google.com/s2/favicons?domain=pipedrive.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  zendesk: {
+    url: 'https://www.google.com/s2/favicons?domain=zendesk.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  freshdesk: {
+    url: 'https://www.google.com/s2/favicons?domain=freshdesk.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Design
+  figma: {
+    url: 'https://www.google.com/s2/favicons?domain=figma.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  canva: {
+    url: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  adobe: {
+    url: 'https://www.google.com/s2/favicons?domain=adobe.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Finance (additional)
+  quickbooks: {
+    url: 'https://www.google.com/s2/favicons?domain=quickbooks.intuit.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  xero: {
+    url: 'https://www.google.com/s2/favicons?domain=xero.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  paypal: {
+    url: 'https://www.google.com/s2/favicons?domain=paypal.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  square: {
+    url: 'https://www.google.com/s2/favicons?domain=squareup.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  plaid: {
+    url: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Storage
+  dropbox: {
+    url: 'https://www.google.com/s2/favicons?domain=dropbox.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  box: {
+    url: 'https://www.google.com/s2/favicons?domain=box.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  sharepoint: {
+    url: 'https://www.google.com/s2/favicons?domain=sharepoint.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Social (additional)
+  instagram: {
+    url: 'https://www.google.com/s2/favicons?domain=instagram.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  facebook: {
+    url: 'https://www.google.com/s2/favicons?domain=facebook.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  youtube: {
+    url: 'https://www.google.com/s2/favicons?domain=youtube.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Marketing (additional)
+  posthog: {
+    url: 'https://www.google.com/s2/favicons?domain=posthog.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  segment: {
+    url: 'https://www.google.com/s2/favicons?domain=segment.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  mixpanel: {
+    url: 'https://www.google.com/s2/favicons?domain=mixpanel.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // AI / ML (additional)
+  huggingface: {
+    url: 'https://www.google.com/s2/favicons?domain=huggingface.co&sz=64',
+    width: 32,
+    height: 32,
+  },
+  wandb: {
+    url: 'https://www.google.com/s2/favicons?domain=wandb.ai&sz=64',
+    width: 32,
+    height: 32,
+  },
+  'anthropic-api': {
+    url: 'https://www.google.com/s2/favicons?domain=anthropic.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  replicate: {
+    url: 'https://www.google.com/s2/favicons?domain=replicate.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
+  // Healthcare
+  'epic-fhir': {
+    url: 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+  cerner: {
+    url: 'https://www.google.com/s2/favicons?domain=cerner.com&sz=64',
+    width: 32,
+    height: 32,
+  },
+
   // Exclusive
   'local-filesystem': {
     url: '/icons/filesystem.svg',
