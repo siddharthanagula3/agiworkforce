@@ -1,549 +1,116 @@
 'use client';
 
-import { useState, useMemo, Suspense } from 'react';
+import { useState, useMemo, useEffect, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import {
-  Search,
-  Plus,
-  Code,
-  FileText,
-  Mail,
-  MessageSquare,
-  Sparkles,
-  GitBranch,
-  Bug,
-  Zap,
-  Scale,
-  DollarSign,
-  GraduationCap,
-  ShoppingCart,
-  Briefcase,
-  Users,
-  Monitor,
-  Headphones,
-  PenTool,
-  UserCheck,
-  BarChart3,
-  Leaf,
-  TrendingUp,
-  Package,
-  Globe,
-  Brain,
-  Megaphone,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
+import { Search, Plus, Code, FileText, Sparkles, type LucideIcon } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
 
-// ─── Prompts data (sourced from PromptShortcuts catalog) ───────────────────────
+// ─── API response type ─────────────────────────────────────────────────────────
 
-interface PromptItem {
+interface ApiSkill {
+  name: string;
+  description: string;
+  location: string;
+  source: string;
+}
+
+// ─── Derived card shape ────────────────────────────────────────────────────────
+
+interface SkillCardItem {
   id: string;
   name: string;
   description: string;
-  trigger: string;
+  location: string;
+  source: string;
   tags: string[];
   icon: LucideIcon;
+  tab: 'prompts' | 'agents';
 }
 
-const PROMPTS: PromptItem[] = [
-  {
-    id: 'code-review',
-    name: 'Review my code',
-    description: 'Review code for best practices, potential bugs, and improvements.',
-    trigger: '/review',
-    tags: ['coding'],
-    icon: Code,
-  },
-  {
-    id: 'debug-error',
-    name: 'Debug this error',
-    description: 'Debug an error and explain what is wrong.',
-    trigger: '/debug',
-    tags: ['coding'],
-    icon: Bug,
-  },
-  {
-    id: 'explain-code',
-    name: 'Explain this code',
-    description: 'Explain what code does in simple terms.',
-    trigger: '/explain',
-    tags: ['coding'],
-    icon: Code,
-  },
-  {
-    id: 'optimize-code',
-    name: 'Optimize code',
-    description: 'Optimize code for better performance and readability.',
-    trigger: '/optimize',
-    tags: ['coding'],
-    icon: Zap,
-  },
-  {
-    id: 'improve-writing',
-    name: 'Improve my writing',
-    description: 'Improve text for clarity, grammar, and professionalism.',
-    trigger: '/improve',
-    tags: ['writing'],
-    icon: FileText,
-  },
-  {
-    id: 'summarize',
-    name: 'Summarize this',
-    description: 'Provide a concise summary of the provided content.',
-    trigger: '/summarize',
-    tags: ['writing'],
-    icon: MessageSquare,
-  },
-  {
-    id: 'write-email',
-    name: 'Write an email',
-    description: 'Write a professional email on a given topic.',
-    trigger: '/email',
-    tags: ['writing', 'business'],
-    icon: Mail,
-  },
-  {
-    id: 'business-plan',
-    name: 'Create business plan',
-    description: 'Build out a structured business plan.',
-    trigger: '/bizplan',
-    tags: ['business'],
-    icon: GitBranch,
-  },
-  {
-    id: 'market-research',
-    name: 'Market research',
-    description: 'Research a market, competitors, or industry landscape.',
-    trigger: '/research',
-    tags: ['business', 'analysis'],
-    icon: Search,
-  },
-  {
-    id: 'brainstorm',
-    name: 'Brainstorm ideas',
-    description: 'Generate creative ideas on any topic.',
-    trigger: '/brainstorm',
-    tags: ['creative'],
-    icon: Sparkles,
-  },
-  {
-    id: 'generate-content',
-    name: 'Generate content',
-    description: 'Generate engaging content for any audience or format.',
-    trigger: '/content',
-    tags: ['creative', 'writing'],
-    icon: Sparkles,
-  },
-];
-
-// ─── Agents data (sourced from AI Skills catalog) ─────────────────────────────
-
-interface AgentItem {
-  id: string;
-  name: string;
-  description: string;
-  trigger: string;
-  tags: string[];
-  icon: LucideIcon;
+function iconForSkill(_name: string, source: string): LucideIcon {
+  if (source === 'builtin') return Sparkles;
+  if (source === 'project') return Code;
+  return FileText;
 }
 
-const AGENTS: AgentItem[] = [
-  {
-    id: 'code-reviewer',
-    name: 'Code Reviewer',
-    description: 'Reviews code for correctness, security, and best practices.',
-    trigger: '/engineer',
-    tags: ['engineering'],
-    icon: Code,
-  },
-  {
-    id: 'arch-planner',
-    name: 'Architecture Planner',
-    description: 'Plans system architecture, diagrams, and tech decisions.',
-    trigger: '/architect',
-    tags: ['engineering'],
-    icon: GitBranch,
-  },
-  {
-    id: 'cicd-builder',
-    name: 'CI/CD Pipeline Builder',
-    description: 'Builds and optimises CI/CD workflows for any stack.',
-    trigger: '/pipeline',
-    tags: ['engineering', 'automation'],
-    icon: Zap,
-  },
-  {
-    id: 'api-designer',
-    name: 'API Designer',
-    description: 'Designs REST, GraphQL, and gRPC API contracts.',
-    trigger: '/api',
-    tags: ['engineering', 'developer'],
-    icon: Code,
-  },
-  {
-    id: 'ml-pipeline',
-    name: 'ML Pipeline Builder',
-    description: 'Builds end-to-end machine learning pipelines.',
-    trigger: '/ml',
-    tags: ['ai', 'data'],
-    icon: Brain,
-  },
-  {
-    id: 'data-analyst',
-    name: 'Data Analyst',
-    description: 'Runs exploratory data analysis and surfaces insights.',
-    trigger: '/analyze',
-    tags: ['ai', 'data', 'analysis'],
-    icon: BarChart3,
-  },
-  {
-    id: 'prompt-engineer',
-    name: 'Prompt Engineer',
-    description: 'Crafts and optimises prompts for any model.',
-    trigger: '/prompt',
-    tags: ['ai'],
-    icon: Brain,
-  },
-  {
-    id: 'campaign-strategist',
-    name: 'Campaign Strategist',
-    description: 'Plans multi-channel marketing campaigns.',
-    trigger: '/campaign',
-    tags: ['marketing'],
-    icon: Megaphone,
-  },
-  {
-    id: 'seo-optimizer',
-    name: 'SEO Optimizer',
-    description: 'Audits pages and produces keyword and link strategies.',
-    trigger: '/seo',
-    tags: ['marketing'],
-    icon: TrendingUp,
-  },
-  {
-    id: 'ad-copywriter',
-    name: 'Ad Copywriter',
-    description: 'Writes high-converting ad copy for any channel.',
-    trigger: '/adcopy',
-    tags: ['marketing', 'creative'],
-    icon: Megaphone,
-  },
-  {
-    id: 'process-optimizer',
-    name: 'Process Optimizer',
-    description: 'Maps and streamlines business processes.',
-    trigger: '/process',
-    tags: ['operations'],
-    icon: Settings,
-  },
-  {
-    id: 'sop-writer',
-    name: 'SOP Writer',
-    description: 'Writes standard operating procedures for any workflow.',
-    trigger: '/sop',
-    tags: ['operations', 'documentation'],
-    icon: FileText,
-  },
-  {
-    id: 'financial-analyst',
-    name: 'Financial Analyst',
-    description: 'Builds financial models and interprets reports.',
-    trigger: '/finance',
-    tags: ['finance'],
-    icon: DollarSign,
-  },
-  {
-    id: 'budget-forecaster',
-    name: 'Budget Forecaster',
-    description: 'Forecasts budgets and spending trends.',
-    trigger: '/forecast',
-    tags: ['finance'],
-    icon: DollarSign,
-  },
-  {
-    id: 'sysadmin',
-    name: 'System Administrator',
-    description: 'Manages infrastructure, configs, and deployments.',
-    trigger: '/sysadmin',
-    tags: ['it'],
-    icon: Monitor,
-  },
-  {
-    id: 'security-auditor',
-    name: 'Security Auditor',
-    description: 'Audits systems for vulnerabilities and misconfigurations.',
-    trigger: '/security',
-    tags: ['it'],
-    icon: Monitor,
-  },
-  {
-    id: 'ticket-triager',
-    name: 'Ticket Triager',
-    description: 'Classifies and routes support tickets intelligently.',
-    trigger: '/triage',
-    tags: ['support'],
-    icon: Headphones,
-  },
-  {
-    id: 'kb-writer',
-    name: 'Knowledge Base Writer',
-    description: 'Writes help articles and FAQ entries.',
-    trigger: '/kb',
-    tags: ['support', 'documentation'],
-    icon: FileText,
-  },
-  {
-    id: 'copywriter',
-    name: 'Copywriter',
-    description: 'Writes compelling brand and marketing copy.',
-    trigger: '/copy',
-    tags: ['creative', 'writing'],
-    icon: PenTool,
-  },
-  {
-    id: 'scriptwriter',
-    name: 'Video Scriptwriter',
-    description: 'Scripts videos from concept to final draft.',
-    trigger: '/script',
-    tags: ['creative'],
-    icon: PenTool,
-  },
-  {
-    id: 'resume-screener',
-    name: 'Resume Screener',
-    description: 'Screens and scores resumes against job criteria.',
-    trigger: '/hr',
-    tags: ['hr'],
-    icon: UserCheck,
-  },
-  {
-    id: 'policy-drafter',
-    name: 'Policy Drafter',
-    description: 'Drafts HR and compliance policies.',
-    trigger: '/policy',
-    tags: ['hr', 'legal'],
-    icon: FileText,
-  },
-  {
-    id: 'lit-reviewer',
-    name: 'Literature Reviewer',
-    description: 'Reviews academic literature and summarises findings.',
-    trigger: '/litreview',
-    tags: ['research'],
-    icon: Search,
-  },
-  {
-    id: 'competitive-analyst',
-    name: 'Competitive Analyst',
-    description: 'Analyses competitors and market positioning.',
-    trigger: '/compete',
-    tags: ['research', 'business'],
-    icon: Search,
-  },
-  {
-    id: 'tech-writer',
-    name: 'Technical Writer',
-    description: 'Writes technical documentation for any audience.',
-    trigger: '/docs',
-    tags: ['documentation'],
-    icon: FileText,
-  },
-  {
-    id: 'changelog-gen',
-    name: 'Changelog Generator',
-    description: 'Generates changelogs from commits and release notes.',
-    trigger: '/changelog',
-    tags: ['documentation', 'developer'],
-    icon: FileText,
-  },
-  {
-    id: 'workflow-builder',
-    name: 'Workflow Builder',
-    description: 'Designs automation workflows and trigger logic.',
-    trigger: '/workflow',
-    tags: ['automation'],
-    icon: Zap,
-  },
-  {
-    id: 'dashboard-builder',
-    name: 'Dashboard Builder',
-    description: 'Designs KPI dashboards and metrics views.',
-    trigger: '/dashboard',
-    tags: ['analytics'],
-    icon: BarChart3,
-  },
-  {
-    id: 'contract-reviewer',
-    name: 'Contract Reviewer',
-    description: 'Reviews contracts for risk and missing clauses.',
-    trigger: '/contract',
-    tags: ['legal'],
-    icon: Scale,
-  },
-  {
-    id: 'compliance-auditor',
-    name: 'Compliance Auditor',
-    description: 'Audits processes and systems for regulatory compliance.',
-    trigger: '/compliance',
-    tags: ['legal', 'it'],
-    icon: Scale,
-  },
-  {
-    id: 'exec-assistant',
-    name: 'Executive Assistant',
-    description: 'Drafts emails, prepares agendas, and handles scheduling.',
-    trigger: '/exec',
-    tags: ['executive'],
-    icon: Briefcase,
-  },
-  {
-    id: 'meeting-summarizer',
-    name: 'Meeting Summarizer',
-    description: 'Summarises meeting transcripts into action items.',
-    trigger: '/meeting',
-    tags: ['executive', 'productivity'],
-    icon: MessageSquare,
-  },
-  {
-    id: 'biz-plan-writer',
-    name: 'Business Plan Writer',
-    description: 'Writes comprehensive business plans with financials.',
-    trigger: '/bizplan2',
-    tags: ['business'],
-    icon: Briefcase,
-  },
-  {
-    id: 'pitch-deck',
-    name: 'Pitch Deck Creator',
-    description: 'Creates investor pitch decks from briefs.',
-    trigger: '/pitch',
-    tags: ['business', 'creative'],
-    icon: Briefcase,
-  },
-  {
-    id: 'curriculum-designer',
-    name: 'Curriculum Designer',
-    description: 'Designs learning curricula and assessment plans.',
-    trigger: '/curriculum',
-    tags: ['education'],
-    icon: GraduationCap,
-  },
-  {
-    id: 'ai-tutor',
-    name: 'AI Tutor',
-    description: 'Personalised tutoring across subjects and skill levels.',
-    trigger: '/tutor',
-    tags: ['education'],
-    icon: GraduationCap,
-  },
-  {
-    id: 'strategy-consultant',
-    name: 'Strategy Consultant',
-    description: 'Advises on business strategy and growth plans.',
-    trigger: '/strategy',
-    tags: ['consulting'],
-    icon: Users,
-  },
-  {
-    id: 'esg-writer',
-    name: 'ESG Report Writer',
-    description: 'Writes sustainability and ESG disclosure reports.',
-    trigger: '/esg',
-    tags: ['sustainability'],
-    icon: Leaf,
-  },
-  {
-    id: 'lead-qualifier',
-    name: 'Lead Qualifier',
-    description: 'Scores and qualifies sales leads from CRM data.',
-    trigger: '/qualify',
-    tags: ['sales'],
-    icon: TrendingUp,
-  },
-  {
-    id: 'prd-writer',
-    name: 'PRD Writer',
-    description: 'Writes product requirements documents from briefs.',
-    trigger: '/prd',
-    tags: ['product'],
-    icon: Package,
-  },
-  {
-    id: 'translator',
-    name: 'Translator',
-    description: 'Translates content across 50+ languages with context.',
-    trigger: '/translate',
-    tags: ['language'],
-    icon: Globe,
-  },
-  {
-    id: 'ui-copy',
-    name: 'UI Copy Reviewer',
-    description: 'Reviews and rewrites UI copy for clarity and tone.',
-    trigger: '/uicopy',
-    tags: ['design', 'creative'],
-    icon: PenTool,
-  },
-  {
-    id: 'content-calendar',
-    name: 'Content Calendar Planner',
-    description: 'Plans multi-channel content calendars for any period.',
-    trigger: '/calendar',
-    tags: ['marketing', 'creative'],
-    icon: Megaphone,
-  },
-  {
-    id: 'shopify-specialist',
-    name: 'Shopify Specialist',
-    description: 'Manages products, orders, and store optimisation.',
-    trigger: '/shopify',
-    tags: ['business', 'finance'],
-    icon: ShoppingCart,
-  },
-  {
-    id: 'model-evaluator',
-    name: 'Model Evaluator',
-    description: 'Evaluates LLM outputs against defined rubrics.',
-    trigger: '/eval',
-    tags: ['ai', 'data'],
-    icon: Brain,
-  },
-];
+function tagsForSkill(source: string): string[] {
+  if (source === 'builtin') return ['builtin'];
+  if (source === 'project') return ['project'];
+  if (source === 'user') return ['user'];
+  return [];
+}
+
+function tabForSkill(source: string): 'prompts' | 'agents' {
+  return source === 'builtin' ? 'prompts' : 'agents';
+}
+
+function mapApiSkill(s: ApiSkill): SkillCardItem {
+  return {
+    id: s.name,
+    name: s.name,
+    description: s.description || '',
+    location: s.location || '',
+    source: s.source,
+    tags: tagsForSkill(s.source),
+    icon: iconForSkill(s.name, s.source),
+    tab: tabForSkill(s.source),
+  };
+}
 
 // ─── Tab type ──────────────────────────────────────────────────────────────────
 
 type TabValue = 'prompts' | 'agents';
 
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 animate-pulse">
+      <div className="mb-2.5 flex items-start gap-3">
+        <div className="h-9 w-9 shrink-0 rounded-lg border border-white/[0.06] bg-white/[0.06]" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <div className="h-3 w-3/4 rounded bg-white/[0.06]" />
+          <div className="h-2.5 w-1/2 rounded bg-white/[0.04]" />
+        </div>
+      </div>
+      <div className="h-2.5 w-full rounded bg-white/[0.04]" />
+      <div className="mt-1.5 h-2.5 w-4/5 rounded bg-white/[0.04]" />
+    </div>
+  );
+}
+
 // ─── SkillCard ─────────────────────────────────────────────────────────────────
 
 interface SkillCardProps {
-  name: string;
-  description: string;
-  trigger: string;
-  tags: string[];
-  icon: LucideIcon;
+  item: SkillCardItem;
 }
 
-function SkillCard({ name, description, trigger, tags, icon: Icon }: SkillCardProps) {
+function SkillCard({ item }: SkillCardProps) {
+  const Icon = item.icon;
   return (
-    <div className="group flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all duration-200 hover:border-white/[0.10] hover:bg-white/[0.04]">
+    <Link
+      href={`/skills/${encodeURIComponent(item.name)}`}
+      className="group flex flex-col rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 transition-all duration-200 hover:border-white/[0.10] hover:bg-white/[0.04] focus:outline-none focus:ring-2 focus:ring-primary/50"
+    >
       <div className="mb-2.5 flex items-start gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-white/[0.04]">
           <Icon className="h-4 w-4 text-primary" aria-hidden="true" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{name}</p>
-          <p className="font-mono text-[10px] text-muted-foreground/60">{trigger}</p>
+          <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+          <p className="font-mono text-[10px] text-muted-foreground/60">{item.source}</p>
         </div>
       </div>
-      <p className="flex-1 text-xs leading-relaxed text-muted-foreground/80">{description}</p>
-      {tags.length > 0 && (
+      <p className="flex-1 text-xs leading-relaxed text-muted-foreground/80 line-clamp-2">
+        {item.description || 'No description.'}
+      </p>
+      {item.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1">
-          {tags.slice(0, 3).map((tag) => (
+          {item.tags.slice(0, 3).map((tag) => (
             <Badge
               key={tag}
               variant="outline"
@@ -554,7 +121,7 @@ function SkillCard({ name, description, trigger, tags, icon: Icon }: SkillCardPr
           ))}
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 
@@ -566,6 +133,9 @@ function SkillsPageInner() {
   const pathname = usePathname();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [skills, setSkills] = useState<SkillCardItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const rawTab = searchParams.get('tab');
   const activeTab: TabValue = rawTab === 'agents' ? 'agents' : 'prompts';
@@ -580,32 +150,51 @@ function SkillsPageInner() {
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
-  const filteredPrompts = useMemo(() => {
-    if (!searchQuery) return PROMPTS;
-    const q = searchQuery.toLowerCase();
-    return PROMPTS.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q) ||
-        p.tags.some((t) => t.includes(q)) ||
-        p.trigger.includes(q),
-    );
-  }, [searchQuery]);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch('/api/skills')
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`/api/skills returned ${res.status}`);
+        const json = (await res.json()) as { skills: ApiSkill[] };
+        return json.skills ?? [];
+      })
+      .then((items) => {
+        if (!cancelled) {
+          setSkills(items.map(mapApiSkill));
+          setLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'Failed to load skills';
+          setError(msg);
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const filteredAgents = useMemo(() => {
-    if (!searchQuery) return AGENTS;
-    const q = searchQuery.toLowerCase();
-    return AGENTS.filter(
-      (a) =>
-        a.name.toLowerCase().includes(q) ||
-        a.description.toLowerCase().includes(q) ||
-        a.tags.some((t) => t.includes(q)) ||
-        a.trigger.includes(q),
-    );
-  }, [searchQuery]);
+  const promptSkills = useMemo(() => skills.filter((s) => s.tab === 'prompts'), [skills]);
+  const agentSkills = useMemo(() => skills.filter((s) => s.tab === 'agents'), [skills]);
 
-  const displayItems = activeTab === 'prompts' ? filteredPrompts : filteredAgents;
-  const totalCount = activeTab === 'prompts' ? PROMPTS.length : AGENTS.length;
+  const filteredItems = useMemo(() => {
+    const pool = activeTab === 'prompts' ? promptSkills : agentSkills;
+    if (!searchQuery) return pool;
+    const q = searchQuery.toLowerCase();
+    return pool.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.description.toLowerCase().includes(q) ||
+        s.tags.some((t) => t.includes(q)) ||
+        s.source.includes(q),
+    );
+  }, [activeTab, promptSkills, agentSkills, searchQuery]);
+
+  const totalCount = activeTab === 'prompts' ? promptSkills.length : agentSkills.length;
 
   return (
     <div className="min-h-full bg-background">
@@ -665,35 +254,53 @@ function SkillsPageInner() {
 
       {/* Content */}
       <div className="mx-auto max-w-6xl px-6 py-6">
-        {/* Results count */}
-        <p className="mb-4 text-xs text-muted-foreground">
-          {searchQuery
-            ? `${displayItems.length} of ${totalCount} ${activeTab}`
-            : `${totalCount} ${activeTab}`}
-        </p>
-
-        {/* Grid */}
-        {displayItems.length > 0 ? (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {displayItems.map((item) => (
-              <SkillCard
-                key={item.id}
-                name={item.name}
-                description={item.description}
-                trigger={item.trigger}
-                tags={item.tags}
-                icon={item.icon}
-              />
-            ))}
-          </div>
-        ) : (
+        {loading ? (
+          <>
+            <div className="mb-4 h-3 w-20 animate-pulse rounded bg-white/[0.06]" />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          </>
+        ) : error ? (
           <div className="py-20 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-              <Search className="h-7 w-7 text-muted-foreground" />
+              <FileText className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h3 className="text-base font-medium text-foreground">No {activeTab} found</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Try a different search term.</p>
+            <h3 className="text-base font-medium text-foreground">Could not load skills</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
           </div>
+        ) : (
+          <>
+            {/* Results count */}
+            <p className="mb-4 text-xs text-muted-foreground">
+              {searchQuery
+                ? `${filteredItems.length} of ${totalCount} ${activeTab}`
+                : `${totalCount} ${activeTab}`}
+            </p>
+
+            {/* Grid */}
+            {filteredItems.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {filteredItems.map((item) => (
+                  <SkillCard key={item.id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="py-20 text-center">
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
+                  <Search className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-base font-medium text-foreground">No {activeTab} found</h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {totalCount === 0
+                    ? 'No skills are loaded. Configure the SKILLS_LAYERS environment variable.'
+                    : 'Try a different search term.'}
+                </p>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
