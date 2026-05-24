@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, Brain, Lock, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
-import { PROVIDER_DISPLAY, EFFORT_LABEL, type ProviderId, type Effort } from '@agiworkforce/types';
-import { MARKETING } from '@/lib/marketing-constants';
+import { Switch } from '@shared/ui/switch';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
+import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
 import { useBillingStore } from '@/stores/unified/auth';
 import { isModelAllowedForTier } from '@/constants/llm';
 
@@ -68,9 +69,20 @@ function providerSupportsEffort(providerKey: string): boolean {
   return id ? PROVIDER_DISPLAY[id].supportsEffort : false;
 }
 
+/** Whether this model supports adaptive thinking (checks provider capability). */
+function modelSupportsThinking(model: AIModel): boolean {
+  return providerSupportsEffort(model.providerKey);
+}
+
+/** True when the model name contains "Opus" — used to show usage-rate tooltip. */
+function isOpusModel(model: AIModel): boolean {
+  return model.name.toLowerCase().includes('opus');
+}
+
 /**
- * Partition models into "recommended" (top ~4 for the user's tier, in-tier
- * models first with auto-modes at the top) and "more" (the rest).
+ * Partition models into "recommended" (top ~4 for the user's tier) and
+ * "more" (the rest). Flagship (locked) models always appear in recommended
+ * with an isLocked flag so free users see them with an inline Upgrade link.
  *
  * When a search query is present we skip partitioning so the user sees all
  * matching results in a flat list.
@@ -79,7 +91,7 @@ function partitionModels(
   models: AIModel[],
   tier: string,
   searchQuery: string,
-): { recommended: AIModel[]; more: AIModel[]; isSearching: boolean } {
+): { recommended: (AIModel & { isLocked: boolean })[]; more: AIModel[]; isSearching: boolean } {
   if (searchQuery.trim()) {
     const q = searchQuery.toLowerCase();
     const matches = models.filter(
@@ -88,21 +100,41 @@ function partitionModels(
         m.provider.toLowerCase().includes(q) ||
         m.description.toLowerCase().includes(q),
     );
-    return { recommended: matches, more: [], isSearching: true };
+    return {
+      recommended: matches.map((m) => ({
+        ...m,
+        isLocked: m.providerKey !== 'managed_cloud' && !isModelAllowedForTier(m.id, tier),
+      })),
+      more: [],
+      isSearching: true,
+    };
   }
 
-  const inTier = models.filter(
-    (m) => m.providerKey === 'managed_cloud' || isModelAllowedForTier(m.id, tier),
-  );
-  const outOfTier = models.filter(
-    (m) => m.providerKey !== 'managed_cloud' && !isModelAllowedForTier(m.id, tier),
-  );
+  const autoModels = models.filter((m) => m.providerKey === 'managed_cloud');
+  const manualModels = models.filter((m) => m.providerKey !== 'managed_cloud');
 
-  // Top recommended: auto-modes first (managed_cloud), then up to 3 in-tier manual models
-  const autoModels = inTier.filter((m) => m.providerKey === 'managed_cloud');
-  const manualInTier = inTier.filter((m) => m.providerKey !== 'managed_cloud');
-  const recommended = [...autoModels, ...manualInTier.slice(0, 3)];
-  const more = [...manualInTier.slice(3), ...outOfTier];
+  const inTierManual = manualModels.filter((m) => isModelAllowedForTier(m.id, tier));
+  const lockedManual = manualModels.filter((m) => !isModelAllowedForTier(m.id, tier));
+
+  // Show up to 1 locked flagship at the top of recommended; fill remaining 2 slots with in-tier.
+  const flagshipLocked = lockedManual.slice(0, 1);
+  const remainingSlots = 3 - flagshipLocked.length;
+  const inTierSlice = inTierManual.slice(0, remainingSlots);
+  const recommendedManual = [...flagshipLocked, ...inTierSlice];
+
+  const recommendedIds = new Set([
+    ...autoModels.map((m) => m.id),
+    ...recommendedManual.map((m) => m.id),
+  ]);
+  const more = manualModels.filter((m) => !recommendedIds.has(m.id));
+
+  const recommended = [
+    ...autoModels.map((m) => ({ ...m, isLocked: false })),
+    ...recommendedManual.map((m) => ({
+      ...m,
+      isLocked: !isModelAllowedForTier(m.id, tier),
+    })),
+  ];
 
   return { recommended, more, isSearching: false };
 }
@@ -139,7 +171,7 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: 
   );
 }
 
-/** Renders a single model row in the selector. Locked rows show an Upgrade badge linking to /pricing. */
+/** Renders a single model row. Locked rows show an inline "Upgrade" text link instead of an amber pill. */
 function ModelRow({
   model,
   isSelected,
@@ -151,11 +183,11 @@ function ModelRow({
   isLocked: boolean;
   onSelect?: () => void;
 }) {
-  return (
+  const rowContent = (
     <div
       className={[
         'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
-        isLocked ? 'cursor-default opacity-60' : 'cursor-pointer hover:bg-muted/60',
+        isLocked ? 'cursor-default' : 'cursor-pointer hover:bg-muted/60',
         isSelected ? 'bg-muted/40' : '',
       ].join(' ')}
       onClick={isLocked ? undefined : onSelect}
@@ -187,30 +219,47 @@ function ModelRow({
         <a
           href="/pricing"
           onClick={(e) => e.stopPropagation()}
-          className="ml-auto flex shrink-0 items-center gap-0.5 rounded bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 hover:bg-amber-400/25"
+          className="ml-auto shrink-0 text-xs text-amber-400 hover:text-amber-300 hover:underline"
           aria-label="Upgrade to unlock this model"
         >
-          <Lock className="h-2.5 w-2.5" aria-hidden="true" />
           Upgrade
         </a>
       )}
       {isSelected && !isLocked && (
-        <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+        <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
       )}
     </div>
   );
-}
 
-const EFFORT_ORDER: Effort[] = ['low', 'medium', 'high', 'max'];
+  if (isOpusModel(model)) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>{rowContent}</div>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={8}>
+            Opus consumes usage limits faster than other models
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return rowContent;
+}
 
 interface ComposerFooterProps {
   hint?: string;
   showModelSelector?: boolean;
+  /** When true, shows a search input inside the model dropdown (code surface only). */
+  showModelSearch?: boolean;
 }
 
 export function ComposerFooter({
   hint = 'Cmd+Enter to send · Enter for newline',
   showModelSelector = true,
+  showModelSearch = false,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -220,8 +269,6 @@ export function ComposerFooter({
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
   const thinkingEnabled = useModelStore((s) => s.thinkingEnabled);
   const setThinkingEnabled = useModelStore((s) => s.setThinkingEnabled);
-  const thinkingBudget = useModelStore((s) => s.thinkingBudget);
-  const setThinkingBudget = useModelStore((s) => s.setThinkingBudget);
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
 
@@ -236,26 +283,7 @@ export function ComposerFooter({
   const showMore = moreExpanded || selectedInMore || isSearching;
 
   const selectedProviderKey = selectedModel.providerKey;
-  const supportsEffort = providerSupportsEffort(selectedProviderKey);
-
-  // Current effort derived from thinkingBudget
-  function currentEffort(): Effort {
-    if (thinkingBudget >= 65536) return 'max';
-    if (thinkingBudget >= 32768) return 'high';
-    if (thinkingBudget >= 16384) return 'medium';
-    return 'low';
-  }
-
-  function selectEffort(effort: Effort) {
-    const budgetMap: Record<Effort, number> = {
-      low: 4096,
-      medium: 16384,
-      high: 32768,
-      max: 65536,
-    };
-    setThinkingBudget(budgetMap[effort]);
-    setThinkingEnabled(true);
-  }
+  const supportsAdaptive = modelSupportsThinking(selectedModel);
 
   return (
     <div className="mt-2 space-y-2">
@@ -289,59 +317,6 @@ export function ComposerFooter({
         <span className="text-xs text-muted-foreground">{hint}</span>
 
         <div className="flex items-center gap-2">
-          {/* Thinking effort selector — only for providers that support it */}
-          {supportsEffort && thinkingEnabled && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-amber-400 transition-colors hover:bg-muted/60"
-                  aria-label="Thinking effort"
-                >
-                  <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span>{EFFORT_LABEL[currentEffort()]}</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={6} className="w-40 p-1">
-                <div className="space-y-0.5">
-                  {EFFORT_ORDER.map((effort) => (
-                    <button
-                      key={effort}
-                      onClick={() => selectEffort(effort)}
-                      className={[
-                        'w-full rounded px-2 py-1 text-left text-xs transition-colors hover:bg-muted',
-                        currentEffort() === effort
-                          ? 'font-medium text-foreground'
-                          : 'text-muted-foreground',
-                      ].join(' ')}
-                    >
-                      {EFFORT_LABEL[effort]}
-                    </button>
-                  ))}
-                  <div className="my-1 border-t border-border" />
-                  <button
-                    onClick={() => setThinkingEnabled(false)}
-                    className="w-full rounded px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
-                  >
-                    Off
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-
-          {/* Thinking enable button — shown when provider supports effort but it's off */}
-          {supportsEffort && !thinkingEnabled && (
-            <button
-              onClick={() => {
-                selectEffort('medium');
-              }}
-              className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-amber-400"
-              aria-label="Enable thinking"
-            >
-              <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
-            </button>
-          )}
-
           {/* Response style selector */}
           <StyleSelector />
 
@@ -365,28 +340,33 @@ export function ComposerFooter({
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
                   <span className="max-w-[140px] truncate">{selectedModel.name}</span>
+                  {supportsAdaptive && (
+                    <span className="text-xs text-muted-foreground/70">Adaptive</span>
+                  )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
-                <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
+                {/* Header — model count badge removed per Claude reference */}
+                <div className="flex items-center border-b border-border/40 px-3 py-2">
                   <span className="text-xs font-medium text-foreground">Models</span>
-                  <span className="ml-auto rounded bg-muted/50 px-1.5 py-0.5 text-xs text-muted-foreground">
-                    {MARKETING.providers.display} providers
-                  </span>
                 </div>
-                {/* Search input */}
-                <div className="border-b border-border/40 px-3 py-1.5">
-                  <input
-                    className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-                    placeholder="Search models..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    aria-label="Search models"
-                  />
-                </div>
+
+                {/* Search input — shown only in code surface */}
+                {showModelSearch && (
+                  <div className="border-b border-border/40 px-3 py-1.5">
+                    <input
+                      className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                      placeholder="Search models..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="Search models"
+                    />
+                  </div>
+                )}
+
                 <div className="max-h-[320px] overflow-y-auto py-1">
-                  {/* Recommended section */}
+                  {/* Recommended section label */}
                   {!isSearching && (
                     <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
                       Recommended
@@ -399,14 +379,41 @@ export function ComposerFooter({
                         key={model.id}
                         model={model}
                         isSelected={isSelected}
-                        isLocked={false}
-                        onSelect={() => {
-                          setSelectedModelId(model.id);
-                          setOpen(false);
-                        }}
+                        isLocked={model.isLocked}
+                        onSelect={
+                          model.isLocked
+                            ? undefined
+                            : () => {
+                                setSelectedModelId(model.id);
+                                setOpen(false);
+                              }
+                        }
                       />
                     );
                   })}
+
+                  {/* Adaptive thinking toggle row — sits between model list and "More models" */}
+                  {!isSearching && (
+                    <>
+                      <div className="my-1 border-t border-border/40" />
+                      <div className="flex items-center gap-2 px-3 py-1.5">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-foreground/80">
+                            Adaptive thinking
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            Thinks for more complex tasks
+                          </span>
+                        </span>
+                        <Switch
+                          checked={thinkingEnabled}
+                          onCheckedChange={(checked) => setThinkingEnabled(checked)}
+                          aria-label="Toggle adaptive thinking"
+                          className="h-5 w-9"
+                        />
+                      </div>
+                    </>
+                  )}
 
                   {/* More models section — only shown when not searching */}
                   {!isSearching && more.length > 0 && (
