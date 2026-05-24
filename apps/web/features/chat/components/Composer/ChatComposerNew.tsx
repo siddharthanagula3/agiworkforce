@@ -12,8 +12,6 @@ import {
   ChevronRight,
   Check,
   Camera,
-  FolderOpen,
-  GitFork,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -85,7 +83,7 @@ interface ChatComposerProps {
   attachmentPrivacyShortLabel?: string;
 }
 
-const CONNECTOR_PREVIEW = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
+const CONNECTOR_PHASE1 = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
 
 type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
 
@@ -188,6 +186,18 @@ const ChatComposerNewComponent = ({
 
   // Real connector state from the server
   const connectors = useConnectors();
+
+  // Build connector list for the + menu submenu: show connected connectors first,
+  // then fill with phase-1 connectors. Cap at 8 to keep the popover compact.
+  const connectorMenuList = React.useMemo(() => {
+    const connected = CONNECTORS.filter((c) => connectors.connectedIds.has(c.id));
+    if (connected.length > 0) {
+      // Show all connected ones plus any phase-1 not yet connected, capped at 8.
+      const phase1NotConnected = CONNECTOR_PHASE1.filter((c) => !connectors.connectedIds.has(c.id));
+      return [...connected, ...phase1NotConnected].slice(0, 8);
+    }
+    return CONNECTOR_PHASE1;
+  }, [connectors.connectedIds]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -543,12 +553,11 @@ const ChatComposerNewComponent = ({
       {/* Selected Skill Badge */}
       {selectedSkill && (
         <div className="mb-2 flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs text-primary">
-            <Sparkles className="h-3 w-3" />
-            {selectedSkill.name}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
+            /{selectedSkill.name}
             <button
               onClick={() => setSelectedSkill(null)}
-              className="rounded-full p-0.5 hover:bg-primary/20"
+              className="rounded-full p-0.5 hover:bg-emerald-500/20"
               aria-label={`Remove ${selectedSkill.name} skill`}
             >
               <X className="h-2.5 w-2.5" />
@@ -685,28 +694,7 @@ const ChatComposerNewComponent = ({
                 >
                   <Camera className="h-4 w-4" />
                   <span className="flex-1 text-left">Take a screenshot</span>
-                  <span className="text-[10px]">Soon</span>
-                </button>
-
-                {/* 3. Add to project (stub) */}
-                <button
-                  type="button"
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                >
-                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 text-left">Add to project</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-
-                {/* 4. Add from GitHub (stub) */}
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
-                  aria-disabled="true"
-                >
-                  <GitFork className="h-4 w-4" />
-                  <span className="flex-1 text-left">Add from GitHub</span>
+                  <span className="text-[10px]">Desktop only</span>
                 </button>
 
                 {/* Divider */}
@@ -787,7 +775,7 @@ const ChatComposerNewComponent = ({
 
                   {showConnectorsSubmenu && (
                     <div className="absolute left-full top-0 z-50 ml-1 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                      {CONNECTOR_PREVIEW.map((connector) => {
+                      {connectorMenuList.map((connector) => {
                         const isConnected = connectors.connectedIds.has(connector.id);
                         const isMutating = connectors.mutatingIds.has(connector.id);
                         return (

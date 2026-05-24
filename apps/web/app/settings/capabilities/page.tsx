@@ -1,259 +1,154 @@
 'use client';
 
-import { useBillingStore } from '@/stores/unified/auth';
+import { useState, useEffect } from 'react';
+import { Switch } from '@shared/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
+import { Button } from '@shared/ui/button';
 import Link from 'next/link';
 
-interface CapRow {
-  label: string;
-  /** Tooltip shown on hover; explains what the feature does. */
-  tooltip: string;
-  description: string;
-  tiers: string[];
-  /** Tiers where access is granted but at a lower token cap than Pro/Max */
-  lowerCapTiers?: string[];
-  link?: string;
+const LS_PREFIX = 'agi.capabilities.';
+
+function usePersisted(key: string, fallback: boolean) {
+  const [value, setValue] = useState(fallback);
+  useEffect(() => {
+    const stored = localStorage.getItem(LS_PREFIX + key);
+    if (stored !== null) setValue(stored === 'true');
+  }, [key]);
+  const set = (v: boolean) => {
+    setValue(v);
+    localStorage.setItem(LS_PREFIX + key, String(v));
+  };
+  return [value, set] as const;
 }
 
-const CAPABILITIES: CapRow[] = [
-  {
-    label: 'Voice transcription',
-    tooltip: 'Push-to-talk audio input transcribed via Whisper, with AI cleanup of filler words.',
-    description: 'Push-to-talk Whisper transcription with AI cleanup.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-    link: '/settings/voice',
-  },
-  {
-    label: 'Image generation',
-    tooltip: 'Generate images from text prompts via managed cloud providers or your own API keys.',
-    description: 'Generate images via managed cloud or BYOK.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'Video generation',
-    tooltip:
-      'Generate short video clips from text or image prompts using multiple model providers.',
-    description: 'Runway Gen-4, Veo-3, and Sora 2 routing.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'Computer use',
-    tooltip: 'AI-driven browser and desktop automation. The model can click, scroll, and type.',
-    description: 'Automated browser and desktop actions.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'Extended thinking',
-    tooltip: 'Lets the model spend extra compute on step-by-step reasoning before answering.',
-    description: 'Adaptive reasoning for complex tasks.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'Web search',
-    tooltip: 'Routes queries to live search results from 10+ providers for up-to-date answers.',
-    description: 'Real-time search across 10+ providers.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'MCP connectors',
-    tooltip: 'Connect external tools and data sources using the Model Context Protocol standard.',
-    description: 'Connect external tools via Model Context Protocol.',
-    tiers: ['byok', 'hobby', 'pro', 'max'],
-    lowerCapTiers: ['hobby'],
-  },
-  {
-    label: 'BYOK (any tier)',
-    tooltip: 'Bring your own provider API keys. Bypasses all managed token caps on any plan.',
-    description: 'Bring your own API keys to bypass all managed caps.',
-    tiers: ['free', 'local', 'byok', 'hobby', 'pro', 'max'],
-  },
-  {
-    label: 'Local models',
-    tooltip:
-      'Run models entirely on your own hardware via Ollama or LM Studio. No data leaves your device.',
-    description: 'Ollama and LM Studio local inference. No data leaves your device.',
-    tiers: ['free', 'local', 'byok', 'hobby', 'pro', 'max'],
-  },
-];
-
-const TIER_ORDER = ['local', 'free', 'byok', 'hobby', 'pro', 'max'];
-const TIER_LABEL: Record<string, string> = {
-  local: 'Local',
-  free: 'Free',
-  byok: 'BYOK',
-  hobby: 'Hobby',
-  pro: 'Pro',
-  max: 'Max',
-};
-
 export default function CapabilitiesSettingsPage() {
-  const subscription = useBillingStore((s) => s.subscription);
-  const tier = subscription?.tier ?? 'free';
+  const [memory, setMemory] = usePersisted('memory', true);
+  const [searchChats, setSearchChats] = usePersisted('searchChats', true);
+  const [generateFromHistory, setGenerateFromHistory] = usePersisted('generateFromHistory', true);
+  const [connectorDiscovery, setConnectorDiscovery] = usePersisted('connectorDiscovery', true);
+  const [artifacts, setArtifacts] = usePersisted('artifacts', true);
+
+  const [toolAccessMode, setToolAccessMode] = useState('needed');
+  useEffect(() => {
+    const stored = localStorage.getItem(LS_PREFIX + 'toolAccessMode');
+    if (stored) setToolAccessMode(stored);
+  }, []);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div className="space-y-8">
       <div>
-        <h1
-          style={{
-            fontFamily: 'var(--serif)',
-            fontSize: 24,
-            fontWeight: 500,
-            color: 'var(--text-1)',
-            margin: '0 0 4px',
-          }}
-        >
-          Capabilities
-        </h1>
-        <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Features available on your current{' '}
-          <strong style={{ color: 'var(--teal)' }}>{TIER_LABEL[tier] ?? 'Free'}</strong> plan.
+        <h2 className="text-xl font-semibold text-foreground">Capabilities</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Control what AGI can do in your conversations.
         </p>
       </div>
 
-      {/* Capability table */}
-      <section
-        style={{
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Header row */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr repeat(6, 56px)',
-            padding: '10px 20px',
-            borderBottom: '1px solid var(--border)',
-            gap: 4,
-          }}
-        >
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-3)' }}>Feature</span>
-          {TIER_ORDER.map((t) => (
-            <span
-              key={t}
-              style={{
-                fontSize: 11,
-                fontWeight: t === tier ? 700 : 500,
-                color: t === tier ? 'var(--teal)' : 'var(--text-3)',
-                textAlign: 'center',
-              }}
-            >
-              {TIER_LABEL[t]}
-            </span>
-          ))}
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+          Memory
+        </h3>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Memory</p>
+            <p className="text-xs text-muted-foreground">
+              Allow AGI to remember details across conversations
+            </p>
+          </div>
+          <Switch checked={memory} onCheckedChange={setMemory} />
         </div>
 
-        {/* Rows */}
-        {CAPABILITIES.map((cap, i) => {
-          const hasFeature = cap.tiers.includes(tier);
-          return (
-            <div
-              key={cap.label}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr repeat(6, 56px)',
-                padding: '12px 20px',
-                borderBottom: i < CAPABILITIES.length - 1 ? '1px solid var(--border)' : undefined,
-                gap: 4,
-                alignItems: 'center',
-                background: hasFeature ? undefined : 'rgba(255,255,255,0.01)',
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 500,
-                    color: hasFeature ? 'var(--text-1)' : 'var(--text-3)',
-                    marginBottom: 2,
-                  }}
-                >
-                  <span
-                    title={cap.tooltip}
-                    style={{ cursor: 'help', borderBottom: '1px dotted var(--text-3)' }}
-                  >
-                    {cap.label}
-                  </span>
-                  {cap.link && hasFeature && (
-                    <Link
-                      href={cap.link}
-                      style={{
-                        marginLeft: 8,
-                        fontSize: 11,
-                        color: 'var(--teal)',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      Configure
-                    </Link>
-                  )}
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)' }}>{cap.description}</div>
-              </div>
-              {TIER_ORDER.map((t) => {
-                const included = cap.tiers.includes(t);
-                const isLowerCap = included && (cap.lowerCapTiers ?? []).includes(t);
-                const isCurrent = t === tier;
-                return (
-                  <div
-                    key={t}
-                    style={{
-                      textAlign: 'center',
-                      fontSize: isLowerCap ? 10 : 16,
-                      color: included ? 'var(--teal)' : 'var(--text-3)',
-                      fontWeight: isCurrent && included ? 700 : 400,
-                      lineHeight: 1.2,
-                    }}
-                    title={isLowerCap ? 'Available at a lower token cap than Pro/Max' : undefined}
-                  >
-                    {included ? (
-                      isLowerCap ? (
-                        <span style={{ fontSize: 11 }}>✓ (lower cap)</span>
-                      ) : (
-                        '✓'
-                      )
-                    ) : (
-                      '·'
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })}
-      </section>
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Search and reference chats</p>
+            <p className="text-xs text-muted-foreground">
+              Let AGI search your past conversations for context
+            </p>
+          </div>
+          <Switch checked={searchChats} onCheckedChange={setSearchChats} />
+        </div>
 
-      {/* Lower cap footnote */}
-      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
-        Lower cap: available on Hobby with a smaller token quota than Pro/Max.
-      </p>
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Generate from past chats</p>
+            <p className="text-xs text-muted-foreground">
+              Use conversation history to generate better responses
+            </p>
+          </div>
+          <Switch checked={generateFromHistory} onCheckedChange={setGenerateFromHistory} />
+        </div>
 
-      {/* Upgrade CTA */}
-      {(tier === 'free' || tier === 'hobby') && (
-        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+        <div className="flex gap-2">
           <Link
-            href="/pricing"
-            style={{
-              padding: '9px 20px',
-              background: 'var(--teal)',
-              borderRadius: 'var(--radius)',
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 600,
-              textDecoration: 'none',
-            }}
+            href="/settings/memory"
+            className="text-xs text-[var(--chat-accent-primary)] hover:underline"
           >
-            {tier === 'hobby' ? 'Upgrade to Pro' : 'Upgrade to Hobby'}
+            View and manage memory
           </Link>
         </div>
-      )}
+
+        <Button variant="outline" size="sm" disabled className="text-xs">
+          Import memory from other AI providers
+        </Button>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+          General
+        </h3>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Tool access mode</p>
+            <p className="text-xs text-muted-foreground">
+              How AGI loads and uses tools from connectors
+            </p>
+          </div>
+          <Select
+            value={toolAccessMode}
+            onValueChange={(v) => {
+              setToolAccessMode(v);
+              localStorage.setItem(LS_PREFIX + 'toolAccessMode', v);
+            }}
+          >
+            <SelectTrigger className="w-[200px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="always">Always allow</SelectItem>
+              <SelectItem value="needed">Load tools when needed</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Connector discovery</p>
+            <p className="text-xs text-muted-foreground">
+              Suggest relevant connectors during conversations
+            </p>
+          </div>
+          <Switch checked={connectorDiscovery} onCheckedChange={setConnectorDiscovery} />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
+          Visuals
+        </h3>
+
+        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Artifacts</p>
+            <p className="text-xs text-muted-foreground">
+              Allow AGI to generate interactive content: code previews, charts, and documents
+              rendered inline
+            </p>
+          </div>
+          <Switch checked={artifacts} onCheckedChange={setArtifacts} />
+        </div>
+      </section>
     </div>
   );
 }
