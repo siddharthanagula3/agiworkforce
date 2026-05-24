@@ -500,7 +500,7 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let mut spans = vec![
         Span::styled(
-            " AGI Workforce ",
+            " AGI ",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -565,7 +565,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     if app.chat_messages.is_empty() && !app.is_loading {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Welcome to AGI Workforce TUI",
+            "  Welcome to AGI",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),

@@ -369,7 +369,7 @@ pub fn render_permissions(
     );
 
     let mut body = vec![
-        "  AGI Workforce won't ask before using allowed tools.".to_string(),
+        "  AGI won't ask before using allowed tools.".to_string(),
         "  ╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────╮"
             .to_string(),
         "  │ ⌕ Search…                                                                                                    │"
@@ -545,8 +545,8 @@ pub fn render_tasks(running: &[String]) -> String {
 
 pub fn render_chrome() -> String {
     let body = vec![
-        "  AGI Workforce in Chrome works with the Chrome extension to let you control your browser".to_string(),
-        "  directly from the AGI Workforce CLI. Navigate websites, fill forms, capture screenshots,".to_string(),
+        "  AGI in Chrome works with the Chrome extension to let you control your browser".to_string(),
+        "  directly from the AGI CLI. Navigate websites, fill forms, capture screenshots,".to_string(),
         "  record GIFs, and debug with console logs and network requests.".to_string(),
         String::new(),
         "    Status:    Enabled".to_string(),
@@ -559,12 +559,12 @@ pub fn render_chrome() -> String {
         "  Usage: agi --chrome or agi --no-chrome".to_string(),
         String::new(),
         "  Site-level permissions are inherited from the Chrome extension. Manage permissions in the".to_string(),
-        "  Chrome extension settings to control which sites AGI Workforce can browse, click, and type on.".to_string(),
+        "  Chrome extension settings to control which sites AGI can browse, click, and type on.".to_string(),
         String::new(),
         "  Learn more: https://code.agiworkforce.com/docs/chrome".to_string(),
     ];
     frame(
-        "AGI Workforce in Chrome (Beta)".to_string(),
+        "AGI in Chrome (Beta)".to_string(),
         &body,
         "Enter to confirm · Esc to cancel",
     )
@@ -579,7 +579,7 @@ pub fn render_ide(available_ides: &[String]) -> String {
         vec![
             "  Connect to an IDE for integrated development features.".to_string(),
             String::new(),
-            "  No available IDEs detected. Make sure your IDE has the AGI Workforce extension or"
+            "  No available IDEs detected. Make sure your IDE has the AGI extension or"
                 .to_string(),
             "  plugin installed and is running.".to_string(),
         ]
@@ -829,7 +829,7 @@ pub fn render_keybindings() -> String {
     let body = vec![
         "    Global".to_string(),
         "      Ctrl+C       Cancel current turn / interrupt".to_string(),
-        "      Ctrl+D       Exit AGI Workforce".to_string(),
+        "      Ctrl+D       Exit AGI".to_string(),
         "      Ctrl+L       Clear screen (preserve session)".to_string(),
         "      Tab          Toggle plan mode".to_string(),
         "      Shift+Tab    Cycle plan / accept / reject".to_string(),
@@ -1132,7 +1132,7 @@ mod tests {
     #[test]
     fn chrome_shows_status_extension_and_actions() {
         let s = render_chrome();
-        assert!(s.contains("AGI Workforce in Chrome (Beta)"));
+        assert!(s.contains("AGI in Chrome (Beta)"));
         assert!(s.contains("Status:    Enabled"));
         assert!(s.contains("Extension: Installed"));
         assert!(s.contains("❯ Manage permissions"));
@@ -1146,7 +1146,7 @@ mod tests {
         let s = render_ide(&[]);
         assert!(s.contains("Select IDE"));
         assert!(s.contains("No available IDEs detected"));
-        assert!(s.contains("AGI Workforce extension"));
+        assert!(s.contains("AGI extension"));
     }
 
     #[test]

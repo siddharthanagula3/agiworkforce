@@ -47,7 +47,7 @@ fn write_default_config(home: &Path) -> Result<()> {
     let default_config = CliConfig::default();
     let toml_body = toml::to_string_pretty(&default_config)?;
 
-    let header = r#"# AGI Workforce CLI Configuration
+    let header = r#"# AGI CLI Configuration
 # Global: ~/.agiworkforce/config.toml
 # Project override: .agiworkforce/config.toml
 #
@@ -81,7 +81,7 @@ fn write_default_instructions(home: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let contents = r#"# AGI Workforce Instructions
+    let contents = r#"# AGI Instructions
 
 Add custom instructions here. These are loaded into every agent session.
 The CLI loads this file from ~/.agiworkforce/INSTRUCTIONS.md (global)
@@ -120,7 +120,7 @@ fn write_default_rules(home: &Path) -> Result<()> {
         return Ok(());
     }
 
-    let contents = r#"# Default execution rules for AGI Workforce CLI
+    let contents = r#"# Default execution rules for AGI CLI
 # Format: <effect> <matcher> <value>
 #   effect:  allow | deny
 #   matcher: prefix | program | regex | heuristic

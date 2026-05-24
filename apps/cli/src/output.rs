@@ -436,7 +436,7 @@ pub fn print_banner(model: &str, provider: &str) {
     };
     eprintln!(
         "{} {} {}{}",
-        "AGI Workforce CLI".bold(),
+        "AGI CLI".bold(),
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
         format!("({} via {})", model, provider).dimmed(),
         color_info.dimmed()

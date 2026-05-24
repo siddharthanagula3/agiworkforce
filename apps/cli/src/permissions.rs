@@ -292,7 +292,7 @@ impl PermissionStore {
     /// Output format:
     ///   Permissions:  Recently denied  Allow  Ask  Deny  Workspace
     ///
-    ///   AGI Workforce won't ask before using allowed tools.
+    ///   AGI won't ask before using allowed tools.
     ///
     ///   Search…
     ///
@@ -335,9 +335,9 @@ impl PermissionStore {
             .collect();
 
         let hint = match active {
-            "allow" => "AGI Workforce won't ask before using allowed tools.",
-            "deny" => "AGI Workforce will never use denied tools.",
-            "ask" => "AGI Workforce will ask before using these tools each time.",
+            "allow" => "AGI won't ask before using allowed tools.",
+            "deny" => "AGI will never use denied tools.",
+            "ask" => "AGI will ask before using these tools each time.",
             "workspace" => "Workspace rules apply only in this directory.",
             "recently-denied" => "Tools denied during this session.",
             _ => "",
@@ -464,7 +464,7 @@ mod tests {
         let display = store.display_tab("deny");
         assert!(display.contains("[Deny]"));
         assert!(display.contains("rm -rf"));
-        assert!(display.contains("AGI Workforce will never use denied tools."));
+        assert!(display.contains("AGI will never use denied tools."));
     }
 
     #[test]
