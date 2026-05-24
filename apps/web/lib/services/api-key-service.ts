@@ -4,22 +4,25 @@
  * # Client injection contract (WEB-RLS-BYPASS mitigation)
  *
  * USER-CONTEXT methods (`createApiKey`, `listApiKeys`, `revokeApiKey`) accept a
- *   `client: SupabaseClient` parameter. Callers pass `getUserClient(jwt)`.
+ *   `db: DatabaseAdapter` parameter. Callers pass `getNeonDb()` bound to the
+ *   authenticated user via `db.withUser(jwt)`.
  *
  * SERVICE-CONTEXT methods:
- *   `verifyKey()` - receives only a raw API key (no user JWT). Must use service-role
- *   to look up the key across all users. Once verified, downstream callers should
- *   construct a `getUserClient(jwt)` for subsequent user-scoped operations.
+ *   `verifyKey()` - receives only a raw API key (no user JWT). Must use the
+ *   service-level db adapter to look up the key across all users. Once verified,
+ *   downstream callers should use `getNeonDb().withUser(jwt)` for subsequent
+ *   user-scoped operations.
  *
  * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
  */
 import 'server-only';
 
-import { type SupabaseClient } from '@supabase/supabase-js';
-import { getServiceClient } from '@/lib/supabase-server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { randomBytes, scrypt, timingSafeEqual, createHash } from 'crypto';
 import { ApiKey } from '@/types/saas';
+import type { ApiKeyRow } from '@/lib/server/neon-types';
 import argon2 from 'argon2';
 
 // Scrypt parameters for secure key derivation (legacy)
@@ -180,104 +183,84 @@ async function verifyKeyHash(rawKey: string, storedHash: string): Promise<Verify
 /**
  * Update the key hash in the database (for rehashing on auth)
  */
-async function updateKeyHash(
-  supabase: SupabaseClient,
-  keyId: string,
-  newHash: string,
-): Promise<void> {
-  const { error } = await supabase.from('api_keys').update({ key_hash: newHash }).eq('id', keyId);
-
-  if (error) {
+async function updateKeyHash(db: DatabaseAdapter, keyId: string, newHash: string): Promise<void> {
+  try {
+    await db.execute('UPDATE api_keys SET key_hash = $1 WHERE id = $2', [newHash, keyId]);
+    logger.info({ keyId }, 'Successfully rehashed API key to Argon2id');
+  } catch (error) {
     logger.error({ error, keyId }, 'Failed to update API key hash during rehash');
     // Don't throw - rehashing failure shouldn't block authentication
-  } else {
-    logger.info({ keyId }, 'Successfully rehashed API key to Argon2id');
   }
 }
 
 export class ApiKeyService {
   /**
    * Create a new API Key.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so inserts are
-   * scoped to the authenticated user's rows.
+   * USER-CONTEXT: caller passes a DatabaseAdapter bound to the authenticated user
+   * so inserts are scoped to the authenticated user's rows.
    * RETURNS THE RAW KEY ONLY ONCE.
    *
    * RT-02: Stores `key_prefix` (the keyId segment) for O(1) verification lookup.
    */
   static async createApiKey(
-    client: SupabaseClient,
+    db: DatabaseAdapter,
     userId: string,
     name: string,
     scopes: string[] = [],
   ): Promise<{ apiKey: ApiKey; rawKey: string }> {
     const { raw, hash, keyId } = await generateKey();
 
-    const { data, error } = await client
-      .from('api_keys')
-      .insert({
-        user_id: userId,
-        name,
-        key_hash: hash,
-        // RT-02: key_prefix stores the keyId for fast single-row lookup in verifyKey.
-        // Column must exist in DB; migration adds it as nullable for backward compat.
-        key_prefix: keyId,
-        scopes,
-        expires_at: null, // customizable
-      })
-      .select()
-      .single();
+    const rows = await db.query<ApiKeyRow>(
+      `INSERT INTO api_keys (user_id, name, key_hash, key_prefix, scopes, expires_at)
+       VALUES ($1, $2, $3, $4, $5, NULL)
+       RETURNING *`,
+      [userId, name, hash, keyId, scopes],
+    );
 
-    if (error) {
-      logger.error({ error, userId }, 'Failed to create API key');
-      throw error;
+    if (!rows[0]) {
+      const err = new Error('Failed to create API key: no row returned');
+      logger.error({ userId }, err.message);
+      throw err;
     }
 
-    return { apiKey: data as ApiKey, rawKey: raw };
+    return { apiKey: rows[0] as unknown as ApiKey, rawKey: raw };
   }
 
   /**
    * List user's API Keys.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only the
-   * requesting user's keys are returned.
+   * USER-CONTEXT: caller passes a DatabaseAdapter bound to the authenticated user
+   * so only the requesting user's keys are returned.
    *
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    * to reduce data transfer and improve query performance.
    */
-  static async listApiKeys(client: SupabaseClient, userId: string): Promise<ApiKey[]> {
-    const { data, error } = await client
-      .from('api_keys')
-      .select('id, user_id, name, scopes, created_at, expires_at, last_used_at')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+  static async listApiKeys(db: DatabaseAdapter, userId: string): Promise<ApiKey[]> {
+    const rows = await db.query<ApiKeyRow>(
+      `SELECT id, user_id, name, scopes, created_at, expires_at, last_used_at
+       FROM api_keys
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [userId],
+    );
 
-    if (error) {
-      logger.error({ error, userId }, 'Failed to list API keys');
-      throw error;
-    }
-
-    return data as ApiKey[];
+    return rows as unknown as ApiKey[];
   }
 
   /**
    * Revoke/Delete API Key.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient to enforce
-   * ownership via RLS in addition to the explicit .eq('user_id', userId).
+   * USER-CONTEXT: caller passes a DatabaseAdapter bound to the authenticated user
+   * to enforce ownership in addition to the explicit user_id check.
    */
-  static async revokeApiKey(client: SupabaseClient, id: string, userId: string): Promise<void> {
-    const { error } = await client.from('api_keys').delete().eq('id', id).eq('user_id', userId); // Ensure ownership
-
-    if (error) {
-      logger.error({ error, id }, 'Failed to revoke API key');
-      throw error;
-    }
+  static async revokeApiKey(db: DatabaseAdapter, id: string, userId: string): Promise<void> {
+    await db.execute('DELETE FROM api_keys WHERE id = $1 AND user_id = $2', [id, userId]);
   }
 
   /**
    * Verify an API Key (for external API usage).
    * SERVICE-CONTEXT: this method receives a raw API key with no user JWT.
-   * It must use service-role to look up the key by prefix across all users.
-   * Once a key is verified and user_id is returned, downstream callers should
-   * construct a getUserClient(jwt) for any further user-scoped operations.
+   * It must use the service-level db adapter to look up the key by prefix
+   * across all users. Once a key is verified and user_id is returned, downstream
+   * callers should use getNeonDb().withUser(jwt) for any further user-scoped ops.
    *
    * RT-02 FIX: Two-path verification to prevent DoS via Argon2 fan-out:
    *
@@ -292,9 +275,8 @@ export class ApiKeyService {
    * is rejected immediately with no Argon2 work.
    */
   static async verifyKey(rawKey: string): Promise<ApiKey | null> {
-    // SECURITY: service-role required because verifyKey receives only a raw API key
-    // (no user JWT). It must look up the key across all users to identify the owner.
-    const supabase = getServiceClient();
+    // SERVICE-CONTEXT: service-level db (no user JWT) to look up across all users.
+    const db = getNeonDb();
 
     // Parse-time rejection: reject keys that don't even look like API keys.
     // Regex allows both new format (with embedded keyId) and old format (no underscore separator).
@@ -310,16 +292,16 @@ export class ApiKeyService {
     if (keyIdMatch?.[1]) {
       // FAST PATH: Single DB lookup by key_prefix
       const keyId = keyIdMatch[1];
-      const { data: keys, error } = await supabase
-        .from('api_keys')
-        .select(
-          'id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at',
-        )
-        .eq('key_prefix', keyId)
-        .or('expires_at.is.null,expires_at.gt.now()')
-        .limit(2); // Expect exactly 1; limit(2) detects collision
+      const keys = await db.query<ApiKeyRow>(
+        `SELECT id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at
+         FROM api_keys
+         WHERE key_prefix = $1
+           AND (expires_at IS NULL OR expires_at > now())
+         LIMIT 2`,
+        [keyId],
+      );
 
-      if (error || !keys || keys.length === 0) {
+      if (!keys || keys.length === 0) {
         return null;
       }
 
@@ -328,19 +310,19 @@ export class ApiKeyService {
       const result = await verifyKeyHash(rawKey, key.key_hash);
       if (!result.valid) return null;
 
-      void supabase
-        .from('api_keys')
-        .update({ last_used_at: new Date().toISOString() })
-        .eq('id', key.id)
-        .then(({ error: updateError }) => {
-          if (updateError) logger.error({ error: updateError }, 'Failed to update last_used_at');
-        });
+      // Fire-and-forget: update last_used_at
+      db.execute('UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [
+        new Date().toISOString(),
+        key.id,
+      ]).catch((updateError: unknown) => {
+        logger.error({ error: updateError }, 'Failed to update last_used_at');
+      });
 
       if (result.needsRehash) {
         void (async () => {
           try {
             const newHash = await rehashWithArgon2(rawKey);
-            await updateKeyHash(supabase, key.id, newHash);
+            await updateKeyHash(db, key.id, newHash);
           } catch (rehashError) {
             logger.error({ error: rehashError, keyId: key.id }, 'Failed to rehash API key');
           }
@@ -350,7 +332,7 @@ export class ApiKeyService {
       const { key_hash: _h, key_prefix: _p, ...keyWithoutSecrets } = key;
       void _h;
       void _p;
-      return keyWithoutSecrets as ApiKey;
+      return keyWithoutSecrets as unknown as ApiKey;
     }
 
     // LEGACY PATH: Old key format — no key_id prefix. Scan user's keys only.
@@ -358,35 +340,34 @@ export class ApiKeyService {
     logger.warn({ keyPrefix: rawKey.slice(0, 12) }, 'RT-02: legacy key format — slow Argon2 path');
 
     // Fetch only required columns for verification to reduce data transfer
-    const { data: keys, error } = await supabase
-      .from('api_keys')
-      .select(
-        'id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at',
-      )
-      .is('key_prefix', null) // Only old-format keys lack a key_prefix
-      .or('expires_at.is.null,expires_at.gt.now()')
-      .limit(1000); // Safety limit
+    const keys = await db.query<ApiKeyRow>(
+      `SELECT id, user_id, name, key_hash, key_prefix, scopes, created_at, expires_at, last_used_at
+       FROM api_keys
+       WHERE key_prefix IS NULL
+         AND (expires_at IS NULL OR expires_at > now())
+       LIMIT 1000`,
+    );
 
-    if (error || !keys || keys.length === 0) {
+    if (!keys || keys.length === 0) {
       return null;
     }
 
     for (const key of keys) {
       const result = await verifyKeyHash(rawKey, key.key_hash);
       if (result.valid) {
-        void supabase
-          .from('api_keys')
-          .update({ last_used_at: new Date().toISOString() })
-          .eq('id', key.id)
-          .then(({ error: updateError }) => {
-            if (updateError) logger.error({ error: updateError }, 'Failed to update last_used_at');
-          });
+        // Fire-and-forget: update last_used_at
+        db.execute('UPDATE api_keys SET last_used_at = $1 WHERE id = $2', [
+          new Date().toISOString(),
+          key.id,
+        ]).catch((updateError: unknown) => {
+          logger.error({ error: updateError }, 'Failed to update last_used_at');
+        });
 
         if (result.needsRehash) {
           void (async () => {
             try {
               const newHash = await rehashWithArgon2(rawKey);
-              await updateKeyHash(supabase, key.id, newHash);
+              await updateKeyHash(db, key.id, newHash);
             } catch (rehashError) {
               logger.error(
                 { error: rehashError, keyId: key.id, fromFormat: result.format },
@@ -399,7 +380,7 @@ export class ApiKeyService {
         const { key_hash: _keyHash, key_prefix: _kp, ...keyWithoutHash } = key;
         void _keyHash;
         void _kp;
-        return keyWithoutHash as ApiKey;
+        return keyWithoutHash as unknown as ApiKey;
       }
     }
 

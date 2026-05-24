@@ -13,18 +13,18 @@
  *
  * # Client injection contract
  *
- * Methods that act on behalf of an authenticated user accept a `client:
- * SupabaseClient` injected by the caller (use `getUserClient(jwt)` from
- * `@/lib/supabase-server`).  Service-context operations call
- * `getServiceClient()` internally and are documented as such.
+ * Methods that act on behalf of an authenticated user accept a `db:
+ * DatabaseAdapter` injected by the caller (use `getNeonDb()` from
+ * `@/lib/server/neon-db`). Service-context operations call
+ * `getNeonDb()` internally and are documented as such.
  *
  * The `validateInviteCode` method calls the `validate_and_redeem_invite_code`
- * security-definer RPC — the only permitted path to read invite state.  Direct
+ * security-definer RPC — the only permitted path to read invite state. Direct
  * SELECT on `beta_invites` is blocked by RLS.
  */
 import 'server-only';
 
-import { type SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -50,71 +50,80 @@ export interface ValidateInviteResult {
   error?: InviteCodeError;
 }
 
+// RPC row shape returned by validate_and_redeem_invite_code
+interface ValidateRpcRow {
+  valid: boolean;
+  invite_id: string | null;
+  error: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // joinWaitlist
 // Inserts into cloud_managed_waitlist (migration 20260522000000).
-// Accepts an anonymous Supabase client — no auth required.
+// Accepts a DatabaseAdapter — no auth required.
 // ---------------------------------------------------------------------------
 
 export async function joinWaitlist(
-  client: SupabaseClient,
+  db: DatabaseAdapter,
   entry: WaitlistEntry,
 ): Promise<{ success: boolean; error?: string }> {
   const source = entry.source ?? 'other';
 
-  const { error } = await client.from('cloud_managed_waitlist').upsert(
-    {
-      email: entry.email.toLowerCase().trim(),
-      source,
-    },
-    { onConflict: 'email,source' },
-  );
-
-  if (error) {
-    logger.error({ code: error.code }, '[waitlistService] joinWaitlist error');
+  try {
+    await db.execute(
+      `INSERT INTO cloud_managed_waitlist (email, source)
+       VALUES ($1, $2)
+       ON CONFLICT (email, source) DO UPDATE
+         SET updated_at = now()`,
+      [entry.email.toLowerCase().trim(), source],
+    );
+    return { success: true };
+  } catch (err) {
+    logger.error({ code: (err as { code?: string }).code }, '[waitlistService] joinWaitlist error');
     return { success: false, error: 'Failed to join waitlist. Please try again.' };
   }
-
-  return { success: true };
 }
 
 // ---------------------------------------------------------------------------
 // validateInviteCode
 // Calls validate_and_redeem_invite_code RPC (migration 20260523000000).
-// Must be called with an authenticated user client; returns 'unauthenticated'
-// when auth.uid() is null (the RPC GRANT is restricted to `authenticated`).
+// Must be called with a db adapter bound to an authenticated user via
+// db.withUser(jwt); returns 'unauthenticated' when auth.uid() is null.
+// Parameter order: p_code, p_surface, p_source (matches function signature).
 // ---------------------------------------------------------------------------
 
 export async function validateInviteCode(
-  client: SupabaseClient,
+  db: DatabaseAdapter,
   code: string,
   surface: string,
   source: string,
 ): Promise<ValidateInviteResult> {
-  const { data, error } = await client.rpc('validate_and_redeem_invite_code', {
-    p_code: code.trim().toUpperCase(),
-    p_surface: surface,
-    p_source: source,
-  });
+  try {
+    const rows = await db.query<ValidateRpcRow>(
+      'SELECT * FROM validate_and_redeem_invite_code($1, $2, $3)',
+      [code.trim().toUpperCase(), surface, source],
+    );
 
-  if (error) {
-    logger.error({ code: error.code }, '[waitlistService] validateInviteCode rpc error');
+    // RPC returns a single row
+    const row = rows[0] ?? null;
+
+    if (!row) {
+      return { valid: false, error: 'rpc_error' };
+    }
+
+    if (row.valid) {
+      return { valid: true, inviteId: row.invite_id ?? undefined };
+    }
+
+    return {
+      valid: false,
+      error: (row.error as InviteCodeError) ?? 'rpc_error',
+    };
+  } catch (err) {
+    logger.error(
+      { code: (err as { code?: string }).code },
+      '[waitlistService] validateInviteCode rpc error',
+    );
     return { valid: false, error: 'rpc_error' };
   }
-
-  // RPC returns a single row as an array with one element
-  const row = Array.isArray(data) ? data[0] : data;
-
-  if (!row) {
-    return { valid: false, error: 'rpc_error' };
-  }
-
-  if (row.valid) {
-    return { valid: true, inviteId: row.invite_id ?? undefined };
-  }
-
-  return {
-    valid: false,
-    error: (row.error as InviteCodeError) ?? 'rpc_error',
-  };
 }
