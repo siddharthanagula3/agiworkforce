@@ -128,7 +128,7 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
 
-/// AGI Workforce CLI — multi-model AI agent in your terminal
+/// AGI CLI — multi-model AI agent in your terminal
 #[derive(Parser, Debug)]
 #[command(
     name = "agi",
@@ -392,7 +392,7 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// Sends `model: "auto-economy"` to the AGI Workforce managed-cloud API,
+    /// Sends `model: "auto-economy"` to the AGI managed-cloud API,
     /// which delegates routing to the server-side classifier.  The CLI never
     /// discloses which model was actually used (silent routing).
     ///
@@ -592,12 +592,12 @@ enum Command {
         #[command(subcommand)]
         action: SyncSubcommand,
     },
-    /// Login to AGI Workforce cloud (or an LLM provider via OAuth).
+    /// Login to AGI cloud (or an LLM provider via OAuth).
     Login {
         /// Provider to login with (agiworkforce, anthropic, openai). Omit for interactive menu.
         provider: Option<String>,
     },
-    /// Logout from AGI Workforce cloud.
+    /// Logout from AGI cloud.
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,

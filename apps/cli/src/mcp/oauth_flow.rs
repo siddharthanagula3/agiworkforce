@@ -244,7 +244,7 @@ pub async fn dynamic_register(reg_endpoint: &str, redirect_uri: &str) -> Result<
         .context("build reqwest client for dynamic registration")?;
 
     let body = RegistrationRequest {
-        client_name: "AGI Workforce CLI",
+        client_name: "AGI CLI",
         redirect_uris: vec![redirect_uri],
         grant_types: vec!["authorization_code", "refresh_token"],
         response_types: vec!["code"],

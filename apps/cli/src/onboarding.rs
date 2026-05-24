@@ -78,7 +78,7 @@ fn print_welcome_banner() {
     eprintln!("{}", amber(logo));
     eprintln!(
         "  {} {}",
-        amber_bold("Welcome to AGI Workforce"),
+        amber_bold("Welcome to AGI"),
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
     );
     eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
@@ -510,7 +510,7 @@ fn print_safety_notes() {
     eprintln!("\n  {}", amber_bold("Before you start:"));
     eprintln!("  {}", "─".repeat(50).dimmed());
     eprintln!();
-    eprintln!("  {}  AGI Workforce can make mistakes.", "•".yellow());
+    eprintln!("  {}  AGI can make mistakes.", "•".yellow());
     eprintln!(
         "      {}",
         "Review the code it writes and commands it runs.".dimmed()

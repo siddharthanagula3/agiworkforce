@@ -142,7 +142,7 @@ impl PrivacyMode {
                 "selected context may be sent directly to the user's configured provider key"
             }
             PrivacyMode::Managed => {
-                "selected context may be sent through AGI Workforce managed cloud"
+                "selected context may be sent through AGI managed cloud"
             }
         }
     }
