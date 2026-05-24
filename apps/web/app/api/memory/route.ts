@@ -11,14 +11,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -35,7 +36,7 @@ async function handleGetMemories(request: NextRequest) {
     .range(offset, offset + limit - 1);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch memories');
+    logger.error({ error, userId }, 'Failed to fetch memories');
     throw createError.internal('Failed to fetch memories');
   }
 
@@ -60,7 +61,8 @@ async function handleCreateMemory(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client for all DB ops. user_id still needed for INSERT (RLS can't infer it).
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { content?: string; category?: string; source?: string };
   try {
@@ -83,7 +85,7 @@ async function handleCreateMemory(request: NextRequest) {
   const { data, error } = await supabase
     .from('user_memories')
     .insert({
-      user_id: user.id,
+      user_id: userId,
       content: body.content.trim(),
       category: body.category?.trim() || null,
       source,
@@ -92,7 +94,7 @@ async function handleCreateMemory(request: NextRequest) {
     .single();
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create memory');
+    logger.error({ error, userId }, 'Failed to create memory');
     throw createError.internal('Failed to create memory');
   }
 

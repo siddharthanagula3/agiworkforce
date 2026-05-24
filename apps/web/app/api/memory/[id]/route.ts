@@ -12,7 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -21,7 +21,8 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { data, error } = await supabase
@@ -56,7 +57,8 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   let body: { content?: string };
@@ -110,7 +112,8 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { error } = await supabase
