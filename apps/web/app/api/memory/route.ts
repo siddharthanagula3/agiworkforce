@@ -12,14 +12,15 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { UserMemoryRow } from '@/lib/server/neon-types';
 
 async function handleGetMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -28,20 +29,23 @@ async function handleGetMemories(request: NextRequest) {
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
-  const { data, error } = await supabase
-    .from('user_memories')
-    .select('id, content, category, source, created_at, updated_at')
-    .eq('is_deleted', false)
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) {
+  let data: UserMemoryRow[];
+  try {
+    data = await db.query<UserMemoryRow>(
+      `select id, content, category, source, created_at, updated_at
+       from user_memories
+       where user_id = $1 and is_deleted = false
+       order by updated_at desc
+       limit $2 offset $3`,
+      [userId, limit, offset],
+    );
+  } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch memories');
     throw createError.internal('Failed to fetch memories');
   }
 
   return NextResponse.json({
-    memories: (data || []).map((m) => ({
+    memories: data.map((m) => ({
       id: m.id,
       content: m.content,
       category: m.category,
@@ -60,9 +64,8 @@ async function handleCreateMemory(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client for all DB ops. user_id still needed for INSERT (RLS can't infer it).
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
 
   let body: { content?: string; category?: string; source?: string };
   try {
@@ -82,18 +85,17 @@ async function handleCreateMemory(request: NextRequest) {
   const validSources = ['mobile', 'desktop', 'web', 'auto'];
   const source = validSources.includes(body.source ?? '') ? body.source : 'web';
 
-  const { data, error } = await supabase
-    .from('user_memories')
-    .insert({
-      user_id: userId,
-      content: body.content.trim(),
-      category: body.category?.trim() || null,
-      source,
-    })
-    .select()
-    .single();
-
-  if (error) {
+  let row: UserMemoryRow;
+  try {
+    const [inserted] = await db.query<UserMemoryRow>(
+      `insert into user_memories (user_id, content, category, source)
+       values ($1, $2, $3, $4)
+       returning *`,
+      [userId, body.content.trim(), body.category?.trim() ?? null, source],
+    );
+    if (!inserted) throw new Error('No row returned');
+    row = inserted;
+  } catch (error) {
     logger.error({ error, userId }, 'Failed to create memory');
     throw createError.internal('Failed to create memory');
   }
@@ -101,12 +103,12 @@ async function handleCreateMemory(request: NextRequest) {
   return NextResponse.json(
     {
       memory: {
-        id: data.id,
-        content: data.content,
-        category: data.category,
-        source: data.source,
-        createdAt: data.created_at,
-        updatedAt: data.updated_at,
+        id: row.id,
+        content: row.content,
+        category: row.category,
+        source: row.source,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
       },
     },
     { status: 201 },

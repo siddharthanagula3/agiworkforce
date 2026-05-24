@@ -9,6 +9,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 // Zod schema for session actions
 const SessionRequestSchema = z.object({
@@ -31,9 +32,8 @@ async function handler(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // RLS-AUDIT-FIX: replaced inline service-role auth with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
 
   let rawBody: unknown;
   try {
@@ -53,38 +53,39 @@ async function handler(request: NextRequest) {
 
   switch (action) {
     case 'create': {
-      const { data, error } = await supabase
-        .from('web_conversations')
-        .insert({
-          user_id: userId,
-          title: title || 'New Chat',
-          employee_id: employeeId || 'general',
-        })
-        .select()
-        .single();
-
-      if (error) {
-        logger.error({ userId, error }, 'Failed to create session');
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.query<Record<string, unknown>>(
+          `insert into web_conversations (user_id, title, employee_id)
+           values ($1, $2, $3)
+           returning *`,
+          [userId, title || 'New Chat', employeeId || 'general'],
+        );
+      } catch (err) {
+        logger.error({ userId, err }, 'Failed to create session');
         throw createError.internal('Failed to create chat session');
       }
 
-      return NextResponse.json({ session: data });
+      return NextResponse.json({ session: rows[0] ?? null });
     }
 
     case 'list': {
-      const { data, error } = await supabase
-        .from('web_conversations')
-        .select('*')
-        .eq('user_id', userId)
-        .order('updated_at', { ascending: false })
-        .limit(50);
-
-      if (error) {
-        logger.error({ userId, error }, 'Failed to list sessions');
+      let rows: Record<string, unknown>[];
+      try {
+        rows = await db.query<Record<string, unknown>>(
+          `select *
+           from web_conversations
+           where user_id = $1
+           order by updated_at desc
+           limit 50`,
+          [userId],
+        );
+      } catch (err) {
+        logger.error({ userId, err }, 'Failed to list sessions');
         throw createError.internal('Failed to list sessions');
       }
 
-      return NextResponse.json({ sessions: data });
+      return NextResponse.json({ sessions: rows });
     }
 
     case 'get': {
@@ -92,29 +93,32 @@ async function handler(request: NextRequest) {
         throw createError.badRequest('sessionId is required');
       }
 
-      const { data: session, error: sessionError } = await supabase
-        .from('web_conversations')
-        .select('*')
-        .eq('id', sessionId)
-        .eq('user_id', userId)
-        .single();
+      const sessionRows = await db.query<Record<string, unknown>>(
+        `select *
+         from web_conversations
+         where id = $1 and user_id = $2`,
+        [sessionId, userId],
+      );
 
-      if (sessionError || !session) {
+      if (sessionRows.length === 0) {
         throw createError.notFound('Session not found');
       }
 
-      const { data: messages, error: messagesError } = await supabase
-        .from('web_messages')
-        .select('*')
-        .eq('conversation_id', sessionId)
-        .order('created_at', { ascending: true });
-
-      if (messagesError) {
-        logger.error({ sessionId, error: messagesError }, 'Failed to get messages');
+      let msgRows: Record<string, unknown>[];
+      try {
+        msgRows = await db.query<Record<string, unknown>>(
+          `select *
+           from web_messages
+           where conversation_id = $1
+           order by created_at asc`,
+          [sessionId],
+        );
+      } catch (err) {
+        logger.error({ sessionId, err }, 'Failed to get messages');
         throw createError.internal('Failed to get messages');
       }
 
-      return NextResponse.json({ session, messages });
+      return NextResponse.json({ session: sessionRows[0], messages: msgRows });
     }
 
     case 'delete': {
@@ -122,14 +126,14 @@ async function handler(request: NextRequest) {
         throw createError.badRequest('sessionId is required');
       }
 
-      const { error } = await supabase
-        .from('web_conversations')
-        .delete()
-        .eq('id', sessionId)
-        .eq('user_id', userId);
-
-      if (error) {
-        logger.error({ sessionId, error }, 'Failed to delete session');
+      try {
+        await db.execute(
+          `delete from web_conversations
+           where id = $1 and user_id = $2`,
+          [sessionId, userId],
+        );
+      } catch (err) {
+        logger.error({ sessionId, err }, 'Failed to delete session');
         throw createError.internal('Failed to delete session');
       }
 

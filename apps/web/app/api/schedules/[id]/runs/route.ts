@@ -12,6 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 function mapRowToRun(row: Record<string, unknown>) {
   return {
@@ -35,9 +36,8 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: scheduleId } = await context.params;
 
   const url = new URL(request.url);
@@ -45,33 +45,32 @@ async function handleGetRuns(request: NextRequest, context: RouteContext) {
   const limit = Math.min(Number.isNaN(parsedLimit) ? 20 : parsedLimit, 100);
 
   // Verify the schedule belongs to this user
-  const { data: schedule, error: scheduleError } = await supabase
-    .from('scheduled_tasks')
-    .select('id')
-    .eq('id', scheduleId)
-    .eq('user_id', userId)
-    .single();
+  const [schedule] = await db.query<{ id: string }>(
+    `select id from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
+    [scheduleId, userId],
+  );
 
-  if (scheduleError || !schedule) {
+  if (!schedule) {
     throw createError.notFound('Schedule not found');
   }
 
   // Fetch runs
-  const { data, error } = await supabase
-    .from('schedule_runs')
-    .select('*')
-    .eq('schedule_id', scheduleId)
-    .eq('user_id', userId)
-    .order('started_at', { ascending: false })
-    .limit(limit);
-
-  if (error) {
+  let data: Record<string, unknown>[];
+  try {
+    data = await db.query<Record<string, unknown>>(
+      `select * from schedule_runs
+       where schedule_id = $1 and user_id = $2
+       order by started_at desc
+       limit $3`,
+      [scheduleId, userId, limit],
+    );
+  } catch (error) {
     logger.error({ error, scheduleId }, 'Failed to fetch schedule runs');
     throw createError.internal('Failed to fetch schedule runs');
   }
 
   return NextResponse.json({
-    runs: (data || []).map(mapRowToRun),
+    runs: data.map(mapRowToRun),
   });
 }
 
@@ -87,50 +86,49 @@ async function handleTriggerRun(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: scheduleId } = await context.params;
 
   // Verify the schedule belongs to this user
-  const { data: schedule, error: scheduleError } = await supabase
-    .from('scheduled_tasks')
-    .select('id')
-    .eq('id', scheduleId)
-    .eq('user_id', userId)
-    .single();
+  const [schedule] = await db.query<{ id: string }>(
+    `select id from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
+    [scheduleId, userId],
+  );
 
-  if (scheduleError || !schedule) {
+  if (!schedule) {
     throw createError.notFound('Schedule not found');
   }
 
   // Create a pending run
-  const { data, error } = await supabase
-    .from('schedule_runs')
-    .insert({
-      schedule_id: scheduleId,
-      user_id: userId,
-      status: 'pending',
-    })
-    .select()
-    .single();
-
-  if (error) {
+  let runData: Record<string, unknown>;
+  try {
+    const [inserted] = await db.query<Record<string, unknown>>(
+      `insert into schedule_runs (schedule_id, user_id, status)
+       values ($1, $2, 'pending')
+       returning *`,
+      [scheduleId, userId],
+    );
+    if (!inserted) throw new Error('No row returned');
+    runData = inserted;
+  } catch (error) {
     logger.error({ error, scheduleId }, 'Failed to trigger schedule run');
     throw createError.internal('Failed to trigger schedule run');
   }
 
-  // Update the schedule's last_run_at
-  await supabase
-    .from('scheduled_tasks')
-    .update({
-      last_run_at: new Date().toISOString(),
-      last_run_status: 'pending',
-    })
-    .eq('id', scheduleId)
-    .eq('user_id', userId);
+  // Update the schedule's last_run_at (best-effort, do not fail the request)
+  try {
+    await db.execute(
+      `update scheduled_tasks
+       set last_run_at = now(), last_run_status = 'pending'
+       where id = $1 and user_id = $2`,
+      [scheduleId, userId],
+    );
+  } catch {
+    // non-fatal
+  }
 
-  return NextResponse.json({ run: mapRowToRun(data) }, { status: 201 });
+  return NextResponse.json({ run: mapRowToRun(runData) }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleGetRuns);

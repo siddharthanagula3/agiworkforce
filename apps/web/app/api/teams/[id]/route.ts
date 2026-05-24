@@ -13,6 +13,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { TeamRow, TeamMemberRow } from '@/lib/server/neon-types';
 
 function mapRowToTeam(row: Record<string, unknown>) {
   return {
@@ -45,38 +47,36 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
     throw createError.validation('Invalid team ID');
   }
 
-  const { data: team, error: teamError } = await supabase
-    .from('teams')
-    .select('id, name, description, owner_id, created_at, updated_at')
-    .eq('id', teamId)
-    .single();
+  const [team] = await db.query<TeamRow>(
+    `select id, name, description, owner_id, created_at, updated_at
+     from teams where id = $1 limit 1`,
+    [teamId],
+  );
 
-  if (teamError || !team) {
+  if (!team) {
     throw createError.notFound('Team not found');
   }
 
-  const teamRow = team as Record<string, unknown>;
-  const isOwner = teamRow['owner_id'] === userId;
+  const isOwner = team.owner_id === userId;
 
   // Check if the user is a member
-  const { data: membership, error: membershipError } = await supabase
-    .from('team_members')
-    .select('role')
-    .eq('team_id', teamId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (membershipError) {
-    logger.error({ error: membershipError, userId, teamId }, 'Failed to check membership');
+  let membership: Pick<TeamMemberRow, 'role'> | undefined;
+  try {
+    const [row] = await db.query<Pick<TeamMemberRow, 'role'>>(
+      `select role from team_members where team_id = $1 and user_id = $2 limit 1`,
+      [teamId, userId],
+    );
+    membership = row;
+  } catch (error) {
+    logger.error({ error, userId, teamId }, 'Failed to check membership');
     throw createError.internal('Failed to fetch team');
   }
 
@@ -85,24 +85,25 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
   }
 
   // Fetch members
-  const { data: members, error: membersError } = await supabase
-    .from('team_members')
-    .select('id, team_id, user_id, email, name, role, joined_at')
-    .eq('team_id', teamId)
-    .order('joined_at', { ascending: true });
-
-  if (membersError) {
-    logger.error({ error: membersError, userId, teamId }, 'Failed to fetch team members');
+  let members: TeamMemberRow[];
+  try {
+    members = await db.query<TeamMemberRow>(
+      `select id, team_id, user_id, email, name, role, joined_at
+       from team_members where team_id = $1 order by joined_at asc`,
+      [teamId],
+    );
+  } catch (error) {
+    logger.error({ error, userId, teamId }, 'Failed to fetch team members');
     throw createError.internal('Failed to fetch team members');
   }
 
-  const userRole = isOwner ? 'owner' : (membership?.['role'] ?? 'viewer');
+  const userRole = isOwner ? 'owner' : (membership?.role ?? 'viewer');
 
   return NextResponse.json({
     team: {
-      ...mapRowToTeam(teamRow),
+      ...mapRowToTeam(team as unknown as Record<string, unknown>),
       role: userRole,
-      members: (members || []).map((m) => mapRowToMember(m as Record<string, unknown>)),
+      members: members.map((m) => mapRowToMember(m as unknown as Record<string, unknown>)),
     },
   });
 }
@@ -121,9 +122,8 @@ async function handleUpdateTeam(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -154,55 +154,61 @@ async function handleUpdateTeam(
   }
 
   // Verify team exists and user has admin or owner access
-  const { data: team, error: teamError } = await supabase
-    .from('teams')
-    .select('id, owner_id')
-    .eq('id', teamId)
-    .single();
+  const [team] = await db.query<Pick<TeamRow, 'id' | 'owner_id'>>(
+    `select id, owner_id from teams where id = $1 limit 1`,
+    [teamId],
+  );
 
-  if (teamError || !team) {
+  if (!team) {
     throw createError.notFound('Team not found');
   }
 
-  const teamRow = team as Record<string, unknown>;
-  const isOwner = teamRow['owner_id'] === userId;
+  const isOwner = team.owner_id === userId;
 
   if (!isOwner) {
-    const { data: membership } = await supabase
-      .from('team_members')
-      .select('role')
-      .eq('team_id', teamId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    const memberRole = (membership as Record<string, unknown> | null)?.['role'];
-    if (memberRole !== 'admin') {
+    const [memberRow] = await db.query<Pick<TeamMemberRow, 'role'>>(
+      `select role from team_members where team_id = $1 and user_id = $2 limit 1`,
+      [teamId, userId],
+    );
+    if (memberRow?.role !== 'admin') {
       throw createError.forbidden('Only team owners and admins can update team settings');
     }
   }
 
-  const updateData: Record<string, unknown> = {};
-  if (body.name !== undefined) updateData['name'] = body.name.trim();
-  if (body.description !== undefined) updateData['description'] = body.description.trim();
+  const setClauses: string[] = [];
+  const params: unknown[] = [];
 
-  if (Object.keys(updateData).length === 0) {
+  if (body.name !== undefined) {
+    params.push(body.name.trim());
+    setClauses.push(`name = $${params.length}`);
+  }
+  if (body.description !== undefined) {
+    params.push(body.description.trim());
+    setClauses.push(`description = $${params.length}`);
+  }
+
+  if (setClauses.length === 0) {
     throw createError.validation('No fields to update');
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from('teams')
-    .update(updateData)
-    .eq('id', teamId)
-    .select()
-    .single();
+  params.push(teamId);
+  const idIdx = params.length;
 
-  if (updateError) {
-    logger.error({ error: updateError, userId, teamId }, 'Failed to update team');
+  let updated: TeamRow;
+  try {
+    const [row] = await db.query<TeamRow>(
+      `update teams set ${setClauses.join(', ')} where id = $${idIdx} returning *`,
+      params,
+    );
+    if (!row) throw new Error('No row returned');
+    updated = row;
+  } catch (error) {
+    logger.error({ error, userId, teamId }, 'Failed to update team');
     throw createError.internal('Failed to update team');
   }
 
   return NextResponse.json({
-    team: mapRowToTeam(updated as Record<string, unknown>),
+    team: mapRowToTeam(updated as unknown as Record<string, unknown>),
   });
 }
 
@@ -220,9 +226,8 @@ async function handleDeleteTeam(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -230,25 +235,23 @@ async function handleDeleteTeam(
   }
 
   // Only the owner may delete the team
-  const { data: team, error: teamError } = await supabase
-    .from('teams')
-    .select('id, owner_id')
-    .eq('id', teamId)
-    .single();
+  const [team] = await db.query<Pick<TeamRow, 'id' | 'owner_id'>>(
+    `select id, owner_id from teams where id = $1 limit 1`,
+    [teamId],
+  );
 
-  if (teamError || !team) {
+  if (!team) {
     throw createError.notFound('Team not found');
   }
 
-  const teamRow = team as Record<string, unknown>;
-  if (teamRow['owner_id'] !== userId) {
+  if (team.owner_id !== userId) {
     throw createError.forbidden('Only the team owner can delete this team');
   }
 
-  const { error: deleteError } = await supabase.from('teams').delete().eq('id', teamId);
-
-  if (deleteError) {
-    logger.error({ error: deleteError, userId, teamId }, 'Failed to delete team');
+  try {
+    await db.execute(`delete from teams where id = $1`, [teamId]);
+  } catch (error) {
+    logger.error({ error, userId, teamId }, 'Failed to delete team');
     throw createError.internal('Failed to delete team');
   }
 
