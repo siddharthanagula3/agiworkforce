@@ -4,13 +4,12 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 
 import { getEnv } from '@/utils/env';
-import { getAuthenticatedUser } from '@/lib/api-auth';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -73,20 +72,10 @@ export async function POST(
   if (rateLimitResponse) return rateLimitResponse;
 
   // 2. Authenticate — throws AppError(401) if missing/invalid
-  let user: Awaited<ReturnType<typeof getAuthenticatedUser>>;
-  // RLS-bound client derived from the Bearer token when available.
-  // Cookie-path has no raw JWT, so falls back to the string overload (service-role).
-  let userClient: SupabaseClient | string;
+  let userId: string;
   try {
-    user = await getAuthenticatedUser(request);
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      userClient = getUserClient(authHeader.substring(7));
-    } else {
-      // Cookie auth: no raw JWT accessible here; use userId string so CreditService
-      // falls back to the service-role overload path.
-      userClient = user.id;
-    }
+    const auth = await getClerkAuthUser(request);
+    userId = auth.userId;
   } catch (err) {
     if (err && typeof err === 'object' && 'statusCode' in err) {
       const appErr = err as { statusCode: number; message: string };
@@ -94,11 +83,12 @@ export async function POST(
     }
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const db = getNeonDb();
 
   // 3. Validate providerId against allowlist
   const { providerId } = await params;
   if (!ALLOWED_PROVIDER_IDS.has(providerId)) {
-    logger.warn({ providerId, userId: user.id }, 'RT-01: rejected invalid providerId');
+    logger.warn({ providerId, userId }, 'RT-01: rejected invalid providerId');
     return NextResponse.json({ error: 'Invalid provider' }, { status: 400 });
   }
 
@@ -113,9 +103,9 @@ export async function POST(
   }
 
   // 5. Credit pre-check
-  const canAfford = await CreditService.checkAvailable(userClient, user.id, MIN_STREAM_COST_CENTS);
+  const canAfford = await CreditService.checkAvailable(db, userId, MIN_STREAM_COST_CENTS);
   if (!canAfford) {
-    logger.warn({ userId: user.id }, 'RT-01: insufficient credits for stream');
+    logger.warn({ userId }, 'RT-01: insufficient credits for stream');
     return NextResponse.json({ error: 'insufficient_credits' }, { status: 402 });
   }
 
