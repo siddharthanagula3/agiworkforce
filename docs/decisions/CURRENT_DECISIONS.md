@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-05-21
-Last updated: 2026-05-21
+Last reviewed: 2026-05-24
+Last updated: 2026-05-24
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -73,6 +73,9 @@ Archived source material:
 
 16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `TODO.md` for active work, `CHANGELOG.md` for completed work, current docs in `docs/current`, plans in `docs/plans`, evidence in `audit`, generated reports in `reports`, and historical material in `docs/archive`.
     Evidence: `docs/engineering/naming-conventions.md`, `docs/current/agent-and-repo-operability.md`, `scripts/check-structure-conventions.mjs`.
+
+17. The preferred new cloud foundation is Clerk for managed identity and Neon for Postgres, but production stays on the existing Supabase path until Clerk web/mobile session flows, Neon schema/RLS migration, storage/realtime replacements, and rollback runbooks are verified. Do not expose broken OAuth buttons or switch providers by docs-only claims.
+    Evidence: `packages/data-layer/src/adapters/clerk.ts`, `packages/data-layer/src/adapters/neon.ts`, `packages/data-layer/README.md`, `apps/web/.env.example`.
 
 ## Outdated Or Historical
 
