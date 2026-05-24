@@ -3,30 +3,20 @@
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   Plus,
-  Paperclip,
   X,
   Image as ImageIcon,
-  Video,
-  FileText,
   Globe,
   Sparkles,
-  Brain,
   BookOpen,
-  Code2,
   Wand2,
   ChevronRight,
   Check,
-  CheckCircle2,
-  Clock,
-  Link2,
-  Layers,
-  Library,
-  Puzzle,
+  Camera,
+  FolderOpen,
+  Github,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
-import { useDirectoryStore } from '@features/chat/stores/directory-store';
-import { FocusModeButtons, type FocusMode } from './FocusModeButtons';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
 import { SkillsMenu } from '../SkillsMenu';
@@ -34,14 +24,14 @@ import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { GhostTextOverlay } from './GhostTextOverlay';
-import { AgentModeSwitcher } from './AgentModeSwitcher';
-import { FolderContextSelector } from './FolderContextSelector';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
 import type { ChatMode } from '@features/chat/types';
 import { CONNECTORS } from '@features/connectors/data/connectors';
+import { useConnectors } from '@features/connectors/hooks/use-connectors';
+import { Switch } from '@shared/ui/switch';
 
 interface ChatComposerProps {
   onSend: (
@@ -97,14 +87,6 @@ interface ChatComposerProps {
 
 const CONNECTOR_PREVIEW = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
 
-const TOOLS = [
-  { id: 'image', label: 'Generate Image', icon: ImageIcon, color: 'text-purple-400' },
-  { id: 'video', label: 'Generate Video', icon: Video, color: 'text-pink-400' },
-  { id: 'document', label: 'Create Document', icon: FileText, color: 'text-blue-400' },
-  { id: 'search', label: 'Web Search', icon: Globe, color: 'text-emerald-400' },
-  { id: 'code-execution', label: 'Run Code (Python)', icon: Code2, color: 'text-violet-400' },
-];
-
 type StyleMode = 'normal' | 'concise' | 'formal' | 'explanatory';
 
 interface StyleOption {
@@ -120,20 +102,36 @@ const STYLE_OPTIONS: StyleOption[] = [
   { id: 'explanatory', label: 'Explanatory', description: 'Detailed with examples' },
 ];
 
-const FOCUS_MODE_TAGS: Record<NonNullable<FocusMode>, ModeTag[]> = {
-  web: [{ id: 'web-search', label: 'Web Search', color: 'teal' }],
-  academic: [
-    { id: 'research', label: 'Research', color: 'blue' },
-    { id: 'reasoning', label: 'Reasoning', color: 'indigo' },
-  ],
-  code: [{ id: 'coding', label: 'Coding', color: 'green' }],
-  writing: [{ id: 'writing-assist', label: 'Writing', color: 'purple' }],
-  research: [
-    { id: 'deep-research', label: 'Research', color: 'blue' },
-    { id: 'web-search-r', label: 'Web Search', color: 'teal' },
-    { id: 'reasoning-r', label: 'Reasoning', color: 'indigo' },
-  ],
-};
+/** Toggle row used in + menu for Research and Web search. */
+function MenuToggleRow({
+  icon: Icon,
+  label,
+  checked,
+  onToggle,
+  disabled,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+        disabled ? 'cursor-not-allowed opacity-50' : 'hover:bg-muted/60',
+      )}
+    >
+      <Icon className="h-4 w-4 text-muted-foreground" />
+      <span className="flex-1 text-left">{label}</span>
+      {checked && <Check className="h-3.5 w-3.5 text-foreground" />}
+    </button>
+  );
+}
 
 const ChatComposerNewComponent = ({
   onSend,
@@ -447,6 +445,26 @@ const ChatComposerNewComponent = ({
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
 
+  const handleSkillSelect = useCallback((skillName: string) => {
+    setShowSlashMenu(false);
+    // Fetch the skill body and inject it as the message text so the user can
+    // review and optionally edit before sending.
+    void (async () => {
+      try {
+        const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as { body: string };
+        setMessage(json.body);
+      } catch {
+        // On failure, at least put the skill name in the textarea so the user
+        // knows which skill was selected.
+        setMessage(`/${skillName} `);
+      } finally {
+        setTimeout(() => textareaRef.current?.focus(), 0);
+      }
+    })();
+  }, []);
+
   const handleStop = useCallback(() => {
     if (onStop) {
       onStop();
@@ -648,6 +666,7 @@ const ChatComposerNewComponent = ({
             ref={slashMenuRef}
             query={slashQuery}
             onSelect={handleSlashSelect}
+            onSkillSelect={handleSkillSelect}
             onClose={() => setShowSlashMenu(false)}
           />
         )}
