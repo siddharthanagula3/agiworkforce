@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Chrome Extension — AI alongside every webpage | AGI',
   description:
-    'A side panel that lives on top of any tab. Read the page, ask a question, get a tool call back. The extension is the UI; your desktop is the brain. No model runs in the browser.',
+    'A side panel that lives on top of any tab. Read the page, ask a question. Your desktop is the brain. No model runs in the browser.',
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
 
@@ -122,20 +122,8 @@ const FEATURES = [
     body: 'Content scripts extract structured text from articles, docs, and tickets. No copy-paste.',
   },
   {
-    label: 'Platform assistants',
-    body: 'Context-aware on Slack, Gmail, Google Calendar, Google Docs, and GitHub. Triggered by URL pattern.',
-  },
-  {
-    label: 'Job autofill',
-    body: 'One-click application autofill on LinkedIn and Lever. Pulls profile context from your settings.',
-  },
-  {
-    label: 'Quick popup',
-    body: 'Click the toolbar icon for one-off questions without opening the side panel.',
-  },
-  {
-    label: 'Desktop bridge',
-    body: 'Native messaging to AGI Desktop on localhost:8787. All inference runs on your machine.',
+    label: 'Desktop bridge (planned)',
+    body: 'Planned: native messaging to AGI Desktop. All inference runs on your machine. The bridge is the planned architecture, not yet shipped.',
   },
   {
     label: 'BYOK across providers',
@@ -143,7 +131,7 @@ const FEATURES = [
   },
   {
     label: 'Privacy by design',
-    body: 'Zero telemetry on AI screens. Page text never sent to a server — it goes to your desktop only.',
+    body: 'Page text never sent to a server. It goes to your desktop only.',
   },
 ];
 
@@ -156,14 +144,15 @@ export default function ChromeExtensionPage() {
           <h1 className="agi-page-h1">AI alongside every webpage.</h1>
           <p className="agi-page-lede">
             A side panel that lives on top of any tab. Read the page you&rsquo;re on, ask a
-            question, get a tool call back.{' '}
+            question.{' '}
             <strong>
               The extension is the UI. Your desktop is the brain. No model runs in the browser.
-            </strong>
+            </strong>{' '}
+            The extension is in development.
           </p>
           <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
-              Install dev build
+            <Link href="/contact" className="agi-cta-primary">
+              Join the waitlist
             </Link>
             <Link href="/desktop" className="agi-cta-ghost">
               Pair with desktop &rarr;
@@ -186,12 +175,8 @@ export default function ChromeExtensionPage() {
               description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
             />
             <ScreenshotPlaceholder
-              label="Platform assistant — Gmail"
-              description="Context card appears automatically on Gmail. Summarize thread, draft reply, or extract action items in one click."
-            />
-            <ScreenshotPlaceholder
-              label="Quick popup — one-off questions"
-              description="Toolbar icon popup for fast queries. No side panel needed. Answer streams back in under a second over the desktop bridge."
+              label="Page reader"
+              description="Content scripts extract structured text from articles, docs, and tickets. No copy-paste needed."
             />
           </div>
         </section>
@@ -208,19 +193,19 @@ export default function ChromeExtensionPage() {
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">02 / Native messaging bridge</span>
-              <h3 className="agi-step-h">Bridge to your desktop on localhost:8787</h3>
+              <span className="agi-step-n">02 / Planned: native messaging bridge</span>
+              <h3 className="agi-step-h">Planned architecture: bridge to your desktop</h3>
               <p className="agi-step-body">
-                The intent flows through Chrome&rsquo;s native messaging API to the AGI desktop
-                process running on your machine.
+                The planned design routes intent through Chrome&rsquo;s native messaging API to the
+                AGI desktop process. This bridge is not yet shipped.
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">03 / Desktop executes</span>
-              <h3 className="agi-step-h">Desktop executes</h3>
+              <span className="agi-step-n">03 / Planned: desktop executes</span>
+              <h3 className="agi-step-h">Planned: desktop executes</h3>
               <p className="agi-step-body">
-                Tool calls and model traffic happen on your desktop with full BYOK or local-mode
-                access. Results stream back into the side panel.
+                In the target architecture, tool calls and model traffic happen on your desktop with
+                full BYOK or local-mode access. Results stream back into the side panel.
               </p>
             </li>
           </ol>
@@ -243,21 +228,24 @@ export default function ChromeExtensionPage() {
           <p className="agi-section-eyebrow">Built-in</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Side panel + popup</h3>
+              <h3 className="agi-reason-h">Side panel chat</h3>
               <p className="agi-reason-p">
-                Chat alongside any tab. Quick-access popup for one-off questions.
+                Persistent side panel alongside any tab. The conversation carries page context
+                automatically.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Platform assistants</h3>
+              <h3 className="agi-reason-h">Page reader</h3>
               <p className="agi-reason-p">
-                Context-aware on Slack, Gmail, Calendar, Docs, GitHub. Triggered automatically.
+                Content scripts extract structured text from articles, docs, and tickets. No
+                copy-paste.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Job autofill</h3>
+              <h3 className="agi-reason-h">Desktop bridge (planned)</h3>
               <p className="agi-reason-p">
-                One-click application autofill on LinkedIn and Lever. Pulls your profile context.
+                Planned: native messaging to AGI Desktop so all inference runs on your machine, not
+                in the browser.
               </p>
             </li>
           </ul>
@@ -272,7 +260,7 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Bridge</td>
-                <td>Native messaging on localhost:8787</td>
+                <td>Planned: native messaging on localhost:8787 (not yet shipped)</td>
               </tr>
               <tr>
                 <td>Browser model</td>
@@ -280,7 +268,7 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Web Store</td>
-                <td>Listing in review — install the dev build until then</td>
+                <td>Coming soon — join the waitlist for early access</td>
               </tr>
             </tbody>
           </table>

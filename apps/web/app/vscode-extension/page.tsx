@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'VS Code Extension — Multi-provider coding assistant | AGI',
   description:
-    '10+ providers in one VS Code extension. Inline completions, code lens, hover provider, and an @agi chat participant inside Copilot Chat. Bring your own keys.',
+    '10+ providers in one VS Code extension. A standalone AGI chat panel for code questions, refactors, and slash commands. Bring your own keys.',
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
 };
 
@@ -21,28 +21,12 @@ const SLASH: { cmd: string; desc: string }[] = [
 
 const FEATURES = [
   {
-    label: '@agi chat participant',
-    body: 'Use @agi inside Copilot Chat on VS Code and editors that support the Chat Participant API (Cursor, Windsurf). Ask questions, request refactors, run slash commands.',
-  },
-  {
-    label: 'Inline completions',
-    body: 'Ghost-text as you type, powered by whichever provider you pick. Switch providers per file, per project, or globally via the status bar.',
-  },
-  {
-    label: 'Code lens',
-    body: 'Inline actions above every function: Explain, Fix, Refactor, Add Tests, Add Docs. One click, no selection needed.',
-  },
-  {
-    label: 'Hover provider',
-    body: 'Hover any symbol for an inline explanation from your chosen model. Works across all languages.',
+    label: 'AGI chat panel',
+    body: 'A dedicated sidebar panel for code questions, refactors, and slash commands. Runs independently in VS Code without depending on Copilot or any other extension.',
   },
   {
     label: 'Multi-provider switching',
     body: '10+ providers available. Status-bar picker lets you swap model mid-session without leaving the editor.',
-  },
-  {
-    label: 'Cursor compatibility',
-    body: 'The @agi chat participant works in Cursor and other VS Code forks that support the Chat Participant API surface.',
   },
   {
     label: 'BYOK',
@@ -150,8 +134,8 @@ export default function VscodeExtensionPage() {
         <section className="agi-page-hero">
           <h1 className="agi-page-h1">Multi-provider coding assistant.</h1>
           <p className="agi-page-lede">
-            10+ providers in one VS Code extension. Inline completions, code lens, hover provider,
-            and an @agi chat participant inside Copilot Chat.{' '}
+            10+ providers in one VS Code extension. A standalone AGI chat panel for code questions,
+            refactors, and slash commands.{' '}
             <strong>Not locked to one model. Bring your own keys, pay providers directly.</strong>
           </p>
           <div className="agi-cta-row">
@@ -180,12 +164,8 @@ export default function VscodeExtensionPage() {
             }}
           >
             <EditorScreenshot
-              label="@agi in Copilot Chat"
-              description="@agi chat participant answering a question about the open file. Works in VS Code, Cursor, and other editors with the Chat Participant API."
-            />
-            <EditorScreenshot
-              label="Code lens actions"
-              description="Inline Explain, Fix, Refactor, Tests, Docs buttons above a TypeScript function. One click triggers the action with full file context."
+              label="AGI chat panel"
+              description="Standalone AGI sidebar panel answering a question about the open file. Runs independently without Copilot or other extensions."
             />
             <EditorScreenshot
               label="Provider switcher"
@@ -215,24 +195,24 @@ export default function VscodeExtensionPage() {
           <p className="agi-section-eyebrow">What you get</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">@agi chat participant</h3>
+              <h3 className="agi-reason-h">AGI chat panel</h3>
               <p className="agi-reason-p">
-                Use <code>@agi</code> inside Copilot Chat. Ask questions, request refactors, run
-                slash commands without leaving the chat panel.
+                A dedicated sidebar panel. Ask questions, request refactors, run slash commands
+                without leaving the editor. No dependency on Copilot or other extensions.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Inline completions</h3>
+              <h3 className="agi-reason-h">Multi-provider switching</h3>
               <p className="agi-reason-p">
-                Ghost-text as you type, powered by whichever provider you pick. Switch providers per
-                file, per project, or globally.
+                10+ providers in the status-bar picker. Switch model mid-session without leaving the
+                editor or touching a config file.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Code lens + hover</h3>
+              <h3 className="agi-reason-h">BYOK</h3>
               <p className="agi-reason-p">
-                Inline actions above functions: Explain, Fix, Refactor, Add Tests, Add Docs. Hover
-                any symbol for an inline explanation.
+                Bring your own keys. Pay providers directly. No AGI subscription required to use the
+                editor extension.
               </p>
             </li>
           </ul>
@@ -262,7 +242,7 @@ export default function VscodeExtensionPage() {
               </tr>
               <tr>
                 <td>Cursor / forks</td>
-                <td>Supported via the Chat Participant API — install the same VSIX</td>
+                <td>Compatible with VS Code forks — install the same VSIX</td>
               </tr>
               <tr>
                 <td>Desktop bridge</td>
