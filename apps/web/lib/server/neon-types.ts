@@ -349,3 +349,75 @@ export type EmailPreferenceRow = {
   created_at: string;
   updated_at: string;
 };
+
+export type SSOConnectionRow = {
+  id: string;
+  organization_id: string;
+  provider: string;
+  domain: string;
+  metadata_url: string | null;
+  metadata_xml: string | null;
+  entity_id: string | null;
+  sso_url: string | null;
+  certificate: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ReleaseRow = {
+  id: string;
+  version: string;
+  platform: string;
+  channel: string;
+  download_url: string;
+  notes: string | null;
+  pub_date: string;
+  file_size_bytes: number | null;
+  is_critical: boolean;
+  is_prerelease: boolean;
+  created_at: string;
+};
+
+export type SharedConversationRow = {
+  id: string;
+  token: string;
+  messages_json: string;
+  title: string | null;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type DirectorySyncConnectionRow = {
+  id: string;
+  organization_id: string;
+  provider: string;
+  directory_id: string;
+  display_name: string | null;
+  is_active: boolean;
+  last_sync_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DirectorySyncEventRow = {
+  id: string;
+  connection_id: string;
+  event_type: string;
+  user_email: string | null;
+  raw_payload: Record<string, unknown> | null;
+  processed_at: string | null;
+  error: string | null;
+  created_at: string;
+};
+
+export type GitHubPrReviewAttemptRow = {
+  id: string;
+  installation_id: number;
+  pr_number: number;
+  status: string;
+  attempted_at: string;
+  completed_at: string | null;
+  tokens_used: number | null;
+  error: string | null;
+};

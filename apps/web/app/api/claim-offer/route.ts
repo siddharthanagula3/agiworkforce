@@ -1,8 +1,9 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { ClaimOfferRequestSchema } from '@/lib/validations/claim-offer';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -25,7 +26,7 @@ async function handleClaimOffer(request: NextRequest) {
   }
 
   const { userId } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
   // Parse and validate request body
   let body: unknown;
@@ -44,19 +45,22 @@ async function handleClaimOffer(request: NextRequest) {
 
   try {
     // AUDIT-P3-008-009: Select only required columns instead of SELECT *
-    const { data: invite, error: inviteError } = await supabase
-      .from('beta_invites')
-      .select('id, plan_tier, trial_days, discount_percent')
-      .eq('code', trimmedCode)
-      .eq('is_active', true)
-      .single();
+    type InviteRow = {
+      id: string;
+      plan_tier: string;
+      trial_days: number | null;
+      discount_percent: number | null;
+    };
+    const [invite] = await db.query<InviteRow>(
+      'select id, plan_tier, trial_days, discount_percent from beta_invites where code = $1 and is_active = true limit 1',
+      [trimmedCode],
+    );
 
-    if (inviteError || !invite) {
+    if (!invite) {
       logger.warn(
         {
           userId: userId,
           code: trimmedCode,
-          error: inviteError,
         },
         'Invalid invite code',
       );
@@ -64,25 +68,27 @@ async function handleClaimOffer(request: NextRequest) {
     }
 
     // Atomic claim via RPC (prevents race conditions and enforces one-offer-per-user)
-    const { data: claimResult, error: claimError } = await supabase.rpc('claim_beta_invite', {
-      p_user_id: userId,
-      p_invite_id: invite.id,
-      p_plan_tier: invite.plan_tier,
-    });
-
-    if (claimError) {
+    type ClaimRpcRow = {
+      success: boolean;
+      error: string | null;
+      subscription_id: string | null;
+      plan_tier: string | null;
+      trial_days: number | null;
+      discount_percent: number | null;
+    };
+    let claimRpcRows: ClaimRpcRow[];
+    try {
+      claimRpcRows = await db.query<ClaimRpcRow>('select * from claim_beta_invite($1, $2, $3)', [
+        userId,
+        invite.id,
+        invite.plan_tier,
+      ]);
+    } catch (claimError) {
       logger.error({ userId: userId, error: claimError }, 'Error calling claim_beta_invite RPC');
       throw createError.internal('Failed to claim invite code');
     }
 
-    const result = claimResult as {
-      success?: boolean;
-      error?: string;
-      subscription_id?: string;
-      plan_tier?: string;
-      trial_days?: number;
-      discount_percent?: number;
-    } | null;
+    const result = claimRpcRows[0] ?? null;
 
     if (!result?.success) {
       const msg = result?.error || 'Failed to claim invite code';
@@ -94,13 +100,18 @@ async function handleClaimOffer(request: NextRequest) {
     }
 
     // Fetch the updated subscription to return to client
-    const { data: updatedSubscription, error: fetchError } = await supabase
-      .from('subscriptions')
-      .select('id, plan_tier, status, current_period_start, current_period_end')
-      .eq('user_id', userId)
-      .single();
-
-    if (fetchError) {
+    type SubRow = Pick<
+      SubscriptionRow,
+      'id' | 'plan_tier' | 'status' | 'current_period_start' | 'current_period_end'
+    >;
+    let updatedSubscription: SubRow | undefined;
+    try {
+      const rows = await db.query<SubRow>(
+        'select id, plan_tier, status, current_period_start, current_period_end from subscriptions where user_id = $1 limit 1',
+        [userId],
+      );
+      updatedSubscription = rows[0];
+    } catch (fetchError) {
       logger.warn(
         {
           userId: userId,

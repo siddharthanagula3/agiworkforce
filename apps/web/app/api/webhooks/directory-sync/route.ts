@@ -2,6 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent, logInvalidSignature, getClientIp } from '@/lib/security-audit';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -163,17 +164,20 @@ function buildDisplayName(user: WorkOSDirectoryUser): string {
 async function resolveOrganization(
   directoryId: string,
 ): Promise<{ organizationId: string; connectionId: string } | null> {
-  if (!supabaseAdmin) return null;
+  const db = getNeonDb();
+  const rows = await db
+    .query<{
+      id: string;
+      organization_id: string;
+    }>(
+      'select id, organization_id from directory_sync_connections where directory_id = $1 and is_active = true limit 1',
+      [directoryId],
+    )
+    .catch(() => [] as { id: string; organization_id: string }[]);
 
-  const { data, error } = await supabaseAdmin
-    .from('directory_sync_connections')
-    .select('id, organization_id')
-    .eq('directory_id', directoryId)
-    .eq('is_active', true)
-    .single();
-
-  if (error || !data) {
-    logger.warn({ directoryId, error }, 'No active directory sync connection found');
+  const data = rows[0] ?? null;
+  if (!data) {
+    logger.warn({ directoryId }, 'No active directory sync connection found');
     return null;
   }
 
@@ -207,11 +211,11 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
   // paginated listUsers() if needed (e.g., auth user exists but profile doesn't).
   let existingUser: { id: string; email?: string } | undefined;
 
-  const { data: existingProfile } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
+  const db = getNeonDb();
+  const profileRows = await db
+    .query<{ id: string }>('select id from profiles where email = $1 limit 1', [email])
+    .catch(() => [] as { id: string }[]);
+  const existingProfile = profileRows[0] ?? null;
 
   if (existingProfile) {
     existingUser = { id: existingProfile.id, email };
@@ -275,40 +279,47 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
   }
 
   // Upsert profile with SCIM fields
-  const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
-    {
-      id: userId,
-      email,
-      display_name: displayName,
-      external_id: user.id,
-      provisioning_source: 'scim',
-      provisioned_at: new Date().toISOString(),
-      department: user.department ?? null,
-      job_title: user.job_title ?? null,
-      account_status: 'active',
-    },
-    { onConflict: 'id' },
-  );
-
-  if (profileError) {
+  try {
+    await db.execute(
+      `insert into profiles (id, email, display_name, external_id, provisioning_source, provisioned_at, department, job_title, account_status)
+       values ($1, $2, $3, $4, 'scim', $5, $6, $7, 'active')
+       on conflict (id) do update set
+         email = excluded.email,
+         display_name = excluded.display_name,
+         external_id = excluded.external_id,
+         provisioning_source = excluded.provisioning_source,
+         provisioned_at = excluded.provisioned_at,
+         department = excluded.department,
+         job_title = excluded.job_title,
+         account_status = excluded.account_status`,
+      [
+        userId,
+        email,
+        displayName,
+        user.id,
+        new Date().toISOString(),
+        user.department ?? null,
+        user.job_title ?? null,
+      ],
+    );
+  } catch (profileError) {
     logger.error({ error: profileError, userId }, 'Failed to upsert SCIM profile');
     throw profileError;
   }
 
   // Add user to the organization if a directory connection exists
   if (orgInfo) {
-    const { error: memberError } = await supabaseAdmin.from('organization_members').upsert(
-      {
-        organization_id: orgInfo.organizationId,
-        user_id: userId,
-        role: 'member',
-        provisioned_at: new Date().toISOString(),
-        provisioning_source: 'scim',
-      },
-      { onConflict: 'organization_id,user_id' },
-    );
-
-    if (memberError) {
+    try {
+      await db.execute(
+        `insert into organization_members (organization_id, user_id, role, provisioned_at, provisioning_source)
+         values ($1, $2, 'member', $3, 'scim')
+         on conflict (organization_id, user_id) do update set
+           role = excluded.role,
+           provisioned_at = excluded.provisioned_at,
+           provisioning_source = excluded.provisioning_source`,
+        [orgInfo.organizationId, userId, new Date().toISOString()],
+      );
+    } catch (memberError) {
       logger.error(
         { error: memberError, userId, organizationId: orgInfo.organizationId },
         'Failed to add SCIM user to organization',
@@ -317,10 +328,12 @@ async function handleUserCreated(user: WorkOSDirectoryUser, request: Request): P
     }
 
     // Update last_sync_at on the directory connection
-    await supabaseAdmin
-      .from('directory_sync_connections')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', orgInfo.connectionId);
+    await db
+      .execute('update directory_sync_connections set last_sync_at = $1 where id = $2', [
+        new Date().toISOString(),
+        orgInfo.connectionId,
+      ])
+      .catch(() => undefined);
   }
 
   await logSecurityEvent({
@@ -351,21 +364,17 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
   // Find user by external_id first (most reliable), then by email
   let userId: string | null = null;
 
-  const { data: profileByExtId } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('external_id', user.id)
-    .maybeSingle();
-
-  if (profileByExtId) {
-    userId = profileByExtId.id;
+  const db = getNeonDb();
+  const extIdRows = await db
+    .query<{ id: string }>('select id from profiles where external_id = $1 limit 1', [user.id])
+    .catch(() => [] as { id: string }[]);
+  if (extIdRows[0]) {
+    userId = extIdRows[0].id;
   } else if (email) {
-    const { data: profileByEmail } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    userId = profileByEmail?.id ?? null;
+    const emailRows = await db
+      .query<{ id: string }>('select id from profiles where email = $1 limit 1', [email])
+      .catch(() => [] as { id: string }[]);
+    userId = emailRows[0]?.id ?? null;
   }
 
   if (!userId) {
@@ -376,28 +385,33 @@ async function handleUserUpdated(user: WorkOSDirectoryUser, request: Request): P
     return;
   }
 
-  // Build update payload (only set fields that are present)
-  const updates: Record<string, unknown> = {
-    external_id: user.id,
-    updated_at: new Date().toISOString(),
-  };
+  // Build update clauses dynamically
+  const setClauses: string[] = ['external_id = $1', 'updated_at = $2'];
+  const params: unknown[] = [user.id, new Date().toISOString()];
 
-  if (email) updates['email'] = email;
-  if (displayName) updates['display_name'] = displayName;
-  if (user.department !== undefined) updates['department'] = user.department;
-  if (user.job_title !== undefined) updates['job_title'] = user.job_title;
-
-  // If the directory reports the user as inactive, disable the account
+  if (email) {
+    setClauses.push(`email = $${params.push(email)}`);
+  }
+  if (displayName) {
+    setClauses.push(`display_name = $${params.push(displayName)}`);
+  }
+  if (user.department !== undefined) {
+    setClauses.push(`department = $${params.push(user.department)}`);
+  }
+  if (user.job_title !== undefined) {
+    setClauses.push(`job_title = $${params.push(user.job_title)}`);
+  }
   if (user.state === 'inactive') {
-    updates['account_status'] = 'disabled';
+    setClauses.push(`account_status = $${params.push('disabled')}`);
   }
 
-  const { error: updateError } = await supabaseAdmin
-    .from('profiles')
-    .update(updates)
-    .eq('id', userId);
-
-  if (updateError) {
+  params.push(userId);
+  try {
+    await db.execute(
+      `update profiles set ${setClauses.join(', ')} where id = $${params.length}`,
+      params,
+    );
+  } catch (updateError) {
     logger.error({ error: updateError, userId }, 'Failed to update profile via SCIM');
     throw updateError;
   }
@@ -442,21 +456,17 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
   // Find the user by external_id or email
   let userId: string | null = null;
 
-  const { data: profileByExtId } = await supabaseAdmin
-    .from('profiles')
-    .select('id')
-    .eq('external_id', user.id)
-    .maybeSingle();
-
-  if (profileByExtId) {
-    userId = profileByExtId.id;
+  const db = getNeonDb();
+  const extIdRows = await db
+    .query<{ id: string }>('select id from profiles where external_id = $1 limit 1', [user.id])
+    .catch(() => [] as { id: string }[]);
+  if (extIdRows[0]) {
+    userId = extIdRows[0].id;
   } else if (email) {
-    const { data: profileByEmail } = await supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .maybeSingle();
-    userId = profileByEmail?.id ?? null;
+    const emailRows = await db
+      .query<{ id: string }>('select id from profiles where email = $1 limit 1', [email])
+      .catch(() => [] as { id: string }[]);
+    userId = emailRows[0]?.id ?? null;
   }
 
   if (!userId) {
@@ -468,15 +478,12 @@ async function handleUserDeleted(user: WorkOSDirectoryUser, request: Request): P
   }
 
   // Soft-disable: set account_status to 'disabled' (preserves data, blocks login)
-  const { error: updateError } = await supabaseAdmin
-    .from('profiles')
-    .update({
-      account_status: 'disabled',
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', userId);
-
-  if (updateError) {
+  try {
+    await db.execute(
+      "update profiles set account_status = 'disabled', updated_at = $1 where id = $2",
+      [new Date().toISOString(), userId],
+    );
+  } catch (updateError) {
     logger.error({ error: updateError, userId }, 'Failed to disable user via SCIM');
     throw updateError;
   }

@@ -4,7 +4,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { OrganizationMemberRow, DirectorySyncConnectionRow } from '@/lib/server/neon-types';
 
 // ---------------------------------------------------------------------------
 // Admin auth verification
@@ -20,19 +21,16 @@ async function verifyAdminAccess(
     return { isAdmin: false, error: 'Invalid or expired token' };
   }
 
-  const supabase = getServiceClient();
+  const db = getNeonDb();
 
   // Check if caller is an org owner/admin.
-  // NOTE: The previous Supabase-era app_metadata.role === 'admin' global-admin
-  // shortcut has been removed. Access is now gated exclusively on org membership
-  // role (owner or admin), which is stored in the database and auditable.
-  const { data: membership } = await supabase
-    .from('organization_members')
-    .select('organization_id, role')
-    .eq('user_id', userId)
-    .in('role', ['owner', 'admin'])
-    .limit(1)
-    .maybeSingle();
+  const rows = await db
+    .query<
+      Pick<OrganizationMemberRow, 'organization_id' | 'role'>
+    >("select organization_id, role from organization_members where user_id = $1 and role in ('owner', 'admin') limit 1", [userId])
+    .catch(() => [] as Pick<OrganizationMemberRow, 'organization_id' | 'role'>[]);
+
+  const membership = rows[0];
 
   if (!membership) {
     return { isAdmin: false, error: 'Insufficient privileges - org admin or owner required' };
@@ -50,7 +48,6 @@ async function verifyAdminAccess(
 // ---------------------------------------------------------------------------
 
 export async function GET(request: NextRequest) {
-  // Rate limit: reuse the default config for admin endpoints
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -69,17 +66,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const supabaseAdmin = getServiceClient();
+    const db = getNeonDb();
 
-    const { data: connections, error: fetchError } = await supabaseAdmin
-      .from('directory_sync_connections')
-      .select(
-        'id, provider, directory_id, display_name, is_active, last_sync_at, created_at, updated_at',
-      )
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false });
-
-    if (fetchError) {
+    let connections: DirectorySyncConnectionRow[];
+    try {
+      connections = await db.query<DirectorySyncConnectionRow>(
+        'select id, provider, directory_id, display_name, is_active, last_sync_at, created_at, updated_at from directory_sync_connections where organization_id = $1 order by created_at desc',
+        [organizationId],
+      );
+    } catch (fetchError) {
       logger.error(
         { error: fetchError, organizationId },
         'Failed to fetch directory sync connections',
@@ -88,7 +83,7 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({
-      connections: connections ?? [],
+      connections,
       organization_id: organizationId,
     });
   } catch (error) {
@@ -105,7 +100,6 @@ export async function GET(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function POST(request: NextRequest) {
-  // Rate limit
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -134,7 +128,6 @@ export async function POST(request: NextRequest) {
       display_name?: string;
     };
 
-    // Validate required fields
     if (!provider || !directory_id) {
       return NextResponse.json(
         { error: 'provider and directory_id are required' },
@@ -150,32 +143,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabaseAdmin = getServiceClient();
+    const db = getNeonDb();
 
-    const { data: connection, error: insertError } = await supabaseAdmin
-      .from('directory_sync_connections')
-      .insert({
-        organization_id: organizationId,
-        provider,
-        directory_id,
-        display_name: display_name ?? null,
-        is_active: true,
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      // Handle duplicate directory_id
-      if (insertError.code === '23505') {
+    let connection: DirectorySyncConnectionRow;
+    try {
+      const rows = await db.query<DirectorySyncConnectionRow>(
+        'insert into directory_sync_connections (organization_id, provider, directory_id, display_name, is_active) values ($1, $2, $3, $4, true) returning *',
+        [organizationId, provider, directory_id, display_name ?? null],
+      );
+      connection = rows[0]!;
+    } catch (err: unknown) {
+      const pgCode = (err as { code?: string })?.code;
+      if (pgCode === '23505') {
         return NextResponse.json(
           { error: 'A connection with this directory_id already exists' },
           { status: 409 },
         );
       }
-      logger.error(
-        { error: insertError, organizationId },
-        'Failed to create directory sync connection',
-      );
+      logger.error({ error: err, organizationId }, 'Failed to create directory sync connection');
       return NextResponse.json({ error: 'Failed to create connection' }, { status: 500 });
     }
 
@@ -214,7 +199,6 @@ export async function POST(request: NextRequest) {
 // ---------------------------------------------------------------------------
 
 export async function DELETE(request: NextRequest) {
-  // Rate limit
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -246,14 +230,13 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const supabaseAdmin = getServiceClient();
+    const db = getNeonDb();
 
-    // Verify the connection belongs to the admin's organization
-    const { data: existing } = await supabaseAdmin
-      .from('directory_sync_connections')
-      .select('id, organization_id, provider, directory_id')
-      .eq('id', connectionId)
-      .single();
+    const existing = await db
+      .query<
+        Pick<DirectorySyncConnectionRow, 'id' | 'organization_id' | 'provider' | 'directory_id'>
+      >('select id, organization_id, provider, directory_id from directory_sync_connections where id = $1 limit 1', [connectionId])
+      .then((rows) => rows[0] ?? null);
 
     if (!existing) {
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
@@ -261,18 +244,20 @@ export async function DELETE(request: NextRequest) {
 
     if (existing.organization_id !== organizationId) {
       logger.warn(
-        { userId, connectionId, requestedOrg: organizationId, actualOrg: existing.organization_id },
+        {
+          userId,
+          connectionId,
+          requestedOrg: organizationId,
+          actualOrg: existing.organization_id,
+        },
         'Unauthorized attempt to delete directory sync connection from another organization',
       );
       return NextResponse.json({ error: 'Connection not found' }, { status: 404 });
     }
 
-    const { error: deleteError } = await supabaseAdmin
-      .from('directory_sync_connections')
-      .delete()
-      .eq('id', connectionId);
-
-    if (deleteError) {
+    try {
+      await db.execute('delete from directory_sync_connections where id = $1', [connectionId]);
+    } catch (deleteError) {
       logger.error(
         { error: deleteError, connectionId },
         'Failed to delete directory sync connection',

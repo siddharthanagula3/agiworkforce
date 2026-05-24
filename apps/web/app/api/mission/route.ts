@@ -8,7 +8,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -162,7 +162,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   const { userId } = await getClerkAuthUser(request);
 
   // Service-role client for all downstream DB ops.
-  const userClient = getServiceClient();
+  const userClient = getNeonDb();
 
   // Validate subscription
   const subscription = await SubscriptionService.getSubscription(userClient, userId);

@@ -9,8 +9,9 @@
  * expires after 30 days (enforced by the GET handler and a DB cron job).
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { SharedConversationRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -23,13 +24,8 @@ const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 // Maximum allowed title length.
 const MAX_TITLE_LEN = 500;
 
-function getAdminClient() {
-  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-  if (!url || !key) {
-    throw createError.internal('Supabase is not configured');
-  }
-  return createClient(url, key, { auth: { persistSession: false } });
+function getDb() {
+  return getNeonDb();
 }
 
 /** POST /api/shared - upload a packaged conversation */
@@ -76,21 +72,20 @@ async function handlePost(request: NextRequest) {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + 30);
 
-  const supabase = getAdminClient();
-  const { error } = await supabase.from('shared_conversations').insert({
-    token,
-    messages_json: messages,
-    title: safeTitle,
-    expires_at: expiresAt.toISOString(),
-  });
-
-  if (error) {
-    // Duplicate token - return the existing URL instead of erroring.
-    if (error.code === '23505') {
+  const db = getDb();
+  try {
+    await db.execute(
+      'insert into shared_conversations (token, messages_json, title, expires_at) values ($1, $2, $3, $4)',
+      [token, messages, safeTitle, expiresAt.toISOString()],
+    );
+  } catch (err: unknown) {
+    // Duplicate token (23505) - return the existing URL instead of erroring.
+    const pgCode = (err as { code?: string })?.code;
+    if (pgCode === '23505') {
       const appUrl = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
       return NextResponse.json({ url: `${appUrl}/shared/${token}` });
     }
-    logger.error({ error, token }, 'Failed to store shared conversation');
+    logger.error({ error: err, token }, 'Failed to store shared conversation');
     throw createError.internal('Failed to store conversation');
   }
 
@@ -110,18 +105,20 @@ async function handleGet(request: NextRequest) {
     throw createError.validation('token query parameter must be a valid UUID v4 string');
   }
 
-  const supabase = getAdminClient();
-  const { data, error } = await supabase
-    .from('shared_conversations')
-    .select('messages_json, title, expires_at')
-    .eq('token', token)
-    .maybeSingle();
-
-  if (error) {
-    logger.error({ error, token }, 'Failed to fetch shared conversation');
+  const db = getDb();
+  type ConvRow = Pick<SharedConversationRow, 'messages_json' | 'title' | 'expires_at'>;
+  let rows: ConvRow[];
+  try {
+    rows = await db.query<ConvRow>(
+      'select messages_json, title, expires_at from shared_conversations where token = $1 limit 1',
+      [token],
+    );
+  } catch (err) {
+    logger.error({ error: err, token }, 'Failed to fetch shared conversation');
     throw createError.internal('Failed to fetch conversation');
   }
 
+  const data = rows[0];
   if (!data) {
     throw createError.notFound('Shared conversation not found');
   }
