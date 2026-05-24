@@ -205,9 +205,10 @@ fn maybe_trust_current_directory() -> Result<bool> {
 
 fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
-        "AGI Workforce                    Usage included with your subscription",
+        "Local model                      Run AI locally — no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
         "Other providers                  ChatGPT, Claude, GitHub Copilot OAuth",
+        "AGI cloud                        Waitlist only — join at agiworkforce.com",
         "Skip for now                     Configure later with /login",
     ];
 
@@ -219,9 +220,10 @@ fn select_auth_provider() -> Result<AuthChoice> {
         .context("Failed to display auth menu")?;
 
     match selection {
-        0 => Ok(AuthChoice::Provider("agiworkforce")),
+        0 => Ok(AuthChoice::Provider("ollama")),
         1 => Ok(AuthChoice::ApiKey),
         2 => Ok(AuthChoice::OtherProviders),
+        3 => Ok(AuthChoice::Provider("agiworkforce")),
         _ => Ok(AuthChoice::Skip),
     }
 }
