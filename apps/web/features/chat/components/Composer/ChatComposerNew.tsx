@@ -1124,8 +1124,10 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.droppedFiles === next.droppedFiles &&
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
     prev.onTypingChange === next.onTypingChange &&
+    prev.onStop === next.onStop &&
     prev.clearSignal === next.clearSignal &&
-    prev.emptyState === next.emptyState
+    prev.emptyState === next.emptyState &&
+    prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel
   );
 });
 
