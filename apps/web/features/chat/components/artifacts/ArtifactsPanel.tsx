@@ -1,10 +1,35 @@
 'use client';
 
-import { Code2, X, FileCode, PanelRightOpen } from 'lucide-react';
+import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { ArtifactPreview } from './ArtifactPreview';
+
+// ============================================================================
+// Download All helper (Fix 41)
+// ============================================================================
+
+async function downloadAllArtifacts(artifacts: Artifact[]) {
+  const JSZip = (await import('jszip')).default;
+  const zip = new JSZip();
+
+  artifacts.forEach((artifact) => {
+    const ext = artifact.language || artifact.type || 'txt';
+    const safeName = (artifact.title || 'artifact').replace(/[/\\:*?"<>|]/g, '_');
+    zip.file(`${safeName}.${ext}`, artifact.content);
+  });
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'artifacts.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 // ============================================================================
 // Artifact Tab
@@ -97,8 +122,8 @@ export function ArtifactsPanel() {
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
-          // Desktop: inline panel
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[400px] sm:shrink-0',
+          // Desktop: inline panel — responsive width
+          'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
         )}
@@ -114,15 +139,29 @@ export function ArtifactsPanel() {
               </span>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPanelOpen(false)}
-            className="h-7 w-7 p-0"
-            aria-label="Close artifacts panel"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {artifacts.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void downloadAllArtifacts(artifacts)}
+                className="h-7 px-2 text-xs"
+                title="Download all artifacts as zip"
+              >
+                <FolderDown className="h-3.5 w-3.5" />
+                <span className="ml-1 hidden sm:inline">Download all</span>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPanelOpen(false)}
+              className="h-7 w-7 p-0"
+              aria-label="Close artifacts panel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {artifacts.length === 0 ? (

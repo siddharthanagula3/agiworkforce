@@ -400,6 +400,12 @@ const MessageBubbleComponent = function MessageBubble({
               <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
             )}
             {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+            {/* PASTED badge (Fix 42) — shown when isPasted metadata is set by the composer */}
+            {isUser && message.metadata?.isPasted && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                pasted
+              </span>
+            )}
           </div>
 
           {/* Interleaved reasoning + tool flow */}
