@@ -5,9 +5,6 @@ import { useRouter } from 'next/navigation';
 import {
   Search,
   MessageSquare,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
   Settings,
   LogOut,
   ChevronUp,
@@ -29,16 +26,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@shared/ui/alert-dialog';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { ConversationListItem } from './ConversationListItem';
 
@@ -404,6 +391,11 @@ function ChatSidebarContent({
   onRenameSession,
   onToggleSidebar,
   collapsed = false,
+  onPinSession,
+  onStarSession,
+  onArchiveSession,
+  onShareSession,
+  onDuplicateSession,
 }: ChatSidebarProps) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -590,6 +582,11 @@ function ChatSidebarContent({
                   onSelect={onSelectSession}
                   onDelete={onDeleteSession}
                   onRename={onRenameSession}
+                  onPin={onPinSession}
+                  onStar={onStarSession}
+                  onArchive={onArchiveSession}
+                  onShare={onShareSession}
+                  onDuplicate={onDuplicateSession}
                   bulkMode={bulkMode}
                   isChecked={selectedIds.has(session.id)}
                   onToggleCheck={toggleCheck}

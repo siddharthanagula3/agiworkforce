@@ -23,9 +23,9 @@ import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-s
 import { FocusModeButtons, type FocusMode } from './FocusModeButtons';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
+import { SkillsMenu } from '../SkillsMenu';
 import { SendButton } from './SendButton';
 import { ComposerFooter } from './ComposerFooter';
-import { InputFooter } from './InputFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { GhostTextOverlay } from './GhostTextOverlay';
 import { AgentModeSwitcher } from './AgentModeSwitcher';
@@ -78,6 +78,8 @@ interface ChatComposerProps {
   onStop?: () => void;
   /** Increment to clear composer state after a parent-owned deferred send. */
   clearSignal?: number;
+  /** Larger, centered composer presentation used on the empty new-chat state. */
+  emptyState?: boolean;
   /**
    * Per-file privacy label rendered as a chip on each attachment thumbnail
    * (e.g. "Local", "BYOK", "Managed"). Sourced from the host's SendPreview
@@ -139,6 +141,7 @@ const ChatComposerNewComponent = ({
   onTypingChange,
   onStop,
   clearSignal,
+  emptyState = false,
   attachmentPrivacyShortLabel,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
@@ -175,6 +178,7 @@ const ChatComposerNewComponent = ({
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
+  const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -620,7 +624,8 @@ const ChatComposerNewComponent = ({
       <div
         id="chat-composer"
         className={cn(
-          'relative rounded-2xl border bg-[var(--chat-bg-elevated)] shadow-sm backdrop-blur-sm transition-all duration-200',
+          'relative border bg-[var(--chat-bg-elevated)] shadow-sm backdrop-blur-sm transition-all duration-200',
+          emptyState ? 'rounded-[26px]' : 'rounded-2xl',
           isFocused
             ? 'border-teal-500/40 shadow-md ring-2 ring-teal-500/30'
             : 'border-[var(--chat-glass-border)]',
@@ -678,13 +683,21 @@ const ChatComposerNewComponent = ({
           </div>
         )}
 
-        <div className="flex items-end gap-1 p-2 sm:gap-2 sm:p-3">
+        <div
+          className={cn(
+            'flex items-end gap-1 p-2 sm:gap-2 sm:p-3',
+            emptyState && 'min-h-[132px] flex-wrap px-5 py-4 sm:px-6',
+          )}
+        >
           {/* + Overflow Menu Button — contains focus modes, agent mode, folder, tools */}
-          <div className="relative" ref={overflowRef}>
+          <div className={cn('relative', emptyState && 'order-2')} ref={overflowRef}>
             <button
               onClick={() => {
                 setShowOverflowMenu(!showOverflowMenu);
-                if (showOverflowMenu) setShowStyleSubmenu(false);
+                if (showOverflowMenu) {
+                  setShowStyleSubmenu(false);
+                  setShowSkillsSubmenu(false);
+                }
               }}
               disabled={isLoading || disabled}
               className={cn(
@@ -753,20 +766,50 @@ const ChatComposerNewComponent = ({
                 {/* Divider */}
                 <div className="my-1.5 border-t border-border/30" />
 
-                {/* Skills — link to /skills page */}
+                {/* Skills — inline expandable submenu */}
                 <div className="mb-2">
                   <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     Skills
                   </div>
-                  <a
-                    href="/skills"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                    onClick={() => setShowOverflowMenu(false)}
+                  <button
+                    type="button"
+                    onClick={() => setShowSkillsSubmenu((prev) => !prev)}
+                    className={cn(
+                      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                      selectedSkill && 'text-primary',
+                    )}
                   >
-                    <Layers className="h-4 w-4 text-orange-400" />
-                    <span className="flex-1 text-left">Browse Skills</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
+                    <Layers
+                      className={cn('h-4 w-4', selectedSkill ? 'text-primary' : 'text-orange-400')}
+                    />
+                    <span className="flex-1 text-left">
+                      {selectedSkill ? selectedSkill.name : 'Browse Skills'}
+                    </span>
+                    <ChevronRight
+                      className={cn(
+                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
+                        showSkillsSubmenu && 'rotate-90',
+                      )}
+                    />
+                  </button>
+                  {showSkillsSubmenu && (
+                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+                      <SkillsMenu
+                        query=""
+                        onSelect={(skill) => {
+                          setSelectedSkill({
+                            id: skill.name,
+                            name: skill.name,
+                            description: skill.description,
+                            category: skill.source,
+                          });
+                          setShowSkillsSubmenu(false);
+                          setShowOverflowMenu(false);
+                        }}
+                        onClose={() => setShowSkillsSubmenu(false)}
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Divider */}
@@ -870,6 +913,7 @@ const ChatComposerNewComponent = ({
             disabled={isLoading || disabled}
             className={cn(
               'flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+              emptyState && 'order-3',
               (isLoading || disabled) && 'cursor-not-allowed opacity-50',
             )}
             aria-label="Attach file"
@@ -878,7 +922,7 @@ const ChatComposerNewComponent = ({
           </button>
 
           {/* Quick Toggle Buttons */}
-          <div className="flex items-center gap-1">
+          <div className={cn('flex items-center gap-1', emptyState && 'order-4')}>
             <button
               onClick={handleWebSearchToggle}
               disabled={isLoading || disabled || researchEnabled}
@@ -932,7 +976,12 @@ const ChatComposerNewComponent = ({
           </div>
 
           {/* Textarea + Ghost-text overlay wrapper */}
-          <div className="relative min-h-[52px] flex-1">
+          <div
+            className={cn(
+              'relative flex-1',
+              emptyState ? 'order-1 min-h-[76px] basis-full' : 'min-h-[52px]',
+            )}
+          >
             {/* Ghost-text overlay positioned behind the textarea */}
             <GhostTextOverlay
               inputText={message}
@@ -950,7 +999,12 @@ const ChatComposerNewComponent = ({
               placeholder={placeholder}
               disabled={isLoading || disabled}
               // bg-transparent so the ghost-text overlay behind shows through
-              className="relative z-10 min-h-[52px] max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 py-3 text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50 md:text-[15px]"
+              className={cn(
+                'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
+                emptyState
+                  ? 'min-h-[76px] py-2 text-[20px] md:text-[20px]'
+                  : 'min-h-[52px] py-3 text-sm md:text-[15px]',
+              )}
               rows={1}
               aria-label="Message input"
               aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
@@ -974,6 +1028,7 @@ const ChatComposerNewComponent = ({
               setTimeout(() => textareaRef.current?.focus(), 50);
             }}
             disabled={isLoading || disabled}
+            className={emptyState ? 'order-5 ml-auto' : undefined}
           />
 
           {/* Send / Stop Button */}
@@ -982,6 +1037,7 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={disabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
+            className={emptyState ? 'order-6' : undefined}
           />
         </div>
 
@@ -1000,13 +1056,7 @@ const ChatComposerNewComponent = ({
         />
       </div>
 
-      {/* Footer: keyboard hint + credits */}
-      <InputFooter hint={footerHint} />
-
-      {/* Footer row 2: model selector */}
-      <div className="mt-1.5 flex items-center justify-end gap-2 px-1">
-        <ComposerFooter showModelSelector />
-      </div>
+      <ComposerFooter hint={footerHint} showModelSelector />
     </div>
   );
 };
@@ -1035,7 +1085,8 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.droppedFiles === next.droppedFiles &&
     prev.onDroppedFilesConsumed === next.onDroppedFilesConsumed &&
     prev.onTypingChange === next.onTypingChange &&
-    prev.clearSignal === next.clearSignal
+    prev.clearSignal === next.clearSignal &&
+    prev.emptyState === next.emptyState
   );
 });
 
