@@ -20,8 +20,6 @@ function mapPlanTier(plan: BillingPlan | undefined): UIPlanTier {
       return 'hobby';
     case 'pro':
       return 'pro';
-    case 'pro_plus':
-      return 'pro_plus';
     case 'max':
     case 'enterprise':
       return 'max';
