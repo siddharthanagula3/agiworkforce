@@ -17,6 +17,7 @@ const CreateFolderSchema = z.object({
   parentFolderId: z.string().uuid().optional(),
 });
 
+// For updating folder metadata (id required, sessionId absent)
 const UpdateFolderSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100).optional(),
@@ -25,8 +26,12 @@ const UpdateFolderSchema = z.object({
   description: z.string().max(500).optional(),
   parentFolderId: z.string().uuid().nullable().optional(),
   sortOrder: z.number().int().optional(),
-  // For moving a conversation into a folder
-  sessionId: z.string().uuid().optional(),
+});
+
+// For moving a session into (or out of) a folder; folderId=null means move to root
+const MoveSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  folderId: z.string().uuid().nullable(),
 });
 
 const DeleteFolderSchema = z.object({
@@ -100,19 +105,24 @@ async function handlePut(request: NextRequest) {
   const db = getNeonDb();
 
   const body = await request.json();
-  const parsed = UpdateFolderSchema.safeParse(body);
-  if (!parsed.success) throw createError.validation('Invalid request body');
 
-  const { id, name, color, icon, description, parentFolderId, sortOrder, sessionId } = parsed.data;
+  // Move session into/out of a folder (detected by presence of sessionId key)
+  if (body && typeof body === 'object' && 'sessionId' in body) {
+    const parsed = MoveSessionSchema.safeParse(body);
+    if (!parsed.success) throw createError.validation('Invalid request body');
 
-  // Move session to folder (uses DB function)
-  if (sessionId !== undefined) {
+    const { sessionId, folderId } = parsed.data;
     await db.query<{ move_session_to_folder: null }>('select move_session_to_folder($1, $2)', [
       sessionId,
-      id,
+      folderId,
     ]);
     return NextResponse.json({ moved: true });
   }
+
+  const parsed = UpdateFolderSchema.safeParse(body);
+  if (!parsed.success) throw createError.validation('Invalid request body');
+
+  const { id, name, color, icon, description, parentFolderId, sortOrder } = parsed.data;
 
   // Verify folder ownership
   const [existing] = await db.query<{ id: string }>(
