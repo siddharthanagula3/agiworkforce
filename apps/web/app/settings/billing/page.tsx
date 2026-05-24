@@ -179,6 +179,59 @@ export default function BillingSettingsPage() {
           </div>
         </section>
       )}
+
+      {/* Invoices */}
+      {tier !== 'free' && (
+        <section
+          style={{
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-elev)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              padding: '14px 20px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 13,
+              fontWeight: 600,
+              color: 'var(--text-2)',
+            }}
+          >
+            Invoices
+          </div>
+          <div
+            style={{
+              padding: '16px 20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+            }}
+          >
+            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+              View and download your full invoice history on the billing dashboard.
+            </p>
+            <Link
+              href="/billing"
+              style={{
+                flexShrink: 0,
+                padding: '7px 14px',
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)',
+                color: 'var(--text-2)',
+                fontSize: 13,
+                textDecoration: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              View invoices
+            </Link>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
