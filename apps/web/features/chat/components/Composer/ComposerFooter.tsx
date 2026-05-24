@@ -12,6 +12,33 @@ import { useBillingStore } from '@/stores/unified/auth';
 import { isModelAllowedForTier } from '@/constants/llm';
 
 /**
+ * Returns a human-readable daily usage label for free-tier users.
+ * null when there is nothing worth showing (paid tier, no limit set, or
+ * usage is comfortably low).
+ */
+function useDailyUsageLabel(): string | null {
+  const tier = useBillingStore((s) => s.subscription?.tier ?? 'free');
+  const dailyUsage_cents = useBillingStore((s) => s.dailyUsage_cents);
+  const dailyLimit_cents = useBillingStore((s) => s.dailyLimit_cents);
+
+  if (tier !== 'free') return null;
+  if (!dailyLimit_cents || dailyLimit_cents <= 0) return null;
+
+  const pct = dailyUsage_cents / dailyLimit_cents;
+  if (pct < 0.8) return null;
+
+  const remainingCents = Math.max(0, dailyLimit_cents - dailyUsage_cents);
+  if (remainingCents <= 0) return 'Daily limit reached';
+
+  // Approximate remaining messages assuming ~$0.01 average cost per message
+  const approxMessages = Math.floor(remainingCents / 1);
+  if (approxMessages <= 5) {
+    return `~${approxMessages} message${approxMessages !== 1 ? 's' : ''} left today`;
+  }
+  return 'Approaching daily limit';
+}
+
+/**
  * Map a model-store providerKey (from models.json) to a ProviderId
  * as defined in PROVIDER_DISPLAY. Most keys are 1:1; managed_cloud
  * maps to agi-cloud.
@@ -199,6 +226,7 @@ export function ComposerFooter({
   const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
+  const dailyUsageLabel = useDailyUsageLabel();
 
   // Partition into recommended / more, respecting current tier and search
   const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
@@ -233,6 +261,28 @@ export function ComposerFooter({
     <div className="mt-2 space-y-2">
       {/* Budget display — renders only when tokens have been used */}
       <BudgetTrackerDisplay className="mx-1" />
+
+      {/* Daily usage label — shown only for free tier when approaching limit */}
+      {dailyUsageLabel && (
+        <div className="flex items-center gap-1.5 px-1">
+          <span
+            className={[
+              'text-xs font-medium',
+              dailyUsageLabel === 'Daily limit reached' ? 'text-rose-400' : 'text-amber-400',
+            ].join(' ')}
+          >
+            {dailyUsageLabel}
+          </span>
+          {dailyUsageLabel === 'Daily limit reached' && (
+            <a
+              href="/pricing"
+              className="text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              Upgrade
+            </a>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center justify-between gap-2 px-1">
         {/* Left: keyboard hint */}
