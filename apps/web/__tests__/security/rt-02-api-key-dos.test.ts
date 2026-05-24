@@ -16,16 +16,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/utils/env', () => ({
-  requireEnv: (key: string) => {
-    const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-    };
-    return map[key] ?? '';
-  },
-}));
-
 // ─── Argon2 mock — track call count ──────────────────────────────────────────
 const mockArgon2Verify = vi.fn();
 const mockArgon2Hash = vi.fn().mockResolvedValue('$argon2id$mocked-hash');
@@ -37,37 +27,17 @@ vi.mock('argon2', () => ({
   },
 }));
 
-// ─── Supabase mock ────────────────────────────────────────────────────────────
-const mockSelect = vi.fn();
-const mockEq = vi.fn();
-const mockIs = vi.fn();
-const mockOr = vi.fn();
-const mockLimit = vi.fn();
-const mockMaybeSingle = vi.fn();
-const mockInsert = vi.fn();
-const mockUpdate = vi.fn();
-const mockThen = vi.fn().mockResolvedValue({ error: null });
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+const mockNeonQuery = vi.fn();
+const mockNeonExecute = vi.fn().mockResolvedValue(1);
 
-const mockFrom = vi.fn().mockReturnValue({
-  select: mockSelect,
-  insert: mockInsert,
-});
-
-mockSelect.mockReturnValue({
-  eq: mockEq,
-  is: mockIs,
-  or: mockOr,
-});
-mockEq.mockReturnValue({ or: mockOr, maybeSingle: mockMaybeSingle, limit: mockLimit, eq: mockEq });
-mockIs.mockReturnValue({ or: mockOr });
-mockOr.mockReturnValue({ limit: mockLimit });
-mockLimit.mockReturnValue([]);
-mockInsert.mockReturnValue({ select: mockSelect });
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockFrom,
-    auth: { getUser: vi.fn() },
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
@@ -77,17 +47,9 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArgon2Verify.mockResolvedValue(false);
-    mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
-    mockSelect.mockReturnValue({ eq: mockEq, is: mockIs, or: mockOr });
-    mockEq.mockReturnValue({
-      or: mockOr,
-      maybeSingle: mockMaybeSingle,
-      limit: mockLimit,
-      eq: mockEq,
-    });
-    mockIs.mockReturnValue({ or: mockOr });
-    mockOr.mockReturnValue({ limit: mockLimit });
-    mockLimit.mockResolvedValue({ data: [], error: null });
+    // Default: no key found
+    mockNeonQuery.mockResolvedValue([]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   describe('KEY_ID_REGEX format validation', () => {
