@@ -9,7 +9,7 @@ export type NavItem = { href: string; label: string };
 
 export const NAV_ITEMS: NavItem[] = [
   { href: '/settings/general', label: 'General' },
-  { href: '/settings/profile', label: 'Account' },
+  { href: '/settings/account', label: 'Account' },
   { href: '/settings/privacy', label: 'Privacy' },
   { href: '/settings/billing', label: 'Billing' },
   { href: '/settings/usage', label: 'Usage' },
