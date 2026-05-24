@@ -291,18 +291,20 @@ export class DeepSeekProvider {
     metadata: Record<string, unknown>;
   }): Promise<void> {
     try {
-      const { error } = await db.from('agent_messages').insert({
-        session_id: message.sessionId,
-        user_id: message.userId,
-        role: message.role,
-        content: message.content,
-        metadata: message.metadata,
-        created_at: new Date().toISOString(),
+      const token = await getAuthToken();
+      await fetch('/api/agents/log-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          sessionId: message.sessionId,
+          role: message.role,
+          content: message.content,
+          metadata: message.metadata,
+        }),
       });
-
-      if (error) {
-        logger.error('[DeepSeek Provider] Error saving message:', error);
-      }
     } catch (error) {
       logger.error('[DeepSeek Provider] Unexpected error saving message:', error);
     }

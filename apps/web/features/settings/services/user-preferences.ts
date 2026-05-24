@@ -738,14 +738,15 @@ class SettingsService {
    */
   async changePassword(newPassword: string): Promise<{ error?: string }> {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
-
-      if (error) {
-        return { error: error.message };
+      const clerkUser = (
+        window as Record<string, unknown> & {
+          Clerk?: { user?: { updatePassword?: (opts: { newPassword: string }) => Promise<void> } };
+        }
+      )?.Clerk?.user;
+      if (!clerkUser?.updatePassword) {
+        return { error: 'Password update is not available' };
       }
-
+      await clerkUser.updatePassword({ newPassword });
       return {};
     } catch (error) {
       return {
