@@ -194,8 +194,12 @@ function makeRequest(body: Record<string, unknown>, authHeader?: string) {
 const FAKE_BEARER = 'Bearer fake-token-value';
 
 describe('POST /api/agents/execute', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+
+    // Re-setup Supabase server client mock after clearAllMocks() resets it
+    const { createSupabaseServerClient } = await import('@/services/supabase-server');
+    vi.mocked(createSupabaseServerClient).mockResolvedValue({} as never);
 
     // Default: fs/promises mocks for employee system prompt loading
     mockFsAccess.mockResolvedValue(undefined);

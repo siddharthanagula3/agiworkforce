@@ -69,12 +69,26 @@ vi.mock('@/lib/services/subscription-service', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock: error-handler — pass-through wrapper so withErrorHandler works
+// Mock: errors — real implementations so createError.unauthorized() returns
+// a proper AppError instance that withErrorHandler recognizes
 // ---------------------------------------------------------------------------
-vi.mock('@/lib/error-handler', () => ({
-  withErrorHandler: (handler: (req: NextRequest) => Promise<Response>) => (req: NextRequest) =>
-    handler(req),
-}));
+vi.mock('@/lib/errors', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  return {
+    createError: actual.createError,
+    AppError: actual.AppError,
+    isAppError: actual.isAppError,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Mock: error-handler — real withErrorHandler so thrown AppErrors produce
+//        proper JSON responses (matching the live route behaviour)
+// ---------------------------------------------------------------------------
+vi.mock('@/lib/error-handler', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/error-handler')>('@/lib/error-handler');
+  return { withErrorHandler: actual.withErrorHandler, handleError: actual.handleError };
+});
 
 // ---------------------------------------------------------------------------
 // Mock: CreditService — allow by default (sufficient credits)
@@ -194,9 +208,8 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = makeRequest({ prompt: 'a cat' });
 
@@ -206,9 +219,8 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('should return 401 when authorization header is malformed (no Bearer prefix)', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = makeRequest({ prompt: 'a cat' }, { Authorization: 'Token abc123' });
 
@@ -218,9 +230,8 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('should return 401 when Clerk token is invalid', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
 
@@ -228,9 +239,8 @@ describe('POST /api/media/image/generate', () => {
     });
 
     it('should return 401 when Clerk returns no userId', async () => {
-      mockGetClerkAuthUser.mockRejectedValueOnce(
-        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
-      );
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
 
