@@ -2006,8 +2006,8 @@ pub async fn upload_file(
 
     // Strip data URL header: "data:<mime>;base64,<data>"
     let b64_data = data_url
-        .splitn(2, ',')
-        .nth(1)
+        .split_once(',')
+        .map(|(_, data)| data)
         .ok_or("Invalid data URL: missing comma separator")?;
 
     let bytes = B64
