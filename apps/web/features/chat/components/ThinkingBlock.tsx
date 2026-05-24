@@ -23,7 +23,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Brain, ChevronDown } from 'lucide-react';
+import { Clock, ChevronDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
 interface ThinkingBlockProps {
@@ -144,7 +144,7 @@ export function ThinkingBlock({
       className={cn(
         'overflow-hidden rounded-lg border',
         isStreaming
-          ? 'border-purple-500/40 bg-purple-950/10 shadow-sm shadow-purple-500/10 dark:bg-purple-950/20'
+          ? 'border-zinc-700/40 bg-zinc-950/20 dark:bg-zinc-950/30'
           : 'border-zinc-700/40 bg-zinc-950/30 dark:bg-zinc-900/20',
       )}
     >
@@ -155,15 +155,15 @@ export function ThinkingBlock({
         onClick={handleToggle}
         aria-expanded={expanded}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning block`}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/10 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/10 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
       >
-        {/* Brain icon — pulses while streaming (unless reduced-motion) */}
-        <Brain
+        {/* Clock icon — pulses while streaming (unless reduced-motion) */}
+        <Clock
           className={cn(
             'w-3.5 h-3.5 shrink-0',
             isStreaming
-              ? cn('text-purple-400', !reducedMotion.current && 'animate-pulse')
-              : 'text-zinc-400',
+              ? cn('text-zinc-400', !reducedMotion.current && 'animate-pulse')
+              : 'text-zinc-500',
           )}
           aria-hidden="true"
         />
@@ -232,7 +232,7 @@ export function ThinkingBlock({
               {isStreaming && (
                 <span
                   className={cn(
-                    'inline-block w-1.5 h-3 bg-purple-400/60 ml-0.5 align-middle',
+                    'inline-block w-1.5 h-3 bg-zinc-400/60 ml-0.5 align-middle',
                     !reducedMotion.current && 'animate-pulse',
                   )}
                   aria-hidden="true"

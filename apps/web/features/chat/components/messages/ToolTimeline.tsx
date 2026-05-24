@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
+import { ChevronDown, CheckCircle2, GitBranch, Wrench } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
 
@@ -426,6 +426,17 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
                     );
                   });
                 })}
+
+                {/* Done row — shown when every tool completed without error */}
+                {!hasRunning && errorCount === 0 && (
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <CheckCircle2
+                      className="w-3.5 h-3.5 shrink-0 text-emerald-500"
+                      aria-hidden="true"
+                    />
+                    <span className="text-xs text-emerald-500 font-medium">Done</span>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
