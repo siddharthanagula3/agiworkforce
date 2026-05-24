@@ -262,8 +262,8 @@ export interface RealtimeAdapter {
 export type DatabaseProvider = 'supabase' | 'neon' | 'postgres';
 
 /**
- * Auth providers. `supabase` is current. `auth0`, `clerk`, `cognito` are
- * skeletons documented in `docs/current/technical-architecture.md`.
+ * Auth providers. `supabase` is the current production default. `clerk` has a
+ * server verification adapter. `auth0` and `cognito` are documented targets.
  */
 export type AuthProvider = 'supabase' | 'auth0' | 'clerk' | 'cognito';
 

@@ -14,6 +14,7 @@ import {
   SupabaseAuthAdapter,
   SupabaseStorageAdapter,
   SupabaseRealtimeAdapter,
+  ClerkAuthAdapter,
   NeonDatabaseAdapter,
   PostgresDatabaseAdapter,
 } from '../index';
@@ -26,6 +27,9 @@ const ENV_KEYS = [
   'AGI_REALTIME_PROVIDER',
   'AGI_DATABASE_URL',
   'DATABASE_URL',
+  'CLERK_SECRET_KEY',
+  'CLERK_JWT_KEY',
+  'CLERK_AUTHORIZED_PARTIES',
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
@@ -129,7 +133,14 @@ describe('createAuthClient', () => {
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });
 
-  it('throws on unimplemented providers (clerk)', () => {
+  it('returns Clerk adapter when AGI_AUTH_PROVIDER=clerk', () => {
+    process.env['AGI_AUTH_PROVIDER'] = 'clerk';
+    process.env['CLERK_JWT_KEY'] = 'test-jwt-key';
+    const auth = createAuthClient();
+    expect(auth).toBeInstanceOf(ClerkAuthAdapter);
+  });
+
+  it('throws when Clerk is chosen without verification keys', () => {
     process.env['AGI_AUTH_PROVIDER'] = 'clerk';
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });

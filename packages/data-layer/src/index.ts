@@ -62,6 +62,8 @@ export type {
 
 // Concrete adapter classes — exported for advanced users (testing,
 // embedding) but feature code should prefer the factory functions.
+export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
+
 export {
   SupabaseAuthAdapter,
   SupabaseDatabaseAdapter,
