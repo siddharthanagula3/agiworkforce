@@ -1,9 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getSupabaseClient } from '../../services/supabase';
+import { useUser, useClerk } from '@clerk/nextjs';
 import { AgiMark } from '../agi/AgiMark';
 
 /*
@@ -22,30 +22,14 @@ const NAV_ITEMS = [
 
 export function Header() {
   const { t } = useTranslation('common');
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const { user, isLoaded } = useUser();
+  const { signOut } = useClerk();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    async function getUser() {
-      const supabase = getSupabaseClient();
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (mounted) {
-        setUserEmail(session?.user?.email ?? null);
-      }
-    }
-    getUser();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  const userEmail = isLoaded ? (user?.primaryEmailAddress?.emailAddress ?? null) : null;
 
   const handleSignOut = async () => {
-    const supabase = getSupabaseClient();
-    await supabase.auth.signOut();
-    window.location.href = '/';
+    await signOut({ redirectUrl: '/' });
   };
 
   return (
