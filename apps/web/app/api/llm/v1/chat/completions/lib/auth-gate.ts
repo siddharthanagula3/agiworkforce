@@ -1,19 +1,17 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { User, SupabaseClient } from '@supabase/supabase-js';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
 export type AuthGateSuccess = {
   ok: true;
-  user: User;
+  userId: string;
   token: string;
   subscription: Awaited<ReturnType<typeof SubscriptionService.getSubscription>> & object;
-  userClient: SupabaseClient;
 };
 
 type AuthGateFailure = {
@@ -61,15 +59,9 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
 
   const token = authHeader.substring(7);
 
-  // getAuthenticatedUserWithClient handles JWT verification via the documented
-  // service-role exception and returns an RLS-bound client for all downstream
-  // DB access.
-  let user: User;
-  let userClient: SupabaseClient;
+  let userId: string;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    user = auth.user;
-    userClient = auth.userDb;
+    ({ userId } = await getClerkAuthUser(request));
   } catch {
     return {
       ok: false,
@@ -86,7 +78,8 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const userDb = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const subscription = await SubscriptionService.getSubscription(userDb, userId);
 
   if (!subscription) {
     return {
@@ -121,5 +114,5 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  return { ok: true, user, token, subscription, userClient };
+  return { ok: true, userId, token, subscription };
 }

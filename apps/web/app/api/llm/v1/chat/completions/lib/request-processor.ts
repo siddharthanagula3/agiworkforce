@@ -245,7 +245,10 @@ export async function processRequest(
   request: NextRequest,
   auth: AuthGateSuccess,
 ): Promise<ProcessResult> {
-  const { user, token, subscription, userClient } = auth;
+  const { userId, token, subscription } = auth;
+  const userClient = await (
+    await import('@/services/supabase-server')
+  ).createSupabaseServerClient();
 
   const requestId = randomUUID();
 
@@ -335,7 +338,7 @@ export async function processRequest(
       } catch (err) {
         if (err instanceof EgressPolicyError) {
           logger.warn(
-            { userId: user.id, messageIndex: mi, partIndex: pi },
+            { userId: userId, messageIndex: mi, partIndex: pi },
             'Blocked user-supplied image URL (egress policy)',
           );
           return {
@@ -401,7 +404,7 @@ export async function processRequest(
   if (indicResult.isIndic && indicResult.dominantScript) {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         requestId,
         indicRatio: indicResult.indicRatio,
         dominantScript: indicResult.dominantScript,
@@ -417,7 +420,7 @@ export async function processRequest(
   if (requestedModel !== chatRequest.model) {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         requestedModel,
         resolvedModel: chatRequest.model,
         taskType: resolvedTaskType,
@@ -479,7 +482,7 @@ export async function processRequest(
   let quotaWarningHeader: string | null = null;
   try {
     quotaOutcome = await assertQuota({
-      userId: user.id,
+      userId: userId,
       token,
       tier: subscription.plan_tier,
       requestedTokens: quotaEstimateTokens,
@@ -489,7 +492,7 @@ export async function processRequest(
   } catch (gateError) {
     // Fail-open: gate error falls back to legacy CreditService flow
     logger.warn(
-      { userId: user.id, error: gateError instanceof Error ? gateError.message : gateError },
+      { userId: userId, error: gateError instanceof Error ? gateError.message : gateError },
       '[assertQuota] gate errored, falling back to credit-only flow',
     );
   }
@@ -518,7 +521,7 @@ export async function processRequest(
   if (quotaOutcome.kind === 'downgrade') {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         from: chatRequest.model,
         to: quotaOutcome.modelOverride,
         reason: quotaOutcome.reason,
@@ -631,11 +634,11 @@ export async function processRequest(
   );
 
   // Credit allocation + availability check
-  let existingBalance = await CreditService.getBalance(userClient, user.id);
+  let existingBalance = await CreditService.getBalance(userClient, userId);
 
   logger.debug(
     {
-      userId: user.id,
+      userId: userId,
       hasBalance: !!existingBalance,
       accountId: existingBalance?.account_id,
       remaining: existingBalance?.credits_remaining_cents,
@@ -646,13 +649,13 @@ export async function processRequest(
 
   if (!existingBalance || !existingBalance.account_id) {
     logger.info(
-      { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+      { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
       'No credit account found, allocating credits for subscription period',
     );
 
     try {
       const accountId = await SubscriptionService.allocateCreditsForPeriod(
-        user.id,
+        userId,
         subscription.id,
         subscription.plan_tier,
         subscription.current_period_start,
@@ -661,11 +664,11 @@ export async function processRequest(
       );
 
       if (accountId) {
-        logger.info({ userId: user.id, accountId }, 'Credits allocated successfully');
-        existingBalance = await CreditService.getBalance(userClient, user.id);
+        logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
+        existingBalance = await CreditService.getBalance(userClient, userId);
         logger.debug(
           {
-            userId: user.id,
+            userId: userId,
             newBalance: existingBalance?.credits_remaining_cents,
             accountId: existingBalance?.account_id,
           },
@@ -673,23 +676,23 @@ export async function processRequest(
         );
       } else {
         logger.warn(
-          { userId: user.id, planTier: subscription.plan_tier },
+          { userId: userId, planTier: subscription.plan_tier },
           'Credit allocation returned no account ID - plan may not include credits',
         );
       }
     } catch (allocError) {
       logger.error(
-        { error: allocError, userId: user.id, planTier: subscription.plan_tier },
+        { error: allocError, userId: userId, planTier: subscription.plan_tier },
         'Failed to allocate credits - continuing with credit check',
       );
     }
   }
 
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
 
   logger.debug(
     {
-      userId: user.id,
+      userId: userId,
       estimatedCostCents,
       hasCredits,
       balanceRemaining: existingBalance?.credits_remaining_cents,
@@ -716,7 +719,7 @@ export async function processRequest(
 
       const hasFallbackCredits = await CreditService.checkAvailable(
         userClient,
-        user.id,
+        userId,
         fallbackCostCents,
       );
 
@@ -735,10 +738,10 @@ export async function processRequest(
   }
 
   // Reserve credits with idempotency key
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation: ${provider}/${chatRequest.model}`,
     {

@@ -9,14 +9,15 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 async function handleSearchMemories(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const url = new URL(request.url);
   const query = url.searchParams.get('q')?.trim();
@@ -42,7 +43,7 @@ async function handleSearchMemories(request: NextRequest) {
     .limit(20);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to search memories');
+    logger.error({ error, userId }, 'Failed to search memories');
     throw createError.internal('Failed to search memories');
   }
 

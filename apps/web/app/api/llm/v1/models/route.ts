@@ -3,7 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getCorsHeaders } from '@/lib/cors';
 import {
@@ -112,17 +112,15 @@ async function handleListModels(request: NextRequest) {
 
   // Unauthenticated callers get the free-tier model list. Authenticated
   // callers get the model list for their actual subscription tier.
-  let user;
-  let userClient;
+  let userId: string | null = null;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    user = auth.user;
-    userClient = auth.userDb;
+    ({ userId } = await getClerkAuthUser(request));
   } catch {
     return listModelsForRequest(request, 'free');
   }
 
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const userDb = await (await import('@/services/supabase-server')).createSupabaseServerClient();
+  const subscription = await SubscriptionService.getSubscription(userDb, userId);
   return listModelsForRequest(request, subscription?.plan_tier || 'free');
 }
 
