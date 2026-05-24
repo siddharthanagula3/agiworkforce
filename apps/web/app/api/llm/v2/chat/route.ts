@@ -18,7 +18,6 @@ import 'server-only';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
@@ -31,7 +30,7 @@ import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -61,7 +60,7 @@ import {
 } from '@/lib/llm-providers/context-management';
 import { apiCache } from '@/shared/lib/cache';
 import { modelRouter } from '@core/ai/orchestration/model-router';
-import type { User } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 // ---------------------------------------------------------------------------
 // Request schema (same shape as v1)
@@ -188,12 +187,12 @@ function buildOpenAIOptions(req: V2ChatRequest): OpenAIProviderOptions | undefin
 async function handleViaV1Fallback(
   request: NextRequest,
   chatRequest: V2ChatRequest,
-  user: User,
+  userId: string,
   subscription: SubscriptionInfo,
-  userClient: import('@supabase/supabase-js').SupabaseClient,
+  userClient: import('@agiworkforce/data-layer').DatabaseAdapter,
 ): Promise<NextResponse> {
   logger.info(
-    { model: chatRequest.model, userId: userId },
+    { model: chatRequest.model, userId },
     'v2: model not in AI SDK providers - proxying to v1 factory',
   );
 
@@ -523,7 +522,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   if (csrfError) return csrfError;
 
   const { userId } = await getClerkAuthUser(request);
-  const userClient = getServiceClient();
+  const userClient = getNeonDb();
 
   // ---------------------------------------------------------------------------
   // SECURITY: Subscription validation (prevents credit & subscription bypass)
@@ -696,7 +695,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   const aiSdkProvider = detectAiSdkProvider(chatRequest.model);
 
   if (!aiSdkProvider || !useAiSdk) {
-    return handleViaV1Fallback(request, chatRequest, user, subscription, userClient);
+    return handleViaV1Fallback(request, chatRequest, userId, subscription, userClient);
   }
 
   // Map model id (same mapping as v1)

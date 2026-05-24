@@ -5,7 +5,8 @@ import { getOptionalEnv } from '@/utils/env';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * Debug endpoint to check LLM provider configuration
@@ -20,19 +21,26 @@ async function handleGetLlmStatus(request: NextRequest) {
   const isDev = process.env.NODE_ENV === 'development';
 
   if (!isDev) {
-    // In production, require admin authentication via app_metadata.role.
-    // getAuthenticatedUser handles Bearer + cookie flows and uses the service-role
-    // client only for JWT verification (never for DB ops).
-    let user;
+    // In production, require admin authentication via organization membership.
+    let userId: string;
     try {
-      user = await getAuthenticatedUser(request);
+      const auth = await getClerkAuthUser(request);
+      userId = auth.userId;
     } catch {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Verify admin via app_metadata (set by service role only, not user-editable)
-    const isAdmin = user.app_metadata?.['role'] === 'admin';
-    if (!isAdmin) {
+    // Verify admin via organization_members table (owner or admin role only)
+    try {
+      const db = getNeonDb();
+      const rows = await db.query<{ role: string }>(
+        'SELECT role FROM organization_members WHERE user_id = $1 AND role IN ($2, $3) LIMIT 1',
+        [userId, 'owner', 'admin'],
+      );
+      if (rows.length === 0) {
+        return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+      }
+    } catch {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
     }
   }
