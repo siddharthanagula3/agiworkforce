@@ -13,7 +13,7 @@
  * All colours come from --chat-* design tokens; no hardcoded hex values.
  */
 
-import { Sparkles, Code2, PenLine, Search, Image, Languages } from 'lucide-react';
+import { Sparkles, Code2, PenLine, GraduationCap, Coffee, Lightbulb } from 'lucide-react';
 import { useGreeting } from './useGreeting';
 
 interface SuggestionChip {
@@ -34,19 +34,19 @@ const CHIPS: SuggestionChip[] = [
     icon: <PenLine size={13} />,
   },
   {
-    label: 'Research',
-    prompt: 'Research this topic in depth: ',
-    icon: <Search size={13} />,
+    label: 'Learn',
+    prompt: 'Help me learn about ',
+    icon: <GraduationCap size={13} />,
   },
   {
-    label: 'Image',
-    prompt: 'Create an image of ',
-    icon: <Image size={13} />,
+    label: 'Life stuff',
+    prompt: 'Help me with ',
+    icon: <Coffee size={13} />,
   },
   {
-    label: 'Translate',
-    prompt: 'Translate the following text: ',
-    icon: <Languages size={13} />,
+    label: "AGI's pick",
+    prompt: 'What should I focus on today? Give me an interesting challenge or idea to explore.',
+    icon: <Lightbulb size={13} />,
   },
 ];
 

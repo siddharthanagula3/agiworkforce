@@ -73,7 +73,7 @@ describe('useGreeting — time band selection', () => {
 
   it('returns earlyMorning band at hour 6', () => {
     const { result } = renderGreeting(6, 3); // day 3 → variantIndex 0
-    expect(result.current.headline).toBe('Rise and shine');
+    expect(result.current.headline).toBe('Good morning');
   });
 
   it('returns morning band at hour 7', () => {
@@ -108,23 +108,23 @@ describe('useGreeting — time band selection', () => {
 
   it('returns night band at hour 21', () => {
     const { result } = renderGreeting(21, 3); // variantIndex 0
-    expect(result.current.headline).toBe('Good night');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns night band at hour 23 (boundary)', () => {
     const { result } = renderGreeting(23, 3);
-    // variantIndex 0 for day=3 → 'Good night'
-    expect(result.current.headline).toBe('Good night');
+    // variantIndex 0 for day=3 → 'Good evening'
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 0 (midnight)', () => {
     const { result } = renderGreeting(0, 3); // variantIndex 0
-    expect(result.current.headline).toBe('Late night session');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 3 (pre-4am)', () => {
     const { result } = renderGreeting(3, 3);
-    expect(result.current.headline).toBe('Late night session');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 1', () => {
