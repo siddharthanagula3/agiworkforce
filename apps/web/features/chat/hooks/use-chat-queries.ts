@@ -14,13 +14,11 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { queryKeys } from '@shared/stores/query-client';
-import { supabase } from '@shared/lib/supabase-client';
 import { chatPersistenceService } from '../services/conversation-storage';
 import type { ChatSession, ChatMessage } from '../types';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { secureToken } from '@/lib/secure-random';
-import type { User } from '@supabase/supabase-js';
 
 // ============================================================================
 // TYPE DEFINITIONS

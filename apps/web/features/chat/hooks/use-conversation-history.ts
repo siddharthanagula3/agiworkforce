@@ -7,7 +7,6 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { supabase } from '@shared/lib/supabase-client';
 import { chatPersistenceService } from '../services/conversation-storage';
 import { queryKeys } from '@shared/stores/query-client';
 import { logger } from '@shared/lib/logger';
