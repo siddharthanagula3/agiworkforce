@@ -146,6 +146,13 @@ export interface Project {
    * 'violet' | 'zinc'). Mirrors `ProjectRecord.accentColor`.
    */
   accentColor?: string;
+  /**
+   * Hex color string used by web surface for the folder icon in the sidebar.
+   * Optional — defaults to the accent color when absent.
+   */
+  color?: string;
+  /** When true the project is hidden from active views. */
+  isArchived?: boolean;
 }
 
 // ---------------------------------------------------------------------------
