@@ -17,9 +17,11 @@ import {
   ChevronRight,
   Check,
   Layers,
+  Library,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
+import { useDirectoryStore } from '@features/chat/stores/directory-store';
 import { FocusModeButtons, type FocusMode } from './FocusModeButtons';
 import { ActiveModeTags, type ModeTag } from './ActiveModeTags';
 import { SlashCommandMenu, type SlashCommandMenuHandle } from './SlashCommandMenu';
@@ -144,6 +146,7 @@ const ChatComposerNewComponent = ({
   emptyState = false,
   attachmentPrivacyShortLabel,
 }: ChatComposerProps) => {
+  const openDirectory = useDirectoryStore((s) => s.setOpen);
   const [message, setMessage] = useState('');
   const {
     attachments,
@@ -903,6 +906,22 @@ const ChatComposerNewComponent = ({
                     );
                   })}
                 </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Browse Directory */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    openDirectory(true);
+                    setShowOverflowMenu(false);
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                >
+                  <Library className="h-4 w-4 text-primary" />
+                  <span className="flex-1 text-left">Browse Directory</span>
+                </button>
               </div>
             )}
           </div>
