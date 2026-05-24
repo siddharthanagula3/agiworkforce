@@ -44,8 +44,8 @@ pub const OPENAI_OAUTH: OAuthProvider = OAuthProvider {
 
 pub const AGIWORKFORCE_OAUTH: OAuthProvider = OAuthProvider {
     id: "agiworkforce",
-    name: "AGI Workforce",
-    description: "Your AGI Workforce subscription",
+    name: "AGI",
+    description: "Your AGI subscription",
     client_id: "cli",
     authorize_url: "https://agiworkforce.com/auth/device",
     token_url: "https://api.agiworkforce.com/auth/device/token",
@@ -330,7 +330,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     let client = reqwest::Client::new();
 
     // Step 1: Request device code
-    eprintln!("\n  {} Connecting to AGI Workforce...\n", "→".cyan().bold(),);
+    eprintln!("\n  {} Connecting to AGI...\n", "→".cyan().bold(),);
 
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
@@ -342,7 +342,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         .json(&serde_json::json!({ "client_id": "cli" }))
         .send()
         .await
-        .context("Failed to request device code from AGI Workforce")?;
+        .context("Failed to request device code from AGI")?;
 
     if !resp.status().is_success() {
         let status = resp.status();
@@ -428,7 +428,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
                 .unwrap_or(0);
 
             eprintln!(
-                "\n  {} Authenticated with AGI Workforce!",
+                "\n  {} Authenticated with AGI!",
                 "✓".green().bold()
             );
 
