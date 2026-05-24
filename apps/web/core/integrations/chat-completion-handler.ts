@@ -24,6 +24,7 @@ import {
   DEFAULT_PERPLEXITY_MODEL,
 } from '@shared/config/supported-models';
 import { streamFromProvider } from '@/lib/providerStreamClient';
+import { getAuthToken as _getSharedAuthToken } from '@shared/lib/get-auth-token';
 
 export interface AIMessage {
   id?: string;
@@ -49,20 +50,13 @@ function asProviderStreamId(provider: AIProvider): ProviderStreamId | null {
 }
 
 /**
- * Best-effort: pull the current Supabase access token from the browser.
+ * Best-effort: pull the current auth token from the browser.
  * Returns empty string when not signed in (the gateway will then 401 and the
  * caller falls back to the legacy path).
  */
 async function tryGetAuthToken(): Promise<string> {
   if (typeof window === 'undefined') return '';
-  try {
-    const mod = await import('@/utils/supabase/client');
-    const supabase = mod.createClient();
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? '';
-  } catch {
-    return '';
-  }
+  return (await _getSharedAuthToken()) ?? '';
 }
 
 export async function sendAIMessage(

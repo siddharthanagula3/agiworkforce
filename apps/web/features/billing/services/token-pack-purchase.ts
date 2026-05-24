@@ -2,6 +2,7 @@ import { supabase } from '@shared/lib/supabase-client';
 import { captureError } from '@shared/lib/sentry';
 import { logger } from '@shared/lib/logger';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 interface BuyTokenPackParams {
   userId: string;
@@ -9,16 +10,6 @@ interface BuyTokenPackParams {
   packId: string;
   tokens: number;
   price: number;
-}
-
-/**
- * Get authorization token for API calls
- */
-async function getAuthToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
 }
 
 /**

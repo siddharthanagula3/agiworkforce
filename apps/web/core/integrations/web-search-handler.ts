@@ -7,26 +7,10 @@
  */
 
 import { fetchWithTimeout, TimeoutPresets } from '@shared/utils/error-handling';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // SECURITY: API keys removed - all calls go through authenticated proxies
 // Provider availability is determined by proxy configuration, not client-side keys
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    console.error('[WebSearch] Failed to get auth token:', error);
-    return null;
-  }
-}
 
 /**
  * Validates if a value is a valid URL string

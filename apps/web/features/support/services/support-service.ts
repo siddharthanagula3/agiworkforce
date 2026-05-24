@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // =============================================================================
 // EMAIL NOTIFICATION TYPES
@@ -347,13 +348,10 @@ class SupportService {
     error?: string;
   }> {
     try {
-      // Get the current session for authentication
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      // Get the current auth token
+      const token = await getAuthToken();
 
-      if (sessionError || !session) {
+      if (!token) {
         console.warn('[Support Service] No session for email notification, skipping');
         return { success: false, error: 'Not authenticated' };
       }
@@ -363,7 +361,7 @@ class SupportService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
