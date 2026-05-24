@@ -1,7 +1,7 @@
 import 'server-only';
 
 import Stripe from 'stripe';
-import { SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { getSubscriptionPeriod } from '@/lib/stripe-types';
@@ -13,7 +13,7 @@ import {
 } from './db';
 
 export async function dispatchStripeEvent(
-  supabaseAdmin: SupabaseClient,
+  db: DatabaseAdapter,
   stripe: Stripe,
   event: Stripe.Event,
 ): Promise<void> {
@@ -22,16 +22,16 @@ export async function dispatchStripeEvent(
       const session = event.data.object as Stripe.Checkout.Session;
       if (session.metadata?.['type'] === 'credit_topup') {
         logger.info({ sessionId: session.id }, 'Processing credit top-up checkout');
-        await handleCreditTopUp(supabaseAdmin, stripe, session);
+        await handleCreditTopUp(db, stripe, session);
       } else {
-        await upsertSubscriptionFromSession(supabaseAdmin, stripe, session);
+        await upsertSubscriptionFromSession(db, stripe, session);
       }
       break;
     }
     case 'checkout.session.async_payment_succeeded': {
       const session = event.data.object as Stripe.Checkout.Session;
       logger.info({ sessionId: session.id }, 'Async payment succeeded');
-      await upsertSubscriptionFromSession(supabaseAdmin, stripe, session);
+      await upsertSubscriptionFromSession(db, stripe, session);
       break;
     }
     case 'checkout.session.async_payment_failed': {
@@ -42,27 +42,28 @@ export async function dispatchStripeEvent(
 
       try {
         if (stripeSubId) {
-          const { error: updateError } = await supabaseAdmin
-            .from('subscriptions')
-            .update({ status: 'past_due' })
-            .eq('stripe_subscription_id', stripeSubId);
-          if (updateError) {
-            logger.error(
-              { error: updateError, stripeSubId },
-              'Failed to update subscription for async payment failed',
-            );
-          }
+          await db
+            .execute(
+              "update subscriptions set status = 'past_due' where stripe_subscription_id = $1",
+              [stripeSubId],
+            )
+            .catch((updateError: unknown) => {
+              logger.error(
+                { error: updateError, stripeSubId },
+                'Failed to update subscription for async payment failed',
+              );
+            });
         } else if (stripeCustomerId) {
-          const { error: updateError } = await supabaseAdmin
-            .from('subscriptions')
-            .update({ status: 'past_due' })
-            .eq('stripe_customer_id', stripeCustomerId);
-          if (updateError) {
-            logger.error(
-              { error: updateError, stripeCustomerId },
-              'Failed to update subscription by customer ID for async payment failed',
-            );
-          }
+          await db
+            .execute("update subscriptions set status = 'past_due' where stripe_customer_id = $1", [
+              stripeCustomerId,
+            ])
+            .catch((updateError: unknown) => {
+              logger.error(
+                { error: updateError, stripeCustomerId },
+                'Failed to update subscription by customer ID for async payment failed',
+              );
+            });
         }
       } catch (error) {
         logger.error({ error }, 'Error updating subscription for async payment failed');
@@ -72,7 +73,7 @@ export async function dispatchStripeEvent(
     case 'customer.subscription.created':
     case 'customer.subscription.updated': {
       const subscription = event.data.object as Stripe.Subscription;
-      await updateSubscriptionFromStripeSubscription(supabaseAdmin, stripe, subscription);
+      await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
       break;
     }
     case 'invoice.payment_succeeded': {
@@ -107,27 +108,39 @@ export async function dispatchStripeEvent(
       if (shouldUpsert) {
         try {
           if (stripeSubId) {
-            const { error: updateError } = await supabaseAdmin
-              .from('subscriptions')
-              .update(updateData)
-              .eq('stripe_subscription_id', stripeSubId);
-            if (updateError) {
-              logger.error(
-                { error: updateError, stripeSubId },
-                'Failed to update subscription for payment succeeded',
-              );
-            }
+            await db
+              .execute(
+                'update subscriptions set status = $1, current_period_start = $2, current_period_end = $3 where stripe_subscription_id = $4',
+                [
+                  updateData.status,
+                  updateData.current_period_start ?? null,
+                  updateData.current_period_end ?? null,
+                  stripeSubId,
+                ],
+              )
+              .catch((updateError: unknown) => {
+                logger.error(
+                  { error: updateError, stripeSubId },
+                  'Failed to update subscription for payment succeeded',
+                );
+              });
           } else if (stripeCustomerId) {
-            const { error: updateError } = await supabaseAdmin
-              .from('subscriptions')
-              .update(updateData)
-              .eq('stripe_customer_id', stripeCustomerId);
-            if (updateError) {
-              logger.error(
-                { error: updateError, stripeCustomerId },
-                'Failed to update subscription by customer ID for payment succeeded',
-              );
-            }
+            await db
+              .execute(
+                'update subscriptions set status = $1, current_period_start = $2, current_period_end = $3 where stripe_customer_id = $4',
+                [
+                  updateData.status,
+                  updateData.current_period_start ?? null,
+                  updateData.current_period_end ?? null,
+                  stripeCustomerId,
+                ],
+              )
+              .catch((updateError: unknown) => {
+                logger.error(
+                  { error: updateError, stripeCustomerId },
+                  'Failed to update subscription by customer ID for payment succeeded',
+                );
+              });
           }
         } catch (error) {
           logger.error({ error }, 'Error updating subscription for payment succeeded');
@@ -145,31 +158,34 @@ export async function dispatchStripeEvent(
           ? new Date(subscription.canceled_at * 1000).toISOString()
           : new Date().toISOString();
 
-        const { data: existingSub, error: fetchError } = await supabaseAdmin
-          .from('subscriptions')
-          .select('id, user_id')
-          .eq('stripe_subscription_id', stripeSubId)
-          .maybeSingle();
+        const existingSubs = await db
+          .query<{
+            id: string;
+            user_id: string;
+          }>('select id, user_id from subscriptions where stripe_subscription_id = $1 limit 1', [
+            stripeSubId,
+          ])
+          .catch((fetchError: unknown) => {
+            logger.error(
+              { error: fetchError, stripeSubId },
+              'Failed to fetch subscription for deletion',
+            );
+            return [] as { id: string; user_id: string }[];
+          });
 
-        if (fetchError) {
-          logger.error(
-            { error: fetchError, stripeSubId },
-            'Failed to fetch subscription for deletion',
-          );
-        }
+        await db
+          .execute(
+            "update subscriptions set status = 'canceled', canceled_at = $1 where stripe_subscription_id = $2",
+            [canceledAt, stripeSubId],
+          )
+          .catch((updateError: unknown) => {
+            logger.error(
+              { error: updateError, stripeSubId },
+              'Failed to update subscription for deleted event',
+            );
+          });
 
-        const { error: updateError } = await supabaseAdmin
-          .from('subscriptions')
-          .update({ status: 'canceled', canceled_at: canceledAt })
-          .eq('stripe_subscription_id', stripeSubId);
-
-        if (updateError) {
-          logger.error(
-            { error: updateError, stripeSubId },
-            'Failed to update subscription for deleted event',
-          );
-        }
-
+        const existingSub = existingSubs[0];
         if (existingSub?.user_id) {
           try {
             const balance = await CreditService.getBalance(existingSub.user_id);
@@ -217,17 +233,17 @@ export async function dispatchStripeEvent(
             'Retrieved actual subscription status from Stripe after payment failure',
           );
 
-          const { error: updateError } = await supabaseAdmin
-            .from('subscriptions')
-            .update({ status: actualStatus })
-            .eq('stripe_subscription_id', stripeSubId);
-
-          if (updateError) {
-            logger.error(
-              { error: updateError, stripeSubId, actualStatus },
-              'Failed to update subscription for payment failed',
-            );
-          }
+          await db
+            .execute('update subscriptions set status = $1 where stripe_subscription_id = $2', [
+              actualStatus,
+              stripeSubId,
+            ])
+            .catch((updateError: unknown) => {
+              logger.error(
+                { error: updateError, stripeSubId, actualStatus },
+                'Failed to update subscription for payment failed',
+              );
+            });
         } catch (error) {
           logger.error(
             { error, stripeSubId },
@@ -236,16 +252,16 @@ export async function dispatchStripeEvent(
         }
       } else if (stripeCustomerId) {
         try {
-          const { error: updateError } = await supabaseAdmin
-            .from('subscriptions')
-            .update({ status: 'past_due' })
-            .eq('stripe_customer_id', stripeCustomerId);
-          if (updateError) {
-            logger.error(
-              { error: updateError, stripeCustomerId },
-              'Failed to update subscription by customer ID for payment failed',
-            );
-          }
+          await db
+            .execute("update subscriptions set status = 'past_due' where stripe_customer_id = $1", [
+              stripeCustomerId,
+            ])
+            .catch((updateError: unknown) => {
+              logger.error(
+                { error: updateError, stripeCustomerId },
+                'Failed to update subscription by customer ID for payment failed',
+              );
+            });
         } catch (error) {
           logger.error({ error }, 'Error updating subscription for payment failed');
         }
@@ -264,38 +280,38 @@ export async function dispatchStripeEvent(
 
       if (stripeCustomerId && refundedAmount > 0) {
         try {
-          const { data: profile, error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .select('id')
-            .eq('stripe_customer_id', stripeCustomerId)
-            .maybeSingle();
-
-          if (profileError) {
-            logger.error(
-              { error: profileError, stripeCustomerId },
-              'Failed to find user for refund',
-            );
-            break;
-          }
-
-          if (profile?.id) {
-            const { error: refundError } = await supabaseAdmin.rpc('handle_refund', {
-              p_user_id: profile.id,
-              p_refund_amount_cents: refundedAmount,
-              p_reason: `Refund for charge ${charge.id}`,
+          const profiles = await db
+            .query<{
+              id: string;
+            }>('select id from profiles where stripe_customer_id = $1 limit 1', [stripeCustomerId])
+            .catch((profileError: unknown) => {
+              logger.error(
+                { error: profileError, stripeCustomerId },
+                'Failed to find user for refund',
+              );
+              return [] as { id: string }[];
             });
 
-            if (refundError) {
-              logger.error(
-                { error: refundError, userId: profile.id, refundedAmount },
-                'Failed to revoke credits for refund',
-              );
-            } else {
-              logger.info(
-                { userId: profile.id, refundedAmount, chargeId: charge.id },
-                'Credits revoked for refund successfully',
-              );
-            }
+          const profile = profiles[0];
+          if (profile?.id) {
+            await db
+              .execute('select handle_refund($1, $2, $3)', [
+                profile.id,
+                refundedAmount,
+                `Refund for charge ${charge.id}`,
+              ])
+              .then(() => {
+                logger.info(
+                  { userId: profile.id, refundedAmount, chargeId: charge.id },
+                  'Credits revoked for refund successfully',
+                );
+              })
+              .catch((refundError: unknown) => {
+                logger.error(
+                  { error: refundError, userId: profile.id, refundedAmount },
+                  'Failed to revoke credits for refund',
+                );
+              });
           } else {
             logger.warn(
               { stripeCustomerId, chargeId: charge.id },
@@ -324,24 +340,28 @@ export async function dispatchStripeEvent(
         const stripeCustomerId = charge.customer as string | null;
 
         if (stripeCustomerId) {
-          const { data: profile, error: profileError } = await supabaseAdmin
-            .from('profiles')
-            .select('id, email')
-            .eq('stripe_customer_id', stripeCustomerId)
-            .maybeSingle();
+          const profiles = await db
+            .query<{
+              id: string;
+              email: string | null;
+            }>('select id, email from profiles where stripe_customer_id = $1 limit 1', [
+              stripeCustomerId,
+            ])
+            .catch(() => [] as { id: string; email: string | null }[]);
 
-          if (!profileError && profile?.id) {
-            const { error: updateError } = await supabaseAdmin
-              .from('subscriptions')
-              .update({ status: 'past_due', cancel_at_period_end: true })
-              .eq('stripe_customer_id', stripeCustomerId);
-
-            if (updateError) {
-              logger.error(
-                { error: updateError, stripeCustomerId },
-                'Failed to update subscription for dispute',
-              );
-            }
+          const profile = profiles[0];
+          if (profile?.id) {
+            await db
+              .execute(
+                "update subscriptions set status = 'past_due', cancel_at_period_end = true where stripe_customer_id = $1",
+                [stripeCustomerId],
+              )
+              .catch((updateError: unknown) => {
+                logger.error(
+                  { error: updateError, stripeCustomerId },
+                  'Failed to update subscription for dispute',
+                );
+              });
 
             try {
               const balance = await CreditService.getBalance(profile.id);

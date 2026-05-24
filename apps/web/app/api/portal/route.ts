@@ -2,7 +2,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -121,25 +122,29 @@ async function handlePortal(request: NextRequest) {
   }
 
   const { userId, email: userEmail } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
-  const { data: subscription, error } = await supabase
-    .from('subscriptions')
-    .select('stripe_customer_id, stripe_subscription_id, status')
-    .eq('user_id', userId)
-    .single();
+  type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id' | 'status'>;
+  const subRows = await db
+    .query<SubRow>(
+      'select stripe_customer_id, stripe_subscription_id, status from subscriptions where user_id = $1 limit 1',
+      [userId],
+    )
+    .catch(() => [] as SubRow[]);
+  const subscription = subRows[0] ?? null;
 
   // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
   if (!subscription) {
     try {
       // First, check if we have customer_id stored in profiles
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('stripe_customer_id')
-        .eq('id', userId)
-        .maybeSingle();
+      const profileRows = await db
+        .query<
+          Pick<ProfileRow, 'stripe_customer_id'>
+        >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
+        .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
+      const profileData = profileRows[0] ?? null;
 
-      let customerId: string | null = profile?.stripe_customer_id || null;
+      let customerId: string | null = profileData?.stripe_customer_id || null;
 
       if (customerId) {
         logger.info(
@@ -229,7 +234,12 @@ async function handlePortal(request: NextRequest) {
         }
 
         // CRITICAL: Store customer_id for future lookups
-        await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
+        await db
+          .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+            customerId,
+            userId,
+          ])
+          .catch(() => undefined);
 
         logger.info(
           { userId: userId, customerId, email: userEmail },
@@ -269,10 +279,6 @@ async function handlePortal(request: NextRequest) {
     }
   }
 
-  if (error) {
-    throw createError.notFound('No subscription found.');
-  }
-
   // Allow users to access portal even if canceled, to view invoices etc.
   // The only strict requirement is having a customer ID.
   const allowedStatuses = ['active', 'trialing', 'past_due', 'canceled', 'unpaid'];
@@ -294,12 +300,14 @@ async function handlePortal(request: NextRequest) {
       );
       stripeCustomerId = stripeSubscription.customer as string;
 
-      // Update Supabase with the customer_id for future requests
+      // Update db with the customer_id for future requests
       if (stripeCustomerId) {
-        await supabase
-          .from('subscriptions')
-          .update({ stripe_customer_id: stripeCustomerId })
-          .eq('user_id', userId);
+        await db
+          .execute('update subscriptions set stripe_customer_id = $1 where user_id = $2', [
+            stripeCustomerId,
+            userId,
+          ])
+          .catch(() => undefined);
         logger.info(
           {
             userId: userId,

@@ -2,9 +2,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
-// SECURITY: cron job runs without any user JWT — service-role is correct here.
-// Do not replace getServiceClient() with getUserClient() in this file.
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
 // Verify cron secret to prevent unauthorized access
@@ -71,18 +70,26 @@ export async function GET(request: NextRequest) {
     logger.info('Starting monthly credit reset cron job');
 
     // Get all active subscriptions
-    const supabase = getServiceClient();
-    const { data: subscriptions, error: fetchError } = await supabase
-      .from('subscriptions')
-      .select(
-        'id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status',
+    const db = getNeonDb();
+    type SubRow = Pick<
+      SubscriptionRow,
+      | 'id'
+      | 'user_id'
+      | 'plan_tier'
+      | 'stripe_price_id'
+      | 'current_period_start'
+      | 'current_period_end'
+      | 'status'
+    >;
+    const subscriptions = await db
+      .query<SubRow>(
+        'select id, user_id, plan_tier, stripe_price_id, current_period_start, current_period_end, status from subscriptions where status = any($1)',
+        [['active', 'trialing']],
       )
-      .in('status', ['active', 'trialing']);
-
-    if (fetchError) {
-      logger.error({ error: fetchError }, 'Failed to fetch subscriptions');
-      throw fetchError;
-    }
+      .catch((fetchError: unknown) => {
+        logger.error({ error: fetchError }, 'Failed to fetch subscriptions');
+        throw fetchError;
+      });
 
     if (!subscriptions || subscriptions.length === 0) {
       logger.info('No active subscriptions found');

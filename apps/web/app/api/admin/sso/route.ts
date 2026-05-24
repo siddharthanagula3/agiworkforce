@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import type { OrganizationMemberRow, SSOConnectionRow } from '@/lib/server/neon-types';
 
 /**
  * Admin SSO Management API
@@ -16,8 +17,7 @@ import { getServiceClient } from '@/lib/supabase-server';
  * POST   /api/admin/sso                  - Create a new SSO connection (org owner only)
  * DELETE /api/admin/sso?id=<uuid>        - Remove/deactivate an SSO connection (org owner only)
  *
- * All endpoints require organization admin or owner role. Uses service role key to bypass RLS
- * so that explicit, audited authorization checks can be performed in application code.
+ * All endpoints require organization admin or owner role.
  */
 
 interface SSOConnection {
@@ -34,10 +34,6 @@ interface SSOConnection {
   created_by: string | null;
 }
 
-interface OrgMemberRow {
-  role: string;
-}
-
 const CreateSSOConnectionSchema = z.object({
   organization_id: z.string().uuid(),
   provider_type: z.enum(['saml', 'oidc']),
@@ -50,13 +46,8 @@ const CreateSSOConnectionSchema = z.object({
 
 type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 
-function getSupabaseAdmin(): SupabaseClient {
-  return getServiceClient();
-}
-
 /**
  * Verify the caller is authenticated and return their user ID.
- * Uses Clerk auth (cookie session or Bearer token).
  */
 async function verifyAuth(
   request: NextRequest,
@@ -71,34 +62,26 @@ async function verifyAuth(
 
 /**
  * Check whether the caller has the required role in the given organization.
- * Returns the role string if access is granted, null otherwise.
  */
 async function getOrgRole(
-  supabase: SupabaseClient,
+  db: DatabaseAdapter,
   userId: string,
   organizationId: string,
 ): Promise<OrgRole | null> {
-  const { data, error } = await supabase
-    .from('organization_members')
-    .select('role')
-    .eq('organization_id', organizationId)
-    .eq('user_id', userId)
-    .limit(1)
-    .single();
+  const rows = await db.query<Pick<OrganizationMemberRow, 'role'>>(
+    'select role from organization_members where organization_id = $1 and user_id = $2 limit 1',
+    [organizationId, userId],
+  );
 
-  if (error || !data) {
+  if (rows.length === 0) {
     return null;
   }
 
-  const row = data as unknown as OrgMemberRow;
-  const role = row.role as OrgRole;
-  return role;
+  return (rows[0]!.role as OrgRole) ?? null;
 }
 
 /**
  * GET /api/admin/sso
- *
- * List SSO connections for the caller's organization (or a specific org when ?orgId= is given).
  */
 export async function GET(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'default');
@@ -112,78 +95,45 @@ export async function GET(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let supabase: SupabaseClient;
-  try {
-    supabase = getSupabaseAdmin();
-  } catch {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
-
+  const db = getNeonDb();
   const { searchParams } = new URL(request.url);
   const orgId = searchParams.get('orgId');
 
   try {
     if (orgId) {
       // Require admin or owner to view a specific org's SSO connections
-      const role = await getOrgRole(supabase, userId, orgId);
+      const role = await getOrgRole(db, userId, orgId);
       if (!role || !['owner', 'admin'].includes(role)) {
         logger.warn({ userId, orgId }, 'User lacks admin/owner role for SSO list');
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const { data, error } = await supabase
-        .from('sso_connections')
-        .select(
-          'id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at, created_by',
-        )
-        .eq('organization_id', orgId)
-        .order('created_at', { ascending: false });
+      const rows = await db.query<SSOConnectionRow>(
+        'select id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at, created_by from sso_connections where organization_id = $1 order by created_at desc',
+        [orgId],
+      );
 
-      if (error) {
-        logger.error({ error, orgId }, 'Failed to list SSO connections');
-        return NextResponse.json({ error: 'Failed to fetch SSO connections' }, { status: 500 });
-      }
-
-      return NextResponse.json({ connections: (data ?? []) as SSOConnection[] });
+      return NextResponse.json({ connections: rows as unknown as SSOConnection[] });
     }
 
     // No orgId - return connections for all orgs the caller administers
-    const { data: memberRows, error: memberError } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', userId)
-      .in('role', ['owner', 'admin']);
-
-    if (memberError) {
-      logger.error({ error: memberError, userId }, 'Failed to fetch org memberships');
-      return NextResponse.json(
-        { error: 'Failed to fetch organization memberships' },
-        { status: 500 },
-      );
-    }
-
-    const orgIds = ((memberRows ?? []) as Array<{ organization_id: string }>).map(
-      (r) => r.organization_id,
+    const memberRows = await db.query<Pick<OrganizationMemberRow, 'organization_id'>>(
+      "select organization_id from organization_members where user_id = $1 and role in ('owner', 'admin')",
+      [userId],
     );
+
+    const orgIds = memberRows.map((r) => r.organization_id);
 
     if (orgIds.length === 0) {
       return NextResponse.json({ connections: [] });
     }
 
-    const { data, error } = await supabase
-      .from('sso_connections')
-      .select(
-        'id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at, created_by',
-      )
-      .in('organization_id', orgIds)
-      .order('created_at', { ascending: false });
+    const rows = await db.query<SSOConnectionRow>(
+      'select id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at, created_by from sso_connections where organization_id = any($1) order by created_at desc',
+      [orgIds],
+    );
 
-    if (error) {
-      logger.error({ error, userId }, 'Failed to list SSO connections for user orgs');
-      return NextResponse.json({ error: 'Failed to fetch SSO connections' }, { status: 500 });
-    }
-
-    return NextResponse.json({ connections: (data ?? []) as SSOConnection[] });
+    return NextResponse.json({ connections: rows as unknown as SSOConnection[] });
   } catch (error) {
     logger.error({ error, userId }, 'Unexpected error in SSO GET');
     if (error instanceof Error && error.message.includes('fetch failed')) {
@@ -195,13 +145,8 @@ export async function GET(request: NextRequest): Promise<Response> {
 
 /**
  * POST /api/admin/sso
- *
- * Create a new SSO connection. Caller must be an owner of the target organization.
- *
- * Body: CreateSSOConnectionBody
  */
 export async function POST(request: NextRequest): Promise<Response> {
-  // Strict rate limit - creating SSO connections is a high-privilege admin action
   const rateLimitResponse = await withRateLimit(request, 'api-key-create');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -248,16 +193,11 @@ export async function POST(request: NextRequest): Promise<Response> {
     );
   }
 
-  let supabase: SupabaseClient;
-  try {
-    supabase = getSupabaseAdmin();
-  } catch {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
+  const db = getNeonDb();
 
   try {
     // Only org owners may create SSO connections
-    const role = await getOrgRole(supabase, userId, organization_id);
+    const role = await getOrgRole(db, userId, organization_id);
     if (role !== 'owner') {
       logger.warn({ userId, organization_id }, 'User lacks org owner role for SSO create');
 
@@ -275,33 +215,33 @@ export async function POST(request: NextRequest): Promise<Response> {
       );
     }
 
-    const { data, error } = await supabase
-      .from('sso_connections')
-      .insert({
-        organization_id,
-        provider_type,
-        domain: domain.toLowerCase(),
-        display_name: display_name ?? null,
-        metadata_url: metadata_url ?? null,
-        metadata_xml: metadata_xml ?? null,
-        attribute_mapping: attribute_mapping ?? {},
-        created_by: userId,
-        is_active: true,
-      })
-      .select(
-        'id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at',
-      )
-      .single();
-
-    if (error) {
-      // Unique constraint violation on domain
-      if (error.code === '23505') {
+    let rows: SSOConnectionRow[];
+    try {
+      rows = await db.query<SSOConnectionRow>(
+        'insert into sso_connections (organization_id, provider_type, domain, display_name, metadata_url, metadata_xml, attribute_mapping, created_by, is_active) values ($1, $2, $3, $4, $5, $6, $7, $8, true) returning id, organization_id, provider_type, domain, display_name, metadata_url, is_active, attribute_mapping, created_at, updated_at',
+        [
+          organization_id,
+          provider_type,
+          domain.toLowerCase(),
+          display_name ?? null,
+          metadata_url ?? null,
+          metadata_xml ?? null,
+          JSON.stringify(attribute_mapping ?? {}),
+          userId,
+        ],
+      );
+    } catch (err: unknown) {
+      const pgCode = (err as { code?: string })?.code;
+      if (pgCode === '23505') {
         return NextResponse.json(
           { error: `Domain "${domain}" is already configured for SSO` },
           { status: 409 },
         );
       }
-      logger.error({ error, userId, organization_id, domain }, 'Failed to create SSO connection');
+      logger.error(
+        { error: err, userId, organization_id, domain },
+        'Failed to create SSO connection',
+      );
       return NextResponse.json({ error: 'Failed to create SSO connection' }, { status: 500 });
     }
 
@@ -320,7 +260,7 @@ export async function POST(request: NextRequest): Promise<Response> {
       },
     });
 
-    return NextResponse.json({ connection: data as SSOConnection }, { status: 201 });
+    return NextResponse.json({ connection: rows[0] as unknown as SSOConnection }, { status: 201 });
   } catch (error) {
     logger.error({ error, userId, organization_id }, 'Unexpected error in SSO POST');
     if (error instanceof Error && error.message.includes('fetch failed')) {
@@ -332,13 +272,6 @@ export async function POST(request: NextRequest): Promise<Response> {
 
 /**
  * DELETE /api/admin/sso?id=<uuid>[&hard=true]
- *
- * Deactivate (default) or permanently delete an SSO connection.
- * Caller must be an org owner.
- *
- * Query params:
- *   id    - UUID of the SSO connection to remove (required)
- *   hard  - Set to "true" for a permanent hard delete (default: soft deactivate)
  */
 export async function DELETE(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'api-key-revoke');
@@ -363,34 +296,24 @@ export async function DELETE(request: NextRequest): Promise<Response> {
     return NextResponse.json({ error: 'id query parameter is required' }, { status: 400 });
   }
 
-  let supabase: SupabaseClient;
-  try {
-    supabase = getSupabaseAdmin();
-  } catch {
-    return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-  }
+  const db = getNeonDb();
 
   try {
     // Fetch the connection to determine which org it belongs to
-    const { data: existing, error: fetchError } = await supabase
-      .from('sso_connections')
-      .select('id, organization_id, domain, provider_type')
-      .eq('id', connectionId)
-      .single();
+    const existing = await db.query<
+      Pick<SSOConnectionRow, 'id' | 'organization_id' | 'domain' | 'provider'>
+    >('select id, organization_id, domain, provider from sso_connections where id = $1 limit 1', [
+      connectionId,
+    ]);
 
-    if (fetchError || !existing) {
+    if (existing.length === 0) {
       return NextResponse.json({ error: 'SSO connection not found' }, { status: 404 });
     }
 
-    const conn = existing as unknown as {
-      id: string;
-      organization_id: string;
-      domain: string;
-      provider_type: string;
-    };
+    const conn = existing[0]!;
 
     // Only org owners may remove SSO connections
-    const role = await getOrgRole(supabase, userId, conn.organization_id);
+    const role = await getOrgRole(db, userId, conn.organization_id);
     if (role !== 'owner') {
       logger.warn(
         { userId, connectionId, organization_id: conn.organization_id },
@@ -416,29 +339,27 @@ export async function DELETE(request: NextRequest): Promise<Response> {
     }
 
     if (hardDelete) {
-      const { error } = await supabase.from('sso_connections').delete().eq('id', connectionId);
-
-      if (error) {
-        logger.error({ error, userId, connectionId }, 'Failed to hard-delete SSO connection');
-        return NextResponse.json({ error: 'Failed to delete SSO connection' }, { status: 500 });
-      }
-
+      await db
+        .execute('delete from sso_connections where id = $1', [connectionId])
+        .catch((err: unknown) => {
+          logger.error(
+            { error: err, userId, connectionId },
+            'Failed to hard-delete SSO connection',
+          );
+          throw err;
+        });
       logger.info(
         { userId, connectionId, domain: conn.domain },
         'SSO connection permanently deleted',
       );
     } else {
       // Soft delete: deactivate so the record is preserved for audit purposes
-      const { error } = await supabase
-        .from('sso_connections')
-        .update({ is_active: false })
-        .eq('id', connectionId);
-
-      if (error) {
-        logger.error({ error, userId, connectionId }, 'Failed to deactivate SSO connection');
-        return NextResponse.json({ error: 'Failed to deactivate SSO connection' }, { status: 500 });
-      }
-
+      await db
+        .execute('update sso_connections set is_active = false where id = $1', [connectionId])
+        .catch((err: unknown) => {
+          logger.error({ error: err, userId, connectionId }, 'Failed to deactivate SSO connection');
+          throw err;
+        });
       logger.info({ userId, connectionId, domain: conn.domain }, 'SSO connection deactivated');
     }
 
