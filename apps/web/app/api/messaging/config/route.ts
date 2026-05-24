@@ -11,7 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_PLATFORMS = ['whatsapp', 'telegram', 'slack'] as const;
 
@@ -20,16 +20,17 @@ async function handleGetConfig(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from('messaging_connections')
     .select('id, platform, is_active, connected_at, updated_at')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('connected_at', { ascending: false });
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch messaging connections');
+    logger.error({ error, userId }, 'Failed to fetch messaging connections');
     throw createError.internal('Failed to fetch messaging connections');
   }
 
@@ -45,7 +46,8 @@ async function handlePostConfig(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { platform?: string; config?: Record<string, string> };
   try {
@@ -79,7 +81,7 @@ async function handlePostConfig(request: NextRequest) {
     .from('messaging_connections')
     .upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         platform,
         config,
         is_active: true,
@@ -92,7 +94,7 @@ async function handlePostConfig(request: NextRequest) {
     .single();
 
   if (error) {
-    logger.error({ error, userId: user.id, platform }, 'Failed to upsert messaging connection');
+    logger.error({ error, userId, platform }, 'Failed to upsert messaging connection');
     throw createError.internal('Failed to save messaging connection');
   }
 

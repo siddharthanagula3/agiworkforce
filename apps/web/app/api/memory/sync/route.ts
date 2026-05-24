@@ -11,14 +11,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 async function handleGetSyncStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   // Get total count and last updated timestamp
   const { data: allMemories, error } = await supabase
@@ -28,7 +29,7 @@ async function handleGetSyncStatus(request: NextRequest) {
     .order('updated_at', { ascending: false });
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to get sync status');
+    logger.error({ error, userId }, 'Failed to get sync status');
     throw createError.internal('Failed to get sync status');
   }
 
@@ -60,7 +61,8 @@ async function handleTriggerSync(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   // For now, sync is a simple count + last-update query.
   // In the future this can trigger cross-device reconciliation.
