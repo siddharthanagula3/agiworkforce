@@ -40,51 +40,16 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   shouldEnablePromptCache: vi.fn(() => false),
 }));
 
-// Mock Supabase
-const mockSupabaseClient = {
-  auth: {
-    getUser: vi.fn(),
-  },
-};
+// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseClient),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Route was migrated from direct service-role JWT verification to the
-// getAuthenticatedUserWithClient helper. Route is Bearer-only — replicate that
-// in the mock by inspecting the Authorization header and forwarding to
-// mockSupabaseClient.auth.getUser so individual tests can still control auth
-// outcomes via that mock.
-vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: vi.fn(async (req: Request) => {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized();
-    }
-    const token = authHeader.substring(7);
-    const { data, error } = await mockSupabaseClient.auth.getUser(token);
-    if (error || !data?.user) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized('Invalid token');
-    }
-    return data.user;
-  }),
-  getAuthenticatedUserWithClient: vi.fn(async (req: Request) => {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized();
-    }
-    const token = authHeader.substring(7);
-    const { data, error } = await mockSupabaseClient.auth.getUser(token);
-    if (error || !data?.user) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized('Invalid token');
-    }
-    return { user: data.user, userDb: {} };
-  }),
+// Mock Supabase server client (the route creates one for credit/subscription services)
+vi.mock('@/services/supabase-server', () => ({
+  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 // Mock services
@@ -168,15 +133,7 @@ describe('POST /api/llm/completion', () => {
       finishReason: 'stop',
     });
 
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: {
-        user: {
-          id: 'test-user-id',
-          email: 'test@example.com',
-        },
-      },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'test-user-id', email: 'test@example.com' });
   });
 
   afterEach(() => {
@@ -224,10 +181,9 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should return 401 if token is invalid', async () => {
-      mockSupabaseClient.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid token' },
-      });
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',

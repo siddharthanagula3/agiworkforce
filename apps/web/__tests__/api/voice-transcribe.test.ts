@@ -36,8 +36,6 @@ vi.mock('@/lib/cors', () => ({
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     const envMap: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: 'anon-key-test',
       OPENAI_API_KEY: 'sk-test-openai-key',
     };
     return envMap[key] ?? `test-${key}`;
@@ -45,14 +43,10 @@ vi.mock('@/utils/env', () => ({
   getOptionalEnv: vi.fn(() => undefined),
 }));
 
-// Mock Supabase client
-const mockGetUser = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-  })),
+// Mock Clerk auth — controls whether getClerkAuthUser succeeds or throws
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 // Mock error utilities (withErrorHandler uses AppError internally)
@@ -155,48 +149,41 @@ describe('POST /api/voice/transcribe', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-123', email: 'test@example.com' } },
-      error: null,
-    });
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-123', email: 'test@example.com' });
 
     // Default: OpenAI responds with a successful transcription
     mockFetch.mockResolvedValue(makeOpenAISuccessResponse('Hello world'));
   });
 
   it('should return 401 when no authorization header is provided', async () => {
+    const { createError } = await import('@/lib/errors');
+    mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
     const request = makeFormDataRequest({ authHeader: '' });
     const response = await POST(request);
 
     expect(response.status).toBe(401);
-    const data = await response.json();
-    expect(data.error.code).toBe('invalid_api_key');
-    expect(data.error.message).toMatch(/missing or invalid authorization/i);
   });
 
   it('should return 401 when the authorization header does not start with Bearer', async () => {
+    const { createError } = await import('@/lib/errors');
+    mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
     const request = makeFormDataRequest({ authHeader: 'Basic some-base64' });
     const response = await POST(request);
 
     expect(response.status).toBe(401);
-    const data = await response.json();
-    expect(data.error.code).toBe('invalid_api_key');
   });
 
-  it('should return 401 when the Bearer token is invalid (Supabase rejects it)', async () => {
-    mockGetUser.mockResolvedValueOnce({
-      data: { user: null },
-      error: new Error('invalid JWT'),
-    });
+  it('should return 401 when the Bearer token is invalid (Clerk rejects it)', async () => {
+    const { createError } = await import('@/lib/errors');
+    mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
     const request = makeFormDataRequest({ authHeader: 'Bearer bad-token' });
     const response = await POST(request);
 
     expect(response.status).toBe(401);
-    const data = await response.json();
-    expect(data.error.code).toBe('invalid_api_key');
-    expect(data.error.message).toMatch(/authentication failed/i);
   });
 
   it('should return 400 when no audio file is included in the form data', async () => {

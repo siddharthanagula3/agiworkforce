@@ -14,15 +14,8 @@ import {
 import { GoogleProvider, GoogleError, GoogleMessage } from './google-gemini';
 
 // Mock external dependencies
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-  },
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 vi.mock('@shared/lib/logger', () => ({
@@ -42,7 +35,7 @@ vi.mock('@google/genai', () => ({
 }));
 
 // Get mocked modules
-const { supabase } = await import('@shared/lib/supabase-client');
+const { getAuthToken } = await import('@shared/lib/get-auth-token');
 
 describe('GoogleProvider', () => {
   let provider: GoogleProvider;
@@ -52,10 +45,7 @@ describe('GoogleProvider', () => {
     vi.clearAllMocks();
 
     // Setup default auth mock
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    } as never);
+    vi.mocked(getAuthToken).mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -205,10 +195,7 @@ describe('GoogleProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(GoogleError);
       // Error gets re-wrapped in catch block as REQUEST_FAILED
@@ -310,34 +297,6 @@ describe('GoogleProvider', () => {
 
       expect(response.sessionId).toBe('session-123');
       expect(response.userId).toBe('user-456');
-    });
-
-    it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            content: 'Response',
-            usage: { promptTokenCount: 5 },
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', 'user-456');
-
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
-        }),
-      );
     });
 
     it('should handle empty response gracefully', async () => {
@@ -479,38 +438,6 @@ describe('GoogleProvider', () => {
 
       // Should handle gracefully with fallback values
       expect(response.usage).toBeDefined();
-    });
-
-    it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ content: 'Response' }),
-      });
-
-      await provider.sendMessage(mockMessages, undefined, 'user-123');
-
-      expect(insertMock).not.toHaveBeenCalled();
-    });
-
-    it('should not save to database when userId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ content: 'Response' }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', undefined);
-
-      expect(insertMock).not.toHaveBeenCalled();
     });
   });
 });

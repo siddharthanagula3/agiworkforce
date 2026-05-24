@@ -42,16 +42,19 @@ vi.mock('@/lib/cors', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock: Supabase client
+// Mock: Clerk auth
 // ---------------------------------------------------------------------------
-const mockGetUser = vi.fn();
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: mockGetUser,
-    },
-  })),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock: Supabase service client (used by CreditService/SubscriptionService)
+// ---------------------------------------------------------------------------
+vi.mock('@/lib/supabase-server', () => ({
+  getServiceClient: vi.fn(() => ({})),
 }));
 
 // ---------------------------------------------------------------------------
@@ -141,7 +144,7 @@ const PRO_SUBSCRIPTION = {
 // ---------------------------------------------------------------------------
 // Default user fixture
 // ---------------------------------------------------------------------------
-const TEST_USER = { id: 'user-test-id', email: 'test@example.com' };
+const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -150,8 +153,8 @@ describe('POST /api/media/image/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Happy-path defaults
-    mockGetUser.mockResolvedValue({ data: { user: TEST_USER }, error: null });
+    // Happy-path defaults — Clerk auth
+    mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
 
     // Re-establish CreditService mock defaults after clearAllMocks
@@ -161,8 +164,6 @@ describe('POST /api/media/image/generate', () => {
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
 
     // Set required env vars
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
     process.env['OPENAI_API_KEY'] = 'sk-test-openai-key';
     // Unset optional provider keys so getDefaultProvider() picks openai
     delete process.env['GOOGLE_API_KEY'];
@@ -193,45 +194,45 @@ describe('POST /api/media/image/generate', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
+
       const request = makeRequest({ prompt: 'a cat' });
 
       const response = await POST(request);
-      const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error.code).toBe('invalid_api_key');
-      expect(data.error.message).toContain('authorization');
     });
 
     it('should return 401 when authorization header is malformed (no Bearer prefix)', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
+
       const request = makeRequest({ prompt: 'a cat' }, { Authorization: 'Token abc123' });
 
       const response = await POST(request);
-      const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error.code).toBe('invalid_api_key');
     });
 
-    it('should return 401 when Supabase token is invalid', async () => {
-      mockGetUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid JWT' },
-      });
+    it('should return 401 when Clerk token is invalid', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('Invalid token'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
-      const data = await response.json();
 
       expect(response.status).toBe(401);
-      expect(data.error.code).toBe('invalid_api_key');
-      expect(data.error.message).toContain('authentication');
     });
 
-    it('should return 401 when Supabase returns null user without error', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    it('should return 401 when Clerk returns no userId', async () => {
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        Object.assign(new Error('UNAUTHORIZED'), { code: 'UNAUTHORIZED', statusCode: 401 }),
+      );
 
       const response = await POST(makeAuthedRequest({ prompt: 'a cat' }));
-      await response.json();
 
       expect(response.status).toBe(401);
     });
