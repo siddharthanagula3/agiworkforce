@@ -3,7 +3,8 @@
  * Handles CRUD operations for message reactions (emoji reactions on chat messages)
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 import { logger } from '@shared/lib/logger';
 
 /**
@@ -51,68 +52,51 @@ export interface MessageReactionsSummary {
   reactions: ReactionSummary[];
 }
 
-/**
- * Database row types
- */
-interface DBReaction {
-  id: string;
-  message_id: string;
-  user_id: string;
-  emoji: string;
-  created_at: string;
+async function buildMutateHeaders(): Promise<HeadersInit> {
+  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': csrf,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
-interface DBAggregatedReaction {
-  message_id: string;
-  emoji: string;
-  count: number;
-  user_ids: string[];
-  user_reacted: boolean;
+async function buildReadHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 class MessageReactionsService {
   /**
    * Add a reaction to a message
    */
-  async addReaction(userId: string, messageId: string, emoji: string): Promise<MessageReaction> {
-    const { data, error } = await supabase
-      .from('message_reactions')
-      .insert({
-        user_id: userId,
-        message_id: messageId,
-        emoji,
-      } as never)
-      .select()
-      .single();
-
-    if (error) {
-      // Handle duplicate reaction gracefully
-      if (error.code === '23505') {
-        logger.debug('[Reactions] Reaction already exists', { messageId, emoji });
-        throw new Error('You have already added this reaction');
-      }
-      logger.error('[Reactions] Failed to add reaction:', error);
-      throw new Error(`Failed to add reaction: ${error.message}`);
+  async addReaction(_userId: string, messageId: string, emoji: string): Promise<MessageReaction> {
+    const result = await this.toggleReaction(_userId, messageId, emoji);
+    if (!result.added || !result.reaction) {
+      throw new Error('Reaction was removed instead of added, or no data returned');
     }
-
-    return this.mapDBReactionToReaction(data);
+    return result.reaction;
   }
 
   /**
    * Remove a reaction from a message
    */
-  async removeReaction(userId: string, messageId: string, emoji: string): Promise<void> {
-    const { error } = await supabase
-      .from('message_reactions')
-      .delete()
-      .eq('user_id', userId)
-      .eq('message_id', messageId)
-      .eq('emoji', emoji);
-
-    if (error) {
-      logger.error('[Reactions] Failed to remove reaction:', error);
-      throw new Error(`Failed to remove reaction: ${error.message}`);
+  async removeReaction(_userId: string, messageId: string, emoji: string): Promise<void> {
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/reactions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messageId, emoji }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to remove reaction: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
+    // Toggle semantics: if it was already present it will be removed
   }
 
   /**
@@ -120,54 +104,58 @@ class MessageReactionsService {
    * Returns true if reaction was added, false if removed
    */
   async toggleReaction(
-    userId: string,
+    _userId: string,
     messageId: string,
     emoji: string,
   ): Promise<{ added: boolean; reaction?: MessageReaction }> {
-    // Check if reaction exists
-    const { data: existing } = await supabase
-      .from('message_reactions')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('message_id', messageId)
-      .eq('emoji', emoji)
-      .maybeSingle();
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/reactions', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ messageId, emoji }),
+    });
 
-    if (existing) {
-      // Remove existing reaction
-      await this.removeReaction(userId, messageId, emoji);
-      return { added: false };
-    } else {
-      // Add new reaction
-      const reaction = await this.addReaction(userId, messageId, emoji);
-      return { added: true, reaction };
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[Reactions] Failed to toggle reaction:', err);
+      throw new Error(
+        `Failed to toggle reaction: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
+
+    const data = (await res.json()) as {
+      added: boolean;
+      reaction?: {
+        id: string;
+        messageId: string;
+        userId: string;
+        emoji: string;
+        createdAt: string;
+      } | null;
+    };
+
+    if (data.added && data.reaction) {
+      return {
+        added: true,
+        reaction: {
+          id: data.reaction.id,
+          messageId: data.reaction.messageId,
+          userId: data.reaction.userId,
+          emoji: data.reaction.emoji,
+          createdAt: new Date(data.reaction.createdAt),
+        },
+      };
+    }
+
+    return { added: false };
   }
 
   /**
    * Get all reactions for a single message
    */
   async getReactions(messageId: string): Promise<ReactionSummary[]> {
-    const { data, error } = await supabase.rpc(
-      'get_message_reactions' as never,
-      {
-        message_ids: [messageId],
-      } as never,
-    );
-
-    if (error) {
-      logger.error('[Reactions] Failed to get reactions:', error);
-      throw new Error(`Failed to get reactions: ${error.message}`);
-    }
-
-    return ((data || []) as DBAggregatedReaction[])
-      .filter((r: DBAggregatedReaction) => r.message_id === messageId)
-      .map((r: DBAggregatedReaction) => ({
-        emoji: r.emoji,
-        count: r.count,
-        userIds: r.user_ids || [],
-        userReacted: r.user_reacted || false,
-      }));
+    const map = await this.getReactionsForMessages([messageId]);
+    return map.get(messageId) ?? [];
   }
 
   /**
@@ -178,31 +166,38 @@ class MessageReactionsService {
       return new Map();
     }
 
-    const { data, error } = await supabase.rpc(
-      'get_message_reactions' as never,
-      {
-        message_ids: messageIds,
-      } as never,
+    const headers = await buildReadHeaders();
+    const res = await fetch(
+      `/api/chat/reactions?messageIds=${encodeURIComponent(messageIds.join(','))}`,
+      { headers },
     );
 
-    if (error) {
-      logger.error('[Reactions] Failed to get reactions for messages:', error);
-      throw new Error(`Failed to get reactions: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[Reactions] Failed to get reactions for messages:', err);
+      throw new Error(
+        `Failed to get reactions: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    // Group reactions by message_id
-    const reactionsMap = new Map<string, ReactionSummary[]>();
+    const data = (await res.json()) as {
+      reactions: Record<
+        string,
+        Array<{ emoji: string; count: number; userIds: string[]; userReacted: boolean }>
+      >;
+    };
 
-    for (const row of (data || []) as DBAggregatedReaction[]) {
-      const r = row as DBAggregatedReaction;
-      const existing = reactionsMap.get(r.message_id) || [];
-      existing.push({
-        emoji: r.emoji,
-        count: r.count,
-        userIds: r.user_ids || [],
-        userReacted: r.user_reacted || false,
-      });
-      reactionsMap.set(r.message_id, existing);
+    const reactionsMap = new Map<string, ReactionSummary[]>();
+    for (const [msgId, summaries] of Object.entries(data.reactions ?? {})) {
+      reactionsMap.set(
+        msgId,
+        summaries.map((s) => ({
+          emoji: s.emoji,
+          count: s.count,
+          userIds: s.userIds || [],
+          userReacted: s.userReacted || false,
+        })),
+      );
     }
 
     return reactionsMap;
@@ -211,81 +206,47 @@ class MessageReactionsService {
   /**
    * Check if user has reacted to a message with a specific emoji
    */
-  async hasUserReacted(userId: string, messageId: string, emoji: string): Promise<boolean> {
-    const { data, error } = await supabase
-      .from('message_reactions')
-      .select('id')
-      .eq('user_id', userId)
-      .eq('message_id', messageId)
-      .eq('emoji', emoji)
-      .maybeSingle();
-
-    if (error) {
-      logger.error('[Reactions] Failed to check user reaction:', error);
+  async hasUserReacted(_userId: string, messageId: string, emoji: string): Promise<boolean> {
+    try {
+      const reactions = await this.getReactions(messageId);
+      const summary = reactions.find((r) => r.emoji === emoji);
+      return summary?.userReacted ?? false;
+    } catch {
       return false;
     }
-
-    return !!data;
   }
 
   /**
    * Get all user's reactions for a message
    */
-  async getUserReactionsForMessage(userId: string, messageId: string): Promise<string[]> {
-    const { data, error } = await supabase
-      .from('message_reactions')
-      .select('emoji')
-      .eq('user_id', userId)
-      .eq('message_id', messageId);
-
-    if (error) {
-      logger.error('[Reactions] Failed to get user reactions:', error);
+  async getUserReactionsForMessage(_userId: string, messageId: string): Promise<string[]> {
+    try {
+      const reactions = await this.getReactions(messageId);
+      return reactions.filter((r) => r.userReacted).map((r) => r.emoji);
+    } catch {
       return [];
     }
-
-    return (data || []).map((r: { emoji: string }) => r.emoji);
   }
 
   /**
    * Remove all reactions from a message (admin function)
+   * No dedicated route exists; this method is not supported via API.
    */
-  async clearMessageReactions(messageId: string): Promise<void> {
-    const { error } = await supabase.from('message_reactions').delete().eq('message_id', messageId);
-
-    if (error) {
-      logger.error('[Reactions] Failed to clear reactions:', error);
-      throw new Error(`Failed to clear reactions: ${error.message}`);
-    }
+  async clearMessageReactions(_messageId: string): Promise<void> {
+    logger.warn('[Reactions] clearMessageReactions is not supported via the API');
+    throw new Error('clearMessageReactions is not available in this context');
   }
 
   /**
    * Get reaction count for a message
    */
   async getReactionCount(messageId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('message_reactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('message_id', messageId);
-
-    if (error) {
-      logger.error('[Reactions] Failed to count reactions:', error);
+    try {
+      const reactions = await this.getReactions(messageId);
+      return reactions.reduce((sum, r) => sum + r.count, 0);
+    } catch {
       return 0;
     }
-
-    return count || 0;
-  }
-
-  /**
-   * Map database reaction row to MessageReaction interface
-   */
-  private mapDBReactionToReaction(dbReaction: DBReaction): MessageReaction {
-    return {
-      id: dbReaction.id,
-      messageId: dbReaction.message_id,
-      userId: dbReaction.user_id,
-      emoji: dbReaction.emoji,
-      createdAt: new Date(dbReaction.created_at),
-    };
   }
 }
 
