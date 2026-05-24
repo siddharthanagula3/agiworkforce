@@ -3,22 +3,23 @@
  *
  * # Client injection contract (WEB-RLS-BYPASS mitigation)
  *
- * USER-CONTEXT methods accept a `SupabaseClient` parameter. Callers construct it via:
- *   `import { getUserClient } from '@/lib/supabase-server';`
- *   `const client = getUserClient(jwtFromBearerHeader);`
+ * USER-CONTEXT methods accept a `DatabaseAdapter` parameter. Callers construct it via:
+ *   `import { getNeonDb } from '@/lib/server/neon-db';`
+ *   `const db = getNeonDb().withUser(jwt);`
  *
- * SERVICE-CONTEXT methods (Stripe webhook, cron, claim-offer) call `getServiceClient()`
+ * SERVICE-CONTEXT methods (Stripe webhook, cron, claim-offer) call `getNeonDb()`
  * internally. Their doc-comments say "SERVICE-CONTEXT" and list valid callers.
  *
  * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
  */
 import 'server-only';
 
-import { type SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getNeonDb } from '@/lib/server/neon-db';
 import Stripe from 'stripe';
-import { getServiceClient } from '@/lib/supabase-server';
 import { logger } from '@/lib/logger';
 import { CreditService } from './credit-service';
+import type { SubscriptionRow, ProfileRow } from '@/lib/server/neon-types';
 import {
   getBillingDetailsFromPriceId,
   resolvePlanTier,
@@ -66,36 +67,45 @@ function resolveCreditsAllocationCents(
 export class SubscriptionService {
   /**
    * Get subscription for a user.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so the query is
-   * scoped to the authenticated user's rows.
+   * USER-CONTEXT: caller passes a DatabaseAdapter (optionally bound to the
+   * authenticated user via db.withUser(jwt)) so the query is scoped to the
+   * authenticated user's rows.
+   *
+   * Supports two call forms (mirrors credit-service overload pattern):
+   *   getSubscription(db, userId)  — caller provides adapter
+   *   getSubscription(userId)      — service creates its own adapter internally
    *
    * PERFORMANCE OPTIMIZATION: Select only required columns instead of '*'
    */
   static async getSubscription(
-    client: SupabaseClient,
-    userId: string,
+    dbOrUserId: DatabaseAdapter | string,
+    userId?: string,
   ): Promise<SubscriptionInfo | null> {
+    let db: DatabaseAdapter;
+    let resolvedUserId: string;
+    if (typeof dbOrUserId === 'string') {
+      db = getNeonDb();
+      resolvedUserId = dbOrUserId;
+    } else {
+      db = dbOrUserId;
+      resolvedUserId = userId!;
+    }
+
     try {
-      const { data, error } = await client
-        .from('subscriptions')
-        .select(
-          'id, user_id, plan_tier, status, current_period_start, current_period_end, stripe_subscription_id, stripe_price_id',
-        )
-        .eq('user_id', userId)
-        .single();
+      const rows = await db.query<SubscriptionRow>(
+        `SELECT id, user_id, plan_tier, status, current_period_start, current_period_end,
+                stripe_subscription_id, stripe_price_id
+         FROM subscriptions
+         WHERE user_id = $1
+         LIMIT 1`,
+        [resolvedUserId],
+      );
 
-      if (error) {
-        if (error.code === 'PGRST116') {
-          // No subscription found
-          return null;
-        }
-        logger.error({ error, userId }, 'Failed to get subscription');
-        throw error;
-      }
-
-      if (!data) {
+      if (rows.length === 0) {
         return null;
       }
+
+      const data = rows[0]!;
 
       return {
         id: data.id,
@@ -108,7 +118,7 @@ export class SubscriptionService {
         stripe_price_id: data.stripe_price_id,
       };
     } catch (error) {
-      logger.error({ error, userId }, 'Error in getSubscription');
+      logger.error({ error, userId: resolvedUserId }, 'Error in getSubscription');
       throw error;
     }
   }
@@ -245,38 +255,29 @@ export class SubscriptionService {
    * SERVICE-CONTEXT: called only from syncWithStripe which has no user JWT.
    */
   private static async ensureProfileExists(userId: string, email: string): Promise<void> {
-    // SECURITY: service-role required because this runs inside syncWithStripe which is called
-    // from the Stripe webhook handler (no user JWT context).
-    const supabase = getServiceClient();
+    // SERVICE-CONTEXT: service-level db (no user JWT) since this is called inside
+    // syncWithStripe which is called from the Stripe webhook handler.
+    const db = getNeonDb();
 
     // Check if profile exists
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
+    const existing = await db.query<Pick<ProfileRow, 'id'>>(
+      'SELECT id FROM profiles WHERE id = $1 LIMIT 1',
+      [userId],
+    );
 
-    if (fetchError) {
-      logger.error({ error: fetchError, userId }, 'Error checking for existing profile');
-      throw fetchError;
-    }
-
-    if (!existingProfile) {
+    if (existing.length === 0) {
       // Profile doesn't exist - create it
       logger.info({ userId, email }, 'Creating missing profile for user');
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert({ id: userId, email: email } as Record<string, unknown>);
-
-      if (insertError) {
-        // Ignore duplicate key errors (profile might have been created concurrently)
-        if (insertError.code !== '23505') {
+      try {
+        await db.execute('INSERT INTO profiles (id, email) VALUES ($1, $2)', [userId, email]);
+        logger.info({ userId, email }, 'Profile created successfully');
+      } catch (insertError) {
+        // Ignore unique-violation errors (profile might have been created concurrently)
+        if ((insertError as { code?: string }).code !== '23505') {
           logger.error({ error: insertError, userId }, 'Failed to create profile');
           throw insertError;
         }
         logger.info({ userId }, 'Profile already exists (concurrent creation)');
-      } else {
-        logger.info({ userId, email }, 'Profile created successfully');
       }
     }
   }
@@ -310,16 +311,16 @@ export class SubscriptionService {
     try {
       logger.info({ userId, email }, 'Attempting self-healing subscription sync');
 
-      // SECURITY: service-role required because this is called from the Stripe webhook
-      // handler and admin diagnose page (no user JWT in either context).
-      const supabase = getServiceClient();
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('stripe_customer_id')
-        .eq('id', userId)
-        .maybeSingle();
+      // SERVICE-CONTEXT: service-level db (no user JWT) since this is called from the
+      // Stripe webhook handler and admin diagnose page (no user JWT in either context).
+      const db = getNeonDb();
 
-      let customerId: string | null = (profile?.stripe_customer_id as string | undefined) || null;
+      const profileRows = await db.query<Pick<ProfileRow, 'stripe_customer_id'>>(
+        'SELECT stripe_customer_id FROM profiles WHERE id = $1 LIMIT 1',
+        [userId],
+      );
+
+      let customerId: string | null = profileRows[0]?.stripe_customer_id ?? null;
 
       if (customerId) {
         logger.info({ customerId, userId }, 'Found stripe_customer_id in profiles (BEST PRACTICE)');
@@ -370,7 +371,10 @@ export class SubscriptionService {
         customerId = customer.id;
 
         // Store customer_id for future lookups
-        await supabase.from('profiles').update({ stripe_customer_id: customerId }).eq('id', userId);
+        await db.execute('UPDATE profiles SET stripe_customer_id = $1 WHERE id = $2', [
+          customerId,
+          userId,
+        ]);
 
         logger.info(
           { customerId, email },
@@ -458,86 +462,120 @@ export class SubscriptionService {
       // Ensure profile exists before creating subscription (FK constraint)
       await this.ensureProfileExists(userId, email);
 
-      const subData = {
-        user_id: userId,
-        stripe_customer_id: customerId,
-        stripe_subscription_id: stripeSubscription.id,
-        stripe_price_id: stripePriceId || null,
-        status: stripeSubscription.status,
-        plan_tier: planTier,
-        current_period_start: new Date(periodStart * 1000).toISOString(),
-        current_period_end: new Date(periodEnd * 1000).toISOString(),
-        cancel_at_period_end: stripeSubscription.cancel_at_period_end,
-        canceled_at: stripeSubscription.canceled_at
-          ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
-          : null,
-        updated_at: new Date().toISOString(),
-        stripe_coupon_id: stripeCouponId,
-      };
+      const currentPeriodStart = new Date(periodStart * 1000).toISOString();
+      const currentPeriodEnd = new Date(periodEnd * 1000).toISOString();
+      const canceledAt = stripeSubscription.canceled_at
+        ? new Date(stripeSubscription.canceled_at * 1000).toISOString()
+        : null;
+      const updatedAt = new Date().toISOString();
 
-      logger.info({ subData }, 'Upserting subscription data');
+      logger.info(
+        {
+          userId,
+          subscriptionId: stripeSubscription.id,
+          planTier,
+          status: stripeSubscription.status,
+        },
+        'Upserting subscription data',
+      );
 
-      let { data, error } = await supabase
-        .from('subscriptions')
-        .upsert(subData, { onConflict: 'user_id' })
-        .select()
-        .single();
-
-      if (error) {
-        const isUndefinedColumnError =
-          typeof error === 'object' && error !== null && 'code' in error
-            ? (error as { code?: string }).code === '42703'
-            : false;
-
-        if (isUndefinedColumnError) {
+      // Primary upsert — includes all columns
+      let rows: SubscriptionRow[];
+      try {
+        rows = await db.query<SubscriptionRow>(
+          `INSERT INTO subscriptions
+             (user_id, stripe_customer_id, stripe_subscription_id, stripe_price_id,
+              status, plan_tier, current_period_start, current_period_end,
+              cancel_at_period_end, canceled_at, updated_at, stripe_coupon_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+           ON CONFLICT (user_id) DO UPDATE SET
+             stripe_customer_id      = EXCLUDED.stripe_customer_id,
+             stripe_subscription_id  = EXCLUDED.stripe_subscription_id,
+             stripe_price_id         = EXCLUDED.stripe_price_id,
+             status                  = EXCLUDED.status,
+             plan_tier               = EXCLUDED.plan_tier,
+             current_period_start    = EXCLUDED.current_period_start,
+             current_period_end      = EXCLUDED.current_period_end,
+             cancel_at_period_end    = EXCLUDED.cancel_at_period_end,
+             canceled_at             = EXCLUDED.canceled_at,
+             updated_at              = EXCLUDED.updated_at,
+             stripe_coupon_id        = EXCLUDED.stripe_coupon_id
+           RETURNING *`,
+          [
+            userId,
+            customerId,
+            stripeSubscription.id,
+            stripePriceId || null,
+            stripeSubscription.status,
+            planTier,
+            currentPeriodStart,
+            currentPeriodEnd,
+            stripeSubscription.cancel_at_period_end,
+            canceledAt,
+            updatedAt,
+            stripeCouponId,
+          ],
+        );
+      } catch (upsertError) {
+        // 42703 = undefined_column: table is missing a column (migration pending)
+        // Retry with minimal columns that are guaranteed to exist
+        if ((upsertError as { code?: string }).code === '42703') {
           logger.warn(
-            { userId, error },
+            { userId, error: upsertError },
             'Subscriptions table missing columns; retrying sync with minimal fields',
           );
 
-          const minimalData = {
-            user_id: subData.user_id,
-            stripe_customer_id: subData.stripe_customer_id,
-            stripe_subscription_id: subData.stripe_subscription_id,
-            stripe_price_id: subData.stripe_price_id,
-            status: subData.status,
-            plan_tier: subData.plan_tier,
-            current_period_start: subData.current_period_start,
-            current_period_end: subData.current_period_end,
-            cancel_at_period_end: subData.cancel_at_period_end,
-            canceled_at: subData.canceled_at,
-            updated_at: subData.updated_at,
-            // Exclude stripe_coupon_id
-          };
-
-          const fallbackResult = await supabase
-            .from('subscriptions')
-            .upsert(minimalData, { onConflict: 'user_id' })
-            .select()
-            .single();
-
-          data = fallbackResult.data;
-          error = fallbackResult.error;
+          rows = await db.query<SubscriptionRow>(
+            `INSERT INTO subscriptions
+               (user_id, stripe_customer_id, stripe_subscription_id, stripe_price_id,
+                status, plan_tier, current_period_start, current_period_end,
+                cancel_at_period_end, canceled_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (user_id) DO UPDATE SET
+               stripe_customer_id      = EXCLUDED.stripe_customer_id,
+               stripe_subscription_id  = EXCLUDED.stripe_subscription_id,
+               stripe_price_id         = EXCLUDED.stripe_price_id,
+               status                  = EXCLUDED.status,
+               plan_tier               = EXCLUDED.plan_tier,
+               current_period_start    = EXCLUDED.current_period_start,
+               current_period_end      = EXCLUDED.current_period_end,
+               cancel_at_period_end    = EXCLUDED.cancel_at_period_end,
+               canceled_at             = EXCLUDED.canceled_at,
+               updated_at              = EXCLUDED.updated_at
+             RETURNING *`,
+            [
+              userId,
+              customerId,
+              stripeSubscription.id,
+              stripePriceId || null,
+              stripeSubscription.status,
+              planTier,
+              currentPeriodStart,
+              currentPeriodEnd,
+              stripeSubscription.cancel_at_period_end,
+              canceledAt,
+              updatedAt,
+            ],
+          );
+        } else {
+          throw upsertError;
         }
       }
 
-      if (error) {
-        logger.error({ error, userId }, 'Failed to upsert subscription during sync');
-        throw error;
-      }
-
-      if (!data) {
+      if (!rows[0]) {
         logger.error({ userId }, 'Subscription upsert returned no row');
         throw new Error('Subscription upsert returned no data');
       }
+
+      const data = rows[0];
 
       // Allocate credits if needed
       await this.allocateCreditsForPeriod(
         userId,
         data.id,
         planTier,
-        new Date(subData.current_period_start),
-        new Date(subData.current_period_end),
+        new Date(currentPeriodStart),
+        new Date(currentPeriodEnd),
         {
           stripePriceId: stripePriceId ?? undefined,
           overrideCreditsCents:
