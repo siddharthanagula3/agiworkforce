@@ -7,6 +7,8 @@ interface CapRow {
   label: string;
   description: string;
   tiers: string[];
+  /** Tiers where access is granted but at a lower token cap than Pro/Max */
+  lowerCapTiers?: string[];
   link?: string;
 }
 
@@ -15,37 +17,44 @@ const CAPABILITIES: CapRow[] = [
     label: 'Voice transcription',
     description: 'Push-to-talk Whisper transcription with AI cleanup.',
     tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
     link: '/settings/voice',
   },
   {
     label: 'Image generation',
     description: 'Generate images via managed cloud or BYOK.',
     tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'Video generation',
     description: 'Runway Gen-4, Veo-3, and Sora 2 routing.',
-    tiers: ['pro', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'Computer use',
     description: 'Automated browser and desktop actions.',
-    tiers: ['pro', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'Extended thinking',
     description: 'Adaptive reasoning for complex tasks.',
     tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'Web search',
     description: 'Real-time search across 10+ providers.',
     tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'MCP connectors',
     description: 'Connect external tools via Model Context Protocol.',
-    tiers: ['pro', 'max'],
+    tiers: ['hobby', 'pro', 'max'],
+    lowerCapTiers: ['hobby'],
   },
   {
     label: 'BYOK (any tier)',
@@ -165,6 +174,7 @@ export default function CapabilitiesSettingsPage() {
               </div>
               {TIER_ORDER.map((t) => {
                 const included = cap.tiers.includes(t);
+                const isLowerCap = included && (cap.lowerCapTiers ?? []).includes(t);
                 const isCurrent = t === tier;
                 return (
                   <div
@@ -175,8 +185,9 @@ export default function CapabilitiesSettingsPage() {
                       color: included ? 'var(--teal)' : 'var(--text-3)',
                       fontWeight: isCurrent && included ? 700 : 400,
                     }}
+                    title={isLowerCap ? 'Available at a lower token cap than Pro/Max' : undefined}
                   >
-                    {included ? '✓' : '·'}
+                    {included ? (isLowerCap ? '✓*' : '✓') : '·'}
                   </div>
                 );
               })}
@@ -184,6 +195,11 @@ export default function CapabilitiesSettingsPage() {
           );
         })}
       </section>
+
+      {/* Lower cap footnote */}
+      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 0 }}>
+        * Available on Hobby at a lower token cap than Pro/Max.
+      </p>
 
       {/* Upgrade CTA */}
       {(tier === 'free' || tier === 'hobby') && (

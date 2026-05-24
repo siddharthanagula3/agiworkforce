@@ -11,6 +11,7 @@ import {
   CheckSquare,
   Folder,
   Layers,
+  Library,
   PanelLeft,
   Plus,
   Download,
@@ -30,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
+import { useDirectoryStore } from '@features/chat/stores/directory-store';
 import { ConversationListItem } from './ConversationListItem';
 
 // ---------------------------------------------------------------------------
@@ -62,6 +64,8 @@ export interface ChatSidebarProps {
   onArchiveSession?: (sessionId: string) => void;
   onShareSession?: (sessionId: string) => void;
   onDuplicateSession?: (sessionId: string) => void;
+  /** Move a session to a project. Called with (sessionId, projectId). */
+  onMoveToProjectSession?: (sessionId: string, projectId: string) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,6 +126,7 @@ const SessionItem = React.memo(function SessionItem({
   onArchive,
   onShare,
   onDuplicate,
+  onMoveToProject,
   bulkMode = false,
   isChecked = false,
   onToggleCheck,
@@ -136,6 +141,7 @@ const SessionItem = React.memo(function SessionItem({
   onArchive?: (id: string) => void;
   onShare?: (id: string) => void;
   onDuplicate?: (id: string) => void;
+  onMoveToProject?: (id: string, projectId: string) => void;
   bulkMode?: boolean;
   isChecked?: boolean;
   onToggleCheck?: (id: string) => void;
@@ -225,6 +231,11 @@ const SessionItem = React.memo(function SessionItem({
         onArchive={onArchive ? () => onArchive(session.id) : undefined}
         onShare={onShare ? () => onShare(session.id) : undefined}
         onDuplicate={onDuplicate ? () => onDuplicate(session.id) : undefined}
+        onMoveToProject={
+          onMoveToProject
+            ? (projectId: string) => onMoveToProject(session.id, projectId)
+            : undefined
+        }
       />
     </div>
   );
@@ -331,6 +342,7 @@ function CollapsedSidebar({
 }) {
   const router = useRouter();
   const { user } = useAuthStore();
+  const openDirectory = useDirectoryStore((s) => s.setOpen);
   const initials = user?.name
     ? user.name
         .split(' ')
@@ -378,7 +390,16 @@ function CollapsedSidebar({
       </button>
 
       <button
-        onClick={() => router.push('/settings/general')}
+        onClick={() => openDirectory(true)}
+        className={RAIL_BTN}
+        title="Directory"
+        aria-label="Directory"
+      >
+        <Library className="h-[18px] w-[18px]" />
+      </button>
+
+      <button
+        onClick={() => router.push('/customize')}
         className={RAIL_BTN}
         title="Customize"
         aria-label="Customize"
@@ -428,6 +449,7 @@ function ChatSidebarContent({
   onDuplicateSession,
 }: ChatSidebarProps) {
   const router = useRouter();
+  const openDirectory = useDirectoryStore((s) => s.setOpen);
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -543,7 +565,7 @@ function ChatSidebarContent({
         </div>
       )}
 
-      {/* Nav items — claude.ai parity: New chat, Projects, Artifacts, Customize */}
+      {/* Nav items */}
       <div className="mx-1 pb-1 mb-1">
         <button
           onClick={onNewChat}
@@ -578,7 +600,15 @@ function ChatSidebarContent({
           Artifacts
         </button>
         <button
-          onClick={() => router.push('/settings/general')}
+          onClick={() => openDirectory(true)}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
+          aria-label="Directory"
+        >
+          <Library className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Directory
+        </button>
+        <button
+          onClick={() => router.push('/customize')}
           className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
           aria-label="Customize"
         >
