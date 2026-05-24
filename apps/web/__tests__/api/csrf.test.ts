@@ -91,6 +91,18 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
+// ─── Neon DB + Clerk auth — used by chat/conversations/[id]/route ─────────────
+// The conversation routes were migrated from Supabase to Neon + Clerk in Wave 3.
+const mockNeonQuery = vi.fn();
+const mockNeonExecute = vi.fn();
+const mockRequireCurrentUserId = vi.fn();
+
+vi.mock('@/lib/server/neon-chat', () => ({
+  getNeonChatDb: () => ({ query: mockNeonQuery, execute: mockNeonExecute }),
+  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
+  normalizeMessageMetadata: (v: unknown) => v,
+}));
+
 // ─── Import routes under test ─────────────────────────────────────────────
 import {
   PUT as memoryPUT,
@@ -170,6 +182,19 @@ describe('CSRF protection on state-changing endpoints', () => {
     process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
     process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
     process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-key';
+
+    // Default Neon + Clerk mocks for conversation routes
+    mockRequireCurrentUserId.mockResolvedValue('user-1');
+    mockNeonQuery.mockResolvedValue([
+      {
+        id: 'test-conv-id',
+        title: 'Test',
+        model: 'auto',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      },
+    ]);
+    mockNeonExecute.mockResolvedValue(undefined);
 
     // By default pass CSRF
     mockRequireCsrfToken.mockResolvedValue(null);
@@ -307,11 +332,7 @@ describe('CSRF protection on state-changing endpoints', () => {
 
     it('proceeds normally with valid CSRF token', async () => {
       mockRequireCsrfToken.mockResolvedValue(null);
-      // Mock the update chain for soft delete
-      mockSupabaseQuery.update.mockReturnValue({
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockResolvedValue({ error: null }),
-      });
+      // Neon execute is already mocked to resolve in beforeEach
 
       const response = await convDELETE(makeConvRequest('DELETE'), convRouteContext);
 

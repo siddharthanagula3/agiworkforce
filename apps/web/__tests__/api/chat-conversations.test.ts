@@ -28,29 +28,21 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// RLS-bound Supabase client returned by getAuthenticatedUserWithClient.
-// Tests set up .from() chains on this object to simulate DB responses.
-const mockSupabaseData = {
-  from: vi.fn(),
-};
+// Mock Neon DB and Clerk auth — routes use these instead of Supabase after Wave 3.
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+const mockRequireCurrentUserId = vi.fn();
 
-// Mock api-auth so routes receive {user, userDb: mockSupabaseData} directly,
-// bypassing the real getServiceClient/getUserClient singleton calls.
-const mockGetAuthenticatedUserWithClient = vi.fn();
-vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUserWithClient: (...args: unknown[]) =>
-    mockGetAuthenticatedUserWithClient(...args),
+vi.mock('@/lib/server/neon-chat', () => ({
+  getNeonChatDb: () => ({ query: mockQuery, execute: mockExecute }),
+  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
+  normalizeMessageMetadata: (v: unknown) => v,
 }));
 
 // Import after mocks
 import { GET, POST } from '@/app/api/chat/conversations/route';
 
 describe('Chat Conversations API', () => {
-  const mockUser = {
-    id: 'user-123',
-    email: 'test@example.com',
-  };
-
   const mockConversations = [
     {
       id: 'conv-1',
@@ -71,18 +63,19 @@ describe('Chat Conversations API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user — routes receive {user, userDb} via mocked helper.
-    mockGetAuthenticatedUserWithClient.mockResolvedValue({
-      user: mockUser,
-      userDb: mockSupabaseData,
-    });
+    // Default: authenticated user
+    mockRequireCurrentUserId.mockResolvedValue('user-123');
+
+    // Default: empty DB results
+    mockQuery.mockResolvedValue([]);
+    mockExecute.mockResolvedValue(undefined);
   });
 
   describe('GET /api/chat/conversations', () => {
     describe('Authentication', () => {
       it('should return 401 if no authorization header and no session', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
+        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations');
         const response = await GET(request);
@@ -91,17 +84,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should authenticate with Bearer token', async () => {
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: mockConversations, error: null }),
-                }),
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockResolvedValueOnce(mockConversations);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
@@ -115,9 +98,7 @@ describe('Chat Conversations API', () => {
 
       it('should reject invalid Bearer token', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(
-          createError.unauthorized('Invalid token'),
-        );
+        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer invalid-token' },
@@ -130,17 +111,7 @@ describe('Chat Conversations API', () => {
 
     describe('Listing Conversations', () => {
       it('should return empty array when no conversations exist', async () => {
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-                }),
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
@@ -153,17 +124,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should return conversations ordered by updated_at desc', async () => {
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({ data: mockConversations, error: null }),
-                }),
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockResolvedValueOnce(mockConversations);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
@@ -176,19 +137,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should filter out deleted conversations', async () => {
-        const isNull = vi.fn().mockReturnValue({
-          order: vi.fn().mockReturnValue({
-            limit: vi.fn().mockResolvedValue({ data: mockConversations, error: null }),
-          }),
-        });
-
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: isNull,
-            }),
-          }),
-        });
+        mockQuery.mockResolvedValueOnce(mockConversations);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
@@ -196,47 +145,29 @@ describe('Chat Conversations API', () => {
         const response = await GET(request);
 
         expect(response.status).toBe(200);
-        expect(isNull).toHaveBeenCalledWith('deleted_at', null);
+        // Verify the SQL query filters deleted_at is null
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('deleted_at is null'),
+          expect.any(Array),
+        );
       });
 
       it('should limit results to 50 conversations', async () => {
-        const limitFn = vi.fn().mockResolvedValue({ data: mockConversations, error: null });
-
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: limitFn,
-                }),
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockResolvedValueOnce(mockConversations);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
         });
         await GET(request);
 
-        expect(limitFn).toHaveBeenCalledWith(50);
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('limit 50'),
+          expect.any(Array),
+        );
       });
 
       it('should return 500 on database error', async () => {
-        mockSupabaseData.from.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              is: vi.fn().mockReturnValue({
-                order: vi.fn().mockReturnValue({
-                  limit: vi.fn().mockResolvedValue({
-                    data: null,
-                    error: { message: 'Database error' },
-                  }),
-                }),
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockRejectedValueOnce(new Error('Database error'));
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           headers: { Authorization: 'Bearer valid-token' },
@@ -251,16 +182,8 @@ describe('Chat Conversations API', () => {
   describe('POST /api/chat/conversations', () => {
     describe('Creating Conversations', () => {
       it('should create conversation with default title and model', async () => {
-        const insertFn = vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'new-conv', title: 'New conversation', model: 'auto' },
-              error: null,
-            }),
-          }),
-        });
-
-        mockSupabaseData.from.mockReturnValue({ insert: insertFn });
+        const newConv = { id: 'new-conv', title: 'New conversation', model: 'auto' };
+        mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -275,16 +198,8 @@ describe('Chat Conversations API', () => {
       });
 
       it('should create conversation with custom title', async () => {
-        const insertFn = vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'new-conv', title: 'My Custom Title', model: 'auto' },
-              error: null,
-            }),
-          }),
-        });
-
-        mockSupabaseData.from.mockReturnValue({ insert: insertFn });
+        const newConv = { id: 'new-conv', title: 'My Custom Title', model: 'auto' };
+        mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -297,22 +212,15 @@ describe('Chat Conversations API', () => {
         const response = await POST(request);
 
         expect(response.status).toBe(201);
-        expect(insertFn).toHaveBeenCalledWith(
-          expect.objectContaining({ title: 'My Custom Title' }),
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          expect.arrayContaining(['My Custom Title']),
         );
       });
 
       it('should create conversation with specific model', async () => {
-        const insertFn = vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'new-conv', title: 'New conversation', model: 'gpt-5.4' },
-              error: null,
-            }),
-          }),
-        });
-
-        mockSupabaseData.from.mockReturnValue({ insert: insertFn });
+        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.4' };
+        mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -325,20 +233,15 @@ describe('Chat Conversations API', () => {
         const response = await POST(request);
 
         expect(response.status).toBe(201);
-        expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ model: 'gpt-5.4' }));
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          expect.arrayContaining(['gpt-5.4']),
+        );
       });
 
       it('should associate conversation with authenticated user', async () => {
-        const insertFn = vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'new-conv' },
-              error: null,
-            }),
-          }),
-        });
-
-        mockSupabaseData.from.mockReturnValue({ insert: insertFn });
+        const newConv = { id: 'new-conv' };
+        mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -346,20 +249,14 @@ describe('Chat Conversations API', () => {
         });
         await POST(request);
 
-        expect(insertFn).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'user-123' }));
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_conversations'),
+          expect.arrayContaining(['user-123']),
+        );
       });
 
       it('should return 500 on database insert error', async () => {
-        mockSupabaseData.from.mockReturnValue({
-          insert: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: { message: 'Insert failed' },
-              }),
-            }),
-          }),
-        });
+        mockQuery.mockRejectedValueOnce(new Error('Insert failed'));
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
@@ -372,7 +269,7 @@ describe('Chat Conversations API', () => {
 
       it('should return 401 if not authenticated', async () => {
         const { createError } = await import('@/lib/errors');
-        mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
+        mockRequireCurrentUserId.mockRejectedValueOnce(createError.unauthorized());
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
           method: 'POST',
