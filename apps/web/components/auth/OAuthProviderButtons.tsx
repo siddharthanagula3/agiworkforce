@@ -5,6 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 export type OAuthProvider = 'google' | 'github';
 
+const OAUTH_PROVIDER_FLAGS: Record<OAuthProvider, boolean> = {
+  google: process.env['NEXT_PUBLIC_AUTH_GOOGLE_ENABLED'] === 'true',
+  github: process.env['NEXT_PUBLIC_AUTH_GITHUB_ENABLED'] === 'true',
+};
+
 const providerButtonStyle: CSSProperties = {
   alignItems: 'center',
   background: 'var(--agi-bg)',
@@ -31,17 +36,34 @@ const disabledProviderButtonStyle: CSSProperties = {
 };
 
 interface OAuthProviderButtonsProps {
+  enabledProviders: OAuthProvider[];
   loadingProvider: OAuthProvider | null;
   onOAuth: (provider: OAuthProvider) => void | Promise<void>;
 }
 
-export function OAuthProviderButtons({ loadingProvider, onOAuth }: OAuthProviderButtonsProps) {
+export function getEnabledOAuthProviders(): OAuthProvider[] {
+  return (Object.keys(OAUTH_PROVIDER_FLAGS) as OAuthProvider[]).filter(
+    (provider) => OAUTH_PROVIDER_FLAGS[provider],
+  );
+}
+
+export function OAuthProviderButtons({
+  enabledProviders,
+  loadingProvider,
+  onOAuth,
+}: OAuthProviderButtonsProps) {
   const { t } = useTranslation('auth');
 
-  const providers: Array<{ id: OAuthProvider; label: string }> = [
-    { id: 'google', label: t('continueWithGoogle') },
-    { id: 'github', label: t('continueWithGithub') },
-  ];
+  const providers = (
+    [
+      { id: 'google', label: t('continueWithGoogle') },
+      { id: 'github', label: t('continueWithGithub') },
+    ] satisfies Array<{ id: OAuthProvider; label: string }>
+  ).filter((provider) => enabledProviders.includes(provider.id));
+
+  if (providers.length === 0) {
+    return null;
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
