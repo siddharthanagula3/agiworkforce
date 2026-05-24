@@ -5,6 +5,10 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { getSafeRedirectUrl } from '@/lib/safe-redirect';
+import {
+  OAuthProviderButtons,
+  type OAuthProvider,
+} from '../../components/auth/OAuthProviderButtons';
 import { getSupabaseClient } from '../../services/supabase';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
@@ -95,7 +99,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [magicLoading, setMagicLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState<OAuthProvider | null>(null);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
 
   async function onPasswordSignIn(e: React.FormEvent) {
@@ -134,7 +138,7 @@ function LoginForm() {
     }
   }
 
-  async function onOAuth(provider: 'google' | 'github') {
+  async function onOAuth(provider: OAuthProvider) {
     setOauthLoading(provider);
     try {
       const supabase = getSupabaseClient();
@@ -253,6 +257,23 @@ function LoginForm() {
               {t('welcomeBackHeading')}
             </h2>
 
+            <OAuthProviderButtons loadingProvider={oauthLoading} onOAuth={onOAuth} />
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                margin: '28px 0',
+                color: 'var(--agi-ink-quiet)',
+                fontSize: 12,
+              }}
+            >
+              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+              {t('orContinueWithEmail')}
+              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
+            </div>
+
             <form
               onSubmit={onPasswordSignIn}
               style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
@@ -317,42 +338,6 @@ function LoginForm() {
             >
               {magicLoading ? t('sendingMagicLink') : `${t('emailMagicLinkCta')} →`}
             </button>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                margin: '28px 0',
-                color: 'var(--agi-ink-quiet)',
-                fontSize: 12,
-              }}
-            >
-              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-              {t('orContinueWith')}
-              <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <button
-                type="button"
-                onClick={() => onOAuth('google')}
-                disabled={oauthLoading !== null}
-                className="agi-tier-cta agi-tier-cta--ghost"
-                style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-              >
-                {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
-              </button>
-              <button
-                type="button"
-                onClick={() => onOAuth('github')}
-                disabled={oauthLoading !== null}
-                className="agi-tier-cta agi-tier-cta--ghost"
-                style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-              >
-                {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
-              </button>
-            </div>
 
             <p
               style={{
