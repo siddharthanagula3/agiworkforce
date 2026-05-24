@@ -3,20 +3,22 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  SquarePen,
   Search,
   MessageSquare,
   MoreHorizontal,
   Pencil,
   Trash2,
-  X,
   Settings,
   LogOut,
   ChevronUp,
   CheckSquare,
   Folder,
   Layers,
+  PanelLeft,
+  Plus,
+  Download,
 } from 'lucide-react';
+import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { ScrollArea } from '@shared/ui/scroll-area';
@@ -289,11 +291,14 @@ const SessionItem = React.memo(function SessionItem({
 const UserProfileArea = React.memo(function UserProfileArea() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { signOut: clerkSignOut } = useClerk();
 
   const handleLogout = useCallback(async () => {
+    // Sign out from Clerk first to invalidate the Clerk session token,
+    // then run the store cleanup so in-memory state is cleared.
+    await clerkSignOut({ redirectUrl: '/login' });
     await logout();
-    router.push('/login');
-  }, [logout, router]);
+  }, [clerkSignOut, logout]);
 
   const displayName = user?.name || user?.email?.split('@')[0] || 'User';
   const initial = displayName.charAt(0).toUpperCase();
@@ -323,7 +328,7 @@ const UserProfileArea = React.memo(function UserProfileArea() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" className="w-52 mb-1">
-          <DropdownMenuItem onClick={() => router.push('/chat')}>
+          <DropdownMenuItem onClick={() => router.push('/settings/general')}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
           </DropdownMenuItem>
@@ -342,8 +347,11 @@ const UserProfileArea = React.memo(function UserProfileArea() {
 });
 
 // ---------------------------------------------------------------------------
-// Collapsed Sidebar (icon-only rail — 48px per design-spec §6.1)
+// Collapsed Sidebar — claude.ai icon-rail pattern (~50px)
 // ---------------------------------------------------------------------------
+
+const RAIL_BTN =
+  'flex h-9 w-9 items-center justify-center rounded-lg text-[var(--chat-text-muted)] hover:bg-white/[0.08] hover:text-[var(--chat-text-primary)] transition-colors';
 
 function CollapsedSidebar({
   onNewChat,
@@ -352,29 +360,75 @@ function CollapsedSidebar({
   onNewChat: () => void;
   onToggleSidebar?: () => void;
 }) {
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const initials = user?.name
+    ? user.name
+        .split(' ')
+        .map((w: string) => w[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase()
+    : '?';
+
   return (
-    <div
-      className="flex w-12 h-full flex-col items-center gap-2 bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)] py-3"
-      onMouseEnter={onToggleSidebar}
-    >
+    <div className="flex w-[50px] h-full flex-col items-center bg-[var(--chat-sidebar-bg)] py-2 gap-1">
       <button
-        onClick={onNewChat}
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-        aria-label="New chat"
+        onClick={onToggleSidebar}
+        className={RAIL_BTN}
+        title="Expand sidebar"
+        aria-label="Expand sidebar"
       >
-        <SquarePen className="h-4 w-4" />
+        <PanelLeft className="h-[18px] w-[18px]" />
       </button>
-      <button
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-        aria-label="Search"
-      >
-        <Search className="h-4 w-4" />
+
+      <button onClick={onNewChat} className={RAIL_BTN} title="New chat" aria-label="New chat">
+        <Plus className="h-[18px] w-[18px]" />
       </button>
+
+      <button className={RAIL_BTN} title="Search" aria-label="Search">
+        <Search className="h-[18px] w-[18px]" />
+      </button>
+
+      <button className={RAIL_BTN} title="Chats" aria-label="Chats">
+        <MessageSquare className="h-[18px] w-[18px]" />
+      </button>
+
       <button
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-        aria-label="Chats"
+        onClick={() => router.push('/projects')}
+        className={RAIL_BTN}
+        title="Projects"
+        aria-label="Projects"
       >
-        <MessageSquare className="h-4 w-4" />
+        <Folder className="h-[18px] w-[18px]" />
+      </button>
+
+      <button
+        onClick={() => router.push('/settings/general')}
+        className={RAIL_BTN}
+        title="Customize"
+        aria-label="Customize"
+      >
+        <Settings className="h-[18px] w-[18px]" />
+      </button>
+
+      <div className="flex-1" />
+
+      <button
+        className={cn(RAIL_BTN, 'relative')}
+        title="Get apps and extensions"
+        aria-label="Get apps"
+      >
+        <Download className="h-[18px] w-[18px]" />
+        <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-500" />
+      </button>
+
+      <button
+        className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold bg-[var(--chat-accent-primary)] text-white"
+        title={user?.name ?? 'Account'}
+        aria-label="Account menu"
+      >
+        {initials}
       </button>
     </div>
   );
@@ -458,10 +512,7 @@ function ChatSidebarContent({
   }
 
   return (
-    <div
-      className="flex h-full w-[260px] flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]"
-      onMouseLeave={onToggleSidebar}
-    >
+    <div className="flex h-full w-[260px] flex-col bg-[var(--chat-sidebar-bg)] border-r border-[var(--chat-border-strong)]">
       {/* Header */}
       {bulkMode ? (
         <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px]">
@@ -486,17 +537,24 @@ function ChatSidebarContent({
       ) : (
         <div className="flex items-center gap-2 px-3 pt-3 pb-2">
           <button
-            onClick={onNewChat}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
-            aria-label="New chat"
+            onClick={onToggleSidebar}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-white/[0.08] hover:text-[var(--chat-text-primary)] transition-colors"
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
           >
-            <SquarePen className="h-4 w-4" />
+            <PanelLeft className="h-4 w-4" />
           </button>
-          <span className="text-[13px] font-semibold text-foreground">AGI Workforce</span>
+          <button
+            className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-white/[0.08] hover:text-[var(--chat-text-primary)] transition-colors"
+            aria-label="Search"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+          <div className="flex-1" />
           {sessions.length > 0 && (
             <button
               onClick={() => setBulkMode(true)}
-              className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-black/[0.06] dark:hover:bg-white/[0.08] hover:text-foreground transition-colors"
+              className="flex h-6 w-6 items-center justify-center rounded-md text-[var(--chat-text-muted)] hover:bg-white/[0.08] hover:text-[var(--chat-text-primary)] transition-colors"
               aria-label="Select conversations"
               title="Select conversations"
             >
@@ -506,33 +564,19 @@ function ChatSidebarContent({
         </div>
       )}
 
-      {/* Search */}
-      <div className="mx-2 my-2 flex items-center gap-2 rounded-lg bg-black/5 dark:bg-white/5 px-3 py-2">
-        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" aria-hidden="true" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search conversations..."
-          aria-label="Search conversations"
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="shrink-0 text-muted-foreground/50 hover:text-foreground transition-colors"
-            aria-label="Clear search"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* Nav items: Projects and Artifacts */}
-      <div className="mx-1 border-b border-[var(--chat-border-strong)] pb-1 mb-1">
+      {/* Nav items — claude.ai parity: New chat, Projects, Artifacts, Customize */}
+      <div className="mx-1 pb-1 mb-1">
+        <button
+          onClick={onNewChat}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
+          aria-label="New chat"
+        >
+          <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          New chat
+        </button>
         <button
           onClick={() => router.push('/projects')}
-          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
           aria-label="Projects"
         >
           <Folder className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -540,12 +584,25 @@ function ChatSidebarContent({
         </button>
         <button
           onClick={() => router.push('/gallery')}
-          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
           aria-label="Artifacts"
         >
           <Layers className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           Artifacts
         </button>
+        <button
+          onClick={() => router.push('/settings/general')}
+          className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
+          aria-label="Customize"
+        >
+          <Settings className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          Customize
+        </button>
+      </div>
+
+      {/* Recents header */}
+      <div className="px-3 py-1.5 text-[11px] font-medium text-[var(--chat-text-muted)] tracking-wide">
+        Recents
       </div>
 
       {/* Session list */}
