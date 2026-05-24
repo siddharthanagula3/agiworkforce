@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
@@ -235,12 +236,12 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Server configuration error'));
         }
 
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'suspended' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'suspended' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
           return errorResponse(createError.internal('Failed to update account status'));
         }
@@ -285,12 +286,12 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Server configuration error'));
         }
 
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'banned' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'banned' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
           return errorResponse(createError.internal('Failed to update account status'));
         }
@@ -344,12 +345,12 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.internal('Server configuration error'));
         }
 
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'active' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'active' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
           return errorResponse(createError.internal('Failed to update account status'));
         }

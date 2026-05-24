@@ -3,7 +3,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -57,7 +58,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.unauthorized('Please sign in to continue');
   }
 
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
   const user = { id: userId, email: '' };
 
   // Type-safe request body parsing with Zod validation
@@ -96,11 +97,17 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   // If user already has an active subscription, do NOT create a new subscription via Checkout.
   // Route them to the Billing Portal instead to prevent duplicate subscriptions / double billing.
-  const { data: existingSubscription } = await supabase
-    .from('subscriptions')
-    .select('status, plan_tier, stripe_customer_id, stripe_subscription_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  type SubRow = Pick<
+    SubscriptionRow,
+    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+  >;
+  const subRows = await db
+    .query<SubRow>(
+      'select status, plan_tier, stripe_customer_id, stripe_subscription_id from subscriptions where user_id = $1 limit 1',
+      [user.id],
+    )
+    .catch(() => [] as SubRow[]);
+  const existingSubscription = subRows[0] ?? null;
 
   const activeStatuses = new Set(['active', 'trialing', 'past_due']);
   const hasActiveSubscription =
@@ -109,11 +116,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     activeStatuses.has(existingSubscription.status);
 
   // First, check if we have a customer ID stored in profiles
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .maybeSingle();
+  const profileRows = await db
+    .query<
+      Pick<ProfileRow, 'stripe_customer_id'>
+    >('select stripe_customer_id from profiles where id = $1 limit 1', [user.id])
+    .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
+  const profile = profileRows[0] ?? null;
 
   if (profile?.stripe_customer_id) {
     stripeCustomerId = profile.stripe_customer_id;
@@ -139,10 +147,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       stripeCustomerId = customer.id;
 
       // Store the customer ID in the profile for future use
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: stripeCustomerId })
-        .eq('id', user.id);
+      await db
+        .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+          stripeCustomerId,
+          user.id,
+        ])
+        .catch(() => undefined);
 
       logger.info(
         { userId: user.id, customerId: stripeCustomerId },
@@ -165,10 +175,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         const customers = await stripe.customers.list({ email: user.email, limit: 1 });
         if (customers.data.length > 0) {
           stripeCustomerId = customers.data[0]?.id ?? null;
-          await supabase
-            .from('profiles')
-            .update({ stripe_customer_id: stripeCustomerId })
-            .eq('id', user.id);
+          await db
+            .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+              stripeCustomerId,
+              user.id,
+            ])
+            .catch(() => undefined);
         }
       }
 

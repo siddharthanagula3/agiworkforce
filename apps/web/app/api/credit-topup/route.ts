@@ -2,8 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -45,7 +46,7 @@ async function handleCreditTopup(request: NextRequest) {
   }
 
   const { userId, email } = await getClerkAuthUser(request);
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
   let body: unknown;
   try {
@@ -81,17 +82,16 @@ async function handleCreditTopup(request: NextRequest) {
   const stripe = getStripeClient();
 
   // Get user's profile to check for existing Stripe customer
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', userId)
-    .maybeSingle();
+  const [profileRow] = await db
+    .query<
+      Pick<ProfileRow, 'stripe_customer_id'>
+    >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
+    .catch((profileError: unknown) => {
+      logger.warn({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
+      return [];
+    });
 
-  if (profileError) {
-    logger.warn({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
-  }
-
-  let customerId = profile?.stripe_customer_id;
+  let customerId = profileRow?.stripe_customer_id;
 
   // Create or retrieve Stripe customer
   if (!customerId) {
@@ -110,17 +110,15 @@ async function handleCreditTopup(request: NextRequest) {
     customerId = customer.id;
 
     // Update profile with customer ID
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ stripe_customer_id: customerId })
-      .eq('id', userId);
-    if (updateError) {
-      // Non-fatal: proceed with checkout even if we fail to persist mapping
-      logger.warn(
-        { error: updateError, userId: userId, customerId },
-        'Failed to store stripe_customer_id on profile',
-      );
-    }
+    await db
+      .execute('update profiles set stripe_customer_id = $1 where id = $2', [customerId, userId])
+      .catch((updateError: unknown) => {
+        // Non-fatal: proceed with checkout even if we fail to persist mapping
+        logger.warn(
+          { error: updateError, userId: userId, customerId },
+          'Failed to store stripe_customer_id on profile',
+        );
+      });
   }
 
   // AUDIT-008-005: Validate origin against allowed list to prevent open redirect
