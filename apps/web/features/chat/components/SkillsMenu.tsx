@@ -1,13 +1,11 @@
 'use client';
 
 /**
- * SkillsMenu — lists user-authored skills (sourced from `/api/skills`,
- * which loads via `@agiworkforce/skills`) and lets the user select one to
- * inject into the next message.
+ * SkillsMenu -- flat name-only picker for user-authored skills.
+ * Body preview and expand/collapse have been removed; the heavy progressive-
+ * disclosure version lives in the settings/skills page.
  *
- * Progressive disclosure: only metadata (name, description, location) is
- * fetched on mount. The body is loaded on-demand when the user expands a
- * skill — until then, the body section shows "Loading skill body…".
+ * Footer rows: "Manage skills" and "+ Add skill".
  */
 
 import React, { useEffect, useState } from 'react';
@@ -17,16 +15,14 @@ import type { Skill } from '@agiworkforce/skills';
 import { cn } from '@shared/lib/utils';
 
 /**
- * `SkillSummary` is `Skill` minus its `body` field — bodies are loaded
- * lazily for progressive disclosure. `location` and `source` carry the
- * filesystem path and precedence-source string from the shared package's
- * `Skill` type so the consumer UI stays in sync with server-side parsing.
+ * `SkillSummary` is `Skill` minus its `body` field -- the flat picker does
+ * not need body content.  `location` and `source` carry the filesystem path
+ * and precedence-source string from the shared package's `Skill` type so the
+ * consumer UI stays in sync with server-side parsing.
  */
 interface SkillSummary {
   name: Skill['name'];
   description: Skill['description'];
-  /** Skill body — undefined until the user expands the row. */
-  body?: Skill['body'];
   location: Skill['filePath'];
   source: Skill['source'];
 }
@@ -38,18 +34,12 @@ interface SkillsMenuProps {
 }
 
 interface SkillsListResponse {
-  skills: Array<Omit<SkillSummary, 'body'>>;
-}
-
-interface SkillBodyResponse {
-  body: string;
+  skills: Array<SkillSummary>;
 }
 
 export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React.JSX.Element {
   const [skills, setSkills] = useState<SkillSummary[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [expandedSkillName, setExpandedSkillName] = useState<string | null>(null);
-  const [bodyLoading, setBodyLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,25 +66,6 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
       s.description.toLowerCase().includes(query.toLowerCase()),
   );
 
-  async function handleExpand(skill: SkillSummary): Promise<void> {
-    if (skill.body !== undefined) {
-      setExpandedSkillName(skill.name === expandedSkillName ? null : skill.name);
-      return;
-    }
-    setBodyLoading(skill.name);
-    setExpandedSkillName(skill.name);
-    try {
-      const res = await fetch(`/api/skills/${encodeURIComponent(skill.name)}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as SkillBodyResponse;
-      setSkills((prev) => prev.map((s) => (s.name === skill.name ? { ...s, body: json.body } : s)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setBodyLoading(null);
-    }
-  }
-
   if (error) {
     return (
       <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
@@ -103,11 +74,33 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
     );
   }
 
+  const footer = (
+    <div className="border-t border-border/40 pt-1">
+      <a
+        href="/settings/skills"
+        onClick={onClose}
+        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        Manage skills
+      </a>
+      <a
+        href="/settings/skills/new"
+        onClick={onClose}
+        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+      >
+        + Add skill
+      </a>
+    </div>
+  );
+
   if (filtered.length === 0) {
     return (
-      <div className="rounded-md border border-border bg-card p-3 text-sm text-muted-foreground">
-        No skills available. Create skills under <code>~/.claude/skills/</code> or your
-        project&apos;s <code>.claude/skills/</code>.
+      <div className="flex w-56 flex-col p-1">
+        <div className="px-3 py-3 text-sm text-muted-foreground">
+          No skills installed. Create skills under{' '}
+          <code className="text-xs">~/.claude/skills/</code>.
+        </div>
+        {footer}
       </div>
     );
   }
@@ -116,7 +109,7 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
     <div
       role="listbox"
       aria-label="Skills"
-      className="overflow-hidden rounded-md border border-border bg-card shadow-md"
+      className="flex w-56 flex-col p-1"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           onClose();
@@ -133,47 +126,27 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
         }
       }}
     >
-      {filtered.map((skill, idx) => {
-        const isActive = idx === activeIndex;
-        const isExpanded = expandedSkillName === skill.name;
-        return (
-          <div
-            key={skill.name}
-            role="option"
-            aria-selected={isActive}
-            className={cn(
-              'border-b border-border px-3 py-2 last:border-b-0',
-              isActive && 'bg-accent',
-            )}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <button type="button" onClick={() => onSelect(skill)} className="flex-1 text-left">
-                <div className="font-medium">{skill.name}</div>
-                <div className="text-xs text-muted-foreground">{skill.description}</div>
-              </button>
-              <button
-                type="button"
-                aria-label={isExpanded ? 'Collapse skill body' : 'Expand skill body'}
-                onClick={() => {
-                  void handleExpand(skill);
-                }}
-                className="rounded px-2 py-1 text-xs hover:bg-accent"
-              >
-                {isExpanded ? '▾' : '▸'}
-              </button>
-            </div>
-            {isExpanded ? (
-              <div className="mt-2 rounded bg-muted/50 p-2 text-xs">
-                {bodyLoading === skill.name ? (
-                  <span className="text-muted-foreground">Loading skill body…</span>
-                ) : (
-                  <pre className="whitespace-pre-wrap break-words font-mono">{skill.body}</pre>
-                )}
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
+      <div className="py-1">
+        {filtered.map((skill, idx) => {
+          const isActive = idx === activeIndex;
+          return (
+            <button
+              key={skill.name}
+              type="button"
+              role="option"
+              aria-selected={isActive}
+              onClick={() => onSelect(skill)}
+              className={cn(
+                'flex w-full items-center rounded-md px-3 py-2 text-left text-sm transition-colors',
+                isActive ? 'bg-muted/60 text-foreground' : 'text-foreground hover:bg-muted/60',
+              )}
+            >
+              {skill.name}
+            </button>
+          );
+        })}
+      </div>
+      {footer}
     </div>
   );
 }

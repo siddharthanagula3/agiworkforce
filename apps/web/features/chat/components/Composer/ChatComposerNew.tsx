@@ -13,7 +13,7 @@ import {
   Check,
   Camera,
   FolderOpen,
-  Github,
+  GitFork,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -151,7 +151,6 @@ const ChatComposerNewComponent = ({
   emptyState = false,
   attachmentPrivacyShortLabel,
 }: ChatComposerProps) => {
-  const openDirectory = useDirectoryStore((s) => s.setOpen);
   const [message, setMessage] = useState('');
   const {
     attachments,
@@ -162,11 +161,9 @@ const ChatComposerNewComponent = ({
   } = useAttachments({
     onError: (_msg) => {
       // Validation errors are surfaced by the useAttachments hook via its return value.
-      // A toast notification could be wired here in the future.
     },
   });
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
-  const [selectedTools, setSelectedTools] = useState<string[]>([]);
   const [showMentions, setShowMentions] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
@@ -175,19 +172,22 @@ const ChatComposerNewComponent = ({
   const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() =>
     ChatAIService.getAvailableSkillsSync(),
   );
-  const [focusMode, setFocusMode] = useState<FocusMode>(null);
   const [activeTags, setActiveTags] = useState<ModeTag[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashQuery, setSlashQuery] = useState('');
-  const [agentMode, setAgentMode] = useState<ChatMode>(initialAgentMode);
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  // agentMode and selectedFolderId kept with safe defaults; state removed from UI
+  // but still forwarded via onSend meta to preserve the API contract.
+  const agentMode: ChatMode = initialAgentMode;
+  const selectedFolderId: string | null = null;
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [researchEnabled, setResearchEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
+
+  // Real connector state from the server
+  const connectors = useConnectors();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -244,13 +244,12 @@ const ChatComposerNewComponent = ({
   const clearComposerState = useCallback(() => {
     setMessage('');
     clearAttachments();
-    setSelectedTools([]);
     setSelectedSkill(null);
     setWebSearchEnabled(false);
-    setThinkingEnabled(false);
     setResearchEnabled(false);
     setStyleMode('normal');
     setShowStyleSubmenu(false);
+    setActiveTags([]);
     clearSuggestion();
 
     if (textareaRef.current) {
@@ -320,6 +319,9 @@ const ChatComposerNewComponent = ({
     function handleClickOutside(e: MouseEvent) {
       if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
         setShowOverflowMenu(false);
+        setShowSkillsSubmenu(false);
+        setShowConnectorsSubmenu(false);
+        setShowStyleSubmenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
         setShowMentions(false);
@@ -329,12 +331,6 @@ const ChatComposerNewComponent = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Sync tags when focus mode changes
-  const handleFocusModeChange = useCallback((mode: FocusMode) => {
-    setFocusMode(mode);
-    setActiveTags(mode ? FOCUS_MODE_TAGS[mode] : []);
-  }, []);
-
   const handleTagDismiss = useCallback((id: string) => {
     setActiveTags((prev) => prev.filter((t) => t.id !== id));
   }, []);
@@ -342,31 +338,25 @@ const ChatComposerNewComponent = ({
   const handleWebSearchToggle = useCallback(() => {
     setWebSearchEnabled((prev) => {
       const next = !prev;
-      if (next) {
-        handleFocusModeChange('web');
-      } else if (focusMode === 'web') {
-        handleFocusModeChange(null);
-      }
+      if (next) setResearchEnabled(false);
       return next;
     });
-  }, [focusMode, handleFocusModeChange]);
-
-  const handleThinkingToggle = useCallback(() => {
-    setThinkingEnabled((prev) => !prev);
   }, []);
 
   const handleResearchToggle = useCallback(() => {
     setResearchEnabled((prev) => {
       const next = !prev;
-      if (next) {
-        handleFocusModeChange('research');
-        setWebSearchEnabled(false);
-      } else if (focusMode === 'research') {
-        handleFocusModeChange(null);
-      }
+      if (next) setWebSearchEnabled(false);
       return next;
     });
-  }, [focusMode, handleFocusModeChange]);
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setShowOverflowMenu(false);
+    setShowSkillsSubmenu(false);
+    setShowConnectorsSubmenu(false);
+    setShowStyleSubmenu(false);
+  }, []);
 
   // Handle input change: detect @mention and /command; clear stale ghost-text
   const handleInputChange = useCallback(
@@ -433,36 +423,8 @@ const ChatComposerNewComponent = ({
   const handleSlashSelect = useCallback((commandId: string) => {
     setMessage('');
     setShowSlashMenu(false);
-    const toolMap: Record<string, string> = {
-      search: 'search',
-      image: 'image',
-      doc: 'document',
-    };
-    const toolId = toolMap[commandId];
-    if (toolId) {
-      setSelectedTools((prev) => (prev.includes(toolId) ? prev : [...prev, toolId]));
-    }
+    if (commandId === 'search') setWebSearchEnabled(true);
     setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
-
-  const handleSkillSelect = useCallback((skillName: string) => {
-    setShowSlashMenu(false);
-    // Fetch the skill body and inject it as the message text so the user can
-    // review and optionally edit before sending.
-    void (async () => {
-      try {
-        const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`);
-        if (!res.ok) return;
-        const json = (await res.json()) as { body: string };
-        setMessage(json.body);
-      } catch {
-        // On failure, at least put the skill name in the textarea so the user
-        // knows which skill was selected.
-        setMessage(`/${skillName} `);
-      } finally {
-        setTimeout(() => textareaRef.current?.focus(), 0);
-      }
-    })();
   }, []);
 
   const handleStop = useCallback(() => {
@@ -486,17 +448,12 @@ const ChatComposerNewComponent = ({
           agentMode,
           folderId: selectedFolderId,
           webSearchEnabled,
-          thinkingEnabled,
-          codeExecutionEnabled: selectedTools.includes('code-execution'),
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
         },
       );
 
       if (result === false) return;
       clearComposerState();
-      // selectedTools/thinkingEnabled/webSearchEnabled are read at send-time only;
-      // including them would re-create the callback on every toggle and break
-      // child memoization without changing behavior.
     }, // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       message,
@@ -549,19 +506,13 @@ const ChatComposerNewComponent = ({
     [handleSubmit, showMentions, showSlashMenu, suggestion, acceptSuggestion, clearSuggestion],
   );
 
-  const toggleTool = useCallback((toolId: string) => {
-    setSelectedTools((prev) =>
-      prev.includes(toolId) ? prev.filter((t) => t !== toolId) : [...prev, toolId],
-    );
-  }, []);
-
   const hasContent = Boolean(message.trim() || attachments.length > 0);
 
   /**
    * Derive the 3-state mode for SendButton:
-   * - 'stop'  — AI is loading (actively streaming); clicking aborts the stream
-   * - 'queue' — AI is generating but user has typed a message to queue
-   * - 'send'  — idle; button submits the current message
+   * - 'stop'  -- AI is loading (actively streaming); clicking aborts the stream
+   * - 'queue' -- AI is generating but user has typed a message to queue
+   * - 'send'  -- idle; button submits the current message
    */
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
@@ -578,22 +529,15 @@ const ChatComposerNewComponent = ({
     [addFiles],
   );
 
-  // Determine if any overflow features are active (for the + button indicator)
+  // + button indicator: amber tint when any feature is active
   const hasOverflowActive =
-    focusMode !== null ||
-    agentMode !== 'solo' ||
-    selectedFolderId !== null ||
-    selectedTools.length > 0 ||
-    webSearchEnabled ||
-    thinkingEnabled ||
-    researchEnabled ||
-    styleMode !== 'normal';
+    selectedSkill !== null || webSearchEnabled || researchEnabled || styleMode !== 'normal';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
       <DragDropOverlay onDrop={handleFileDrop} />
 
-      {/* Active Mode Tags — shown above the composer when a focus mode is active */}
+      {/* Active Mode Tags */}
       <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
@@ -610,38 +554,10 @@ const ChatComposerNewComponent = ({
               <X className="h-2.5 w-2.5" />
             </button>
           </span>
-          <span className="text-[10px] text-muted-foreground">{selectedSkill.category}</span>
         </div>
       )}
 
-      {/* Selected Tools Tags */}
-      {selectedTools.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          {selectedTools.map((toolId) => {
-            const tool = TOOLS.find((t) => t.id === toolId);
-            if (!tool) return null;
-            const Icon = tool.icon;
-            return (
-              <span
-                key={toolId}
-                className="inline-flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/50 px-2.5 py-1 text-xs"
-              >
-                <Icon className={cn('h-3 w-3', tool.color)} />
-                {tool.label}
-                <button
-                  onClick={() => toggleTool(toolId)}
-                  className="rounded-full p-0.5 hover:bg-muted"
-                  aria-label={`Remove ${tool.label}`}
-                >
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Attachments — rich preview with image thumbnails and doc chips */}
+      {/* Attachments */}
       <AttachmentPreview
         previews={previews}
         onRemove={removeFile}
@@ -666,7 +582,6 @@ const ChatComposerNewComponent = ({
             ref={slashMenuRef}
             query={slashQuery}
             onSelect={handleSlashSelect}
-            onSkillSelect={handleSkillSelect}
             onClose={() => setShowSlashMenu(false)}
           />
         )}
@@ -719,12 +634,13 @@ const ChatComposerNewComponent = ({
             emptyState && 'min-h-[132px] flex-wrap px-5 py-4 sm:px-6',
           )}
         >
-          {/* + Overflow Menu Button — contains focus modes, agent mode, folder, tools */}
+          {/* + Overflow Menu Button */}
           <div className={cn('relative', emptyState && 'order-2')} ref={overflowRef}>
             <button
               onClick={() => {
-                setShowOverflowMenu(!showOverflowMenu);
-                if (showOverflowMenu) {
+                const next = !showOverflowMenu;
+                setShowOverflowMenu(next);
+                if (!next) {
                   setShowStyleSubmenu(false);
                   setShowSkillsSubmenu(false);
                   setShowConnectorsSubmenu(false);
@@ -744,87 +660,86 @@ const ChatComposerNewComponent = ({
               <Plus className="h-5 w-5" />
             </button>
 
-            {/* Overflow Menu Popover */}
+            {/* + Menu Popover */}
             {showOverflowMenu && (
-              <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-2 shadow-xl backdrop-blur-xl">
-                {/* Focus Modes */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Focus Mode
-                  </div>
-                  <FocusModeButtons
-                    activeMode={focusMode}
-                    onChange={(mode) => {
-                      handleFocusModeChange(mode);
-                    }}
-                  />
-                </div>
+              <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                {/* 1. Add files or photos */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    fileInputRef.current?.click();
+                    closeMenu();
+                  }}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                >
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex-1 text-left">Add files or photos</span>
+                </button>
+
+                {/* 2. Take a screenshot */}
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
+                  aria-disabled="true"
+                >
+                  <Camera className="h-4 w-4" />
+                  <span className="flex-1 text-left">Take a screenshot</span>
+                  <span className="text-[10px]">Soon</span>
+                </button>
+
+                {/* 3. Add to project (stub) */}
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                >
+                  <FolderOpen className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex-1 text-left">Add to project</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+
+                {/* 4. Add from GitHub (stub) */}
+                <button
+                  type="button"
+                  disabled
+                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
+                  aria-disabled="true"
+                >
+                  <GitFork className="h-4 w-4" />
+                  <span className="flex-1 text-left">Add from GitHub</span>
+                </button>
 
                 {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
+                <div className="my-1 border-t border-border/30" />
 
-                {/* Agent Mode */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Agent Mode
-                  </div>
-                  <div className="px-1">
-                    <AgentModeSwitcher
-                      mode={agentMode}
-                      onChange={setAgentMode}
-                      disabled={isLoading || disabled}
-                    />
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Folder Context */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Project Context
-                  </div>
-                  <div className="px-1">
-                    <FolderContextSelector
-                      selectedFolderId={selectedFolderId}
-                      onChange={setSelectedFolderId}
-                      disabled={isLoading || disabled}
-                    />
-                  </div>
-                </div>
-
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Skills — inline expandable submenu */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Skills
-                  </div>
+                {/* 5. Skills -- right flyout */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setShowSkillsSubmenu((prev) => !prev)}
+                    onClick={() => {
+                      setShowSkillsSubmenu((prev) => !prev);
+                      setShowConnectorsSubmenu(false);
+                      setShowStyleSubmenu(false);
+                    }}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
                       selectedSkill && 'text-primary',
                     )}
                   >
-                    <Layers
-                      className={cn('h-4 w-4', selectedSkill ? 'text-primary' : 'text-orange-400')}
-                    />
-                    <span className="flex-1 text-left">
-                      {selectedSkill ? selectedSkill.name : 'Browse Skills'}
-                    </span>
-                    <ChevronRight
+                    <Sparkles
                       className={cn(
-                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
-                        showSkillsSubmenu && 'rotate-90',
+                        'h-4 w-4',
+                        selectedSkill ? 'text-primary' : 'text-muted-foreground',
                       )}
                     />
+                    <span className="flex-1 text-left">
+                      {selectedSkill ? selectedSkill.name : 'Skills'}
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
+
                   {showSkillsSubmenu && (
-                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+                    <div className="absolute left-full top-0 z-50 ml-1 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl">
                       <SkillsMenu
                         query=""
                         onSelect={(skill) => {
@@ -834,8 +749,7 @@ const ChatComposerNewComponent = ({
                             description: skill.description,
                             category: skill.source,
                           });
-                          setShowSkillsSubmenu(false);
-                          setShowOverflowMenu(false);
+                          closeMenu();
                         }}
                         onClose={() => setShowSkillsSubmenu(false)}
                       />
@@ -843,92 +757,155 @@ const ChatComposerNewComponent = ({
                   )}
                 </div>
 
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Connectors — inline expandable submenu */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Connectors
-                  </div>
+                {/* 6. Connectors -- right flyout */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setShowConnectorsSubmenu((prev) => !prev)}
+                    onClick={() => {
+                      setShowConnectorsSubmenu((prev) => !prev);
+                      setShowSkillsSubmenu(false);
+                      setShowStyleSubmenu(false);
+                    }}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                   >
-                    <Link2 className="h-4 w-4 text-cyan-400" />
-                    <span className="flex-1 text-left">Browse Connectors</span>
-                    <ChevronRight
-                      className={cn(
-                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
-                        showConnectorsSubmenu && 'rotate-90',
-                      )}
-                    />
+                    {/* Simple connector icon */}
+                    <svg
+                      className="h-4 w-4 text-muted-foreground"
+                      viewBox="0 0 16 16"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      aria-hidden="true"
+                    >
+                      <circle cx="3.5" cy="8" r="2" />
+                      <circle cx="12.5" cy="8" r="2" />
+                      <path d="M5.5 8h5" />
+                    </svg>
+                    <span className="flex-1 text-left">Connectors</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
+
                   {showConnectorsSubmenu && (
-                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
-                      {CONNECTOR_PREVIEW.map((connector) => (
-                        <div
-                          key={connector.id}
-                          className="flex items-center gap-2 rounded-md px-3 py-1.5"
+                    <div className="absolute left-full top-0 z-50 ml-1 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                      {CONNECTOR_PREVIEW.map((connector) => {
+                        const isConnected = connectors.connectedIds.has(connector.id);
+                        const isMutating = connectors.mutatingIds.has(connector.id);
+                        return (
+                          <div
+                            key={connector.id}
+                            className="flex items-center gap-2.5 rounded-lg px-3 py-2"
+                          >
+                            <span className="text-base" aria-hidden="true">
+                              {connector.iconEmoji ?? connector.iconText}
+                            </span>
+                            <span className="flex-1 truncate text-sm">{connector.name}</span>
+                            <Switch
+                              checked={isConnected}
+                              disabled={isMutating || connectors.loading}
+                              aria-label={`Toggle ${connector.name}`}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  void connectors.connect(connector.id, connector.authType);
+                                } else {
+                                  void connectors.disconnect(connector.id);
+                                }
+                              }}
+                              className="h-5 w-9 data-[state=checked]:bg-[var(--chat-accent-primary)]"
+                            />
+                          </div>
+                        );
+                      })}
+
+                      {/* Connector footer */}
+                      <div className="mt-1 border-t border-border/30 pt-1">
+                        <a
+                          href="/connectors"
+                          onClick={closeMenu}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
-                          <span className="text-sm" aria-hidden="true">
-                            {connector.iconEmoji ?? '🔗'}
+                          Manage connectors
+                        </a>
+                        <a
+                          href="/connectors/new"
+                          onClick={closeMenu}
+                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        >
+                          Add connector
+                        </a>
+                        <a
+                          href="/connectors/permissions"
+                          onClick={closeMenu}
+                          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        >
+                          <span>Tool access</span>
+                          <span className="text-xs text-muted-foreground/60">
+                            Load tools when needed
                           </span>
-                          <span className="flex-1 truncate text-sm">{connector.name}</span>
-                          <span className="flex shrink-0 items-center gap-1 text-[11px] text-emerald-400">
-                            <CheckCircle2 className="h-3 w-3" />
-                            Connected
-                          </span>
-                        </div>
-                      ))}
-                      <a
-                        href="/connectors"
-                        onClick={() => setShowOverflowMenu(false)}
-                        className="mt-1 flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                      >
-                        <Clock className="h-3 w-3 text-muted-foreground/60" />
-                        More coming soon
-                      </a>
+                        </a>
+                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Plugins */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Plugins
-                  </div>
-                  <a
-                    href="/plugins"
-                    onClick={() => setShowOverflowMenu(false)}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                {/* 7. Plugins */}
+                <a
+                  href="/plugins"
+                  onClick={closeMenu}
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                >
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    aria-hidden="true"
                   >
-                    <Puzzle className="h-4 w-4 text-violet-400" />
-                    <span className="flex-1 text-left">
-                      Browse available plugins
-                      <span className="ml-1.5 text-[10px] text-muted-foreground/60">
-                        Coming soon
-                      </span>
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </a>
-                </div>
+                    <rect x="2" y="2" width="5" height="5" rx="1" />
+                    <rect x="9" y="2" width="5" height="5" rx="1" />
+                    <rect x="2" y="9" width="5" height="5" rx="1" />
+                    <path d="M11.5 9v6M9 11.5h6" />
+                  </svg>
+                  <span className="flex-1 text-left">Plugins</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </a>
 
                 {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
+                <div className="my-1 border-t border-border/30" />
 
-                {/* Use Style — inline submenu */}
-                <div className="mb-2">
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Response Style
-                  </div>
+                {/* 8. Research toggle */}
+                <MenuToggleRow
+                  icon={BookOpen}
+                  label="Research"
+                  checked={researchEnabled}
+                  onToggle={() => {
+                    handleResearchToggle();
+                    closeMenu();
+                  }}
+                  disabled={isLoading || disabled}
+                />
+
+                {/* 9. Web search toggle */}
+                <MenuToggleRow
+                  icon={Globe}
+                  label="Web search"
+                  checked={webSearchEnabled}
+                  onToggle={() => {
+                    handleWebSearchToggle();
+                    closeMenu();
+                  }}
+                  disabled={isLoading || disabled}
+                />
+
+                {/* 10. Use style -- right flyout */}
+                <div className="relative">
                   <button
                     type="button"
-                    onClick={() => setShowStyleSubmenu((prev) => !prev)}
+                    onClick={() => {
+                      setShowStyleSubmenu((prev) => !prev);
+                      setShowSkillsSubmenu(false);
+                      setShowConnectorsSubmenu(false);
+                    }}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
                       styleMode !== 'normal' && 'text-primary',
@@ -937,33 +914,29 @@ const ChatComposerNewComponent = ({
                     <Wand2
                       className={cn(
                         'h-4 w-4',
-                        styleMode !== 'normal' ? 'text-primary' : 'text-amber-400',
+                        styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
                       )}
                     />
                     <span className="flex-1 text-left">
                       {styleMode === 'normal'
-                        ? 'Use Style'
-                        : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use Style')}
+                        ? 'Use style'
+                        : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use style')}
                     </span>
-                    <ChevronRight
-                      className={cn(
-                        'h-3.5 w-3.5 text-muted-foreground transition-transform',
-                        showStyleSubmenu && 'rotate-90',
-                      )}
-                    />
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                   </button>
+
                   {showStyleSubmenu && (
-                    <div className="mt-1 rounded-lg border border-border/40 bg-muted/30 p-1">
+                    <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
                       {STYLE_OPTIONS.map((option) => (
                         <button
                           key={option.id}
                           type="button"
                           onClick={() => {
                             setStyleMode(option.id);
-                            setShowStyleSubmenu(false);
+                            closeMenu();
                           }}
                           className={cn(
-                            'flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
+                            'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
                             styleMode === option.id
                               ? 'bg-primary/10 text-primary'
                               : 'hover:bg-muted/60',
@@ -981,70 +954,12 @@ const ChatComposerNewComponent = ({
                     </div>
                   )}
                 </div>
-
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Tools */}
-                <div>
-                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Tools
-                  </div>
-                  {TOOLS.map((tool) => {
-                    const Icon = tool.icon;
-                    const isSelected = selectedTools.includes(tool.id);
-                    return (
-                      <button
-                        key={tool.id}
-                        onClick={() => toggleTool(tool.id)}
-                        className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                          isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted/60',
-                        )}
-                      >
-                        <Icon className={cn('h-4 w-4', tool.color)} />
-                        <span className="flex-1 text-left">{tool.label}</span>
-                        {isSelected && <div className="h-2 w-2 rounded-full bg-primary" />}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Divider */}
-                <div className="my-1.5 border-t border-border/30" />
-
-                {/* Browse Directory */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    openDirectory(true);
-                    setShowOverflowMenu(false);
-                  }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                >
-                  <Library className="h-4 w-4 text-primary" />
-                  <span className="flex-1 text-left">Browse Directory</span>
-                </button>
               </div>
             )}
           </div>
 
-          {/* Attach Button (paperclip) */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoading || disabled}
-            className={cn(
-              'flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
-              emptyState && 'order-3',
-              (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-            )}
-            aria-label="Attach file"
-          >
-            <Paperclip className="h-5 w-5" />
-          </button>
-
-          {/* Quick Toggle Buttons */}
-          <div className={cn('flex items-center gap-1', emptyState && 'order-4')}>
+          {/* Quick Toggle Pills -- preserved for direct access */}
+          <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
             <button
               onClick={handleWebSearchToggle}
               disabled={isLoading || disabled || researchEnabled}
@@ -1060,23 +975,6 @@ const ChatComposerNewComponent = ({
             >
               <Globe className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Search</span>
-            </button>
-
-            <button
-              onClick={handleThinkingToggle}
-              disabled={isLoading || disabled}
-              className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                thinkingEnabled
-                  ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label="Toggle extended thinking"
-              aria-pressed={thinkingEnabled}
-            >
-              <Brain className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Think</span>
             </button>
 
             <button
@@ -1104,7 +1002,6 @@ const ChatComposerNewComponent = ({
               emptyState ? 'order-1 min-h-[76px] basis-full' : 'min-h-[52px]',
             )}
           >
-            {/* Ghost-text overlay positioned behind the textarea */}
             <GhostTextOverlay
               inputText={message}
               suggestion={suggestion}
@@ -1120,7 +1017,6 @@ const ChatComposerNewComponent = ({
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
               disabled={isLoading || disabled}
-              // bg-transparent so the ghost-text overlay behind shows through
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
@@ -1132,7 +1028,6 @@ const ChatComposerNewComponent = ({
               aria-describedby={suggestion ? 'ghost-text-hint' : undefined}
             />
 
-            {/* Screen-reader announcement for ghost-text suggestion */}
             {suggestion && (
               <span id="ghost-text-hint" className="sr-only">
                 Suggestion available: {suggestion}. Press Tab to accept.
@@ -1150,7 +1045,7 @@ const ChatComposerNewComponent = ({
               setTimeout(() => textareaRef.current?.focus(), 50);
             }}
             disabled={isLoading || disabled}
-            className={emptyState ? 'order-5 ml-auto' : undefined}
+            className={emptyState ? 'order-4 ml-auto' : undefined}
           />
 
           {/* Send / Stop Button */}
@@ -1159,7 +1054,7 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={disabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className={emptyState ? 'order-6' : undefined}
+            className={emptyState ? 'order-5' : undefined}
           />
         </div>
 
@@ -1186,12 +1081,13 @@ const ChatComposerNewComponent = ({
 /**
  * ChatComposerNew with memoization optimization.
  *
- * Enhancements over the original version:
- * - Ghost-text prompt completion via useApiPromptCompletion (Tab/ArrowRight to accept)
- * - Agent mode, focus modes, folder selector moved into "+" overflow menu
- * - Accepts prefillText prop for empty-state category pills
- * - Rounded-2xl border with teal focus ring
- * - Existing slash commands, @mentions, and voice input preserved
+ * + menu matches Claude's structure:
+ *   Add files/photos, Take screenshot (stub), Add to project (stub),
+ *   Add from GitHub (stub), Skills flyout, Connectors flyout (real toggles),
+ *   Plugins link, Research toggle, Web search toggle, Use style flyout.
+ *
+ * Removed from + menu: Focus Mode, Agent Mode, Project Context, Tools group,
+ * Browse Directory. State kept with safe defaults so onSend meta is unchanged.
  */
 export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
   return (
