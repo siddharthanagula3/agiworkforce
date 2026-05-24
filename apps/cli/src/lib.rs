@@ -277,7 +277,7 @@ pub struct Cli {
     #[arg(long, value_name = "MODEL")]
     fallback_model: Option<String>,
 
-    /// Initialize project with CLAUDE.md
+    /// Initialize project with AGENTS.md
     #[arg(long)]
     init: bool,
 
@@ -1806,11 +1806,11 @@ pub async fn run_main() -> Result<()> {
         return daemon::run_daemon(&app_config).await;
     }
 
-    // --init: create CLAUDE.md in current directory
+    // --init: create AGENTS.md in current directory
     if cli.init {
-        let claude_md = std::path::Path::new("CLAUDE.md");
-        if claude_md.exists() {
-            eprintln!("CLAUDE.md already exists in current directory.");
+        let agents_md = std::path::Path::new("AGENTS.md");
+        if agents_md.exists() {
+            eprintln!("AGENTS.md already exists in current directory.");
         } else {
             let template = "# Project Instructions\n\n\
                            ## Overview\n\n\
@@ -1823,8 +1823,8 @@ pub async fn run_main() -> Result<()> {
                            Describe your project structure.\n\n\
                            ## Development Rules\n\n\
                            - Add your coding conventions here\n";
-            std::fs::write(claude_md, template)?;
-            eprintln!("Created CLAUDE.md in current directory.");
+            std::fs::write(agents_md, template)?;
+            eprintln!("Created AGENTS.md in current directory.");
         }
         return Ok(());
     }
