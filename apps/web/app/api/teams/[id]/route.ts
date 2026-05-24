@@ -12,7 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 function mapRowToTeam(row: Record<string, unknown>) {
   return {
@@ -46,7 +46,8 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -64,18 +65,18 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
   }
 
   const teamRow = team as Record<string, unknown>;
-  const isOwner = teamRow['owner_id'] === user.id;
+  const isOwner = teamRow['owner_id'] === userId;
 
   // Check if the user is a member
   const { data: membership, error: membershipError } = await supabase
     .from('team_members')
     .select('role')
     .eq('team_id', teamId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .maybeSingle();
 
   if (membershipError) {
-    logger.error({ error: membershipError, userId: user.id, teamId }, 'Failed to check membership');
+    logger.error({ error: membershipError, userId, teamId }, 'Failed to check membership');
     throw createError.internal('Failed to fetch team');
   }
 
@@ -91,7 +92,7 @@ async function handleGetTeam(request: NextRequest, context: { params: Promise<{ 
     .order('joined_at', { ascending: true });
 
   if (membersError) {
-    logger.error({ error: membersError, userId: user.id, teamId }, 'Failed to fetch team members');
+    logger.error({ error: membersError, userId, teamId }, 'Failed to fetch team members');
     throw createError.internal('Failed to fetch team members');
   }
 
@@ -121,7 +122,8 @@ async function handleUpdateTeam(
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -163,14 +165,14 @@ async function handleUpdateTeam(
   }
 
   const teamRow = team as Record<string, unknown>;
-  const isOwner = teamRow['owner_id'] === user.id;
+  const isOwner = teamRow['owner_id'] === userId;
 
   if (!isOwner) {
     const { data: membership } = await supabase
       .from('team_members')
       .select('role')
       .eq('team_id', teamId)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .maybeSingle();
 
     const memberRole = (membership as Record<string, unknown> | null)?.['role'];
@@ -195,7 +197,7 @@ async function handleUpdateTeam(
     .single();
 
   if (updateError) {
-    logger.error({ error: updateError, userId: user.id, teamId }, 'Failed to update team');
+    logger.error({ error: updateError, userId, teamId }, 'Failed to update team');
     throw createError.internal('Failed to update team');
   }
 
@@ -219,7 +221,8 @@ async function handleDeleteTeam(
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -238,14 +241,14 @@ async function handleDeleteTeam(
   }
 
   const teamRow = team as Record<string, unknown>;
-  if (teamRow['owner_id'] !== user.id) {
+  if (teamRow['owner_id'] !== userId) {
     throw createError.forbidden('Only the team owner can delete this team');
   }
 
   const { error: deleteError } = await supabase.from('teams').delete().eq('id', teamId);
 
   if (deleteError) {
-    logger.error({ error: deleteError, userId: user.id, teamId }, 'Failed to delete team');
+    logger.error({ error: deleteError, userId, teamId }, 'Failed to delete team');
     throw createError.internal('Failed to delete team');
   }
 

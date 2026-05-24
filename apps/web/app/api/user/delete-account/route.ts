@@ -5,7 +5,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { getServiceClient } from '@/lib/supabase-server';
 
 /**
@@ -42,8 +42,8 @@ export async function DELETE(request: NextRequest) {
 
   let userId: string;
   try {
-    const { user } = await getAuthenticatedUserWithClient(request);
-    userId = user.id;
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }

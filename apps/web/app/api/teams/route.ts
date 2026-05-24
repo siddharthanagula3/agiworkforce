@@ -11,7 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 function mapRowToTeam(row: Record<string, unknown>) {
   return {
@@ -33,17 +33,18 @@ async function handleGetTeams(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   // Fetch teams the user owns
   const { data: ownedTeams, error: ownedError } = await supabase
     .from('teams')
     .select('id, name, description, owner_id, created_at, updated_at')
-    .eq('owner_id', user.id)
+    .eq('owner_id', userId)
     .order('created_at', { ascending: false });
 
   if (ownedError) {
-    logger.error({ error: ownedError, userId: user.id }, 'Failed to fetch owned teams');
+    logger.error({ error: ownedError, userId }, 'Failed to fetch owned teams');
     throw createError.internal('Failed to fetch teams');
   }
 
@@ -51,10 +52,10 @@ async function handleGetTeams(request: NextRequest) {
   const { data: memberships, error: memberError } = await supabase
     .from('team_members')
     .select('team_id, role, joined_at')
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   if (memberError) {
-    logger.error({ error: memberError, userId: user.id }, 'Failed to fetch team memberships');
+    logger.error({ error: memberError, userId }, 'Failed to fetch team memberships');
     throw createError.internal('Failed to fetch teams');
   }
 
@@ -71,7 +72,7 @@ async function handleGetTeams(request: NextRequest) {
       .order('created_at', { ascending: false });
 
     if (memberTeamError) {
-      logger.error({ error: memberTeamError, userId: user.id }, 'Failed to fetch member teams');
+      logger.error({ error: memberTeamError, userId }, 'Failed to fetch member teams');
       throw createError.internal('Failed to fetch teams');
     }
     memberTeams = (memberTeamRows || []) as Record<string, unknown>[];
@@ -109,7 +110,8 @@ async function handleCreateTeam(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: { name?: string; description?: string };
   try {
@@ -133,13 +135,13 @@ async function handleCreateTeam(request: NextRequest) {
     .insert({
       name: body.name.trim(),
       description: (body.description ?? '').trim(),
-      owner_id: user.id,
+      owner_id: userId,
     })
     .select()
     .single();
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create team');
+    logger.error({ error, userId }, 'Failed to create team');
     throw createError.internal('Failed to create team');
   }
 

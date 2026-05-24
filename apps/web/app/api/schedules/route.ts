@@ -11,7 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 function mapRowToSchedule(row: Record<string, unknown>) {
   return {
@@ -44,17 +44,18 @@ async function handleGetSchedules(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const { data, error } = await supabase
     .from('scheduled_tasks')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(100);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch schedules');
+    logger.error({ error, userId }, 'Failed to fetch schedules');
     throw createError.internal('Failed to fetch schedules');
   }
 
@@ -78,7 +79,8 @@ async function handleCreateSchedule(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: Record<string, unknown>;
   try {
@@ -127,7 +129,7 @@ async function handleCreateSchedule(request: NextRequest) {
       : 'UTC';
 
   const insertData: Record<string, unknown> = {
-    user_id: user.id,
+    user_id: userId,
     name: (body['name'] as string).trim(),
     prompt: (body['prompt'] as string).trim(),
     model,
@@ -169,7 +171,7 @@ async function handleCreateSchedule(request: NextRequest) {
     .single();
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create schedule');
+    logger.error({ error, userId }, 'Failed to create schedule');
     throw createError.internal('Failed to create schedule');
   }
 

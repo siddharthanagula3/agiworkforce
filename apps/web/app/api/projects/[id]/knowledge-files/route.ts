@@ -15,7 +15,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapKnowledgeFileRow } from '@/lib/projects';
 import {
   SYNCED_APP_SURFACES,
@@ -45,7 +45,8 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: projectId } = await context.params;
 
   // Verify project ownership before listing files
@@ -53,7 +54,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
     .from('user_projects')
     .select('id')
     .eq('id', projectId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (projectError || !project) {
@@ -87,7 +88,8 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: projectId } = await context.params;
 
   let body: {
@@ -141,7 +143,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     .from('user_projects')
     .select('id')
     .eq('id', projectId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (projectError || !project) {
@@ -158,7 +160,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
       checksum_sha256: body.checksumSha256.trim(),
       summary: body.summary?.trim() ?? null,
       source_surface: body.sourceSurface,
-      added_by_user_id: user.id,
+      added_by_user_id: userId,
       storage_uri: body.storageUri.trim(),
     })
     .select('*')

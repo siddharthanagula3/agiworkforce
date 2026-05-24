@@ -6,7 +6,7 @@ import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 
 /**
@@ -32,8 +32,11 @@ async function authenticateRequest(
   request: NextRequest,
 ): Promise<{ userId: string; supabase: SupabaseClient }> {
   try {
-    const { user, userDb } = await getAuthenticatedUserWithClient(request);
-    return { userId: user.id, supabase: userDb };
+    const { userId } = await getClerkAuthUser(request);
+    const supabase = await (
+      await import('@/services/supabase-server')
+    ).createSupabaseServerClient();
+    return { userId, supabase };
   } catch {
     throw new Error('UNAUTHORIZED');
   }

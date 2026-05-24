@@ -7,7 +7,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { getServiceClient } from '@/lib/supabase-server';
 
 /**
@@ -52,13 +52,12 @@ async function handleDeleteUserData(request: NextRequest) {
   }
 
   try {
-    const { user } = await getAuthenticatedUserWithClient(request);
+    const { userId } = await getClerkAuthUser(request);
 
     // Log the deletion request for audit purposes
     logger.info(
       {
-        userId: user.id,
-        email: user.email,
+        userId,
         action: 'gdpr_data_deletion_requested',
       },
       'User requested GDPR data deletion',
@@ -71,21 +70,21 @@ async function handleDeleteUserData(request: NextRequest) {
 
     // Call the delete_user_data database function
     const { data, error } = await adminSupabase.rpc('delete_user_data', {
-      target_user_id: user.id,
+      target_user_id: userId,
     });
 
     if (error) {
       logger.error(
         {
           error,
-          userId: user.id,
+          userId,
         },
         'Failed to delete user data via RPC',
       );
 
       // If the function doesn't exist, provide a fallback manual deletion
       if (error.message?.includes('function') || error.code === 'PGRST202') {
-        logger.warn({ userId: user.id }, 'delete_user_data function not found, using fallback');
+        logger.warn({ userId }, 'delete_user_data function not found, using fallback');
 
         // Manual deletion in correct order (respecting foreign key constraints)
         const deletionResults: Record<string, { deleted: boolean; error?: string }> = {};
@@ -109,15 +108,12 @@ async function handleDeleteUserData(request: NextRequest) {
           const { error: deleteError } = await adminSupabase
             .from(table)
             .delete()
-            .eq(column, user.id);
+            .eq(column, userId);
 
           if (deleteError && deleteError.code !== 'PGRST116') {
             // Ignore "not found" errors
             deletionResults[table] = { deleted: false, error: deleteError.message };
-            logger.warn(
-              { table, error: deleteError, userId: user.id },
-              `Failed to delete from ${table}`,
-            );
+            logger.warn({ table, error: deleteError, userId }, `Failed to delete from ${table}`);
           } else {
             deletionResults[table] = { deleted: true };
           }
@@ -125,7 +121,7 @@ async function handleDeleteUserData(request: NextRequest) {
 
         logger.info(
           {
-            userId: user.id,
+            userId,
             results: deletionResults,
           },
           'Completed fallback data deletion',
@@ -136,7 +132,7 @@ async function handleDeleteUserData(request: NextRequest) {
             success: true,
             message:
               'Your data deletion request has been processed. Some data may require manual review.',
-            user_id: user.id,
+            user_id: userId,
             deletion_timestamp: new Date().toISOString(),
             note: 'To complete account deletion, please also delete your authentication account through account settings.',
           },
@@ -154,7 +150,7 @@ async function handleDeleteUserData(request: NextRequest) {
 
     logger.info(
       {
-        userId: user.id,
+        userId,
         result: data,
       },
       'User data deleted successfully via RPC',
@@ -164,7 +160,7 @@ async function handleDeleteUserData(request: NextRequest) {
       {
         success: true,
         message: 'Your data has been successfully deleted.',
-        user_id: user.id,
+        user_id: userId,
         deletion_timestamp: new Date().toISOString(),
         details: data,
         note: 'To complete account deletion, please also delete your authentication account through account settings.',

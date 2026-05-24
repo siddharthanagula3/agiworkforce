@@ -13,7 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 type RouteContext = { params: Promise<{ id: string; fileId: string }> };
 
@@ -24,7 +24,8 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id: projectId, fileId } = await context.params;
 
   // Verify project ownership
@@ -32,7 +33,7 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
     .from('user_projects')
     .select('id')
     .eq('id', projectId)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (projectError || !project) {
