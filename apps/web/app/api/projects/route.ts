@@ -11,7 +11,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
 import {
   PRIVACY_MODES,
@@ -46,7 +46,8 @@ async function handleGetProjects(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -57,12 +58,12 @@ async function handleGetProjects(request: NextRequest) {
   const { data, error } = await supabase
     .from('user_projects')
     .select('*')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .order('updated_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch projects');
+    logger.error({ error, userId }, 'Failed to fetch projects');
     throw createError.internal('Failed to fetch projects');
   }
 
@@ -80,7 +81,8 @@ async function handleCreateProject(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   let body: {
     name?: string;
@@ -164,7 +166,7 @@ async function handleCreateProject(request: NextRequest) {
   }
 
   const baseInsert: Record<string, unknown> = {
-    user_id: user.id,
+    user_id: userId,
     name: body.name.trim(),
     description: body.description?.trim() ?? '',
     instructions: body.instructions?.trim() ?? '',
@@ -207,7 +209,7 @@ async function handleCreateProject(request: NextRequest) {
   }
 
   if (result.error) {
-    logger.error({ error: result.error, userId: user.id }, 'Failed to create project');
+    logger.error({ error: result.error, userId }, 'Failed to create project');
     throw createError.internal('Failed to create project');
   }
 

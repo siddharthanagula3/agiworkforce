@@ -12,7 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
 import {
   PRIVACY_MODES,
@@ -49,14 +49,15 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { data, error } = await supabase
     .from('user_projects')
     .select('*')
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .single();
 
   if (error || !data) {
@@ -77,7 +78,8 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   let body: {
@@ -198,7 +200,7 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
       .from('user_projects')
       .update(payload)
       .eq('id', id)
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .select('*')
       .single();
   };
@@ -232,17 +234,18 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   const { error } = await supabase
     .from('user_projects')
     .delete()
     .eq('id', id)
-    .eq('user_id', user.id);
+    .eq('user_id', userId);
 
   if (error) {
-    logger.error({ error, projectId: id }, 'Failed to delete project');
+    logger.error({ error, projectId: id, userId }, 'Failed to delete project');
     throw createError.internal('Failed to delete project');
   }
 
