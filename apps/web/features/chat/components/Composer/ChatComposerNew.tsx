@@ -18,6 +18,7 @@ import {
   Check,
   Layers,
   Library,
+  Puzzle,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -132,7 +133,7 @@ const ChatComposerNewComponent = ({
   onSend,
   isLoading = false,
   isGenerating = false,
-  placeholder = 'Ask anything',
+  placeholder = 'Ask anything. Type / for commands',
   disabled = false,
   initialAgentMode = 'solo',
   promptCompletionEnabled = true,
@@ -630,7 +631,7 @@ const ChatComposerNewComponent = ({
           'relative border bg-[var(--chat-bg-elevated)] shadow-sm backdrop-blur-sm transition-all duration-200',
           emptyState ? 'rounded-[26px]' : 'rounded-2xl',
           isFocused
-            ? 'border-teal-500/40 shadow-md ring-2 ring-teal-500/30'
+            ? 'border-[var(--chat-accent-primary)]/40 shadow-md ring-2 ring-[var(--chat-accent-primary)]/30'
             : 'border-[var(--chat-glass-border)]',
         )}
       >
@@ -706,7 +707,7 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                 hasOverflowActive
-                  ? 'bg-teal-500/15 text-teal-500'
+                  ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 (isLoading || disabled) && 'cursor-not-allowed opacity-50',
               )}
@@ -813,6 +814,25 @@ const ChatComposerNewComponent = ({
                       />
                     </div>
                   )}
+                </div>
+
+                {/* Divider */}
+                <div className="my-1.5 border-t border-border/30" />
+
+                {/* Plugins */}
+                <div className="mb-2">
+                  <div className="mb-1 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Plugins
+                  </div>
+                  <a
+                    href="/plugins"
+                    onClick={() => setShowOverflowMenu(false)}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                  >
+                    <Puzzle className="h-4 w-4 text-violet-400" />
+                    <span className="flex-1 text-left">Browse available plugins</span>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                  </a>
                 </div>
 
                 {/* Divider */}
@@ -948,7 +968,7 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                 webSearchEnabled
-                  ? 'bg-teal-500/15 text-teal-400 ring-1 ring-teal-500/30'
+                  ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 (isLoading || disabled || researchEnabled) && 'cursor-not-allowed opacity-50',
               )}

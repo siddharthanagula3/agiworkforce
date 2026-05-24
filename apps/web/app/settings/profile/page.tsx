@@ -203,7 +203,7 @@ export default function ProfileSettingsPage() {
               height: 56,
               borderRadius: '50%',
               background:
-                'linear-gradient(135deg, var(--chat-accent-primary, #da7756) 0%, var(--chat-accent-secondary, #21808d) 100%)',
+                'linear-gradient(135deg, var(--chat-accent-primary, #c8892a) 0%, var(--chat-accent-secondary, #21808d) 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -360,7 +360,7 @@ export default function ProfileSettingsPage() {
               fontSize: 13,
               fontWeight: 600,
               color: '#fff',
-              background: 'var(--chat-accent-primary, #da7756)',
+              background: 'var(--chat-accent-primary, #c8892a)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               cursor: displayName.trim().length === 0 || saving ? 'not-allowed' : 'pointer',
