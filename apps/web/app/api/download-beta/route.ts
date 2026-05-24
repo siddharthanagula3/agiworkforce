@@ -4,6 +4,7 @@ import { readFile } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -113,20 +114,13 @@ async function handleDownloadBeta(request: NextRequest) {
     throw createError.notFound(`Download for platform "${platform}" is not configured.`);
   }
 
+  const { userId } = await getClerkAuthUser(request);
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
-    throw createError.unauthorized('Authentication required to download.');
-  }
 
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('status')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .maybeSingle();
 
   const activeStatuses = ['active', 'trialing'];

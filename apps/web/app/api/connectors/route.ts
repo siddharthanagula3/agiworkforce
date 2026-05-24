@@ -12,7 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 // WEB-RLS-BYPASS fix: use canonical client factories from lib/supabase-server
 // instead of a locally-defined duplicate. User-scoped connector operations use
 // getUserClient(jwt) when a Bearer token is present so RLS policies are enforced.
@@ -24,7 +24,7 @@ import { getServiceClient, getUserClient } from '@/lib/supabase-server';
 /**
  * Return an RLS-bound client when the request carries a Bearer JWT, or the
  * canonical service-role client when only cookie auth is available.
- * Callers MUST still apply .eq('user_id', user.id) for defense-in-depth.
+ * Callers MUST still apply .eq('user_id', userId) for defense-in-depth.
  */
 function getScopedClient(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
@@ -78,18 +78,18 @@ async function handleGetConnectors(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
   const supabase = getScopedClient(request);
 
   const { data, error } = await supabase
     .from('user_connectors')
     .select('id, connector_id, auth_type, connected_at, updated_at')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('is_active', true)
     .order('connected_at', { ascending: false });
 
   if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch connectors');
+    logger.error({ error, userId: userId }, 'Failed to fetch connectors');
     throw createError.internal('Failed to fetch connectors');
   }
 
@@ -114,7 +114,7 @@ async function handleCreateConnector(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   let body: { connectorId?: string; authType?: string };
   try {
@@ -151,7 +151,7 @@ async function handleCreateConnector(request: NextRequest) {
     .from('user_connectors')
     .upsert(
       {
-        user_id: user.id,
+        user_id: userId,
         connector_id: body.connectorId,
         auth_type: authType,
         is_active: true,
@@ -165,7 +165,7 @@ async function handleCreateConnector(request: NextRequest) {
 
   if (error) {
     logger.error(
-      { error, userId: user.id, connectorId: body.connectorId },
+      { error, userId: userId, connectorId: body.connectorId },
       'Failed to save connector',
     );
     throw createError.internal('Failed to save connector');
@@ -195,7 +195,7 @@ async function handleDeleteConnector(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   const url = new URL(request.url);
   const connectorId = url.searchParams.get('connectorId');
@@ -210,11 +210,11 @@ async function handleDeleteConnector(request: NextRequest) {
   const { error } = await supabase
     .from('user_connectors')
     .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('connector_id', connectorId);
 
   if (error) {
-    logger.error({ error, userId: user.id, connectorId }, 'Failed to disconnect connector');
+    logger.error({ error, userId: userId, connectorId }, 'Failed to disconnect connector');
     throw createError.internal('Failed to disconnect connector');
   }
 

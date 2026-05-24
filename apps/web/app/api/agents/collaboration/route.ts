@@ -8,7 +8,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { logger } from '@/lib/logger';
 import { randomUUID } from 'crypto';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 /**
  * Agent Collaboration API
@@ -43,11 +43,7 @@ async function handleCollaboration(request: NextRequest): Promise<NextResponse> 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Authenticate user - never trust userId from request body.
-  // getAuthenticatedUser handles Bearer + cookie flows and uses the service-role
-  // client only for JWT verification (never for DB ops).
-  const user = await getAuthenticatedUser(request);
-  const userId = user.id;
+  const { userId } = await getClerkAuthUser(request);
 
   // Rate limiting - collaboration uses the same budget as LLM completion
   const rateLimitResponse = await withRateLimit(request, 'llm-completion');

@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -43,15 +44,8 @@ async function handleCreditTopup(request: NextRequest) {
     return rateLimitResponse;
   }
 
+  const { userId, email } = await getClerkAuthUser(request);
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    throw createError.unauthorized('Please sign in to continue');
-  }
 
   let body: unknown;
   try {
@@ -90,27 +84,27 @@ async function handleCreditTopup(request: NextRequest) {
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('stripe_customer_id')
-    .eq('id', user.id)
+    .eq('id', userId)
     .maybeSingle();
 
   if (profileError) {
-    logger.warn({ error: profileError, userId: user.id }, 'Failed to fetch profile for top-up');
+    logger.warn({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
   }
 
   let customerId = profile?.stripe_customer_id;
 
   // Create or retrieve Stripe customer
   if (!customerId) {
-    // user.email may be undefined for phone/SSO/anonymous auth users
-    if (!user.email) {
+    // email may be undefined for phone/SSO/anonymous auth users
+    if (!email) {
       throw createError.validation(
         'An email address is required for billing. Please add an email to your account.',
       );
     }
     const customer = await stripe.customers.create({
-      email: user.email,
+      email: email,
       metadata: {
-        supabase_user_id: user.id,
+        supabase_user_id: userId,
       },
     });
     customerId = customer.id;
@@ -119,11 +113,11 @@ async function handleCreditTopup(request: NextRequest) {
     const { error: updateError } = await supabase
       .from('profiles')
       .update({ stripe_customer_id: customerId })
-      .eq('id', user.id);
+      .eq('id', userId);
     if (updateError) {
       // Non-fatal: proceed with checkout even if we fail to persist mapping
       logger.warn(
-        { error: updateError, userId: user.id, customerId },
+        { error: updateError, userId: userId, customerId },
         'Failed to store stripe_customer_id on profile',
       );
     }
@@ -184,13 +178,13 @@ async function handleCreditTopup(request: NextRequest) {
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: {
-      user_id: user.id,
+      user_id: userId,
       type: 'credit_topup',
       credit_amount_cents: creditAmount.toString(),
     },
     payment_intent_data: {
       metadata: {
-        user_id: user.id,
+        user_id: userId,
         type: 'credit_topup',
         credit_amount_cents: creditAmount.toString(),
       },
@@ -199,7 +193,7 @@ async function handleCreditTopup(request: NextRequest) {
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       sessionId: checkoutSession.id,
       amount: creditAmount,
     },
