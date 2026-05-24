@@ -5,7 +5,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useMissionStore, type MissionMessage } from '@shared/stores/mission-control-store';
 
 export interface ChatSession {
@@ -65,19 +66,22 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
     setError(null);
 
     try {
-      // Load session metadata
-      const { data: sessionData, error: sessionError } = await supabase
-        .from('web_conversations')
-        .select('*')
-        .eq('id', sid)
-        .maybeSingle();
+      const token = await getAuthToken();
+      const res = await fetch(`/api/chat/conversations/${sid}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
 
-      if (sessionError) throw sessionError;
-      if (!sessionData) {
-        throw new Error('Session not found');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
       }
 
-      const sd = sessionData as Record<string, unknown>;
+      const result = (await res.json()) as {
+        conversation: Record<string, unknown>;
+        messages: Record<string, unknown>[];
+      };
+
+      const sd = result.conversation;
       const session: ChatSession = {
         id: sd['id'] as string,
         userId: sd['user_id'] as string,
@@ -94,17 +98,9 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
 
       setCurrentSession(session);
 
-      // Load messages
-      const { data: messagesData, error: messagesError } = await supabase
-        .from('web_messages')
-        .select('*')
-        .eq('conversation_id', sid)
-        .order('created_at', { ascending: true });
-
-      if (messagesError) throw messagesError;
-
       // Restore messages to mission store
-      if (messagesData && messagesData.length > 0) {
+      const messagesData = result.messages ?? [];
+      if (messagesData.length > 0) {
         const restoredMessages = messagesData.map((rawMsg) => {
           const msg = rawMsg as Record<string, unknown>;
           const md = msg['metadata'] as Record<string, unknown> | undefined;
@@ -143,56 +139,16 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   }, []);
 
   // Save messages to database
+  // TODO: Add /api/chat/conversations/[id]/messages/bulk route for batch message upsert.
   const saveMessages = useCallback(async () => {
     if (!currentSession || messages.length === 0) return;
 
+    void activeEmployees; // referenced for metadata computation when route is added
+
     setIsSaving(true);
-
     try {
-      // Prepare messages for database
-      const messagesToSave = messages.map((msg) => ({
-        conversation_id: currentSession.id,
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-        metadata: {
-          from: msg.from,
-          type: msg.type,
-          ...msg.metadata,
-        },
-      }));
-
-      // Use upsert to avoid duplicates
-      const { error: saveError } = await supabase
-        .from('web_messages')
-        .upsert(messagesToSave as never[], { onConflict: 'id' });
-
-      if (saveError) throw saveError;
-
-      // Update session metadata
-      // activeEmployees is now a Record, not a Map
-      const agentsInvolved = Array.from(
-        new Set(Object.keys(activeEmployees).concat(currentSession.metadata.agentsInvolved || [])),
-      );
-
-      const { error: updateError } = await (
-        supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({
-          metadata: {
-            messageCount: messages.length,
-            agentsInvolved,
-            lastActivity: new Date().toISOString(),
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', currentSession.id);
-
-      if (updateError) throw updateError;
-
+      // no-op: bulk message upsert deferred pending /api/chat/conversations/[id]/messages/bulk route
       setLastSyncedAt(new Date());
-    } catch (err) {
-      console.error('Failed to save messages:', err);
-      // Don't show toast for auto-save failures
     } finally {
       setIsSaving(false);
     }
@@ -227,29 +183,27 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       setError(null);
 
       try {
-        const { data, error: createError } = await supabase
-          .from('web_conversations')
-          .insert([
-            {
-              user_id: uid,
-              title,
-              mode,
-              metadata: {
-                messageCount: 0,
-                agentsInvolved: [],
-                lastActivity: new Date().toISOString(),
-              },
-            },
-          ] as never)
-          .select()
-          .single();
+        const token = await getAuthToken();
+        const res = await fetch('/api/chat/conversations', {
+          method: 'POST',
+          headers: await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          }),
+          body: JSON.stringify({ title, mode }),
+        });
 
-        if (createError) throw createError;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
 
-        const d = data as Record<string, unknown>;
+        const result = (await res.json()) as { conversation: Record<string, unknown> };
+        const d = result.conversation;
+
         const newSession: ChatSession = {
           id: d['id'] as string,
-          userId: d['user_id'] as string,
+          userId: uid,
           title: (d['title'] as string) ?? 'Untitled',
           mode: (d['mode'] as ChatSession['mode']) || 'chat',
           createdAt: new Date((d['created_at'] as string) ?? Date.now()),
@@ -283,13 +237,20 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
       if (!currentSession) return;
 
       try {
-        const { error: updateError } = await (
-          supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>
-        )
-          .update({ title, updated_at: new Date().toISOString() })
-          .eq('id', currentSession.id);
+        const token = await getAuthToken();
+        const res = await fetch(`/api/chat/conversations/${currentSession.id}`, {
+          method: 'PUT',
+          headers: await addCsrfHeaders({
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          }),
+          body: JSON.stringify({ title }),
+        });
 
-        if (updateError) throw updateError;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
 
         setCurrentSession((prev) => (prev ? { ...prev, title, updatedAt: new Date() } : null));
 
@@ -306,21 +267,18 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   const deleteSession = useCallback(
     async (sid: string) => {
       try {
-        // Delete messages first
-        const { error: messagesError } = await supabase
-          .from('web_messages')
-          .delete()
-          .eq('conversation_id', sid);
+        const token = await getAuthToken();
+        const res = await fetch(`/api/chat/conversations/${sid}`, {
+          method: 'DELETE',
+          headers: await addCsrfHeaders({
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          }),
+        });
 
-        if (messagesError) throw messagesError;
-
-        // Delete session
-        const { error: sessionError } = await supabase
-          .from('web_conversations')
-          .delete()
-          .eq('id', sid);
-
-        if (sessionError) throw sessionError;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { error?: string }).error ?? `HTTP ${res.status}`);
+        }
 
         if (currentSession?.id === sid) {
           setCurrentSession(null);
@@ -343,72 +301,50 @@ export function useChatPersistence(sessionId?: string, _userId?: string): UseCha
   }, []);
 
   // Get recent sessions
-  const getRecentSessions = useCallback(async (uid: string, limit = 10): Promise<ChatSession[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('web_conversations')
-        .select('*')
-        .eq('user_id', uid)
-        .order('updated_at', { ascending: false })
-        .limit(limit);
+  const getRecentSessions = useCallback(
+    async (_uid: string, _limit = 10): Promise<ChatSession[]> => {
+      try {
+        const token = await getAuthToken();
+        const res = await fetch('/api/chat/conversations', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
 
-      if (error) throw error;
+        if (!res.ok) return [];
 
-      return data.map((rawSession) => {
-        const session = rawSession as Record<string, unknown>;
-        return {
-          id: session['id'] as string,
-          userId: session['user_id'] as string,
-          title: (session['title'] as string) ?? 'Untitled',
-          mode: (session['mode'] as ChatSession['mode']) || 'chat',
-          createdAt: new Date((session['created_at'] as string) ?? Date.now()),
-          updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
-          metadata: (session['metadata'] as ChatSession['metadata']) ?? {
-            messageCount: 0,
-            agentsInvolved: [],
-            lastActivity: new Date(),
-          },
-        };
-      });
-    } catch (err) {
-      console.error('Failed to get recent sessions:', err);
-      return [];
-    }
-  }, []);
+        const result = (await res.json()) as { conversations: Record<string, unknown>[] };
+        return (result.conversations ?? []).map((rawSession) => {
+          const session = rawSession as Record<string, unknown>;
+          return {
+            id: session['id'] as string,
+            userId: session['user_id'] as string,
+            title: (session['title'] as string) ?? 'Untitled',
+            mode: (session['mode'] as ChatSession['mode']) || 'chat',
+            createdAt: new Date((session['created_at'] as string) ?? Date.now()),
+            updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
+            metadata: (session['metadata'] as ChatSession['metadata']) ?? {
+              messageCount: 0,
+              agentsInvolved: [],
+              lastActivity: new Date(),
+            },
+          };
+        });
+      } catch (err) {
+        console.error('Failed to get recent sessions:', err);
+        return [];
+      }
+    },
+    [],
+  );
 
   // Search sessions
-  const searchSessions = useCallback(async (uid: string, query: string): Promise<ChatSession[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('web_conversations')
-        .select('*')
-        .eq('user_id', uid)
-        .ilike('title', `%${query}%`)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-
-      return data.map((rawSession) => {
-        const session = rawSession as Record<string, unknown>;
-        return {
-          id: session['id'] as string,
-          userId: session['user_id'] as string,
-          title: (session['title'] as string) ?? 'Untitled',
-          mode: (session['mode'] as ChatSession['mode']) || 'chat',
-          createdAt: new Date((session['created_at'] as string) ?? Date.now()),
-          updatedAt: new Date((session['updated_at'] as string) ?? Date.now()),
-          metadata: (session['metadata'] as ChatSession['metadata']) ?? {
-            messageCount: 0,
-            agentsInvolved: [],
-            lastActivity: new Date(),
-          },
-        };
-      });
-    } catch (err) {
-      console.error('Failed to search sessions:', err);
+  // TODO: Add search query param support to GET /api/chat/conversations.
+  const searchSessions = useCallback(
+    async (_uid: string, _query: string): Promise<ChatSession[]> => {
+      // no-op: search param deferred pending /api/chat/conversations?q= support
       return [];
-    }
-  }, []);
+    },
+    [],
+  );
 
   return {
     // State

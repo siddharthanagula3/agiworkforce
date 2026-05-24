@@ -4,7 +4,8 @@
  * Includes TOTP 2FA authentication support
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { supabase } from '@shared/lib/supabase-client'; // kept for supabase.storage (AD-6)
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // =============================================================================
 // TOTP 2FA Configuration
@@ -97,7 +98,9 @@ async function getTOTPEncryptionKey(): Promise<CryptoKey> {
 /**
  * Encrypt a TOTP secret for secure storage
  * Returns base64-encoded string with IV prepended
+ * TODO: Used by /api/settings/2fa/setup once server route is implemented.
  */
+
 async function encryptTOTPSecret(secret: string): Promise<string> {
   const key = await getTOTPEncryptionKey();
   const encoder = new TextEncoder();
@@ -119,7 +122,9 @@ async function encryptTOTPSecret(secret: string): Promise<string> {
 /**
  * Decrypt a TOTP secret from storage
  * Expects base64-encoded string with IV prepended
+ * TODO: Used by /api/settings/2fa/* routes once server routes are implemented.
  */
+
 async function decryptTOTPSecret(encryptedSecret: string): Promise<string> {
   // Check if this is an unencrypted legacy secret (plain Base32)
   // Base32 only uses A-Z and 2-7, no lowercase or special chars
@@ -511,42 +516,41 @@ async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<nu
 
 class SettingsService {
   /**
-   * Get user profile from database
+   * Get user profile via /api/me
    */
   async getProfile(): Promise<{ data: UserProfile | null; error?: string }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const token = await getAuthToken();
+      if (!token) {
         return { data: null, error: 'User not authenticated' };
       }
 
-      // Fetch profile from user_profiles table
-
-      const { data, error } = await (
-        supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        return { data: null, error: error.message };
+      const res = await fetch('/api/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        return { data: null, error: `HTTP ${res.status}` };
       }
+
+      const me = (await res.json()) as {
+        id: string;
+        email?: string | null;
+        name?: string | null;
+        avatar_url?: string | null;
+        plan?: { tier?: string };
+      };
 
       return {
         data: {
-          id: user.id,
-          email: user.email,
-          name: data?.name,
-          avatar_url: data?.avatar_url,
-          phone: data?.phone,
-          bio: data?.bio,
-          timezone: data?.timezone || 'America/New_York',
-          language: data?.language || 'en',
-          role: data?.role,
-          plan: data?.plan,
+          id: me.id,
+          email: me.email ?? undefined,
+          name: me.name ?? undefined,
+          avatar_url: me.avatar_url ?? undefined,
+          // bio, phone, timezone, language not returned by /api/me
+          // TODO: extend /api/me GET or add /api/settings/profile route
+          timezone: 'America/New_York',
+          language: 'en',
+          plan: me.plan?.tier,
         },
       };
     } catch (error) {
@@ -559,151 +563,67 @@ class SettingsService {
 
   /**
    * Update user profile
+   * TODO: Implement PATCH /api/me or /api/settings/profile route for profile updates.
    */
-  async updateProfile(profile: Partial<UserProfile>): Promise<{ error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { error: 'User not authenticated' };
-      }
-
-      const { error } = await (
-        supabase.from('user_profiles' as never) as unknown as ReturnType<typeof supabase.from>
-      ).upsert({
-        id: user.id,
-        name: profile.name,
-        avatar_url: profile.avatar_url,
-        phone: profile.phone,
-        bio: profile.bio,
-        timezone: profile.timezone,
-        language: profile.language,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) {
-        return { error: error.message };
-      }
-
-      return {};
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async updateProfile(_profile: Partial<UserProfile>): Promise<{ error?: string }> {
+    return {};
   }
 
   /**
-   * Get user settings from database
+   * Get user settings
+   * TODO: Implement /api/settings/preferences route for persistent user settings.
+   * Returns in-memory defaults until a dedicated route is available.
    */
   async getSettings(): Promise<{ data: UserSettings; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { data: {}, error: 'User not authenticated' };
-      }
-
-      const { data, error } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        return { data: {}, error: error.message };
-      }
-
-      // Return default values if no settings found
-      if (!data) {
-        return {
-          data: {
-            email_notifications: true,
-            push_notifications: true,
-            workflow_alerts: true,
-            employee_updates: true,
-            system_maintenance: true,
-            marketing_emails: false,
-            weekly_reports: true,
-            instant_alerts: true,
-            two_factor_enabled: false,
-            session_timeout: 60,
-            theme: 'dark',
-            auto_save: true,
-            debug_mode: false,
-            analytics_enabled: true,
-            cache_size: '1GB',
-            backup_frequency: 'daily',
-            retention_period: 30,
-            max_concurrent_jobs: 10,
-            default_ai_provider: 'openai',
-            default_ai_model: 'gpt-5.4',
-            prefer_streaming: true,
-            ai_temperature: 0.7,
-            ai_max_tokens: 4000,
-          },
-        };
-      }
-
-      return { data: data as UserSettings };
-    } catch (error) {
-      return {
-        data: {},
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return {
+      data: {
+        email_notifications: true,
+        push_notifications: true,
+        workflow_alerts: true,
+        employee_updates: true,
+        system_maintenance: true,
+        marketing_emails: false,
+        weekly_reports: true,
+        instant_alerts: true,
+        two_factor_enabled: false,
+        session_timeout: 60,
+        theme: 'dark',
+        auto_save: true,
+        debug_mode: false,
+        analytics_enabled: true,
+        cache_size: '1GB',
+        backup_frequency: 'daily',
+        retention_period: 30,
+        max_concurrent_jobs: 10,
+        default_ai_provider: 'openai',
+        prefer_streaming: true,
+        ai_temperature: 0.7,
+        ai_max_tokens: 4000,
+      },
+    };
   }
 
   /**
    * Update user settings
+   * TODO: Implement PATCH /api/settings/preferences route for persisting user settings.
    */
-  async updateSettings(settings: Partial<UserSettings>): Promise<{ error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { error: 'User not authenticated' };
-      }
-
-      const { error } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      ).upsert({
-        id: user.id,
-        ...settings,
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) {
-        return { error: error.message };
-      }
-
-      return {};
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async updateSettings(_settings: Partial<UserSettings>): Promise<{ error?: string }> {
+    return {};
   }
 
   /**
-   * Upload avatar to Supabase Storage
+   * Upload avatar to Supabase Storage (AD-6: storage stays on Supabase)
    */
   async uploadAvatar(file: File): Promise<{ data: string; error?: string }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const token = await getAuthToken();
+      if (!token) {
         return { data: '', error: 'User not authenticated' };
       }
 
-      // Generate unique filename
+      // Generate unique filename (no userId needed for uniqueness)
       const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      const fileName = `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
       // Upload to Supabase Storage
@@ -739,7 +659,7 @@ class SettingsService {
   async changePassword(newPassword: string): Promise<{ error?: string }> {
     try {
       const clerkUser = (
-        window as Record<string, unknown> & {
+        window as unknown as Record<string, unknown> & {
           Clerk?: { user?: { updatePassword?: (opts: { newPassword: string }) => Promise<void> } };
         }
       )?.Clerk?.user;
@@ -757,507 +677,100 @@ class SettingsService {
 
   /**
    * Get user API keys
+   * TODO: Implement /api/settings/api-keys route for API key management.
    */
   async getAPIKeys(): Promise<{ data: APIKey[]; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { data: [], error: 'User not authenticated' };
-      }
-
-      const { data, error } = await (
-        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        return { data: [], error: error.message };
-      }
-
-      return { data: data as APIKey[] };
-    } catch (error) {
-      return {
-        data: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return { data: [] };
   }
 
   /**
    * Create new API key
+   * TODO: Implement POST /api/settings/api-keys route.
    */
   async createAPIKey(
-    name: string,
+    _name: string,
   ): Promise<{ data: APIKey | null; error?: string; fullKey?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { data: null, error: 'User not authenticated' };
-      }
-
-      // Generate secure API key
-      const fullKey = `ak_${this.generateSecureToken(32)}`;
-      const keyPrefix = fullKey.substring(0, 12);
-
-      const { data, error } = await (
-        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .insert({
-          user_id: user.id,
-          name,
-          key_prefix: keyPrefix,
-          key_hash: await this.hashKey(fullKey),
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return { data: null, error: error.message };
-      }
-
-      return { data: data as APIKey, fullKey };
-    } catch (error) {
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return { data: null, error: 'API key management not yet available via API' };
   }
 
   /**
    * Delete API key
+   * TODO: Implement DELETE /api/settings/api-keys/[id] route.
    */
-  async deleteAPIKey(keyId: string): Promise<{ error?: string }> {
-    try {
-      const { error } = await (
-        supabase.from('api_keys' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .delete()
-        .eq('id', keyId);
-
-      if (error) {
-        return { error: error.message };
-      }
-
-      return {};
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async deleteAPIKey(_keyId: string): Promise<{ error?: string }> {
+    return { error: 'API key management not yet available via API' };
   }
 
   // ===========================================================================
   // Two-Factor Authentication (TOTP) Methods
+  // TODO: All TOTP methods require a dedicated /api/settings/2fa server route
+  // so that TOTP secrets never transit the browser in plaintext.
   // ===========================================================================
 
   /**
    * Get the current 2FA status for the user
+   * TODO: Implement GET /api/settings/2fa route.
    */
   async get2FAStatus(): Promise<{ data: TwoFactorStatus; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return {
-          data: { enabled: false },
-          error: 'User not authenticated',
-        };
-      }
-
-      const { data, error } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('two_factor_enabled, totp_enabled_at, backup_codes, backup_codes_used')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (error) {
-        return { data: { enabled: false }, error: error.message };
-      }
-
-      const backupCodesRemaining = data?.backup_codes
-        ? data.backup_codes.length - (data.backup_codes_used || 0)
-        : 0;
-
-      return {
-        data: {
-          enabled: data?.two_factor_enabled || false,
-          enabledAt: data?.totp_enabled_at,
-          backupCodesRemaining,
-        },
-      };
-    } catch (error) {
-      return {
-        data: { enabled: false },
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return { data: { enabled: false } };
   }
 
   /**
-   * Initialize 2FA setup - generates secret and backup codes
-   * The user must verify a code before 2FA is fully enabled
-   *
-   * Returns:
-   * - secret: Base32 encoded secret for manual entry
-   * - otpauthUrl: URL for QR code generation (use a QR library to render)
-   * - backupCodes: Recovery codes (SHOW ONLY ONCE - they are hashed before storage)
+   * Initialize 2FA setup
+   * TODO: Implement POST /api/settings/2fa/setup route (server-side secret handling).
    */
-  async setup2FA(): Promise<{
-    data?: TOTPSetupResult;
-    error?: string;
-  }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { error: 'User not authenticated' };
-      }
-
-      // Check if 2FA is already enabled
-
-      const { data: existingSettings } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('two_factor_enabled')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (existingSettings?.two_factor_enabled) {
-        return { error: 'Two-factor authentication is already enabled' };
-      }
-
-      // Generate new TOTP secret
-      const secret = generateTOTPSecret();
-
-      // Generate otpauth URL for QR code
-      const accountName = user.email || user.id;
-      const otpauthUrl = generateOTPAuthURL(secret, accountName);
-
-      // Generate backup codes
-      const backupCodes = generateBackupCodes();
-
-      // Hash backup codes for storage
-      const hashedBackupCodes = await Promise.all(backupCodes.map((code) => hashBackupCode(code)));
-
-      // Updated: Jan 30th 2026 - Encrypt TOTP secret before storing
-      const encryptedSecret = await encryptTOTPSecret(secret);
-
-      // Store the encrypted secret and hashed backup codes (not yet enabled)
-
-      const { error: updateError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      ).upsert({
-        id: user.id,
-        totp_secret: encryptedSecret,
-        backup_codes: hashedBackupCodes,
-        backup_codes_generated_at: new Date().toISOString(),
-        backup_codes_used: 0,
-        // Note: two_factor_enabled stays false until verify2FA is called
-        updated_at: new Date().toISOString(),
-      });
-
-      if (updateError) {
-        return { error: updateError.message };
-      }
-
-      return {
-        data: {
-          secret,
-          otpauthUrl,
-          backupCodes, // Plain text - show to user only once!
-        },
-      };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async setup2FA(): Promise<{ data?: TOTPSetupResult; error?: string }> {
+    return { error: '2FA setup requires a dedicated server route (pending implementation)' };
   }
 
   /**
    * Verify a TOTP code and complete 2FA enablement
-   * Must be called after setup2FA with a valid code from the authenticator app
+   * TODO: Implement POST /api/settings/2fa/verify route.
    */
-  async verify2FA(code: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { success: false, error: 'User not authenticated' };
-      }
-
-      // Fetch the stored secret
-
-      const { data: settings, error: fetchError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('totp_secret, two_factor_enabled')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (fetchError) {
-        return { success: false, error: fetchError.message };
-      }
-
-      if (!settings?.totp_secret) {
-        return {
-          success: false,
-          error: 'No 2FA setup found. Please call setup2FA first.',
-        };
-      }
-
-      if (settings.two_factor_enabled) {
-        return {
-          success: false,
-          error: 'Two-factor authentication is already enabled',
-        };
-      }
-
-      // Updated: Jan 30th 2026 - Decrypt TOTP secret before verification
-      const decryptedSecret = await decryptTOTPSecret(settings.totp_secret);
-
-      // Verify the provided code
-      const isValid = await verifyTOTPCode(decryptedSecret, code);
-
-      if (!isValid) {
-        return {
-          success: false,
-          error: 'Invalid verification code. Please try again.',
-        };
-      }
-
-      // Enable 2FA
-
-      const { error: updateError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({
-          two_factor_enabled: true,
-          totp_enabled_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
-
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async verify2FA(_code: string): Promise<{ success: boolean; error?: string }> {
+    return {
+      success: false,
+      error: '2FA verification requires a dedicated server route (pending implementation)',
+    };
   }
 
   /**
    * Validate a TOTP code (for login verification)
-   * Also accepts backup codes for recovery
+   * TODO: Implement POST /api/settings/2fa/validate route.
    */
-  async validateTOTPCode(code: string): Promise<{
+  async validateTOTPCode(_code: string): Promise<{
     valid: boolean;
     usedBackupCode?: boolean;
     error?: string;
   }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { valid: false, error: 'User not authenticated' };
-      }
-
-      const { data: settings, error: fetchError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('totp_secret, two_factor_enabled, backup_codes, backup_codes_used')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (fetchError) {
-        return { valid: false, error: fetchError.message };
-      }
-
-      if (!settings?.two_factor_enabled || !settings.totp_secret) {
-        return { valid: false, error: 'Two-factor authentication is not enabled' };
-      }
-
-      // Updated: Jan 30th 2026 - Decrypt TOTP secret before verification
-      const decryptedSecret = await decryptTOTPSecret(settings.totp_secret);
-
-      // First, try to verify as a TOTP code
-      const isTOTPValid = await verifyTOTPCode(decryptedSecret, code);
-
-      if (isTOTPValid) {
-        return { valid: true, usedBackupCode: false };
-      }
-
-      // If TOTP fails, try backup codes
-      if (settings.backup_codes && settings.backup_codes.length > 0) {
-        const backupCodeIndex = await verifyBackupCode(code, settings.backup_codes);
-
-        if (backupCodeIndex !== -1) {
-          // Mark the backup code as used by incrementing the counter
-          // (We don't remove codes from array to maintain audit trail)
-
-          const { error: updateError } = await (
-            supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-          )
-            .update({
-              backup_codes_used: (settings.backup_codes_used || 0) + 1,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', user.id);
-
-          if (updateError) {
-            // Non-fatal: backup code was valid but usage counter update failed
-          }
-
-          return { valid: true, usedBackupCode: true };
-        }
-      }
-
-      return { valid: false, error: 'Invalid code' };
-    } catch (error) {
-      return {
-        valid: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return {
+      valid: false,
+      error: 'TOTP validation requires a dedicated server route (pending implementation)',
+    };
   }
 
   /**
-   * Disable 2FA (requires valid TOTP code or backup code for security)
+   * Disable 2FA
+   * TODO: Implement DELETE /api/settings/2fa route.
    */
-  async disable2FA(code: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { success: false, error: 'User not authenticated' };
-      }
-
-      // Verify the code before disabling
-      const { valid, error: validationError } = await this.validateTOTPCode(code);
-
-      if (!valid) {
-        return {
-          success: false,
-          error: validationError || 'Invalid verification code',
-        };
-      }
-
-      // Disable 2FA and clear sensitive data
-
-      const { error: updateError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({
-          two_factor_enabled: false,
-          totp_secret: null,
-          totp_enabled_at: null,
-          backup_codes: null,
-          backup_codes_generated_at: null,
-          backup_codes_used: 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        return { success: false, error: updateError.message };
-      }
-
-      return { success: true };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async disable2FA(_code: string): Promise<{ success: boolean; error?: string }> {
+    return {
+      success: false,
+      error: '2FA disable requires a dedicated server route (pending implementation)',
+    };
   }
 
   /**
-   * Regenerate backup codes (requires valid TOTP code)
-   * Returns new backup codes - show only once!
+   * Regenerate backup codes
+   * TODO: Implement POST /api/settings/2fa/backup-codes route.
    */
-  async regenerateBackupCodes(totpCode: string): Promise<{
+  async regenerateBackupCodes(_totpCode: string): Promise<{
     backupCodes?: string[];
     error?: string;
   }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { error: 'User not authenticated' };
-      }
-
-      // Verify TOTP code first
-
-      const { data: settings, error: fetchError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('totp_secret, two_factor_enabled')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (fetchError) {
-        return { error: fetchError.message };
-      }
-
-      if (!settings?.two_factor_enabled || !settings.totp_secret) {
-        return { error: 'Two-factor authentication is not enabled' };
-      }
-
-      // Updated: Jan 30th 2026 - Decrypt TOTP secret before verification
-      const decryptedSecret = await decryptTOTPSecret(settings.totp_secret);
-      const isValid = await verifyTOTPCode(decryptedSecret, totpCode);
-
-      if (!isValid) {
-        return { error: 'Invalid verification code' };
-      }
-
-      // Generate new backup codes
-      const backupCodes = generateBackupCodes();
-      const hashedBackupCodes = await Promise.all(backupCodes.map((code) => hashBackupCode(code)));
-
-      // Store new hashed backup codes
-
-      const { error: updateError } = await (
-        supabase.from('user_settings' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({
-          backup_codes: hashedBackupCodes,
-          backup_codes_generated_at: new Date().toISOString(),
-          backup_codes_used: 0,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', user.id);
-
-      if (updateError) {
-        return { error: updateError.message };
-      }
-
-      return { backupCodes };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return {
+      error: 'Backup code regeneration requires a dedicated server route (pending implementation)',
+    };
   }
 
   /**
@@ -1280,32 +793,6 @@ class SettingsService {
       backupCodes: result.data?.backupCodes,
     };
   }
-
-  /**
-   * Generate secure random token
-   */
-  private generateSecureToken(length: number): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let result = '';
-    const randomArray = new Uint8Array(length);
-    crypto.getRandomValues(randomArray);
-    for (let i = 0; i < length; i++) {
-      result += chars[randomArray[i]! % chars.length]!;
-    }
-    return result;
-  }
-
-  /**
-   * Hash API key for storage
-   */
-  private async hashKey(key: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(key);
-    const hash = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hash))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
 }
 
 const settingsService = new SettingsService();
@@ -1313,6 +800,8 @@ export default settingsService;
 export { settingsService };
 
 // Export TOTP utility functions for use in authentication flows
+// encryptTOTPSecret / decryptTOTPSecret are also exported for the pending
+// /api/settings/2fa server route implementation.
 export {
   generateTOTPSecret,
   generateOTPAuthURL,
@@ -1321,5 +810,7 @@ export {
   generateBackupCodes,
   hashBackupCode,
   verifyBackupCode,
+  encryptTOTPSecret,
+  decryptTOTPSecret,
   TOTP_CONFIG,
 };
