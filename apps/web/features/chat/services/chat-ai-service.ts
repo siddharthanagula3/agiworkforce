@@ -4,7 +4,7 @@ import { logger } from '@shared/lib/logger';
  * Bridges the chat UI to the /api/llm/v1/chat/completions backend with SSE streaming.
  */
 
-import { createClient } from '@/utils/supabase/client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { SkillCategories } from '@core/ai/orchestration/intelligent-agent-router';
@@ -33,17 +33,14 @@ function getCategoryForSkill(skillId: string): string {
 }
 
 /**
- * Get the Supabase auth token for API calls
+ * Get the auth token for API calls, throwing if not authenticated.
  */
-async function getAuthToken(): Promise<string> {
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+async function requireAuthToken(): Promise<string> {
+  const token = await getAuthToken();
+  if (!token) {
     throw new Error('Not authenticated. Please sign in to continue.');
   }
-  return session.access_token;
+  return token;
 }
 
 /**
@@ -157,7 +154,7 @@ export class ChatAIService {
     const { signal } = activeAbortController;
 
     try {
-      const token = await getAuthToken();
+      const token = await requireAuthToken();
       const modelId = useModelStore.getState().selectedModelId;
 
       // Build messages array: conversation history + current user message
