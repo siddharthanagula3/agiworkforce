@@ -36,6 +36,7 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
+import { useChatStore as useFeatureChatStore } from '../stores/chat-store';
 import type { ChatMessage } from '../stores/chat-store';
 import { cn } from '@shared/lib/utils';
 import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
@@ -168,6 +169,23 @@ export default function WebChatPage() {
   }, [router, selectedModel]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
+
+  // Consume any pending message written by the project-detail composer before
+  // navigating here. Reading once on mount prevents the value from surviving
+  // page refreshes.
+  useEffect(() => {
+    try {
+      const pending = sessionStorage.getItem('agi.project.pendingMessage');
+      if (pending) {
+        sessionStorage.removeItem('agi.project.pendingMessage');
+        sessionStorage.removeItem('agi.project.pendingProjectId');
+        setComposerPrefill(pending);
+      }
+    } catch {
+      // sessionStorage unavailable -- ignore
+    }
+  }, []);
+
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
@@ -521,6 +539,14 @@ export default function WebChatPage() {
     [updateConversation],
   );
 
+  const moveToProject = useFeatureChatStore((s) => s.moveToProject);
+  const handleMoveToProjectSession = useCallback(
+    (sessionId: string, projectId: string) => {
+      moveToProject(sessionId, projectId);
+    },
+    [moveToProject],
+  );
+
   // Auto-title: when the second message arrives (first assistant reply), derive title
   // from the first user message content if the conversation is still named "New Chat".
   // Intentionally only re-runs on messages.length, not the full messages array, to
@@ -598,6 +624,7 @@ export default function WebChatPage() {
         onRenameSession={handleRenameSession}
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         collapsed={sidebarCollapsed}
+        onMoveToProjectSession={handleMoveToProjectSession}
       />
 
       {/* Main area + artifact workbench */}
