@@ -14,53 +14,44 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/utils/env', () => ({
-  requireEnv: (key: string) => {
-    const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-    };
-    return map[key] ?? '';
-  },
+
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+// AuditService.getOrganizationLogs accepts a DatabaseAdapter and calls
+// db.query(sql, params) twice: once for membership check, once for audit logs.
+// We control per-test behavior by setting mockMembershipRows / mockLogsRows.
+
+let mockMembershipRows: unknown[] = [];
+let mockLogsRows: unknown[] = [];
+let mockMembershipThrows: unknown = null;
+
+const mockQuery = vi.fn();
+
+// Mock client passed explicitly to getOrganizationLogs.
+const mockClient = {
+  query: mockQuery,
+} as unknown as import('@agiworkforce/data-layer').DatabaseAdapter;
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
-
-// ─── Supabase mock ────────────────────────────────────────────────────────────
-let mockMembershipResult: { data: unknown; error: unknown } = { data: null, error: null };
-let mockLogsResult: { data: unknown; error: unknown } = { data: [], error: null };
-
-const mockFrom = vi.fn();
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({ from: mockFrom })),
-}));
-
-// Mock client passed explicitly to getOrganizationLogs (mirrors getUserClient output).
-
-const mockClient = { from: mockFrom } as any;
 
 function setupMocks() {
-  // org_members query chain: from → select → eq → eq → maybeSingle
-  const memberChain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue(mockMembershipResult),
-  };
-
-  // audit_logs query chain: from → select → eq → order → limit
-  const logsChain = {
-    select: vi.fn().mockReturnThis(),
-    eq: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue(mockLogsResult),
-  };
-
-  mockFrom.mockImplementation((table: string) => {
-    if (table === 'organization_members') return memberChain;
-    if (table === 'audit_logs') return logsChain;
-    return { select: vi.fn().mockReturnThis() };
+  mockQuery.mockImplementation((sql: string) => {
+    if (sql.includes('organization_members')) {
+      if (mockMembershipThrows) return Promise.reject(mockMembershipThrows);
+      return Promise.resolve(mockMembershipRows);
+    }
+    if (sql.includes('audit_logs')) {
+      return Promise.resolve(mockLogsRows);
+    }
+    return Promise.resolve([]);
   });
-
-  return { memberChain, logsChain };
 }
 
 import { AuditService } from '@/lib/services/audit-service';
@@ -68,17 +59,18 @@ import { AuditService } from '@/lib/services/audit-service';
 describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockMembershipResult = { data: null, error: null };
-    mockLogsResult = { data: [], error: null };
+    mockMembershipRows = [];
+    mockLogsRows = [];
+    mockMembershipThrows = null;
   });
 
   it('throws 403 error when caller is not a member of the org', async () => {
-    mockMembershipResult = { data: null, error: null }; // No membership
+    mockMembershipRows = []; // No membership row returned
     setupMocks();
 
     await expect(
       AuditService.getOrganizationLogs(mockClient, 'org-1', 'attacker-user-id'),
-    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') }); // AUDIT-FIX: vitest 4.x regex arg broken
+    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') });
 
     const err = await AuditService.getOrganizationLogs(
       mockClient,
@@ -90,35 +82,32 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   });
 
   it('throws when caller_id is for a different org than requested', async () => {
-    // Caller is member of org-2 but requests org-1 logs — membership check fails
-    mockMembershipResult = { data: null, error: null };
+    // Caller is member of org-2 but requests org-1 logs — membership check returns no row
+    mockMembershipRows = [];
     setupMocks();
 
     await expect(
       AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-who-is-in-org-2'),
-    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') }); // AUDIT-FIX: vitest 4.x regex arg broken
+    ).rejects.toMatchObject({ message: expect.stringContaining('Forbidden') });
   });
 
   it('returns logs when caller IS a member of the org', async () => {
-    mockMembershipResult = { data: { user_id: 'user-1' }, error: null };
-    mockLogsResult = {
-      data: [
-        {
-          id: 'log-1',
-          action: 'create',
-          resource: 'chat',
-          resource_id: 'chat-1',
-          metadata: {},
-          user_id: 'user-1',
-          organization_id: 'org-1',
-          ip_address: '1.2.3.4',
-          user_agent: 'Mozilla/5.0',
-          created_at: '2026-01-01T00:00:00Z',
-          actor: { email: 'user@example.com' },
-        },
-      ],
-      error: null,
-    };
+    mockMembershipRows = [{ user_id: 'user-1' }];
+    mockLogsRows = [
+      {
+        id: 'log-1',
+        action: 'create',
+        resource: 'chat',
+        resource_id: 'chat-1',
+        metadata: {},
+        user_id: 'user-1',
+        organization_id: 'org-1',
+        ip_address: '1.2.3.4',
+        user_agent: 'Mozilla/5.0',
+        created_at: '2026-01-01T00:00:00Z',
+        actor_email: 'user@example.com',
+      },
+    ];
     setupMocks();
 
     const logs = await AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1');
@@ -129,7 +118,7 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
 
   it('does not return any logs for unauthorized callers (no side channel)', async () => {
     // Even if the DB had logs, an unauthorized caller sees nothing
-    mockMembershipResult = { data: null, error: null };
+    mockMembershipRows = [];
     setupMocks();
 
     let caughtError: Error | null = null;
@@ -145,21 +134,26 @@ describe('RT-09: AuditService.getOrganizationLogs IDOR fix', () => {
   });
 
   it('throws on DB membership error (does not swallow errors)', async () => {
-    mockMembershipResult = { data: null, error: new Error('DB connection failed') };
+    mockMembershipThrows = new Error('DB connection failed');
     setupMocks();
 
     await expect(AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1')).rejects.toThrow();
   });
 
   it('membership check uses both org_id and user_id as filters', async () => {
-    mockMembershipResult = { data: { user_id: 'user-1' }, error: null };
-    mockLogsResult = { data: [], error: null };
-    const { memberChain } = setupMocks();
+    mockMembershipRows = [{ user_id: 'user-1' }];
+    mockLogsRows = [];
+    setupMocks();
 
     await AuditService.getOrganizationLogs(mockClient, 'org-1', 'user-1');
 
-    // Verify eq was called with org constraint AND user constraint
-    expect(memberChain.eq).toHaveBeenCalledWith('organization_id', 'org-1');
-    expect(memberChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    // Verify db.query was called with both org and user params
+    const membershipCall = mockQuery.mock.calls.find(
+      (args: unknown[]) => typeof args[0] === 'string' && args[0].includes('organization_members'),
+    ) as [string, unknown[]] | undefined;
+    expect(membershipCall).toBeDefined();
+    const params = membershipCall![1];
+    expect(params).toContain('org-1');
+    expect(params).toContain('user-1');
   });
 });
