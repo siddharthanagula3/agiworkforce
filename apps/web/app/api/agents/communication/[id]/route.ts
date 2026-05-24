@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 /**
  * Agent Delegation Response API
@@ -33,7 +33,8 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
 
   // RLS-bound client: agent_delegations.user_id RLS policy enforces tenant
   // isolation; the .eq('user_id', ...) filter remains as defense-in-depth.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   const { id } = await context.params;
 
   let body: unknown;
@@ -60,7 +61,7 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
       updated_at: new Date().toISOString(),
     })
     .eq('id', id)
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .select()
     .single();
 
@@ -72,12 +73,12 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
     if (error.code === 'PGRST116') {
       throw createError.notFound('Delegation not found');
     }
-    logger.error({ error, userId: user.id, delegationId: id }, 'Failed to respond to delegation');
+    logger.error({ error, userId, delegationId: id }, 'Failed to respond to delegation');
     throw createError.internal('Failed to respond to delegation');
   }
 
   logger.info(
-    { userId: user.id, delegationId: id, status: newStatus },
+    { userId, delegationId: id, status: newStatus },
     'Agent delegation response recorded',
   );
 

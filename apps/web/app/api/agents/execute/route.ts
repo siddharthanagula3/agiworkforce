@@ -10,7 +10,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getTaskModelForProvider } from '@agiworkforce/types';
@@ -106,9 +106,9 @@ async function handler(request: NextRequest) {
   let userId: string;
   let userClient;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    userId = auth.user.id;
-    userClient = auth.userDb;
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
+    userClient = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   } catch {
     throw createError.unauthorized('Authentication required');
   }

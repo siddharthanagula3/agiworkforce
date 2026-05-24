@@ -12,7 +12,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_TAGS = [
   'coding',
@@ -30,7 +30,8 @@ async function handleGetConversationsByTag(request: NextRequest) {
   if (rateLimitResponse) return rateLimitResponse;
 
   // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const supabase = await (await import('@/services/supabase-server')).createSupabaseServerClient();
 
   // Parse and validate the tag query parameter
   const { searchParams } = new URL(request.url);
@@ -47,13 +48,13 @@ async function handleGetConversationsByTag(request: NextRequest) {
   const { data, error } = await supabase
     .from('conversation_tags')
     .select('conversation_id')
-    .eq('user_id', user.id)
+    .eq('user_id', userId)
     .eq('tag', tag)
     .order('classified_at', { ascending: false })
     .limit(200);
 
   if (error) {
-    logger.error({ error, userId: user.id, tag }, 'Failed to fetch conversations by tag');
+    logger.error({ error, userId, tag }, 'Failed to fetch conversations by tag');
     throw createError.internal('Failed to fetch conversations');
   }
 
