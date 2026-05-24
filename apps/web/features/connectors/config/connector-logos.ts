@@ -202,3 +202,88 @@ export function getConnectorLogo(connectorId: string) {
 export function hasOfficialLogo(connectorId: string): boolean {
   return !!CONNECTOR_LOGOS[connectorId];
 }
+
+// ─── Tool Inventory ────────────────────────────────────────────────────────────
+
+/**
+ * Representative tools exposed by each connector.
+ * Used for per-tool permission controls in the UI.
+ * Names are user-facing labels, not internal API identifiers.
+ */
+export const CONNECTOR_TOOLS: Record<string, string[]> = {
+  // Productivity
+  gmail: ['Read emails', 'Send email', 'Search inbox', 'Manage labels', 'Create draft'],
+  'google-drive': ['List files', 'Read file', 'Upload file', 'Create folder', 'Share file'],
+  notion: ['Read pages', 'Create page', 'Update page', 'Search', 'Delete page'],
+  slack: ['Read messages', 'Send message', 'List channels', 'Upload file', 'Manage reactions'],
+  'google-sheets': [
+    'Read cells',
+    'Write cells',
+    'Create spreadsheet',
+    'Run formula',
+    'List sheets',
+  ],
+  outlook: ['Read emails', 'Send email', 'Search inbox', 'Manage calendar', 'Create event'],
+  onedrive: ['List files', 'Read file', 'Upload file', 'Create folder', 'Delete file'],
+
+  // Developer
+  github: ['Read repos', 'Create PR', 'Read issues', 'Create issue', 'Push code'],
+  linear: ['List issues', 'Create issue', 'Update issue', 'Manage cycles', 'List projects'],
+  jira: ['List issues', 'Create issue', 'Update issue', 'Manage sprints', 'List projects'],
+
+  // Collaboration
+  teams: ['Read messages', 'Send message', 'List channels', 'Manage meetings', 'Search'],
+  confluence: ['Read pages', 'Create page', 'Update page', 'Search spaces', 'Delete page'],
+  asana: ['List tasks', 'Create task', 'Update task', 'Manage projects', 'List teams'],
+  zoom: ['Schedule meeting', 'List meetings', 'Get recordings', 'Update meeting', 'Delete meeting'],
+
+  // CRM
+  hubspot: ['Read contacts', 'Create contact', 'Update contact', 'Manage deals', 'Log note'],
+  salesforce: ['Read objects', 'Create record', 'Update record', 'Run query', 'Manage leads'],
+  calendly: ['List event types', 'Get bookings', 'Create invite', 'Cancel booking'],
+  intercom: ['Read conversations', 'Send message', 'Manage tickets', 'Search customers'],
+
+  // Marketing
+  'google-analytics': ['Run report', 'Get audience', 'Get conversions', 'Get traffic sources'],
+  mailchimp: ['List audiences', 'Create campaign', 'Send campaign', 'Manage templates'],
+
+  // Finance
+  stripe: ['List payments', 'Create payment', 'Manage subscriptions', 'Get customers', 'Refund'],
+  shopify: [
+    'List products',
+    'Create product',
+    'Manage orders',
+    'Get customers',
+    'Update inventory',
+  ],
+
+  // Social
+  linkedin: ['Post content', 'Read profile', 'Search network', 'Get analytics'],
+  twitter: ['Post tweet', 'Read timeline', 'Search content', 'Manage account'],
+  discord: ['Send message', 'Read messages', 'Manage channels', 'Manage roles', 'List servers'],
+
+  // AI
+  openai: ['Run completion', 'Manage assistants', 'Create embedding', 'List models'],
+  elevenlabs: ['Generate speech', 'Clone voice', 'List voices', 'Create audio'],
+
+  // Exclusive
+  'local-filesystem': ['Read file', 'Write file', 'List directory', 'Delete file', 'Move file'],
+  terminal: ['Run command', 'Run script', 'Manage processes', 'Stream output', 'Set env'],
+  'browser-automation': [
+    'Navigate URL',
+    'Click element',
+    'Fill form',
+    'Scrape page',
+    'Take screenshot',
+  ],
+  'screen-vision': ['Take screenshot', 'OCR text', 'Find element', 'Click on screen'],
+  ollama: ['Run inference', 'List models', 'Pull model', 'Delete model'],
+};
+
+/**
+ * Get the list of tools for a connector.
+ * Returns an empty array if no tools are defined.
+ */
+export function getConnectorTools(connectorId: string): string[] {
+  return CONNECTOR_TOOLS[connectorId] ?? [];
+}
