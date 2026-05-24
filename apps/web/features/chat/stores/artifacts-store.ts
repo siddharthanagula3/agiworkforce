@@ -363,9 +363,9 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
         const shareId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
+          const userId = (
+            window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } }
+          )?.Clerk?.user?.id;
 
           const { error } = await (
             supabase as unknown as import('@supabase/supabase-js').SupabaseClient
@@ -373,7 +373,7 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
             .from('shared_artifacts')
             .insert({
               id: shareId,
-              user_id: user?.id,
+              user_id: userId,
               artifact_id: artifactId,
               artifact_data: artifact,
               created_at: new Date().toISOString(),

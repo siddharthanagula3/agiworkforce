@@ -951,8 +951,10 @@ export function useUserActivity(
   return useQuery<UserActivity[], Error>({
     queryKey: ['settings', 'activity', userId ?? 'current', limit],
     queryFn: async (): Promise<UserActivity[]> => {
-      const { data: authUser } = await supabase.auth.getUser();
-      const targetUserId = userId || authUser.user?.id;
+      const clerkUserId = (
+        window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } }
+      )?.Clerk?.user?.id;
+      const targetUserId = userId || clerkUserId;
 
       if (!targetUserId) return [];
 
