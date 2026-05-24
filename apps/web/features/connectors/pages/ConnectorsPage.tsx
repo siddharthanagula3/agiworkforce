@@ -13,6 +13,7 @@ import {
   Loader2,
   Link2,
   BookOpen,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -27,6 +28,7 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
+import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
 import { getCsrfToken } from '@/lib/client/csrf';
 import Image from 'next/image';
 
@@ -682,6 +684,7 @@ interface ConnectorCardProps {
   connectedAt?: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  onOpenPermissions: () => void;
 }
 
 function formatRelativeTime(isoString: string | null | undefined): string {
@@ -704,6 +707,7 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
   connectedAt,
   onConnect,
   onDisconnect,
+  onOpenPermissions,
 }) => {
   const isComingSoon = connector.phase > 1;
   // OAuth connectors do not yet have a real auth flow. Showing "Connected" for
@@ -796,6 +800,15 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                onClick={onOpenPermissions}
+                aria-label="Tool permissions"
+              >
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
                 aria-label="Open in new tab"
               >
                 <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -825,31 +838,42 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
             Coming Soon
           </Button>
         ) : (
-          <Button
-            size="sm"
-            className={cn(
-              'h-7 w-full text-xs',
-              connector.exclusive
-                ? 'bg-amber-500 text-black hover:bg-amber-400'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90',
-            )}
-            onClick={onConnect}
-            disabled={mutating}
-          >
-            {mutating ? (
-              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-            ) : connector.exclusive ? (
-              <>
-                <Zap className="mr-1.5 h-3 w-3" />
-                Enable
-              </>
-            ) : (
-              <>
-                <Plus className="mr-1.5 h-3 w-3" />
-                Connect
-              </>
-            )}
-          </Button>
+          <div className="flex w-full items-center gap-1">
+            <Button
+              size="sm"
+              className={cn(
+                'h-7 flex-1 text-xs',
+                connector.exclusive
+                  ? 'bg-amber-500 text-black hover:bg-amber-400'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
+              )}
+              onClick={onConnect}
+              disabled={mutating}
+            >
+              {mutating ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : connector.exclusive ? (
+                <>
+                  <Zap className="mr-1.5 h-3 w-3" />
+                  Enable
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-1.5 h-3 w-3" />
+                  Connect
+                </>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 shrink-0 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onOpenPermissions}
+              aria-label="Tool permissions"
+            >
+              <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -870,6 +894,7 @@ export function ConnectorsPage() {
   const [loading, setLoading] = useState(true);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [permissionsConnector, setPermissionsConnector] = useState<Connector | null>(null);
 
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
@@ -1123,6 +1148,7 @@ export function ConnectorsPage() {
                     connectedAt={connectedAtMap[connector.id]}
                     onConnect={() => void handleConnect(connector.id)}
                     onDisconnect={() => void handleDisconnect(connector.id)}
+                    onOpenPermissions={() => setPermissionsConnector(connector)}
                   />
                 ))}
               </div>
@@ -1152,6 +1178,7 @@ export function ConnectorsPage() {
                     mutating={mutatingIds.has(connector.id)}
                     onConnect={() => void handleConnect(connector.id)}
                     onDisconnect={() => void handleDisconnect(connector.id)}
+                    onOpenPermissions={() => setPermissionsConnector(connector)}
                   />
                 ))}
               </div>
@@ -1235,6 +1262,14 @@ export function ConnectorsPage() {
       </div>
 
       <AddCustomConnectorDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+
+      <ToolPermissionsPanel
+        connector={permissionsConnector}
+        open={permissionsConnector !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermissionsConnector(null);
+        }}
+      />
     </ErrorBoundary>
   );
 }
