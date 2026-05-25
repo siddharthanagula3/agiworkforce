@@ -111,71 +111,21 @@ async function warmUpDatabase(): Promise<boolean> {
 }
 
 // ============================================================================
-// Web API Fallback for Subscription
+// Web API Fallback for Subscription — REMOVED
+//
+// P1 fix (audit 2026-05-25): fetchSubscriptionFromWebAPI sent the desktop's
+// Supabase JWT as a Bearer token to /api/me on the web surface. The web API
+// gate (getClerkAuthUser in apps/web/lib/api-auth.ts) validates tokens
+// exclusively via Clerk's verifyToken(). A Supabase JWT has a different
+// issuer/audience/signing key and will always fail Clerk verification,
+// returning 401 on every request.
+//
+// The correct fix requires a cross-surface device-link bridge so the desktop
+// can obtain a Clerk-signed token. That work is tracked separately and must be
+// escalated to the supervisor. Until the bridge is in place the web-API
+// fallback path is removed entirely; the primary subscription fetch (direct
+// Supabase query, lines below) remains unchanged and continues to work.
 // ============================================================================
-
-/**
- * Fetch subscription data from the web API as a fallback when direct Supabase queries fail.
- * The /api/me endpoint accepts Bearer token auth and returns subscription + credits.
- */
-async function fetchSubscriptionFromWebAPI(accessToken: string): Promise<Subscription | null> {
-  const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-    const response = await fetch(`${WEB_APP_URL}/api/me`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      console.warn(`[Auth] Web API fallback failed: HTTP ${response.status}`);
-      return null;
-    }
-
-    const data = await response.json();
-
-    // Transform /api/me response to Subscription format
-    if (!data.plan) {
-      return null;
-    }
-
-    const subscription: Subscription = {
-      id: '', // Not available from /api/me
-      user_id: data.id,
-      stripe_customer_id: null,
-      stripe_subscription_id: null,
-      stripe_price_id: null,
-      plan_tier: data.plan.tier || 'free',
-      status: data.plan.status || 'active',
-      current_period_start: null,
-      current_period_end: data.plan.current_period_end
-        ? new Date(data.plan.current_period_end * 1000).toISOString()
-        : null,
-      cancel_at_period_end: false,
-      canceled_at: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    return subscription;
-  } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') {
-      console.warn(`[Auth] Web API fallback timed out after ${timeoutMs / 1000}s`);
-    } else {
-      console.warn('[Auth] Web API fallback failed:', err);
-    }
-    return null;
-  }
-}
 
 // Deep link protocol for Tauri desktop app auth redirects
 const TAURI_DEEP_LINK_PROTOCOL = 'agiworkforce://';
@@ -745,14 +695,11 @@ class SupabaseAuthService {
 
   private async doFetchSubscription(
     userId: string,
-    session?: Session | null,
+    _session?: Session | null,
     _retryCount = 0,
   ): Promise<Subscription | null> {
     const supabase = getSupabase();
     const timeoutMs = 30000; // Increased to 30s - Supabase responds but network can be slow
-
-    // Get access token for web API fallback
-    const accessToken = session?.access_token || this.currentState.session?.access_token;
 
     // =========================================================================
     // STEP 1: Try direct Supabase query (fastest when DB is warm)
@@ -782,7 +729,7 @@ class SupabaseAuthService {
         return data;
       }
 
-      // "No rows" is expected for free users - but we should still try web API to confirm
+      // "No rows" is expected for free users (genuinely no subscription row).
       const errorWithCode = error as { code?: string; message?: string } | null;
       if (!(error?.message?.includes('no rows') || errorWithCode?.code === 'PGRST116') && error) {
         console.warn('[Auth] Supabase query failed:', error.message);
@@ -792,26 +739,16 @@ class SupabaseAuthService {
     }
 
     // =========================================================================
-    // STEP 2: Try Web API fallback (works when Supabase is slow/down)
+    // STEP 2: Direct Supabase query failed or returned no rows.
+    //
+    // NOTE: The web-API fallback (/api/me) that previously lived here was
+    // removed in the P1 fix (audit 2026-05-25) because it sent a Supabase
+    // JWT to a Clerk-only endpoint and always returned 401. See the comment
+    // block above doFetchSubscription for the full explanation. A proper
+    // cross-surface device-link bridge must be built before a web-API
+    // fallback can be restored.
     // =========================================================================
-    if (accessToken) {
-      try {
-        const webApiResult = await fetchSubscriptionFromWebAPI(accessToken);
-
-        if (webApiResult) {
-          return webApiResult;
-        }
-      } catch (err) {
-        console.warn('[Auth] Web API fallback failed:', err);
-      }
-    } else {
-      console.warn('[Auth] No access token available for web API fallback');
-    }
-
-    // =========================================================================
-    // STEP 3: Both failed - return null (caller handles cache/loading state)
-    // =========================================================================
-    console.warn('[Auth] All subscription fetch methods failed');
+    console.warn('[Auth] Subscription fetch from Supabase returned no data');
     return null;
   }
 
