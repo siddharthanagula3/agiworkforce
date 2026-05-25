@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import QRCode from 'qrcode';
-import { getEnv, requireEnv } from '@/utils/env';
+import { getEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -134,8 +134,6 @@ async function handleDeviceLink(request: NextRequest) {
     }
 
     void authUser; // authenticated; user identity not stored at link time
-
-    requireEnv('NEXT_PUBLIC_SUPABASE_URL'); // keep env validation call for compat
 
     const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 

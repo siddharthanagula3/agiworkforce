@@ -40,7 +40,6 @@ const nextConfig: NextConfig = {
   // See: apps/web/instrumentation.ts
   experimental: {
     optimizePackageImports: [
-      '@supabase/ssr',
       'lucide-react',
       'date-fns',
       'framer-motion',

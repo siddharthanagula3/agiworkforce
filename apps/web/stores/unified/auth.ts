@@ -1,21 +1,25 @@
 'use client';
 
 /**
- * Real Supabase auth store for the web app.
+ * Auth store for the web app (Clerk-backed).
  *
- * Replaces the previous compilation stub. Provides:
- *  - useAuth()        — Supabase user + subscription + credits + auth helpers
+ * Provides:
+ *  - useAuth()        — user + subscription + credits + auth helpers
  *  - useBillingStore  — Subscription plan + credit balance used by chat components
  *
  * Components import `useBillingStore` from this file for subscription/credit data.
- * The store hydrates by calling /api/me once on mount then listens to
- * Supabase onAuthStateChange to stay in sync.
+ * The store hydrates by calling /api/me once on mount.
  */
 
 import React from 'react';
 import { create } from 'zustand';
-import { supabase } from '@/lib/supabase';
-import type { User } from '@supabase/supabase-js';
+
+// Minimal user shape retained for backward compatibility with components reading user.email/id.
+export interface User {
+  id: string;
+  email?: string;
+  [key: string]: unknown;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -189,7 +193,16 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
   },
 
   signOut: async () => {
-    await supabase.auth.signOut();
+    // Sign out via Clerk
+    try {
+      const windowWithClerk = window as unknown as Record<string, unknown>;
+      if (typeof window !== 'undefined' && windowWithClerk['Clerk']) {
+        const clerkInstance = windowWithClerk['Clerk'] as { signOut?: () => Promise<void> };
+        await clerkInstance.signOut?.();
+      }
+    } catch {
+      // Clerk not available or already signed out - proceed with local cleanup
+    }
     set({ ...INITIAL_STATE, isLoading: false, initialized: true });
     if (typeof window !== 'undefined') {
       window.location.href = '/login';
@@ -223,23 +236,16 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 // ---------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
-  // Resolve existing session by verifying with the server.
-  // getUser() forces a server-side JWT re-verification, unlike getSession()
-  // which only reads the cookie without validating the token. This prevents
-  // session fixation attacks where a tampered cookie passes client-side checks.
-  supabase.auth.getUser().then(({ data: { user: existingUser } }) => {
-    if (existingUser) {
-      useBillingStore.setState({ user: existingUser });
-      useBillingStore.getState().refreshUser();
-    } else {
-      useBillingStore.setState({ isLoading: false, initialized: true });
-    }
-  });
-
-  // Stay in sync with Supabase auth state changes (sign-in, sign-out, token refresh)
-  supabase.auth.onAuthStateChange((_event, session) => {
-    useBillingStore.getState()._setUser(session?.user ?? null);
-  });
+  // Bootstrap using /api/me (Supabase auth removed; Clerk session is managed by middleware).
+  useBillingStore
+    .getState()
+    .refreshUser()
+    .then(() => {
+      const isInit = useBillingStore.getState().initialized;
+      if (!isInit) {
+        useBillingStore.setState({ isLoading: false, initialized: true });
+      }
+    });
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-ap
  * 4. Rate limiting is applied at 30 requests/minute per IP to prevent abuse
  *
  * If download access needs to be restricted in the future (e.g., for beta builds),
- * add authentication by importing createSupabaseServerClient and checking user session.
+ * add authentication by calling getClerkAuthUser(request) from lib/api-auth.
  */
 async function handleDownload(request: NextRequest) {
   // Rate limiting: 30 requests per minute per IP to prevent abuse

@@ -78,17 +78,11 @@ async function importTOTPEncryptionKey(keyMaterial: Uint8Array): Promise<CryptoK
   );
 }
 
+// Legacy TOTP key derived from NEXT_PUBLIC_SUPABASE_URL is no longer available
+// after the Supabase-to-Neon migration. Any TOTP secrets encrypted with the old
+// key cannot be decrypted automatically. Users will need to re-enroll.
 async function getLegacyTOTPEncryptionKey(): Promise<CryptoKey | null> {
-  const supabaseUrl =
-    typeof process !== 'undefined' ? process.env['NEXT_PUBLIC_SUPABASE_URL'] : undefined;
-  if (!supabaseUrl) {
-    return null;
-  }
-
-  const encoder = new TextEncoder();
-  const baseKey = encoder.encode(supabaseUrl + '-totp-encryption-v1');
-  const hash = await crypto.subtle.digest('SHA-256', baseKey);
-  return importTOTPEncryptionKey(new Uint8Array(hash));
+  return null;
 }
 
 async function getTOTPEncryptionKey(): Promise<CryptoKey> {

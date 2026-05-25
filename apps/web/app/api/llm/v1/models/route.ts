@@ -119,8 +119,7 @@ async function handleListModels(request: NextRequest) {
     return listModelsForRequest(request, 'free');
   }
 
-  const userDb = await (await import('@/services/supabase-server')).createSupabaseServerClient();
-  const subscription = await SubscriptionService.getSubscription(userDb, userId);
+  const subscription = await SubscriptionService.getSubscription(userId);
   return listModelsForRequest(request, subscription?.plan_tier || 'free');
 }
 
