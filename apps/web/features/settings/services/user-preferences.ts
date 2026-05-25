@@ -2,9 +2,14 @@
  * Settings Service
  * Manages user settings and preferences with full Supabase integration
  * Includes TOTP 2FA authentication support
+ *
+ * Storage: Vercel Blob (requires BLOB_READ_WRITE_TOKEN env var on the server)
+ * Note: uploadAvatar is called from a server action / API route, not directly
+ * from browser code, so BLOB_READ_WRITE_TOKEN is safe server-side.
  */
 
-import { supabase } from '@shared/lib/supabase-client'; // kept for supabase.storage (AD-6)
+// AD-6 override: avatar storage migrated from Supabase Storage to Vercel Blob.
+import { put } from '@vercel/blob';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // =============================================================================
@@ -612,7 +617,8 @@ class SettingsService {
   }
 
   /**
-   * Upload avatar to Supabase Storage (AD-6: storage stays on Supabase)
+   * Upload avatar to Vercel Blob (migrated from Supabase Storage, AD-6 override).
+   * Requires BLOB_READ_WRITE_TOKEN on the server.
    */
   async uploadAvatar(file: File): Promise<{ data: string; error?: string }> {
     try {
@@ -626,25 +632,16 @@ class SettingsService {
       const fileName = `${Date.now()}-${crypto.randomUUID()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // Upload to Supabase Storage
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true,
+      // Upload to Vercel Blob
+      const blob = await put(filePath, file, {
+        access: 'public',
+        contentType: file.type,
       });
 
-      if (uploadError) {
-        return { data: '', error: uploadError.message };
-      }
-
-      // Get public URL
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('avatars').getPublicUrl(filePath);
-
       // Update profile with new avatar URL
-      await this.updateProfile({ avatar_url: publicUrl });
+      await this.updateProfile({ avatar_url: blob.url });
 
-      return { data: publicUrl };
+      return { data: blob.url };
     } catch (error) {
       return {
         data: '',
