@@ -9,11 +9,7 @@
  * - Transaction support
  */
 
-import { supabase } from '@shared/lib/supabase-client';
-
-// Tables not yet in generated Database type — use untyped client for these
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+import { getNeonDb } from '@/lib/server/neon-db';
 import { MultiAgentChatError } from '@shared/types/multi-agent-chat';
 import type {
   MultiAgentConversation,
@@ -88,9 +84,17 @@ export async function createConversation(
       ui_settings: {},
     } as ConversationMetadataInsert;
 
-    const { error: metaError } = await db.from('conversation_metadata').insert(metadataData);
-
-    if (metaError) {
+    try {
+      const neonDb = getNeonDb();
+      await neonDb.execute(
+        'insert into conversation_metadata (conversation_id, user_id, ui_settings) values ($1, $2, $3)',
+        [
+          metadataData.conversation_id,
+          metadataData.user_id,
+          JSON.stringify(metadataData.ui_settings ?? {}),
+        ],
+      );
+    } catch (metaError) {
       console.error('Failed to create conversation metadata:', metaError);
       // Don't fail the conversation creation for metadata error
     }
@@ -728,86 +732,23 @@ export async function incrementParticipantStats(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Use atomic RPC function for increment - prevents race conditions
-      const { error } = await db.rpc('increment_participant_stats', {
-        p_participant_id: participantId,
-        p_message_count: stats.message_count || 0,
-        p_tokens_used: stats.tokens_used || 0,
-        p_cost_incurred: stats.cost_incurred || 0,
-        p_tasks_completed: stats.tasks_completed || 0,
-      });
-
-      if (error) {
-        // Categorize the error for proper handling
-        const errorMessage = error.message?.toLowerCase() || '';
-        const errorCode = error.code || '';
-
-        // Check if RPC function doesn't exist (migration not applied)
-        if (
-          errorMessage.includes('function') &&
-          (errorMessage.includes('does not exist') || errorMessage.includes('could not find'))
-        ) {
-          // CRITICAL: Do not fall back to non-atomic operations
-          // Instead, throw actionable error with migration instructions
-          throw new MultiAgentChatError(
-            'Database migration required: increment_participant_stats RPC function not found. ' +
-              'Run: supabase migration up 20251117000003_add_participant_stats_rpc.sql',
-            'MIGRATION_REQUIRED',
-            {
-              missingFunction: 'increment_participant_stats',
-              migrationFile: '20251117000003_add_participant_stats_rpc.sql',
-              originalError: error,
-            },
-          );
-        }
-
-        // Check if participant doesn't exist
-        if (
-          errorMessage.includes('participant not found') ||
-          errorCode === 'P0001' // PostgreSQL RAISE EXCEPTION code
-        ) {
-          throw new MultiAgentChatError(
-            `Participant not found: ${participantId}`,
-            'PARTICIPANT_NOT_FOUND',
-            { participantId, originalError: error },
-          );
-        }
-
-        // Check for transient errors that warrant retry
-        const isTransientError =
-          errorCode === '40001' || // Serialization failure
-          errorCode === '40P01' || // Deadlock detected
-          errorCode === '57P01' || // Admin shutdown
-          errorCode === '57P02' || // Crash shutdown
-          errorCode === '57P03' || // Cannot connect now
-          errorMessage.includes('connection') ||
-          errorMessage.includes('timeout') ||
-          errorMessage.includes('temporarily unavailable');
-
-        if (isTransientError && attempt < maxRetries) {
-          lastError = new Error(error.message);
-          retriesUsed = attempt + 1;
-          console.warn(
-            `[incrementParticipantStats] Transient error on attempt ${attempt + 1}/${maxRetries + 1}, retrying in ${retryDelayMs}ms:`,
-            error.message,
-          );
-          await sleep(retryDelayMs * Math.pow(2, attempt)); // Exponential backoff
-          continue;
-        }
-
-        // Non-transient error or max retries exceeded
-        throw new MultiAgentChatError(
-          `Failed to increment participant stats: ${error.message}`,
-          'PARTICIPANT_STATS_UPDATE_ERROR',
-          {
-            participantId,
-            stats,
-            attemptsMade: attempt + 1,
-            errorCode,
-            originalError: error,
-          },
-        );
-      }
+      // Use parameterized SQL for atomic increment (replaces Supabase RPC).
+      const neonDb = getNeonDb();
+      await neonDb.execute(
+        `update conversation_participants set
+           message_count   = message_count   + $1,
+           tokens_used     = tokens_used     + $2,
+           cost_incurred   = cost_incurred   + $3,
+           tasks_completed = tasks_completed + $4
+         where id = $5`,
+        [
+          stats.message_count || 0,
+          stats.tokens_used || 0,
+          stats.cost_incurred || 0,
+          stats.tasks_completed || 0,
+          participantId,
+        ],
+      );
 
       // Success - log for audit trail
       console.debug(

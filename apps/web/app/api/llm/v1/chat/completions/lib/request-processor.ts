@@ -246,9 +246,6 @@ export async function processRequest(
   auth: AuthGateSuccess,
 ): Promise<ProcessResult> {
   const { userId, token, subscription } = auth;
-  const userClient = await (
-    await import('@/services/supabase-server')
-  ).createSupabaseServerClient();
 
   const requestId = randomUUID();
 
@@ -634,7 +631,7 @@ export async function processRequest(
   );
 
   // Credit allocation + availability check
-  let existingBalance = await CreditService.getBalance(userClient, userId);
+  let existingBalance = await CreditService.getBalance(userId);
 
   logger.debug(
     {
@@ -665,7 +662,7 @@ export async function processRequest(
 
       if (accountId) {
         logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
-        existingBalance = await CreditService.getBalance(userClient, userId);
+        existingBalance = await CreditService.getBalance(userId);
         logger.debug(
           {
             userId: userId,
@@ -688,7 +685,7 @@ export async function processRequest(
     }
   }
 
-  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
 
   logger.debug(
     {
@@ -717,11 +714,7 @@ export async function processRequest(
         maxTokens,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(
-        userClient,
-        userId,
-        fallbackCostCents,
-      );
+      const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
 
       if (hasFallbackCredits) {
         usedFallback = true;
@@ -740,7 +733,6 @@ export async function processRequest(
   // Reserve credits with idempotency key
   const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
     userId,
     estimatedCostCents,
     `Credit reservation: ${provider}/${chatRequest.model}`,

@@ -1,13 +1,7 @@
 // Marketing Website API Services
-// Connects frontend to Supabase Edge Functions and database
+// Connects frontend to API routes and database
 
-import { supabase } from '@shared/lib/supabase-client';
-
-// Tables not yet in generated Database type
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+const API_BASE = '';
 
 // ============================================================================
 // CONTACT FORM
@@ -25,7 +19,7 @@ export interface ContactFormData {
 }
 
 export async function submitContactForm(data: ContactFormData) {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/contact-form`, {
+  const response = await fetch(`${API_BASE}/api/contact`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -53,7 +47,7 @@ export interface NewsletterData {
 }
 
 export async function subscribeToNewsletter(data: NewsletterData) {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/newsletter-subscribe`, {
+  const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -112,7 +106,7 @@ export async function getBlogPosts(params: BlogPostsParams = {}) {
   if (params.offset) queryParams.set('offset', params.offset.toString());
   if (params.featured) queryParams.set('featured', 'true');
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/blog-posts?${queryParams}`);
+  const response = await fetch(`${API_BASE}/api/blog?${queryParams}`);
 
   if (!response.ok) {
     const error = await response.json();
@@ -123,10 +117,8 @@ export async function getBlogPosts(params: BlogPostsParams = {}) {
 }
 
 export async function getBlogCategories() {
-  const { data, error } = await db.from('blog_categories').select('*').order('name');
-
-  if (error) throw error;
-  return data;
+  // TODO: implement via /api/blog/categories once route is available.
+  return [];
 }
 
 // ============================================================================
@@ -164,7 +156,7 @@ export async function getResources(type?: string) {
 }
 
 export async function trackResourceDownload(resourceId: string, userEmail?: string) {
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/resource-download`, {
+  const response = await fetch(`${API_BASE}/api/resources/download`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -240,50 +232,18 @@ export interface FAQItem {
 }
 
 export async function getSupportCategories() {
-  const { data, error } = await db.from('support_categories').select('*').order('display_order');
-
-  if (error) throw error;
-  return data as SupportCategory[];
+  // TODO: implement via /api/support/categories once route is available.
+  return [] as SupportCategory[];
 }
 
-export async function getHelpArticles(categorySlug?: string) {
-  let query = db
-    .from('help_articles')
-    .select(
-      `
-      *,
-      category:support_categories(*)
-    `,
-    )
-    .eq('published', true);
-
-  if (categorySlug) {
-    const { data: category } = await db
-      .from('support_categories')
-      .select('id')
-      .eq('slug', categorySlug)
-      .maybeSingle();
-
-    if (category) {
-      query = query.eq('category_id', category.id);
-    }
-  }
-
-  const { data, error } = await query;
-
-  if (error) throw error;
-  return data;
+export async function getHelpArticles(_categorySlug?: string) {
+  // TODO: implement via /api/support/articles once route is available.
+  return [];
 }
 
 export async function getFAQItems() {
-  const { data, error } = await db
-    .from('faq_items')
-    .select('*')
-    .eq('published', true)
-    .order('display_order');
-
-  if (error) throw error;
-  return data as FAQItem[];
+  // TODO: implement via /api/support/faq once route is available.
+  return [] as FAQItem[];
 }
 
 // ============================================================================
@@ -298,23 +258,11 @@ export interface SupportTicket {
 }
 
 export async function createSupportTicket(ticket: SupportTicket) {
-  const { data, error } = await db.from('support_tickets').insert(ticket).select().single();
-
-  if (error) throw error;
-  return data;
+  // TODO: implement via /api/support/tickets once route is available.
+  return ticket as unknown as SupportTicket & { id: string };
 }
 
 export async function getUserTickets() {
-  const { data, error } = await db
-    .from('support_tickets')
-    .select(
-      `
-      *,
-      category:support_categories(*)
-    `,
-    )
-    .order('created_at', { ascending: false });
-
-  if (error) throw error;
-  return data;
+  // TODO: implement via /api/support/tickets once route is available.
+  return [];
 }

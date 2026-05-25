@@ -1,12 +1,5 @@
-import { supabase } from '@shared/lib/supabase-client';
 import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
 import { getAuthToken } from '@shared/lib/get-auth-token';
-
-// Use type assertion to access tables not in generated schema
-const db = supabase as unknown as {
-  from: (table: string) => ReturnType<typeof supabase.from>;
-  rpc: (fn: string, params?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>;
-};
 
 // Local type definitions
 interface ToolDefinition {
@@ -488,84 +481,35 @@ class ToolInvocationService {
 
     const isUserScopedTable = userScopedTables.includes(table!);
 
-    let result;
-    switch (operation) {
-      case 'select': {
-        let queryBuilder = db.from(table!).select(parameters['select'] || '*');
-
-        // Automatically add user_id filter for user-scoped tables
-        if (isUserScopedTable && !parameters['user_id']) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional filters from parameters
-        if (parameters['filters']) {
-          const filters = parameters['filters'] as Record<string, unknown>;
-          for (const [key, value] of Object.entries(filters)) {
-            queryBuilder = queryBuilder.eq(key, value);
-          }
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'insert': {
-        // Automatically add user_id for user-scoped tables
-        const insertData = isUserScopedTable
-          ? { ...(parameters['data'] as Record<string, unknown>), user_id: userId }
-          : (parameters['data'] as Record<string, unknown>);
-
-        result = await db.from(table!).insert(insertData);
-        break;
-      }
-      case 'update': {
-        let queryBuilder = db.from(table!).update(parameters['data'] as Record<string, unknown>);
-
-        // For user-scoped tables, require user_id in where clause
-        if (isUserScopedTable) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional where conditions
-        if (parameters['column'] && parameters['value']) {
-          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'delete': {
-        let queryBuilder = db.from(table!).delete();
-
-        // For user-scoped tables, require user_id in where clause
-        if (isUserScopedTable) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional where conditions
-        if (parameters['column'] && parameters['value']) {
-          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'custom':
-        // For custom RPC calls, pass userId in parameters
-        result = await db.rpc(query!, {
-          ...parameters,
-          user_id: userId,
-        });
-        break;
-      default:
-        throw new Error(`Unsupported database operation: ${operation}`);
+    // Route database operations through the server-side API endpoint to avoid
+    // direct client-side DB access (Supabase removed; Neon is server-only).
+    const token = await getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required for database operations');
     }
 
-    if (result.error) {
-      throw new Error(`Database operation failed: ${result.error.message}`);
+    const response = await fetch('/api/agents/db-operation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        operation,
+        table,
+        query,
+        parameters,
+        userId,
+        isUserScopedTable,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(`Database operation failed: ${err.error ?? response.statusText}`);
     }
 
-    return result.data;
+    return (await response.json()) as unknown;
   }
 
   // File System Operation Execution

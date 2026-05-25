@@ -4,8 +4,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import type { ArtifactData, ArtifactVersion } from '../components/artifacts/ArtifactPreview';
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // ============================================================================
 // Types
@@ -363,25 +363,20 @@ export const useArtifactsStore = create<ArtifactsState & ArtifactsActions>()(
         const shareId = `share-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
         try {
-          const userId = (
-            window as Record<string, unknown> & { Clerk?: { user?: { id?: string } } }
-          )?.Clerk?.user?.id;
-
-          const { error } = await (
-            supabase as unknown as import('@supabase/supabase-js').SupabaseClient
-          )
-            .from('shared_artifacts')
-            .insert({
-              id: shareId,
-              user_id: userId,
-              artifact_id: artifactId,
-              artifact_data: artifact,
-              created_at: new Date().toISOString(),
-              expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          const token = await getAuthToken();
+          if (token) {
+            const res = await fetch('/api/artifacts/publish', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({
+                share_id: shareId,
+                artifact_id: artifactId,
+                artifact_data: artifact,
+              }),
             });
-
-          if (error) {
-            logger.warn('Could not persist shared artifact to database', error.message);
+            if (!res.ok) {
+              logger.warn('Could not persist shared artifact to database', res.statusText);
+            }
           }
         } catch (dbError) {
           logger.warn('Database error during artifact sharing', dbError);

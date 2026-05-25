@@ -23,9 +23,6 @@ async function handleChatCompletions(request: NextRequest) {
   if (!authResult.ok) return authResult.response;
 
   const { userId, token } = authResult;
-  const userClient = await (
-    await import('@/services/supabase-server')
-  ).createSupabaseServerClient();
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await processRequest(request, authResult);
@@ -42,7 +39,6 @@ async function handleChatCompletions(request: NextRequest) {
       // Refund reservation on upstream failure
       const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
       await CreditService.deductCredits(
-        userClient,
         userId,
         -processed.estimatedCostCents,
         `Refund for failed streaming request: ${processed.provider}/${processed.chatRequest.model}`,
@@ -60,7 +56,7 @@ async function handleChatCompletions(request: NextRequest) {
       );
     }
 
-    return buildStreamResponse(request, stream, processed, userClient, userId, token);
+    return buildStreamResponse(request, stream, processed, userId, token);
   }
 
   // Non-streaming path
@@ -70,7 +66,6 @@ async function handleChatCompletions(request: NextRequest) {
   } catch (error) {
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
     await CreditService.deductCredits(
-      userClient,
       userId,
       -processed.estimatedCostCents,
       `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
@@ -88,7 +83,7 @@ async function handleChatCompletions(request: NextRequest) {
     );
   }
 
-  return buildNonStreamResponse(request, llmResponse, processed, userClient, userId, token);
+  return buildNonStreamResponse(request, llmResponse, processed, userId, token);
 }
 
 export const POST = withErrorHandler(handleChatCompletions);

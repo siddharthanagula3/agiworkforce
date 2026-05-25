@@ -23,7 +23,6 @@ import {
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Particles } from '@shared/ui/particles';
-import { supabase } from '@shared/lib/supabase-client';
 import { toast } from 'sonner';
 import Image from 'next/image';
 
@@ -103,32 +102,29 @@ const BlogPage: React.FC = () => {
           params.append('search', search);
         }
 
-        const { data, error } = await supabase.functions.invoke('blog-posts', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            category: category !== 'All' ? category : undefined,
-            search: search || undefined,
-            limit: 10,
-            offset: page * 10,
-          }),
-        });
-
-        if (error) {
-          throw error;
+        const res = await fetch(`/api/blog/posts?${params.toString()}`);
+        if (!res.ok) {
+          throw new Error(`Failed to fetch blog posts: ${res.status}`);
         }
 
-        const response = data || { posts: [], count: 0, hasMore: false };
+        const response = (await res.json()) as {
+          posts?: BlogPost[];
+          count?: number;
+          hasMore?: boolean;
+        };
+        const safeResponse = {
+          posts: response.posts ?? [],
+          count: response.count ?? 0,
+          hasMore: response.hasMore ?? false,
+        };
 
         if (page === 0) {
-          setBlogPosts(response.posts || []);
+          setBlogPosts(safeResponse.posts);
         } else {
-          setBlogPosts((prev) => [...prev, ...(response.posts || [])]);
+          setBlogPosts((prev) => [...prev, ...safeResponse.posts]);
         }
 
-        setHasMore(response.hasMore || false);
+        setHasMore(safeResponse.hasMore);
         setCurrentPage(page);
       } catch (err) {
         console.error('Error fetching blog posts:', err);
@@ -144,13 +140,10 @@ const BlogPage: React.FC = () => {
   // Fetch categories
   const fetchCategories = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('blog_categories').select('*').order('name');
-
-      if (error) {
-        throw error;
-      }
-
-      setCategories(data || []);
+      const res = await fetch('/api/blog/categories');
+      if (!res.ok) throw new Error(`Failed to fetch categories: ${res.status}`);
+      const body = (await res.json()) as { categories?: BlogCategory[] };
+      setCategories(body.categories ?? []);
     } catch (err) {
       console.error('Error fetching categories:', err);
       // Don't show error for categories, just use default ones
