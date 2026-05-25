@@ -7,7 +7,6 @@
  */
 
 import type {
-  ConversationParticipant,
   AgentCollaboration,
   RealtimeConversationUpdate,
   RealtimeParticipantUpdate,
