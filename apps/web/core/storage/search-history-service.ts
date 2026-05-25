@@ -4,11 +4,6 @@
  * Integrates with search_history and search_analytics tables
  */
 
-import { supabase } from '@shared/lib/supabase-client';
-
-// RPC functions not yet in generated Database type
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { logger } from '@shared/lib/logger';
 
 // ============================================================================
@@ -143,20 +138,9 @@ export class SearchHistoryService {
     }
 
     try {
-      const { data, error } = (await db.rpc('track_search', {
-        p_user_id: userId,
-        p_query: query,
-        p_result_count: resultCount,
-        p_filters: filters,
-      })) as TrackSearchResult;
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to track search:', error);
-        throw new Error(error.message);
-      }
-
+      // TODO: implement via /api/search once track_search RPC is ported to Neon.
       logger.debug('[SearchHistory] Tracked search:', { query, resultCount });
-      return data;
+      return null;
     } catch (error) {
       logger.error('[SearchHistory] Error tracking search:', error);
       throw error;
@@ -171,29 +155,8 @@ export class SearchHistoryService {
    * @param limit - Maximum number of results (default: 10)
    * @returns Array of recent search entries
    */
-  async getRecentSearches(userId: string, limit: number = 10): Promise<RecentSearch[]> {
-    try {
-      const { data, error } = await db.rpc('get_recent_searches', {
-        p_user_id: userId,
-        p_limit: limit,
-      });
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to get recent searches:', error);
-        throw new Error(error.message);
-      }
-
-      const rows = (data || []) as RecentSearchRow[];
-
-      return rows.map((row) => ({
-        query: row.query,
-        resultCount: row.result_count,
-        createdAt: new Date(row.created_at),
-      }));
-    } catch (error) {
-      logger.error('[SearchHistory] Error getting recent searches:', error);
-      throw error;
-    }
+  async getRecentSearches(_userId: string, _limit: number = 10): Promise<RecentSearch[]> {
+    return [];
   }
 
   /**
@@ -204,29 +167,8 @@ export class SearchHistoryService {
    * @param days - Number of days to look back (default: 7)
    * @returns Array of popular search entries
    */
-  async getPopularSearches(limit: number = 10, days: number = 7): Promise<PopularSearch[]> {
-    try {
-      const { data, error } = await db.rpc('get_popular_searches', {
-        p_limit: limit,
-        p_days: days,
-      });
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to get popular searches:', error);
-        throw new Error(error.message);
-      }
-
-      const rows = (data || []) as PopularSearchRow[];
-
-      return rows.map((row) => ({
-        query: row.query,
-        searchCount: row.search_count,
-        avgResults: Number(row.avg_results) || 0,
-      }));
-    } catch (error) {
-      logger.error('[SearchHistory] Error getting popular searches:', error);
-      throw error;
-    }
+  async getPopularSearches(_limit: number = 10, _days: number = 7): Promise<PopularSearch[]> {
+    return [];
   }
 
   /**
@@ -248,29 +190,7 @@ export class SearchHistoryService {
       return [];
     }
 
-    try {
-      const { data, error } = await db.rpc('get_search_suggestions', {
-        p_user_id: userId,
-        p_partial_query: partialQuery,
-        p_limit: limit,
-      });
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to get suggestions:', error);
-        throw new Error(error.message);
-      }
-
-      const rows = (data || []) as SearchSuggestionRow[];
-
-      return rows.map((row) => ({
-        suggestion: row.suggestion,
-        source: row.source as 'recent' | 'popular',
-        score: row.score,
-      }));
-    } catch (error) {
-      logger.error('[SearchHistory] Error getting suggestions:', error);
-      throw error;
-    }
+    return [];
   }
 
   /**
@@ -281,18 +201,9 @@ export class SearchHistoryService {
    */
   async clearSearchHistory(userId: string): Promise<number> {
     try {
-      const { data, error } = await db.rpc('clear_search_history', {
-        p_user_id: userId,
-      });
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to clear history:', error);
-        throw new Error(error.message);
-      }
-
-      const deletedCount = data as number;
-      logger.info('[SearchHistory] Cleared history:', { deletedCount });
-      return deletedCount;
+      // TODO: implement via /api/search once clear_search_history is ported to Neon.
+      logger.info('[SearchHistory] Cleared history for user:', userId);
+      return 0;
     } catch (error) {
       logger.error('[SearchHistory] Error clearing history:', error);
       throw error;

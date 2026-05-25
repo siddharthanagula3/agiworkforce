@@ -2,8 +2,7 @@
  * Agent Status Store
  *
  * Zustand store tracking real-time agent execution status.
- * Subscribes to Supabase Realtime for live updates from the desktop app.
- * Falls back to API polling when Supabase Realtime is unavailable.
+ * Uses API polling for live updates (Supabase Realtime removed).
  */
 
 'use client';
@@ -11,8 +10,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { AgentSession, AgentSessionStatus, AgentStatusSummary } from '@agiworkforce/types';
-import { supabase } from '@shared/lib/supabase-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // ─── State Interface ────────────────────────────────────────────────────────
 
@@ -26,21 +25,21 @@ interface AgentStatusState {
   /** Error message from the last fetch/subscription attempt. */
   error: string | null;
 
-  /** Whether Supabase Realtime subscription is active. */
+  /** Whether polling subscription is active. */
   isSubscribed: boolean;
 
-  /** Polling interval ID (fallback when Realtime is unavailable). */
+  /** Polling interval ID. */
   pollingIntervalId: ReturnType<typeof setInterval> | null;
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
-  /** Fetch agent sessions from Supabase or API. */
+  /** Fetch agent sessions from API. */
   fetchSessions: () => Promise<void>;
 
-  /** Subscribe to Supabase Realtime for live updates. */
+  /** Start polling for live updates. */
   subscribe: () => void;
 
-  /** Unsubscribe from Realtime and stop polling. */
+  /** Stop polling. */
   unsubscribe: () => void;
 
   /** Start polling fallback (every 10 seconds). */
@@ -49,7 +48,7 @@ interface AgentStatusState {
   /** Stop polling. */
   stopPolling: () => void;
 
-  /** Update a single session (from Realtime event). */
+  /** Update a single session (from polling event). */
   upsertSession: (session: AgentSession) => void;
 
   /** Remove a session by ID. */
@@ -69,9 +68,6 @@ const initialState = {
   pollingIntervalId: null as ReturnType<typeof setInterval> | null,
 };
 
-// ─── Supabase table name ────────────────────────────────────────────────────
-
-const AGENT_SESSIONS_TABLE = 'agent_sessions';
 const POLLING_INTERVAL_MS = 10_000;
 
 // ─── Store ──────────────────────────────────────────────────────────────────
@@ -88,23 +84,14 @@ export const useAgentStatusStore = create<AgentStatusState>()(
         set({ isLoading: true, error: null }, undefined, 'agentStatus/fetchSessions:start');
 
         try {
-          // Cast to untyped client since agent_sessions may not be in generated types yet
-          const untypedClient =
-            supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+          const token = await getAuthToken();
+          const res = await fetch('/api/agents/sessions', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
 
-          const { data, error } = await untypedClient
-            .from(AGENT_SESSIONS_TABLE)
-            .select('*')
-            .eq('user_id', userId)
-            .order('started_at', { ascending: false })
-            .limit(50);
-
-          if (error) {
-            // Table may not exist yet — fall back to empty state
-            console.warn(
-              '[AgentStatusStore] Supabase fetch failed, using empty state:',
-              error.message,
-            );
+          if (!res.ok) {
+            // API may not exist yet — fall back to empty state
+            console.warn('[AgentStatusStore] fetch failed, using empty state:', res.status);
             set(
               { sessions: [], isLoading: false, error: null },
               undefined,
@@ -113,7 +100,8 @@ export const useAgentStatusStore = create<AgentStatusState>()(
             return;
           }
 
-          const sessions: AgentSession[] = (data ?? []).map(mapRowToSession);
+          const body = (await res.json()) as { sessions?: Record<string, unknown>[] };
+          const sessions: AgentSession[] = (body.sessions ?? []).map(mapRowToSession);
           set({ sessions, isLoading: false }, undefined, 'agentStatus/fetchSessions:success');
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -123,60 +111,8 @@ export const useAgentStatusStore = create<AgentStatusState>()(
       },
 
       subscribe: () => {
-        const userId = useAuthStore.getState().user?.id;
-        if (!userId) return;
-
-        try {
-          const untypedClient =
-            supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
-          const channel = untypedClient
-            .channel('agent-sessions-realtime')
-            .on(
-              'postgres_changes' as 'system',
-              {
-                event: '*',
-                schema: 'public',
-                table: AGENT_SESSIONS_TABLE,
-                filter: `user_id=eq.${userId}`,
-              } as Record<string, unknown>,
-              (payload: Record<string, unknown>) => {
-                const eventType = payload['eventType'] as string;
-                if (eventType === 'DELETE') {
-                  const old = payload['old'] as Record<string, unknown> | undefined;
-                  if (old?.['id']) {
-                    get().removeSession(String(old['id']));
-                  }
-                } else {
-                  const newRow = payload['new'] as Record<string, unknown> | undefined;
-                  if (newRow) {
-                    get().upsertSession(mapRowToSession(newRow));
-                  }
-                }
-              },
-            )
-            .subscribe((status: string) => {
-              if (status === 'SUBSCRIBED') {
-                set({ isSubscribed: true }, undefined, 'agentStatus/subscribe:connected');
-              } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                // Fall back to polling
-                set({ isSubscribed: false }, undefined, 'agentStatus/subscribe:error');
-                get().startPolling();
-              }
-            });
-
-          // Store channel reference for cleanup (via closure — unsubscribe disposes it)
-          set({
-            unsubscribe: () => {
-              untypedClient.removeChannel(channel);
-              set({ isSubscribed: false }, undefined, 'agentStatus/unsubscribe');
-              get().stopPolling();
-            },
-          });
-        } catch {
-          // Realtime unavailable — start polling
-          get().startPolling();
-        }
+        // Supabase Realtime removed; use polling instead
+        get().startPolling();
       },
 
       unsubscribe: () => {
@@ -195,7 +131,11 @@ export const useAgentStatusStore = create<AgentStatusState>()(
           void get().fetchSessions();
         }, POLLING_INTERVAL_MS);
 
-        set({ pollingIntervalId: intervalId }, undefined, 'agentStatus/startPolling');
+        set(
+          { pollingIntervalId: intervalId, isSubscribed: true },
+          undefined,
+          'agentStatus/startPolling',
+        );
       },
 
       stopPolling: () => {
@@ -243,7 +183,7 @@ export const useAgentStatusStore = create<AgentStatusState>()(
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Map a Supabase row (snake_case) to an AgentSession (camelCase). */
+/** Map an API row (snake_case) to an AgentSession (camelCase). */
 function mapRowToSession(row: Record<string, unknown>): AgentSession {
   return {
     id: String(row['id'] ?? ''),

@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -18,7 +17,6 @@ export async function buildStreamResponse(
   request: NextRequest,
   stream: ReadableStream,
   processed: ProcessedRequest,
-  userClient: SupabaseClient,
   userId: string,
   token: string,
 ): Promise<NextResponse> {
@@ -416,7 +414,6 @@ export async function buildStreamResponse(
               requestId,
             );
             await CreditService.deductCredits(
-              userClient,
               userId,
               costDifference,
               `Credit adjustment (streaming): ${providerUsed}/${modelUsed}`,

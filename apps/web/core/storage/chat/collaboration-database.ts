@@ -8,11 +8,7 @@
  * - Session history and analytics
  */
 
-import { supabase } from '@shared/lib/supabase-client';
-
-// Tables not yet in generated Database type — use untyped client for these
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+import { getNeonDb } from '@/lib/server/neon-db';
 import { MultiAgentChatError } from '@shared/types/multi-agent-chat';
 import type {
   AgentCollaboration,
@@ -223,15 +219,8 @@ export async function updateCollaboration(
  */
 export async function deleteCollaboration(collaborationId: string): Promise<void> {
   try {
-    const { error } = await db.from('agent_collaborations').delete().eq('id', collaborationId);
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to delete collaboration',
-        'COLLABORATION_DELETE_ERROR',
-        error,
-      );
-    }
+    const db = getNeonDb();
+    await db.execute('delete from agent_collaborations where id = $1', [collaborationId]);
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;

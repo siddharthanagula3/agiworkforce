@@ -145,15 +145,12 @@ async function handleLLMCompletion(request: NextRequest) {
     logger.warn({ error: err }, 'Authentication failed');
     throw createError.unauthorized('Invalid authentication token');
   }
-  const userClient = await (
-    await import('@/services/supabase-server')
-  ).createSupabaseServerClient();
 
   // Generate unique request ID for idempotency (prevents duplicate charges on retry)
   const requestId = randomUUID();
 
   // Get subscription
-  const subscription = await SubscriptionService.getSubscription(userClient, userId);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     throw createError.forbidden('No active subscription found');
@@ -269,10 +266,10 @@ async function handleLLMCompletion(request: NextRequest) {
   );
 
   // Check if user has enough credits (both daily and monthly)
-  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
 
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, userId);
+    const balance = await CreditService.getBalance(userId);
 
     logger.warn(
       {
@@ -302,11 +299,7 @@ async function handleLLMCompletion(request: NextRequest) {
         llmRequest.max_tokens || 1000,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(
-        userClient,
-        userId,
-        fallbackCostCents,
-      );
+      const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
 
       if (hasFallbackCredits) {
         logger.info(
@@ -342,7 +335,6 @@ async function handleLLMCompletion(request: NextRequest) {
   const reservationDescription = `Credit reservation: ${provider}/${llmRequest.model}`;
   const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
     userId,
     estimatedCostCents,
     reservationDescription,
@@ -368,7 +360,7 @@ async function handleLLMCompletion(request: NextRequest) {
     );
 
     // Return appropriate error based on the failure reason
-    const balance = await CreditService.getBalance(userClient, userId);
+    const balance = await CreditService.getBalance(userId);
     return handleCreditError(reserveResult, balance);
   }
 
@@ -466,7 +458,6 @@ async function handleLLMCompletion(request: NextRequest) {
                 requestId,
               );
               await CreditService.deductCredits(
-                userClient,
                 userId,
                 costDifference,
                 adjustmentDescription,
@@ -564,7 +555,6 @@ async function handleLLMCompletion(request: NextRequest) {
       );
       const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
       await CreditService.deductCredits(
-        userClient,
         userId,
         -estimatedCostCents, // Negative amount = refund
         `Refund for failed streaming request: ${provider}/${llmRequest.model}`,
@@ -595,7 +585,6 @@ async function handleLLMCompletion(request: NextRequest) {
     );
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
-      userClient,
       userId,
       -estimatedCostCents, // Negative amount = refund
       `Refund for failed request: ${provider}/${llmRequest.model}`,
@@ -639,7 +628,6 @@ async function handleLLMCompletion(request: NextRequest) {
       requestId,
     );
     const adjustmentResult = await CreditService.deductCredits(
-      userClient,
       userId,
       costDifference, // Positive = additional charge, negative = refund
       adjustmentDescription,
@@ -685,7 +673,7 @@ async function handleLLMCompletion(request: NextRequest) {
   }
 
   // Get updated balance for response
-  await CreditService.getBalance(userClient, userId);
+  await CreditService.getBalance(userId);
 
   // Calculate cache savings if applicable
   const cacheMetrics = calculateCacheSavings(

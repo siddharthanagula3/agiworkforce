@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { logger } from '@/lib/logger';
 import { secureToken } from '@/lib/secure-random';
 import { CreditService } from '@/lib/services/credit-service';
@@ -29,7 +28,6 @@ export async function buildNonStreamResponse(
     search_results?: unknown[];
   },
   processed: ProcessedRequest,
-  userClient: SupabaseClient,
   userId: string,
   token: string,
 ): Promise<NextResponse> {
@@ -66,7 +64,6 @@ export async function buildNonStreamResponse(
         requestId,
       );
       await CreditService.deductCredits(
-        userClient,
         userId,
         costDifference,
         costDifference > 0

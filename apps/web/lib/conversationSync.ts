@@ -1,42 +1,12 @@
 /**
- * ConversationSyncService - 3-device conversation sync (web ↔ mobile ↔ desktop)
+ * ConversationSyncService - 3-device conversation sync (web <> mobile <> desktop)
  *
- * Uses the existing `web_conversations` + `web_messages` Supabase tables with
- * realtime subscriptions for live cross-device push. Conflict resolution is
- * last-write-wins based on `updated_at` timestamps.
+ * Uses the /api/chat/conversations REST endpoints for push/pull.
+ * Conflict resolution is last-write-wins based on `updated_at` timestamps.
  *
- * Expected table shape (uses existing tables - no migration needed):
- *
- * ```sql
- * web_conversations (
- *   id uuid primary key default gen_random_uuid(),
- *   user_id uuid references auth.users not null,
- *   title text,
- *   model text,
- *   is_active boolean default true,
- *   synced_from text,           -- 'desktop' | 'web' | 'mobile' | null
- *   metadata jsonb default '{}',
- *   created_at timestamptz default now(),
- *   updated_at timestamptz default now(),
- *   deleted_at timestamptz
- * )
- *
- * web_messages (
- *   id uuid primary key default gen_random_uuid(),
- *   conversation_id uuid references web_conversations(id) on delete cascade,
- *   role text not null,
- *   content text not null,
- *   model text,
- *   input_tokens integer,
- *   output_tokens integer,
- *   cost_cents numeric,
- *   created_at timestamptz default now(),
- *   updated_at timestamptz
- * )
- * ```
+ * NOTE: Migrated from Supabase direct table access to REST API routes.
  */
 
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertSurfaceCanSyncChats } from '@agiworkforce/types';
 import type {
   LegacyWebSyncEvent as SyncEvent,
@@ -63,12 +33,12 @@ export type {
 // ---------------------------------------------------------------------------
 
 export class ConversationSyncService {
-  private supabase: SupabaseClient;
   private origin: SyncOrigin;
   private _status: SyncStatus = 'idle';
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
+  private getToken: (() => Promise<string | null>) | null = null;
 
-  constructor(supabase: SupabaseClient, origin: SyncOrigin = 'web') {
+  constructor(_ignored: unknown, origin: SyncOrigin = 'web') {
     // /goal sync-rule enforcement: consumer chat sync is Web/Desktop/
     // Mobile only. If a future refactor accidentally constructs this
     // service from a developer surface (CLI/VS Code/Chrome), the
@@ -77,7 +47,6 @@ export class ConversationSyncService {
     // channel. See `assertSurfaceCanSyncChats` in
     // packages/types/src/suite-contracts.ts.
     assertSurfaceCanSyncChats(origin);
-    this.supabase = supabase;
     this.origin = origin;
   }
 
@@ -94,36 +63,44 @@ export class ConversationSyncService {
     };
   }
 
+  /** Provide a token getter (injected to avoid circular imports with auth). */
+  setTokenGetter(fn: () => Promise<string | null>): void {
+    this.getToken = fn;
+  }
+
+  private async authHeaders(): Promise<Record<string, string>> {
+    const token = this.getToken ? await this.getToken() : null;
+    if (!token) return {};
+    return { Authorization: `Bearer ${token}` };
+  }
+
   // -------------------------------------------------------------------------
   // Push
   // -------------------------------------------------------------------------
 
   /**
-   * Push (upsert) a local conversation to Supabase.
-   * Stamps `synced_from` with the current origin and updates `updated_at`.
+   * Push (upsert) a local conversation via /api/chat/conversations.
    */
   async pushConversation(conversation: SyncedConversation): Promise<void> {
     this.setStatus('syncing');
     try {
-      const { error } = await this.supabase.from('web_conversations').upsert(
-        {
+      const headers = await this.authHeaders();
+      const res = await fetch('/api/chat/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({
           id: conversation.id,
-          user_id: conversation.user_id,
           title: conversation.title,
           model: conversation.model,
-          is_active: conversation.is_active ?? true,
           synced_from: this.origin,
           metadata: conversation.metadata ?? {},
           created_at: conversation.created_at,
           updated_at: new Date().toISOString(),
-          deleted_at: conversation.deleted_at,
-        } as never,
-        { onConflict: 'id' },
-      );
-
-      if (error) {
+        }),
+      });
+      if (!res.ok) {
         this.setStatus('error');
-        throw new Error(`[ConversationSync] pushConversation failed: ${error.message}`);
+        throw new Error(`[ConversationSync] pushConversation failed: ${res.status}`);
       }
       this.setStatus('synced');
     } catch (err) {
@@ -133,32 +110,23 @@ export class ConversationSyncService {
   }
 
   /**
-   * Push (upsert) messages for a conversation.
+   * Push (upsert) messages for a conversation via /api/chat/conversations/:id/messages.
    */
   async pushMessages(messages: SyncedMessage[]): Promise<void> {
     if (messages.length === 0) return;
 
     this.setStatus('syncing');
     try {
-      const { error } = await this.supabase.from('web_messages').upsert(
-        messages.map((m) => ({
-          id: m.id,
-          conversation_id: m.conversation_id,
-          role: m.role,
-          content: m.content,
-          model: m.model,
-          input_tokens: m.input_tokens,
-          output_tokens: m.output_tokens,
-          cost_cents: m.cost_cents,
-          created_at: m.created_at,
-          updated_at: new Date().toISOString(),
-        })) as never,
-        { onConflict: 'id' },
-      );
-
-      if (error) {
+      const headers = await this.authHeaders();
+      const conversationId = messages[0]!.conversation_id;
+      const res = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify({ messages }),
+      });
+      if (!res.ok) {
         this.setStatus('error');
-        throw new Error(`[ConversationSync] pushMessages failed: ${error.message}`);
+        throw new Error(`[ConversationSync] pushMessages failed: ${res.status}`);
       }
       this.setStatus('synced');
     } catch (err) {
@@ -172,32 +140,23 @@ export class ConversationSyncService {
   // -------------------------------------------------------------------------
 
   /**
-   * Pull conversations from Supabase, optionally filtered by updated_at > since.
-   * Returns conversations ordered by most recently updated first.
+   * Pull conversations via /api/chat/conversations.
    */
   async pullConversations(since?: Date): Promise<SyncedConversation[]> {
     this.setStatus('syncing');
     try {
-      let query = this.supabase
-        .from('web_conversations')
-        .select('*')
-        .is('deleted_at', null)
-        .order('updated_at', { ascending: false })
-        .limit(100);
-
-      if (since) {
-        query = query.gt('updated_at', since.toISOString());
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
+      const headers = await this.authHeaders();
+      const url = since
+        ? `/api/chat/conversations?since=${encodeURIComponent(since.toISOString())}`
+        : '/api/chat/conversations';
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
         this.setStatus('error');
-        throw new Error(`[ConversationSync] pullConversations failed: ${error.message}`);
+        throw new Error(`[ConversationSync] pullConversations failed: ${res.status}`);
       }
-
+      const body = (await res.json()) as { conversations?: SyncedConversation[] };
       this.setStatus('synced');
-      return (data ?? []) as unknown as SyncedConversation[];
+      return body.conversations ?? [];
     } catch (err) {
       this.setStatus('error');
       throw err;
@@ -208,17 +167,13 @@ export class ConversationSyncService {
    * Pull messages for a specific conversation.
    */
   async pullMessages(conversationId: string): Promise<SyncedMessage[]> {
-    const { data, error } = await this.supabase
-      .from('web_messages')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      throw new Error(`[ConversationSync] pullMessages failed: ${error.message}`);
+    const headers = await this.authHeaders();
+    const res = await fetch(`/api/chat/conversations/${conversationId}/messages`, { headers });
+    if (!res.ok) {
+      throw new Error(`[ConversationSync] pullMessages failed: ${res.status}`);
     }
-
-    return (data ?? []) as unknown as SyncedMessage[];
+    const body = (await res.json()) as { messages?: SyncedMessage[] };
+    return body.messages ?? [];
   }
 
   // -------------------------------------------------------------------------

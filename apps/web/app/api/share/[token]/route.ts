@@ -12,7 +12,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { createClient as createServerClient } from '@/utils/supabase/server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 
@@ -67,12 +67,11 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
-  const supabaseServer = await createServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabaseServer.auth.getUser();
-  if (authError || !user) {
+  let userId: string;
+  try {
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
+  } catch {
     throw createError.unauthorized();
   }
 
@@ -81,7 +80,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
   try {
     await db.execute('delete from shared_sessions where token = $1 and owner_id = $2', [
       token,
-      user.id,
+      userId,
     ]);
   } catch (err) {
     logger.error({ err, token, userId: user.id }, 'Failed to revoke shared session');

@@ -6,9 +6,6 @@
  */
 
 import { grokProvider, GrokProvider } from '@core/ai/llm/providers/grok-ai';
-import { supabase } from '@shared/lib/supabase-client';
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 
 export interface SocialMediaQuery {
   topic: string;
@@ -517,20 +514,10 @@ Your analysis should be data-driven, actionable, and insightful.`;
     analysis: SocialMediaAnalysisResult,
   ): Promise<void> {
     try {
-      const { error } = await db.from('social_media_analyses').insert({
-        user_id: userId,
-        query: query,
-        result: analysis,
-        topic: query.topic,
-        platforms: query.platforms || ['x'],
-        timeframe: query.timeframe || '24h',
-        confidence_score: analysis.metadata.confidenceScore,
-        created_at: new Date().toISOString(),
-      });
-
-      if (error) {
-        console.error('[SocialMediaAnalyzer] Error storing analysis:', error);
-      }
+      // TODO: implement via /api/analytics once social_media_analyses table is ported to Neon.
+      void userId;
+      void query;
+      void analysis;
     } catch (error) {
       console.error('[SocialMediaAnalyzer] Unexpected error storing analysis:', error);
     }
