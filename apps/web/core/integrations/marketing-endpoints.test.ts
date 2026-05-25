@@ -3,10 +3,9 @@
  * Unit tests for the marketing website API services
  *
  * Note: getBlogCategories, getSupportCategories, getHelpArticles, getFAQItems,
- * createSupportTicket, and getUserTickets are now stub implementations that
- * return empty arrays/objects pending API route implementation.
- * getResources and getPricingPlans reference an internal `db` variable that
- * is not yet wired — those tests verify they throw rather than silently fail.
+ * createSupportTicket, getUserTickets, getResources, and getPricingPlans are
+ * now stub implementations that return empty arrays/objects pending API route
+ * implementation.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -242,10 +241,11 @@ describe('Marketing Endpoints', () => {
   });
 
   describe('getResources', () => {
-    it('should throw referencing undefined db variable', async () => {
-      // getResources references an internal `db` variable not yet connected.
-      // It should throw a ReferenceError or similar runtime error.
-      await expect(getResources()).rejects.toThrow();
+    it('should return empty array (stub pending API route)', async () => {
+      const result = await getResources();
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBe(0);
     });
   });
 
@@ -286,9 +286,11 @@ describe('Marketing Endpoints', () => {
   });
 
   describe('getPricingPlans', () => {
-    it('should throw referencing undefined db variable', async () => {
-      // getPricingPlans references an internal `db` variable not yet connected.
-      await expect(getPricingPlans()).rejects.toThrow();
+    it('should return empty array (stub pending API route)', async () => {
+      const result = await getPricingPlans();
+
+      expect(Array.isArray(result)).toBe(true);
+      expect(result.length).toBe(0);
     });
   });
 

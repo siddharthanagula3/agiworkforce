@@ -374,9 +374,8 @@ describe('POST /api/agents/execute', () => {
     }
 
     // Credit deduction should have been called after stream flush. Signature:
-    // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+    // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
     expect(mockDeductCredits).toHaveBeenCalledWith(
-      expect.anything(), // userClient
       'user-123',
       expect.any(Number),
       expect.stringContaining('agent execution'),

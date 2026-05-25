@@ -140,6 +140,7 @@ export function WebSidebar({
 
   const conversations = useChatStore((s) => s.conversations);
   const user = useBillingStore((s) => s.user);
+  const sidebarUserMeta = (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {};
   const subscription = useBillingStore((s) => s.subscription);
   const planDisplayName = subscription?.display_name ?? 'Free';
 
@@ -558,7 +559,7 @@ export function WebSidebar({
               flexShrink: 0,
             }}
           >
-            {initials(user?.['user_metadata']?.['full_name'], user?.email)}
+            {initials(sidebarUserMeta['full_name'] as string | undefined, user?.email)}
           </div>
           {!collapsed && (
             <>
@@ -573,9 +574,7 @@ export function WebSidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {(user?.['user_metadata']?.['full_name'] as string | undefined) ??
-                    user?.email ??
-                    'Account'}
+                  {(sidebarUserMeta['full_name'] as string | undefined) ?? user?.email ?? 'Account'}
                 </div>
                 <div
                   style={{

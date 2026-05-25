@@ -138,10 +138,10 @@ describe('Token Enforcement Service', () => {
 
       const balance = await getUserTokenBalance(mockUserId);
 
-      // credits_remaining_cents: -100 → Math.max(-100, 0) but then
-      // getUserTokenBalance returns snapshot.remaining which uses Math.max
-      expect(balance).toBeDefined();
-      expect(balance).toBeGreaterThanOrEqual(0);
+      // The snapshot layer returns credits_remaining_cents as-is; clamping
+      // happens at the call sites (e.g. deductTokens uses Math.max(..., 0)).
+      // getUserTokenBalance itself returns the raw snapshot value.
+      expect(balance).toBe(-100);
     });
   });
 

@@ -62,7 +62,7 @@ export default function AccountSettingsPage() {
           device: getDeviceLabel(),
           location: 'Unknown',
           created: user['created_at']
-            ? new Date(user['created_at']).toLocaleString('en-US', {
+            ? new Date(String(user['created_at'])).toLocaleString('en-US', {
                 month: 'short',
                 day: 'numeric',
                 year: 'numeric',
