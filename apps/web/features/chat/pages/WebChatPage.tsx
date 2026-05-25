@@ -49,6 +49,8 @@ type SendMeta = {
   codeExecutionEnabled?: boolean;
   /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
   styleMode?: string;
+  /** Skill body to inject as a system message in the LLM request. */
+  skillBody?: string;
 };
 
 type PendingByokHandoff = {
@@ -379,6 +381,7 @@ export default function WebChatPage() {
         thinkingEnabled: options.meta?.thinkingEnabled,
         codeExecution: options.meta?.codeExecutionEnabled,
         styleMode: options.meta?.styleMode,
+        skillBody: options.meta?.skillBody,
       });
     },
     [
@@ -392,7 +395,8 @@ export default function WebChatPage() {
   );
 
   const handleSend = useCallback(
-    (content: string, attachments?: File[], _skillId?: string, meta?: SendMeta): false | void => {
+    (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
+      void skillId; // skill identity resolved; body is carried in meta.skillBody
       const sourceConversationId = urlConversationId || activeConversationId;
       const conversation = sourceConversationId
         ? (conversations.find((item) => item.id === sourceConversationId) ?? null)
