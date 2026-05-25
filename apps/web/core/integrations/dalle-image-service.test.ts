@@ -10,32 +10,22 @@ import {
   type DallEGenerationRequest,
 } from './dalle-image-service';
 
-// Mock Supabase client
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-  },
+// Mock auth token (replaces former supabase.auth.getSession usage)
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
+
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 describe('DALL-E Image Service', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
-  let mockSupabase: { auth: { getSession: ReturnType<typeof vi.fn> } };
+  const mockGetAuthToken = vi.mocked(getAuthToken);
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as unknown as {
-      auth: { getSession: ReturnType<typeof vi.fn> };
-    };
-
-    // Default auth mock
-    mockSupabase.auth.getSession.mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    });
+    // Default: authenticated
+    mockGetAuthToken.mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -124,10 +114,7 @@ describe('DALL-E Image Service', () => {
     });
 
     it('should throw error when not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      });
+      mockGetAuthToken.mockResolvedValueOnce(null);
 
       await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toMatchObject({
         message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer

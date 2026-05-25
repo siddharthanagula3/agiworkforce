@@ -29,6 +29,8 @@ import type {
   ConversationStats,
 } from '@shared/types/multi-agent-chat';
 
+const db = getNeonDb();
+
 // =============================================
 // CONVERSATION OPERATIONS
 // =============================================
@@ -85,8 +87,7 @@ export async function createConversation(
     } as ConversationMetadataInsert;
 
     try {
-      const neonDb = getNeonDb();
-      await neonDb.execute(
+      await db.execute(
         'insert into conversation_metadata (conversation_id, user_id, ui_settings) values ($1, $2, $3)',
         [
           metadataData.conversation_id,
@@ -733,8 +734,7 @@ export async function incrementParticipantStats(
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       // Use parameterized SQL for atomic increment (replaces Supabase RPC).
-      const neonDb = getNeonDb();
-      await neonDb.execute(
+      await db.execute(
         `update conversation_participants set
            message_count   = message_count   + $1,
            tokens_used     = tokens_used     + $2,

@@ -74,9 +74,15 @@ impl RateLimiter {
 
     async fn check(&self) -> bool {
         let mut reqs = self.requests.lock().await;
-        let cutoff = std::time::Instant::now() - std::time::Duration::from_secs(60);
-        while reqs.front().is_some_and(|t| *t < cutoff) {
-            reqs.pop_front();
+        let now = std::time::Instant::now();
+        // checked_sub returns None only when the monotonic clock epoch is
+        // less than 60s old (e.g. first seconds after system boot or after
+        // a wake-from-sleep clock adjustment). In that case no entry can be
+        // older than 60s so we skip eviction rather than panicking.
+        if let Some(cutoff) = now.checked_sub(std::time::Duration::from_secs(60)) {
+            while reqs.front().is_some_and(|t| *t < cutoff) {
+                reqs.pop_front();
+            }
         }
         if reqs.len() >= self.max_per_minute {
             return false;

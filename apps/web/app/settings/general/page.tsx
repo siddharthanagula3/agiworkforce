@@ -97,8 +97,8 @@ export default function GeneralSettingsPage() {
 
   // --- Profile state -------------------------------------------------------
   const initialFullName =
-    (user?.user_metadata?.['full_name'] as string | undefined) ??
-    (user?.user_metadata?.['name'] as string | undefined) ??
+    (user?.['user_metadata']?.['full_name'] as string | undefined) ??
+    (user?.['user_metadata']?.['name'] as string | undefined) ??
     (typeof window !== 'undefined'
       ? (window.localStorage.getItem('agi.profile.displayName') ?? '')
       : '') ??
@@ -110,7 +110,7 @@ export default function GeneralSettingsPage() {
   const [preferredName, setPreferredName] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
     return (
-      (user?.user_metadata?.['preferred_name'] as string | undefined) ??
+      (user?.['user_metadata']?.['preferred_name'] as string | undefined) ??
       window.localStorage.getItem(LS_PREFERRED_NAME_KEY) ??
       initialFullName.split(' ')[0] ??
       ''

@@ -10,10 +10,13 @@ vi.mock('../api-auth', () => ({
   getClerkAuthUser: vi.fn(),
 }));
 
-// Mock @clerk/nextjs/server for getUserRole
+// Mock @clerk/nextjs/server for getUserRole.
+// clerkClient is a plain async function (not vi.fn()) so that the global
+// mockReset:true config does not wipe its return value between tests.
+// Only mockGetUser needs to be a vi.fn() — it is the only spy under test.
 const mockGetUser = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
-  clerkClient: vi.fn().mockResolvedValue({
+  clerkClient: async () => ({
     users: { getUser: (...args: unknown[]) => mockGetUser(...args) },
   }),
 }));

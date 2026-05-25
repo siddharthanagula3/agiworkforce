@@ -66,34 +66,6 @@ function normalizeProviderId(provider: string): string {
   return normalized;
 }
 
-function extractCreditsRemainingCents(value: unknown): {
-  remaining: number;
-  allocated?: number;
-  periodEnd?: Date | null;
-} {
-  if (typeof value === 'number') {
-    return { remaining: Math.max(value, 0) };
-  }
-
-  if (value && typeof value === 'object') {
-    const row = value as {
-      credits_remaining_cents?: number;
-      credits_allocated_cents?: number;
-      period_end?: string | null;
-    };
-    return {
-      remaining: Math.max(Number(row.credits_remaining_cents ?? 0), 0),
-      allocated:
-        row.credits_allocated_cents !== undefined
-          ? Math.max(Number(row.credits_allocated_cents), 0)
-          : undefined,
-      periodEnd: row.period_end ? new Date(row.period_end) : null,
-    };
-  }
-
-  return { remaining: 0 };
-}
-
 export function estimateUsageCostCents({
   provider,
   model,
@@ -136,7 +108,7 @@ async function getUserUsageBudgetSnapshot(userId: string): Promise<UsageBudgetSn
       typeof body['credits_remaining_cents'] === 'number' ? body['credits_remaining_cents'] : 0;
     const allocated =
       typeof body['credits_allocated_cents'] === 'number' ? body['credits_allocated_cents'] : 0;
-    const periodEnd = typeof body['period_end'] === 'string' ? body['period_end'] : null;
+    const periodEnd = typeof body['period_end'] === 'string' ? new Date(body['period_end']) : null;
     return { remaining, allocated, periodEnd };
   } catch (error) {
     logger.error('[Usage Budget] Error loading balance snapshot:', error);

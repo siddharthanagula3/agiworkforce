@@ -663,7 +663,7 @@ async function _checkFlagshipDailyQuota(
  * already been sent, so errors are logged but not re-thrown.
  */
 export async function reconcileUsage(opts: ReconcileUsageOptions): Promise<void> {
-  const { userId, token, actualTokens, feature, isFlagship } = opts;
+  const { userId, actualTokens, feature, isFlagship } = opts;
 
   if (actualTokens <= 0) return;
 

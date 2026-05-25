@@ -14,13 +14,9 @@ import {
   getAvailableSearchProviders,
 } from './web-search-handler';
 
-// Mock Supabase client
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-  },
+// Mock auth token (replaces former supabase.auth.getSession usage)
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 // Mock fetchWithTimeout
@@ -38,26 +34,20 @@ vi.mock('@core/ai/llm/unified-language-model', () => ({
   },
 }));
 
+import { getAuthToken } from '@shared/lib/get-auth-token';
+
 describe('Web Search Handler', () => {
-  let mockSupabase: { auth: { getSession: ReturnType<typeof vi.fn> } };
   let mockFetchWithTimeout: ReturnType<typeof vi.fn>;
+  const mockGetAuthToken = vi.mocked(getAuthToken);
 
   beforeEach(async () => {
     vi.clearAllMocks();
-
-    const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as unknown as {
-      auth: { getSession: ReturnType<typeof vi.fn> };
-    };
 
     const { fetchWithTimeout } = await import('@shared/utils/error-handling');
     mockFetchWithTimeout = fetchWithTimeout as ReturnType<typeof vi.fn>;
 
     // Default auth mock - authenticated user
-    mockSupabase.auth.getSession.mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    });
+    mockGetAuthToken.mockResolvedValue('test-token');
 
     // Suppress console logs during tests
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -111,10 +101,7 @@ describe('Web Search Handler', () => {
     });
 
     it('should throw error when user is not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      });
+      mockGetAuthToken.mockResolvedValueOnce(null);
 
       await expect(searchWithPerplexity('test query')).rejects.toMatchObject({
         message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer
@@ -229,10 +216,7 @@ describe('Web Search Handler', () => {
     });
 
     it('should throw error when not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      });
+      mockGetAuthToken.mockResolvedValueOnce(null);
 
       await expect(searchWithGoogle('test')).rejects.toMatchObject({
         message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer

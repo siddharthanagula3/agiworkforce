@@ -14,10 +14,10 @@ const LogMessageSchema = z.object({
   content: z.string(),
   model: z.string().optional(),
   provider: z.string().optional(),
-  tokensInput: z.number().int().nonneg().optional(),
-  tokensOutput: z.number().int().nonneg().optional(),
-  costCents: z.number().nonneg().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  tokensInput: z.number().int().nonnegative().optional(),
+  tokensOutput: z.number().int().nonnegative().optional(),
+  costCents: z.number().nonnegative().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 async function handlePost(request: NextRequest) {
