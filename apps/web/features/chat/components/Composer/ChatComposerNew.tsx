@@ -44,6 +44,8 @@ interface ChatComposerProps {
       codeExecutionEnabled?: boolean;
       /** Output style hint forwarded to the LLM system prompt. undefined = 'normal'. */
       styleMode?: string;
+      /** Resolved skill body injected as a system message in the LLM request. */
+      skillBody?: string;
     },
   ) => void | false;
   isLoading?: boolean;
@@ -167,6 +169,7 @@ const ChatComposerNewComponent = ({
   const [mentionStartIndex, setMentionStartIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<SkillInfo | null>(null);
+  const [skillBody, setSkillBody] = useState<string | null>(null);
   const [availableSkills, setAvailableSkills] = useState<SkillInfo[]>(() =>
     ChatAIService.getAvailableSkillsSync(),
   );
@@ -255,6 +258,7 @@ const ChatComposerNewComponent = ({
     setMessage('');
     clearAttachments();
     setSelectedSkill(null);
+    setSkillBody(null);
     setWebSearchEnabled(false);
     setResearchEnabled(false);
     setStyleMode('normal');
@@ -272,6 +276,29 @@ const ChatComposerNewComponent = ({
     lastClearSignalRef.current = clearSignal;
     clearComposerState();
   }, [clearComposerState, clearSignal]);
+
+  // Fetch skill body whenever a skill is selected (covers both slash-command and + menu paths).
+  // Body is stored in state and injected as a system message when the user sends.
+  useEffect(() => {
+    if (!selectedSkill) {
+      setSkillBody(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/skills/${encodeURIComponent(selectedSkill.name)}`);
+        if (!res.ok) return;
+        const json = (await res.json()) as { body: string };
+        if (!cancelled) setSkillBody(json.body ?? null);
+      } catch {
+        // Body injection is best-effort; silently skip on network error.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSkill]);
 
   // Handle prefillText prop — React "derived state from props" pattern.
   // When the parent passes a new non-empty prefillText, we update message
@@ -437,6 +464,13 @@ const ChatComposerNewComponent = ({
     setTimeout(() => textareaRef.current?.focus(), 0);
   }, []);
 
+  const handleSkillSelect = useCallback((skillName: string) => {
+    setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
+    setMessage('');
+    setShowSlashMenu(false);
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  }, []);
+
   const handleStop = useCallback(() => {
     if (onStop) {
       onStop();
@@ -459,6 +493,7 @@ const ChatComposerNewComponent = ({
           folderId: selectedFolderId,
           webSearchEnabled,
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
+          skillBody: skillBody ?? undefined,
         },
       );
 
@@ -469,6 +504,7 @@ const ChatComposerNewComponent = ({
       message,
       attachments,
       selectedSkill,
+      skillBody,
       isLoading,
       disabled,
       agentMode,
@@ -591,6 +627,7 @@ const ChatComposerNewComponent = ({
             ref={slashMenuRef}
             query={slashQuery}
             onSelect={handleSlashSelect}
+            onSkillSelect={handleSkillSelect}
             onClose={() => setShowSlashMenu(false)}
           />
         )}

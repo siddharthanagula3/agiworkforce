@@ -23,6 +23,8 @@ interface SendMessageOptions {
   thinkingEnabled?: boolean;
   /** Output style hint. When set and not 'normal', a system message is prepended. */
   styleMode?: string;
+  /** Skill body injected as a system message at the start of the request. */
+  skillBody?: string;
 }
 
 const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
@@ -290,8 +292,15 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
+        // Prepend the selected skill's body as a system message. This is injected
+        // invisibly and does not appear in chat bubbles.
+        if (options.skillBody) {
+          apiMessages.unshift({ role: 'system', content: options.skillBody });
+        }
+
         // Prepend a style system message when the user has selected a non-default style.
         // This is injected invisibly into the API call and does not appear in chat bubbles.
+        // Placed after skillBody so style sits at index 0 (processed last by the model).
         if (options.styleMode && options.styleMode !== 'normal') {
           const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
           if (styleInstruction) {
