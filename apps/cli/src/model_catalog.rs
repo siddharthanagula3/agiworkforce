@@ -52,8 +52,8 @@ const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 /// It is NOT a user-visible model selection; it is purely a last-resort guard.
 fn pick_fallback_default_model() -> String {
     let candidates = legacy_bundled_models();
-    // Prefer anthropic, then openai, then any
-    for preferred_provider in &["anthropic", "openai"] {
+    // v1 local-only: prefer local providers, then cloud as fallback
+    for preferred_provider in &["ollama", "lmstudio", "anthropic", "openai"] {
         if let Some(m) = candidates
             .iter()
             .find(|m| m.provider == *preferred_provider)
