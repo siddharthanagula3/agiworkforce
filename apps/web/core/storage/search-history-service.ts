@@ -188,16 +188,10 @@ export class SearchHistoryService {
   async deleteSearch(userId: string, searchId: string): Promise<void> {
     try {
       const db = getNeonDb();
-      const { error } = await db
-        .from('search_history')
-        .delete()
-        .eq('id', searchId)
-        .eq('user_id', userId);
-
-      if (error) {
-        logger.error('[SearchHistory] Failed to delete search:', error);
-        throw new Error(error.message);
-      }
+      await db.execute('DELETE FROM search_history WHERE id = $1 AND user_id = $2', [
+        searchId,
+        userId,
+      ]);
 
       logger.debug('[SearchHistory] Deleted search:', { searchId });
     } catch (error) {

@@ -96,9 +96,10 @@ export default function GeneralSettingsPage() {
   const [mounted, setMounted] = useState(false);
 
   // --- Profile state -------------------------------------------------------
+  const userMeta = (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {};
   const initialFullName =
-    (user?.['user_metadata']?.['full_name'] as string | undefined) ??
-    (user?.['user_metadata']?.['name'] as string | undefined) ??
+    (userMeta['full_name'] as string | undefined) ??
+    (userMeta['name'] as string | undefined) ??
     (typeof window !== 'undefined'
       ? (window.localStorage.getItem('agi.profile.displayName') ?? '')
       : '') ??
@@ -110,7 +111,7 @@ export default function GeneralSettingsPage() {
   const [preferredName, setPreferredName] = useState<string>(() => {
     if (typeof window === 'undefined') return '';
     return (
-      (user?.['user_metadata']?.['preferred_name'] as string | undefined) ??
+      (userMeta['preferred_name'] as string | undefined) ??
       window.localStorage.getItem(LS_PREFERRED_NAME_KEY) ??
       initialFullName.split(' ')[0] ??
       ''

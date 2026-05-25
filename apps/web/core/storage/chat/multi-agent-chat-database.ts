@@ -15,6 +15,7 @@ import type {
   MultiAgentConversation,
   MultiAgentConversationInsert,
   MultiAgentConversationUpdate,
+  AgentCollaboration,
   ConversationParticipant,
   ConversationParticipantInsert,
   ConversationParticipantUpdate,
@@ -57,19 +58,27 @@ export async function createConversation(
       status: 'active',
     } as MultiAgentConversationInsert;
 
-    const { data: conversation, error: convError } = await db
-      .from('multi_agent_conversations')
-      .insert(conversationData)
-      .select()
-      .maybeSingle();
+    const convRows = await db.query<MultiAgentConversation>(
+      `INSERT INTO multi_agent_conversations
+         (user_id, title, description, conversation_type, orchestration_mode,
+          collaboration_strategy, max_agents, metadata, tags, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
+      [
+        conversationData.user_id,
+        conversationData.title,
+        conversationData.description,
+        conversationData.conversation_type,
+        conversationData.orchestration_mode,
+        conversationData.collaboration_strategy,
+        conversationData.max_agents,
+        JSON.stringify(conversationData.metadata ?? {}),
+        conversationData.tags,
+        conversationData.status,
+      ],
+    );
 
-    if (convError) {
-      throw new MultiAgentChatError(
-        'Failed to create conversation',
-        'CONVERSATION_CREATE_ERROR',
-        convError,
-      );
-    }
+    const conversation = convRows[0] ?? null;
 
     if (!conversation) {
       throw new MultiAgentChatError(
@@ -130,39 +139,31 @@ export async function getConversation(
   userId: string,
 ): Promise<ConversationWithParticipants | null> {
   try {
-    const { data: conversation, error: convError } = await db
-      .from('multi_agent_conversations')
-      .select('*')
-      .eq('id', conversationId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const convRows = await db.query<MultiAgentConversation>(
+      'SELECT * FROM multi_agent_conversations WHERE id = $1 AND user_id = $2',
+      [conversationId, userId],
+    );
 
-    if (convError) {
-      throw new MultiAgentChatError(
-        'Failed to fetch conversation',
-        'CONVERSATION_FETCH_ERROR',
-        convError,
-      );
-    }
+    const conversation = convRows[0] ?? null;
 
     if (!conversation) {
       return null;
     }
 
     // Get participants
-    const { data: participants, error: partError } = await db
-      .from('conversation_participants')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('joined_at', { ascending: true });
-
-    if (partError) {
+    let participants: ConversationParticipant[] = [];
+    try {
+      participants = await db.query<ConversationParticipant>(
+        'SELECT * FROM conversation_participants WHERE conversation_id = $1 ORDER BY joined_at ASC',
+        [conversationId],
+      );
+    } catch (partError) {
       console.error('Failed to fetch participants:', partError);
     }
 
     return {
       ...conversation,
-      participants: participants || [],
+      participants,
     };
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
@@ -191,34 +192,37 @@ export async function getConversationWithDetails(
     }
 
     // Get collaborations
-    const { data: collaborations, error: collabError } = await db
-      .from('agent_collaborations')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('started_at', { ascending: false });
-
-    if (collabError) {
+    let collaborations: AgentCollaboration[] = [];
+    try {
+      collaborations = await db.query<AgentCollaboration>(
+        'SELECT * FROM agent_collaborations WHERE conversation_id = $1 ORDER BY started_at DESC',
+        [conversationId],
+      );
+    } catch (collabError) {
       console.error('Failed to fetch collaborations:', collabError);
     }
 
     // Get metadata
-    const { data: metadata, error: metaError } = await db
-      .from('conversation_metadata')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .maybeSingle();
-
-    if (metaError) {
+    let metadata: ConversationMetadata | null = null;
+    try {
+      const metaRows = await db.query<ConversationMetadata>(
+        'SELECT * FROM conversation_metadata WHERE conversation_id = $1',
+        [conversationId],
+      );
+      metadata = metaRows[0] ?? null;
+    } catch (metaError) {
       console.error('Failed to fetch metadata:', metaError);
     }
 
     // Get message count from web_messages table
-    const { count: messageCount, error: countError } = await db
-      .from('web_messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('session_id', conversationId);
-
-    if (countError) {
+    let messageCount = 0;
+    try {
+      const countRows = await db.query<{ count: string }>(
+        'SELECT COUNT(*)::int AS count FROM web_messages WHERE session_id = $1',
+        [conversationId],
+      );
+      messageCount = Number(countRows[0]?.count ?? 0);
+    } catch (countError) {
       console.error('Failed to count messages:', countError);
     }
 
@@ -226,7 +230,7 @@ export async function getConversationWithDetails(
       ...conversation,
       collaborations: collaborations || [],
       metadata: metadata || ({} as ConversationMetadata),
-      message_count: messageCount || 0,
+      message_count: messageCount,
     };
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
@@ -248,31 +252,36 @@ export async function listConversations(
   filters: ConversationListFilters = {},
 ): Promise<{ conversations: ConversationWithParticipants[]; total: number }> {
   try {
-    let query = db
-      .from('multi_agent_conversations')
-      .select('*', { count: 'exact' })
-      .eq('user_id', userId);
+    const conditions: string[] = ['user_id = $1'];
+    const params: unknown[] = [userId];
+    let paramIdx = 2;
 
     // Apply filters
     if (filters.status && filters.status.length > 0) {
-      query = query.in('status', filters.status);
+      conditions.push(`status = ANY($${paramIdx})`);
+      params.push(filters.status);
+      paramIdx++;
     }
 
     if (filters.conversation_type && filters.conversation_type.length > 0) {
-      query = query.in('conversation_type', filters.conversation_type);
+      conditions.push(`conversation_type = ANY($${paramIdx})`);
+      params.push(filters.conversation_type);
+      paramIdx++;
     }
 
     if (filters.tags && filters.tags.length > 0) {
-      query = query.contains('tags', filters.tags);
+      conditions.push(`tags @> $${paramIdx}::text[]`);
+      params.push(filters.tags);
+      paramIdx++;
     }
 
     if (filters.search_query) {
-      // Updated: Jan 15th 2026 - Fixed SQL injection by sanitizing user input
-      // Escape special characters that could be used for SQL injection
-      const sanitized = filters.search_query
-        .replace(/[%_\\]/g, '\\$&') // Escape LIKE wildcards and backslash
-        .replace(/'/g, "''"); // Escape single quotes
-      query = query.or(`title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+      // Escape LIKE wildcards — single-quote escaping is handled by parameterization
+      const sanitized = filters.search_query.replace(/[%_\\]/g, '\\$&');
+      const pattern = `%${sanitized}%`;
+      conditions.push(`(title ILIKE $${paramIdx} OR description ILIKE $${paramIdx})`);
+      params.push(pattern);
+      paramIdx++;
     }
 
     // Apply metadata filters (requires join - simplified approach)
@@ -282,75 +291,90 @@ export async function listConversations(
     }
 
     if (filters.date_from) {
-      query = query.gte('created_at', filters.date_from);
+      conditions.push(`created_at >= $${paramIdx}`);
+      params.push(filters.date_from);
+      paramIdx++;
     }
 
     if (filters.date_to) {
-      query = query.lte('created_at', filters.date_to);
+      conditions.push(`created_at <= $${paramIdx}`);
+      params.push(filters.date_to);
+      paramIdx++;
     }
 
     // Pagination
     const limit = filters.limit || 50;
     const offset = filters.offset || 0;
-    query = query.range(offset, offset + limit - 1);
 
-    // Ordering
-    query = query.order('last_message_at', {
-      ascending: false,
-      nullsFirst: false,
-    });
+    const whereClause = conditions.join(' AND ');
 
-    const { data: conversations, error: convError, count } = await query;
+    // Use COUNT(*) OVER() to get total without a second round-trip
+    const sql = `
+      SELECT *, COUNT(*) OVER() AS total_count
+      FROM multi_agent_conversations
+      WHERE ${whereClause}
+      ORDER BY last_message_at DESC NULLS LAST
+      LIMIT $${paramIdx} OFFSET $${paramIdx + 1}
+    `;
+    params.push(limit, offset);
 
-    if (convError) {
+    type ConvRow = MultiAgentConversation & { total_count: string };
+    const rows = await db.query<ConvRow>(sql, params);
+
+    if (rows === undefined) {
       throw new MultiAgentChatError(
         'Failed to list conversations',
         'CONVERSATION_LIST_ERROR',
-        convError,
+        null,
       );
     }
 
+    const total = rows.length > 0 ? Number(rows[0]!.total_count) : 0;
+    const conversations = rows as MultiAgentConversation[];
+
     // Batch fetch participants for all conversations
-    const conversationIds = conversations?.map((c: Record<string, unknown>) => c['id']) || [];
+    const conversationIds = conversations.map((c) => c.id);
     let participantsMap: Record<string, ConversationParticipant[]> = {};
 
     if (conversationIds.length > 0) {
-      const { data: allParticipants, error: partError } = await db
-        .from('conversation_participants')
-        .select('*')
-        .in('conversation_id', conversationIds);
+      try {
+        const allParticipants = await db.query<ConversationParticipant>(
+          'SELECT * FROM conversation_participants WHERE conversation_id = ANY($1)',
+          [conversationIds],
+        );
 
-      if (partError) {
-        console.error('Failed to fetch participants:', partError);
-      } else {
         // Group participants by conversation_id
         participantsMap = (allParticipants || []).reduce(
           (
             acc: Record<string, ConversationParticipant[]>,
-            participant: Record<string, unknown>,
+            participant: ConversationParticipant,
           ) => {
-            if (!acc[participant['conversation_id'] as string]) {
-              acc[participant['conversation_id'] as string] = [];
+            const convId = (participant as unknown as Record<string, unknown>)[
+              'conversation_id'
+            ] as string;
+            if (!acc[convId]) {
+              acc[convId] = [];
             }
-            acc[participant['conversation_id'] as string]!.push(
-              participant as unknown as ConversationParticipant,
-            );
+            acc[convId]!.push(participant);
             return acc;
           },
           {} as Record<string, ConversationParticipant[]>,
         );
+      } catch (partError) {
+        console.error('Failed to fetch participants:', partError);
       }
     }
 
-    const conversationsWithParticipants: ConversationWithParticipants[] =
-      conversations?.map((conv: Record<string, unknown>) => ({
+    const conversationsWithParticipants: ConversationWithParticipants[] = conversations.map(
+      (conv) => ({
         ...(conv as unknown as ConversationWithParticipants),
-        participants: participantsMap[conv['id'] as string] || [],
-      })) || [];
+        participants: participantsMap[conv.id] || [],
+      }),
+    );
 
     return {
       conversations: conversationsWithParticipants,
-      total: count || 0,
+      total,
     };
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
@@ -364,6 +388,25 @@ export async function listConversations(
   }
 }
 
+// Allowed column names for dynamic UPDATE in updateConversation
+const ALLOWED_CONVERSATION_UPDATE_COLUMNS = new Set([
+  'title',
+  'description',
+  'conversation_type',
+  'orchestration_mode',
+  'collaboration_strategy',
+  'max_agents',
+  'metadata',
+  'tags',
+  'status',
+  'started_at',
+  'completed_at',
+  'last_message_at',
+  'total_messages',
+  'total_tokens',
+  'total_cost',
+]);
+
 /**
  * Updates a conversation
  */
@@ -373,21 +416,30 @@ export async function updateConversation(
   updates: MultiAgentConversationUpdate,
 ): Promise<MultiAgentConversation> {
   try {
-    const { data, error } = await db
-      .from('multi_agent_conversations')
-      .update(updates)
-      .eq('id', conversationId)
-      .eq('user_id', userId)
-      .select()
-      .maybeSingle();
+    const entries = Object.entries(updates).filter(([key]) => {
+      if (!ALLOWED_CONVERSATION_UPDATE_COLUMNS.has(key)) {
+        console.warn(`updateConversation: ignoring unknown column "${key}"`);
+        return false;
+      }
+      return true;
+    });
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to update conversation',
-        'CONVERSATION_UPDATE_ERROR',
-        error,
-      );
+    if (entries.length === 0) {
+      throw new MultiAgentChatError('No valid fields to update', 'CONVERSATION_UPDATE_ERROR', null);
     }
+
+    const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`).join(', ');
+    const values = entries.map(([, v]) => v);
+    values.push(conversationId, userId);
+    const idParam = entries.length + 1;
+    const userParam = entries.length + 2;
+
+    const rows = await db.query<MultiAgentConversation>(
+      `UPDATE multi_agent_conversations SET ${setClauses} WHERE id = $${idParam} AND user_id = $${userParam} RETURNING *`,
+      values,
+    );
+
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError(
@@ -415,19 +467,10 @@ export async function updateConversation(
  */
 export async function deleteConversation(conversationId: string, userId: string): Promise<void> {
   try {
-    const { error } = await db
-      .from('multi_agent_conversations')
-      .delete()
-      .eq('id', conversationId)
-      .eq('user_id', userId);
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to delete conversation',
-        'CONVERSATION_DELETE_ERROR',
-        error,
-      );
-    }
+    await db.execute('DELETE FROM multi_agent_conversations WHERE id = $1 AND user_id = $2', [
+      conversationId,
+      userId,
+    ]);
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -464,23 +507,43 @@ export async function addParticipant(
       tools_available: request.tools_available || [],
     } as ConversationParticipantInsert;
 
-    const { data, error } = await db
-      .from('conversation_participants')
-      .insert(participantData)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      if (error.code === '23505') {
+    let rows: ConversationParticipant[];
+    try {
+      rows = await db.query<ConversationParticipant>(
+        `INSERT INTO conversation_participants
+           (conversation_id, employee_id, employee_name, employee_role, employee_provider,
+            participant_role, status, capabilities, tools_available)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [
+          participantData.conversation_id,
+          participantData.employee_id,
+          participantData.employee_name,
+          participantData.employee_role,
+          participantData.employee_provider,
+          participantData.participant_role,
+          participantData.status,
+          participantData.capabilities,
+          participantData.tools_available,
+        ],
+      );
+    } catch (insertError) {
+      if ((insertError as { code?: string })?.code === '23505') {
         // Unique constraint violation
         throw new MultiAgentChatError(
           'Participant already exists in conversation',
           'PARTICIPANT_ALREADY_EXISTS',
-          error,
+          insertError,
         );
       }
-      throw new MultiAgentChatError('Failed to add participant', 'PARTICIPANT_ADD_ERROR', error);
+      throw new MultiAgentChatError(
+        'Failed to add participant',
+        'PARTICIPANT_ADD_ERROR',
+        insertError,
+      );
     }
+
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError(
@@ -507,6 +570,10 @@ export async function addParticipantsBatch(
   participants: AddParticipantRequest[],
 ): Promise<ConversationParticipant[]> {
   try {
+    if (participants.length === 0) {
+      return [];
+    }
+
     const participantsData = participants.map((p) => ({
       conversation_id: conversationId,
       employee_id: p.employee_id,
@@ -519,18 +586,37 @@ export async function addParticipantsBatch(
       tools_available: p.tools_available || [],
     })) as ConversationParticipantInsert[];
 
-    const { data, error } = await db
-      .from('conversation_participants')
-      .insert(participantsData)
-      .select();
+    // Build VALUES tuples with a running param counter
+    const valueTuples: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to add participants in batch',
-        'PARTICIPANT_BATCH_ADD_ERROR',
-        error,
+    for (const p of participantsData) {
+      valueTuples.push(
+        `($${paramIdx}, $${paramIdx + 1}, $${paramIdx + 2}, $${paramIdx + 3}, $${paramIdx + 4}, $${paramIdx + 5}, $${paramIdx + 6}, $${paramIdx + 7}, $${paramIdx + 8})`,
       );
+      params.push(
+        p.conversation_id,
+        p.employee_id,
+        p.employee_name,
+        p.employee_role,
+        p.employee_provider,
+        p.participant_role,
+        p.status,
+        p.capabilities,
+        p.tools_available,
+      );
+      paramIdx += 9;
     }
+
+    const data = await db.query<ConversationParticipant>(
+      `INSERT INTO conversation_participants
+         (conversation_id, employee_id, employee_name, employee_role, employee_provider,
+          participant_role, status, capabilities, tools_available)
+       VALUES ${valueTuples.join(', ')}
+       RETURNING *`,
+      params,
+    );
 
     return data || [];
   } catch (error) {
@@ -550,19 +636,10 @@ export async function addParticipantsBatch(
  */
 export async function getParticipants(conversationId: string): Promise<ConversationParticipant[]> {
   try {
-    const { data, error } = await db
-      .from('conversation_participants')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .order('joined_at', { ascending: true });
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch participants',
-        'PARTICIPANT_FETCH_ERROR',
-        error,
-      );
-    }
+    const data = await db.query<ConversationParticipant>(
+      'SELECT * FROM conversation_participants WHERE conversation_id = $1 ORDER BY joined_at ASC',
+      [conversationId],
+    );
 
     return data || [];
   } catch (error) {
@@ -577,6 +654,23 @@ export async function getParticipants(conversationId: string): Promise<Conversat
   }
 }
 
+// Allowed column names for dynamic UPDATE in updateParticipant
+const ALLOWED_PARTICIPANT_UPDATE_COLUMNS = new Set([
+  'employee_name',
+  'employee_role',
+  'employee_provider',
+  'participant_role',
+  'status',
+  'capabilities',
+  'tools_available',
+  'last_active_at',
+  'left_at',
+  'message_count',
+  'tokens_used',
+  'cost_incurred',
+  'tasks_completed',
+]);
+
 /**
  * Updates a participant
  */
@@ -585,20 +679,29 @@ export async function updateParticipant(
   updates: ConversationParticipantUpdate,
 ): Promise<ConversationParticipant> {
   try {
-    const { data, error } = await db
-      .from('conversation_participants')
-      .update(updates)
-      .eq('id', participantId)
-      .select()
-      .maybeSingle();
+    const entries = Object.entries(updates).filter(([key]) => {
+      if (!ALLOWED_PARTICIPANT_UPDATE_COLUMNS.has(key)) {
+        console.warn(`updateParticipant: ignoring unknown column "${key}"`);
+        return false;
+      }
+      return true;
+    });
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to update participant',
-        'PARTICIPANT_UPDATE_ERROR',
-        error,
-      );
+    if (entries.length === 0) {
+      throw new MultiAgentChatError('No valid fields to update', 'PARTICIPANT_UPDATE_ERROR', null);
     }
+
+    const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`).join(', ');
+    const values = entries.map(([, v]) => v);
+    values.push(participantId);
+    const idParam = entries.length + 1;
+
+    const rows = await db.query<ConversationParticipant>(
+      `UPDATE conversation_participants SET ${setClauses} WHERE id = $${idParam} RETURNING *`,
+      values,
+    );
+
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError('Participant not found', 'PARTICIPANT_NOT_FOUND', null);
@@ -623,21 +726,10 @@ export async function updateParticipant(
 export async function removeParticipant(participantId: string): Promise<void> {
   try {
     // Soft delete by updating status and setting left_at
-    const { error } = await db
-      .from('conversation_participants')
-      .update({
-        status: 'removed',
-        left_at: new Date().toISOString(),
-      })
-      .eq('id', participantId);
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to remove participant',
-        'PARTICIPANT_REMOVE_ERROR',
-        error,
-      );
-    }
+    await db.execute(
+      `UPDATE conversation_participants SET status = $1, left_at = $2 WHERE id = $3`,
+      ['removed', new Date().toISOString(), participantId],
+    );
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -658,21 +750,10 @@ export async function updateParticipantActivity(
   status: 'active' | 'idle' | 'working',
 ): Promise<void> {
   try {
-    const { error } = await db
-      .from('conversation_participants')
-      .update({
-        status,
-        last_active_at: new Date().toISOString(),
-      })
-      .eq('id', participantId);
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to update participant activity',
-        'PARTICIPANT_ACTIVITY_ERROR',
-        error,
-      );
-    }
+    await db.execute(
+      `UPDATE conversation_participants SET status = $1, last_active_at = $2 WHERE id = $3`,
+      [status, new Date().toISOString(), participantId],
+    );
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -815,21 +896,12 @@ export async function getConversationMetadata(
   conversationId: string,
 ): Promise<ConversationMetadata | null> {
   try {
-    const { data, error } = await db
-      .from('conversation_metadata')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .maybeSingle();
+    const rows = await db.query<ConversationMetadata>(
+      'SELECT * FROM conversation_metadata WHERE conversation_id = $1',
+      [conversationId],
+    );
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch conversation metadata',
-        'METADATA_FETCH_ERROR',
-        error,
-      );
-    }
-
-    return data;
+    return rows[0] ?? null;
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -837,6 +909,17 @@ export async function getConversationMetadata(
     throw new MultiAgentChatError('Unexpected error fetching metadata', 'UNEXPECTED_ERROR', error);
   }
 }
+
+// Allowed column names for dynamic UPDATE in updateConversationMetadata
+const ALLOWED_METADATA_UPDATE_COLUMNS = new Set([
+  'ui_settings',
+  'is_archived',
+  'is_pinned',
+  'is_public',
+  'share_token',
+  'last_opened_at',
+  'custom_data',
+]);
 
 /**
  * Updates conversation metadata
@@ -846,20 +929,29 @@ export async function updateConversationMetadata(
   updates: ConversationMetadataUpdate,
 ): Promise<ConversationMetadata> {
   try {
-    const { data, error } = await db
-      .from('conversation_metadata')
-      .update(updates)
-      .eq('conversation_id', conversationId)
-      .select()
-      .maybeSingle();
+    const entries = Object.entries(updates).filter(([key]) => {
+      if (!ALLOWED_METADATA_UPDATE_COLUMNS.has(key)) {
+        console.warn(`updateConversationMetadata: ignoring unknown column "${key}"`);
+        return false;
+      }
+      return true;
+    });
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to update conversation metadata',
-        'METADATA_UPDATE_ERROR',
-        error,
-      );
+    if (entries.length === 0) {
+      throw new MultiAgentChatError('No valid fields to update', 'METADATA_UPDATE_ERROR', null);
     }
+
+    const setClauses = entries.map(([key], i) => `${key} = $${i + 1}`).join(', ');
+    const values = entries.map(([, v]) => v);
+    values.push(conversationId);
+    const idParam = entries.length + 1;
+
+    const rows = await db.query<ConversationMetadata>(
+      `UPDATE conversation_metadata SET ${setClauses} WHERE conversation_id = $${idParam} RETURNING *`,
+      values,
+    );
+
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError('Conversation metadata not found', 'METADATA_NOT_FOUND', null);
@@ -884,18 +976,10 @@ export async function updateConversationMetadata(
 export async function getConversationStats(userId: string): Promise<ConversationStats> {
   try {
     // Get aggregate stats
-    const { data: conversations, error: convError } = await db
-      .from('multi_agent_conversations')
-      .select('status, total_messages, total_tokens, total_cost, started_at, completed_at')
-      .eq('user_id', userId);
-
-    if (convError) {
-      throw new MultiAgentChatError(
-        'Failed to fetch conversation stats',
-        'STATS_FETCH_ERROR',
-        convError,
-      );
-    }
+    const conversations = await db.query<Record<string, unknown>>(
+      'SELECT status, total_messages, total_tokens, total_cost, started_at, completed_at FROM multi_agent_conversations WHERE user_id = $1',
+      [userId],
+    );
 
     const total_conversations = conversations?.length || 0;
     const active_conversations =
@@ -942,30 +1026,34 @@ export async function getConversationStats(userId: string): Promise<Conversation
     }> = [];
 
     if (conversationIds2.length > 0) {
-      const { data: participants, error: partError } = await db
-        .from('conversation_participants')
-        .select('employee_id, employee_name')
-        .in('conversation_id', conversationIds2);
-
-      if (!partError && participants) {
-        const agentCounts = participants.reduce(
-          (acc: Record<string, number>, p: Record<string, unknown>) => {
-            const key = `${p['employee_id']}|${p['employee_name']}`;
-            acc[key] = (acc[key] || 0) + 1;
-            return acc;
-          },
-          {} as Record<string, number>,
+      try {
+        const participants = await db.query<Record<string, unknown>>(
+          'SELECT employee_id, employee_name FROM conversation_participants WHERE conversation_id = ANY($1)',
+          [conversationIds2],
         );
 
-        most_used_agents = Object.entries(agentCounts)
-          .map(([key, count]) => {
-            const parts = key.split('|');
-            const employee_id = parts[0] ?? '';
-            const employee_name = parts[1] ?? '';
-            return { employee_id, employee_name, usage_count: count as number };
-          })
-          .sort((a, b) => b.usage_count - a.usage_count)
-          .slice(0, 10);
+        if (participants) {
+          const agentCounts = participants.reduce(
+            (acc: Record<string, number>, p: Record<string, unknown>) => {
+              const key = `${p['employee_id']}|${p['employee_name']}`;
+              acc[key] = (acc[key] || 0) + 1;
+              return acc;
+            },
+            {} as Record<string, number>,
+          );
+
+          most_used_agents = Object.entries(agentCounts)
+            .map(([key, count]) => {
+              const parts = key.split('|');
+              const employee_id = parts[0] ?? '';
+              const employee_name = parts[1] ?? '';
+              return { employee_id, employee_name, usage_count: count as number };
+            })
+            .sort((a, b) => b.usage_count - a.usage_count)
+            .slice(0, 10);
+        }
+      } catch (partError) {
+        console.error('Failed to fetch participants for stats:', partError);
       }
     }
 

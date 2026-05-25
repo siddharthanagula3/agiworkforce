@@ -246,32 +246,32 @@ describe('QwenProvider', () => {
     });
 
     it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-            usage: { prompt_tokens: 5 },
-            id: 'resp-123',
-          }),
-      });
+      // First fetch: proxy call; second fetch: log-message API call
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [{ message: { content: 'Response' } }],
+              usage: { prompt_tokens: 5 },
+              id: 'resp-123',
+            }),
+        })
+        .mockResolvedValueOnce({ ok: true });
 
       await provider.sendMessage(mockMessages, 'session-123', 'user-456');
 
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/agents/log-message',
         expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
+          method: 'POST',
+          headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+          body: expect.stringContaining('"sessionId":"session-123"'),
         }),
       );
+      const logBody = JSON.parse(mockFetch.mock.calls[1]![1]!.body as string);
+      expect(logBody.role).toBe('assistant');
+      expect(logBody.content).toBe('Response');
     });
 
     it('should handle empty response gracefully', async () => {
@@ -372,10 +372,7 @@ describe('QwenProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
       const stream = provider.streamMessage(mockMessages);
 
@@ -396,33 +393,32 @@ describe('QwenProvider', () => {
     });
 
     it('should save to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Streamed' } }],
-            usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
-          }),
-      });
+      // First fetch: proxy call; second fetch: log-message API call
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [{ message: { content: 'Streamed' } }],
+              usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
+            }),
+        })
+        .mockResolvedValueOnce({ ok: true });
 
       const chunks = [];
       for await (const chunk of provider.streamMessage(mockMessages, 'session-123', 'user-456')) {
         chunks.push(chunk);
       }
 
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/agents/log-message',
         expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          content: 'Streamed',
+          method: 'POST',
+          body: expect.stringContaining('"sessionId":"session-123"'),
         }),
       );
+      const logBody = JSON.parse(mockFetch.mock.calls[1]![1]!.body as string);
+      expect(logBody.content).toBe('Streamed');
     });
   });
 
@@ -474,11 +470,6 @@ describe('QwenProvider', () => {
     });
 
     it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -490,24 +481,24 @@ describe('QwenProvider', () => {
 
       await provider.sendMessage(mockMessages, undefined, 'user-123');
 
-      expect(insertMock).not.toHaveBeenCalled();
+      // Only the proxy call should have been made; no log-message call
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalledWith('/api/agents/log-message', expect.anything());
     });
 
     it('should handle database save error gracefully', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: new Error('DB error') });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
+      // Proxy call succeeds; log-message call rejects (network failure)
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [{ message: { content: 'Response' } }],
+            }),
+        })
+        .mockRejectedValueOnce(new Error('Network error saving log'));
 
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-          }),
-      });
-
-      // Should not throw even if database save fails
+      // Should not throw even if the log-message API call fails
       const response = await provider.sendMessage(mockMessages, 'session-123', 'user-456');
       expect(response.content).toBe('Response');
     });
