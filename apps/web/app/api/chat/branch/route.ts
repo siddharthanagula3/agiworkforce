@@ -21,7 +21,6 @@ type ConversationRow = {
   title: string | null;
   created_at: string;
   updated_at: string;
-  is_active: boolean;
 };
 
 type MessageRow = {
@@ -60,7 +59,7 @@ async function handlePost(request: NextRequest) {
 
   // Verify the session belongs to the user
   const [originalSession] = await db.query<ConversationRow>(
-    'select id, title from web_conversations where id = $1 and user_id = $2 and is_active = true limit 1',
+    'select id, title from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
     [sessionId, userId],
   );
   if (!originalSession) throw createError.notFound('Session not found');
@@ -87,9 +86,9 @@ async function handlePost(request: NextRequest) {
   const result = await db.transaction(async (tx) => {
     // Create new conversation
     const [branchSession] = await tx.query<ConversationRow>(
-      `insert into web_conversations (user_id, title, is_active, created_at, updated_at)
-       values ($1, $2, true, now(), now())
-       returning id, user_id, title, created_at, updated_at, is_active`,
+      `insert into web_conversations (user_id, title, created_at, updated_at)
+       values ($1, $2, now(), now())
+       returning id, user_id, title, created_at, updated_at`,
       [userId, branchTitle],
     );
 
@@ -98,8 +97,8 @@ async function handlePost(request: NextRequest) {
     // Copy messages
     for (const msg of messagesToCopy) {
       await tx.execute(
-        `insert into web_messages (conversation_id, role, content, created_at, updated_at)
-         values ($1, $2, $3, now(), now())`,
+        `insert into web_messages (conversation_id, role, content, created_at)
+         values ($1, $2, $3, now())`,
         [branchSession.id, msg.role, msg.content],
       );
     }
