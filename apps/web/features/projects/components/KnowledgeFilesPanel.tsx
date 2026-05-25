@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
-import { supabase } from '@shared/lib/supabase-client';
+import { put } from '@vercel/blob';
 import { getCsrfToken } from '@/lib/client/csrf';
 import { FilePreviewModal } from './FilePreviewModal';
 
@@ -17,7 +17,6 @@ type UploadState =
   | { status: 'uploading'; fileName: string; progress: number }
   | { status: 'error'; message: string };
 
-const KNOWLEDGE_BUCKET = 'knowledge-files';
 const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10 MiB — mirrors MAX_ATTACHMENT_BYTES
 
 const ALLOWED_MIME_TYPES = new Set([
@@ -104,23 +103,19 @@ export function KnowledgeFilesPanel({ projectId }: Props) {
       const arrayBuffer = await file.arrayBuffer();
       const checksumSha256 = await sha256Hex(arrayBuffer);
 
-      // 2. Upload to Supabase Storage
+      // 2. Upload to Vercel Blob (requires BLOB_READ_WRITE_TOKEN on the server)
       const timestamp = Date.now();
       const ext = file.name.split('.').pop() ?? 'bin';
-      const storagePath = `projects/${projectId}/${timestamp}_${checksumSha256.slice(0, 8)}.${ext}`;
+      const storagePath = `knowledge-files/projects/${projectId}/${timestamp}_${checksumSha256.slice(0, 8)}.${ext}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(KNOWLEDGE_BUCKET)
-        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
-
-      if (uploadError) {
-        // Bucket may not exist yet in local/dev env. Surface a clear message.
-        throw new Error(`Storage upload failed: ${uploadError.message}`);
-      }
+      const uploadedBlob = await put(storagePath, file, {
+        access: 'public',
+        contentType: file.type || 'application/octet-stream',
+      });
 
       setUploadState({ status: 'uploading', fileName: file.name, progress: 80 });
 
-      const storageUri = uploadData.fullPath ?? uploadData.path;
+      const storageUri = uploadedBlob.url;
 
       // 3. Register the file via the API
       const csrfToken = await getCsrfToken();

@@ -3,10 +3,14 @@ import { logger } from '@shared/lib/logger';
  * File Attachment Handler
  *
  * Handles file uploads, storage, and retrieval for chat attachments.
- * Uses Supabase Storage for secure file hosting.
+ * Uses Vercel Blob for file hosting (requires BLOB_READ_WRITE_TOKEN on the server).
+ *
+ * NOTE: Vercel Blob URLs are permanent public URLs. The bucket-init concept does
+ * not apply. For deletion, pass the full blob URL (blob.url) to del().
+ * Attachment.id stores the blob URL so deleteFile() can call del(url).
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { put, del, list } from '@vercel/blob';
 import { secureFilenameSegment } from '@/lib/secure-random';
 import type { Attachment } from '../types';
 
@@ -23,7 +27,6 @@ export interface UploadResult {
 }
 
 export class AttachmentHandler {
-  private readonly bucketName = 'chat-attachments';
   private readonly maxFileSize = 10 * 1024 * 1024; // 10MB
   private readonly allowedTypes = [
     // Images
@@ -55,25 +58,11 @@ export class AttachmentHandler {
   ];
 
   /**
-   * Initialize the storage bucket if it doesn't exist
+   * No-op: Vercel Blob has no bucket concept.
+   * Retained for API compatibility with existing callers.
    */
   async initializeBucket(): Promise<void> {
-    const { data: buckets } = await supabase.storage.listBuckets();
-
-    const bucketExists = buckets?.some((bucket) => bucket.name === this.bucketName);
-
-    if (!bucketExists) {
-      const { error } = await supabase.storage.createBucket(this.bucketName, {
-        public: false, // Private bucket with signed URLs
-        fileSizeLimit: this.maxFileSize,
-        allowedMimeTypes: this.allowedTypes,
-      });
-
-      if (error) {
-        logger.error('Failed to create storage bucket:', error);
-        throw new Error(`Failed to initialize storage: ${error.message}`);
-      }
-    }
+    // Vercel Blob does not require bucket initialization.
   }
 
   /**
@@ -111,7 +100,7 @@ export class AttachmentHandler {
   }
 
   /**
-   * Upload a file to Supabase Storage
+   * Upload a file to Vercel Blob
    */
   async uploadFile(
     file: File,
@@ -135,26 +124,11 @@ export class AttachmentHandler {
     const safeFilename = `${userId}/${sessionId}/${timestamp}_${randomString}.${extension}`;
 
     try {
-      // Upload file
-      const { data, error } = await supabase.storage
-        .from(this.bucketName)
-        .upload(safeFilename, file, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (error) {
-        throw new Error(`Upload failed: ${error.message}`);
-      }
-
-      // Get public URL (signed for private buckets)
-      const { data: urlData } = await supabase.storage
-        .from(this.bucketName)
-        .createSignedUrl(data.path, 3600 * 24 * 7); // 7 days
-
-      if (!urlData) {
-        throw new Error('Failed to generate signed URL');
-      }
+      // Upload file to Vercel Blob
+      const blob = await put(safeFilename, file, {
+        access: 'public',
+        contentType: file.type,
+      });
 
       // Create thumbnail for images
       let thumbnailUrl: string | undefined;
@@ -162,20 +136,20 @@ export class AttachmentHandler {
         thumbnailUrl = await this.createThumbnail(file, safeFilename, userId, sessionId);
       }
 
-      // Create attachment object
+      // Attachment.id stores the blob URL so deleteFile() can call del(url).
       const attachment: Attachment = {
-        id: data.path,
+        id: blob.url,
         name: file.name,
         type: file.type,
         size: file.size,
-        url: urlData.signedUrl,
+        url: blob.url,
         thumbnailUrl,
       };
 
       return {
         attachment,
-        url: data.path,
-        publicUrl: urlData.signedUrl,
+        url: blob.url,
+        publicUrl: blob.url,
       };
     } catch (error) {
       logger.error('File upload error:', error);
@@ -239,29 +213,17 @@ export class AttachmentHandler {
 
       if (!blob) return undefined;
 
-      // Upload thumbnail
+      // Upload thumbnail to Vercel Blob
       const thumbnailPath = originalPath.replace(/\.[^/.]+$/, '_thumb.jpg');
 
-      const { data, error } = await supabase.storage
-        .from(this.bucketName)
-        .upload(thumbnailPath, blob, {
-          cacheControl: '3600',
-          upsert: false,
-        });
-
-      if (error) {
-        logger.error('Thumbnail upload error:', error);
-        return undefined;
-      }
-
-      // Get signed URL for thumbnail
-      const { data: urlData } = await supabase.storage
-        .from(this.bucketName)
-        .createSignedUrl(data.path, 3600 * 24 * 7);
+      const thumbBlob = await put(thumbnailPath, blob, {
+        access: 'public',
+        contentType: 'image/jpeg',
+      });
 
       URL.revokeObjectURL(imageUrl);
 
-      return urlData?.signedUrl;
+      return thumbBlob.url;
     } catch (error) {
       logger.error('Thumbnail creation error:', error);
       return undefined;
@@ -294,125 +256,110 @@ export class AttachmentHandler {
   }
 
   /**
-   * Delete a file from storage
+   * Delete a file from Vercel Blob.
+   * @param blobUrl - The full Vercel Blob URL returned by put() (stored as Attachment.id).
    */
-  async deleteFile(filePath: string): Promise<void> {
-    const { error } = await supabase.storage.from(this.bucketName).remove([filePath]);
+  async deleteFile(blobUrl: string): Promise<void> {
+    await del(blobUrl);
 
-    if (error) {
-      throw new Error(`Failed to delete file: ${error.message}`);
+    // Also try to delete thumbnail if it exists (derive thumb URL from original)
+    const thumbnailUrl = blobUrl.replace(/\.[^/.?#]+(\?.*)?$/, (_, qs) => `_thumb.jpg${qs ?? ''}`);
+    try {
+      await del(thumbnailUrl);
+    } catch {
+      // Thumbnail may not exist; ignore deletion errors.
     }
-
-    // Also try to delete thumbnail if it exists
-    const thumbnailPath = filePath.replace(/\.[^/.]+$/, '_thumb.jpg');
-    await supabase.storage.from(this.bucketName).remove([thumbnailPath]);
   }
 
   /**
-   * Get file info
+   * Get file info from Vercel Blob.
+   * @param blobUrl - The full Vercel Blob URL.
    */
-  async getFileInfo(filePath: string): Promise<{
+  async getFileInfo(blobUrl: string): Promise<{
     name: string;
     size: number;
     type: string;
     url: string;
   } | null> {
-    const { data, error } = await supabase.storage.from(this.bucketName).list(filePath);
-
-    if (error || !data || data.length === 0) {
+    try {
+      const { blobs } = await list({ prefix: blobUrl });
+      if (!blobs || blobs.length === 0) return null;
+      const entry = blobs[0]!;
+      const name = entry.pathname.split('/').pop() ?? entry.pathname;
+      return {
+        name,
+        size: entry.size,
+        type: 'application/octet-stream', // Vercel Blob list does not return content-type
+        url: entry.url,
+      };
+    } catch {
       return null;
     }
-
-    const file = data[0];
-
-    // Get signed URL
-    const { data: urlData } = await supabase.storage
-      .from(this.bucketName)
-      .createSignedUrl(filePath, 3600);
-
-    return {
-      name: file?.name ?? '',
-      size: file?.metadata?.['size'] || 0,
-      type: file?.metadata?.['mimetype'] || 'application/octet-stream',
-      url: urlData?.signedUrl || '',
-    };
   }
 
   /**
-   * Refresh signed URL for an attachment
+   * Vercel Blob public URLs are permanent and do not expire.
+   * This method is retained for API compatibility; it returns the URL unchanged.
+   * @param blobUrl - The full Vercel Blob URL.
    */
-  async refreshSignedUrl(filePath: string, expiresIn: number = 3600): Promise<string> {
-    const { data, error } = await supabase.storage
-      .from(this.bucketName)
-      .createSignedUrl(filePath, expiresIn);
-
-    if (error || !data) {
-      throw new Error('Failed to refresh signed URL');
-    }
-
-    return data.signedUrl;
+  async refreshSignedUrl(blobUrl: string, _expiresIn: number = 3600): Promise<string> {
+    return blobUrl;
   }
 
   /**
-   * Get all attachments for a session
+   * Get all attachments for a session from Vercel Blob.
    */
   async getSessionAttachments(userId: string, sessionId: string): Promise<Attachment[]> {
-    const folderPath = `${userId}/${sessionId}`;
+    const prefix = `${userId}/${sessionId}/`;
 
-    const { data, error } = await supabase.storage.from(this.bucketName).list(folderPath);
-
-    if (error) {
+    let blobs;
+    try {
+      ({ blobs } = await list({ prefix }));
+    } catch (error) {
       logger.error('Failed to list attachments:', error);
       return [];
     }
 
-    if (!data || data.length === 0) {
+    if (!blobs || blobs.length === 0) {
       return [];
     }
 
     const attachments: Attachment[] = [];
 
-    for (const file of data) {
+    for (const entry of blobs) {
+      const name = entry.pathname.split('/').pop() ?? entry.pathname;
       // Skip thumbnails
-      if (file.name.includes('_thumb.')) continue;
+      if (name.includes('_thumb.')) continue;
 
-      const filePath = `${folderPath}/${file.name}`;
+      // Derive thumbnail URL by path convention
+      const thumbnailUrl = entry.url.replace(
+        /\.[^/.?#]+(\?.*)?$/,
+        (_, qs) => `_thumb.jpg${qs ?? ''}`,
+      );
 
-      // Get signed URL
-      const { data: urlData } = await supabase.storage
-        .from(this.bucketName)
-        .createSignedUrl(filePath, 3600 * 24 * 7);
-
-      if (urlData) {
-        // Check for thumbnail
-        const thumbnailPath = filePath.replace(/\.[^/.]+$/, '_thumb.jpg');
-        const { data: thumbData } = await supabase.storage
-          .from(this.bucketName)
-          .createSignedUrl(thumbnailPath, 3600 * 24 * 7);
-
-        attachments.push({
-          id: filePath,
-          name: file.name,
-          type: file.metadata?.['mimetype'] || 'application/octet-stream',
-          size: file.metadata?.['size'] || 0,
-          url: urlData.signedUrl,
-          thumbnailUrl: thumbData?.signedUrl,
-        });
-      }
+      attachments.push({
+        id: entry.url,
+        name,
+        type: 'application/octet-stream', // Vercel Blob list does not return content-type
+        size: entry.size,
+        url: entry.url,
+        thumbnailUrl,
+      });
     }
 
     return attachments;
   }
 
   /**
-   * Download a file
+   * Download a file from Vercel Blob.
+   * @param blobUrl - The full Vercel Blob URL.
    */
-  async downloadFile(filePath: string, filename: string): Promise<void> {
-    const { data, error } = await supabase.storage.from(this.bucketName).download(filePath);
-
-    if (error || !data) {
+  async downloadFile(blobUrl: string, filename: string): Promise<void> {
+    const response = await fetch(blobUrl);
+    if (!response.ok) {
       throw new Error('Failed to download file');
     }
+    const data = await response.blob();
 
     // Create download link
     const url = URL.createObjectURL(data);
