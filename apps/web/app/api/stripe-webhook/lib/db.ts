@@ -220,12 +220,13 @@ export async function upsertSubscriptionFromSession(
 ): Promise<NextResponse | void> {
   logger.info({ sessionId: session.id }, 'Processing checkout session');
 
-  let supabaseUserId =
+  let resolvedUserId =
+    session.metadata?.['user_id'] ||
     session.metadata?.['supabase_user_id'] ||
     session.metadata?.['userId'] ||
     session.client_reference_id;
 
-  if (!supabaseUserId && session.customer) {
+  if (!resolvedUserId && session.customer) {
     try {
       const stripeCustomerId = session.customer as string;
 
@@ -236,9 +237,9 @@ export async function upsertSubscriptionFromSession(
       const profile = profiles[0];
 
       if (profile?.id) {
-        supabaseUserId = profile.id;
+        resolvedUserId = profile.id;
         logger.info(
-          { sessionId: session.id, customerId: stripeCustomerId, userId: supabaseUserId },
+          { sessionId: session.id, customerId: stripeCustomerId, userId: resolvedUserId },
           'Resolved user_id from stripe_customer_id in profiles table (BEST PRACTICE)',
         );
       } else {
@@ -275,21 +276,21 @@ export async function upsertSubscriptionFromSession(
                 throw new Error('Email reuse detected - cannot safely assign subscription');
               }
 
-              supabaseUserId = matchingUser.id;
+              resolvedUserId = matchingUser.id;
               logger.warn(
-                { sessionId: session.id, email: customer.email, userId: supabaseUserId },
+                { sessionId: session.id, email: customer.email, userId: resolvedUserId },
                 'FALLBACK: Resolved user_id from email - storing customer_id for future',
               );
 
               await db
                 .execute('update profiles set stripe_customer_id = $1 where id = $2', [
                   stripeCustomerId,
-                  supabaseUserId,
+                  resolvedUserId,
                 ])
                 .catch(() => undefined);
 
               logger.info(
-                { userId: supabaseUserId, customerId: stripeCustomerId },
+                { userId: resolvedUserId, customerId: stripeCustomerId },
                 'Stored stripe_customer_id in profile (migration from email fallback)',
               );
             } else {
@@ -306,7 +307,7 @@ export async function upsertSubscriptionFromSession(
     }
   }
 
-  if (!supabaseUserId) {
+  if (!resolvedUserId) {
     logger.error(
       {
         sessionId: session.id,
@@ -314,7 +315,7 @@ export async function upsertSubscriptionFromSession(
         hasMetadata: !!session.metadata,
         hasClientRef: !!session.client_reference_id,
       },
-      'CRITICAL: No supabase_user_id found - cannot create subscription',
+      'CRITICAL: No user_id found - cannot create subscription',
     );
     throw new Error('Cannot determine user_id for subscription');
   }
@@ -331,23 +332,23 @@ export async function upsertSubscriptionFromSession(
     }
   }
 
-  await ensureProfileExists(db, supabaseUserId, customerEmail);
+  await ensureProfileExists(db, resolvedUserId, customerEmail);
 
   const stripeCustomerId = session.customer as string | null;
   if (stripeCustomerId) {
     await db
       .execute('update profiles set stripe_customer_id = $1 where id = $2', [
         stripeCustomerId,
-        supabaseUserId,
+        resolvedUserId,
       ])
       .catch((updateError: unknown) => {
         logger.error(
-          { error: updateError, userId: supabaseUserId, customerId: stripeCustomerId },
+          { error: updateError, userId: resolvedUserId, customerId: stripeCustomerId },
           'Failed to store stripe_customer_id in profiles table',
         );
       });
     logger.info(
-      { userId: supabaseUserId, customerId: stripeCustomerId },
+      { userId: resolvedUserId, customerId: stripeCustomerId },
       'Stored stripe_customer_id in profiles table (enables proper customer lookup)',
     );
   }
@@ -356,14 +357,14 @@ export async function upsertSubscriptionFromSession(
     const profileRows = await db
       .query<{
         email: string | null;
-      }>('select email from profiles where id = $1 limit 1', [supabaseUserId])
+      }>('select email from profiles where id = $1 limit 1', [resolvedUserId])
       .catch(() => [] as { email: string | null }[]);
 
     const storedProfile = profileRows[0];
     if (storedProfile?.email && storedProfile.email !== customerEmail) {
       logger.warn(
         {
-          supabaseUserId,
+          resolvedUserId,
           profileEmail: storedProfile.email,
           stripeCustomerEmail: customerEmail,
           sessionId: session.id,
@@ -415,7 +416,7 @@ export async function upsertSubscriptionFromSession(
   const stripeSubId = session.subscription as string | null;
 
   logger.debug(
-    { sessionId: session.id, supabaseUserId, planTier, stripeCustomerId, stripeSubId },
+    { sessionId: session.id, resolvedUserId, planTier, stripeCustomerId, stripeSubId },
     'Session details',
   );
 
@@ -509,7 +510,7 @@ export async function upsertSubscriptionFromSession(
 
   if (!stripePriceId && stripeSubId) {
     logger.warn(
-      { sessionId: session.id, subscriptionId: stripeSubId, userId: supabaseUserId },
+      { sessionId: session.id, subscriptionId: stripeSubId, userId: resolvedUserId },
       'stripe_price_id is null for session. Attempting final retrieval...',
     );
     try {
@@ -538,7 +539,7 @@ export async function upsertSubscriptionFromSession(
 
   if (!stripePriceId) {
     logger.error(
-      { sessionId: session.id, subscriptionId: stripeSubId, userId: supabaseUserId },
+      { sessionId: session.id, subscriptionId: stripeSubId, userId: resolvedUserId },
       'CRITICAL: stripe_price_id is still null after all attempts',
     );
   }
@@ -563,7 +564,7 @@ export async function upsertSubscriptionFromSession(
   }
 
   const subData = {
-    user_id: supabaseUserId,
+    user_id: resolvedUserId,
     status,
     plan_tier: planTier,
     stripe_customer_id: stripeCustomerId,
@@ -624,7 +625,7 @@ export async function upsertSubscriptionFromSession(
     for (let attempt = 1; attempt <= WEBHOOK_MAX_RETRIES; attempt++) {
       try {
         await SubscriptionService.allocateCreditsForPeriod(
-          supabaseUserId,
+          resolvedUserId,
           data.id,
           planTier,
           new Date(currentPeriodStart),
@@ -632,7 +633,7 @@ export async function upsertSubscriptionFromSession(
           { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
         );
         logger.info(
-          { userId: supabaseUserId, subscriptionId: data.id, planTier, attempt },
+          { userId: resolvedUserId, subscriptionId: data.id, planTier, attempt },
           'Credits allocated for new subscription',
         );
         lastError = null;
@@ -642,7 +643,7 @@ export async function upsertSubscriptionFromSession(
         logger.warn(
           {
             error: creditError,
-            userId: supabaseUserId,
+            userId: resolvedUserId,
             subscriptionId: data.id,
             attempt,
             maxRetries: WEBHOOK_MAX_RETRIES,
@@ -660,7 +661,7 @@ export async function upsertSubscriptionFromSession(
 
     if (lastError) {
       logger.error(
-        { error: lastError, userId: supabaseUserId, subscriptionId: data.id, planTier },
+        { error: lastError, userId: resolvedUserId, subscriptionId: data.id, planTier },
         'CRITICAL: Failed to allocate credits after all retries - user may need manual sync',
       );
     }
@@ -750,7 +751,7 @@ export async function updateSubscriptionFromStripeSubscription(
 
   logger.info({ stripeSubId, stripeCustomerId, updateData }, 'Updating subscription');
 
-  let supabaseUserId: string | null = null;
+  let resolvedUserId: string | null = null;
 
   if (stripeSubId) {
     const existingSubs = await db
@@ -770,7 +771,7 @@ export async function updateSubscriptionFromStripeSubscription(
     const existingSub = existingSubs[0];
 
     if (existingSub) {
-      supabaseUserId = existingSub.user_id;
+      resolvedUserId = existingSub.user_id;
 
       const isNewPeriod = existingSub.current_period_start !== updateData.current_period_start;
 
@@ -810,14 +811,14 @@ export async function updateSubscriptionFromStripeSubscription(
         updatedRow &&
         updateData.current_period_start &&
         updateData.current_period_end &&
-        supabaseUserId
+        resolvedUserId
       ) {
         const pStart = updateData.current_period_start;
         const pEnd = updateData.current_period_end;
         try {
           if (isNewPeriod) {
             await SubscriptionService.resetCreditsForNewPeriod(
-              supabaseUserId,
+              resolvedUserId,
               updatedRow.id,
               planTier,
               new Date(pStart),
@@ -825,12 +826,12 @@ export async function updateSubscriptionFromStripeSubscription(
               { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
-              { userId: supabaseUserId, subscriptionId: updatedRow.id, planTier },
+              { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
               'Credits reset for new billing period',
             );
           } else {
             await SubscriptionService.allocateCreditsForPeriod(
-              supabaseUserId,
+              resolvedUserId,
               updatedRow.id,
               planTier,
               new Date(pStart),
@@ -838,25 +839,26 @@ export async function updateSubscriptionFromStripeSubscription(
               { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
-              { userId: supabaseUserId, subscriptionId: updatedRow.id, planTier },
+              { userId: resolvedUserId, subscriptionId: updatedRow.id, planTier },
               'Credits allocated for subscription update',
             );
           }
         } catch (creditError) {
           logger.error(
-            { error: creditError, userId: supabaseUserId, subscriptionId: updatedRow.id },
+            { error: creditError, userId: resolvedUserId, subscriptionId: updatedRow.id },
             'Failed to allocate/reset credits for subscription',
           );
         }
       }
     } else {
-      const metadataUserId = subscription.metadata?.['supabase_user_id'];
+      const metadataUserId =
+        subscription.metadata?.['user_id'] || subscription.metadata?.['supabase_user_id'];
       if (metadataUserId) {
         logger.info(
           { stripeSubId, metadataUserId },
           'Subscription not found. Will create via metadata user_id',
         );
-        supabaseUserId = metadataUserId;
+        resolvedUserId = metadataUserId;
       } else if (stripeCustomerId) {
         const profileRows = await db.query<{ id: string }>(
           'select id from profiles where stripe_customer_id = $1 limit 1',
@@ -869,7 +871,7 @@ export async function updateSubscriptionFromStripeSubscription(
             { userId: profileByCustomer.id, customerId: stripeCustomerId },
             'Found user by stripe_customer_id in profiles table (BEST PRACTICE)',
           );
-          supabaseUserId = profileByCustomer.id;
+          resolvedUserId = profileByCustomer.id;
         } else {
           try {
             const customer = await stripe.customers.retrieve(stripeCustomerId);
@@ -888,7 +890,7 @@ export async function updateSubscriptionFromStripeSubscription(
                   { userId: emailProfile.id, email: customerEmail },
                   'FALLBACK: Found user by email (will store customer_id for future)',
                 );
-                supabaseUserId = emailProfile.id;
+                resolvedUserId = emailProfile.id;
 
                 await db
                   .execute('update profiles set stripe_customer_id = $1 where id = $2', [
@@ -917,7 +919,7 @@ export async function updateSubscriptionFromStripeSubscription(
         }
       }
 
-      if (supabaseUserId) {
+      if (resolvedUserId) {
         let customerEmailForProfile: string | null = null;
         if (stripeCustomerId) {
           try {
@@ -929,29 +931,29 @@ export async function updateSubscriptionFromStripeSubscription(
             // ignore; profile created without email
           }
         }
-        await ensureProfileExists(db, supabaseUserId, customerEmailForProfile);
+        await ensureProfileExists(db, resolvedUserId, customerEmailForProfile);
 
         if (stripeCustomerId) {
           await db
             .execute('update profiles set stripe_customer_id = $1 where id = $2', [
               stripeCustomerId,
-              supabaseUserId,
+              resolvedUserId,
             ])
             .catch((updateError: unknown) => {
               logger.error(
-                { error: updateError, userId: supabaseUserId, customerId: stripeCustomerId },
+                { error: updateError, userId: resolvedUserId, customerId: stripeCustomerId },
                 'Failed to store stripe_customer_id in profiles table',
               );
             });
           logger.info(
-            { userId: supabaseUserId, customerId: stripeCustomerId },
+            { userId: resolvedUserId, customerId: stripeCustomerId },
             'Stored stripe_customer_id in profiles table',
           );
         }
 
         const createData = {
           ...updateData,
-          user_id: supabaseUserId,
+          user_id: resolvedUserId,
           stripe_subscription_id: stripeSubId,
           stripe_customer_id: stripeCustomerId,
         };
@@ -995,7 +997,7 @@ export async function updateSubscriptionFromStripeSubscription(
         const upsertedRow = upserted[0];
         if (upsertedRow) {
           logger.info(
-            { subscriptionId: upsertedRow.id, userId: supabaseUserId },
+            { subscriptionId: upsertedRow.id, userId: resolvedUserId },
             'Successfully upserted subscription',
           );
         }
@@ -1004,13 +1006,13 @@ export async function updateSubscriptionFromStripeSubscription(
           upsertedRow &&
           updateData.current_period_start &&
           updateData.current_period_end &&
-          supabaseUserId
+          resolvedUserId
         ) {
           const pStart = updateData.current_period_start;
           const pEnd = updateData.current_period_end;
           try {
             await SubscriptionService.allocateCreditsForPeriod(
-              supabaseUserId,
+              resolvedUserId,
               upsertedRow.id,
               planTier,
               new Date(pStart),
@@ -1018,12 +1020,12 @@ export async function updateSubscriptionFromStripeSubscription(
               { stripePriceId: stripePriceId ?? undefined, overrideCreditsCents },
             );
             logger.info(
-              { userId: supabaseUserId, subscriptionId: upsertedRow.id, planTier },
+              { userId: resolvedUserId, subscriptionId: upsertedRow.id, planTier },
               'Credits allocated for new subscription',
             );
           } catch (creditError) {
             logger.error(
-              { error: creditError, userId: supabaseUserId, subscriptionId: upsertedRow.id },
+              { error: creditError, userId: resolvedUserId, subscriptionId: upsertedRow.id },
               'Failed to allocate credits for new subscription',
             );
           }

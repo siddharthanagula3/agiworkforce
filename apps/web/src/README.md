@@ -14,7 +14,7 @@ apps/web/
 │   ├── entry/                 # bootstrap, layout wrappers, route shells
 │   ├── core/                  # state orchestration, shared flows
 │   ├── platform/              # next-specific hooks, server actions, RSC adapters
-│   ├── integrations/          # supabase, stripe, providers, mcp, vercel, posthog, sentry
+│   ├── integrations/          # clerk, neon, stripe, providers, mcp, vercel, posthog, sentry
 │   ├── data/                  # zod schemas, RLS clients, query helpers
 │   └── ui/                    # reusable client+server primitives
 └── (components/, lib/, hooks/ retained only where a documented boundary needs them)

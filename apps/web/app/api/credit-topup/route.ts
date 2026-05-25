@@ -104,7 +104,7 @@ async function handleCreditTopup(request: NextRequest) {
     const customer = await stripe.customers.create({
       email: email,
       metadata: {
-        supabase_user_id: userId,
+        user_id: userId,
       },
     });
     customerId = customer.id;

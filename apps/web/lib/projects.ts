@@ -136,7 +136,7 @@ export function mapKnowledgeFileRow(row: Record<string, unknown>): ProjectKnowle
 }
 
 /**
- * Map a raw `user_projects` row from supabase-js into the canonical
+ * Map a raw `user_projects` row from Neon into the canonical
  * project shape. Tolerant of missing columns when the round-10
  * migration hasn't been applied yet — defaults are derived from the
  * canonical `PrivacyMode`/`ProviderMode`/`SourceSurface` types.

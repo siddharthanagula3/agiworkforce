@@ -42,7 +42,6 @@ Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. 
 - `features/` - product-domain feature code.
 - `lib/` - web runtime helpers and server utilities.
 - `public/` - shipped public assets only.
-- `supabase/` - legacy web-local migration mirror; root `supabase/` remains canonical until consolidation.
 - `pnpm-workspace.yaml` - nested Vercel/web-subdirectory install adapter; root `pnpm-workspace.yaml` remains canonical for normal monorepo work.
 
 ## Commands
@@ -76,7 +75,6 @@ Web deploys through Next.js/Vercel-style hosting. Production releases must verif
 
 ## Known Caveats
 
-- `apps/web/supabase` is not canonical; root `supabase/` owns migrations.
 - `apps/web/pnpm-workspace.yaml` exists only so web-subdirectory installs treat the app as a workspace root when needed. Do not add packages there; update root `pnpm-workspace.yaml`.
 - `build` currently embeds the Desktop web build under `/chat/`.
 
