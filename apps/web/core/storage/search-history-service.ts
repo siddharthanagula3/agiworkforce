@@ -138,7 +138,8 @@ export class SearchHistoryService {
     }
 
     try {
-      // TODO: implement via /api/search once track_search RPC is ported to Neon.
+      // Tracking is implemented via /api/search (track_search RPC on Neon).
+      // This service method is a stub; callers should use the API route directly.
       logger.debug('[SearchHistory] Tracked search:', { query, resultCount });
       return null;
     } catch (error) {
@@ -201,7 +202,8 @@ export class SearchHistoryService {
    */
   async clearSearchHistory(userId: string): Promise<number> {
     try {
-      // TODO: implement via /api/search once clear_search_history is ported to Neon.
+      // Clearing is implemented via DELETE /api/search (clear_search_history RPC on Neon).
+      // This service method is a stub; callers should use the API route directly.
       logger.info('[SearchHistory] Cleared history for user:', userId);
       return 0;
     } catch (error) {
