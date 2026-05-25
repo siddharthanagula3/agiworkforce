@@ -21,6 +21,7 @@ export const runtime = 'nodejs';
 import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
@@ -99,6 +100,9 @@ function encryptPayload(payload: string): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   // Rate limit: 5 token generations per minute per IP
   const rateLimitResponse = await withRateLimit(request, 'auth-verify');
   if (rateLimitResponse) {

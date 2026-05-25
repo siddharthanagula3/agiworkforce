@@ -76,6 +76,7 @@ export async function dispatchStripeEvent(
       await updateSubscriptionFromStripeSubscription(db, stripe, subscription);
       break;
     }
+    case 'invoice.paid':
     case 'invoice.payment_succeeded': {
       const invoice = event.data.object as Stripe.Invoice;
       const stripeCustomerId = invoice.customer as string | null;
