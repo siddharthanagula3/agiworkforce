@@ -558,7 +558,7 @@ export function WebSidebar({
               flexShrink: 0,
             }}
           >
-            {initials(user?.user_metadata?.['full_name'], user?.email)}
+            {initials(user?.['user_metadata']?.['full_name'], user?.email)}
           </div>
           {!collapsed && (
             <>
@@ -573,7 +573,7 @@ export function WebSidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {(user?.user_metadata?.['full_name'] as string | undefined) ??
+                  {(user?.['user_metadata']?.['full_name'] as string | undefined) ??
                     user?.email ??
                     'Account'}
                 </div>

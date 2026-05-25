@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { requireEnv } from '@/utils/env';
 import {
   verifyGitHubWebhookSignature,
   getInstallationAccessToken,

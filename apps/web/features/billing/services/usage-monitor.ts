@@ -81,7 +81,7 @@ export class UsageTracker {
     }
   }
 
-  async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
+  async getUsageSummary(_userId: string, period: DateRange): Promise<UsageSummary> {
     try {
       const token = await getAuthToken();
       const params = new URLSearchParams({

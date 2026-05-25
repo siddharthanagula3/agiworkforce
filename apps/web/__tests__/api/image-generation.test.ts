@@ -203,8 +203,8 @@ describe('POST /api/media/image/generate — credit deduction', () => {
       await POST(makeAuthedRequest({ prompt: 'a forest' }));
 
       const firstCall = mockDeductCredits.mock.calls[0]!;
-      // Signature: deductCredits(client, userId, amountCents, description, metadata, ikey)
-      const metadata = firstCall[4] as Record<string, unknown>;
+      // Signature: deductCredits(userId, amountCents, description, metadata, ikey)
+      const metadata = firstCall[3] as Record<string, unknown>;
       expect(metadata['type']).toBe('reservation');
     });
 
@@ -239,13 +239,13 @@ describe('POST /api/media/image/generate — credit deduction', () => {
       expect(mockDeductCredits).toHaveBeenCalledTimes(2);
 
       // The refund call should pass a negative amount.
-      // Signature: deductCredits(client, userId, amountCents, description, metadata, ikey)
+      // Signature: deductCredits(userId, amountCents, description, metadata, ikey)
       const refundCall = mockDeductCredits.mock.calls[1]!;
-      const refundAmount = refundCall[2] as number;
+      const refundAmount = refundCall[1] as number;
       expect(refundAmount).toBeLessThan(0);
 
       // Refund metadata should include type: refund
-      const refundMeta = refundCall[4] as Record<string, unknown>;
+      const refundMeta = refundCall[3] as Record<string, unknown>;
       expect(refundMeta['type']).toBe('refund');
     });
 

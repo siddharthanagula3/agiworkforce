@@ -4,6 +4,7 @@
  * Integrates with search_history and search_analytics tables
  */
 
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@shared/lib/logger';
 
 // ============================================================================
@@ -61,41 +62,6 @@ export interface SearchSuggestion {
   score: number;
 }
 
-/**
- * Result from track_search RPC
- */
-interface TrackSearchResult {
-  data: string | null;
-  error: { message: string; code?: string } | null;
-}
-
-/**
- * Row from get_recent_searches RPC
- */
-interface RecentSearchRow {
-  query: string;
-  result_count: number;
-  created_at: string;
-}
-
-/**
- * Row from get_popular_searches RPC
- */
-interface PopularSearchRow {
-  query: string;
-  search_count: number;
-  avg_results: number;
-}
-
-/**
- * Row from get_search_suggestions RPC
- */
-interface SearchSuggestionRow {
-  suggestion: string;
-  source: string;
-  score: number;
-}
-
 // ============================================================================
 // Service Implementation
 // ============================================================================
@@ -129,7 +95,7 @@ export class SearchHistoryService {
    * @returns The ID of the created search history entry, or null if failed
    */
   async trackSearch(params: TrackSearchParams): Promise<string | null> {
-    const { userId, query, resultCount, filters = {} } = params;
+    const { query, resultCount } = params;
 
     // Skip empty queries
     if (!query.trim()) {
@@ -182,9 +148,9 @@ export class SearchHistoryService {
    * @returns Array of search suggestions
    */
   async getSearchSuggestions(
-    userId: string,
+    _userId: string,
     partialQuery: string,
-    limit: number = 5,
+    _limit: number = 5,
   ): Promise<SearchSuggestion[]> {
     // Skip if query is too short
     if (partialQuery.trim().length < 2) {
@@ -221,6 +187,7 @@ export class SearchHistoryService {
    */
   async deleteSearch(userId: string, searchId: string): Promise<void> {
     try {
+      const db = getNeonDb();
       const { error } = await db
         .from('search_history')
         .delete()

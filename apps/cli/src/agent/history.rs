@@ -50,7 +50,7 @@ impl AgentSession {
                         ContentBlock::ToolResult { tool_use_id, .. } => {
                             result_ids.insert(tool_use_id.clone());
                         }
-                        _ => {}
+                        ContentBlock::Text { .. } => {}
                     }
                 }
             }

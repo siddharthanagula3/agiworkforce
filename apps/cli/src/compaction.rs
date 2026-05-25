@@ -406,10 +406,10 @@ fn tool_output_tokens(msg: &Message) -> usize {
             .iter()
             .filter_map(|b| match b {
                 ContentBlock::ToolResult { content, .. } => Some(estimate_tokens(content)),
-                _ => None,
+                ContentBlock::Text { .. } | ContentBlock::ToolUse { .. } => None,
             })
             .sum(),
-        _ => 0,
+        MessageContent::Text(_) => 0,
     }
 }
 
@@ -573,7 +573,7 @@ fn remove_tool_results(messages: Vec<Message>) -> Vec<Message> {
                     Some(Message::blocks(&msg.role, filtered))
                 }
             }
-            _ => Some(msg),
+            MessageContent::Text(_) => Some(msg),
         })
         .collect()
 }

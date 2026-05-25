@@ -10,7 +10,7 @@
  *      (invalid_api_key, "Missing or invalid authorization header")
  *
  *   2. Header present but JWT verification fails inside
- *      `getAuthenticatedUserWithClient` → 401
+ *      `getClerkAuthUser` → 401
  *      (invalid_api_key, "Invalid authentication token")
  *
  * The team-lead spec mentions "cookie"; this route is Bearer-only by design
@@ -51,12 +51,11 @@ vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((k: string) => `mock-${k}`),
 }));
 
-// The auth gate calls `getAuthenticatedUserWithClient` from `@/lib/api-auth`.
+// The auth gate calls `getClerkAuthUser` from `@/lib/api-auth`.
 // We control its behavior per-test to simulate "valid JWT" vs "forged JWT".
-const mockGetAuthenticatedUserWithClient = vi.fn();
+const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUserWithClient: (...args: unknown[]) =>
-    mockGetAuthenticatedUserWithClient(...args),
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
   getAuthenticatedUser: vi.fn(),
 }));
 
@@ -128,7 +127,7 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
     expect(body.error?.message).toMatch(/authorization header/i);
 
     // Auth gate must short-circuit before reaching downstream services.
-    expect(mockGetAuthenticatedUserWithClient).not.toHaveBeenCalled();
+    expect(mockGetClerkAuthUser).not.toHaveBeenCalled();
     expect(mockGetSubscription).not.toHaveBeenCalled();
     expect(mockCheckAvailable).not.toHaveBeenCalled();
     expect(mockSendRequest).not.toHaveBeenCalled();
@@ -142,15 +141,13 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
     const body = (await response.json()) as AuthErrorBody;
     expect(body.error?.code).toBe('invalid_api_key');
     expect(body.error?.message).toMatch(/authorization header/i);
-    expect(mockGetAuthenticatedUserWithClient).not.toHaveBeenCalled();
+    expect(mockGetClerkAuthUser).not.toHaveBeenCalled();
   });
 
   it('rejects request with a forged/invalid Bearer JWT → 401', async () => {
-    // Bearer token present, but Supabase JWT verification throws inside
-    // getAuthenticatedUserWithClient — auth-gate.ts:73-87 maps that to 401.
-    mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(
-      new Error('JWT signature verification failed'),
-    );
+    // Bearer token present, but Clerk JWT verification throws inside
+    // getClerkAuthUser — auth-gate.ts:63-79 maps that to 401.
+    mockGetClerkAuthUser.mockRejectedValueOnce(new Error('JWT signature verification failed'));
 
     const response = await POST(
       makeRequest({
@@ -164,17 +161,17 @@ describe('POST /api/llm/v1/chat/completions — auth contract', () => {
     expect(body.error?.message).toMatch(/invalid authentication token/i);
 
     // JWT verification was attempted, but no downstream service was reached.
-    expect(mockGetAuthenticatedUserWithClient).toHaveBeenCalledTimes(1);
+    expect(mockGetClerkAuthUser).toHaveBeenCalledTimes(1);
     expect(mockGetSubscription).not.toHaveBeenCalled();
     expect(mockCheckAvailable).not.toHaveBeenCalled();
     expect(mockSendRequest).not.toHaveBeenCalled();
   });
 
   it('rejects an empty Bearer token → 401', async () => {
-    // "Bearer " (trailing space, no token) — getAuthenticatedUserWithClient
+    // "Bearer " (trailing space, no token) — getClerkAuthUser
     // should reject the empty token. We mock the rejection to assert the
     // route's contract (route translates the error to 401 invalid_api_key).
-    mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(new Error('Invalid token'));
+    mockGetClerkAuthUser.mockRejectedValueOnce(new Error('Invalid token'));
 
     const response = await POST(makeRequest({ Authorization: 'Bearer ' }));
 

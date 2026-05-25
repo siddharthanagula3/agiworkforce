@@ -625,7 +625,10 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                         ChatRole::User => Style::default().fg(Color::White),
                         ChatRole::System => Style::default().fg(Color::Yellow),
                         ChatRole::Tool => Style::default().fg(Color::DarkGray),
-                        _ => Style::default().fg(Color::White),
+                        // Assistant is handled by the outer if-branch; reaching
+                        // here would be a logic error but we render it as plain
+                        // white rather than panicking so the TUI stays responsive.
+                        ChatRole::Assistant => Style::default().fg(Color::White),
                     };
                     let content = format!("    {text_line}");
                     lines.push(Line::from(parse_inline_md(&content, style)));

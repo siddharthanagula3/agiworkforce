@@ -138,21 +138,9 @@ export interface Resource {
 }
 
 export async function getResources(type?: string) {
-  let query = db
-    .from('resources')
-    .select('*')
-    .eq('published', true)
-    .order('featured', { ascending: false })
-    .order('created_at', { ascending: false });
-
-  if (type && type !== 'All') {
-    query = query.eq('type', type);
-  }
-
-  const { data, error } = await query;
-
-  if (error) throw error;
-  return data;
+  // TODO: implement via /api/resources once route is available.
+  void type;
+  return [] as Resource[];
 }
 
 export async function trackResourceDownload(resourceId: string, userEmail?: string) {
@@ -190,14 +178,8 @@ export interface PricingPlan {
 }
 
 export async function getPricingPlans() {
-  const { data, error } = await db
-    .from('subscription_plans')
-    .select('*')
-    .eq('active', true)
-    .order('display_order');
-
-  if (error) throw error;
-  return data as PricingPlan[];
+  // TODO: implement via /api/pricing-plans once route is available.
+  return [] as PricingPlan[];
 }
 
 // ============================================================================

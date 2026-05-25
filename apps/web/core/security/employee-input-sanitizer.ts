@@ -620,9 +620,9 @@ function escapeInjectionPatterns(input: string): string {
  */
 async function logSuspiciousInput(
   userId: string,
-  originalInput: string,
-  sanitizedInput: string,
-  context: {
+  _originalInput: string,
+  _sanitizedInput: string,
+  _context: {
     injectionResult: InjectionDetectionResult;
     employeeInjectionResult: InjectionDetectionResult;
     modifications: string[];

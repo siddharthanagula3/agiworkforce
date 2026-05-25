@@ -217,10 +217,10 @@ export class SecurityMonitoringService {
           uniqueUsers.add(event.user_id);
         }
 
-        // Count critical/high severity
+        // Count critical/error severity
         if (event.severity === 'critical') {
           criticalCount++;
-        } else if (event.severity === 'high') {
+        } else if (event.severity === 'error') {
           highCount++;
         }
       }

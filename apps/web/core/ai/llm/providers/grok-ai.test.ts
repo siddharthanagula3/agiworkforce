@@ -338,10 +338,9 @@ describe('GrokProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // Auth check uses getAuthToken(), so simulate unauthenticated by returning null.
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
       const stream = provider.streamMessage(mockMessages);
 
@@ -362,33 +361,34 @@ describe('GrokProvider', () => {
     });
 
     it('should save to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Streamed' } }],
-            usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
-          }),
-      });
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // Provider makes two fetch calls: proxy first, then log-message.
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [{ message: { content: 'Streamed' } }],
+              usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
+            }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }); // log-message
 
       const chunks = [];
       for await (const chunk of provider.streamMessage(mockMessages, 'session-123', 'user-456')) {
         chunks.push(chunk);
       }
 
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/agents/log-message',
         expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          content: 'Streamed',
+          method: 'POST',
+          body: expect.stringContaining('"sessionId":"session-123"'),
         }),
       );
+      const logBody = JSON.parse((mockFetch.mock.calls[1]![1] as RequestInit).body as string);
+      expect(logBody.sessionId).toBe('session-123');
+      expect(logBody.content).toBe('Streamed');
     });
   });
 
@@ -522,11 +522,8 @@ describe('GrokProvider', () => {
     });
 
     it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // When sessionId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -538,22 +535,22 @@ describe('GrokProvider', () => {
 
       await provider.sendMessage(mockMessages, undefined, 'user-123');
 
-      expect(insertMock).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalledWith('/api/agents/log-message', expect.anything());
     });
 
     it('should handle database save error gracefully', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: new Error('DB error') });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-          }),
-      });
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // The provider's saveMessageToDatabase swallows errors so the main response is unaffected.
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              choices: [{ message: { content: 'Response' } }],
+            }),
+        })
+        .mockRejectedValueOnce(new Error('DB error')); // log-message call fails
 
       // Should not throw even if database save fails
       const response = await provider.sendMessage(mockMessages, 'session-123', 'user-456');

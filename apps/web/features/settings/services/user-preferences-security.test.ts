@@ -52,7 +52,9 @@ describe('settingsService 2FA storage security', () => {
 
     const result = await settingsService.setup2FA();
 
-    expect(result.error).toContain('TOTP secret encryption is not configured');
+    expect(result.error).toContain(
+      '2FA setup requires a dedicated server route (pending implementation)',
+    );
     expect(upsertMock).not.toHaveBeenCalled();
   });
 });

@@ -28,7 +28,7 @@ export const reactionQueryKeys = queryKeys.reactions;
  */
 async function getCurrentUser(): Promise<{ id: string } | null> {
   try {
-    const clerk = (window as Record<string, unknown>)['Clerk'] as
+    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
       | { user?: { id: string } | null }
       | undefined;
     return clerk?.user?.id ? { id: clerk.user.id } : null;
