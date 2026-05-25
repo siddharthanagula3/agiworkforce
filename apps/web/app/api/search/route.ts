@@ -135,7 +135,7 @@ async function handleGet(request: NextRequest) {
   // Search sessions by title
   const sessionParams: unknown[] = [userId, `%${q}%`];
   const sessionClauses: string[] = ['user_id = $1', 'title ilike $2'];
-  if (!includeArchived) sessionClauses.push('is_active = true');
+  if (!includeArchived) sessionClauses.push('deleted_at is null');
   if (startDate) {
     sessionClauses.push(`created_at >= $${sessionParams.length + 1}`);
     sessionParams.push(startDate);
@@ -157,7 +157,7 @@ async function handleGet(request: NextRequest) {
   // Get user's session IDs for message search
   let sessionIdQuery = 'select id from web_conversations where user_id = $1';
   const sidParams: unknown[] = [userId];
-  if (!includeArchived) sessionIdQuery += ' and is_active = true';
+  if (!includeArchived) sessionIdQuery += ' and deleted_at is null';
   const sessionIdRows = await db.query<{ id: string }>(sessionIdQuery, sidParams);
   const sessionIds = sessionIdRows.map((r) => r.id);
 
@@ -240,12 +240,7 @@ async function handleGet(request: NextRequest) {
 
   // Fire-and-forget search tracking
   if (q.trim()) {
-    db.query('select track_search($1, $2, $3, $4)', [
-      userId,
-      q,
-      stats.totalResults,
-      JSON.stringify({ role, startDate, endDate, includeArchived }),
-    ]).catch(() => {
+    db.query('select track_search($1, $2, $3)', [userId, q, stats.totalResults]).catch(() => {
       // Non-critical - swallow errors silently
     });
   }
@@ -267,14 +262,9 @@ async function handlePost(request: NextRequest) {
   const parsed = TrackSearchSchema.safeParse(body);
   if (!parsed.success) throw createError.validation('Invalid request body');
 
-  const { query, resultCount, filters } = parsed.data;
+  const { query, resultCount } = parsed.data;
 
-  await db.query('select track_search($1, $2, $3, $4)', [
-    userId,
-    query,
-    resultCount,
-    JSON.stringify(filters ?? {}),
-  ]);
+  await db.query('select track_search($1, $2, $3)', [userId, query, resultCount]);
 
   return NextResponse.json({ tracked: true });
 }
