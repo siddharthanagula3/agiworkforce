@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getEnv, requireEnv } from '@/utils/env';
 import { DevicePollRequestSchema } from '@/lib/validations/device';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -8,6 +6,27 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { decryptToken } from '@/lib/device-token-crypto';
+import { getNeonDb } from '@/lib/server/neon-db';
+
+// Row shape from device_authorization_codes (poll fields only)
+interface DeviceAuthRow {
+  device_id: string;
+  device_fingerprint: string | null;
+  status: string;
+  user_id: string | null;
+  expires_at: string;
+  updated_at: string;
+}
+
+// Row shape returned by the inline atomic consume query
+interface ConsumedRow {
+  status: string;
+  user_id: string | null;
+  user_email: string | null;
+  user_name: string | null;
+  access_token: string | null;
+  refresh_token: string | null;
+}
 
 async function handleDevicePoll(request: NextRequest) {
   // Parse body once and reuse - request.json() can only be called once
@@ -37,46 +56,41 @@ async function handleDevicePoll(request: NextRequest) {
   }
 
   try {
-    // Validate the already-parsed request body
-    const body = parsedBody;
-
-    const validationResult = DevicePollRequestSchema.safeParse(body);
+    const validationResult = DevicePollRequestSchema.safeParse(parsedBody);
     if (!validationResult.success) {
       throw createError.validation('Invalid request body', validationResult.error);
     }
 
     const { device_id, device_fingerprint } = validationResult.data;
-
-    // Safe environment variable access
-    const supabaseUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL', '') || requireEnv('SUPABASE_URL');
-    const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
+    const db = getNeonDb();
 
     // AUDIT-008-008: Use explicit column selection instead of SELECT *
-    const { data, error } = await supabase
-      .from('device_authorization_codes')
-      .select('device_id, device_fingerprint, status, user_id, expires_at, updated_at')
-      .eq('device_id', device_id)
-      .single();
+    const rows = await db.query<DeviceAuthRow>(
+      `SELECT device_id, device_fingerprint, status, user_id, expires_at, updated_at
+         FROM device_authorization_codes
+        WHERE device_id = $1`,
+      [device_id],
+    );
 
-    if (error || !data) {
+    if (!rows.length) {
       return NextResponse.json(
         { error: 'Not found' },
         { status: 404, headers: { 'Cache-Control': 'no-store' } },
       );
     }
 
+    const data = rows[0]!;
+
     // Expiry check first (also treat already-consumed codes as expired)
     if (data.status === 'consumed' || new Date(data.expires_at) < new Date()) {
       if (data.status === 'pending') {
         // Best-effort: mark pending codes as expired
-        await supabase
-          .from('device_authorization_codes')
-          .update({ status: 'expired', updated_at: new Date().toISOString() })
-          .eq('device_id', device_id);
+        await db.execute(
+          `UPDATE device_authorization_codes
+              SET status = 'expired', updated_at = $1
+            WHERE device_id = $2`,
+          [new Date().toISOString(), device_id],
+        );
       }
       return NextResponse.json(
         { error: 'Not found' },
@@ -100,18 +114,17 @@ async function handleDevicePoll(request: NextRequest) {
       }
     } else if (device_fingerprint) {
       // Legacy session (no fingerprint stored) but client IS sending one now - backfill it.
-      // Use WHERE device_fingerprint IS NULL to prevent race conditions: if two concurrent
-      // polls both reach this branch, only the first UPDATE wins; the second is a no-op.
-      await supabase
-        .from('device_authorization_codes')
-        .update({ device_fingerprint, updated_at: new Date().toISOString() })
-        .eq('device_id', device_id)
-        .is('device_fingerprint', null);
+      // Use WHERE device_fingerprint IS NULL to prevent race conditions.
+      await db.execute(
+        `UPDATE device_authorization_codes
+            SET device_fingerprint = $1, updated_at = $2
+          WHERE device_id = $3
+            AND device_fingerprint IS NULL`,
+        [device_fingerprint, new Date().toISOString(), device_id],
+      );
       logger.info({ deviceId: device_id }, 'Device fingerprint backfilled for legacy session');
     } else {
-      // SECURITY: Legacy no-fingerprint path is now deprecated (CodeRabbit H9 / stabilization fix)
-      // Previously this allowed through for backward compatibility.
-      // Returning HTTP 410 Gone to force clients to update to fingerprint-aware versions.
+      // SECURITY: Legacy no-fingerprint path is now deprecated
       logger.warn(
         { deviceId: device_id },
         'DEPRECATED: Device poll without fingerprint rejected - legacy path is sunset. Client must update.',
@@ -127,41 +140,47 @@ async function handleDevicePoll(request: NextRequest) {
 
     if (data.status === 'approved' && data.user_id) {
       // Atomically consume tokens (approved -> consumed) and return them exactly once.
-      // This prevents double-poll races from leaking tokens multiple times.
-      const { data: consumedRows, error: consumeError } = await supabase.rpc(
-        'consume_device_authorization_tokens',
-        { p_device_id: device_id },
+      // This inlines the logic of the consume_device_authorization_tokens RPC.
+      // FOR UPDATE locks the row; the UPDATE only fires if status is still 'approved'.
+      const consumedRows = await db.query<ConsumedRow>(
+        `WITH locked AS (
+           SELECT status, expires_at, user_id, user_email, user_name,
+                  access_token, refresh_token
+             FROM device_authorization_codes
+            WHERE device_id = $1
+            FOR UPDATE
+         ),
+         updated AS (
+           UPDATE device_authorization_codes d
+              SET status      = 'consumed',
+                  consumed_at = NOW(),
+                  access_token  = NULL,
+                  refresh_token = NULL,
+                  updated_at    = NOW()
+             FROM locked
+            WHERE d.device_id = $1
+              AND locked.status = 'approved'
+         )
+         SELECT
+           locked.status::text        AS status,
+           locked.user_id             AS user_id,
+           locked.user_email          AS user_email,
+           locked.user_name           AS user_name,
+           locked.access_token::text  AS access_token,
+           locked.refresh_token::text AS refresh_token
+           FROM locked`,
+        [device_id],
       );
 
-      if (consumeError) {
-        logger.error(
-          { error: consumeError, deviceId: device_id },
-          'Failed to consume device tokens',
-        );
-        throw createError.internal('Failed to consume device authorization tokens');
-      }
-
-      const consumed = (Array.isArray(consumedRows) ? consumedRows[0] : consumedRows) as {
-        status?: string;
-        user_id?: string | null;
-        user_email?: string | null;
-        user_name?: string | null;
-        access_token?: string | null;
-        refresh_token?: string | null;
-      } | null;
-
-      if (consumed === null || consumed === undefined) {
-        // RPC returned no rows: tokens were already consumed by a concurrent poll.
-        // Return 'pending' so the client retries; subsequent polls will get 'expired'.
+      if (!consumedRows.length) {
+        // Row disappeared between poll and consume - treat as pending retry
         return NextResponse.json(
           { status: 'pending' },
           { headers: { 'Cache-Control': 'no-store' } },
         );
       }
-      if (!consumed.status) {
-        // RPC returned a row but status is missing - unexpected state.
-        throw createError.internal('Device token consumption returned unexpected state');
-      }
+
+      const consumed = consumedRows[0]!;
 
       if (consumed.status === 'expired' || consumed.status === 'consumed') {
         return NextResponse.json(
@@ -184,7 +203,7 @@ async function handleDevicePoll(request: NextRequest) {
         );
       }
 
-      if (!consumed.access_token || !consumed.refresh_token || !consumed.user_id) {
+      if (!consumed.access_token || !consumed.user_id) {
         logger.warn(
           { deviceId: device_id, status: consumed.status },
           'Device code approved but tokens missing after consumption',
@@ -194,10 +213,12 @@ async function handleDevicePoll(request: NextRequest) {
 
       // Decrypt tokens that were encrypted at rest by the approve endpoint
       let accessToken: string;
-      let refreshToken: string;
+      let refreshToken: string | null = null;
       try {
         accessToken = decryptToken(consumed.access_token);
-        refreshToken = decryptToken(consumed.refresh_token);
+        if (consumed.refresh_token) {
+          refreshToken = decryptToken(consumed.refresh_token);
+        }
       } catch (decryptError) {
         logger.error(
           {

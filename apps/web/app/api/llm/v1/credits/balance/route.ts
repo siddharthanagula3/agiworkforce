@@ -2,7 +2,6 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
@@ -37,10 +36,9 @@ async function handleGetBalance(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
 
-  const userClient = getServiceClient();
   const [subscriptionResult, balanceResult] = await Promise.allSettled([
-    SubscriptionService.getSubscription(userClient, userId),
-    CreditService.getBalance(userClient, userId),
+    SubscriptionService.getSubscription(userId),
+    CreditService.getBalance(userId),
   ]);
 
   // Extract results, providing null for rejected promises

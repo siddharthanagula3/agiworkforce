@@ -1,15 +1,12 @@
 /**
- * WebSocket Manager
- * Advanced WebSocket connection management with:
- * - Connection pooling
- * - Automatic reconnection with exponential backoff
- * - Message queuing during disconnection
- * - Heartbeat/ping-pong
- * - Connection state tracking
- * - Event-based architecture
+ * WebSocket Manager (no-op stub)
+ *
+ * Supabase Realtime channel management has been removed. The class, enums,
+ * and interfaces are retained so that call sites continue to compile. Native
+ * WebSocket and Supabase Realtime functionality will be re-implemented with a
+ * different provider.
  */
 
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 
 // WebSocket connection states
@@ -88,666 +85,110 @@ export interface WebSocketEvent {
   timestamp: number;
 }
 
-// Connection pool entry
-interface PooledConnection {
-  id: string;
-  ws: WebSocket | null;
-  supabaseChannel?: ReturnType<typeof supabase.channel> | null;
-  state: WebSocketState;
-  metrics: ConnectionMetrics;
-  config: Required<ConnectionConfig>;
-  messageQueue: WebSocketMessage[];
-  heartbeatTimer?: ReturnType<typeof setInterval>;
-  reconnectTimer?: ReturnType<typeof setTimeout>;
-  listeners: Map<WebSocketEventType, Set<(event: WebSocketEvent) => void>>;
-}
-
-// Default configuration
-const DEFAULT_CONFIG: Required<ConnectionConfig> = {
-  url: '',
-  reconnectInterval: 1000,
-  maxReconnectAttempts: 5,
-  heartbeatInterval: 30000, // 30 seconds
-  messageQueueSize: 1000,
-  poolSize: 5,
-  useSupabaseRealtime: true,
-};
-
 export class WebSocketManager {
-  private connections: Map<string, PooledConnection> = new Map();
-  private messageHandlers: Map<MessageType, Set<(message: WebSocketMessage) => void>> = new Map();
-  private globalListeners: Map<WebSocketEventType, Set<(event: WebSocketEvent) => void>> =
-    new Map();
-  private config: Required<ConnectionConfig>;
-
-  constructor(config: ConnectionConfig = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
+  constructor(_config: ConnectionConfig = {}) {
+    logger.warn('[WebSocketManager] Supabase Realtime has been removed. Manager is a no-op stub.');
   }
 
   /**
-   * Create a new WebSocket connection
+   * Create a new WebSocket connection (no-op stub)
    */
-  async connect(connectionId: string, sessionId?: string): Promise<void> {
-    // Check if connection already exists
-    if (this.connections.has(connectionId)) {
-      const conn = this.connections.get(connectionId)!;
-      if (conn.state === WebSocketState.CONNECTED) {
-        logger.debug(`[WebSocket] Connection ${connectionId} already connected`);
-        return;
-      }
-    }
-
-    // Initialize connection
-    const connection: PooledConnection = {
-      id: connectionId,
-      ws: null,
-      supabaseChannel: null,
-      state: WebSocketState.CONNECTING,
-      metrics: {
-        connectionId,
-        state: WebSocketState.CONNECTING,
-        reconnectAttempts: 0,
-        messagesReceived: 0,
-        messagesSent: 0,
-        latency: 0,
-        errors: 0,
-      },
-      config: this.config,
-      messageQueue: [],
-      listeners: new Map(),
-    };
-
-    this.connections.set(connectionId, connection);
-    this.emitEvent(connectionId, 'stateChange', {
-      state: WebSocketState.CONNECTING,
-    });
-
-    try {
-      if (this.config.useSupabaseRealtime) {
-        // Use Supabase Realtime
-        await this.connectSupabase(connection, sessionId);
-      } else {
-        // Use native WebSocket
-        await this.connectNative(connection);
-      }
-
-      // Start heartbeat
-      this.startHeartbeat(connection);
-
-      // Process queued messages
-      this.processMessageQueue(connection);
-
-      logger.info(`[WebSocket] Connected: ${connectionId}`);
-    } catch (error) {
-      logger.error(`[WebSocket] Connection failed: ${connectionId}`, error);
-      this.handleConnectionError(connection, error);
-    }
+  async connect(_connectionId: string, _sessionId?: string): Promise<void> {
+    logger.warn('[WebSocketManager] connect() called but realtime has been removed.');
   }
 
   /**
-   * Connect using Supabase Realtime
+   * Disconnect a WebSocket connection (no-op stub)
    */
-  private async connectSupabase(connection: PooledConnection, sessionId?: string): Promise<void> {
-    const channelName = sessionId || `global-${connection.id}`;
-
-    connection.supabaseChannel = supabase
-      .channel(channelName)
-      .on('broadcast', { event: 'message' }, (payload) => {
-        this.handleMessage(connection, payload['payload'] as WebSocketMessage);
-      })
-      .on('presence', { event: 'sync' }, () => {
-        this.handlePresenceSync(connection);
-      })
-      .on('presence', { event: 'join' }, (payload) => {
-        this.handlePresenceJoin(connection, payload);
-      })
-      .on('presence', { event: 'leave' }, (payload) => {
-        this.handlePresenceLeave(connection, payload);
-      });
-
-    // Subscribe to channel
-    const channel = await connection.supabaseChannel.subscribe();
-
-    if (channel) {
-      connection.state = WebSocketState.CONNECTED;
-      connection.metrics.state = WebSocketState.CONNECTED;
-      connection.metrics.connectedAt = Date.now();
-      connection.metrics.reconnectAttempts = 0;
-      this.emitEvent(connection.id, 'connected', { channelName });
-      this.emitEvent(connection.id, 'stateChange', {
-        state: WebSocketState.CONNECTED,
-      });
-    } else {
-      throw new Error(`Failed to subscribe to channel: ${status}`);
-    }
+  async disconnect(_connectionId: string): Promise<void> {
+    logger.warn('[WebSocketManager] disconnect() called but realtime has been removed.');
   }
 
   /**
-   * Connect using native WebSocket
-   */
-  private async connectNative(connection: PooledConnection): Promise<void> {
-    return new Promise((resolve, reject) => {
-      try {
-        const ws = new WebSocket(this.config.url);
-        connection.ws = ws;
-
-        ws.onopen = () => {
-          connection.state = WebSocketState.CONNECTED;
-          connection.metrics.state = WebSocketState.CONNECTED;
-          connection.metrics.connectedAt = Date.now();
-          connection.metrics.reconnectAttempts = 0;
-          this.emitEvent(connection.id, 'connected', {});
-          this.emitEvent(connection.id, 'stateChange', {
-            state: WebSocketState.CONNECTED,
-          });
-          resolve();
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data) as WebSocketMessage;
-            this.handleMessage(connection, message);
-          } catch (error) {
-            logger.error('[WebSocket] Failed to parse message', error);
-            connection.metrics.errors++;
-          }
-        };
-
-        ws.onerror = (error) => {
-          logger.error('[WebSocket] Error', error);
-          connection.metrics.errors++;
-          this.emitEvent(connection.id, 'error', { error });
-          reject(error);
-        };
-
-        ws.onclose = (event) => {
-          logger.info(`[WebSocket] Closed: ${connection.id}`, event.code, event.reason);
-          this.handleConnectionClose(connection, event.code, event.reason);
-        };
-      } catch (error) {
-        reject(error);
-      }
-    });
-  }
-
-  /**
-   * Disconnect a WebSocket connection
-   */
-  async disconnect(connectionId: string): Promise<void> {
-    const connection = this.connections.get(connectionId);
-    if (!connection) {
-      logger.warn(`[WebSocket] Connection not found: ${connectionId}`);
-      return;
-    }
-
-    connection.state = WebSocketState.DISCONNECTING;
-    this.emitEvent(connectionId, 'stateChange', {
-      state: WebSocketState.DISCONNECTING,
-    });
-
-    // Stop heartbeat
-    if (connection.heartbeatTimer) {
-      clearInterval(connection.heartbeatTimer);
-      connection.heartbeatTimer = undefined;
-    }
-
-    // Stop reconnect timer
-    if (connection.reconnectTimer) {
-      clearTimeout(connection.reconnectTimer);
-      connection.reconnectTimer = undefined;
-    }
-
-    // Close connection
-    if (connection.supabaseChannel) {
-      await connection.supabaseChannel.unsubscribe();
-      connection.supabaseChannel = null;
-    }
-
-    if (connection.ws) {
-      connection.ws.close(1000, 'Normal closure');
-      connection.ws = null;
-    }
-
-    connection.state = WebSocketState.DISCONNECTED;
-    connection.metrics.state = WebSocketState.DISCONNECTED;
-    connection.metrics.disconnectedAt = Date.now();
-    this.emitEvent(connectionId, 'disconnected', {});
-    this.emitEvent(connectionId, 'stateChange', {
-      state: WebSocketState.DISCONNECTED,
-    });
-
-    // Remove from pool
-    this.connections.delete(connectionId);
-    logger.info(`[WebSocket] Disconnected: ${connectionId}`);
-  }
-
-  /**
-   * Send a message through WebSocket
+   * Send a message through WebSocket (no-op stub)
    */
   async send(
-    connectionId: string,
-    message: Omit<WebSocketMessage, 'id' | 'timestamp'>,
+    _connectionId: string,
+    _message: Omit<WebSocketMessage, 'id' | 'timestamp'>,
   ): Promise<void> {
-    const connection = this.connections.get(connectionId);
-    if (!connection) {
-      throw new Error(`Connection not found: ${connectionId}`);
-    }
-
-    // Create full message
-    const fullMessage: WebSocketMessage = {
-      id: this.generateMessageId(),
-      timestamp: Date.now(),
-      ...message,
-    };
-
-    // If not connected, queue the message
-    if (connection.state !== WebSocketState.CONNECTED) {
-      if (connection.messageQueue.length < this.config.messageQueueSize) {
-        connection.messageQueue.push(fullMessage);
-        logger.debug(
-          `[WebSocket] Message queued: ${connection.id}, queue size: ${connection.messageQueue.length}`,
-        );
-      } else {
-        logger.warn(`[WebSocket] Message queue full: ${connection.id}`);
-      }
-      return;
-    }
-
-    try {
-      if (connection.supabaseChannel) {
-        // Send via Supabase Realtime
-        await connection.supabaseChannel.send({
-          type: 'broadcast',
-          event: 'message',
-          payload: fullMessage,
-        });
-      } else if (connection.ws && connection.ws.readyState === WebSocket.OPEN) {
-        // Send via native WebSocket
-        connection.ws.send(JSON.stringify(fullMessage));
-      } else {
-        throw new Error('WebSocket not ready');
-      }
-
-      connection.metrics.messagesSent++;
-    } catch (error) {
-      logger.error('[WebSocket] Failed to send message', error);
-      connection.metrics.errors++;
-
-      // Queue the message for retry
-      if (connection.messageQueue.length < this.config.messageQueueSize) {
-        connection.messageQueue.push(fullMessage);
-      }
-
-      throw error;
-    }
+    logger.warn('[WebSocketManager] send() called but realtime has been removed.');
   }
 
   /**
-   * Broadcast a message to all connections
+   * Broadcast a message to all connections (no-op stub)
    */
-  async broadcast(message: Omit<WebSocketMessage, 'id' | 'timestamp'>): Promise<void> {
-    const promises = Array.from(this.connections.keys()).map((connectionId) =>
-      this.send(connectionId, message).catch((error) =>
-        logger.error(`Failed to broadcast to ${connectionId}`, error),
-      ),
-    );
-
-    await Promise.allSettled(promises);
+  async broadcast(_message: Omit<WebSocketMessage, 'id' | 'timestamp'>): Promise<void> {
+    logger.warn('[WebSocketManager] broadcast() called but realtime has been removed.');
   }
 
   /**
-   * Handle incoming message
+   * Register message handler for specific message type (no-op stub)
    */
-  private handleMessage(connection: PooledConnection, message: WebSocketMessage): void {
-    connection.metrics.messagesReceived++;
-
-    // Handle heartbeat responses
-    if (message.type === MessageType.HEARTBEAT) {
-      const latency = Date.now() - message.timestamp;
-      connection.metrics.latency = latency;
-      connection.metrics.lastHeartbeat = Date.now();
-      return;
-    }
-
-    // Emit to specific message type handlers
-    const handlers = this.messageHandlers.get(message.type);
-    if (handlers) {
-      handlers.forEach((handler) => {
-        try {
-          handler(message);
-        } catch (error) {
-          logger.error('[WebSocket] Message handler error', error);
-        }
-      });
-    }
-
-    // Emit generic message event
-    this.emitEvent(connection.id, 'message', message);
+  onMessage(_type: MessageType, _handler: (message: WebSocketMessage) => void): () => void {
+    logger.warn('[WebSocketManager] onMessage() called but realtime has been removed.');
+    return () => {};
   }
 
   /**
-   * Handle connection close
-   */
-  private handleConnectionClose(connection: PooledConnection, code: number, reason: string): void {
-    connection.state = WebSocketState.DISCONNECTED;
-    connection.metrics.disconnectedAt = Date.now();
-    this.emitEvent(connection.id, 'disconnected', { code, reason });
-    this.emitEvent(connection.id, 'stateChange', {
-      state: WebSocketState.DISCONNECTED,
-    });
-
-    // Attempt reconnection if not a normal closure
-    if (code !== 1000 && connection.metrics.reconnectAttempts < this.config.maxReconnectAttempts) {
-      this.scheduleReconnect(connection);
-    } else if (connection.metrics.reconnectAttempts >= this.config.maxReconnectAttempts) {
-      connection.state = WebSocketState.FAILED;
-      connection.metrics.state = WebSocketState.FAILED;
-      this.emitEvent(connection.id, 'stateChange', {
-        state: WebSocketState.FAILED,
-      });
-      logger.error(`[WebSocket] Max reconnect attempts reached: ${connection.id}`);
-    }
-  }
-
-  /**
-   * Handle connection error
-   */
-  private handleConnectionError(connection: PooledConnection, error: unknown): void {
-    connection.metrics.errors++;
-    this.emitEvent(connection.id, 'error', { error });
-
-    // Attempt reconnection
-    if (connection.metrics.reconnectAttempts < this.config.maxReconnectAttempts) {
-      this.scheduleReconnect(connection);
-    } else {
-      connection.state = WebSocketState.FAILED;
-      connection.metrics.state = WebSocketState.FAILED;
-      this.emitEvent(connection.id, 'stateChange', {
-        state: WebSocketState.FAILED,
-      });
-    }
-  }
-
-  /**
-   * Schedule reconnection with exponential backoff
-   */
-  private scheduleReconnect(connection: PooledConnection): void {
-    if (connection.reconnectTimer) {
-      clearTimeout(connection.reconnectTimer);
-    }
-
-    connection.state = WebSocketState.RECONNECTING;
-    connection.metrics.reconnectAttempts++;
-    this.emitEvent(connection.id, 'reconnecting', {
-      attempt: connection.metrics.reconnectAttempts,
-    });
-    this.emitEvent(connection.id, 'stateChange', {
-      state: WebSocketState.RECONNECTING,
-    });
-
-    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
-    const delay =
-      this.config.reconnectInterval * Math.pow(2, connection.metrics.reconnectAttempts - 1);
-    logger.info(
-      `[WebSocket] Scheduling reconnect for ${connection.id} in ${delay}ms (attempt ${connection.metrics.reconnectAttempts})`,
-    );
-
-    connection.reconnectTimer = setTimeout(() => {
-      this.connect(connection.id).catch((error) => {
-        logger.error('[WebSocket] Reconnection failed', error);
-      });
-    }, delay);
-  }
-
-  /**
-   * Start heartbeat for connection health monitoring
-   */
-  private startHeartbeat(connection: PooledConnection): void {
-    if (connection.heartbeatTimer) {
-      clearInterval(connection.heartbeatTimer);
-    }
-
-    connection.heartbeatTimer = setInterval(() => {
-      if (connection.state === WebSocketState.CONNECTED) {
-        this.send(connection.id, {
-          type: MessageType.HEARTBEAT,
-          payload: { ping: true },
-        }).catch((error) => {
-          logger.error('[WebSocket] Heartbeat failed', error);
-        });
-      }
-    }, this.config.heartbeatInterval);
-  }
-
-  /**
-   * Process queued messages
-   */
-  private async processMessageQueue(connection: PooledConnection): Promise<void> {
-    if (connection.state !== WebSocketState.CONNECTED || connection.messageQueue.length === 0) {
-      return;
-    }
-
-    logger.info(`[WebSocket] Processing ${connection.messageQueue.length} queued messages`);
-
-    // Sort by priority (high > normal > low)
-    connection.messageQueue.sort((a, b) => {
-      const priorityOrder = { high: 3, normal: 2, low: 1 };
-      return (
-        (priorityOrder[b.priority || 'normal'] || 2) - (priorityOrder[a.priority || 'normal'] || 2)
-      );
-    });
-
-    // Send all queued messages
-    while (connection.messageQueue.length > 0) {
-      const message = connection.messageQueue.shift()!;
-      try {
-        await this.send(connection.id, message);
-      } catch (error) {
-        logger.error('[WebSocket] Failed to send queued message', error);
-        // Re-queue if send failed
-        connection.messageQueue.unshift(message);
-        break;
-      }
-    }
-  }
-
-  /**
-   * Handle Supabase presence sync
-   */
-  private handlePresenceSync(connection: PooledConnection): void {
-    if (!connection.supabaseChannel) return;
-
-    const state = connection.supabaseChannel.presenceState();
-    this.emitEvent(connection.id, 'message', {
-      type: MessageType.PRESENCE,
-      payload: { event: 'sync', state },
-    });
-  }
-
-  /**
-   * Handle Supabase presence join
-   */
-  private handlePresenceJoin(connection: PooledConnection, payload: unknown): void {
-    this.emitEvent(connection.id, 'message', {
-      type: MessageType.PRESENCE,
-      payload: { event: 'join', ...(payload as Record<string, unknown>) },
-    });
-  }
-
-  /**
-   * Handle Supabase presence leave
-   */
-  private handlePresenceLeave(connection: PooledConnection, payload: unknown): void {
-    this.emitEvent(connection.id, 'message', {
-      type: MessageType.PRESENCE,
-      payload: { event: 'leave', ...(payload as Record<string, unknown>) },
-    });
-  }
-
-  /**
-   * Register message handler for specific message type
-   */
-  onMessage(type: MessageType, handler: (message: WebSocketMessage) => void): () => void {
-    if (!this.messageHandlers.has(type)) {
-      this.messageHandlers.set(type, new Set());
-    }
-
-    const handlers = this.messageHandlers.get(type)!;
-    handlers.add(handler);
-
-    // Return unsubscribe function
-    return () => {
-      handlers.delete(handler);
-      if (handlers.size === 0) {
-        this.messageHandlers.delete(type);
-      }
-    };
-  }
-
-  /**
-   * Register event listener
+   * Register event listener (no-op stub)
    */
   on(
-    connectionId: string,
-    event: WebSocketEventType,
-    handler: (event: WebSocketEvent) => void,
+    _connectionId: string,
+    _event: WebSocketEventType,
+    _handler: (event: WebSocketEvent) => void,
   ): () => void {
-    const connection = this.connections.get(connectionId);
-    if (!connection) {
-      logger.warn(`[WebSocket] Connection not found: ${connectionId}`);
-      return () => {};
-    }
-
-    if (!connection.listeners.has(event)) {
-      connection.listeners.set(event, new Set());
-    }
-
-    const listeners = connection.listeners.get(event)!;
-    listeners.add(handler);
-
-    // Return unsubscribe function
-    return () => {
-      listeners.delete(handler);
-      if (listeners.size === 0) {
-        connection.listeners.delete(event);
-      }
-    };
+    logger.warn('[WebSocketManager] on() called but realtime has been removed.');
+    return () => {};
   }
 
   /**
-   * Register global event listener (all connections)
+   * Register global event listener (no-op stub)
    */
-  onGlobal(event: WebSocketEventType, handler: (event: WebSocketEvent) => void): () => void {
-    if (!this.globalListeners.has(event)) {
-      this.globalListeners.set(event, new Set());
-    }
-
-    const listeners = this.globalListeners.get(event)!;
-    listeners.add(handler);
-
-    // Return unsubscribe function
-    return () => {
-      listeners.delete(handler);
-      if (listeners.size === 0) {
-        this.globalListeners.delete(event);
-      }
-    };
+  onGlobal(_event: WebSocketEventType, _handler: (event: WebSocketEvent) => void): () => void {
+    logger.warn('[WebSocketManager] onGlobal() called but realtime has been removed.');
+    return () => {};
   }
 
   /**
-   * Emit event to listeners
+   * Get connection state (no-op stub)
    */
-  private emitEvent(connectionId: string, type: WebSocketEventType, data?: unknown): void {
-    const event: WebSocketEvent = {
-      type,
-      connectionId,
-      data,
-      timestamp: Date.now(),
-    };
-
-    // Emit to connection-specific listeners
-    const connection = this.connections.get(connectionId);
-    if (connection) {
-      const listeners = connection.listeners.get(type);
-      if (listeners) {
-        listeners.forEach((handler) => {
-          try {
-            handler(event);
-          } catch (error) {
-            logger.error('[WebSocket] Event handler error', error);
-          }
-        });
-      }
-    }
-
-    // Emit to global listeners
-    const globalListeners = this.globalListeners.get(type);
-    if (globalListeners) {
-      globalListeners.forEach((handler) => {
-        try {
-          handler(event);
-        } catch (error) {
-          logger.error('[WebSocket] Global event handler error', error);
-        }
-      });
-    }
+  getState(_connectionId: string): WebSocketState | undefined {
+    return undefined;
   }
 
   /**
-   * Get connection state
+   * Get connection metrics (no-op stub)
    */
-  getState(connectionId: string): WebSocketState | undefined {
-    return this.connections.get(connectionId)?.state;
+  getMetrics(_connectionId: string): ConnectionMetrics | undefined {
+    return undefined;
   }
 
   /**
-   * Get connection metrics
-   */
-  getMetrics(connectionId: string): ConnectionMetrics | undefined {
-    return this.connections.get(connectionId)?.metrics;
-  }
-
-  /**
-   * Get all connections
+   * Get all connections (no-op stub)
    */
   getAllConnections(): string[] {
-    return Array.from(this.connections.keys());
+    return [];
   }
 
   /**
-   * Get connection count
+   * Get connection count (no-op stub)
    */
   getConnectionCount(): number {
-    return this.connections.size;
+    return 0;
   }
 
   /**
-   * Check if connection is active
+   * Check if connection is active (no-op stub)
    */
-  isConnected(connectionId: string): boolean {
-    const connection = this.connections.get(connectionId);
-    return connection?.state === WebSocketState.CONNECTED;
+  isConnected(_connectionId: string): boolean {
+    return false;
   }
 
   /**
-   * Generate unique message ID
-   */
-  private generateMessageId(): string {
-    return `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  }
-
-  /**
-   * Clean up all connections
+   * Clean up all connections (no-op stub)
    */
   async cleanup(): Promise<void> {
-    const promises = Array.from(this.connections.keys()).map((connectionId) =>
-      this.disconnect(connectionId),
-    );
-
-    await Promise.allSettled(promises);
-    this.messageHandlers.clear();
-    this.globalListeners.clear();
-    logger.info('[WebSocket] Cleanup complete');
+    logger.warn('[WebSocketManager] cleanup() called but realtime has been removed.');
   }
 }
 
