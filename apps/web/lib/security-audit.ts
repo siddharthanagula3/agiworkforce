@@ -4,25 +4,12 @@
  * Logs security-relevant events to the security_audit_logs table.
  * Use this for tracking authentication failures, rate limits, authorization failures, etc.
  *
- * SECURITY: 'server-only' import (added 2026-05-05) is defense-in-depth — this
- * module instantiates a Supabase service-role client at module load. If it is
- * ever accidentally imported by a client component, the build fails loudly
- * rather than silently shipping `undefined` for SUPABASE_SERVICE_ROLE_KEY in
- * the client bundle.
+ * SECURITY: 'server-only' import is defense-in-depth — this module must never
+ * be imported by client components.
  */
 import 'server-only';
-import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from './server/neon-db';
 import { logger } from './logger';
-
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-
-const supabaseAdmin =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
 
 export type SecurityEventType =
   | 'auth_failed'
@@ -49,11 +36,6 @@ export interface SecurityAuditEvent {
  * Log a security event to the audit table
  */
 export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void> {
-  if (!supabaseAdmin) {
-    logger.warn('Supabase admin client not initialized - cannot log security event');
-    return;
-  }
-
   const {
     userId,
     eventType,
@@ -65,24 +47,21 @@ export async function logSecurityEvent(event: SecurityAuditEvent): Promise<void>
   } = event;
 
   try {
-    const { error } = await supabaseAdmin.from('security_audit_logs').insert({
-      user_id: userId || null,
-      event_type: eventType,
-      severity,
-      ip_address: ipAddress || null,
-      user_agent: userAgent || null,
-      endpoint: endpoint || null,
-      details,
-    });
-
-    if (error) {
-      logger.error({ error, eventType, userId }, 'Failed to insert security audit log to database');
-    } else {
-      logger.info(
-        { eventType, severity, userId, endpoint },
-        'Security event logged to audit table',
-      );
-    }
+    const db = getNeonDb();
+    await db.execute(
+      `INSERT INTO security_audit_logs (user_id, event_type, severity, ip_address, user_agent, endpoint, details)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        userId || null,
+        eventType,
+        severity,
+        ipAddress || null,
+        userAgent || null,
+        endpoint || null,
+        JSON.stringify(details),
+      ],
+    );
+    logger.info({ eventType, severity, userId, endpoint }, 'Security event logged to audit table');
   } catch (err) {
     logger.error({ error: err, eventType }, 'Exception while logging security event');
   }

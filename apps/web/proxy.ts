@@ -26,9 +26,9 @@ function buildCspWithNonce(nonce: string): string {
     default-src 'self';
     script-src 'self' 'nonce-${nonce}'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
-    img-src 'self' data: blob: https://img.clerk.com https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com https://www.google-analytics.com;
+    img-src 'self' data: blob: https://img.clerk.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com https://www.google-analytics.com;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors 'none';
