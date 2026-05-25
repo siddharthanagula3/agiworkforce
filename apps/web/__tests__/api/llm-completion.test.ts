@@ -57,11 +57,6 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock Supabase server client (the route creates one for credit/subscription services)
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
-}));
-
 // Mock services
 const mockGetSubscription = vi.fn();
 const mockCheckAvailable = vi.fn();
@@ -112,10 +107,6 @@ import { POST } from '@/app/api/llm/completion/route';
 describe('POST /api/llm/completion', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-
-    // Re-setup Supabase server client mock after clearAllMocks() resets it
-    const { createSupabaseServerClient } = await import('@/services/supabase-server');
-    vi.mocked(createSupabaseServerClient).mockResolvedValue({} as never);
 
     // Default mock implementations
     mockGetProviderFromModel.mockReturnValue('deepseek');

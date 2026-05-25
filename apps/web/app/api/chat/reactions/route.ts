@@ -14,10 +14,6 @@ const ToggleReactionSchema = z.object({
   emoji: z.string().min(1).max(10),
 });
 
-const GetReactionsSchema = z.object({
-  messageIds: z.array(z.string().uuid()).min(1).max(100),
-});
-
 type ReactionRow = {
   id: string;
   message_id: string;

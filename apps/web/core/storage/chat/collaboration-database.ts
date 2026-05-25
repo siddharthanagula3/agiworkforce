@@ -19,6 +19,8 @@ import type {
   TaskStatus,
 } from '@shared/types/multi-agent-chat';
 
+const db = getNeonDb();
+
 // =============================================
 // COLLABORATION SESSION OPERATIONS
 // =============================================
@@ -219,7 +221,6 @@ export async function updateCollaboration(
  */
 export async function deleteCollaboration(collaborationId: string): Promise<void> {
   try {
-    const db = getNeonDb();
     await db.execute('delete from agent_collaborations where id = $1', [collaborationId]);
   } catch (error) {
     if (error instanceof MultiAgentChatError) {

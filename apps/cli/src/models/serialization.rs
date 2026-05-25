@@ -63,7 +63,11 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                                 }
                             }));
                         }
-                        _ => {}
+                        ContentBlock::ToolResult { .. } => {
+                            // Tool results are not emitted for assistant-role messages
+                            // in the OpenAI format; they are handled in the user-role
+                            // branch below as separate "tool" role messages.
+                        }
                     }
                 }
 
@@ -105,7 +109,10 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                         ContentBlock::Text { text } => {
                             text_parts.push(text.clone());
                         }
-                        _ => {}
+                        ContentBlock::ToolUse { .. } => {
+                            // ToolUse blocks are not expected in user/tool-role messages;
+                            // skip to avoid emitting malformed OpenAI API payloads.
+                        }
                     }
                 }
 

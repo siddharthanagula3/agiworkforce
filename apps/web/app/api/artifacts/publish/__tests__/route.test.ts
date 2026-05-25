@@ -12,7 +12,7 @@ import { describe, it, expect, vi } from 'vitest';
 
 const { mockPublishArtifact, mockGetAuth, mockRequireCsrf, mockWithRateLimit } = vi.hoisted(() => ({
   mockPublishArtifact: vi.fn(),
-  mockGetAuth: vi.fn().mockResolvedValue({ user: { id: 'user-1' }, userDb: {} }),
+  mockGetAuth: vi.fn().mockResolvedValue({ userId: 'user-1' }),
   mockRequireCsrf: vi.fn().mockResolvedValue(null),
   mockWithRateLimit: vi.fn().mockResolvedValue(null),
 }));
@@ -21,7 +21,7 @@ vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockRequireCsrf }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockWithRateLimit }));
-vi.mock('@/lib/api-auth', () => ({ getAuthenticatedUserWithClient: mockGetAuth }));
+vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetAuth }));
 
 vi.mock('@/lib/artifact-publisher', () => {
   class TrustBoundaryViolationError extends Error {
@@ -100,7 +100,7 @@ function makeRequest(body: unknown) {
 
 describe('POST /api/artifacts/publish', () => {
   it('happy path returns 200 with waitlist discriminated union', async () => {
-    mockGetAuth.mockResolvedValueOnce({ user: { id: 'user-1' }, userDb: {} });
+    mockGetAuth.mockResolvedValueOnce({ userId: 'user-1' });
     mockRequireCsrf.mockResolvedValueOnce(null);
     mockWithRateLimit.mockResolvedValueOnce(null);
     mockPublishArtifact.mockResolvedValueOnce({
@@ -118,7 +118,7 @@ describe('POST /api/artifacts/publish', () => {
   });
 
   it('trust-boundary violation returns 400 with code and codes array', async () => {
-    mockGetAuth.mockResolvedValueOnce({ user: { id: 'user-1' }, userDb: {} });
+    mockGetAuth.mockResolvedValueOnce({ userId: 'user-1' });
     mockRequireCsrf.mockResolvedValueOnce(null);
     mockWithRateLimit.mockResolvedValueOnce(null);
     mockPublishArtifact.mockRejectedValueOnce(
@@ -142,7 +142,7 @@ describe('POST /api/artifacts/publish', () => {
     // ArtifactPersistenceUnavailableError (42P01) which caused 503s.
     // The new publisher returns { kind: 'waitlist' } instead.
     // Verify the route has no special-case 503 branch.
-    mockGetAuth.mockResolvedValueOnce({ user: { id: 'user-1' }, userDb: {} });
+    mockGetAuth.mockResolvedValueOnce({ userId: 'user-1' });
     mockRequireCsrf.mockResolvedValueOnce(null);
     mockWithRateLimit.mockResolvedValueOnce(null);
     mockPublishArtifact.mockResolvedValueOnce({

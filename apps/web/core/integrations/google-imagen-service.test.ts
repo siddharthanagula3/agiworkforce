@@ -11,32 +11,22 @@ import {
   type ImagenServiceError,
 } from './google-imagen-service';
 
-// Mock Supabase client
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-  },
+// Mock auth token (replaces former supabase.auth.getSession usage)
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
+
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 describe('Google Imagen Service', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
-  let mockSupabase: { auth: { getSession: ReturnType<typeof vi.fn> } };
+  const mockGetAuthToken = vi.mocked(getAuthToken);
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as unknown as {
-      auth: { getSession: ReturnType<typeof vi.fn> };
-    };
-
-    // Default auth mock
-    mockSupabase.auth.getSession.mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    });
+    // Default: authenticated
+    mockGetAuthToken.mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -118,10 +108,7 @@ describe('Google Imagen Service', () => {
     });
 
     it('should throw error when not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      });
+      mockGetAuthToken.mockResolvedValueOnce(null);
 
       await expect(googleImagenService.generateImage(mockRequest)).rejects.toMatchObject({
         code: 'AUTH_ERROR',
@@ -316,10 +303,7 @@ describe('Google Imagen Service', () => {
     });
 
     it('should return original prompt when not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      });
+      mockGetAuthToken.mockResolvedValueOnce(null);
 
       const result = await googleImagenService.enhancePrompt('Original prompt');
 

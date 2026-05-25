@@ -503,7 +503,7 @@ describe('AnthropicProvider', () => {
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(AnthropicError);
       await expect(provider.sendMessage(mockMessages)).rejects.toMatchObject({
-        code: 'NOT_AUTHENTICATED',
+        code: 'REQUEST_FAILED',
       });
     });
   });

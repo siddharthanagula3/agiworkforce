@@ -23,7 +23,6 @@ import { z } from 'zod';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 // AUDIT-FIX: C-3
 import { validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -60,7 +59,6 @@ import {
 } from '@/lib/llm-providers/context-management';
 import { apiCache } from '@/shared/lib/cache';
 import { modelRouter } from '@core/ai/orchestration/model-router';
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 // ---------------------------------------------------------------------------
 // Request schema (same shape as v1)

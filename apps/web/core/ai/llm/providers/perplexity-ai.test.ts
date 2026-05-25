@@ -325,31 +325,32 @@ describe('PerplexityProvider', () => {
     });
 
     it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            content: 'Response',
-            usage: { prompt_tokens: 5 },
-          }),
-      });
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // Provider makes two fetch calls: proxy first, then log-message.
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({
+              content: 'Response',
+              usage: { prompt_tokens: 5 },
+            }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) }); // log-message
 
       await provider.sendMessage(mockMessages, 'session-123', 'user-456');
 
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/agents/log-message',
         expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
+          method: 'POST',
+          body: expect.stringContaining('"sessionId":"session-123"'),
         }),
       );
+      const logBody = JSON.parse((mockFetch.mock.calls[1]![1] as RequestInit).body as string);
+      expect(logBody.sessionId).toBe('session-123');
+      expect(logBody.role).toBe('assistant');
+      expect(logBody.content).toBe('Response');
     });
 
     it('should handle empty response gracefully', async () => {
@@ -497,11 +498,8 @@ describe('PerplexityProvider', () => {
     });
 
     it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // When sessionId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ content: 'Response' }),
@@ -509,15 +507,13 @@ describe('PerplexityProvider', () => {
 
       await provider.sendMessage(mockMessages, undefined, 'user-123');
 
-      expect(insertMock).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalledWith('/api/agents/log-message', expect.anything());
     });
 
     it('should not save to database when userId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // When userId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ content: 'Response' }),
@@ -525,19 +521,19 @@ describe('PerplexityProvider', () => {
 
       await provider.sendMessage(mockMessages, 'session-123', undefined);
 
-      expect(insertMock).not.toHaveBeenCalled();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalledWith('/api/agents/log-message', expect.anything());
     });
 
     it('should handle database save error gracefully', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: new Error('DB error') });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ content: 'Response' }),
-      });
+      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // The provider's saveMessageToDatabase swallows errors so the main response is unaffected.
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ content: 'Response' }),
+        })
+        .mockRejectedValueOnce(new Error('DB error')); // log-message call fails
 
       // Should not throw even if database save fails
       const response = await provider.sendMessage(mockMessages, 'session-123', 'user-456');

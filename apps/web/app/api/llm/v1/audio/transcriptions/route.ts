@@ -70,7 +70,7 @@ async function handleTranscriptions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
+  await getClerkAuthUser(request);
 
   let formData: FormData;
   try {

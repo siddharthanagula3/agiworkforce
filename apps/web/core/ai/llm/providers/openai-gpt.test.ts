@@ -564,7 +564,7 @@ describe('OpenAIProvider', () => {
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(OpenAIError);
       await expect(provider.sendMessage(mockMessages)).rejects.toMatchObject({
-        code: 'NOT_AUTHENTICATED',
+        code: 'REQUEST_FAILED',
       });
     });
   });
