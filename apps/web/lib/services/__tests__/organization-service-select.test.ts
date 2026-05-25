@@ -1,5 +1,4 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { OrganizationService } from '../organization-service';
 
