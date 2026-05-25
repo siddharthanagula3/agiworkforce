@@ -285,7 +285,14 @@ describe('Artifact Store (consolidated)', () => {
     it('should throw when artifact does not exist', async () => {
       const { shareArtifact } = useArtifactStore.getState();
 
-      await expect(shareArtifact('non-existent')).rejects.toThrow('Artifact not found');
+      let error: Error | undefined;
+      try {
+        await shareArtifact('non-existent');
+      } catch (e) {
+        error = e as Error;
+      }
+      expect(error).toBeDefined();
+      expect(error!.message).toBe('Artifact not found');
     });
   });
 
