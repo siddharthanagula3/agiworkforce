@@ -1,7 +1,9 @@
 /**
  * Single Conversation API
  *
- * GET /api/chat/conversations/[id] - Get conversation with messages
+ * GET /api/chat/conversations/[id] - Get conversation with messages (paginated)
+ *   Query params: limit (1-500, default 100), offset (default 0)
+ *   Response: { conversation, messages, total, hasMore }
  * PUT /api/chat/conversations/[id] - Update conversation (rename)
  * DELETE /api/chat/conversations/[id] - Soft delete conversation
  */
@@ -29,6 +31,13 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const userId = await requireCurrentUserId();
   const { id } = await context.params;
 
+  // Parse and clamp pagination parameters
+  const url = new URL(request.url);
+  const rawLimit = parseInt(url.searchParams.get('limit') ?? '100', 10);
+  const rawOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 100, 1), 500);
+  const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+
   const db = getNeonChatDb();
   const [conversation] = await db.query<ChatConversationRow>(
     `
@@ -45,19 +54,31 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   }
 
   try {
-    const messages = await db.query<ChatMessageRow>(
-      `
-        select id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
-        from web_messages
-        where conversation_id = $1
-        order by created_at asc
-      `,
-      [id],
-    );
+    const [messages, countRows] = await Promise.all([
+      db.query<ChatMessageRow>(
+        `
+          select id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
+          from web_messages
+          where conversation_id = $1
+          order by created_at asc
+          limit $2 offset $3
+        `,
+        [id, limit, offset],
+      ),
+      db.query<{ total: string }>(
+        'select count(*)::text as total from web_messages where conversation_id = $1',
+        [id],
+      ),
+    ]);
+
+    const total = parseInt(countRows[0]?.total ?? '0', 10);
+    const hasMore = offset + messages.length < total;
 
     return NextResponse.json({
       conversation,
       messages,
+      total,
+      hasMore,
     });
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to fetch messages');

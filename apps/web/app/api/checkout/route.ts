@@ -58,8 +58,25 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     throw createError.unauthorized('Please sign in to continue');
   }
 
+  // Fetch the user's email from Clerk so Stripe customers are created with a
+  // real address. auth() only returns userId for session-cookie requests;
+  // email is only present on Bearer-token paths. clerkClient().users.getUser
+  // is the reliable cross-path source.
+  let userEmail = '';
+  try {
+    const { clerkClient } = await import('@clerk/nextjs/server');
+    const clerkUser = await (await clerkClient()).users.getUser(userId);
+    userEmail =
+      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ??
+      clerkUser.emailAddresses[0]?.emailAddress ??
+      '';
+  } catch (err) {
+    logger.warn({ error: err, userId }, 'Could not fetch email from Clerk; proceeding without it');
+  }
+
   const db = getNeonDb();
-  const user = { id: userId, email: '' };
+  const user = { id: userId, email: userEmail };
 
   // Type-safe request body parsing with Zod validation
   let rawBody: unknown;
