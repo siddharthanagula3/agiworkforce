@@ -144,8 +144,8 @@ for (const dir of requiredDirs) {
   }
 }
 
-if (!fs.existsSync(path.join(root, 'audit/audit-log.md'))) {
-  errors.push('Missing required audit fire log: audit/audit-log.md');
+if (!fs.existsSync(path.join(root, 'audit/INDEX.md'))) {
+  errors.push('Missing required audit index: audit/INDEX.md');
 }
 
 for (const staleConfig of ['app.json', 'apps/mobile/app.json']) {

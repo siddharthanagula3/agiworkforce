@@ -393,6 +393,7 @@ export function ArtifactPreview({
     // getPreviewHTML() always returns a full <!DOCTYPE html> document regardless
     // of artifact.type, so text/html is always correct here.
     const html = getPreviewHTML();
+
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
