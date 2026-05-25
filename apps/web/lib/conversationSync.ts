@@ -36,7 +36,7 @@
  * ```
  */
 
-import type { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertSurfaceCanSyncChats } from '@agiworkforce/types';
 import type {
   LegacyWebSyncEvent as SyncEvent,
@@ -65,7 +65,6 @@ export type {
 export class ConversationSyncService {
   private supabase: SupabaseClient;
   private origin: SyncOrigin;
-  private channel: RealtimeChannel | null = null;
   private _status: SyncStatus = 'idle';
   private statusListeners: Set<(status: SyncStatus) => void> = new Set();
 
@@ -244,7 +243,7 @@ export class ConversationSyncService {
    * Remove the realtime subscription (no-op stub).
    */
   unsubscribe(): void {
-    this.channel = null;
+    // Supabase Realtime channel removed; nothing to clean up
   }
 
   // -------------------------------------------------------------------------

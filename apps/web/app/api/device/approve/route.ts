@@ -2,10 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { createClient } from '@supabase/supabase-js';
+import { auth } from '@clerk/nextjs/server';
 
-import { createSupabaseServerClient } from '@/services/supabase-server';
-import { requireEnv } from '@/utils/env';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -24,6 +23,13 @@ const DeviceApproveRequestSchema = z.object({
   action: z.enum(['approve', 'deny']).optional(),
 });
 
+// Row shape from device_authorization_codes (approve fields)
+interface DeviceAuthRecord {
+  device_id: string;
+  status: string;
+  expires_at: string;
+}
+
 async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> {
   // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
@@ -36,13 +42,10 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
   if (rateLimitResponse) return rateLimitResponse;
 
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    // Authenticate via Clerk (browser session or Bearer token)
+    const { userId, getToken } = await auth();
 
-    if (!user || userError) {
+    if (!userId) {
       throw createError.unauthorized('Please sign in to continue');
     }
 
@@ -61,26 +64,29 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     const code = parsed.data.code;
     const action = parsed.data.action ?? 'approve';
 
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+    const db = getNeonDb();
 
     // Ensure the code exists and hasn't expired
-    const { data: record, error: fetchError } = await admin
-      .from('device_authorization_codes')
-      .select('device_id, status, expires_at')
-      .eq('user_code', code)
-      .single();
+    const records = await db.query<DeviceAuthRecord>(
+      `SELECT device_id, status, expires_at
+         FROM device_authorization_codes
+        WHERE user_code = $1`,
+      [code],
+    );
 
-    if (fetchError || !record) {
+    if (!records.length) {
       throw createError.validation('Invalid or expired device code');
     }
 
+    const record = records[0]!;
+
     if (new Date(record.expires_at) < new Date()) {
-      await admin
-        .from('device_authorization_codes')
-        .update({ status: 'expired', updated_at: new Date().toISOString() })
-        .eq('device_id', record.device_id);
+      await db.execute(
+        `UPDATE device_authorization_codes
+            SET status = 'expired', updated_at = $1
+          WHERE device_id = $2`,
+        [new Date().toISOString(), record.device_id],
+      );
       throw createError.validation('This device code has expired');
     }
 
@@ -92,28 +98,23 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
     const nowIso = new Date().toISOString();
 
     if (action === 'deny') {
-      const { error: updateError, data: updated } = await admin
-        .from('device_authorization_codes')
-        .update({
-          status: 'denied',
-          user_id: user.id,
-          denied_at: nowIso,
-          updated_at: nowIso,
-          // Ensure no tokens remain
-          access_token: null,
-          refresh_token: null,
-          user_email: user.email ?? null,
-          user_name:
-            (user.user_metadata?.['full_name'] as string | undefined) ||
-            user.email?.split('@')[0] ||
-            null,
-        })
-        .eq('device_id', record.device_id)
-        .eq('status', 'pending')
-        .select('status')
-        .maybeSingle();
+      const updated = await db.query<{ status: string }>(
+        `UPDATE device_authorization_codes
+            SET status       = 'denied',
+                user_id      = $1,
+                denied_at    = $2,
+                updated_at   = $2,
+                access_token  = NULL,
+                refresh_token = NULL,
+                user_email   = $3,
+                user_name    = $4
+          WHERE device_id = $5
+            AND status    = 'pending'
+          RETURNING status`,
+        [userId, nowIso, null, null, record.device_id],
+      );
 
-      if (updateError || !updated) {
+      if (!updated.length) {
         throw createError.conflict('This device code has already been processed');
       }
 
@@ -123,50 +124,39 @@ async function handleDeviceApprove(request: NextRequest): Promise<NextResponse> 
       );
     }
 
-    // Approve: store the current session tokens (encrypted) for the device to retrieve exactly once.
-    // Identity was already verified via getUser() above; getSession() is used only to retrieve
-    // the raw token strings that the device needs to authenticate.
-    // WEB-18 (audit 2026-05-19): explicitly re-check expires_at so an expired
-    // session cannot be encrypted into a fresh device-auth payload.
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const accessToken = session?.access_token;
-    const refreshToken = session?.refresh_token;
+    // Approve: obtain the Clerk session token for the device to authenticate with.
+    // WEB-18 (audit 2026-05-19): verify we can retrieve a valid token before
+    // writing it to the database so an expired/invalid session cannot produce
+    // a stale device-auth payload.
+    const clerkToken = await getToken();
 
-    if (!accessToken || !refreshToken) {
-      throw createError.internal('Missing session tokens');
-    }
-    if (session?.expires_at && session.expires_at * 1000 <= Date.now()) {
-      throw createError.unauthorized('Session expired');
+    if (!clerkToken) {
+      throw createError.internal('Missing session token - please sign in again');
     }
 
-    // Encrypt tokens at rest - the poll endpoint will decrypt on retrieval
-    const encryptedAccessToken = encryptToken(accessToken);
-    const encryptedRefreshToken = encryptToken(refreshToken);
+    // Encrypt token at rest - the poll endpoint will decrypt on retrieval.
+    // refresh_token is stored as null for Clerk sessions (token rotation is
+    // handled by the Clerk SDK; the desktop app re-authenticates via the
+    // web flow when the token expires).
+    const encryptedAccessToken = encryptToken(clerkToken);
 
-    const userEmail = user.email ?? null;
-    const userName =
-      (user.user_metadata?.['full_name'] as string | undefined) || userEmail?.split('@')[0] || null;
+    const updated = await db.query<{ status: string }>(
+      `UPDATE device_authorization_codes
+          SET status        = 'approved',
+              user_id       = $1,
+              user_email    = $2,
+              user_name     = $3,
+              access_token  = $4,
+              refresh_token = NULL,
+              authorized_at = $5,
+              updated_at    = $5
+        WHERE device_id = $6
+          AND status    = 'pending'
+        RETURNING status`,
+      [userId, null, null, encryptedAccessToken, nowIso, record.device_id],
+    );
 
-    const { error: updateError, data: updated } = await admin
-      .from('device_authorization_codes')
-      .update({
-        status: 'approved',
-        user_id: user.id,
-        user_email: userEmail,
-        user_name: userName,
-        access_token: encryptedAccessToken,
-        refresh_token: encryptedRefreshToken,
-        authorized_at: nowIso,
-        updated_at: nowIso,
-      })
-      .eq('device_id', record.device_id)
-      .eq('status', 'pending')
-      .select('status')
-      .maybeSingle();
-
-    if (updateError || !updated) {
+    if (!updated.length) {
       throw createError.conflict('This device code has already been processed');
     }
 
