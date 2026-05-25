@@ -3,8 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
-import { requireEnv } from '@/utils/env';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
@@ -12,8 +11,8 @@ import { getNeonDb } from '@/lib/server/neon-db';
  *
  * Returns cross-surface operational status for the dashboard control-plane hero.
  * Surfaces (desktop, mobile, extension, CLI) are detected via last-heartbeat
- * timestamps stored in Supabase. Agent activity and provider health are derived
- * from available Supabase data.
+ * timestamps stored in Neon. Agent activity and provider health are derived
+ * from available data.
  */
 
 export const runtime = 'nodejs';
@@ -73,45 +72,16 @@ async function probeProvider(name: string, url: string): Promise<ProviderRow> {
   }
 }
 
-async function authenticateRequest(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    const token = authHeader.slice(7);
-    // Reuse singleton service-role client for Bearer token validation
-    const {
-      data: { user },
-      error,
-    } = await getServiceClient().auth.getUser(token);
-    if (error || !user) return null;
-    return user.id;
-  }
-
-  // Cookie-based auth for browser requests
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const { createServerClient } = await import('@supabase/ssr');
-  const ssrClient = createServerClient(supabaseUrl, requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'), {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll() {
-        // read-only for this route
-      },
-    },
-  });
-  const {
-    data: { user },
-  } = await ssrClient.auth.getUser();
-  return user?.id ?? null;
-}
-
 export async function GET(request: NextRequest) {
   // Rate limit: use 'health-check' bucket (30 req/min) - appropriate for polling
   const rateLimitResponse = await withRateLimit(request, 'health-check');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const userId = await authenticateRequest(request);
-  if (!userId) {
+  let userId: string;
+  try {
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -595,7 +595,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // Check credits BEFORE invoking the provider (402 if insufficient)
   const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, userId);
+    const balance = await CreditService.getBalance(userId);
     logger.warn(
       { userId: userId, estimatedCostCents, balance },
       'Insufficient credits for image generation',
@@ -625,7 +625,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
     userId,
     estimatedCostCents,
     `Credit reservation: image generation (${provider})`,
@@ -696,7 +695,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     // Refund the reserved credits on generation failure
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
-      userClient,
       userId,
       -estimatedCostCents,
       `Refund: image generation failed (${provider})`,
@@ -768,7 +766,6 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
       requestId,
     );
     await CreditService.deductCredits(
-      userClient,
       userId,
       costDifference,
       costDifference > 0

@@ -6,7 +6,7 @@ import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { clerkClient } from '@clerk/nextjs/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
@@ -16,8 +16,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
  * Requires authenticated session (Bearer token or cookie).
  *
  * The profiles soft-delete is written via Neon parameterized SQL.
- * The auth user removal uses getServiceClient().auth.admin.deleteUser —
- * that path has no Neon equivalent and must stay on the Supabase admin client.
+ * The auth user removal uses clerkClient().users.deleteUser.
  *
  * This endpoint schedules deletion rather than doing it immediately,
  * giving the user a 24-hour grace window before permanent erasure.
@@ -51,9 +50,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   const db = getNeonDb();
-  // Service-role client retained solely for auth.admin.deleteUser — the only
-  // operation here that requires Supabase Auth admin privileges.
-  const adminClient = getServiceClient();
 
   try {
     // Schedule deletion: set deletion_requested_at. A background job (cron or
@@ -78,9 +74,12 @@ export async function DELETE(request: NextRequest) {
         'Soft deletion failed; attempting immediate delete',
       );
 
-      const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
-      if (deleteError) {
-        logger.error({ userId, error: deleteError.message }, 'Account deletion failed');
+      try {
+        const client = await clerkClient();
+        await client.users.deleteUser(userId);
+      } catch (clerkErr: unknown) {
+        const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
+        logger.error({ userId, error: errMsg }, 'Account deletion failed');
         return NextResponse.json(
           { error: 'Account deletion failed. Please contact support@agiworkforce.com.' },
           { status: 500, headers: SECURITY_HEADERS },

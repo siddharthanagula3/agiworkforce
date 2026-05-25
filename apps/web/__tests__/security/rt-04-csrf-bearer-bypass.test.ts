@@ -16,27 +16,21 @@ vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
 
 vi.mock('server-only', () => ({}));
 
-// ─── Supabase admin mock — controls whether JWT is "valid" ────────────────────
-// NOTE: `createClient` is a plain function (not vi.fn()) so that vitest's
-// `mockReset: true` config doesn't clear its implementation between tests.
-// Only `mockGetUser` is reset between tests via beforeEach.
-const mockGetUser = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: () => ({
-    auth: { getUser: (...args: unknown[]) => mockGetUser(...args) },
-  }),
+// ─── Clerk backend mock — controls whether JWT is "valid" ─────────────────────
+// NOTE: `verifyToken` is a plain function (not vi.fn()) at the mock boundary so
+// that vitest's `mockReset: true` config doesn't clear its implementation
+// between tests. Only `mockVerifyToken` is reset between tests via beforeEach.
+const mockVerifyToken = vi.fn();
+vi.mock('@clerk/backend', () => ({
+  verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-vi.mock('@/utils/supabase/server', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: new Error('no session') }),
-    },
-  })),
+// Clerk auth() mock — returns no session (tests exercise the Bearer path)
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn().mockResolvedValue({ userId: null }),
 }));
 
-process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-key';
+process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
 process.env['CSRF_SECRET'] = 'test-csrf-secret-32chars-minimum!!';
 
 import { requireCsrfToken, validateCsrfFromRequest, isBearerTokenValid } from '@/lib/csrf';
@@ -56,15 +50,15 @@ function makeRequest(
 describe('RT-04: CSRF Bearer bypass fix', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: getUser returns no valid user (invalid JWT)
-    mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+    // Default: verifyToken throws (invalid JWT)
+    mockVerifyToken.mockRejectedValue(new Error('invalid token'));
   });
 
   describe('isBearerTokenValid', () => {
     it('returns false when no Authorization header', async () => {
       const result = await isBearerTokenValid(null);
       expect(result).toBe(false);
-      expect(mockGetUser).not.toHaveBeenCalled();
+      expect(mockVerifyToken).not.toHaveBeenCalled();
     });
 
     it('returns false for garbage Bearer token', async () => {
@@ -73,16 +67,13 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('returns false for "Bearer xxx" (invalid JWT)', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid JWT') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid JWT'));
       const result = await isBearerTokenValid('Bearer invalid.jwt.token');
       expect(result).toBe(false);
     });
 
-    it('returns true for a valid JWT', async () => {
-      mockGetUser.mockResolvedValue({
-        data: { user: { id: 'user-123' } },
-        error: null,
-      });
+    it('returns true for a valid Clerk JWT', async () => {
+      mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
       const result = await isBearerTokenValid(
         'Bearer valid.jwt.token.with.sufficient.length.for.bearer.minimum',
       );
@@ -92,13 +83,13 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     it('returns false for extremely short token', async () => {
       const result = await isBearerTokenValid('Bearer x');
       expect(result).toBe(false);
-      expect(mockGetUser).not.toHaveBeenCalled();
+      expect(mockVerifyToken).not.toHaveBeenCalled();
     });
   });
 
   describe('requireCsrfToken', () => {
     it('POST with valid Bearer + no CSRF → 200 (null returned)', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
+      mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
       const req = makeRequest('POST', {
         bearerToken: 'valid.jwt.token.with.sufficient.length.for.bearer.minimum',
       });
@@ -108,7 +99,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
 
     it('POST with invalid Bearer + session cookie + no CSRF → 403 (was previously 200)', async () => {
       // RT-04 regression test: old code returned null for ANY Bearer header
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid'));
       const req = makeRequest('POST', {
         bearerToken: 'bogus_invalid_token',
         cookie: 'agi_access_token=some_cookie_session',
@@ -122,7 +113,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('POST with invalid Bearer + session cookie + valid CSRF → requireCsrfToken called without Bearer bypass', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid'));
       // The key assertion: bogus Bearer no longer grants automatic bypass.
       // With a valid CSRF token the result depends on session binding (tested in unit),
       // but with NO CSRF token the result must be 403 (bogus Bearer does not skip check).
@@ -150,7 +141,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('DELETE with invalid Bearer + no CSRF → 403', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid'));
       const req = makeRequest('DELETE', { bearerToken: 'bogus_token_xyz' });
       const result = await requireCsrfToken(req);
       expect(result).not.toBeNull();
@@ -158,7 +149,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('PUT with invalid Bearer + no CSRF → 403', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid'));
       const req = makeRequest('PUT', { bearerToken: 'bogus' });
       const result = await requireCsrfToken(req);
       expect(result).not.toBeNull();
@@ -168,7 +159,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
 
   describe('validateCsrfFromRequest', () => {
     it('valid Bearer → returns true', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-123' } }, error: null });
+      mockVerifyToken.mockResolvedValue({ sub: 'user_123' });
       const req = makeRequest('POST', {
         bearerToken: 'valid.jwt.token.with.sufficient.length.for.bearer.minimum',
       });
@@ -177,7 +168,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('invalid Bearer + no CSRF → returns false', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: new Error('invalid') });
+      mockVerifyToken.mockRejectedValue(new Error('invalid'));
       const req = makeRequest('POST', { bearerToken: 'bogus' });
       const result = await validateCsrfFromRequest(req);
       expect(result).toBe(false);
