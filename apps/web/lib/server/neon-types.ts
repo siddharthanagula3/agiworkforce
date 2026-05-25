@@ -290,7 +290,6 @@ export type MessagingConnectionRow = {
 
 export type UserIdMappingRow = {
   clerk_id: string;
-  supabase_uuid: string;
   email: string | null;
   mapped_at: string;
 };

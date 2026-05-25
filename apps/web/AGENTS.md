@@ -20,9 +20,7 @@ Read root `AGENTS.md`, then this file, then `apps/web/README.md`.
 
 ## High-Risk Areas
 
-- Auth, cookies, CSRF, CSP, iframe/artifact rendering, file uploads, provider routing, Supabase service-role use, billing, rate limits, and Local/BYOK/Managed labels.
 - Do not put shared schemas, provider adapters, or desktop/CLI behavior in the web app.
-- Root `supabase/` is canonical for migrations until the migration split is resolved.
 
 ## Verification
 

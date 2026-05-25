@@ -341,7 +341,6 @@ export class SubscriptionService {
         // WEB-8 (audit 2026-05-03): tightened IDOR check.
         //
         // The previous logic only blocked when
-        //   `customer.metadata.supabase_user_id !== userId`.
         // It accepted the customer if the metadata field was MISSING -
         // which is exactly the case for legacy customers created before
         // metadata was attached. Combined with the email-fallback path,
@@ -354,7 +353,8 @@ export class SubscriptionService {
         // refused - operators can run a one-time backfill to attach
         // metadata to legacy customers, after which the email fallback
         // becomes safe.
-        const recordedUserId = customer.metadata?.['supabase_user_id'];
+        const recordedUserId =
+          customer.metadata?.['user_id'] || customer.metadata?.['supabase_user_id'];
         if (!recordedUserId || recordedUserId !== userId) {
           logger.warn(
             {

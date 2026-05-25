@@ -141,7 +141,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
-          supabase_user_id: user.id,
+          user_id: user.id,
         },
       });
       stripeCustomerId = customer.id;
@@ -226,7 +226,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       // - not redundant - because Stripe customer IDs are not always available at
       // webhook time (e.g. first-time checkout before the customer object is linked).
       metadata: {
-        supabase_user_id: user.id,
+        user_id: user.id,
         plan_tier: plan,
       },
       allow_promotion_codes: true,
