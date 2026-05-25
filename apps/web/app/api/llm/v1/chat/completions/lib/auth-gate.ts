@@ -78,8 +78,7 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
     };
   }
 
-  const userDb = await (await import('@/services/supabase-server')).createSupabaseServerClient();
-  const subscription = await SubscriptionService.getSubscription(userDb, userId);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     return {

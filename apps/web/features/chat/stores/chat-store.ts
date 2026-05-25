@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
-import { supabase } from '@shared/lib/supabase-client';
 import {
   ConversationSyncService,
   type SyncedConversation,
@@ -211,7 +210,7 @@ function getGreetingTime(): string {
 }
 
 // Singleton sync service for cross-device conversation sync
-const conversationSync = new ConversationSyncService(supabase, 'web');
+const conversationSync = new ConversationSyncService(null, 'web');
 
 // ============================================================================
 // Store

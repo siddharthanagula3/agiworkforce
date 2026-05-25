@@ -17,11 +17,9 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
  */
 async function handler(request: NextRequest) {
   let userId: string;
-  let userClient;
   try {
     const authResult = await getClerkAuthUser(request);
     userId = authResult.userId;
-    userClient = await (await import('@/services/supabase-server')).createSupabaseServerClient();
   } catch {
     throw createError.unauthorized('Authentication required');
   }
@@ -29,8 +27,8 @@ async function handler(request: NextRequest) {
   try {
     // Fetch credit balance and subscription in parallel
     const [balance, subscription] = await Promise.all([
-      CreditService.getBalance(userClient, userId),
-      SubscriptionService.getSubscription(userClient, userId),
+      CreditService.getBalance(userId),
+      SubscriptionService.getSubscription(userId),
     ]);
 
     const planTier = subscription?.plan_tier || 'free';

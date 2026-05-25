@@ -13,11 +13,11 @@
  * 401 and the chunk surface here will show the error.
  */
 
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 
 import { streamFromProvider } from '@/lib/providerStreamClient';
 import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
-import { createClient } from '@/utils/supabase/client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
 
@@ -61,41 +61,20 @@ export default function MultiProviderChatPage(): ReactElement {
   });
   const [busy, setBusy] = useState(false);
 
-  const supabaseResult = useMemo(() => {
-    try {
-      return { client: createClient(), error: null as string | null };
-    } catch (err) {
-      return {
-        client: null,
-        error: err instanceof Error ? err.message : 'Auth client unavailable',
-      };
-    }
-  }, []);
-  const supabase = supabaseResult.client;
-
   useEffect(() => {
-    if (supabaseResult.error) {
-      setAuthError(supabaseResult.error);
-    }
-  }, [supabaseResult.error]);
-
-  useEffect(() => {
-    if (!supabase) return;
     void (async () => {
-      // WEB-18: client-side `getSession` is intentional here. This is not an
-      // auth gate — middleware enforces authentication on this route; the
-      // effect only reads the access token to attach as a Bearer header on
-      // outbound LLM-provider fan-out requests. Using getUser() instead
-      // would round-trip to the auth server on every page render.
-
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setAuthError(error.message);
-        return;
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          setAuthError('Not signed in');
+          return;
+        }
+        setAuthToken(token);
+      } catch (err) {
+        setAuthError(err instanceof Error ? err.message : 'Auth unavailable');
       }
-      setAuthToken(data.session?.access_token ?? null);
     })();
-  }, [supabase]);
+  }, []);
 
   const updateRun = (id: ProviderId, patch: Partial<ProviderRunState>): void => {
     setRuns((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
