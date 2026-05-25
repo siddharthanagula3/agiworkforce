@@ -46,19 +46,29 @@ export async function createCollaboration(
       output_artifacts: [],
     } as unknown as AgentCollaborationInsert;
 
-    const { data, error } = await db
-      .from('agent_collaborations')
-      .insert(collaborationData)
-      .select()
-      .maybeSingle();
+    const rows = await db.query<AgentCollaboration>(
+      `INSERT INTO agent_collaborations (
+        conversation_id, session_name, session_type, participant_ids,
+        lead_participant_id, task_description, task_status, workflow_steps,
+        current_step, output_artifacts
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+      ) RETURNING *`,
+      [
+        (collaborationData as Record<string, unknown>)['conversation_id'],
+        (collaborationData as Record<string, unknown>)['session_name'],
+        (collaborationData as Record<string, unknown>)['session_type'],
+        (collaborationData as Record<string, unknown>)['participant_ids'],
+        (collaborationData as Record<string, unknown>)['lead_participant_id'],
+        (collaborationData as Record<string, unknown>)['task_description'],
+        (collaborationData as Record<string, unknown>)['task_status'],
+        JSON.stringify((collaborationData as Record<string, unknown>)['workflow_steps']),
+        (collaborationData as Record<string, unknown>)['current_step'],
+        JSON.stringify((collaborationData as Record<string, unknown>)['output_artifacts']),
+      ],
+    );
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to create collaboration',
-        'COLLABORATION_CREATE_ERROR',
-        error,
-      );
-    }
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError(
@@ -88,21 +98,12 @@ export async function getCollaboration(
   collaborationId: string,
 ): Promise<AgentCollaboration | null> {
   try {
-    const { data, error } = await db
-      .from('agent_collaborations')
-      .select('*')
-      .eq('id', collaborationId)
-      .maybeSingle();
+    const rows = await db.query<AgentCollaboration>(
+      'SELECT * FROM agent_collaborations WHERE id = $1 LIMIT 1',
+      [collaborationId],
+    );
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch collaboration',
-        'COLLABORATION_FETCH_ERROR',
-        error,
-      );
-    }
-
-    return data;
+    return rows[0] ?? null;
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -128,42 +129,44 @@ export async function listCollaborations(
   },
 ): Promise<{ collaborations: AgentCollaboration[]; total: number }> {
   try {
-    let query = db
-      .from('agent_collaborations')
-      .select('*', { count: 'exact' })
-      .eq('conversation_id', conversationId);
+    const limit = filters?.limit ?? 50;
+    const offset = filters?.offset ?? 0;
 
-    // Apply filters
+    // Build WHERE clause with parameterized filters
+    const conditions: string[] = ['conversation_id = $1'];
+    const params: unknown[] = [conversationId];
+    let paramIdx = 2;
+
     if (filters?.session_type && filters.session_type.length > 0) {
-      query = query.in('session_type', filters.session_type);
+      conditions.push(`session_type = ANY($${paramIdx}::text[])`);
+      params.push(filters.session_type);
+      paramIdx++;
     }
 
     if (filters?.task_status && filters.task_status.length > 0) {
-      query = query.in('task_status', filters.task_status);
+      conditions.push(`task_status = ANY($${paramIdx}::text[])`);
+      params.push(filters.task_status);
+      paramIdx++;
     }
 
-    // Pagination
-    const limit = filters?.limit || 50;
-    const offset = filters?.offset || 0;
-    query = query.range(offset, offset + limit - 1);
+    const whereClause = conditions.join(' AND ');
 
-    // Ordering
-    query = query.order('started_at', { ascending: false });
+    // Use window function to get total count in a single round-trip
+    const rows = await db.query<AgentCollaboration & { _total_count: string }>(
+      `SELECT *, COUNT(*) OVER() AS _total_count
+       FROM agent_collaborations
+       WHERE ${whereClause}
+       ORDER BY started_at DESC
+       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, limit, offset],
+    );
 
-    const { data, error, count } = await query;
+    const total = rows.length > 0 ? parseInt(rows[0]!._total_count, 10) : 0;
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to list collaborations',
-        'COLLABORATION_LIST_ERROR',
-        error,
-      );
-    }
+    // Strip the synthetic _total_count field before returning
+    const collaborations = rows.map(({ _total_count: _tc, ...rest }) => rest as AgentCollaboration);
 
-    return {
-      collaborations: data || [],
-      total: count || 0,
-    };
+    return { collaborations, total };
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -184,20 +187,45 @@ export async function updateCollaboration(
   updates: AgentCollaborationUpdate,
 ): Promise<AgentCollaboration> {
   try {
-    const { data, error } = await db
-      .from('agent_collaborations')
-      .update(updates)
-      .eq('id', collaborationId)
-      .select()
-      .maybeSingle();
+    // Build SET clause dynamically from provided update fields
+    const setClauses: string[] = [];
+    const params: unknown[] = [];
+    let paramIdx = 1;
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to update collaboration',
-        'COLLABORATION_UPDATE_ERROR',
-        error,
-      );
+    const updateMap = updates as Record<string, unknown>;
+
+    for (const key of Object.keys(updateMap)) {
+      const value = updateMap[key];
+      // Serialize JSONB fields
+      if (
+        key === 'workflow_steps' ||
+        key === 'output_artifacts' ||
+        key === 'collaboration_result'
+      ) {
+        setClauses.push(`${key} = $${paramIdx}`);
+        params.push(value !== null && value !== undefined ? JSON.stringify(value) : null);
+      } else {
+        setClauses.push(`${key} = $${paramIdx}`);
+        params.push(value);
+      }
+      paramIdx++;
     }
+
+    // Always touch updated_at
+    setClauses.push(`updated_at = now()`);
+
+    params.push(collaborationId);
+    const idParam = paramIdx;
+
+    const rows = await db.query<AgentCollaboration>(
+      `UPDATE agent_collaborations
+       SET ${setClauses.join(', ')}
+       WHERE id = $${idParam}
+       RETURNING *`,
+      params,
+    );
+
+    const data = rows[0] ?? null;
 
     if (!data) {
       throw new MultiAgentChatError('Collaboration not found', 'COLLABORATION_NOT_FOUND', null);
@@ -221,7 +249,7 @@ export async function updateCollaboration(
  */
 export async function deleteCollaboration(collaborationId: string): Promise<void> {
   try {
-    await db.execute('delete from agent_collaborations where id = $1', [collaborationId]);
+    await db.execute('DELETE FROM agent_collaborations WHERE id = $1', [collaborationId]);
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -639,80 +667,48 @@ export async function getCollaborationStats(conversationId: string): Promise<{
   collaboration_types: Record<string, number>;
 }> {
   try {
-    const { data: collaborations, error } = await db
-      .from('agent_collaborations')
-      .select('*')
-      .eq('conversation_id', conversationId);
-
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch collaboration stats',
-        'COLLABORATION_STATS_ERROR',
-        error,
-      );
-    }
+    const collaborations = await db.query<AgentCollaboration>(
+      'SELECT * FROM agent_collaborations WHERE conversation_id = $1',
+      [conversationId],
+    );
 
     const stats = {
-      total_collaborations: collaborations?.length || 0,
-      active_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'in_progress')
-          .length || 0,
-      completed_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'completed')
-          .length || 0,
-      failed_collaborations:
-        collaborations?.filter((c: Record<string, unknown>) => c['task_status'] === 'failed')
-          .length || 0,
-      total_messages:
-        collaborations?.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + (c['total_messages'] as number),
-          0,
-        ) || 0,
-      total_iterations:
-        collaborations?.reduce(
-          (sum: number, c: Record<string, unknown>) => sum + (c['total_iterations'] as number),
-          0,
-        ) || 0,
+      total_collaborations: collaborations.length,
+      active_collaborations: collaborations.filter((c) => c.task_status === 'in_progress').length,
+      completed_collaborations: collaborations.filter((c) => c.task_status === 'completed').length,
+      failed_collaborations: collaborations.filter((c) => c.task_status === 'failed').length,
+      total_messages: collaborations.reduce((sum, c) => sum + c.total_messages, 0),
+      total_iterations: collaborations.reduce((sum, c) => sum + c.total_iterations, 0),
       average_consensus_score: 0,
       average_duration_seconds: 0,
       collaboration_types: {} as Record<string, number>,
     };
 
     // Calculate average consensus score
-    const collaborationsWithConsensus =
-      collaborations?.filter((c: Record<string, unknown>) => c['consensus_score'] !== null) || [];
+    const collaborationsWithConsensus = collaborations.filter((c) => c.consensus_score !== null);
     if (collaborationsWithConsensus.length > 0) {
       stats.average_consensus_score =
-        collaborationsWithConsensus.reduce(
-          (sum: number, c: Record<string, unknown>) =>
-            sum + ((c['consensus_score'] as number) || 0),
-          0,
-        ) / collaborationsWithConsensus.length;
+        collaborationsWithConsensus.reduce((sum, c) => sum + (c.consensus_score ?? 0), 0) /
+        collaborationsWithConsensus.length;
     }
 
     // Calculate average duration
-    const completedCollaborations =
-      collaborations?.filter(
-        (c: Record<string, unknown>) => c['completed_at'] && c['started_at'],
-      ) || [];
+    const completedCollaborations = collaborations.filter((c) => c.completed_at && c.started_at);
     if (completedCollaborations.length > 0) {
-      const totalDuration = completedCollaborations.reduce(
-        (sum: number, c: Record<string, unknown>) => {
-          const start = new Date(c['started_at'] as string).getTime();
-          const end = new Date(c['completed_at'] as string).getTime();
-          return sum + (end - start);
-        },
-        0,
-      );
+      const totalDuration = completedCollaborations.reduce((sum, c) => {
+        const start = new Date(c.started_at).getTime();
+        const end = new Date(c.completed_at as string).getTime();
+        return sum + (end - start);
+      }, 0);
       stats.average_duration_seconds = Math.round(
         totalDuration / completedCollaborations.length / 1000,
       );
     }
 
     // Count collaboration types
-    collaborations?.forEach((c: Record<string, unknown>) => {
-      stats.collaboration_types[c['session_type'] as string] =
-        (stats.collaboration_types[c['session_type'] as string] || 0) + 1;
+    collaborations.forEach((c) => {
+      const key = c.session_type as string;
+      stats.collaboration_types[key] = (stats.collaboration_types[key] ?? 0) + 1;
     });
 
     return stats;
@@ -735,22 +731,14 @@ export async function getActiveCollaborations(
   conversationId: string,
 ): Promise<AgentCollaboration[]> {
   try {
-    const { data, error } = await db
-      .from('agent_collaborations')
-      .select('*')
-      .eq('conversation_id', conversationId)
-      .eq('task_status', 'in_progress')
-      .order('started_at', { ascending: false });
+    const rows = await db.query<AgentCollaboration>(
+      `SELECT * FROM agent_collaborations
+       WHERE conversation_id = $1 AND task_status = $2
+       ORDER BY started_at DESC`,
+      [conversationId, 'in_progress'],
+    );
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch active collaborations',
-        'ACTIVE_COLLABORATIONS_ERROR',
-        error,
-      );
-    }
-
-    return data || [];
+    return rows;
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;
@@ -771,22 +759,15 @@ export async function getParticipantCollaborationHistory(
   limit: number = 50,
 ): Promise<AgentCollaboration[]> {
   try {
-    const { data, error } = await db
-      .from('agent_collaborations')
-      .select('*')
-      .contains('participant_ids', [participantId])
-      .order('started_at', { ascending: false })
-      .limit(limit);
+    const rows = await db.query<AgentCollaboration>(
+      `SELECT * FROM agent_collaborations
+       WHERE participant_ids @> ARRAY[$1]::text[]
+       ORDER BY started_at DESC
+       LIMIT $2`,
+      [participantId, limit],
+    );
 
-    if (error) {
-      throw new MultiAgentChatError(
-        'Failed to fetch participant collaboration history',
-        'PARTICIPANT_HISTORY_ERROR',
-        error,
-      );
-    }
-
-    return data || [];
+    return rows;
   } catch (error) {
     if (error instanceof MultiAgentChatError) {
       throw error;

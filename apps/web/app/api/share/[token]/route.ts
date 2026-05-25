@@ -83,7 +83,7 @@ async function handleDeleteShare(request: NextRequest, context: RouteContext) {
       userId,
     ]);
   } catch (err) {
-    logger.error({ err, token, userId: user.id }, 'Failed to revoke shared session');
+    logger.error({ err, token, userId }, 'Failed to revoke shared session');
     throw createError.internal('Failed to revoke share');
   }
 

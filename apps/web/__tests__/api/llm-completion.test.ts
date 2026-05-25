@@ -618,9 +618,8 @@ describe('POST /api/llm/completion', () => {
       expect(data.error.message).toContain('Internal server error');
 
       // Check that refund was issued (negative amount). Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
-        expect.anything(), // userClient
         'test-user-id',
         expect.any(Number), // First call is reservation (positive)
         expect.any(String),
@@ -629,7 +628,7 @@ describe('POST /api/llm/completion', () => {
       );
       // Second call should be refund (negative)
       const refundCall = mockDeductCredits.mock.calls.find(
-        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+        (call) => typeof call[1] === 'number' && (call[1] as number) < 0,
       );
       expect(refundCall).toBeDefined();
     });
@@ -818,9 +817,8 @@ describe('POST /api/llm/completion', () => {
       await POST(request);
 
       // First deductCredits call should be reservation. Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
-        expect.anything(), // userClient (RLS-bound Supabase client)
         'test-user-id',
         expect.any(Number),
         expect.stringContaining('reservation'),
@@ -848,12 +846,12 @@ describe('POST /api/llm/completion', () => {
       expect(response.status).toBe(500);
 
       // Check for refund call (negative amount). Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       const refundCall = mockDeductCredits.mock.calls.find(
-        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+        (call) => typeof call[1] === 'number' && (call[1] as number) < 0,
       );
       expect(refundCall).toBeDefined();
-      expect(refundCall![3]).toContain('Refund');
+      expect(refundCall![2]).toContain('Refund');
     });
 
     it('should include credit info in successful response', async () => {
