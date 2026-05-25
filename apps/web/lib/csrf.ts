@@ -1,6 +1,4 @@
 import { createHmac, timingSafeEqual } from 'crypto';
-import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
-import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
 import { auth } from '@clerk/nextjs/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation.
@@ -192,20 +190,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     // Clerk may fail in non-route-handler contexts; fall through
   }
 
-  // Option 1 (Supabase fallback — transition period for non-Clerk surfaces)
-  try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.id) {
-      return user.id;
-    }
-  } catch {
-    // Supabase client may fail in non-route-handler contexts; fall through
-  }
-
-  // Option 2: Cookie-based fallback for anonymous users.
+  // Option 1: Cookie-based fallback for anonymous users.
   // All cookie reads below go through readCookie() which anchors to the
   // cookie-name boundary — see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
@@ -223,7 +208,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     return hostPrefixed;
   }
 
-  // Option 3: Generate unique anonymous session ID
+  // Option 2: Generate unique anonymous session ID
   // NOTE: Each request without any session gets a new ID.
   // Use getOrCreateAnonSession() in route handlers to persist this via cookie.
   return `anon-${crypto.randomUUID()}`;
@@ -253,29 +238,16 @@ export async function getOrCreateAnonSession(
     // Clerk may fail in non-route-handler contexts; fall through
   }
 
-  // Option 1 (Supabase fallback — transition period)
-  try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.id) {
-      return { id: user.id };
-    }
-  } catch {
-    // Fall through to cookie-based fallback
-  }
-
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 2: Prefer authenticated session cookies (no new cookie needed).
+  // Option 1: Prefer authenticated session cookies (no new cookie needed).
   // All cookie reads use the anchored readCookie helper — see web-HIGH-1.
   const sessionId = readCookie(cookies, 'session-id');
   if (sessionId) {
     return { id: sessionId };
   }
 
-  // Option 3: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
+  // Option 2: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
   // The `__Host-` prefix forces Path=/ + Secure + no Domain; browser refuses
   // to set it from JS or sibling subdomains. Legacy `anon-session-id` fallback
   // removed 2026-05-05 per the deadline. Only the __Host- path is accepted.
@@ -284,7 +256,7 @@ export async function getOrCreateAnonSession(
     return { id: hostPrefixed };
   }
 
-  // Option 4: Generate a new anonymous session ID and request it be stored in a cookie
+  // Option 3: Generate a new anonymous session ID and request it be stored in a cookie
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
@@ -334,7 +306,7 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return false;
   }
 
-  // Try Clerk token verification first
+  // Verify using Clerk token verification
   try {
     const { verifyToken } = await import('@clerk/backend');
     const secretKey = process.env['CLERK_SECRET_KEY'];
@@ -343,23 +315,10 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
       if (claims.sub) return true;
     }
   } catch {
-    // Not a Clerk token — try Supabase fallback
+    // Not a valid Clerk token
   }
 
-  // Supabase fallback (transition period)
-  try {
-    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-    const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-    if (!supabaseUrl || !serviceKey) return false;
-
-    const admin = createSupabaseAdminClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await admin.auth.getUser(token);
-    return !error && !!data?.user;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**

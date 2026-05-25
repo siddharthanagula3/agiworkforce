@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
-import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
 import { getEnv, requireEnv } from '@/utils/env';
 import { DeviceLinkRequestSchema } from '@/lib/validations/device';
@@ -10,6 +9,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 async function handleDeviceLink(request: NextRequest) {
   // CSRF protection - prevent cross-site device pairing
@@ -22,33 +23,17 @@ async function handleDeviceLink(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  // SECURITY: Require authenticated session to prevent device-code phishing attacks (CodeRabbit C4 fix)
-  // Without authentication, an attacker can pre-seed a device_id, trick a victim into approving,
-  // and collect session tokens. Requiring auth ensures only legitimate users can initiate device linking.
-  const supabaseAuthUrl = getEnv('NEXT_PUBLIC_SUPABASE_URL', '') || requireEnv('SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  const supabaseAuth = createClient(supabaseAuthUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
-
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  // SECURITY: Require authenticated session to prevent device-code phishing attacks.
+  // Without authentication, an attacker can pre-seed a device_id, trick a victim into
+  // approving, and collect session tokens. Requiring auth ensures only legitimate users
+  // can initiate device linking.
+  let authUser: { userId: string; email?: string };
+  try {
+    authUser = await getClerkAuthUser(request);
+  } catch {
+    logger.warn({}, 'Unauthenticated device link attempt rejected');
     return NextResponse.json(
       { error: 'Authentication required to link a device' },
-      { status: 401, headers: { 'Cache-Control': 'no-store' } },
-    );
-  }
-
-  const accessToken = authHeader.slice(7);
-  const {
-    data: { user: authUser },
-    error: authError,
-  } = await supabaseAuth.auth.getUser(accessToken);
-
-  if (authError || !authUser) {
-    logger.warn({ error: authError?.message }, 'Unauthenticated device link attempt rejected');
-    return NextResponse.json(
-      { error: 'Invalid or expired authentication token' },
       { status: 401, headers: { 'Cache-Control': 'no-store' } },
     );
   }
@@ -70,18 +55,7 @@ async function handleDeviceLink(request: NextRequest) {
     const { device_id, device_name, device_type, device_fingerprint } = validationResult.data;
     const resolvedDeviceType = device_type || 'desktop';
 
-    // Safe environment variable access
-    const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-    const serviceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-    const supabase = createClient(supabaseUrl, serviceRoleKey, {
-      auth: { persistSession: false },
-    });
-
-    // Generate device code with 64-bit entropy (8 bytes = 16 hex chars = 2^64 possibilities)
-    // Retry on rare uniqueness conflicts to avoid transient pairing failures.
-    let link_code = '';
-    let upsertError: unknown = null;
+    const db = getNeonDb();
 
     // Validate NEXT_PUBLIC_APP_URL to prevent verification links pointing to wrong domains
     const appUrlRaw = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
@@ -96,58 +70,72 @@ async function handleDeviceLink(request: NextRequest) {
       logger.warn({ appUrl: appUrlRaw, err }, 'NEXT_PUBLIC_APP_URL is invalid; using default');
       appUrl = 'https://agiworkforce.com';
     }
+
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    let link_code = '';
+    let lastError: unknown = null;
+
+    // Generate device code with 64-bit entropy (8 bytes = 16 hex chars = 2^64 possibilities)
+    // Retry on rare uniqueness conflicts to avoid transient pairing failures.
     for (let attempt = 0; attempt < 3; attempt++) {
       link_code = randomBytes(8).toString('hex').toUpperCase();
-      const { error } = await supabase.from('device_authorization_codes').upsert(
-        {
-          device_id,
-          device_name: device_name || null,
-          device_type: resolvedDeviceType,
-          device_fingerprint: device_fingerprint || null,
-          user_code: link_code,
-          status: 'pending',
-          user_id: null,
-          user_email: null,
-          user_name: null,
-          access_token: null,
-          refresh_token: null,
-          authorized_at: null,
-          consumed_at: null,
-          denied_at: null,
-          revoked_at: null,
-          expires_at: expiresAt.toISOString(),
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'device_id' },
-      );
-
-      if (!error) {
-        upsertError = null;
+      try {
+        await db.execute(
+          `INSERT INTO device_authorization_codes
+             (device_id, device_name, device_type, device_fingerprint, user_code, status,
+              user_id, user_email, user_name, access_token, refresh_token,
+              authorized_at, consumed_at, denied_at, revoked_at, expires_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, 'pending',
+                   NULL, NULL, NULL, NULL, NULL,
+                   NULL, NULL, NULL, NULL, $6, $7)
+           ON CONFLICT (device_id) DO UPDATE SET
+             device_name        = EXCLUDED.device_name,
+             device_type        = EXCLUDED.device_type,
+             device_fingerprint = EXCLUDED.device_fingerprint,
+             user_code          = EXCLUDED.user_code,
+             status             = 'pending',
+             user_id            = NULL,
+             user_email         = NULL,
+             user_name          = NULL,
+             access_token       = NULL,
+             refresh_token      = NULL,
+             authorized_at      = NULL,
+             consumed_at        = NULL,
+             denied_at          = NULL,
+             revoked_at         = NULL,
+             expires_at         = EXCLUDED.expires_at,
+             updated_at         = EXCLUDED.updated_at`,
+          [
+            device_id,
+            device_name || null,
+            resolvedDeviceType,
+            device_fingerprint || null,
+            link_code,
+            expiresAt.toISOString(),
+            new Date().toISOString(),
+          ],
+        );
+        lastError = null;
         break;
-      }
-
-      upsertError = error;
-      const isUniqueViolation =
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === '23505';
-      if (!isUniqueViolation) {
-        break;
+      } catch (err) {
+        lastError = err;
+        // Only retry on unique constraint violations
+        const isUniqueViolation =
+          err instanceof Error && (err.message.includes('23505') || err.message.includes('unique'));
+        if (!isUniqueViolation) {
+          break;
+        }
       }
     }
 
-    if (upsertError) {
-      logger.error(
-        {
-          error: upsertError,
-          device_id,
-        },
-        'Failed to create device code',
-      );
+    if (lastError) {
+      logger.error({ error: lastError, device_id }, 'Failed to create device code');
       throw createError.internal('Failed to create device authorization code');
     }
+
+    void authUser; // authenticated; user identity not stored at link time
+
+    requireEnv('NEXT_PUBLIC_SUPABASE_URL'); // keep env validation call for compat
 
     const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 

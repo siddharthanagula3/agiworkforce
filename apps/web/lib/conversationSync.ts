@@ -228,53 +228,23 @@ export class ConversationSyncService {
 
   /**
    * Subscribe to realtime conversation changes for the authenticated user.
-   * Returns an unsubscribe function.
+   * (no-op stub - Supabase Realtime has been removed)
    *
-   * Uses Supabase Realtime postgres_changes channel filtered by user_id.
+   * Returns a no-op unsubscribe function. Callers should use polling or
+   * another mechanism for cross-device sync.
    */
-  subscribe(userId: string, onUpdate: (event: SyncEvent) => void): () => void {
-    // Clean up any existing subscription
-    this.unsubscribe();
-
-    this.channel = this.supabase
-      .channel(`conversation-sync:${userId}`)
-      .on(
-        'postgres_changes' as never,
-        {
-          event: '*',
-          schema: 'public',
-          table: 'web_conversations',
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload: {
-          eventType: string;
-          new: Record<string, unknown>;
-          old: Record<string, unknown>;
-        }) => {
-          const eventType = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE';
-          const conversation = (eventType === 'DELETE'
-            ? payload.old
-            : payload.new) as unknown as SyncedConversation;
-
-          // Skip events from our own origin to avoid echo loops
-          if (conversation.synced_from === this.origin) return;
-
-          onUpdate({ type: eventType, conversation });
-        },
-      )
-      .subscribe();
-
-    return () => this.unsubscribe();
+  subscribe(_userId: string, _onUpdate: (event: SyncEvent) => void): () => void {
+    console.warn(
+      '[ConversationSyncService] subscribe() called but Supabase Realtime has been removed. No subscription created.',
+    );
+    return () => {};
   }
 
   /**
-   * Remove the realtime subscription.
+   * Remove the realtime subscription (no-op stub).
    */
   unsubscribe(): void {
-    if (this.channel) {
-      this.supabase.removeChannel(this.channel);
-      this.channel = null;
-    }
+    this.channel = null;
   }
 
   // -------------------------------------------------------------------------

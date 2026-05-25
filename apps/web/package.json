@@ -78,6 +78,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.37.0",
+    "@vercel/blob": "^2.4.0",
     "ai": "^6.0.141",
     "argon2": "^0.44.0",
     "class-variance-authority": "^0.7.1",
