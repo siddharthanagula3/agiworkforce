@@ -49,21 +49,11 @@
     "packages/providers/AGENTS.md"
   ],
   "currentEvidence": [
-    "audit/audit-log.md",
-    "audit/anthropic-apps-parity/application-suite-thesis-2026-05-20.md",
-    "audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md",
-    "audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md",
-    "audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md",
-    "audit/anthropic-apps-parity/reference-notes.md",
-    "audit/repo-organization/agentic-development-outlook-2026-05-20.md",
-    "audit/repo-organization/current-monorepo-grade-2026-05-20.md",
-    "audit/repo-organization/docs-status-2026-05-20.md",
-    "audit/repo-organization/generated-artifact-policy-2026-05-20.md",
-    "audit/repo-organization/ownership-model-2026-05-20.md",
-    "audit/repo-organization/package-readme-coverage-2026-05-20.md",
-    "audit/repo-organization/root-classification-2026-05-20.md",
-    "audit/repo-organization/tool-folder-classification-2026-05-20.md",
-    "audit/repo-organization/reference-index/README.md",
+    "audit/GAPS.md",
+    "audit/FLAWS.md",
+    "audit/COVERAGE.md",
+    "audit/INDEX.md",
+    "docs/intentional-divergences.md",
     "docs/reference/REFERENCE_INDEX.md",
     "docs/reference/REFERENCE_STRUCTURE.md"
   ],
@@ -89,9 +79,9 @@
       "rule": "Promote durable conclusions to docs or audit before using as source of truth."
     },
     {
-      "path": "audit/repo-organization/reference-index",
-      "status": "historical-evidence",
-      "rule": "Raw ownership/catalog output from earlier reorg work; evidence only, not current architecture."
+      "path": "audit",
+      "status": "current-evidence",
+      "rule": "GAPS.md, FLAWS.md, COVERAGE.md, INDEX.md — re-verified 2026-05-25. Old subdirectories deleted."
     },
     {
       "path": "reports/root-scratch-archive",
