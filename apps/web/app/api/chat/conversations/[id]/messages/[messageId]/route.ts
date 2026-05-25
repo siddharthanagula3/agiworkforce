@@ -5,6 +5,10 @@
  *   Merges a patch into message.metadata. Currently used for user reactions
  *   (thumbsUp | thumbsDown | null) but intentionally generic so other metadata
  *   fields can be patched in future without a schema change.
+ *
+ * DELETE /api/chat/conversations/[id]/messages/[messageId]
+ *   Permanently deletes a single message. Verifies ownership of both the
+ *   conversation and the message before deletion.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -78,4 +82,45 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   return NextResponse.json({ ok: true });
 }
 
+async function handleDeleteMessage(request: NextRequest, context: RouteContext) {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-message');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const userId = await requireCurrentUserId();
+  const { id: conversationId, messageId } = await context.params;
+
+  const db = getNeonChatDb();
+
+  // Verify conversation ownership first (mirrors PATCH pattern)
+  const [conv] = await db.query<{ id: string }>(
+    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
+    [conversationId, userId],
+  );
+
+  if (!conv) {
+    throw createError.notFound('Conversation not found');
+  }
+
+  // Verify the message exists in this conversation
+  const [msg] = await db.query<{ id: string }>(
+    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    [messageId, conversationId],
+  );
+
+  if (!msg) {
+    throw createError.notFound('Message not found');
+  }
+
+  await db.execute('delete from web_messages where id = $1 and conversation_id = $2', [
+    messageId,
+    conversationId,
+  ]);
+
+  return NextResponse.json({ success: true });
+}
+
 export const PATCH = withErrorHandler(handlePatchMessage);
+export const DELETE = withErrorHandler(handleDeleteMessage);
