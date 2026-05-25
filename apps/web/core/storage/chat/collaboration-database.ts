@@ -194,20 +194,33 @@ export async function updateCollaboration(
 
     const updateMap = updates as Record<string, unknown>;
 
+    const ALLOWED_COLLABORATION_UPDATE_COLUMNS = new Set([
+      'session_name',
+      'session_type',
+      'participant_ids',
+      'lead_participant_id',
+      'task_description',
+      'task_status',
+      'workflow_steps',
+      'current_step',
+      'output_artifacts',
+      'collaboration_result',
+      'started_at',
+      'completed_at',
+      'total_messages',
+      'total_iterations',
+      'consensus_score',
+    ]);
+
+    const JSONB_COLUMNS = new Set(['workflow_steps', 'output_artifacts', 'collaboration_result']);
+
     for (const key of Object.keys(updateMap)) {
-      const value = updateMap[key];
-      // Serialize JSONB fields
-      if (
-        key === 'workflow_steps' ||
-        key === 'output_artifacts' ||
-        key === 'collaboration_result'
-      ) {
-        setClauses.push(`${key} = $${paramIdx}`);
-        params.push(value !== null && value !== undefined ? JSON.stringify(value) : null);
-      } else {
-        setClauses.push(`${key} = $${paramIdx}`);
-        params.push(value);
+      if (!ALLOWED_COLLABORATION_UPDATE_COLUMNS.has(key)) {
+        continue;
       }
+      const value = updateMap[key];
+      setClauses.push(`${key} = $${paramIdx}`);
+      params.push(JSONB_COLUMNS.has(key) && value != null ? JSON.stringify(value) : value);
       paramIdx++;
     }
 
