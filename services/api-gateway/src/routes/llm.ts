@@ -167,7 +167,7 @@ async function enforcePlanTier(userId: string, model: string): Promise<string> {
 
   if (tier === 'hobby' && !HOBBY_ALLOWED_MODELS.has(model)) {
     throw new AppError(
-      `Model "${model}" requires a Pro plan. Hobby tier allows: haiku, gpt-4o-mini, gemini-flash.`,
+      `Model "${model}" requires a Pro plan. Hobby tier allows: ${[...HOBBY_ALLOWED_MODELS].join(', ')}.`,
       403,
     );
   }

@@ -1,133 +1,187 @@
 {
-  "version": 1,
+  "version": 2,
   "created": "2026-05-25",
-  "lastUpdated": "2026-05-25",
-  "phase": "2-audit",
+  "lastUpdated": "2026-05-25T19:30:00Z",
+  "phase": "3-fix-implement",
+  "auditComplete": true,
   "domains": [
     {
       "id": "auth",
       "name": "Auth & Identity",
-      "status": "RED",
-      "surfaces": ["web", "desktop", "mobile", "cli"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:00:00Z",
+      "p0": 0,
+      "p1": 1,
+      "p2": 3,
+      "p3": 3,
+      "fixed": ["CSRF on desktop-token"],
+      "remaining": [
+        "desktop supabase JWT→Clerk mismatch (P1)",
+        "get-auth-token fragile window.Clerk (P2)",
+        "updateProfile no auth header (P2)",
+        "video/generate missing CSRF (P2)"
+      ]
     },
     {
       "id": "chat",
       "name": "Chat & Conversations",
-      "status": "RED",
-      "surfaces": ["web", "desktop", "mobile"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:15:00Z",
+      "p0": 0,
+      "p1": 5,
+      "p2": 5,
+      "p3": 5,
+      "fixed": [
+        "5 missing table migrations (0022)",
+        "branch is_active→deleted_at",
+        "branch updated_at removed"
+      ],
+      "remaining": [
+        "client-only delete (P0→P1, needs DELETE route)",
+        "no message pagination (P1)",
+        "3 overlapping chat stores (P1)",
+        "thinking block split-chunk (P1)",
+        "dead code: skipLlm path + ChatAIService.sendMessage (P1)"
+      ]
     },
     {
       "id": "llm",
       "name": "LLM Routing & Providers",
-      "status": "RED",
-      "surfaces": ["web", "packages", "cli"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:10:00Z",
+      "p0": 0,
+      "p1": 2,
+      "p2": 0,
+      "p3": 1,
+      "remaining": [
+        "stale model IDs in api-gateway error msg (P1)",
+        "700-line hardcoded MODEL_CATALOG in api-gateway (P1)",
+        "stale Supabase JWT doc comment (P3)"
+      ]
     },
     {
       "id": "billing",
       "name": "Billing & Credits",
       "status": "RED",
-      "surfaces": ["web"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "lastChecked": "2026-05-25T19:05:00Z",
+      "p0": 1,
+      "p1": 4,
+      "p2": 5,
+      "p3": 3,
+      "fixed": ["invoice.paid webhook handler"],
+      "remaining": [
+        "/api/usage/deduct route missing (P0)",
+        "checkout email='' (P1)",
+        "PaymentAPI routes to non-existent /payments/* (P1)",
+        "addTokensToUserBalance dead code (P1)",
+        "cron+webhook double-reset (P1)",
+        "daily limits hardcoded zero (P2)",
+        "stub hooks (P2)",
+        "CSRF before auth order (P2)"
+      ]
     },
     {
       "id": "projects",
       "name": "Projects & Artifacts",
-      "status": "RED",
-      "surfaces": ["web", "desktop", "sandbox"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:20:00Z",
+      "p0": 0,
+      "p1": 2,
+      "p2": 4,
+      "p3": 1,
+      "remaining": [
+        "PDF iframes missing sandbox attr (P1)",
+        "storageUri no scheme validation (P1)",
+        "color field no validation (P2)",
+        "delete returns 200 for nonexistent (P2)"
+      ]
     },
     {
       "id": "data-layer",
       "name": "Data Layer & DB",
-      "status": "RED",
-      "surfaces": ["packages", "web"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "GREEN",
+      "lastChecked": "2026-05-25T18:45:00Z",
+      "p0": 0,
+      "p1": 0,
+      "p2": 1,
+      "p3": 0,
+      "fixed": [
+        "shared_conversations migration",
+        "is_active→deleted_at",
+        "track_search 4→3 args",
+        "neon-types 4 schema mismatches",
+        "factory default neon"
+      ],
+      "remaining": ["get_latest_release ignores p_channel (P2)"]
     },
     {
       "id": "desktop-native",
       "name": "Desktop Native",
-      "status": "RED",
-      "surfaces": ["desktop"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:20:00Z",
+      "p0": 0,
+      "p1": 1,
+      "p2": 3,
+      "p3": 2,
+      "remaining": [
+        "hook blocklist too narrow (P1)",
+        "sandbox stubs dead code (P2)",
+        "linux window detection absent (P2)",
+        "terminal executor bash -lc (P2)"
+      ]
     },
     {
       "id": "cli-core",
       "name": "CLI Core",
       "status": "RED",
-      "surfaces": ["cli", "crates"],
       "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "remaining": ["awaiting audit results"]
     },
     {
       "id": "mobile",
       "name": "Mobile App",
-      "status": "RED",
-      "surfaces": ["mobile"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "YELLOW",
+      "lastChecked": "2026-05-25T19:25:00Z",
+      "p0": 0,
+      "p1": 5,
+      "p2": 4,
+      "p3": 3,
+      "remaining": [
+        "T2-3 embedding stub (P1)",
+        "T2-4 model picker no-op (P1)",
+        "T2-12 health API disabled (P1)",
+        "T2-13 InviteCodeModal swap (P1)",
+        "T2-14 user stats missing (P1)",
+        "waitlist store MMKV race (P2)",
+        "12 stores old pattern (P2)",
+        "tagline conflict (P2)",
+        "account.tsx dead code (P2)"
+      ]
     },
     {
       "id": "extensions",
       "name": "Extensions",
-      "status": "RED",
-      "surfaces": ["chrome", "vscode"],
-      "lastChecked": null,
-      "issues": [],
-      "notes": ""
+      "status": "GREEN",
+      "lastChecked": "2026-05-25T19:00:00Z",
+      "p0": 0,
+      "p1": 0,
+      "p2": 1,
+      "p3": 4,
+      "remaining": [
+        "terminal.sendText in test.run (P2)",
+        "MODEL_CAPABILITY local copy (P3)",
+        "deprecated re-export shims (P3)"
+      ]
     }
   ],
   "implementation": {
-    "t2": {
-      "total": 18,
-      "done": 0,
-      "items": [
-        "T2-2",
-        "T2-3",
-        "T2-4",
-        "T2-5",
-        "T2-6",
-        "T2-7",
-        "T2-8",
-        "T2-9",
-        "T2-10",
-        "T2-11",
-        "T2-12",
-        "T2-13",
-        "T2-14",
-        "T2-15",
-        "T2-16",
-        "T2-17",
-        "T2-18"
-      ]
-    },
-    "t3": {
-      "total": 10,
-      "done": 0,
-      "items": ["T3-1", "T3-2", "T3-3", "T3-4", "T3-5", "T3-6", "T3-7", "T3-8", "T3-9", "T3-10"]
-    },
-    "r26": {
-      "total": 8,
-      "done": 0,
-      "items": ["R26-1", "R26-2", "R26-3", "R26-4", "R26-5", "R26-6", "R26-7", "R26-9"]
-    }
-  }
+    "t2": { "total": 18, "done": 0 },
+    "t3": { "total": 10, "done": 0 },
+    "r26": { "total": 8, "done": 0 }
+  },
+  "commits": [
+    "5c617141e - clean build baseline",
+    "5934495ba - critical data-layer, auth, billing fixes",
+    "38e1cd1df - chat migrations + branch route fixes"
+  ]
 }

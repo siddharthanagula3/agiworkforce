@@ -624,6 +624,7 @@ export function ArtifactPreview({
               <iframe
                 title={artifact.title || 'PDF Preview'}
                 src={artifact.content}
+                sandbox="allow-scripts allow-same-origin"
                 className="h-full w-full border-0"
                 aria-label={artifact.title || 'PDF document'}
               />
