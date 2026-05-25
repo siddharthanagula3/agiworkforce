@@ -18,7 +18,7 @@ import { queryKeys } from '@shared/stores/query-client';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { logger } from '@shared/lib/logger';
-import { PaymentAPI } from '@shared/lib/stripe';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // ============================================================================
@@ -871,38 +871,60 @@ export function useBillingAnalytics(
 // ============================================================================
 
 /**
- * Cancel subscription mutation
+ * Cancel subscription mutation.
+ *
+ * Redirects the user to the Stripe Customer Portal where they can cancel
+ * their subscription. This replaces a direct API call to a non-existent
+ * /payments/cancel-subscription route; all subscription self-service
+ * (cancel, resume, download invoices) is handled by the portal.
  *
  * @returns UseMutationResult for cancelling subscription
  */
 export function useCancelSubscription(): UseMutationResult<void, Error, { atPeriodEnd?: boolean }> {
-  const queryClient: QueryClient = useQueryClient();
   const { user } = useAuthStore();
 
   return useMutation<void, Error, { atPeriodEnd?: boolean }>({
-    mutationFn: async ({ atPeriodEnd = true }) => {
+    mutationFn: async () => {
       if (!user?.id) {
         throw new Error('You must be logged in');
       }
 
-      await PaymentAPI.cancelSubscription({
-        cancel_at_period_end: atPeriodEnd,
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/portal', {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        body: JSON.stringify({}),
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.subscription() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.all() });
-      toast.success('Subscription cancelled successfully');
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to open billing portal');
+      }
+
+      const { url } = (await response.json()) as { url: string };
+      window.location.href = url;
     },
     onError: (error: Error) => {
-      logger.error('Failed to cancel subscription:', error);
-      toast.error(error.message || 'Failed to cancel subscription');
+      logger.error('Failed to open billing portal for cancellation:', error);
+      toast.error(error.message || 'Failed to open billing portal');
     },
   });
 }
 
 /**
- * Update payment method mutation
+ * Update payment method mutation.
+ *
+ * Redirects the user to the Stripe Customer Portal where they can update
+ * their default payment method. This replaces a direct API call to a
+ * non-existent /payments/set-default-payment-method route; all payment
+ * method management is handled by the portal.
  *
  * @returns UseMutationResult for updating payment method
  */
@@ -911,24 +933,39 @@ export function useUpdatePaymentMethod(): UseMutationResult<
   Error,
   { paymentMethodId: string }
 > {
-  const queryClient: QueryClient = useQueryClient();
   const { user } = useAuthStore();
 
   return useMutation<void, Error, { paymentMethodId: string }>({
-    mutationFn: async ({ paymentMethodId }) => {
+    mutationFn: async () => {
       if (!user?.id) {
         throw new Error('You must be logged in');
       }
 
-      await PaymentAPI.setDefaultPaymentMethod(paymentMethodId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.paymentMethods() });
-      toast.success('Payment method updated successfully');
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/portal', {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to open billing portal');
+      }
+
+      const { url } = (await response.json()) as { url: string };
+      window.location.href = url;
     },
     onError: (error: Error) => {
-      logger.error('Failed to update payment method:', error);
-      toast.error(error.message || 'Failed to update payment method');
+      logger.error('Failed to open billing portal for payment method update:', error);
+      toast.error(error.message || 'Failed to open billing portal');
     },
   });
 }

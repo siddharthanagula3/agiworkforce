@@ -363,6 +363,89 @@ export function useChatStream(): UseChatStreamReturn {
         let fullAssistantContent = '';
         // Extended-thinking state: tracks whether we're currently inside a <thinking> block
         let inThinkingBlock = false;
+        // Content buffer for split-chunk thinking marker detection.
+        // SSE chunks can arrive mid-tag (e.g. "<thin" then "king>"), so we
+        // accumulate raw content here and scan for complete markers before
+        // dispatching to the thinking or regular content paths.
+        let contentBuffer = '';
+
+        // Minimum bytes to hold back so a split marker at the tail is caught
+        // on the next iteration. Length of "</thinking>" minus 1 = 11 chars.
+        const HOLD_BACK = 11;
+
+        /**
+         * Flush as much of contentBuffer as is safe without losing a partial
+         * marker at the tail.
+         *
+         * The caller passes `isFinal = true` when the stream is done so we
+         * emit everything regardless of a potential partial marker.
+         */
+        const flushContentBuffer = (isFinal = false) => {
+          // Process all complete <thinking> / </thinking> markers in the buffer.
+          while (true) {
+            const openIdx = contentBuffer.indexOf('<thinking>');
+            const closeIdx = contentBuffer.indexOf('</thinking>');
+
+            if (!inThinkingBlock && openIdx !== -1) {
+              // Emit everything before the marker as regular content.
+              const before = contentBuffer.slice(0, openIdx);
+              if (before) {
+                fullAssistantContent += before;
+                appendToMessage(assistantMessageId, before);
+              }
+              inThinkingBlock = true;
+              updateMessage(assistantMessageId, {
+                metadata: {
+                  isThinkingStreaming: true,
+                  thinkingStartedAt: new Date().toISOString(),
+                },
+              });
+              contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
+              continue;
+            }
+
+            if (inThinkingBlock && closeIdx !== -1) {
+              // Emit thinking content before the closing marker.
+              const thinkingPart = contentBuffer.slice(0, closeIdx);
+              if (thinkingPart) {
+                appendToThinking(assistantMessageId, thinkingPart);
+              }
+              inThinkingBlock = false;
+              updateMessage(assistantMessageId, {
+                metadata: {
+                  isThinkingStreaming: false,
+                  thinkingCompletedAt: new Date().toISOString(),
+                },
+              });
+              contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
+              continue;
+            }
+
+            // No complete marker found. If final, emit everything; otherwise
+            // hold back enough bytes to catch a split marker on the next call.
+            if (isFinal) {
+              if (contentBuffer) {
+                if (inThinkingBlock) {
+                  appendToThinking(assistantMessageId, contentBuffer);
+                } else {
+                  fullAssistantContent += contentBuffer;
+                  appendToMessage(assistantMessageId, contentBuffer);
+                }
+                contentBuffer = '';
+              }
+            } else if (contentBuffer.length > HOLD_BACK) {
+              const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
+              if (inThinkingBlock) {
+                appendToThinking(assistantMessageId, safe);
+              } else {
+                fullAssistantContent += safe;
+                appendToMessage(assistantMessageId, safe);
+              }
+              contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
+            }
+            break;
+          }
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -379,6 +462,8 @@ export function useChatStream(): UseChatStreamReturn {
 
             const data = trimmedLine.slice(6);
             if (data === '[DONE]') {
+              // Flush any remaining buffered content before closing.
+              flushContentBuffer(true);
               // Close any dangling thinking block
               if (inThinkingBlock) {
                 updateMessage(assistantMessageId, {
@@ -424,30 +509,9 @@ export function useChatStream(): UseChatStreamReturn {
               }
 
               if (chunk !== null) {
-                if (chunk === '<thinking>') {
-                  // Server signals the start of an extended thinking block
-                  inThinkingBlock = true;
-                  updateMessage(assistantMessageId, {
-                    metadata: {
-                      isThinkingStreaming: true,
-                      thinkingStartedAt: new Date().toISOString(),
-                    },
-                  });
-                } else if (chunk === '</thinking>') {
-                  // Server signals the end of an extended thinking block
-                  inThinkingBlock = false;
-                  updateMessage(assistantMessageId, {
-                    metadata: {
-                      isThinkingStreaming: false,
-                      thinkingCompletedAt: new Date().toISOString(),
-                    },
-                  });
-                } else if (inThinkingBlock) {
-                  appendToThinking(assistantMessageId, chunk);
-                } else {
-                  fullAssistantContent += chunk;
-                  appendToMessage(assistantMessageId, chunk);
-                }
+                // Accumulate into content buffer and scan for split thinking markers.
+                contentBuffer += chunk;
+                flushContentBuffer(false);
               }
 
               // Handle server-managed tool status indicators
@@ -527,6 +591,8 @@ export function useChatStream(): UseChatStreamReturn {
           }
         }
 
+        // Flush any remaining buffered content (in case [DONE] wasn't received)
+        flushContentBuffer(true);
         // Save the complete assistant message to database (in case [DONE] wasn't received)
         finishRunningTools();
         if (fullAssistantContent) {
