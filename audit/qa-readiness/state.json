@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "created": "2026-05-25",
+  "lastUpdated": "2026-05-25",
+  "phase": "2-audit",
+  "domains": [
+    {
+      "id": "auth",
+      "name": "Auth & Identity",
+      "status": "RED",
+      "surfaces": ["web", "desktop", "mobile", "cli"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "chat",
+      "name": "Chat & Conversations",
+      "status": "RED",
+      "surfaces": ["web", "desktop", "mobile"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "llm",
+      "name": "LLM Routing & Providers",
+      "status": "RED",
+      "surfaces": ["web", "packages", "cli"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "billing",
+      "name": "Billing & Credits",
+      "status": "RED",
+      "surfaces": ["web"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "projects",
+      "name": "Projects & Artifacts",
+      "status": "RED",
+      "surfaces": ["web", "desktop", "sandbox"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "data-layer",
+      "name": "Data Layer & DB",
+      "status": "RED",
+      "surfaces": ["packages", "web"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "desktop-native",
+      "name": "Desktop Native",
+      "status": "RED",
+      "surfaces": ["desktop"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "cli-core",
+      "name": "CLI Core",
+      "status": "RED",
+      "surfaces": ["cli", "crates"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "mobile",
+      "name": "Mobile App",
+      "status": "RED",
+      "surfaces": ["mobile"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    },
+    {
+      "id": "extensions",
+      "name": "Extensions",
+      "status": "RED",
+      "surfaces": ["chrome", "vscode"],
+      "lastChecked": null,
+      "issues": [],
+      "notes": ""
+    }
+  ],
+  "implementation": {
+    "t2": {
+      "total": 18,
+      "done": 0,
+      "items": [
+        "T2-2",
+        "T2-3",
+        "T2-4",
+        "T2-5",
+        "T2-6",
+        "T2-7",
+        "T2-8",
+        "T2-9",
+        "T2-10",
+        "T2-11",
+        "T2-12",
+        "T2-13",
+        "T2-14",
+        "T2-15",
+        "T2-16",
+        "T2-17",
+        "T2-18"
+      ]
+    },
+    "t3": {
+      "total": 10,
+      "done": 0,
+      "items": ["T3-1", "T3-2", "T3-3", "T3-4", "T3-5", "T3-6", "T3-7", "T3-8", "T3-9", "T3-10"]
+    },
+    "r26": {
+      "total": 8,
+      "done": 0,
+      "items": ["R26-1", "R26-2", "R26-3", "R26-4", "R26-5", "R26-6", "R26-7", "R26-9"]
+    }
+  }
+}
