@@ -1,0 +1,43 @@
+{
+  "timestamp": "2026-05-25T18:00:00Z",
+  "branch": "audit/preexisting-remediation-2026-05-23",
+  "cleanBuild": true,
+  "results": {
+    "cargoCheck": { "status": "PASS", "duration": "3m06s" },
+    "cargoTestLib": { "status": "PASS", "tests": 14 },
+    "typecheckAll": { "status": "PASS", "packages": 32 },
+    "testAll": {
+      "status": "PASS",
+      "breakdown": {
+        "web": { "files": 172, "tests": 3557, "passed": 3557, "failed": 0 },
+        "desktop": { "files": 143, "tests": 1759, "passed": 1758, "skipped": 1 },
+        "mobile": { "tests": 1127, "passed": 1117, "skipped": 10 },
+        "extension": { "files": 38, "tests": 853, "passed": 853 },
+        "extensionVscode": { "files": 32, "tests": 562, "passed": 562 },
+        "apiGateway": { "files": 17, "tests": 122, "passed": 116, "skipped": 6 },
+        "signalingServer": { "files": 4, "tests": 49, "passed": 49 },
+        "unifiedChat": { "files": 26, "tests": 455, "passed": 455 },
+        "types": { "files": 7, "tests": 228, "passed": 228 },
+        "routing": { "files": 2, "tests": 234, "passed": 234 },
+        "runtime": { "files": 7, "tests": 143, "passed": 143 },
+        "llmRuntime": { "files": 8, "tests": 102, "passed": 102 },
+        "dataLayer": { "files": 4, "tests": 62, "passed": 62 },
+        "llmNormalize": { "files": 4, "tests": 52, "passed": 52 },
+        "compliance": { "files": 4, "tests": 27, "passed": 27 },
+        "skills": { "files": 3, "tests": 26, "passed": 26 },
+        "localLlm": { "files": 2, "tests": 26, "passed": 26 },
+        "mcp": { "files": 2, "tests": 24, "passed": 24 },
+        "browserTool": { "files": 4, "tests": 20, "passed": 20 },
+        "applyPatch": { "files": 2, "tests": 19, "passed": 19 },
+        "services": { "files": 1, "tests": 12, "passed": 12 },
+        "api": { "files": 1, "tests": 7, "passed": 7 }
+      },
+      "totalTests": 9518,
+      "totalPassed": 9491,
+      "totalSkipped": 17
+    },
+    "lint": { "status": "PASS" },
+    "lintExtension": { "status": "PASS" },
+    "llmOperability": { "status": "PASS", "checks": 16 }
+  }
+}
