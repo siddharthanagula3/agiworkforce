@@ -1,16 +1,11 @@
 /**
- * Chat Real-Time Subscriptions Service
+ * Chat Real-Time Subscriptions Service (no-op stub)
  *
- * Implements Supabase real-time subscriptions for multi-agent chat:
- * - Message insert/update subscriptions
- * - Typing indicator broadcasts
- * - Presence tracking
- * - Connection state management
- * - Automatic reconnection handling
+ * Supabase Realtime has been removed. These functions are retained as no-op
+ * stubs so that call sites continue to compile. Real-time features will be
+ * re-implemented with a different provider or polling approach.
  */
 
-import { supabase } from '@shared/lib/supabase-client';
-import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import type {
   ConversationParticipant,
   AgentCollaboration,
@@ -27,7 +22,7 @@ import type {
 type ConversationUpdateCallback = (update: RealtimeConversationUpdate) => void;
 type ParticipantUpdateCallback = (update: RealtimeParticipantUpdate) => void;
 // Updated: Jan 15th 2026 - Fixed any type
-type MessageCallback = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => void;
+type MessageCallback = (payload: Record<string, unknown>) => void;
 type TypingCallback = (indicator: TypingIndicator) => void;
 type PresenceCallback = (state: PresenceState[]) => void;
 type ConnectionStateCallback = (state: 'connected' | 'disconnected' | 'reconnecting') => void;
@@ -37,442 +32,136 @@ type ConnectionStateCallback = (state: 'connected' | 'disconnected' | 'reconnect
 // =============================================
 
 export class ChatRealtimeSubscriptionManager {
-  private channels: Map<string, RealtimeChannel> = new Map();
-  private reconnectAttempts: Map<string, number> = new Map();
-  private maxReconnectAttempts = 5;
-  private reconnectDelay = 2000; // 2 seconds
-
   /**
-   * Subscribes to conversation updates
+   * Subscribes to conversation updates (no-op stub)
    */
   subscribeToConversation(
     conversationId: string,
-    onUpdate: ConversationUpdateCallback,
-    onConnectionStateChange?: ConnectionStateCallback,
+    _onUpdate: ConversationUpdateCallback,
+    _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
-    const channelName = `conversation:${conversationId}`;
-
-    // Remove existing channel if present
-    this.unsubscribe(channelName);
-
-    // Create new channel
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'multi_agent_conversations',
-          filter: `id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const update: RealtimeConversationUpdate = {
-            conversation_id: conversationId,
-            update_type: this.mapPostgresEventToUpdateType(payload.eventType),
-            data: payload.new || payload.old,
-            timestamp: new Date().toISOString(),
-          };
-          onUpdate(update);
-        },
-      )
-      .subscribe((status) => {
-        if (onConnectionStateChange) {
-          onConnectionStateChange(this.mapSubscriptionStatus(status));
-        }
-
-        if (status === 'CHANNEL_ERROR') {
-          this.handleReconnect(channelName, () =>
-            this.subscribeToConversation(conversationId, onUpdate, onConnectionStateChange),
-          );
-        }
-      });
-
-    this.channels.set(channelName, channel);
-
-    // Return unsubscribe function
-    return () => this.unsubscribe(channelName);
+    console.warn(
+      `[ChatRealtimeSubscriptionManager] subscribeToConversation called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+    );
+    return () => {};
   }
 
   /**
-   * Subscribes to participant updates
+   * Subscribes to participant updates (no-op stub)
    */
   subscribeToParticipants(
     conversationId: string,
-    onUpdate: ParticipantUpdateCallback,
-    onConnectionStateChange?: ConnectionStateCallback,
+    _onUpdate: ParticipantUpdateCallback,
+    _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
-    const channelName = `participants:${conversationId}`;
-
-    // Remove existing channel if present
-    this.unsubscribe(channelName);
-
-    // Create new channel
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversation_participants',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          const participant = (payload.new || payload.old) as ConversationParticipant;
-          const update: RealtimeParticipantUpdate = {
-            participant_id: participant.id,
-            conversation_id: conversationId,
-            update_type: this.mapParticipantEvent(payload.eventType),
-            data: participant,
-            timestamp: new Date().toISOString(),
-          };
-          onUpdate(update);
-        },
-      )
-      .subscribe((status) => {
-        if (onConnectionStateChange) {
-          onConnectionStateChange(this.mapSubscriptionStatus(status));
-        }
-
-        if (status === 'CHANNEL_ERROR') {
-          this.handleReconnect(channelName, () =>
-            this.subscribeToParticipants(conversationId, onUpdate, onConnectionStateChange),
-          );
-        }
-      });
-
-    this.channels.set(channelName, channel);
-
-    return () => this.unsubscribe(channelName);
+    console.warn(
+      `[ChatRealtimeSubscriptionManager] subscribeToParticipants called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+    );
+    return () => {};
   }
 
   /**
-   * Subscribes to collaboration updates
+   * Subscribes to collaboration updates (no-op stub)
    */
   subscribeToCollaborations(
     conversationId: string,
-    onUpdate: (collaboration: AgentCollaboration) => void,
-    onConnectionStateChange?: ConnectionStateCallback,
+    _onUpdate: (collaboration: AgentCollaboration) => void,
+    _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
-    const channelName = `collaborations:${conversationId}`;
-
-    this.unsubscribe(channelName);
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'agent_collaborations',
-          filter: `conversation_id=eq.${conversationId}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            onUpdate(payload.new as AgentCollaboration);
-          }
-        },
-      )
-      .subscribe((status) => {
-        if (onConnectionStateChange) {
-          onConnectionStateChange(this.mapSubscriptionStatus(status));
-        }
-
-        if (status === 'CHANNEL_ERROR') {
-          this.handleReconnect(channelName, () =>
-            this.subscribeToCollaborations(conversationId, onUpdate, onConnectionStateChange),
-          );
-        }
-      });
-
-    this.channels.set(channelName, channel);
-
-    return () => this.unsubscribe(channelName);
+    console.warn(
+      `[ChatRealtimeSubscriptionManager] subscribeToCollaborations called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+    );
+    return () => {};
   }
 
   /**
-   * Subscribes to chat messages for a conversation
+   * Subscribes to chat messages for a conversation (no-op stub)
    */
   subscribeToMessages(
     conversationId: string,
-    onMessage: MessageCallback,
-    onConnectionStateChange?: ConnectionStateCallback,
+    _onMessage: MessageCallback,
+    _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
-    const channelName = `messages:${conversationId}`;
-
-    this.unsubscribe(channelName);
-
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'web_messages',
-          filter: `session_id=eq.${conversationId}`,
-        },
-        onMessage,
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'web_messages',
-          filter: `session_id=eq.${conversationId}`,
-        },
-        onMessage,
-      )
-      .subscribe((status) => {
-        if (onConnectionStateChange) {
-          onConnectionStateChange(this.mapSubscriptionStatus(status));
-        }
-
-        if (status === 'CHANNEL_ERROR') {
-          this.handleReconnect(channelName, () =>
-            this.subscribeToMessages(conversationId, onMessage, onConnectionStateChange),
-          );
-        }
-      });
-
-    this.channels.set(channelName, channel);
-
-    return () => this.unsubscribe(channelName);
+    console.warn(
+      `[ChatRealtimeSubscriptionManager] subscribeToMessages called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+    );
+    return () => {};
   }
 
   /**
-   * Subscribes to typing indicators for a conversation
+   * Subscribes to typing indicators for a conversation (no-op stub)
    */
-  subscribeToTypingIndicators(conversationId: string, onTyping: TypingCallback): () => void {
-    const channelName = `typing:${conversationId}`;
-
-    this.unsubscribe(channelName);
-
-    const channel = supabase
-      .channel(channelName)
-      .on('broadcast', { event: 'typing' }, (payload) => {
-        onTyping(payload['payload'] as TypingIndicator);
-      });
-
-    channel.subscribe();
-
-    this.channels.set(channelName, channel);
-
-    return () => this.unsubscribe(channelName);
+  subscribeToTypingIndicators(_conversationId: string, _onTyping: TypingCallback): () => void {
+    console.warn(
+      '[ChatRealtimeSubscriptionManager] subscribeToTypingIndicators called but Supabase Realtime has been removed. No subscription created.',
+    );
+    return () => {};
   }
 
   /**
-   * Broadcasts a typing indicator
+   * Broadcasts a typing indicator (no-op stub)
    */
   async broadcastTyping(
-    conversationId: string,
-    participantId: string,
-    employeeName: string,
-    isTyping: boolean,
+    _conversationId: string,
+    _participantId: string,
+    _employeeName: string,
+    _isTyping: boolean,
   ): Promise<void> {
-    const channelName = `typing:${conversationId}`;
-    let channel = this.channels.get(channelName);
-
-    if (!channel) {
-      // Create channel if it doesn't exist
-      channel = supabase.channel(channelName);
-      await channel.subscribe();
-      this.channels.set(channelName, channel);
-    }
-
-    const indicator: TypingIndicator = {
-      conversation_id: conversationId,
-      participant_id: participantId,
-      employee_name: employeeName,
-      is_typing: isTyping,
-      timestamp: new Date().toISOString(),
-    };
-
-    await channel.send({
-      type: 'broadcast',
-      event: 'typing',
-      payload: indicator,
-    });
+    console.warn(
+      '[ChatRealtimeSubscriptionManager] broadcastTyping called but Supabase Realtime has been removed. No broadcast sent.',
+    );
   }
 
   /**
-   * Subscribes to presence tracking for a conversation
+   * Subscribes to presence tracking for a conversation (no-op stub)
    */
   subscribeToPresence(
-    conversationId: string,
-    participantId: string,
-    onPresenceChange: PresenceCallback,
+    _conversationId: string,
+    _participantId: string,
+    _onPresenceChange: PresenceCallback,
   ): () => void {
-    const channelName = `presence:${conversationId}`;
-
-    this.unsubscribe(channelName);
-
-    const channel = supabase
-      .channel(channelName)
-      .on('presence', { event: 'sync' }, () => {
-        const presenceState = channel.presenceState();
-        const states: PresenceState[] = [];
-
-        // Updated: Jan 15th 2026 - Fixed any type
-        Object.values(presenceState).forEach((presences: unknown) => {
-          if (Array.isArray(presences)) {
-            presences.forEach((presence: unknown) => {
-              states.push(presence as PresenceState);
-            });
-          }
-        });
-
-        onPresenceChange(states);
-      })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        // Handle new presence
-        console.debug('New presence:', newPresences);
-      })
-      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        // Handle left presence
-        console.debug('Left presence:', leftPresences);
-      });
-
-    // Track this participant's presence
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        await channel.track({
-          conversation_id: conversationId,
-          participant_id: participantId,
-          status: 'online',
-          last_seen: new Date().toISOString(),
-        });
-      }
-    });
-
-    this.channels.set(channelName, channel);
-
-    return () => this.unsubscribe(channelName);
+    console.warn(
+      '[ChatRealtimeSubscriptionManager] subscribeToPresence called but Supabase Realtime has been removed. No subscription created.',
+    );
+    return () => {};
   }
 
   /**
-   * Updates presence status
+   * Updates presence status (no-op stub)
    */
   async updatePresenceStatus(
-    conversationId: string,
-    participantId: string,
-    status: 'online' | 'offline' | 'busy',
+    _conversationId: string,
+    _participantId: string,
+    _status: 'online' | 'offline' | 'busy',
   ): Promise<void> {
-    const channelName = `presence:${conversationId}`;
-    const channel = this.channels.get(channelName);
-
-    if (channel) {
-      await channel.track({
-        conversation_id: conversationId,
-        participant_id: participantId,
-        status,
-        last_seen: new Date().toISOString(),
-      });
-    }
+    console.warn(
+      '[ChatRealtimeSubscriptionManager] updatePresenceStatus called but Supabase Realtime has been removed.',
+    );
   }
 
   /**
-   * Unsubscribes from a specific channel
+   * Unsubscribes from a specific channel (no-op stub)
    */
-  unsubscribe(channelName: string): void {
-    const channel = this.channels.get(channelName);
-    if (channel) {
-      supabase.removeChannel(channel);
-      this.channels.delete(channelName);
-      this.reconnectAttempts.delete(channelName);
-    }
-  }
+  unsubscribe(_channelName: string): void {}
 
   /**
-   * Unsubscribes from all channels
+   * Unsubscribes from all channels (no-op stub)
    */
   // Updated: Jan 15th 2026 - Enhanced cleanup to prevent memory leaks from subscription tokens
-  unsubscribeAll(): void {
-    this.channels.forEach((channel, _channelName) => {
-      supabase.removeChannel(channel);
-    });
-    this.channels.clear();
-    this.reconnectAttempts.clear();
-  }
+  unsubscribeAll(): void {}
 
   /**
    * Gets the connection state of a channel
    */
-  getChannelState(channelName: string): string | undefined {
-    const channel = this.channels.get(channelName);
-    return channel?.state;
+  getChannelState(_channelName: string): string | undefined {
+    return undefined;
   }
 
   /**
    * Gets all active channels
    */
   getActiveChannels(): string[] {
-    return Array.from(this.channels.keys());
-  }
-
-  // =============================================
-  // PRIVATE METHODS
-  // =============================================
-
-  private mapPostgresEventToUpdateType(
-    eventType: string,
-  ): RealtimeConversationUpdate['update_type'] {
-    switch (eventType) {
-      case 'UPDATE':
-        return 'stats_updated';
-      case 'INSERT':
-        return 'message_added';
-      default:
-        return 'stats_updated';
-    }
-  }
-
-  private mapParticipantEvent(eventType: string): RealtimeParticipantUpdate['update_type'] {
-    switch (eventType) {
-      case 'INSERT':
-        return 'activity';
-      case 'UPDATE':
-        return 'status_change';
-      default:
-        return 'stats_updated';
-    }
-  }
-
-  private mapSubscriptionStatus(status: string): 'connected' | 'disconnected' | 'reconnecting' {
-    switch (status) {
-      case 'SUBSCRIBED':
-        return 'connected';
-      case 'CLOSED':
-        return 'disconnected';
-      case 'CHANNEL_ERROR':
-        return 'reconnecting';
-      default:
-        return 'disconnected';
-    }
-  }
-
-  private handleReconnect(channelName: string, reconnectFn: () => void): void {
-    const attempts = this.reconnectAttempts.get(channelName) || 0;
-
-    if (attempts < this.maxReconnectAttempts) {
-      this.reconnectAttempts.set(channelName, attempts + 1);
-
-      setTimeout(
-        () => {
-          console.debug(
-            `Reconnecting channel ${channelName} (attempt ${attempts + 1}/${this.maxReconnectAttempts})`,
-          );
-          reconnectFn();
-        },
-        this.reconnectDelay * Math.pow(2, attempts),
-      ); // Exponential backoff
-    } else {
-      console.error(`Max reconnection attempts reached for channel ${channelName}`);
-      this.reconnectAttempts.delete(channelName);
-    }
+    return [];
   }
 }
 
@@ -507,7 +196,7 @@ export function resetSubscriptionManager(): void {
 // =============================================
 
 /**
- * Subscribes to all updates for a conversation
+ * Subscribes to all updates for a conversation (no-op stub)
  */
 export function subscribeToConversationUpdates(
   conversationId: string,
@@ -519,95 +208,44 @@ export function subscribeToConversationUpdates(
     onPresenceChange?: PresenceCallback;
     onConnectionStateChange?: ConnectionStateCallback;
   },
-  options?: {
+  _options?: {
     participantId?: string;
   },
 ): () => void {
-  const manager = getSubscriptionManager();
-  const unsubscribeFns: Array<() => void> = [];
-
-  // Subscribe to conversation updates
-  if (callbacks.onConversationUpdate) {
-    unsubscribeFns.push(
-      manager.subscribeToConversation(
-        conversationId,
-        callbacks.onConversationUpdate,
-        callbacks.onConnectionStateChange,
-      ),
-    );
-  }
-
-  // Subscribe to participant updates
-  if (callbacks.onParticipantUpdate) {
-    unsubscribeFns.push(
-      manager.subscribeToParticipants(
-        conversationId,
-        callbacks.onParticipantUpdate,
-        callbacks.onConnectionStateChange,
-      ),
-    );
-  }
-
-  // Subscribe to messages
-  if (callbacks.onMessage) {
-    unsubscribeFns.push(
-      manager.subscribeToMessages(
-        conversationId,
-        callbacks.onMessage,
-        callbacks.onConnectionStateChange,
-      ),
-    );
-  }
-
-  // Subscribe to typing indicators
-  if (callbacks.onTyping) {
-    unsubscribeFns.push(manager.subscribeToTypingIndicators(conversationId, callbacks.onTyping));
-  }
-
-  // Subscribe to presence
-  if (callbacks.onPresenceChange && options?.participantId) {
-    unsubscribeFns.push(
-      manager.subscribeToPresence(
-        conversationId,
-        options.participantId,
-        callbacks.onPresenceChange,
-      ),
-    );
-  }
-
-  // Return function to unsubscribe from all
-  return () => {
-    unsubscribeFns.forEach((unsubscribe) => unsubscribe());
-  };
+  console.warn(
+    `[subscribeToConversationUpdates] Called for ${conversationId} but Supabase Realtime has been removed. No subscriptions created.`,
+  );
+  void callbacks;
+  return () => {};
 }
 
 /**
- * Broadcasts typing status for a participant
+ * Broadcasts typing status for a participant (no-op stub)
  */
 export async function broadcastTypingStatus(
-  conversationId: string,
-  participantId: string,
-  employeeName: string,
-  isTyping: boolean,
+  _conversationId: string,
+  _participantId: string,
+  _employeeName: string,
+  _isTyping: boolean,
 ): Promise<void> {
-  const manager = getSubscriptionManager();
-  await manager.broadcastTyping(conversationId, participantId, employeeName, isTyping);
+  console.warn(
+    '[broadcastTypingStatus] Called but Supabase Realtime has been removed. No broadcast sent.',
+  );
 }
 
 /**
- * Updates participant presence status
+ * Updates participant presence status (no-op stub)
  */
 export async function updatePresence(
-  conversationId: string,
-  participantId: string,
-  status: 'online' | 'offline' | 'busy',
+  _conversationId: string,
+  _participantId: string,
+  _status: 'online' | 'offline' | 'busy',
 ): Promise<void> {
-  const manager = getSubscriptionManager();
-  await manager.updatePresenceStatus(conversationId, participantId, status);
+  console.warn('[updatePresence] Called but Supabase Realtime has been removed.');
 }
 
 /**
- * Cleans up all subscriptions (call on app unmount)
+ * Cleans up all subscriptions (no-op stub)
  */
 export function cleanupSubscriptions(): void {
   const manager = getSubscriptionManager();
@@ -619,37 +257,14 @@ export function cleanupSubscriptions(): void {
 // =============================================
 
 /**
- * React hook for subscribing to conversation updates
- * Usage in a React component:
- *
- * import { useConversationSubscription } from '@core/storage/chat/chat-realtime-subscriptions';
- *
- * function MyComponent({ conversationId }) {
- *   useConversationSubscription(conversationId, {
- *     onMessage: (payload) => console.log('New message:', payload),
- *     onTyping: (indicator) => console.log('Typing:', indicator)
- *   });
- * }
+ * React hook for subscribing to conversation updates (no-op stub)
  */
 export function useConversationSubscription(
   _conversationId: string,
   _callbacks: Parameters<typeof subscribeToConversationUpdates>[1],
   _options?: Parameters<typeof subscribeToConversationUpdates>[2],
 ) {
-  // This would need React imports to work properly
-  // For now, it's a placeholder showing the intended API
-
-  // useEffect(() => {
-  //   const unsubscribe = subscribeToConversationUpdates(
-  //     conversationId,
-  //     callbacks,
-  //     options
-  //   );
-  //
-  //   return unsubscribe;
-  // }, [conversationId]);
-
   console.warn(
-    'useConversationSubscription requires React imports. Use subscribeToConversationUpdates directly for now.',
+    'useConversationSubscription: Supabase Realtime has been removed. This hook is a no-op.',
   );
 }

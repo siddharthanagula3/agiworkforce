@@ -7,7 +7,6 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -420,11 +419,8 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // Authentication
   const { userId } = await getClerkAuthUser(request);
 
-  // Service-role client for all downstream DB ops.
-  const userClient = getServiceClient();
-
   // Check subscription
-  const subscription = await SubscriptionService.getSubscription(userClient, userId);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     return NextResponse.json(
@@ -597,7 +593,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const estimatedCostCents = maxProviderCost * n;
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
-  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
   if (!hasCredits) {
     const balance = await CreditService.getBalance(userClient, userId);
     logger.warn(

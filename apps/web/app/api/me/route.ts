@@ -5,7 +5,6 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
-import { getServiceClient } from '@/lib/supabase-server';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -23,16 +22,13 @@ async function handleGetMe(request: NextRequest) {
     const { userId, email } = await getClerkAuthUser(request);
 
     const db = getNeonDb();
-    const userClient = getServiceClient();
 
     const [subscription, credits, routing_preferences] = await Promise.all([
-      SubscriptionService.getSubscription(userClient, userId).catch(
-        (subscriptionError: unknown) => {
-          logger.warn({ userId, error: subscriptionError }, 'Error fetching subscription');
-          return null;
-        },
-      ),
-      CreditService.getBalance(userClient, userId).catch((creditError: unknown) => {
+      SubscriptionService.getSubscription(userId).catch((subscriptionError: unknown) => {
+        logger.warn({ userId, error: subscriptionError }, 'Error fetching subscription');
+        return null;
+      }),
+      CreditService.getBalance(userId).catch((creditError: unknown) => {
         logger.warn({ error: creditError, userId }, 'Failed to get credit balance');
         return null;
       }),
