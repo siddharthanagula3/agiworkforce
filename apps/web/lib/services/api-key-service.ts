@@ -13,7 +13,7 @@
  *   downstream callers should use `getNeonDb().withUser(jwt)` for subsequent
  *   user-scoped operations.
  *
- * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ * Never add direct DB client construction here. See lib/services/README.md.
  */
 import 'server-only';
 

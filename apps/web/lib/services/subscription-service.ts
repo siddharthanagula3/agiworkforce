@@ -10,7 +10,7 @@
  * SERVICE-CONTEXT methods (Stripe webhook, cron, claim-offer) call `getNeonDb()`
  * internally. Their doc-comments say "SERVICE-CONTEXT" and list valid callers.
  *
- * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ * Never add direct DB client construction here. See lib/services/README.md.
  */
 import 'server-only';
 

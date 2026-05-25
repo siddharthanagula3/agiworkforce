@@ -198,10 +198,6 @@ export interface ProjectFile {
 // ---------------------------------------------------------------------------
 export const LLM_MODELS: unknown[] = [];
 export const PLAN_MODELS: unknown[] = [];
-export const supabase: Record<string, unknown> = {};
-export const supabaseAuth: Record<string, unknown> & { getUser: () => { id: string } | null } = {
-  getUser: () => null,
-};
 export type SubscriptionTier = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
 export const ThemeProvider = ({ children }: { children: ReactNode }) =>
   children as React.ReactElement;
