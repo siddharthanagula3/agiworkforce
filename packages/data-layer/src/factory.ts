@@ -114,7 +114,7 @@ export interface CreateDatabaseClientOptions {
 export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): DatabaseAdapter {
   const provider =
     opts.provider ??
-    readEnvProvider<DatabaseProvider>('AGI_DATABASE_PROVIDER', 'supabase', DATABASE_PROVIDERS);
+    readEnvProvider<DatabaseProvider>('AGI_DATABASE_PROVIDER', 'neon', DATABASE_PROVIDERS);
 
   switch (provider) {
     case 'supabase': {

@@ -197,12 +197,14 @@ export type ArtifactRow = {
 
 export type WaitlistRow = {
   id: string;
-  email: string;
-  name: string | null;
-  company: string | null;
-  role: string | null;
-  use_case: string | null;
+  user_id: string | null;
+  email: string | null;
+  plan: string | null;
+  billing_interval: string | null;
+  source: string | null;
   status: string;
+  joined_at: string | null;
+  updated_at: string | null;
   created_at: string;
 };
 
@@ -290,6 +292,7 @@ export type MessagingConnectionRow = {
 
 export type UserIdMappingRow = {
   clerk_id: string;
+  supabase_uuid: string;
   email: string | null;
   mapped_at: string;
 };
@@ -368,7 +371,6 @@ export type ReleaseRow = {
   id: string;
   version: string;
   platform: string;
-  channel: string;
   download_url: string;
   notes: string | null;
   pub_date: string;
@@ -414,9 +416,10 @@ export type GitHubPrReviewAttemptRow = {
   id: string;
   installation_id: number;
   pr_number: number;
+  repo_owner: string;
+  repo_name: string;
   status: string;
   attempted_at: string;
   completed_at: string | null;
   tokens_used: number | null;
-  error: string | null;
 };
