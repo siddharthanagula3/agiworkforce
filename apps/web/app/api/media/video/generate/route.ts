@@ -7,7 +7,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
@@ -323,11 +322,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   // Authentication
   const { userId } = await getClerkAuthUser(request);
 
-  // Service-role client for all downstream DB ops.
-  const userClient = getServiceClient();
-
   // Get subscription and check tier
-  const subscription = await SubscriptionService.getSubscription(userClient, userId);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     throw createError.forbidden(
@@ -374,9 +370,9 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Cost pre-check: verify the user has enough credits before starting the task
   const estimatedCostCents = VIDEO_COST_CENTS[provider];
-  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, userId);
+    const balance = await CreditService.getBalance(userId);
     logger.warn(
       { userId: userId, provider, estimatedCostCents, balance },
       'Insufficient credits for video generation',
@@ -390,7 +386,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
   const requestId = randomUUID();
   const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
     userId,
     estimatedCostCents,
     `Credit reservation: video generation (${provider})`,
@@ -437,7 +432,6 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     // Refund the reserved credits since the task was never created
     const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
-      userClient,
       userId,
       -estimatedCostCents,
       `Refund: video generation failed (${provider})`,
