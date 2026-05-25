@@ -219,8 +219,10 @@ async function handlePortal(request: NextRequest) {
         if (customerId) {
           const matchedCustomer = customers.data.find((c) => c.id === customerId);
           if (
-            matchedCustomer?.metadata?.['supabase_user_id'] &&
-            matchedCustomer.metadata['supabase_user_id'] !== userId
+            matchedCustomer?.metadata?.['user_id'] ||
+            (matchedCustomer?.metadata?.['supabase_user_id'] &&
+              (matchedCustomer.metadata['user_id'] ||
+                matchedCustomer.metadata['supabase_user_id']) !== userId)
           ) {
             logger.error(
               { userId: userId, customerId: matchedCustomer.id },

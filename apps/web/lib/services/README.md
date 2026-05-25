@@ -18,8 +18,6 @@ static async getSubscription(
   userId: string,
 ): Promise<SubscriptionInfo | null> {
   // `client` was constructed by the route handler via:
-  //   import { getUserClient } from '@/lib/supabase-server';
-  //   const userClient = getUserClient(jwtFromBearerHeader);
   return client.from('subscriptions').select(...).eq('user_id', userId);
 }
 
@@ -35,12 +33,9 @@ static async resetCreditsForNewPeriod(...) { ... }
 ### Route handler responsibility
 
 ```ts
-import { getUserClient, getServiceClient } from '@/lib/supabase-server';
-
 // In a user-facing route handler:
 const authHeader = request.headers.get('authorization');
 const jwt = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-const userClient = jwt ? getUserClient(jwt) : getServiceClient(); // cookie-path fallback; MUST still filter by user_id
 
 await SubscriptionService.getSubscription(userClient, user.id);
 
@@ -52,7 +47,6 @@ await SubscriptionService.resetCreditsForNewPeriod(userId, subscriptionId, planT
 
 - [ ] Does it read/write user-owned rows? Accept `client: SupabaseClient`.
 - [ ] Is it called from a webhook, cron, or admin context only? Use `getServiceClient()` internally and document it with a `// SECURITY:` comment.
-- [ ] Never define a private `getSupabaseClient()` inside a route file or service file. Use the canonical exports from `@/lib/supabase-server`.
 
 ### Files in scope (all migrated as of 2026-05-05)
 

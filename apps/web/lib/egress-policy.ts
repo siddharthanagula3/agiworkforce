@@ -24,8 +24,6 @@ const ALLOWED_HOSTNAMES = [
   // Supabase: wildcard for project-specific subdomains
 ] as const;
 
-const SUPABASE_PATTERN = /^[a-z0-9-]+\.supabase\.(co|io)$/;
-
 // Hostname strings that always identify the local machine.
 const LOCALHOST_NAMES = new Set(['localhost', 'localhost.localdomain']);
 
@@ -122,7 +120,6 @@ export function validateEgressUrl(urlString: string): void {
 
   const hostname = url.hostname;
   if (ALLOWED_HOSTNAMES.includes(hostname as (typeof ALLOWED_HOSTNAMES)[number])) return;
-  if (SUPABASE_PATTERN.test(hostname)) return;
 
   throw new EgressPolicyError(urlString);
 }

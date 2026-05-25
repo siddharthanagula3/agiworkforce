@@ -101,7 +101,7 @@ async function handleDeleteUserData(request: NextRequest) {
 
       if (!isMissingFn) {
         logger.error({ err, userId }, 'Failed to delete user data via RPC');
-        throw createError.supabase('Failed to delete user data', pgErr.message ?? String(err));
+        throw createError.internal('Failed to delete user data', pgErr.message ?? String(err));
       }
 
       logger.warn({ userId }, 'delete_user_data function not found, using fallback');

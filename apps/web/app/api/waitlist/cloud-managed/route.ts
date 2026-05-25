@@ -12,7 +12,7 @@ import { requireCsrfToken } from '@/lib/csrf';
  * POST /api/waitlist/cloud-managed
  *
  * Unauthenticated waitlist signup for the Cloud Managed private beta.
- * Persists to the `cloud_managed_waitlist` table (see supabase/migrations/).
+ * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
  * If the table does not yet exist, stubs a console log and returns 200 OK —
  * idempotent, no error surface to the user.
  *
