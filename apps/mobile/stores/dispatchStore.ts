@@ -1,7 +1,7 @@
 import { Alert } from 'react-native';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { useConnectionStore } from '@/stores/connectionStore';
 
 // ---------------------------------------------------------------------------
@@ -150,9 +150,4 @@ export const useDispatchStore = create<DispatchState>()(
   ),
 );
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useDispatchStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useDispatchStore, 'dispatch-store');

@@ -876,6 +876,48 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
     }
 }
 
+/// Fetch the user's remaining credit percentage from the AGI cloud API.
+/// Returns `None` on any network/parse failure so callers can fall back gracefully.
+/// The response shape is `{ credits: { monthly_remaining_cents, monthly_allocated_cents } }`.
+async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
+    #[derive(serde::Deserialize)]
+    struct Credits {
+        monthly_remaining_cents: Option<u64>,
+        monthly_allocated_cents: Option<u64>,
+    }
+    #[derive(serde::Deserialize)]
+    struct BalanceResp {
+        credits: Option<Credits>,
+    }
+
+    let url = format!("{}/api/llm/v1/credits/balance", api_base);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .ok()?;
+
+    let resp = client
+        .get(&url)
+        .bearer_auth(bearer)
+        .send()
+        .await
+        .ok()?;
+
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let body: BalanceResp = resp.json().await.ok()?;
+    let credits = body.credits?;
+    let allocated = credits.monthly_allocated_cents.unwrap_or(0);
+    if allocated == 0 {
+        return None;
+    }
+    let remaining = credits.monthly_remaining_cents.unwrap_or(0);
+    let pct = ((remaining as f64 / allocated as f64) * 100.0).round() as u8;
+    Some(pct.min(100))
+}
+
 /// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
@@ -2069,15 +2111,15 @@ pub async fn run_main() -> Result<()> {
     // Quota warning: only for Hobby-tier managed accounts with < 10% credits left.
     // BYOK and Local users never see this banner — they have no managed quota.
     {
+        // Guard first — skip the auth load and network call entirely for non-Hobby plans.
         let is_hobby = std::env::var("AGI_PLAN")
             .map(|v| v.eq_ignore_ascii_case("hobby"))
             .unwrap_or(false);
 
-        // Attempt to fetch live remaining credits from the cloud API.
-        // Falls back to the AGI_QUOTA_REMAINING_PCT env var (or 100) on any
-        // failure so offline / unauthenticated runs are unaffected.
-        let remaining: u8 = 'quota: {
-            // Only hit the network when the user is authenticated with the AGI cloud.
+        if is_hobby {
+            // Attempt to fetch live remaining credits from the cloud API.
+            // Falls back to the AGI_QUOTA_REMAINING_PCT env var (or 100) on any
+            // failure so offline / unauthenticated runs are unaffected.
             let token = auth::AuthStore::load()
                 .ok()
                 .and_then(|s| s.entries.get("agiworkforce").cloned())
@@ -2086,62 +2128,33 @@ pub async fn run_main() -> Result<()> {
                     auth::AuthEntry::ApiKey { key } => Some(key),
                 });
 
-            if let Some(bearer) = token {
+            let remaining: u8 = if let Some(bearer) = token {
                 let api_base = std::env::var("AGI_API_URL")
                     .unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
-                let url = format!("{}/api/llm/v1/credits/balance", api_base);
-                let result = reqwest::Client::builder()
-                    .timeout(std::time::Duration::from_secs(3))
-                    .build()
+                fetch_remaining_pct(&bearer, &api_base)
+                    .await
+                    .or_else(|| {
+                        std::env::var("AGI_QUOTA_REMAINING_PCT")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                    })
+                    .unwrap_or(100)
+            } else {
+                // Not authenticated — fall back to env var (decorative / CI override).
+                std::env::var("AGI_QUOTA_REMAINING_PCT")
                     .ok()
-                    .and_then(|c| {
-                        // Drive the async GET inside the existing async context.
-                        tokio::task::block_in_place(|| {
-                            tokio::runtime::Handle::current().block_on(async {
-                                c.get(&url)
-                                    .bearer_auth(&bearer)
-                                    .send()
-                                    .await
-                                    .ok()
-                                    .and_then(|r| {
-                                        if r.status().is_success() {
-                                            Some(r)
-                                        } else {
-                                            None
-                                        }
-                                    })
-                            })
-                        })
-                    });
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(100)
+            };
 
-                if let Some(resp) = result {
-                    #[derive(serde::Deserialize)]
-                    struct BalanceResp {
-                        remaining_pct: Option<u8>,
-                    }
-                    if let Ok(body) = tokio::task::block_in_place(|| {
-                        tokio::runtime::Handle::current()
-                            .block_on(resp.json::<BalanceResp>())
-                    }) {
-                        break 'quota body.remaining_pct.unwrap_or(100);
-                    }
-                }
+            if remaining < 10 {
+                eprintln!(
+                    "{}",
+                    colored::Colorize::yellow(
+                        "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
+                    )
+                );
             }
-
-            // Fall back to env var (decorative / CI override).
-            std::env::var("AGI_QUOTA_REMAINING_PCT")
-                .ok()
-                .and_then(|s| s.parse().ok())
-                .unwrap_or(100)
-        };
-
-        if is_hobby && remaining < 10 {
-            eprintln!(
-                "{}",
-                colored::Colorize::yellow(
-                    "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
-                )
-            );
         }
     }
 
