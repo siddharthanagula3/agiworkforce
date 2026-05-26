@@ -21,11 +21,13 @@ import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Cpu, Plane, Shield } from 'lucide-react-native';
 import Constants from 'expo-constants';
+import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
+import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
   composeFirstRunDisclosure,
   isDisclosureSatisfied,
@@ -142,6 +144,11 @@ export default function OnboardingScreen() {
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const modelPickerRef = useRef<BottomSheet>(null);
+
+  const handlePickModel = useCallback(() => {
+    modelPickerRef.current?.snapToIndex(0);
+  }, []);
 
   // Detect device capabilities once on mount
   useEffect(() => {
@@ -267,21 +274,12 @@ export default function OnboardingScreen() {
         return;
       }
 
-      // Catalog fields not yet populated — fall back to simulated progress.
+      // Model catalog entry is not yet fully populated (downloadUrl / checksum /
+      // format missing). Rather than simulating fake download progress, skip
+      // straight to chat — the model will be available on a future update.
       // TODO(model-catalog-engineer): populate downloadUrl + checksum + format in
-      // @agiworkforce/local-llm catalog to activate the real path above.
-      let progress = 0;
-      downloadTimerRef.current = setInterval(() => {
-        progress += 1.2;
-        const clamped = Math.min(progress, 100);
-        setDownloadProgress(clamped);
-        setDownloadSpeedMBs(Math.round(8 + Math.random() * 6));
-        if (progress >= 100) {
-          clearInterval(downloadTimerRef.current!);
-          downloadTimerRef.current = null;
-          setTimeout(finishOnboarding, 600);
-        }
-      }, 80);
+      // @agiworkforce/local-llm catalog to activate the real download path above.
+      finishOnboarding();
     },
     [recommendedModel, finishOnboarding],
   );
@@ -310,6 +308,7 @@ export default function OnboardingScreen() {
             deviceInfo={deviceInfo}
             model={recommendedModel}
             onDownload={handleStartDownload}
+            onPickModel={handlePickModel}
           />
         )}
         {screen === 'download' && (
@@ -332,6 +331,10 @@ export default function OnboardingScreen() {
           onDecline={handleDisclosureDecline}
         />
       )}
+
+      {/* Model picker sheet — overlays the full screen, only shown when user
+          taps "Pick a different model" on the device-tier screen. */}
+      <ModelPickerSheet sheetRef={modelPickerRef} />
     </SafeAreaView>
   );
 }
@@ -442,11 +445,13 @@ function DeviceTierScreen({
   deviceInfo,
   model,
   onDownload,
+  onPickModel,
 }: {
   colors: ReturnType<typeof useThemeColors>;
   deviceInfo: DeviceTierInfo;
   model: RecommendedModel;
   onDownload: (cellularEnabled: boolean) => void;
+  onPickModel: () => void;
 }) {
   const tierLabel = deviceInfo.tier === 1 ? 'Tier 1' : deviceInfo.tier === 2 ? 'Tier 2' : 'Tier 3';
   const [cellularEnabled, setCellularEnabled] = useState(false);
@@ -556,14 +561,12 @@ function DeviceTierScreen({
         </Text>
       </Pressable>
 
-      {/* Secondary: model picker — TODO wire to model-picker screen when built */}
+      {/* Secondary: model picker */}
       <Pressable
         testID="device-tier-pick-model-btn"
         accessibilityRole="button"
         accessibilityLabel="Pick a different model"
-        onPress={() => {
-          /* TODO: navigate to model picker screen */
-        }}
+        onPress={onPickModel}
         style={styles.secondaryBtn}
       >
         <Text style={[styles.secondaryBtnText, { color: colors.textMuted }]}>

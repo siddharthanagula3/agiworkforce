@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
@@ -348,12 +348,7 @@ function createLocalConversation(
   return localId;
 }
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useChatMessageStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useChatMessageStore, 'chat-message-store');
 
 function assertLocalToByokHandoffPreview(preview: LocalToByokHandoffPreview): void {
   if (preview.redactionReport.blocked || preview.draft.redactionReport.blocked) {

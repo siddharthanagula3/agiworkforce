@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { JoinWaitlistInput, JoinWaitlistResult } from './service';
 
 // ---------------------------------------------------------------------------
@@ -57,6 +57,8 @@ export const useWaitlistStore = create<WaitlistState>()(
     {
       name: 'waitlist-store',
       storage: createJSONStorage(() => mmkvStorage),
+      // AUDIT-FIX: MMKV-RACE — defer rehydration until encrypted MMKV is open.
+      skipHydration: true,
       partialize: (state) => ({
         joined: state.joined,
         email: state.email,
@@ -70,3 +72,5 @@ export const useWaitlistStore = create<WaitlistState>()(
     },
   ),
 );
+
+rehydrateWhenMmkvReady(useWaitlistStore, 'waitlist-store');

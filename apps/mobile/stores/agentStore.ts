@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { useConnectionStore } from '@/stores/connectionStore';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
@@ -134,9 +134,4 @@ export const useAgentStore = create<AgentState>()(
   ),
 );
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useAgentStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useAgentStore, 'agent-store');
