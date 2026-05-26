@@ -254,6 +254,9 @@ const MessageBubbleComponent = function MessageBubble({
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
   const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
   const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
+  const storedChoice = useComparisonStore((state) =>
+    state.getComparisonChoice(message.sessionId ?? '', message.id),
+  );
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -484,7 +487,7 @@ const MessageBubbleComponent = function MessageBubble({
             <ComparisonResponse
               optionA={message.metadata.comparisonOptions.a}
               optionB={message.metadata.comparisonOptions.b}
-              choice={message.metadata.comparisonChoice}
+              choice={storedChoice ?? message.metadata.comparisonChoice}
               isStreaming={message.isStreaming}
               onChoose={(side) => {
                 setComparisonChoice(message.sessionId ?? '', message.id, side);
