@@ -4,12 +4,7 @@
  * Used by: app/chats/page, WebChatPage (as useFeatureChatStore), MessageBubble,
  * MessageListNew, ChatMessageList, BudgetTrackerDisplay, and use-unified-adapter.
  *
- * Persist key: 'agi-chat-store' (persists sessions + messages).
- *
- * NOTE: shared/stores/chat-store.ts also uses persist key 'agi-chat-store'.
- * That is a known key collision. The two stores have incompatible shapes and
- * different persist partializers, so whichever writes last wins. Fix tracked
- * as a separate concern -- do not merge these stores without a migration plan.
+ * Persist key: 'agi-feature-chat-store' (persists sessions + messages).
  *
  * Related stores (distinct purposes, different shapes -- do NOT merge):
  *   - stores/chatStore.ts                 (main page store; persist key 'agiworkforce-web-chat')
@@ -155,7 +150,7 @@ export interface ChatSession {
   userId?: string;
   isPinned?: boolean;
   isArchived?: boolean;
-  /** Project this session belongs to (client-side only; not persisted to vibe_sessions). */
+  /** Project this session belongs to (client-side only; not persisted to the database). */
   projectId?: string | null;
 }
 
@@ -594,9 +589,9 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
 
       // ========================================================================
-      // Persistence (vibe_sessions / vibe_messages)
+      // Persistence (session + message sync)
       // TODO: Add /api/chat/sessions and /api/chat/sessions/[id]/messages routes
-      // for vibe_sessions/vibe_messages persistence (schema differs from web_conversations).
+      // for session persistence.
       // ========================================================================
 
       loadSessionsFromDb: async (_userId: string) => {
@@ -619,8 +614,8 @@ export const useChatStore = create<ChatState & ChatActions>()(
       },
     })),
     {
-      name: 'agi-chat-store',
-      version: 1,
+      name: 'agi-feature-chat-store',
+      version: 2,
       partialize: (state) => ({
         sessions: state.sessions,
         messages: state.messages,
