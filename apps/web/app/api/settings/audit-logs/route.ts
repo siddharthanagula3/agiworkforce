@@ -12,7 +12,6 @@ import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 
 const QuerySchema = z.object({
-  userId: z.string().optional(),
   action: z.string().optional(),
   resourceType: z.string().optional(),
   startDate: z.string().datetime({ offset: true }).optional(),
@@ -46,7 +45,6 @@ async function handleGetAuditLogs(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const parsed = QuerySchema.safeParse({
-    userId: searchParams.get('userId') ?? undefined,
     action: searchParams.get('action') ?? undefined,
     resourceType: searchParams.get('resourceType') ?? undefined,
     startDate: searchParams.get('startDate') ?? undefined,
@@ -59,11 +57,9 @@ async function handleGetAuditLogs(request: NextRequest) {
     throw createError.validation('Invalid query parameters', parsed.error.issues);
   }
 
-  const { userId, action, resourceType, startDate, endDate, limit, offset } = parsed.data;
+  const { action, resourceType, startDate, endDate, limit, offset } = parsed.data;
 
-  // Users can only query their own logs unless they request a specific userId.
-  // Org-level cross-user admin access is not implemented yet.
-  const effectiveUserId = userId ?? requesterId;
+  const effectiveUserId = requesterId;
 
   const db = getNeonDb();
 
