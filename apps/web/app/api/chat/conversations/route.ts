@@ -24,17 +24,36 @@ async function handleGetConversations(request: NextRequest) {
 
   const userId = await requireCurrentUserId();
 
+  // Optional title search. Sanitize to prevent oversized ILIKE patterns.
+  const url = new URL(request.url);
+  const rawQ = url.searchParams.get('q') ?? '';
+  const q = rawQ.slice(0, 200).trim();
+
   try {
-    const conversations = await getNeonChatDb().query<ChatConversationRow>(
-      `
-        select id, title, model, created_at, updated_at
-        from web_conversations
-        where user_id = $1 and deleted_at is null
-        order by updated_at desc
-        limit 50
-      `,
-      [userId],
-    );
+    let conversations: ChatConversationRow[];
+    if (q) {
+      conversations = await getNeonChatDb().query<ChatConversationRow>(
+        `
+          select id, title, model, created_at, updated_at
+          from web_conversations
+          where user_id = $1 and deleted_at is null and title ilike $2
+          order by updated_at desc
+          limit 50
+        `,
+        [userId, `%${q}%`],
+      );
+    } else {
+      conversations = await getNeonChatDb().query<ChatConversationRow>(
+        `
+          select id, title, model, created_at, updated_at
+          from web_conversations
+          where user_id = $1 and deleted_at is null
+          order by updated_at desc
+          limit 50
+        `,
+        [userId],
+      );
+    }
     return NextResponse.json({ conversations });
   } catch (error) {
     logger.error({ error, userId }, 'Failed to fetch conversations');
