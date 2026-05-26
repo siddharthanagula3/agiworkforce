@@ -763,11 +763,14 @@ function ChatSidebarContent({
 
       {/* Session list */}
       <ScrollArea className="flex-1">
-        {isSearching && searchQuery.trim() ? (
-          <div className="flex items-center justify-center py-6">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/50" />
+        {/* Inline loading indicator: shown alongside the client-side fallback list */}
+        {isSearching && searchQuery.trim() && (
+          <div className="flex items-center gap-1.5 px-3 py-1 text-[11px] text-muted-foreground/50">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Searching...
           </div>
-        ) : filteredSessions.length === 0 ? (
+        )}
+        {filteredSessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <MessageSquare className="mb-2 h-7 w-7 text-muted-foreground/25" />
             <p className="text-sm text-muted-foreground/50">
