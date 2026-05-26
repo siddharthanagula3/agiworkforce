@@ -9,9 +9,8 @@
  * Persist key: 'agiworkforce-web-chat' (persists model selection + sidebar state only).
  *
  * Related stores (distinct purposes, different shapes -- do NOT merge):
- *   - features/chat/stores/chat-store.ts  (session/message feature store; persist key 'agi-chat-store')
- *   - shared/stores/chat-store.ts         (MGX-style conversation store; ALSO uses 'agi-chat-store' -- key collision, tracked concern)
- *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, owns its own scope)
+ *   - shared/stores/chat-store.ts         (MGX-style conversation store; persist key 'agi-chat-store')
+ *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, persist key 'agi-web-chat')
  */
 
 import { create } from 'zustand';

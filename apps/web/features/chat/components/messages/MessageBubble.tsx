@@ -63,7 +63,7 @@ import type { GeneratedDocument } from '../../services/document-generation-servi
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
 import { ComparisonResponse } from './ComparisonResponse';
-import { useChatStore } from '../../stores/chat-store';
+import { useComparisonStore } from '../../stores/comparison-store';
 import { InlineSourcesList } from '../research/ResearchPanel';
 import type { ResearchSource } from '../../stores/research-panel-store';
 
@@ -253,7 +253,7 @@ const MessageBubbleComponent = function MessageBubble({
   const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
   const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
   const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
-  const setComparisonChoice = useChatStore((state) => state.setComparisonChoice);
+  const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -487,9 +487,7 @@ const MessageBubbleComponent = function MessageBubble({
               choice={message.metadata.comparisonChoice}
               isStreaming={message.isStreaming}
               onChoose={(side) => {
-                if (message.sessionId) {
-                  setComparisonChoice(message.sessionId, message.id, side);
-                }
+                setComparisonChoice(message.sessionId ?? '', message.id, side);
               }}
             />
           )}

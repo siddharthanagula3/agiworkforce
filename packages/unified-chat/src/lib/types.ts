@@ -50,6 +50,13 @@ export interface ChatMessage {
   isStreaming?: boolean;
   error?: string;
   /**
+   * Surface-specific metadata. Kept as a generic bag so the shared package
+   * stays free of surface-specific types (e.g. web-only paywall, search
+   * results, code execution). Consumers should cast to their own typed
+   * interface when reading (e.g. `msg.metadata as WebChatMessageMetadata`).
+   */
+  metadata?: Record<string, unknown>;
+  /**
    * Routing provenance for this assistant message. When the model was chosen
    * by the auto-router rather than the user, `source` is `'auto'` and the
    * footer renders a trace ("Auto routed: <task> -> <model>") plus a button
