@@ -64,9 +64,11 @@ import {
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   DEFAULT_AGI_BRIDGE_URL,
+  DEFAULT_AGI_CLOUD_API_URL,
   ORIGIN_EXTENSION_PAGE,
   MAX_CONTEXT_HTML_CHARS,
   validateBridgeUrl,
+  validateCloudApiUrl,
   validateGatewayUrl,
   validateShortcutActions,
 } from './background/policy';
@@ -2608,6 +2610,119 @@ async function getAgiBridgeBaseUrl(): Promise<string> {
 }
 
 /**
+ * Resolve the cloud API URL from chrome.storage.local (`agi_cloud_api_url`),
+ * falling back to DEFAULT_AGI_CLOUD_API_URL. The URL must pass
+ * validateCloudApiUrl (HTTPS, non-local). Invalid stored values are discarded
+ * and the default is used.
+ */
+async function getAgiCloudApiUrl(): Promise<string> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get('agi_cloud_api_url', (result) => {
+      if (chrome.runtime.lastError) {
+        resolve(DEFAULT_AGI_CLOUD_API_URL);
+        return;
+      }
+      const raw = (result['agi_cloud_api_url'] as string | undefined)?.trim();
+      if (!raw) {
+        resolve(DEFAULT_AGI_CLOUD_API_URL);
+        return;
+      }
+      const validated = validateCloudApiUrl(raw);
+      if (!validated) {
+        logger.error('Stored cloud API URL failed validation, using default', { raw });
+        resolve(DEFAULT_AGI_CLOUD_API_URL);
+        return;
+      }
+      resolve(validated);
+    });
+  });
+}
+
+/**
+ * Handle a chat message by calling the AGI Workforce cloud API directly.
+ * Used when the desktop bridge is unavailable but the user has set an API key.
+ *
+ * Security: apiKey comes exclusively from chrome.storage.session (CRIT-004 /
+ * chrome-HIGH-3). It is never accepted from message wire.
+ *
+ * The SSE format parsed here matches the OpenAI chat completions streaming
+ * format. Chunks are forwarded to the side panel via broadcastChunk in the
+ * same CHAT_CHUNK format as the bridge path — no UI changes needed.
+ */
+async function handleDirectCloudChat(
+  cloudUrl: string,
+  apiKey: string,
+  messages: Array<{ role: string; content: string }>,
+  broadcastChunk: (text: string, done: boolean, error?: string) => void,
+): Promise<void> {
+  const resp = await fetch(cloudUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ messages, stream: true }),
+    signal: AbortSignal.timeout(60000),
+  });
+
+  if (!resp.ok || !resp.body) {
+    const errText = `Cloud API error: ${resp.status} ${resp.statusText}`;
+    broadcastChunk('', true, errText);
+    return;
+  }
+
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let sseBuffer = '';
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    sseBuffer += decoder.decode(value, { stream: true });
+    const lines = sseBuffer.split('\n');
+    sseBuffer = lines.pop() ?? '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed === 'data: [DONE]') continue;
+      const dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
+      try {
+        const parsed = JSON.parse(dataStr) as {
+          choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
+          content?: string;
+          done?: boolean;
+        };
+        const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
+        if (delta) {
+          broadcastChunk(delta, false);
+        }
+        if (parsed.done || parsed.choices?.[0]?.finish_reason === 'stop') {
+          broadcastChunk('', true);
+          return;
+        }
+      } catch {
+        // Non-JSON SSE line — skip
+      }
+    }
+  }
+  // Flush remaining buffer
+  const remaining = sseBuffer.trim();
+  if (remaining && remaining !== 'data: [DONE]') {
+    const dataStr = remaining.startsWith('data: ') ? remaining.slice(6) : remaining;
+    try {
+      const parsed = JSON.parse(dataStr) as {
+        choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
+        content?: string;
+      };
+      const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
+      if (delta) broadcastChunk(delta, false);
+    } catch {
+      // Final fragment not valid JSON — discard
+    }
+  }
+  broadcastChunk('', true);
+}
+
+/**
  * Settings keys for the optional `/api/v1/providers/:id/stream` path that
  * routes through the AGI Workforce api-gateway instead of the local desktop
  * bridge. Default-off; enabled by setting `chrome.storage.local.agi_use_provider_stream = true`.
@@ -3034,6 +3149,35 @@ async function handleChatMessage(
       resolve(null);
     }
   });
+
+  // ── Cloud-fallback gate ────────────────────────────────────────────────────
+  // When the desktop bridge is not connected, attempt direct cloud API call.
+  // API key is read exclusively from chrome.storage.session (CRIT-004 /
+  // chrome-HIGH-3). The check `!state.isNativeConnected` mirrors the bridge
+  // connect state; even if the bridge URL fetch below would succeed, we skip
+  // this path when the bridge IS connected to preserve existing behavior.
+  if (!state.isNativeConnected) {
+    if (resolvedApiKey) {
+      try {
+        const cloudUrl = await getAgiCloudApiUrl();
+        logger.debug('Bridge not connected — using cloud API fallback', { cloudUrl });
+        await handleDirectCloudChat(cloudUrl, resolvedApiKey, messages, broadcastChunk);
+        return;
+      } catch (cloudErr) {
+        logger.warn('Cloud API fallback failed', cloudErr);
+        const errMsg = cloudErr instanceof Error ? cloudErr.message : 'Cloud request failed';
+        broadcastChunk('', true, errMsg);
+        return;
+      }
+    } else {
+      // No bridge, no API key — give a clear, actionable error.
+      broadcastChunk(
+        'Desktop not connected. Set an API key in extension settings for cloud mode.',
+        true,
+      );
+      return;
+    }
+  }
 
   try {
     // Attempt to stream via the AGI Workforce API.
