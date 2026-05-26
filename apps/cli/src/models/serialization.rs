@@ -94,9 +94,45 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                 }
                 vec![msg]
             } else {
-                // For user/tool messages — tool results become separate "tool" role messages
+                // For user/tool messages — tool results become separate "tool" role messages.
+                // Text and Image blocks accumulate together into a single content-parts array
+                // so that mixed text+image input is sent as ONE user message with a content
+                // array (the format required by gpt-4o and other vision-capable models).
                 let mut msgs = Vec::new();
-                let mut text_parts = Vec::new();
+                // `content_parts` accumulates text/image parts for the current user message.
+                // It holds JSON Value objects: text parts as {"type":"text","text":"..."} and
+                // image parts as {"type":"image_url","image_url":{"url":"..."}}.
+                let mut content_parts: Vec<Value> = Vec::new();
+
+                /// Flush the accumulated content_parts as a single user message.
+                /// If there is exactly one text-only part, downgrade to a plain string for
+                /// API compatibility with models that expect `"content": "..."`.
+                fn flush_content_parts(
+                    parts: &mut Vec<Value>,
+                    role: &str,
+                    msgs: &mut Vec<Value>,
+                ) {
+                    if parts.is_empty() {
+                        return;
+                    }
+                    let content: Value = if parts.len() == 1 {
+                        // Check if it is a plain text-only part
+                        if parts[0].get("type").and_then(|t| t.as_str()) == Some("text") {
+                            if let Some(txt) = parts[0].get("text").and_then(|t| t.as_str()) {
+                                // Downgrade to plain string for backwards compat
+                                serde_json::json!(txt)
+                            } else {
+                                serde_json::json!(parts.clone())
+                            }
+                        } else {
+                            serde_json::json!(parts.clone())
+                        }
+                    } else {
+                        serde_json::json!(parts.clone())
+                    };
+                    msgs.push(serde_json::json!({ "role": role, "content": content }));
+                    parts.clear();
+                }
 
                 for block in blocks {
                     match block {
@@ -105,14 +141,8 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                             content,
                             ..
                         } => {
-                            // Flush accumulated text/image parts first
-                            if !text_parts.is_empty() {
-                                msgs.push(serde_json::json!({
-                                    "role": m.role,
-                                    "content": text_parts.join(""),
-                                }));
-                                text_parts.clear();
-                            }
+                            // Flush accumulated text/image parts first as a single user message
+                            flush_content_parts(&mut content_parts, &m.role, &mut msgs);
                             msgs.push(serde_json::json!({
                                 "role": "tool",
                                 "tool_call_id": tool_use_id,
@@ -120,28 +150,18 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                             }));
                         }
                         ContentBlock::Text { text } => {
-                            text_parts.push(text.clone());
+                            content_parts.push(serde_json::json!({
+                                "type": "text",
+                                "text": text,
+                            }));
                         }
                         // OpenAI vision: {"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}
                         ContentBlock::Image { mime, data_b64 } => {
-                            // Flush any pending text before inserting the image part
-                            if !text_parts.is_empty() {
-                                msgs.push(serde_json::json!({
-                                    "role": m.role,
-                                    "content": text_parts.join(""),
-                                }));
-                                text_parts.clear();
-                            }
-                            msgs.push(serde_json::json!({
-                                "role": m.role,
-                                "content": [
-                                    {
-                                        "type": "image_url",
-                                        "image_url": {
-                                            "url": format!("data:{mime};base64,{data_b64}")
-                                        }
-                                    }
-                                ]
+                            content_parts.push(serde_json::json!({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": format!("data:{mime};base64,{data_b64}")
+                                }
                             }));
                         }
                         ContentBlock::ToolUse { .. } => {
@@ -151,13 +171,8 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                     }
                 }
 
-                // Flush remaining text
-                if !text_parts.is_empty() {
-                    msgs.push(serde_json::json!({
-                        "role": m.role,
-                        "content": text_parts.join(""),
-                    }));
-                }
+                // Flush remaining parts as a single message
+                flush_content_parts(&mut content_parts, &m.role, &mut msgs);
 
                 if msgs.is_empty() {
                     // Fallback: empty content
@@ -255,12 +270,60 @@ mod tests {
     fn openai_image_block_produces_image_url_content() {
         let msg = Message::blocks("user", vec![image_block()]);
         let msgs = convert_message_to_openai(&msg);
+        // Image-only: single message, content is an array with one image_url part
+        assert_eq!(msgs.len(), 1, "image-only should produce exactly one message");
         let content = msgs[0]["content"].as_array().unwrap();
         assert_eq!(content[0]["type"], "image_url");
         assert_eq!(
             content[0]["image_url"]["url"],
             "data:image/png;base64,BASE64DATA"
         );
+    }
+
+    #[test]
+    fn openai_mixed_text_image_produces_one_message_with_parts_array() {
+        // A user message with both text and image blocks must produce EXACTLY ONE
+        // API message with a content array of two parts — not two consecutive user messages.
+        let msg = Message::blocks(
+            "user",
+            vec![
+                ContentBlock::Text {
+                    text: "describe this".to_string(),
+                },
+                image_block(),
+            ],
+        );
+        let msgs = convert_message_to_openai(&msg);
+        assert_eq!(
+            msgs.len(),
+            1,
+            "mixed text+image should produce exactly one user message, got {}",
+            msgs.len()
+        );
+        let content = msgs[0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2, "content array should have 2 parts");
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[0]["text"], "describe this");
+        assert_eq!(content[1]["type"], "image_url");
+        assert_eq!(
+            content[1]["image_url"]["url"],
+            "data:image/png;base64,BASE64DATA"
+        );
+    }
+
+    #[test]
+    fn openai_text_only_user_message_produces_plain_string_content() {
+        // Pure text should still downgrade to a plain string content (not an array)
+        // for backwards compatibility with models that do not support content arrays.
+        let msg = Message::blocks(
+            "user",
+            vec![ContentBlock::Text {
+                text: "hello".to_string(),
+            }],
+        );
+        let msgs = convert_message_to_openai(&msg);
+        assert_eq!(msgs.len(), 1);
+        assert_eq!(msgs[0]["content"], "hello", "single text should be plain string");
     }
 
     #[test]
