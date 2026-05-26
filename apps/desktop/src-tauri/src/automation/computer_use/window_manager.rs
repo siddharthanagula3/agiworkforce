@@ -648,11 +648,50 @@ impl WindowCoordinator {
 
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     fn get_active_window_impl() -> Option<ActiveWindow> {
-        // TODO: implement via X11/Wayland atom queries
-        // (_NET_ACTIVE_WINDOW + _NET_WM_PID -> /proc/<pid>/exe). Until then,
-        // return None so the permission gate falls through to the user-prompt
-        // path rather than incorrectly allowing actions on Linux.
-        None
+        // Use xdotool (X11) to query the active window PID and title.
+        // On Wayland or when xdotool is absent the command will fail and we
+        // return None — the permission gate then falls through to the
+        // user-prompt path, which is the safe default.
+        use std::process::Command;
+
+        // Step 1: get the PID of the active window's owning process.
+        let pid_output = Command::new("xdotool")
+            .arg("getactivewindow")
+            .arg("getwindowpid")
+            .output()
+            .ok()?;
+        if !pid_output.status.success() {
+            return None;
+        }
+        let pid_str = String::from_utf8_lossy(&pid_output.stdout);
+        let pid = pid_str.trim().parse::<u32>().ok()?;
+
+        // Step 2: resolve the process name from /proc/<pid>/comm (single line,
+        // no symlink deref required — unlike /proc/<pid>/exe).
+        let comm_path = format!("/proc/{}/comm", pid);
+        let comm_raw = std::fs::read_to_string(&comm_path).ok()?;
+        let app_name = comm_raw.trim().to_string();
+        if app_name.is_empty() {
+            return None;
+        }
+
+        // Step 3: get the window title (best-effort; empty on failure).
+        let title_output = Command::new("xdotool")
+            .arg("getactivewindow")
+            .arg("getwindowname")
+            .output()
+            .ok();
+        let window_title = title_output
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+
+        // bundle_id stays None on Linux — no reliable cross-DE bundle-id source.
+        Some(ActiveWindow {
+            app_name,
+            window_title,
+            bundle_id: None,
+        })
     }
 
     /// Activates a window by title.
