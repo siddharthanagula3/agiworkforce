@@ -3,7 +3,6 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 
@@ -24,8 +23,7 @@ async function handlePost(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { userId } = await getClerkAuthUser(request);
-  const db = getNeonDb();
+  await getClerkAuthUser(request);
 
   const body = await request.json();
   const parsed = LogMessageSchema.safeParse(body);
@@ -33,15 +31,8 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
-  const d = parsed.data;
-
-  await db.execute(
-    `insert into vibe_agent_messages
-     (session_id, user_id, agent_id, role, content, metadata)
-     values ($1, $2, $3, $4, $5, $6)`,
-    [d.sessionId, userId, d.agentId ?? null, d.role, d.content, JSON.stringify(d.metadata ?? {})],
-  );
-
+  // Agent message persistence table dropped in migration 20260525200001.
+  // This endpoint is retained as a no-op stub for backward compatibility.
   return NextResponse.json({ ok: true });
 }
 

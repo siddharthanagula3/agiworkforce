@@ -7,8 +7,6 @@
  * Previously duplicated across:
  * - src/shared/utils/error-handling.ts
  * - src/features/chat/utils/retry-handler.ts
- * - src/features/vibe/sdk/retry.ts
- * - src/features/vibe/sdk/utils.ts
  * - src/shared/lib/api-enhanced.ts
  */
 
