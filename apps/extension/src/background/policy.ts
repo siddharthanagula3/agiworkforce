@@ -228,6 +228,40 @@ export function validateBridgeUrl(raw: string): string | null {
   }
 }
 
+// ─── Cloud API URL validation ───────────────────────────────────────────────
+
+/**
+ * Default cloud API endpoint for the direct-cloud fallback path.
+ * Used when the desktop bridge (localhost:8787) is unavailable and the user
+ * has set an API key in chrome.storage.session.
+ */
+export const DEFAULT_AGI_CLOUD_API_URL = 'https://agiworkforce.com/api/llm/v1/chat/completions';
+
+/**
+ * Validate a user- or storage-supplied cloud API URL. Returns the normalized
+ * URL (trailing slash stripped) or `null` if the URL fails validation.
+ *
+ * Security contract (opposite of validateBridgeUrl):
+ *   - MUST be HTTPS (not HTTP).
+ *   - MUST NOT be a loopback/local host — that is the bridge's domain.
+ *   - Standard URL-parseable.
+ *
+ * The user chooses their own cloud endpoint so we cannot use an exact allowlist
+ * (unlike validateGatewayUrl which guards Supabase JWTs). We only enforce the
+ * transport/locality constraints; the API key scope is the user's responsibility.
+ */
+export function validateCloudApiUrl(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') return null;
+    if (ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) return null; // reject local hostnames
+    return raw.replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
 // ─── Shortcut action validation ─────────────────────────────────────────────
 
 /**

@@ -29,7 +29,9 @@ import { setupVoiceInput } from './features/side-panel/voice';
 import {
   ALLOWED_BRIDGE_HOSTS,
   DEFAULT_AGI_BRIDGE_URL,
+  DEFAULT_AGI_CLOUD_API_URL,
   validateBridgeUrl,
+  validateCloudApiUrl,
 } from './background/policy';
 import {
   Terminal,
@@ -1417,6 +1419,12 @@ function injectStyles(): void {
     }
     #sp-status-pill.connected .sp-status-dot { background: var(--agi-ext-success); }
     #sp-status-pill.disconnected .sp-status-dot { background: var(--agi-ext-danger); }
+    #sp-status-pill.cloud {
+      background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+      color: var(--agi-ext-accent);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent);
+    }
+    #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
 
     /* ── Tab bar ── */
     #sp-tab-bar {
@@ -2370,15 +2378,23 @@ function updateConnectionStatus(): void {
   const pill = document.getElementById('sp-status-pill');
   if (!pill) return;
   if (_ctx.isConnected) {
+    // Bridge is online (native or HTTP bridge connected).
     pill.className = 'connected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Connected');
+    pill.replaceChildren(dot, 'Bridge');
+  } else if (_ctx.currentApiKey) {
+    // Bridge offline but API key is set — cloud fallback is active.
+    pill.className = 'cloud';
+    const dot = document.createElement('span');
+    dot.className = 'sp-status-dot';
+    pill.replaceChildren(dot, 'Cloud');
   } else {
+    // No bridge, no API key — fully offline.
     pill.className = 'disconnected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Not Connected');
+    pill.replaceChildren(dot, 'Offline');
   }
 }
 
@@ -3157,6 +3173,25 @@ function buildUI(): void {
   settingsBar.appendChild(bridgeUrlLabel);
   settingsBar.appendChild(bridgeUrlRow);
 
+  // Cloud API URL — used for direct cloud fallback when bridge is offline.
+  const cloudUrlLabel = el('div', { class: 'sp-settings-label' }, 'Cloud API URL');
+  const cloudUrlRow = el('div', { class: 'sp-settings-row' });
+
+  const cloudUrlInput = el('input', {
+    class: 'sp-settings-input',
+    id: 'sp-cloud-url-input',
+    type: 'text',
+    placeholder: DEFAULT_AGI_CLOUD_API_URL,
+    spellcheck: 'false',
+  }) as HTMLInputElement;
+
+  const cloudUrlSaveBtn = el('button', { class: 'sp-settings-btn' }, 'Apply');
+
+  cloudUrlRow.appendChild(cloudUrlInput);
+  cloudUrlRow.appendChild(cloudUrlSaveBtn);
+  settingsBar.appendChild(cloudUrlLabel);
+  settingsBar.appendChild(cloudUrlRow);
+
   document.body.appendChild(settingsBar);
 
   const consolePanel = el('div', { id: 'sp-console-panel' });
@@ -3233,6 +3268,49 @@ function buildUI(): void {
     if (e.key === 'Enter') saveBridgeUrl();
   });
 
+  // Initialize cloud URL input from storage.
+  chrome.storage.local.get('agi_cloud_api_url', (result) => {
+    if (chrome.runtime.lastError) return;
+    const stored = result['agi_cloud_api_url'] as string | undefined;
+    if (stored && cloudUrlInput instanceof HTMLInputElement) {
+      cloudUrlInput.value = stored;
+    }
+  });
+
+  // Save cloud API URL — HTTPS only, non-local.
+  const saveCloudUrl = (): void => {
+    const raw = (cloudUrlInput as HTMLInputElement).value.trim();
+    if (!raw) {
+      chrome.storage.local.remove('agi_cloud_api_url').catch(() => {});
+    } else {
+      const validated = validateCloudApiUrl(raw);
+      if (!validated) {
+        const bar = document.getElementById('sp-settings-bar');
+        if (bar) {
+          const existing = bar.querySelector('.sp-cloud-error');
+          if (existing) existing.remove();
+          const errEl = document.createElement('div');
+          errEl.className = 'sp-cloud-error';
+          errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
+          errEl.textContent = 'Only HTTPS URLs (non-local) are allowed';
+          bar.appendChild(errEl);
+          setTimeout(() => errEl.remove(), 8000);
+        }
+        return;
+      }
+      chrome.storage.local
+        .set({ agi_cloud_api_url: validated })
+        .catch((err: unknown) => console.warn('[SidePanel] Failed to save cloud URL:', err));
+    }
+    const bar = document.getElementById('sp-settings-bar');
+    if (bar) bar.classList.remove('open');
+  };
+
+  cloudUrlSaveBtn.addEventListener('click', saveCloudUrl);
+  cloudUrlInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') saveCloudUrl();
+  });
+
   const authBar = el('div', { id: 'sp-auth-bar' });
 
   const authInput = el('input', {
@@ -3248,7 +3326,7 @@ function buildUI(): void {
   const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
   const statusDot0 = document.createElement('span');
   statusDot0.className = 'sp-status-dot';
-  statusPill.replaceChildren(statusDot0, 'Not Connected');
+  statusPill.replaceChildren(statusDot0, 'Offline');
 
   authBar.appendChild(authInput);
   authBar.appendChild(authSaveBtn);
