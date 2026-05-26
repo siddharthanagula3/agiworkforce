@@ -173,7 +173,20 @@ message -- revise and call `update_plan` again.\n\n",
             .await;
             expanded
         };
-        self.messages.push(Message::text("user", &effective_input));
+
+        // If there are pending image blocks (from `--file` image attachments),
+        // build a multipart user message that includes them alongside the text.
+        if !self.pending_image_blocks.is_empty() {
+            let mut blocks: Vec<ContentBlock> = std::mem::take(&mut self.pending_image_blocks);
+            if !effective_input.is_empty() {
+                blocks.push(ContentBlock::Text {
+                    text: effective_input.clone(),
+                });
+            }
+            self.messages.push(Message::blocks("user", blocks));
+        } else {
+            self.messages.push(Message::text("user", &effective_input));
+        }
 
         self.save_checkpoint();
 

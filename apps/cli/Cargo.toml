@@ -43,6 +43,7 @@ agiworkforce-app-server = { path = "../../crates/agiworkforce-app-server" }
 agiworkforce-plugin-runtime = { path = "../../crates/agiworkforce-plugin-runtime" }
 agiworkforce-apply-patch = { path = "../../crates/agiworkforce-apply-patch" }
 agiworkforce-task-runtime = { path = "../../crates/agiworkforce-task-runtime" }
+agiworkforce-utils-image = { path = "../../crates/agiworkforce-utils-image" }
 async-trait = "0.1.89"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"

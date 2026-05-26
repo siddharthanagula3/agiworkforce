@@ -16,6 +16,15 @@ pub(crate) fn convert_message_to_anthropic(m: &Message) -> Value {
                     ContentBlock::Text { text } => serde_json::json!({
                         "type": "text", "text": text
                     }),
+                    // Anthropic vision: {"type":"image","source":{"type":"base64","media_type":"image/png","data":"..."}}
+                    ContentBlock::Image { mime, data_b64 } => serde_json::json!({
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": mime,
+                            "data": data_b64
+                        }
+                    }),
                     ContentBlock::ToolUse { id, name, input } => serde_json::json!({
                         "type": "tool_use", "id": id, "name": name, "input": input
                     }),
@@ -52,6 +61,10 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                     match block {
                         ContentBlock::Text { text } => {
                             text_parts.push(text.clone());
+                        }
+                        ContentBlock::Image { .. } => {
+                            // Image blocks are not expected in assistant-role messages;
+                            // skip to avoid emitting malformed API payloads.
                         }
                         ContentBlock::ToolUse { id, name, input } => {
                             tc_array.push(serde_json::json!({
@@ -92,7 +105,7 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                             content,
                             ..
                         } => {
-                            // Flush accumulated text first
+                            // Flush accumulated text/image parts first
                             if !text_parts.is_empty() {
                                 msgs.push(serde_json::json!({
                                     "role": m.role,
@@ -108,6 +121,28 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                         }
                         ContentBlock::Text { text } => {
                             text_parts.push(text.clone());
+                        }
+                        // OpenAI vision: {"type":"image_url","image_url":{"url":"data:image/png;base64,..."}}
+                        ContentBlock::Image { mime, data_b64 } => {
+                            // Flush any pending text before inserting the image part
+                            if !text_parts.is_empty() {
+                                msgs.push(serde_json::json!({
+                                    "role": m.role,
+                                    "content": text_parts.join(""),
+                                }));
+                                text_parts.clear();
+                            }
+                            msgs.push(serde_json::json!({
+                                "role": m.role,
+                                "content": [
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": format!("data:{mime};base64,{data_b64}")
+                                        }
+                                    }
+                                ]
+                            }));
                         }
                         ContentBlock::ToolUse { .. } => {
                             // ToolUse blocks are not expected in user/tool-role messages;
@@ -155,6 +190,13 @@ pub(crate) fn convert_message_to_gemini(m: &Message) -> Value {
                 .iter()
                 .map(|b| match b {
                     ContentBlock::Text { text } => serde_json::json!({ "text": text }),
+                    // Gemini vision: {"inlineData":{"mimeType":"image/png","data":"..."}}
+                    ContentBlock::Image { mime, data_b64 } => serde_json::json!({
+                        "inlineData": {
+                            "mimeType": mime,
+                            "data": data_b64
+                        }
+                    }),
                     ContentBlock::ToolUse { name, input, .. } => {
                         serde_json::json!({
                             "functionCall": { "name": name, "args": input }
@@ -174,5 +216,59 @@ pub(crate) fn convert_message_to_gemini(m: &Message) -> Value {
                 .collect();
             serde_json::json!({ "role": role, "parts": parts })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn image_block() -> ContentBlock {
+        ContentBlock::Image {
+            mime: "image/png".to_string(),
+            data_b64: "BASE64DATA".to_string(),
+        }
+    }
+
+    #[test]
+    fn anthropic_image_block_uses_base64_source() {
+        let msg = Message::blocks(
+            "user",
+            vec![
+                image_block(),
+                ContentBlock::Text {
+                    text: "describe this".to_string(),
+                },
+            ],
+        );
+        let v = convert_message_to_anthropic(&msg);
+        let content = v["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "image");
+        assert_eq!(content[0]["source"]["type"], "base64");
+        assert_eq!(content[0]["source"]["media_type"], "image/png");
+        assert_eq!(content[0]["source"]["data"], "BASE64DATA");
+        assert_eq!(content[1]["type"], "text");
+        assert_eq!(content[1]["text"], "describe this");
+    }
+
+    #[test]
+    fn openai_image_block_produces_image_url_content() {
+        let msg = Message::blocks("user", vec![image_block()]);
+        let msgs = convert_message_to_openai(&msg);
+        let content = msgs[0]["content"].as_array().unwrap();
+        assert_eq!(content[0]["type"], "image_url");
+        assert_eq!(
+            content[0]["image_url"]["url"],
+            "data:image/png;base64,BASE64DATA"
+        );
+    }
+
+    #[test]
+    fn gemini_image_block_uses_inline_data() {
+        let msg = Message::blocks("user", vec![image_block()]);
+        let v = convert_message_to_gemini(&msg);
+        let parts = v["parts"].as_array().unwrap();
+        assert_eq!(parts[0]["inlineData"]["mimeType"], "image/png");
+        assert_eq!(parts[0]["inlineData"]["data"], "BASE64DATA");
     }
 }

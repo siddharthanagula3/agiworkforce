@@ -147,12 +147,23 @@ pub fn mistral_provider() -> Provider {
     }
 }
 
-/// A content block within a message (supports text and tool interactions).
+/// A content block within a message (supports text, images, and tool interactions).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ContentBlock {
     #[serde(rename = "text")]
     Text { text: String },
+    /// Base64-encoded image with MIME type (e.g. "image/png"). Created by the
+    /// `--file / -f` flag when an image extension is detected.  Provider
+    /// serializers translate this into the correct provider-specific format.
+    #[serde(rename = "image")]
+    Image {
+        /// MIME type, e.g. "image/png", "image/jpeg", "image/webp", "image/gif".
+        mime: String,
+        /// Raw base64-encoded bytes (no `data:` prefix — that is added by the
+        /// serializer so each provider receives the format it expects).
+        data_b64: String,
+    },
     #[serde(rename = "tool_use")]
     ToolUse {
         id: String,
@@ -274,7 +285,9 @@ impl Message {
                 .iter()
                 .filter_map(|b| match b {
                     ContentBlock::Text { text } => Some(text.as_str()),
-                    _ => None,
+                    ContentBlock::Image { .. }
+                    | ContentBlock::ToolUse { .. }
+                    | ContentBlock::ToolResult { .. } => None,
                 })
                 .collect::<Vec<_>>()
                 .join(""),

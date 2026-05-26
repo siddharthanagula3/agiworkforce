@@ -1975,17 +1975,17 @@ pub async fn run_main() -> Result<()> {
         }
     };
 
-    // Read file contents for -f flag
-    let file_context = read_file_contexts(&cli.files)?;
+    // Read file contents for -f flag — text files and images are handled separately
+    let file_context_result = read_file_contexts(&cli.files)?;
 
     // Gather system context
     let sys_context = context::gather_system_context();
 
-    // Build the final prompt from components
+    // Build the final prompt from components (text files only; images attach as blocks)
     let final_prompt = build_final_prompt(
         cli.prompt.as_deref(),
         stdin_content.as_deref(),
-        &file_context,
+        &file_context_result.text,
     );
 
     // Build effective system prompt (base + append)
@@ -2022,8 +2022,20 @@ pub async fn run_main() -> Result<()> {
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
     let effective_max_turns = cli.max_turns.or(effort_max_turns);
 
-    // Determine mode: one-shot if we have a prompt (from arg or stdin) or --print, REPL otherwise
-    if let Some(ref prompt) = final_prompt {
+    // Determine mode: one-shot if we have a prompt (from arg or stdin), image
+    // attachments, or --print. REPL otherwise.
+    //
+    // Images alone (with no text prompt) are valid: the user may want the model
+    // to describe the image without an explicit question, so we treat the empty
+    // string as the user turn and let the model respond to the image content.
+    let effective_prompt = final_prompt.clone().or_else(|| {
+        if !file_context_result.images.is_empty() {
+            Some(String::new())
+        } else {
+            None
+        }
+    });
+    if let Some(ref prompt) = effective_prompt {
         return run_oneshot(
             &app_config,
             &model,
@@ -2040,6 +2052,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            file_context_result.images,
         )
         .await;
     }
@@ -2208,24 +2221,97 @@ pub async fn run_main() -> Result<()> {
     }
 }
 
-/// Read file contents for the -f flag, returning formatted file context.
-pub fn read_file_contexts(files: &[String]) -> Result<String> {
+/// An image file attached via the `--file / -f` flag, ready to be included in a
+/// multipart message as a `ContentBlock::Image`.
+pub struct ImageAttachment {
+    /// Original file path (for display/error messages).
+    pub path: String,
+    /// MIME type (e.g. "image/png").
+    pub mime: String,
+    /// Raw base64-encoded image bytes (no `data:` prefix).
+    pub data_b64: String,
+}
+
+/// Return value from [`read_file_contexts`]: text file context and detected image
+/// attachments are separated so callers can handle them differently.
+pub struct FileContextResult {
+    /// Formatted text from non-image files (XML-wrapped, as before).
+    pub text: String,
+    /// Image files encoded and ready for multipart message injection.
+    pub images: Vec<ImageAttachment>,
+}
+
+/// Image file extensions recognised for vision attachment.
+fn is_image_extension(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    matches!(
+        std::path::Path::new(&lower)
+            .extension()
+            .and_then(|e| e.to_str()),
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" | "tiff" | "tif")
+    )
+}
+
+/// Read file contents for the -f flag, returning formatted text context and any
+/// image attachments separately.
+pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
     let mut context = String::new();
+    let mut images = Vec::new();
+
     for path in files {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => {
-                context.push_str(&format!(
-                    "<file path=\"{}\">\n{}\n</file>\n\n",
-                    path, contents
-                ));
+        if is_image_extension(path) {
+            // Read raw bytes and encode for vision
+            match std::fs::read(path) {
+                Ok(bytes) => {
+                    use agiworkforce_utils_image::{PromptImageMode, load_for_prompt_bytes};
+                    match load_for_prompt_bytes(
+                        std::path::Path::new(path),
+                        bytes,
+                        PromptImageMode::ResizeToFit,
+                    ) {
+                        Ok(encoded) => {
+                            use base64::Engine as _;
+                            let data_b64 = base64::engine::general_purpose::STANDARD
+                                .encode(&encoded.bytes);
+                            images.push(ImageAttachment {
+                                path: path.clone(),
+                                mime: encoded.mime,
+                                data_b64,
+                            });
+                        }
+                        Err(e) => {
+                            output::print_error(&format!(
+                                "Failed to process image '{}': {}",
+                                path, e
+                            ));
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(e) => {
+                    output::print_error(&format!("Failed to read image '{}': {}", path, e));
+                    std::process::exit(1);
+                }
             }
-            Err(e) => {
-                output::print_error(&format!("Failed to read file '{}': {}", path, e));
-                std::process::exit(1);
+        } else {
+            match std::fs::read_to_string(path) {
+                Ok(contents) => {
+                    context.push_str(&format!(
+                        "<file path=\"{}\">\n{}\n</file>\n\n",
+                        path, contents
+                    ));
+                }
+                Err(e) => {
+                    output::print_error(&format!("Failed to read file '{}': {}", path, e));
+                    std::process::exit(1);
+                }
             }
-        }
-    }
-    Ok(context)
+        } // end else (non-image file)
+    } // end for path in files
+    Ok(FileContextResult {
+        text: context,
+        images,
+    })
 }
 
 /// Combine positional prompt, stdin content, and file context into the final prompt.
@@ -2338,6 +2424,7 @@ pub async fn run_oneshot(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
+    image_attachments: Vec<ImageAttachment>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2359,6 +2446,20 @@ pub async fn run_oneshot(
     }
     session.enable_managed_session()?;
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
+
+    // If the user attached image files via --file, queue them as pending image
+    // blocks on the session.  The next `session.send()` call will prepend them
+    // to the user message so text + images arrive in a single multipart turn.
+    if !image_attachments.is_empty() {
+        use models::ContentBlock;
+        session.pending_image_blocks = image_attachments
+            .into_iter()
+            .map(|img| ContentBlock::Image {
+                mime: img.mime,
+                data_b64: img.data_b64,
+            })
+            .collect();
+    }
 
     if output_mode == OneShotOutputMode::JsonLine {
         // Stream-JSON: NDJSON events on stdout, one per line. The full
