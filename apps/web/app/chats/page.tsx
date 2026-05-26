@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@clerk/nextjs';
 import {
   Search,
   MessageSquare,
@@ -16,7 +15,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import { useChatStore } from '@features/chat/stores/chat-store';
+import { useChatStore } from '@agiworkforce/unified-chat';
 import { useProjectStore } from '@features/projects/stores/project-store';
 import { ConversationListItem } from '@features/chat/components/Sidebar/ConversationListItem';
 import {
@@ -57,14 +56,12 @@ const GROUP_ORDER = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older
 
 export default function ChatsIndexPage() {
   const router = useRouter();
-  const { userId } = useAuth();
 
-  const sessions = useChatStore((s) => s.sessions);
-  const loadSessionsFromDb = useChatStore((s) => s.loadSessionsFromDb);
-  const deleteSession = useChatStore((s) => s.deleteSession);
-  const archiveSession = useChatStore((s) => s.archiveSession);
-  const moveToProject = useChatStore((s) => s.moveToProject);
-  const setActiveSession = useChatStore((s) => s.setActiveSession);
+  const conversations = useChatStore((s) => s.conversations);
+  const removeConversation = useChatStore((s) => s.removeConversation);
+  const archiveConversation = useChatStore((s) => s.archiveConversation);
+  const updateConversation = useChatStore((s) => s.updateConversation);
+  const setActiveConversation = useChatStore((s) => s.setActiveConversation);
 
   const projects = useProjectStore((s) => s.projects);
 
@@ -74,13 +71,6 @@ export default function ChatsIndexPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-
-  // Load sessions on mount
-  useEffect(() => {
-    if (userId) {
-      void loadSessionsFromDb(userId);
-    }
-  }, [userId, loadSessionsFromDb]);
 
   // Exit bulk mode on Escape
   useEffect(() => {
@@ -110,18 +100,19 @@ export default function ChatsIndexPage() {
 
   // Filter: non-archived, matching search, optionally by folder
   const filtered = useMemo(() => {
-    let list = sessions.filter((s) => !s.isArchived);
+    let list = conversations.filter((c) => !c.archived);
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
-        (s) =>
-          s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
+        (c) =>
+          c.title.toLowerCase().includes(q) ||
+          (c.lastMessage && c.lastMessage.toLowerCase().includes(q)),
       );
     }
 
     return list;
-  }, [sessions, searchQuery]);
+  }, [conversations, searchQuery]);
 
   // Group by date
   const grouped = useMemo(() => {
@@ -129,13 +120,12 @@ export default function ChatsIndexPage() {
     for (const key of GROUP_ORDER) {
       groups.set(key, []);
     }
-    for (const session of filtered) {
-      const raw = session.updatedAt;
-      const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
+    for (const conv of filtered) {
+      const d = conv.updatedAt ? new Date(conv.updatedAt) : new Date();
       const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
       const group = getTimeGroup(safeDate);
       const arr = groups.get(group);
-      if (arr) arr.push(session);
+      if (arr) arr.push(conv);
     }
     for (const [key, value] of groups) {
       if (value.length === 0) groups.delete(key);
@@ -147,26 +137,26 @@ export default function ChatsIndexPage() {
     if (selectedIds.size === filtered.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filtered.map((s) => s.id)));
+      setSelectedIds(new Set(filtered.map((c) => c.id)));
     }
   }, [selectedIds.size, filtered]);
 
   const handleBulkDelete = useCallback(() => {
-    for (const id of selectedIds) deleteSession(id);
+    for (const id of selectedIds) removeConversation(id);
     exitBulkMode();
-  }, [selectedIds, deleteSession, exitBulkMode]);
+  }, [selectedIds, removeConversation, exitBulkMode]);
 
   const handleBulkArchive = useCallback(() => {
-    for (const id of selectedIds) archiveSession(id);
+    for (const id of selectedIds) archiveConversation(id);
     exitBulkMode();
-  }, [selectedIds, archiveSession, exitBulkMode]);
+  }, [selectedIds, archiveConversation, exitBulkMode]);
 
   const handleBulkMoveToProject = useCallback(
     (projectId: string) => {
-      for (const id of selectedIds) moveToProject(id, projectId);
+      for (const id of selectedIds) updateConversation(id, { projectId });
       exitBulkMode();
     },
-    [selectedIds, moveToProject, exitBulkMode],
+    [selectedIds, updateConversation, exitBulkMode],
   );
 
   const handleSessionClick = useCallback(
@@ -175,10 +165,10 @@ export default function ChatsIndexPage() {
         toggleCheck(id);
         return;
       }
-      setActiveSession(id);
+      setActiveConversation(id);
       router.push(`/chat/${id}`);
     },
-    [bulkMode, toggleCheck, setActiveSession, router],
+    [bulkMode, toggleCheck, setActiveConversation, router],
   );
 
   return (
@@ -353,34 +343,29 @@ export default function ChatsIndexPage() {
                     {group}
                   </h2>
                   <div className="space-y-1">
-                    {groupSessions.map((session) => {
-                      const updatedAt =
-                        session.updatedAt instanceof Date
-                          ? session.updatedAt
-                          : session.updatedAt
-                            ? new Date(session.updatedAt)
-                            : new Date();
-                      const safeDate = isNaN(updatedAt.getTime()) ? new Date(0) : updatedAt;
-                      const isChecked = selectedIds.has(session.id);
-                      const projectName = session.projectId
-                        ? projectMap.get(session.projectId)
+                    {groupSessions.map((conv) => {
+                      const d = conv.updatedAt ? new Date(conv.updatedAt) : new Date();
+                      const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
+                      const isChecked = selectedIds.has(conv.id);
+                      const projectName = conv.projectId
+                        ? projectMap.get(conv.projectId)
                         : undefined;
 
                       // Bulk mode: checkbox row only
                       if (bulkMode) {
                         return (
                           <div
-                            key={session.id}
-                            onClick={() => toggleCheck(session.id)}
+                            key={conv.id}
+                            onClick={() => toggleCheck(conv.id)}
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter' || e.key === ' ') {
                                 e.preventDefault();
-                                toggleCheck(session.id);
+                                toggleCheck(conv.id);
                               }
                             }}
-                            aria-label={session.title}
+                            aria-label={conv.title}
                             className={cn(
                               'flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 transition-colors',
                               isChecked ? 'bg-primary/10' : 'hover:bg-accent',
@@ -397,7 +382,7 @@ export default function ChatsIndexPage() {
                               )}
                             </span>
                             <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                              {session.title || 'Untitled'}
+                              {conv.title || 'Untitled'}
                             </span>
                             {projectName && (
                               <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-muted text-muted-foreground">
@@ -411,18 +396,20 @@ export default function ChatsIndexPage() {
                       // Normal mode: use ConversationListItem for full hover menu,
                       // plus project badge rendered inline after it
                       return (
-                        <div key={session.id} className="relative flex items-center">
+                        <div key={conv.id} className="relative flex items-center">
                           <div className="min-w-0 flex-1">
                             <ConversationListItem
-                              id={session.id}
-                              title={session.title || 'Untitled'}
+                              id={conv.id}
+                              title={conv.title || 'Untitled'}
                               updatedAt={safeDate}
-                              totalMessages={session.messageCount ?? 0}
+                              totalMessages={conv.messageCount ?? 0}
                               isActive={false}
-                              onClick={() => handleSessionClick(session.id)}
-                              onDelete={() => deleteSession(session.id)}
-                              onArchive={() => archiveSession(session.id)}
-                              onMoveToProject={(projectId) => moveToProject(session.id, projectId)}
+                              onClick={() => handleSessionClick(conv.id)}
+                              onDelete={() => removeConversation(conv.id)}
+                              onArchive={() => archiveConversation(conv.id)}
+                              onMoveToProject={(projectId) =>
+                                updateConversation(conv.id, { projectId })
+                              }
                             />
                           </div>
                           {projectName && (

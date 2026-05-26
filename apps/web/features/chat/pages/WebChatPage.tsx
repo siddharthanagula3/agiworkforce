@@ -36,8 +36,9 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
-import { useChatStore as useFeatureChatStore } from '../stores/chat-store';
-import type { ChatMessage } from '../stores/chat-store';
+import { useChatStore as useUnifiedChatStore } from '@agiworkforce/unified-chat';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { WebChatMessageMetadata } from '../types/message-metadata';
 import { cn } from '@shared/lib/utils';
 import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
 
@@ -65,7 +66,7 @@ type PendingByokHandoff = {
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
   const thinkingSteps = thinkingContent ? [thinkingContent] : m.metadata?.thinkingSteps;
-  const metadata =
+  const metadata: Record<string, unknown> | undefined =
     m.metadata || m.model
       ? {
           ...m.metadata,
@@ -82,10 +83,10 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
 
   return {
     id: m.id,
-    sessionId: conversationId,
+    conversationId,
     role: m.role === 'system' ? 'assistant' : m.role,
     content: m.content,
-    createdAt: new Date(m.createdAt),
+    createdAt: m.createdAt,
     isStreaming: m.isStreaming,
     metadata,
   };
@@ -589,12 +590,12 @@ export default function WebChatPage() {
     [updateConversation],
   );
 
-  const moveToProject = useFeatureChatStore((s) => s.moveToProject);
+  const updateUnifiedConversation = useUnifiedChatStore((s) => s.updateConversation);
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => {
-      moveToProject(sessionId, projectId);
+      updateUnifiedConversation(sessionId, { projectId });
     },
-    [moveToProject],
+    [updateUnifiedConversation],
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
@@ -650,13 +651,14 @@ export default function WebChatPage() {
   const isEmptyChat = chatMessages.length === 0 && !isLoading;
 
   // Count distinct research sources across all messages for the toggle badge.
-  // chatMessages use the chat-store shape where searchResults is a flat array.
+  // chatMessages use the unified-chat shape where searchResults is a flat array.
   const researchSourceCount = useMemo(() => {
     let count = 0;
     for (const m of chatMessages) {
-      const sr = m.metadata?.searchResults;
+      const meta = m.metadata as WebChatMessageMetadata | undefined;
+      const sr = meta?.searchResults;
       if (Array.isArray(sr)) {
-        count += sr.filter((r) => r.url).length;
+        count += (sr as Array<{ url?: string }>).filter((r) => r.url).length;
       }
     }
     return count;

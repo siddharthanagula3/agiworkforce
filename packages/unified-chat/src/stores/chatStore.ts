@@ -72,6 +72,11 @@ interface ChatState {
   setConversations: (convs: Conversation[]) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updates: Partial<ChatMessage>) => void;
+  updateMessageMetadata: (
+    conversationId: string,
+    messageId: string,
+    patch: Record<string, unknown>,
+  ) => void;
   appendToStreamingContent: (content: string) => void;
   appendToStreamingReasoning: (reasoning: string) => void;
   startStreaming: () => void;
@@ -141,6 +146,18 @@ export const useChatStore = create<ChatState>()(
             const idx = msgs.findIndex((m) => m.id === messageId);
             if (idx !== -1) {
               Object.assign(msgs[idx]!, updates);
+            }
+          }
+        }),
+
+      updateMessageMetadata: (conversationId, messageId, patch) =>
+        set((state) => {
+          const msgs = state.messagesByConversation[conversationId];
+          if (msgs) {
+            const idx = msgs.findIndex((m) => m.id === messageId);
+            if (idx !== -1) {
+              const existing = msgs[idx]!.metadata ?? {};
+              msgs[idx]!.metadata = { ...existing, ...patch };
             }
           }
         }),

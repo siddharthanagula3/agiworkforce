@@ -16,7 +16,9 @@
 
 import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ChatMessage } from '../../stores/chat-store';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { WebChatMessageMetadata } from '../../types/message-metadata';
+import type { PaywallFeature, RequiredTier } from '../InlinePaywallCard';
 import { MessageBubble } from './MessageBubble';
 import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
@@ -182,6 +184,11 @@ interface MessageRowProps {
 // Per-message row component. Stable callbacks bound via useCallback below so
 // React.memo on MessageBubble actually short-circuits when sibling messages
 // stream or update.
+/** Casts the generic metadata bag to the typed web-surface shape. */
+function getMeta(msg: ChatMessage | undefined): WebChatMessageMetadata | undefined {
+  return msg?.metadata as WebChatMessageMetadata | undefined;
+}
+
 const MessageRow = ({
   message,
   onRegenerate,
@@ -189,7 +196,8 @@ const MessageRow = ({
   onPaywallUpgrade,
   onPaywallDismiss,
 }: MessageRowProps) => {
-  const paywall = message.metadata?.paywall;
+  const meta = getMeta(message);
+  const paywall = meta?.paywall;
 
   const handleRegenerate = useCallback(
     () => onRegenerate?.(message.id),
@@ -208,9 +216,9 @@ const MessageRow = ({
   if (paywall) {
     return (
       <InlinePaywallCard
-        feature={paywall.feature}
+        feature={paywall.feature as PaywallFeature}
         currentTier="free"
-        requiredTier={paywall.requiredTier}
+        requiredTier={paywall.requiredTier as RequiredTier}
         reason={paywall.reason}
         onUpgrade={handlePaywallUpgrade}
         onDismiss={handlePaywallDismiss}
@@ -218,17 +226,19 @@ const MessageRow = ({
     );
   }
 
+  const displayRole = message.role === 'system' ? 'assistant' : message.role;
+
   return (
     <MessageBubble
       message={{
         id: message.id,
-        role: message.role,
+        role: displayRole,
         content: message.content,
-        timestamp: message.createdAt,
+        timestamp: message.createdAt ? new Date(message.createdAt) : new Date(),
         isStreaming: message.isStreaming,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
-      onRegenerate={onRegenerate && message.role === 'assistant' ? handleRegenerate : undefined}
+      onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
       onDelete={onDelete ? handleDelete : undefined}
     />
   );
@@ -270,10 +280,10 @@ const MessageGroupRow = memo(
       prevLast?.content === nextLast?.content &&
       prevLast?.isStreaming === nextLast?.isStreaming &&
       // Re-render when thinking content or its streaming state changes
-      prevLast?.metadata?.thinkingContent === nextLast?.metadata?.thinkingContent &&
-      prevLast?.metadata?.isThinkingStreaming === nextLast?.metadata?.isThinkingStreaming &&
+      getMeta(prevLast)?.thinkingContent === getMeta(nextLast)?.thinkingContent &&
+      getMeta(prevLast)?.isThinkingStreaming === getMeta(nextLast)?.isThinkingStreaming &&
       // Re-render when paywall state changes
-      prevLast?.metadata?.paywall === nextLast?.metadata?.paywall &&
+      getMeta(prevLast)?.paywall === getMeta(nextLast)?.paywall &&
       prev.onRegenerate === next.onRegenerate &&
       prev.onDelete === next.onDelete &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
@@ -406,15 +416,19 @@ const ChatMessageListComponent = ({
         <div className="space-y-0.5 pb-2">
           {groups.map((group, groupIdx) => {
             const firstMsg = group.messages[0];
-            const groupDateKey = firstMsg ? toDateKey(firstMsg.createdAt) : '';
+            const firstMsgDate = firstMsg?.createdAt ? new Date(firstMsg.createdAt) : undefined;
+            const groupDateKey = firstMsgDate ? toDateKey(firstMsgDate) : '';
             const prevGroup = groupIdx > 0 ? groups[groupIdx - 1] : null;
             const prevFirstMsg = prevGroup?.messages[0];
-            const prevDateKey = prevFirstMsg ? toDateKey(prevFirstMsg.createdAt) : '';
-            const showDivider = firstMsg && groupDateKey !== prevDateKey;
+            const prevFirstMsgDate = prevFirstMsg?.createdAt
+              ? new Date(prevFirstMsg.createdAt)
+              : undefined;
+            const prevDateKey = prevFirstMsgDate ? toDateKey(prevFirstMsgDate) : '';
+            const showDivider = firstMsgDate && groupDateKey !== prevDateKey;
 
             return (
               <React.Fragment key={group.firstId}>
-                {showDivider && <DateDivider label={formatDateDivider(firstMsg.createdAt)} />}
+                {showDivider && <DateDivider label={formatDateDivider(firstMsgDate)} />}
                 <MessageGroupRow
                   group={group}
                   isLastGroup={groupIdx === groups.length - 1}
@@ -498,8 +512,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     lastPrev?.content === lastNext?.content &&
     lastPrev?.isStreaming === lastNext?.isStreaming &&
     // Detect thinking content changes
-    lastPrev?.metadata?.thinkingContent === lastNext?.metadata?.thinkingContent &&
-    lastPrev?.metadata?.isThinkingStreaming === lastNext?.metadata?.isThinkingStreaming
+    getMeta(lastPrev)?.thinkingContent === getMeta(lastNext)?.thinkingContent &&
+    getMeta(lastPrev)?.isThinkingStreaming === getMeta(lastNext)?.isThinkingStreaming
   );
 });
 
