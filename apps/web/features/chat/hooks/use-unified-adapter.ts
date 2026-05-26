@@ -1,9 +1,9 @@
 /**
  * Unified Adapter Hooks
  *
- * Bridges the shape gap between:
- * - features/chat/stores/chat-store.ts  (Supabase-backed, simple types)
- * - stores/unified/chat/types.ts         (desktop-parity, rich types)
+ * Bridges the shape gap between the shared unified-chat store
+ * (`@agiworkforce/unified-chat`) and the richer UI-adapter types used by
+ * desktop-parity components.
  *
  * These are zero-cost reshaping adapters with no business logic.
  * All heavy state subscription is handled by the caller via useChatStore.
@@ -11,8 +11,8 @@
 
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { useChatStore } from '../stores/chat-store';
-import type { ChatMessage, ChatSession } from '../stores/chat-store';
+import { useChatStore } from '@agiworkforce/unified-chat';
+import type { ChatMessage, Conversation } from '@agiworkforce/unified-chat';
 import type { ToolExecution } from '@/stores/unified/chat/toolStore';
 
 // ============================================================================
@@ -73,19 +73,34 @@ export interface AdaptedModelState {
 // ============================================================================
 
 export function adaptMessage(msg: ChatMessage): AdaptedMessage {
-  const tools = msg.metadata?.tools;
-  const thinkingSteps = msg.metadata?.thinkingSteps;
+  const meta = msg.metadata as
+    | {
+        tools?: Array<{
+          name: string;
+          status: 'pending' | 'running' | 'completed' | 'failed';
+          durationMs?: number;
+          args?: string;
+        }>;
+        thinkingSteps?: string[];
+        tokensUsed?: number;
+        model?: string;
+      }
+    | undefined;
+
+  const tools = meta?.tools;
+  const thinkingSteps = meta?.thinkingSteps;
+  const createdAtDate = msg.createdAt ? new Date(msg.createdAt) : new Date();
 
   return {
     id: msg.id,
     role: msg.role,
     content: msg.content,
-    timestamp: msg.createdAt,
+    timestamp: createdAtDate,
     streaming: msg.isStreaming,
     metadata: {
-      tokensUsed: msg.metadata?.tokensUsed,
-      model: msg.metadata?.model,
-      timestamp: msg.createdAt.getTime(),
+      tokensUsed: meta?.tokensUsed,
+      model: meta?.model,
+      timestamp: createdAtDate.getTime(),
     },
     thinking: thinkingSteps && thinkingSteps.length > 0 ? thinkingSteps.join('\n') : undefined,
     toolCalls:
@@ -100,17 +115,20 @@ export function adaptMessage(msg: ChatMessage): AdaptedMessage {
   };
 }
 
-export function adaptSession(session: ChatSession): ConversationSummary {
+export function adaptConversation(conv: Conversation): ConversationSummary {
   return {
-    id: session.id,
-    title: session.title,
-    lastMessage: session.preview || undefined,
-    updatedAt: session.updatedAt,
-    messageCount: session.messageCount,
-    isPinned: false,
-    isArchived: false,
+    id: conv.id,
+    title: conv.title,
+    lastMessage: conv.lastMessage,
+    updatedAt: new Date(conv.updatedAt),
+    messageCount: conv.messageCount ?? 0,
+    isPinned: conv.pinned ?? false,
+    isArchived: conv.archived ?? false,
   };
 }
+
+/** @deprecated Use adaptConversation. Kept for call-site compatibility. */
+export const adaptSession = adaptConversation;
 
 export function adaptToolExecution(exec: ToolExecution): AdaptedToolEvent {
   return {
@@ -139,45 +157,45 @@ function formatDisplayName(toolName: string): string {
 // ============================================================================
 
 /**
- * Adapts the active session's messages from ChatMessage[] to AdaptedMessage[].
- * Memoized — only recomputes when the raw messages array changes.
+ * Adapts the active conversation's messages from ChatMessage[] to AdaptedMessage[].
+ * Memoized - only recomputes when the raw messages array changes.
  */
 export function useAdaptedMessages(): AdaptedMessage[] {
-  const { activeSessionId, messages } = useChatStore(
+  const { activeConversationId, messagesByConversation } = useChatStore(
     useShallow((s) => ({
-      activeSessionId: s.activeSessionId,
-      messages: s.messages,
+      activeConversationId: s.activeConversationId,
+      messagesByConversation: s.messagesByConversation,
     })),
   );
 
   return useMemo(() => {
-    if (!activeSessionId) return [];
-    const raw = messages[activeSessionId] ?? [];
+    if (!activeConversationId) return [];
+    const raw = messagesByConversation[activeConversationId] ?? [];
     return raw.map(adaptMessage);
-  }, [activeSessionId, messages]);
+  }, [activeConversationId, messagesByConversation]);
 }
 
 /**
- * Adapts all sessions to ConversationSummary[].
- * Memoized — only recomputes when the sessions array changes.
+ * Adapts all conversations to ConversationSummary[].
+ * Memoized - only recomputes when the conversations array changes.
  */
 export function useAdaptedSessions(): ConversationSummary[] {
-  const sessions = useChatStore(useShallow((s) => s.sessions));
+  const conversations = useChatStore(useShallow((s) => s.conversations));
 
-  return useMemo(() => sessions.map(adaptSession), [sessions]);
+  return useMemo(() => conversations.map(adaptConversation), [conversations]);
 }
 
 /**
- * Adapts a single session by id to ConversationSummary.
- * Returns null if the session is not found.
+ * Adapts a single conversation by id to ConversationSummary.
+ * Returns null if the conversation is not found.
  */
 export function useAdaptedSession(sessionId: string): ConversationSummary | null {
-  const sessions = useChatStore(useShallow((s) => s.sessions));
+  const conversations = useChatStore(useShallow((s) => s.conversations));
 
   return useMemo(() => {
-    const session = sessions.find((s) => s.id === sessionId);
-    return session ? adaptSession(session) : null;
-  }, [sessions, sessionId]);
+    const conv = conversations.find((c) => c.id === sessionId);
+    return conv ? adaptConversation(conv) : null;
+  }, [conversations, sessionId]);
 }
 
 /**
@@ -195,7 +213,7 @@ export function useAdaptedToolEvents(executions: ToolExecution[]): AdaptedToolEv
  * so downstream components don't need to branch on platform.
  */
 export function useAdaptedModelState(): AdaptedModelState {
-  // Web stub — modelStore is a no-op on web (see stores/unified/modelStore.ts stub).
+  // Web stub - modelStore is a no-op on web (see stores/unified/modelStore.ts stub).
   // Callers can replace this with a real implementation once modelStore is ported.
   return useMemo(
     () => ({
