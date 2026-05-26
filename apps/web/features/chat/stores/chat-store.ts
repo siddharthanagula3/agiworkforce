@@ -1,3 +1,22 @@
+/**
+ * Feature-layer session/message store for the chat feature.
+ *
+ * Used by: app/chats/page, WebChatPage (as useFeatureChatStore), MessageBubble,
+ * MessageListNew, ChatMessageList, BudgetTrackerDisplay, and use-unified-adapter.
+ *
+ * Persist key: 'agi-chat-store' (persists sessions + messages).
+ *
+ * NOTE: shared/stores/chat-store.ts also uses persist key 'agi-chat-store'.
+ * That is a known key collision. The two stores have incompatible shapes and
+ * different persist partializers, so whichever writes last wins. Fix tracked
+ * as a separate concern -- do not merge these stores without a migration plan.
+ *
+ * Related stores (distinct purposes, different shapes -- do NOT merge):
+ *   - stores/chatStore.ts                 (main page store; persist key 'agiworkforce-web-chat')
+ *   - shared/stores/chat-store.ts         (MGX-style conversation store; same key collision noted above)
+ *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, owns its own scope)
+ */
+
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { persist } from 'zustand/middleware';
