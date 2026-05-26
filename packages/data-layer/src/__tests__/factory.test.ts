@@ -49,11 +49,10 @@ afterEach(() => {
 });
 
 describe('createDatabaseClient', () => {
-  it('defaults to supabase when no env is set and creds provided', () => {
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'anon-key-test';
+  it('defaults to neon when no env is set and connection string provided', () => {
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
     const db = createDatabaseClient();
-    expect(db).toBeInstanceOf(SupabaseDatabaseAdapter);
+    expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
   it('throws when supabase chosen without env', () => {
