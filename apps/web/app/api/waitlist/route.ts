@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -8,6 +9,15 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+
+/**
+ * Hash an email address with SHA-256 before storage.
+ * Emails are PII; they are not needed for display or notifications in this
+ * route (userId is the canonical identifier). Only the hash is stored.
+ */
+function hashEmail(email: string): string {
+  return createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
+}
 
 type WaitlistPlan = 'pro' | 'max';
 type BillingInterval = 'monthly' | 'yearly';
@@ -69,6 +79,10 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     ? payload.billingInterval
     : ('yearly' as const);
   const source = typeof payload.source === 'string' ? payload.source.slice(0, 100) : 'pricing';
+  // Hash the email before storage: the plaintext is not needed for dedup or
+  // notifications in this route. userId is the unique key; email_hash lets
+  // ops audit duplicate addresses without retaining cleartext PII.
+  const emailHash = email != null ? hashEmail(email) : null;
   const db = getNeonDb();
   const now = new Date().toISOString();
 
@@ -81,7 +95,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
        billing_interval = excluded.billing_interval,
        source = excluded.source,
        updated_at = excluded.updated_at`,
-    [userId, email ?? null, payload.plan, billingInterval, source, now, now],
+    [userId, emailHash, payload.plan, billingInterval, source, now, now],
   );
 
   return NextResponse.json({ ok: true, plan: payload.plan, joined: true });

@@ -3,7 +3,7 @@
  *
  * OpenAI provider adapter implementing `ProviderAdapter` from
  * `@agiworkforce/types`. Uses the official `openai` npm SDK for transport
- * (Chat Completions API, streaming SSE) plus
+ * (Chat Completions API + Responses API streaming) plus
  * `@agiworkforce/llm-normalize` for cross-vendor payload shaping.
  *
  * Default: Responses API for catalog-known, streamable text/chat models on
@@ -11,6 +11,22 @@
  * non-chat media models stay on Chat Completions unless a future adapter adds
  * first-class support for their native APIs. Server-side `store` still defaults
  * off unless `responsesStore` is explicitly enabled.
+ *
+ * WHY TWO ADAPTERS EXIST:
+ * This package implements the cross-surface ProviderAdapter contract used by
+ * CLI, desktop, and the web's /api/v1/providers/* routes via
+ * @agiworkforce/llm-normalize.
+ *
+ * The web app also has a separate fetch-based adapter at
+ * apps/web/lib/llm-providers/openai.ts that implements BaseLLMProvider for
+ * the web-internal /api/llm/v1 and /api/llm/v2 routes. That adapter cannot
+ * be replaced by this one because it speaks a different contract
+ * (LLMProviderRequest/LLMProviderResponse vs ChatRequest/StreamChunk).
+ *
+ * Both adapters share model ID resolution from the single source of truth
+ * in packages/types/src/models.json via @agiworkforce/types imports.
+ * Full consolidation would require migrating the web's internal LLM layer
+ * to the ProviderAdapter contract; tracked as a separate refactor.
  *
  * @packageDocumentation
  */
