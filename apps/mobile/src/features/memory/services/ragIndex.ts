@@ -20,9 +20,10 @@ import {
 } from '@/storage/docChunks';
 import type { ParsedDocument, SupportedDocType } from '@/services/docParser';
 
-// TODO(embedding-model): replace with getModelById() call once catalog has an
-// embedding model entry. Placeholder until task #18 lands.
-const EMBEDDING_MODEL_ID = 'nomic-embed-text-v1.5';
+// TODO(embedding-model): replace with getModelById() from @agiworkforce/types once
+// the model catalog has an embedding entry (task #18). EMBEDDING_MODEL_ID is kept
+// as a named constant pointing to where the catalog lookup should land.
+const EMBEDDING_MODEL_ID = 'nomic-embed-text-v1.5'; // placeholder — see TODO above
 const EMBEDDING_DIM = 384;
 
 export interface ChunkingOptions {
@@ -94,17 +95,63 @@ async function ensureDocChunkVecTable(db: Awaited<ReturnType<typeof getDb>>): Pr
 }
 
 /**
- * Stub embedding function.
- * TODO(embedding-model): replace with a real on-device embedding call once the
- * embedding model is wired up. For now returns a deterministic zero vector so
- * the sqlite-vec roundtrip can be exercised in tests.
+ * Character n-gram feature-hashing fallback embedding.
+ *
+ * Produces a unit-normalised Float32Array(384) from the input text using
+ * trigram feature hashing into EMBEDDING_DIM buckets. This is not a neural
+ * embedding — it cannot capture semantic similarity — but it:
+ *   1. Returns a non-null vector so the sqlite-vec roundtrip works in tests.
+ *   2. Gives documents with overlapping character sequences closer cosine
+ *      distances than a zero vector would.
+ *   3. Is entirely deterministic and requires no model download.
+ *
+ * TODO(embedding-model): replace this with a real on-device embedding call
+ * using EMBEDDING_MODEL_ID once task #18 lands and the model catalog has an
+ * embedding entry. The call signature is intentionally async so the real
+ * implementation can be dropped in without changing callers.
  */
-async function embedText(_text: string): Promise<Float32Array | null> {
-  // Real implementation will call the on-device embedding model identified by
-  // EMBEDDING_MODEL_ID. Returning null here signals "no embedding available".
-  // The indexDocument / retrieve functions handle null gracefully.
-  void EMBEDDING_MODEL_ID; // reference to avoid unused-var lint
-  return null;
+async function embedText(text: string): Promise<Float32Array | null> {
+  void EMBEDDING_MODEL_ID; // referenced so the constant is not an unused-var lint error
+
+  const normalized = text.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (normalized.length === 0) return null;
+
+  const vec = new Float32Array(EMBEDDING_DIM);
+
+  // Trigram feature hashing: for each 3-char window compute a stable bucket
+  // index using a simple polynomial hash and accumulate a count.
+  const len = normalized.length;
+  for (let i = 0; i < len - 2; i++) {
+    // FNV-1a–inspired: combine char codes with multiply-xor so collisions are
+    // spread across the bucket range rather than clustered at low indices.
+    let h = 2166136261; // FNV offset basis (32-bit)
+    h = (h ^ normalized.charCodeAt(i)) * 16777619;
+    h = (h ^ normalized.charCodeAt(i + 1)) * 16777619;
+    h = (h ^ normalized.charCodeAt(i + 2)) * 16777619;
+    // Map to [0, EMBEDDING_DIM) with unsigned right-shift to avoid negatives.
+    const bucket = (h >>> 0) % EMBEDDING_DIM;
+    vec[bucket] += 1;
+  }
+
+  // Also hash unigrams so very short texts (< 3 chars) still get signal.
+  for (let i = 0; i < len; i++) {
+    const bucket = ((normalized.charCodeAt(i) * 16777619) >>> 0) % EMBEDDING_DIM;
+    vec[bucket] += 0.25;
+  }
+
+  // L2-normalise to unit length so cosine-distance comparisons are meaningful.
+  let norm = 0;
+  for (let i = 0; i < EMBEDDING_DIM; i++) {
+    norm += vec[i] * vec[i];
+  }
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < EMBEDDING_DIM; i++) {
+      vec[i] /= norm;
+    }
+  }
+
+  return vec;
 }
 
 export async function indexDocument(

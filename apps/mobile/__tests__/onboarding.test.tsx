@@ -66,6 +66,7 @@ const mockStorageSet = jest.fn();
 const mockStorageGet = jest.fn().mockReturnValue(undefined);
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
+  rehydrateWhenMmkvReady: jest.fn((store) => store.persist.rehydrate()),
   storage: {
     getString: (...args: unknown[]) => mockStorageGet(...args),
     set: (...args: unknown[]) => mockStorageSet(...args),
@@ -75,6 +76,21 @@ jest.mock('../lib/mmkv', () => ({
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
+}));
+
+// ModelPickerSheet pulls in @gorhom/bottom-sheet which requires native modules.
+// Stub both so onboarding tests don't crash on the model-picker import.
+jest.mock('@gorhom/bottom-sheet', () => {
+  const mockBottomSheet = jest.fn().mockImplementation(({ children }) => children);
+  return {
+    __esModule: true,
+    default: mockBottomSheet,
+    BottomSheetBackdrop: jest.fn().mockReturnValue(null),
+    BottomSheetScrollView: jest.fn().mockImplementation(({ children }) => children),
+  };
+});
+jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
+  ModelPickerSheet: jest.fn().mockReturnValue(null),
 }));
 
 // Compliance package — control disclosure satisfied / not satisfied
