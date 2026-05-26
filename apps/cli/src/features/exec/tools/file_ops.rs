@@ -70,6 +70,30 @@ pub(super) async fn execute_read_file(args: &HashMap<String, String>) -> Result<
         });
     }
 
+    // Detect image files before attempting to read as text — binary reads would
+    // return garbled data.  Return an actionable message instead.
+    let extension = file_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase());
+    let is_image = matches!(
+        extension.as_deref(),
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" | "tiff" | "tif" | "svg")
+    );
+    if is_image {
+        return Ok(ToolResult {
+            tool_name: "read_file".to_string(),
+            success: false,
+            output: format!(
+                "Image file detected: {}\n\
+                 Image files cannot be read as text. \
+                 To include an image in the conversation, use the `--file / -f` flag when \
+                 starting the CLI (e.g. `agi -f {} \"describe this image\"`).",
+                path, path
+            ),
+        });
+    }
+
     match tokio::fs::read_to_string(file_path).await {
         Ok(contents) => {
             crate::file_state::record_file_read(file_path, &contents);

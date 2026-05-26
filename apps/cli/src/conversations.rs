@@ -279,6 +279,9 @@ fn render_message_content(content: &MessageContent, md: &mut String) {
                         md.push_str(text);
                         md.push_str("\n\n");
                     }
+                    ContentBlock::Image { mime, .. } => {
+                        md.push_str(&format!("> [image: {}]\n\n", mime));
+                    }
                     ContentBlock::ToolUse { name, input, .. } => {
                         let args_preview = format_tool_args(input);
                         md.push_str(&format!("> **Tool: {}** (`{}`)\n\n", name, args_preview));
