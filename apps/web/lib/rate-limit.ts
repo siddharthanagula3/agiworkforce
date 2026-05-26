@@ -133,6 +133,17 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 manifest fetches per minute per IP
     failClosed: false,
   },
+  // 2FA / TOTP endpoints - strict limits to prevent brute force on 6-digit codes
+  '2fa-verify': {
+    limit: 5,
+    window: '15 m', // 5 verify/validate attempts per 15 minutes per user
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
+  '2fa-setup': {
+    limit: 10,
+    window: '1 h', // 10 setup attempts per hour (re-enroll scenarios)
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
   // Authentication endpoints - stricter limits to prevent brute force
   'auth-login': {
     limit: 5,
