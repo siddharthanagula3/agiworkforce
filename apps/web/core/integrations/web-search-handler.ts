@@ -8,6 +8,7 @@
 
 import { fetchWithTimeout, TimeoutPresets } from '@shared/utils/error-handling';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 // SECURITY: API keys removed - all calls go through authenticated proxies
 // Provider availability is determined by proxy configuration, not client-side keys
@@ -75,7 +76,7 @@ export async function searchWithPerplexity(query: string): Promise<SearchRespons
           Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
-          model: 'sonar-pro',
+          model: requireProviderDefaultModel('perplexity'),
           messages: [
             {
               role: 'system',

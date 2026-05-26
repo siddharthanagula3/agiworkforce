@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
@@ -73,14 +74,29 @@ function buildMockData(range: DateRange) {
   // Usage time series
   const usageSeries = generateUsageTimeSeries(days);
 
-  // Model distribution — display labels only, not used for routing
+  // Model distribution — display labels read from catalog, not hardcoded IDs
 
   const modelDistribution = [
-    { label: 'claude-sonnet-4', value: Math.round(1120 * multiplier), color: 'bg-indigo-500' },
-    { label: 'gpt-5.4-turbo', value: Math.round(890 * multiplier), color: 'bg-emerald-500' },
-    { label: 'gemini-3.1-pro-preview', value: Math.round(620 * multiplier), color: 'bg-blue-500' },
-    { label: 'claude-haiku-4', value: Math.round(410 * multiplier), color: 'bg-violet-500' },
-    { label: 'deepseek-r2', value: Math.round(201 * multiplier), color: 'bg-amber-500' },
+    {
+      label: getProviderDefaultModel('anthropic') ?? 'anthropic-default',
+      value: Math.round(1120 * multiplier),
+      color: 'bg-indigo-500',
+    },
+    {
+      label: getProviderDefaultModel('openai') ?? 'openai-default',
+      value: Math.round(890 * multiplier),
+      color: 'bg-emerald-500',
+    },
+    {
+      label: getProviderDefaultModel('google') ?? 'google-default',
+      value: Math.round(620 * multiplier),
+      color: 'bg-blue-500',
+    },
+    {
+      label: getProviderDefaultModel('deepseek') ?? 'deepseek-default',
+      value: Math.round(201 * multiplier),
+      color: 'bg-amber-500',
+    },
   ];
 
   // Top tools
@@ -93,10 +109,15 @@ function buildMockData(range: DateRange) {
     { label: 'email_send', value: Math.round(720 * multiplier), color: 'bg-teal-500' },
   ];
 
-  // Recent activity mock data — display labels only, not used for routing
+  // Recent activity mock data — display labels read from catalog, not hardcoded IDs
 
   const agents = ['Research Bot', 'Code Assistant', 'Data Analyst', 'Email Writer', 'SEO Agent'];
-  const models = ['claude-sonnet-4', 'gpt-5.4-turbo', 'gemini-3.1-pro-preview', 'claude-haiku-4'];
+  const models = [
+    getProviderDefaultModel('anthropic') ?? 'anthropic-default',
+    getProviderDefaultModel('openai') ?? 'openai-default',
+    getProviderDefaultModel('google') ?? 'google-default',
+    getProviderDefaultModel('xai') ?? 'xai-default',
+  ];
 
   const statuses: ActivityRow['status'][] = [
     'success',
