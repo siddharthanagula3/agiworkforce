@@ -700,68 +700,203 @@ class SettingsService {
 
   /**
    * Get the current 2FA status for the user
-   * TODO: Implement GET /api/settings/2fa route.
+   * Calls GET /api/settings/2fa
    */
   async get2FAStatus(): Promise<{ data: TwoFactorStatus; error?: string }> {
-    return { data: { enabled: false } };
+    try {
+      const token = await getAuthToken();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch('/api/settings/2fa', { headers });
+      if (!res.ok) {
+        return { data: { enabled: false }, error: `HTTP ${res.status}` };
+      }
+      const json = (await res.json()) as {
+        enabled: boolean;
+        enabled_at?: string;
+        backup_codes_remaining?: number;
+      };
+      return {
+        data: {
+          enabled: json.enabled,
+          enabledAt: json.enabled_at,
+          backupCodesRemaining: json.backup_codes_remaining,
+        },
+      };
+    } catch (error) {
+      return {
+        data: { enabled: false },
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Initialize 2FA setup
-   * TODO: Implement POST /api/settings/2fa/setup route (server-side secret handling).
+   * Initialize 2FA setup — generates a new TOTP secret and backup codes.
+   * Calls POST /api/settings/2fa/setup
+   * The secret is never stored in plaintext; the server encrypts before saving.
    */
   async setup2FA(): Promise<{ data?: TOTPSetupResult; error?: string }> {
-    return { error: '2FA setup requires a dedicated server route (pending implementation)' };
+    try {
+      const token = await getAuthToken();
+      if (!token) return { error: 'User not authenticated' };
+
+      const res = await fetch('/api/settings/2fa/setup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { error: err.error ?? `HTTP ${res.status}` };
+      }
+
+      const json = (await res.json()) as {
+        secret: string;
+        otpauth_url: string;
+        backup_codes: string[];
+      };
+      return {
+        data: {
+          secret: json.secret,
+          otpauthUrl: json.otpauth_url,
+          backupCodes: json.backup_codes,
+        },
+      };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   /**
-   * Verify a TOTP code and complete 2FA enablement
-   * TODO: Implement POST /api/settings/2fa/verify route.
+   * Verify a TOTP code and enable 2FA on the account.
+   * Must be called after setup2FA(). Calls POST /api/settings/2fa/verify
    */
-  async verify2FA(_code: string): Promise<{ success: boolean; error?: string }> {
-    return {
-      success: false,
-      error: '2FA verification requires a dedicated server route (pending implementation)',
-    };
+  async verify2FA(code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const token = await getAuthToken();
+      if (!token) return { success: false, error: 'User not authenticated' };
+
+      const res = await fetch('/api/settings/2fa/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { success: false, error: err.error ?? `HTTP ${res.status}` };
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   /**
-   * Validate a TOTP code (for login verification)
-   * TODO: Implement POST /api/settings/2fa/validate route.
+   * Validate a TOTP code for step-up auth (not login — Clerk handles login).
+   * Calls POST /api/settings/2fa/validate
    */
-  async validateTOTPCode(_code: string): Promise<{
+  async validateTOTPCode(code: string): Promise<{
     valid: boolean;
     usedBackupCode?: boolean;
     error?: string;
   }> {
-    return {
-      valid: false,
-      error: 'TOTP validation requires a dedicated server route (pending implementation)',
-    };
+    try {
+      const token = await getAuthToken();
+      if (!token) return { valid: false, error: 'User not authenticated' };
+
+      const res = await fetch('/api/settings/2fa/validate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const json = (await res.json().catch(() => ({}))) as {
+        valid?: boolean;
+        used_backup_code?: boolean;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        return { valid: false, error: json.error ?? `HTTP ${res.status}` };
+      }
+      return { valid: json.valid ?? false, usedBackupCode: json.used_backup_code };
+    } catch (error) {
+      return { valid: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   /**
-   * Disable 2FA
-   * TODO: Implement DELETE /api/settings/2fa route.
+   * Disable 2FA on the account.
+   * Requires the current TOTP code (or a backup code) to authorize.
+   * Calls DELETE /api/settings/2fa
    */
-  async disable2FA(_code: string): Promise<{ success: boolean; error?: string }> {
-    return {
-      success: false,
-      error: '2FA disable requires a dedicated server route (pending implementation)',
-    };
+  async disable2FA(code: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const token = await getAuthToken();
+      if (!token) return { success: false, error: 'User not authenticated' };
+
+      const res = await fetch('/api/settings/2fa', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { success: false, error: err.error ?? `HTTP ${res.status}` };
+      }
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   /**
-   * Regenerate backup codes
-   * TODO: Implement POST /api/settings/2fa/backup-codes route.
+   * Regenerate backup codes. Requires the current TOTP code to authorize.
+   * Calls POST /api/settings/2fa/backup-codes
    */
-  async regenerateBackupCodes(_totpCode: string): Promise<{
+  async regenerateBackupCodes(totpCode: string): Promise<{
     backupCodes?: string[];
     error?: string;
   }> {
-    return {
-      error: 'Backup code regeneration requires a dedicated server route (pending implementation)',
-    };
+    try {
+      const token = await getAuthToken();
+      if (!token) return { error: 'User not authenticated' };
+
+      const res = await fetch('/api/settings/2fa/backup-codes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ code: totpCode }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { error: err.error ?? `HTTP ${res.status}` };
+      }
+      const json = (await res.json()) as { backup_codes: string[] };
+      return { backupCodes: json.backup_codes };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   }
 
   /**
