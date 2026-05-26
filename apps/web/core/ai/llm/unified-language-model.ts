@@ -31,7 +31,7 @@ import {
 import { isFeatureEnabled } from '@core/security/gradual-rollout';
 import { logger } from '@shared/lib/logger';
 import { cache } from 'react';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 export type LLMProvider =
   | 'anthropic'
@@ -87,7 +87,7 @@ export interface RequestContext {
   grok?: GrokProviderConfig;
 }
 
-const DEFAULT_OPENAI_MODEL = getProviderDefaultModel('openai') ?? 'gpt-5.4';
+const DEFAULT_OPENAI_MODEL = requireProviderDefaultModel('openai');
 
 const isAnthropicModel = (model: string): model is AnthropicConfig['model'] =>
   ANTHROPIC_MODELS.includes(model as AnthropicConfig['model']);

@@ -17,13 +17,14 @@ import { useEffect, useState, type ReactElement } from 'react';
 
 import { streamFromProvider } from '@/lib/providerStreamClient';
 import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 
 type ProviderId = 'anthropic' | 'openai' | 'ollama' | 'google';
 
 const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderId, string> = {
   anthropic: 'claude-haiku-4.5',
-  openai: 'gpt-5.4-mini',
+  openai: requireProviderDefaultModel('openai'),
   ollama: 'llama3.2',
   google: 'gemini-3.1-flash-lite',
 };
