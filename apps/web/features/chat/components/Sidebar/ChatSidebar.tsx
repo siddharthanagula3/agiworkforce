@@ -20,6 +20,7 @@ import {
   CreditCard,
   Keyboard,
   Globe,
+  Loader2,
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
@@ -40,6 +41,7 @@ import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useDirectoryStore } from '@features/chat/stores/directory-store';
 import { ConversationListItem } from './ConversationListItem';
 import { GlobalSearchDialog } from '@features/chat/components/dialogs/GlobalSearchDialog';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -522,6 +524,11 @@ function ChatSidebarContent({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
 
+  // Server-side search state
+  const [apiSearchResults, setApiSearchResults] = useState<SessionLike[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
     setSelectedIds(new Set());
@@ -565,7 +572,65 @@ function ChatSidebarContent({
     return () => document.removeEventListener('keydown', handler);
   }, [bulkMode, exitBulkMode]);
 
-  const filteredSessions = useMemo(() => {
+  // Debounced server-side search: fires 300ms after the user stops typing
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (!searchQuery.trim()) {
+      setApiSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const token = await getAuthToken();
+        const q = searchQuery.slice(0, 200).trim();
+        const params = new URLSearchParams({ q });
+        const res = await fetch(`/api/chat/conversations?${params.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) {
+          setApiSearchResults(null);
+          return;
+        }
+        const data = (await res.json()) as {
+          conversations: Array<{
+            id: string;
+            title: string;
+            model?: string | null;
+            created_at: string;
+            updated_at: string;
+          }>;
+        };
+        setApiSearchResults(
+          (data.conversations ?? []).map((c) => ({
+            id: c.id,
+            title: c.title ?? 'Untitled Chat',
+            createdAt: c.created_at,
+            updatedAt: c.updated_at,
+          })),
+        );
+      } catch {
+        setApiSearchResults(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Immediate client-side filter (shown while API call is in flight)
+  const clientFilteredSessions = useMemo(() => {
     if (!searchQuery.trim()) return sessions;
     const q = searchQuery.toLowerCase();
     return sessions.filter(
@@ -573,6 +638,11 @@ function ChatSidebarContent({
         s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
     );
   }, [sessions, searchQuery]);
+
+  // Use API results once available; fall back to client-side filter while loading
+  const filteredSessions = searchQuery.trim()
+    ? (apiSearchResults ?? clientFilteredSessions)
+    : sessions;
 
   const grouped = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
 
@@ -693,7 +763,11 @@ function ChatSidebarContent({
 
       {/* Session list */}
       <ScrollArea className="flex-1">
-        {filteredSessions.length === 0 ? (
+        {isSearching && searchQuery.trim() ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground/50" />
+          </div>
+        ) : filteredSessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <MessageSquare className="mb-2 h-7 w-7 text-muted-foreground/25" />
             <p className="text-sm text-muted-foreground/50">
