@@ -120,8 +120,8 @@ export type MessageStatus =
 /**
  * Lifecycle status of an agent action (tool call, MCP request, etc.).
  *
- * Matches the status vocabulary used in database.ts `AgentActionStatus` and
- * runtime.ts `RuntimeActivityStatus`, establishing a single canonical set.
+ * Matches the status vocabulary used in runtime.ts `RuntimeActivityStatus`,
+ * establishing a single canonical set.
  */
 export type ActionStatus =
   /** Action is queued but has not started executing. */
@@ -325,7 +325,6 @@ export interface MessageBase {
  * request, a file operation, etc. Actions belong to a message and carry their
  * own lifecycle status.
  *
- * Corresponds to `vibe_agent_actions` in the database schema.
  */
 export interface ActionBase {
   /** Unique action identifier. */

@@ -1040,39 +1040,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      vibe_files: {
-        Row: {
-          content: string | null;
-          created_at: string | null;
-          filename: string;
-          id: string;
-          language: string | null;
-          session_id: string;
-          updated_at: string | null;
-          user_id: string;
-        };
-        Insert: {
-          content?: string | null;
-          created_at?: string | null;
-          filename: string;
-          id?: string;
-          language?: string | null;
-          session_id: string;
-          updated_at?: string | null;
-          user_id: string;
-        };
-        Update: {
-          content?: string | null;
-          created_at?: string | null;
-          filename?: string;
-          id?: string;
-          language?: string | null;
-          session_id?: string;
-          updated_at?: string | null;
-          user_id?: string;
-        };
-        Relationships: [];
-      };
       waitlist: {
         Row: {
           billing_interval: string | null;
