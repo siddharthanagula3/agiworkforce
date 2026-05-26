@@ -14,12 +14,14 @@ import {
   getProviderDefaultModel,
   getTaskModelForProvider,
   normalizeModelId,
+  requireProviderDefaultModel,
 } from '@agiworkforce/types';
 
-const DEFAULT_OPENAI_MODEL = getProviderDefaultModel('openai') ?? 'gpt-5.4';
-const DEFAULT_DOCUMENT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? 'claude-sonnet-4.6';
+const DEFAULT_OPENAI_MODEL = requireProviderDefaultModel('openai');
+const DEFAULT_DOCUMENT_MODEL =
+  getTaskModelForProvider('anthropic', 'chat') ?? requireProviderDefaultModel('anthropic');
 const DEFAULT_VISUAL_TASK_MODEL =
-  getTaskModelForProvider('google', 'chat') ?? 'gemini-3.1-flash-lite';
+  getTaskModelForProvider('google', 'chat') ?? requireProviderDefaultModel('google');
 
 function resolveDefaultModelForProvider(provider: LLMProvider): string {
   switch (provider) {
@@ -28,13 +30,13 @@ function resolveDefaultModelForProvider(provider: LLMProvider): string {
     case 'google':
       return getProviderDefaultModel('google') ?? DEFAULT_VISUAL_TASK_MODEL;
     case 'perplexity':
-      return getProviderDefaultModel('perplexity') ?? 'sonar';
+      return getProviderDefaultModel('perplexity') ?? requireProviderDefaultModel('perplexity');
     case 'grok':
-      return getProviderDefaultModel('xai') ?? 'grok-4';
+      return getProviderDefaultModel('xai') ?? requireProviderDefaultModel('xai');
     case 'deepseek':
-      return getProviderDefaultModel('deepseek') ?? 'deepseek-chat';
+      return getProviderDefaultModel('deepseek') ?? requireProviderDefaultModel('deepseek');
     case 'qwen':
-      return getProviderDefaultModel('qwen') ?? 'qwen-plus';
+      return getProviderDefaultModel('qwen') ?? requireProviderDefaultModel('qwen');
     case 'openai':
     default:
       return DEFAULT_OPENAI_MODEL;
