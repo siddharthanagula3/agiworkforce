@@ -12,6 +12,7 @@
  *
  * Body: { code: string }
  * Returns: { valid: boolean, used_backup_code?: boolean }
+ * Errors: 400 if 2FA is not enabled; 401 if code is invalid; 429 if rate limited
  */
 
 import 'server-only';
@@ -59,8 +60,7 @@ async function handleValidateTOTP(request: NextRequest) {
   );
 
   if (!row || !row.enabled) {
-    // 2FA not configured — validation passes transparently (caller can decide policy)
-    return NextResponse.json({ valid: true, two_factor_configured: false });
+    throw createError.badRequest('2FA is not enabled on this account');
   }
 
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
