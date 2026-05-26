@@ -1,0 +1,74 @@
+import 'server-only';
+
+import { NextRequest, NextResponse } from 'next/server';
+import { withErrorHandler } from '@/lib/error-handler';
+import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { handleCorsPreflightRequest } from '@/lib/cors';
+
+/**
+ * GET /api/settings/audit-logs/actions
+ * Return the distinct audit event_type values that exist for the current user.
+ * Used to populate the filter dropdown in the audit log UI.
+ */
+async function handleGetActions(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'settings-audit-actions');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  let userId: string;
+  try {
+    const auth = await getClerkAuthUser(request);
+    userId = auth.userId;
+  } catch {
+    throw createError.unauthorized('Authentication required');
+  }
+
+  const db = getNeonDb();
+
+  try {
+    const rows = await db.query<{ event_type: string }>(
+      `select distinct event_type
+       from public.security_audit_logs
+       where user_id = $1
+       order by event_type asc
+       limit 200`,
+      [userId],
+    );
+
+    // Return the user's actual action set merged with the known well-typed set
+    // so the dropdown is populated even before the user has any logs.
+    const knownActions = [
+      'login',
+      'logout',
+      'settings_change',
+      'api_call',
+      'chat_session',
+      'employee_hire',
+      'payment',
+      'api_key_created',
+      'api_key_revoked',
+      'password_changed',
+      'two_factor_enabled',
+      'two_factor_disabled',
+      'session_expired',
+    ];
+
+    const fromDb = rows.map((r) => r.event_type);
+    const merged = Array.from(new Set([...knownActions, ...fromDb])).sort();
+
+    return NextResponse.json({ actions: merged });
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch audit log actions');
+    throw createError.internal('Failed to fetch audit log actions');
+  }
+}
+
+export const GET = withErrorHandler(handleGetActions);
+
+export async function OPTIONS(request: NextRequest) {
+  const preflightResponse = handleCorsPreflightRequest(request);
+  return preflightResponse || new NextResponse(null, { status: 204 });
+}

@@ -269,6 +269,101 @@ export const rateLimitConfigs = {
     window: '1 m', // 100 webhook events per minute per IP (generous for real Stripe traffic)
     failClosed: false, // Allow webhooks through if Redis fails - business critical
   },
+  // Settings: organization
+  'settings-org': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-org-patch': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: team management
+  'settings-team-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-team-invite': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-team-delete': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-team-patch': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: activity and audit logs
+  'settings-activity': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-audit-logs': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-audit-actions': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: API key management
+  'api-keys-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'api-keys-create': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
+  'api-keys-delete': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  // Usage and billing analytics
+  'usage-providers': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'usage-analytics': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'usage-history': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-invoices': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-payment-methods': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-analytics': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
