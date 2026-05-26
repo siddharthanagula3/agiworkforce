@@ -364,6 +364,12 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  // Waitlist signup endpoints — unauthenticated PII intake, tight limit
+  waitlist: {
+    limit: 5,
+    window: '1 h', // 5 signups per hour per IP to prevent enumeration and spam
+    failClosed: true, // Block if Redis unavailable: this endpoint stores PII
+  },
   default: {
     limit: 100,
     window: '1 m', // 100 requests per minute
