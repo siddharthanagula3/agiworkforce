@@ -195,12 +195,8 @@ describe('Chat Messages API', () => {
       it('should only allow the authenticated user to send messages to their own conversation', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
         // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
@@ -210,7 +206,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello' }),
+          body: JSON.stringify({ content: 'Hello', skipLlm: true }),
         });
         await POST(request, mockContext);
 
@@ -240,15 +236,11 @@ describe('Chat Messages API', () => {
     });
 
     describe('Message Flow', () => {
-      it('should save user message and return assistant response', async () => {
+      it('should save message and return it in the response', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history lookup
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
         // count for auto-title check
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
@@ -258,28 +250,22 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello, AI!' }),
+          body: JSON.stringify({ content: 'Hello, AI!', skipLlm: true }),
         });
         const response = await POST(request, mockContext);
 
         expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data.userMessage).toBeDefined();
-        expect(data.assistantMessage).toBeDefined();
-        expect(data.usage).toBeDefined();
+        expect(data.message).toBeDefined();
+        // LLM is NOT called inline; streaming is handled by /api/llm/v1/chat/completions
+        expect(mockFetch).not.toHaveBeenCalled();
       });
 
-      it('should call LLM API with correct parameters', async () => {
-        const historyData = [{ role: 'user', content: 'Hello' }];
-
+      it('should not call LLM API (streaming is handled externally via useChatStream)', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce(historyData);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
         // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
@@ -289,42 +275,40 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.4' }),
+          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.4', skipLlm: true }),
         });
         await POST(request, mockContext);
 
-        expect(mockFetch).toHaveBeenCalledWith(
-          expect.stringContaining('/api/llm/v1/chat/completions'),
-          expect.objectContaining({
-            method: 'POST',
-            headers: expect.objectContaining({
-              'Content-Type': 'application/json',
-            }),
-          }),
-        );
-
-        // Parse the body to verify content
-        const fetchCall = mockFetch.mock.calls[0]!;
-        const body = JSON.parse(fetchCall[1].body);
-        expect(body.model).toBe('gpt-5.4');
-        expect(body.stream).toBe(false);
+        // The route never calls the LLM directly; streaming is the caller's responsibility
+        expect(mockFetch).not.toHaveBeenCalled();
       });
 
-      it('should return 500 if LLM API fails', async () => {
-        mockFetch.mockResolvedValue({
-          ok: false,
-          status: 500,
-          json: () => Promise.resolve({ error: 'Internal error' }),
-        });
-
+      it('should return 500 if message save fails', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert throws
+        mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ content: 'Hello', skipLlm: true }),
+        });
+        const response = await POST(request, mockContext);
+
+        expect(response.status).toBe(500);
+      });
+
+      it('should warn but still save when skipLlm is omitted (legacy callers)', async () => {
+        // conversation lookup
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // rollback delete
-        mockExecute.mockResolvedValueOnce(undefined);
+        // count
+        mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
@@ -332,45 +316,24 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello' }),
+          body: JSON.stringify({ content: 'Hello' }), // skipLlm omitted (defaults to false)
         });
         const response = await POST(request, mockContext);
 
-        expect(response.status).toBe(500);
-      });
-
-      it('should return 500 if user message save fails', async () => {
-        // conversation lookup
-        mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert fails
-        mockQuery.mockResolvedValueOnce([]);
-
-        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
-          method: 'POST',
-          headers: {
-            Authorization: 'Bearer valid-token',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ content: 'Hello' }),
-        });
-        const response = await POST(request, mockContext);
-
-        expect(response.status).toBe(500);
+        // Still saves message and returns 200; no LLM call
+        expect(response.status).toBe(200);
+        expect(mockFetch).not.toHaveBeenCalled();
       });
     });
 
     describe('Auto-titling', () => {
-      it('should auto-title conversation on first message exchange', async () => {
+      it('should auto-title conversation on first user message', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
-        // count = 2 (first exchange triggers auto-title)
-        mockQuery.mockResolvedValueOnce([{ count: '2' }]);
+        // count = 1 (first message triggers auto-title)
+        mockQuery.mockResolvedValueOnce([{ count: '1' }]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
           method: 'POST',
@@ -378,7 +341,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'What is the weather today?' }),
+          body: JSON.stringify({ content: 'What is the weather today?', skipLlm: true }),
         });
         await POST(request, mockContext);
 
@@ -392,14 +355,10 @@ describe('Chat Messages API', () => {
       it('should truncate long messages for title', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
-        // count = 2 (first exchange)
-        mockQuery.mockResolvedValueOnce([{ count: '2' }]);
+        // count = 1 (first message)
+        mockQuery.mockResolvedValueOnce([{ count: '1' }]);
 
         const longMessage =
           'This is a very long message that should be truncated when used as the conversation title because it exceeds fifty characters';
@@ -410,7 +369,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: longMessage }),
+          body: JSON.stringify({ content: longMessage, skipLlm: true }),
         });
         await POST(request, mockContext);
 
@@ -423,14 +382,10 @@ describe('Chat Messages API', () => {
     });
 
     describe('Model Selection', () => {
-      it('should default to auto model when not provided', async () => {
-        // conversation lookup - returns a conversation with a model set
-        mockQuery.mockResolvedValueOnce([{ ...mockConversation, model: 'gpt-4-turbo' }]);
-        // user message insert
-        mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
+      it('should store the model on assistant messages when provided', async () => {
+        // conversation lookup
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        // message insert (assistant role, model provided)
         mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
         // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
@@ -441,27 +396,32 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello' }), // No model specified - defaults to 'auto'
+          body: JSON.stringify({
+            content: 'I can help!',
+            role: 'assistant',
+            model: 'gpt-5.4',
+            skipLlm: true,
+          }),
         });
-        await POST(request, mockContext);
+        const response = await POST(request, mockContext);
 
-        const fetchCall = mockFetch.mock.calls[0]!;
-        const body = JSON.parse(fetchCall[1].body);
-        // When no model specified in request, route uses conversation.model or 'auto'
-        expect(body.model).toBeTruthy();
+        expect(response.status).toBe(200);
+        // LLM is never called inline; model is passed through to DB insert
+        expect(mockFetch).not.toHaveBeenCalled();
+        // Verify the insert includes the model parameter
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_messages'),
+          expect.arrayContaining(['gpt-5.4']),
+        );
       });
     });
 
-    describe('Usage Tracking', () => {
-      it('should return token usage in response', async () => {
+    describe('Response shape', () => {
+      it('should return { message } (not usage or assistantMessage) in response', async () => {
         // conversation lookup
         mockQuery.mockResolvedValueOnce([mockConversation]);
-        // user message insert
+        // message insert
         mockQuery.mockResolvedValueOnce([mockUserMessage]);
-        // history
-        mockQuery.mockResolvedValueOnce([]);
-        // assistant message insert
-        mockQuery.mockResolvedValueOnce([mockAssistantMessage]);
         // count
         mockQuery.mockResolvedValueOnce([{ count: '5' }]);
 
@@ -471,17 +431,16 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello' }),
+          body: JSON.stringify({ content: 'Hello', skipLlm: true }),
         });
         const response = await POST(request, mockContext);
 
         expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data.usage).toEqual({
-          prompt_tokens: 10,
-          completion_tokens: 8,
-          total_tokens: 18,
-        });
+        expect(data.message).toBeDefined();
+        // Route no longer returns assistantMessage or usage (streaming is external)
+        expect(data.assistantMessage).toBeUndefined();
+        expect(data.usage).toBeUndefined();
       });
     });
   });

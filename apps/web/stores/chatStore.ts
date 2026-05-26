@@ -1,5 +1,19 @@
 'use client';
 
+/**
+ * Canonical web chat store for the main chat page flow.
+ *
+ * Used by: WebChatPage, useChatStream, useConversations, UnifiedChatPage,
+ * ChatSettings, CommandPalette, and localByokHandoff.
+ *
+ * Persist key: 'agiworkforce-web-chat' (persists model selection + sidebar state only).
+ *
+ * Related stores (distinct purposes, different shapes -- do NOT merge):
+ *   - features/chat/stores/chat-store.ts  (session/message feature store; persist key 'agi-chat-store')
+ *   - shared/stores/chat-store.ts         (MGX-style conversation store; ALSO uses 'agi-chat-store' -- key collision, tracked concern)
+ *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, owns its own scope)
+ */
+
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
