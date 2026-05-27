@@ -6,6 +6,7 @@
 import { View, Linking } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
+import { MathBlock } from './MathBlock';
 import { colors } from '@/src/ui/theme';
 
 /**
@@ -24,18 +25,11 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
       parts.push(text.slice(lastIdx, match.index));
     }
     parts.push(
-      <Text
+      <MathBlock
         key={`${keyBase}-imath-${keyCounter++}`}
-        style={{
-          fontFamily: 'Menlo',
-          fontStyle: 'italic',
-          fontSize: 13,
-          backgroundColor: 'rgba(33, 128, 141, 0.08)',
-          color: colors.textPrimary,
-        }}
-      >
-        {` ${match[1]!.trim()} `}
-      </Text>,
+        latex={match[1]!.trim()}
+        display={false}
+      />,
     );
     lastIdx = match.index + match[0].length;
   }
@@ -378,33 +372,7 @@ export function renderMarkdownContent(content: string): React.ReactNode[] {
 
     if (match[2] !== undefined) {
       const mathContent = match[2].trim();
-      elements.push(
-        <View
-          key={`bmath-${keyCounter++}`}
-          style={{
-            backgroundColor: 'rgba(33, 128, 141, 0.08)',
-            borderRadius: 6,
-            padding: 8,
-            marginVertical: 6,
-            borderLeftWidth: 2,
-            borderLeftColor: colors.teal,
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: 'Menlo',
-              fontStyle: 'italic',
-              fontSize: 14,
-              color: colors.textPrimary,
-              textAlign: 'center',
-              lineHeight: 22,
-            }}
-            selectable
-          >
-            {mathContent}
-          </Text>
-        </View>,
-      );
+      elements.push(<MathBlock key={`bmath-${keyCounter++}`} latex={mathContent} display={true} />);
     } else if (match[3] !== undefined) {
       const codeContent = match[3].trim();
       elements.push(

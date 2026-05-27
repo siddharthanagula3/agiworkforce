@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { ProjectKnowledgeFile } from '@agiworkforce/types';
+import MarkdownContent from '@/features/chat/components/messages/MarkdownContent';
 
 interface Props {
   file: ProjectKnowledgeFile | null;
@@ -9,15 +10,75 @@ interface Props {
 }
 
 /**
- * FilePreviewModal — renders a knowledge file inline.
+ * FilePreviewModal -- renders a knowledge file inline.
  *
- * Images: rendered as an <img> with object-fit contain.
- * PDFs: embedded via <iframe> pointing at the storage URI.
- * Text/Markdown/JSON/CSV: renders a <pre> with the raw text content fetched
- * from the storage URI.
+ * Images: rendered as an img with object-fit contain.
+ * PDFs: embedded via iframe pointing at the storage URI.
+ * Markdown (.md, .mdx): rendered via MarkdownContent (GFM + syntax highlighting).
+ * Code files (.ts, .tsx, .js, .jsx, .py, .rs, .json, .css, .html, etc.):
+ *   syntax-highlighted via MarkdownContent with a fenced code block.
+ * Text/plain: raw pre in monospace.
  *
  * The modal is dismissible via backdrop click, the Close button, or Escape.
  */
+
+// ---------------------------------------------------------------------------
+// Extension -> language mapping for syntax highlighting
+// ---------------------------------------------------------------------------
+
+const EXT_LANG: Record<string, string> = {
+  ts: 'typescript',
+  tsx: 'tsx',
+  js: 'javascript',
+  jsx: 'jsx',
+  py: 'python',
+  rs: 'rust',
+  go: 'go',
+  java: 'java',
+  c: 'c',
+  cpp: 'cpp',
+  cs: 'csharp',
+  rb: 'ruby',
+  sh: 'bash',
+  bash: 'bash',
+  zsh: 'bash',
+  fish: 'bash',
+  json: 'json',
+  json5: 'json5',
+  yaml: 'yaml',
+  yml: 'yaml',
+  toml: 'toml',
+  css: 'css',
+  scss: 'scss',
+  sass: 'sass',
+  less: 'less',
+  html: 'html',
+  htm: 'html',
+  xml: 'xml',
+  svg: 'xml',
+  sql: 'sql',
+  graphql: 'graphql',
+  gql: 'graphql',
+  tf: 'hcl',
+  hcl: 'hcl',
+  dockerfile: 'dockerfile',
+  swift: 'swift',
+  kt: 'kotlin',
+  kts: 'kotlin',
+  dart: 'dart',
+  php: 'php',
+  lua: 'lua',
+  r: 'r',
+  md: 'markdown',
+  mdx: 'markdown',
+};
+
+/** Return the lowercase extension of a filename, without the leading dot. */
+function fileExt(fileName: string): string {
+  const name = fileName.toLowerCase();
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1) : '';
+}
 
 // ---------------------------------------------------------------------------
 // Text preview subcomponent
@@ -26,9 +87,22 @@ interface Props {
 interface TextPreviewProps {
   storageUri: string;
   fileName: string;
+  /** MIME type of the file, used as fallback when extension is ambiguous */
+  mimeType: string;
 }
 
-function TextPreview({ storageUri, fileName }: TextPreviewProps) {
+type RenderMode = 'markdown' | 'code' | 'plain';
+
+function resolveRenderMode(fileName: string, mimeType: string): RenderMode {
+  const ext = fileExt(fileName);
+  if (ext === 'md' || ext === 'mdx' || ext === 'markdown') return 'markdown';
+  if (ext in EXT_LANG && ext !== 'md' && ext !== 'mdx') return 'code';
+  // Fallback for files with missing/wrong extensions: JSON/XML MIME gets code view.
+  if (mimeType === 'application/json' || mimeType === 'application/xml') return 'code';
+  return 'plain';
+}
+
+function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
   const [text, setText] = useState<string | null>(null);
   const [error, setError] = useState(false);
 
@@ -68,8 +142,44 @@ function TextPreview({ storageUri, fileName }: TextPreviewProps) {
     );
   }
 
-  const isMarkdown = fileName.endsWith('.md') || fileName.endsWith('.markdown');
+  const mode = resolveRenderMode(fileName, mimeType);
 
+  if (mode === 'markdown') {
+    return (
+      <div
+        style={{
+          width: '100%',
+          padding: '16px 20px',
+          color: 'var(--agi-ink)',
+          fontSize: 13,
+          lineHeight: 1.65,
+          boxSizing: 'border-box',
+        }}
+      >
+        <MarkdownContent content={text} />
+      </div>
+    );
+  }
+
+  if (mode === 'code') {
+    const ext = fileExt(fileName);
+    // Prefer extension lang; fall back to sensible MIME-based guess.
+    const lang = EXT_LANG[ext] ?? (mimeType === 'application/json' ? 'json' : 'text');
+    const fenced = `\`\`\`${lang}\n${text}\n\`\`\``;
+    return (
+      <div
+        style={{
+          width: '100%',
+          padding: '8px 12px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <MarkdownContent content={fenced} />
+      </div>
+    );
+  }
+
+  // Plain text
   return (
     <pre
       style={{
@@ -77,12 +187,13 @@ function TextPreview({ storageUri, fileName }: TextPreviewProps) {
         margin: 0,
         padding: '16px 20px',
         fontFamily: 'var(--mono)',
-        fontSize: isMarkdown ? 13 : 12,
+        fontSize: 12,
         color: 'var(--agi-ink)',
         lineHeight: 1.6,
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
         overflowX: 'auto',
+        boxSizing: 'border-box',
       }}
     >
       {text}
@@ -121,16 +232,42 @@ export function FilePreviewModal({ file, onClose }: Props) {
 
   const isImage = file.mimeType.startsWith('image/');
   const isPdf = file.mimeType === 'application/pdf';
+  // A file is text-previewable if MIME is text-ish, or if its extension maps
+  // to a code language (covers .ts/.tsx/.py/.rs etc. served as
+  // application/octet-stream from some storage backends).
+  const ext = fileExt(file.fileName);
   const isText =
     file.mimeType.startsWith('text/') ||
     file.mimeType === 'application/json' ||
-    file.mimeType === 'application/xml';
+    file.mimeType === 'application/xml' ||
+    ext in EXT_LANG;
 
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
     if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${bytes} B`;
   };
+
+  async function handleDownload() {
+    try {
+      // Fetch as blob so the download attribute works cross-origin.
+      // Vercel Blob serves content-disposition: inline by default, so a bare
+      // anchor href would open the file in-tab instead of saving it.
+      const r = await fetch(file!.storageUri);
+      const blob = await r.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = file!.fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch {
+      // Fallback: open in new tab if fetch fails (e.g. CORS on non-Blob hosts)
+      window.open(file!.storageUri, '_blank', 'noopener,noreferrer');
+    }
+  }
 
   return (
     <div
@@ -178,7 +315,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
             flexShrink: 0,
           }}
         >
-          <div style={{ minWidth: 0 }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <p
               style={{
                 fontSize: 14,
@@ -188,7 +325,7 @@ export function FilePreviewModal({ file, onClose }: Props) {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                maxWidth: 600,
+                maxWidth: 560,
               }}
             >
               {file.fileName}
@@ -197,24 +334,42 @@ export function FilePreviewModal({ file, onClose }: Props) {
               {file.mimeType} &middot; {formatSize(file.byteCount)}
             </p>
           </div>
-          <button
-            type="button"
-            aria-label="Close preview"
-            onClick={onClose}
-            style={{
-              flexShrink: 0,
-              marginLeft: 12,
-              background: 'transparent',
-              border: '1px solid var(--agi-rule-strong)',
-              borderRadius: 8,
-              padding: '4px 10px',
-              fontSize: 12,
-              color: 'var(--agi-ink-2)',
-              cursor: 'pointer',
-            }}
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}
           >
-            Close
-          </button>
+            <button
+              type="button"
+              aria-label={`Download ${file.fileName}`}
+              onClick={() => void handleDownload()}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--agi-rule-strong)',
+                borderRadius: 8,
+                padding: '4px 10px',
+                fontSize: 12,
+                color: 'var(--agi-ink-2)',
+                cursor: 'pointer',
+              }}
+            >
+              Download
+            </button>
+            <button
+              type="button"
+              aria-label="Close preview"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--agi-rule-strong)',
+                borderRadius: 8,
+                padding: '4px 10px',
+                fontSize: 12,
+                color: 'var(--agi-ink-2)',
+                cursor: 'pointer',
+              }}
+            >
+              Close
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -250,7 +405,13 @@ export function FilePreviewModal({ file, onClose }: Props) {
             />
           )}
 
-          {isText && <TextPreview storageUri={file.storageUri} fileName={file.fileName} />}
+          {isText && (
+            <TextPreview
+              storageUri={file.storageUri}
+              fileName={file.fileName}
+              mimeType={file.mimeType}
+            />
+          )}
 
           {!isImage && !isPdf && !isText && (
             <div style={{ padding: 32, textAlign: 'center', width: '100%' }}>
