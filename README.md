@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-20
+Last updated: 2026-05-27
 
 > **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
 >
@@ -16,7 +16,7 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 
 > **BYOK-first launch posture (2026-05-16 → 2026-08-01)** — v1 ships as **BYOK + Local only**. All paid tiers are on **email-only waitlist** until **August 1, 2026 graduation**, when caps will be set from real BYOK telemetry instead of guesses. No subscription you can be over-charged on yet.
 >
-> **Wave 4+5 complete** (2026-05-16): 38 commits / +19,659 LOC on PR #366. v3 frontend live across all 6 surfaces behind `DESKTOP_CHAT_V3=true`. **Wave 6 in flight**: $99 Pro Max tier added (6 tiers total), waitlist mechanic, BYOK polish suite, Routing-WHY badge, 5-chip trust row, memory import/export, multi-model side-by-side (Pro+ gated), Chrome + VS Code ext finalization.
+> **R29 — Claude parity + launch readiness in flight** (2026-05-27): 368-screenshot Claude audit complete. 173 features verified end-to-end (95.4% passing). Wave 1 shipped: effort/thinking slider, language selector (Hindi + i18n), file preview, mobile LaTeX rendering. 3 bugs found via line-by-line code tracing and fixed (effort API wiring, incognito DB persistence leak, edit message prop chain). 20-artboard Claude Design prototype extracted. 13 parity gaps + 9 design prototype screens remaining across 6 parallel lanes. See `PLAN.md` R29 section.
 >
 > **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
 >
@@ -144,4 +144,4 @@ This is proprietary software. © 2026 AGI Workforce. All rights reserved.
 
 Active development. Pre-v1.0 MVP. CI on `main` should always be green; if it isn't, that's the highest-priority bug.
 
-Launch-readiness wave 1+2 complete (2026-05-15): all six surfaces (CLI, Desktop, Web, Mobile, Chrome ext, VS Code ext) verified green via `scripts/launch-verify.sh`. See [archived master plan §10.4–§10.6](docs/archive/2026-05-14-reverse-engineering-campaign/MASTER_PLAN.md#104-launch-readiness-wave-1-2026-05-15-31-commits-range-079ae721f759f6a977) for the wave-level audit closure.
+**R29 parity status** (2026-05-27): 149 Claude features audited — 100 at parity (67%), 68 AGI-ahead features, 13 gaps remaining. 15 providers and 84 models in the canonical catalog (`packages/types/src/models.json`). 165/173 total features verified working via end-to-end code tracing. 3557+ tests passing across all surfaces.

@@ -9,6 +9,7 @@ import {
   type MessageMetadata,
   type MessageToolEntry,
 } from '@/stores/chatStore';
+import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
 interface SendMessageOptions {
@@ -147,9 +148,14 @@ export function useChatStream(): UseChatStreamReturn {
       addMessage(userMessage);
 
       // Save user message to database (fire and forget, don't block)
-      saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
-        (err) => console.error('[useChatStream] Failed to save user message:', err),
-      );
+      // Skip DB persistence for temporary/incognito conversations
+      const isTemporaryConversation =
+        useChatStore.getState().conversations[conversationId]?.isTemporary;
+      if (!isTemporaryConversation) {
+        saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
+          (err) => console.error('[useChatStream] Failed to save user message:', err),
+        );
+      }
 
       // Create assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
@@ -342,6 +348,10 @@ export function useChatStream(): UseChatStreamReturn {
             web_fetch: options.webFetch || undefined,
             code_execution: options.codeExecution || undefined,
             thinking_mode: options.thinkingEnabled || undefined,
+            effort: (() => {
+              const ts = useThinkingStore.getState();
+              return ts.enabled ? ts.effort : undefined;
+            })(),
             use_prompt_cache: true,
           }),
           signal: abortControllerRef.current.signal,
@@ -478,7 +488,7 @@ export function useChatStream(): UseChatStreamReturn {
               finishRunningTools();
               setSearching(assistantMessageId, false);
               setExecutingCode(assistantMessageId, false);
-              if (fullAssistantContent) {
+              if (fullAssistantContent && !isTemporaryConversation) {
                 saveMessageToDb(
                   conversationId,
                   {
@@ -595,7 +605,7 @@ export function useChatStream(): UseChatStreamReturn {
         flushContentBuffer(true);
         // Save the complete assistant message to database (in case [DONE] wasn't received)
         finishRunningTools();
-        if (fullAssistantContent) {
+        if (fullAssistantContent && !isTemporaryConversation) {
           saveMessageToDb(
             conversationId,
             {
