@@ -620,6 +620,17 @@ export default function WebChatPage() {
     [deleteMessage],
   );
 
+  const handleEditMessage = useCallback(
+    (id: string) => {
+      if (!activeConversationId || isStreaming) return;
+      const msg = messages.find((m) => m.id === id);
+      if (!msg || msg.role !== 'user') return;
+      setComposerPrefill(msg.content);
+      deleteMessage(id);
+    },
+    [activeConversationId, messages, isStreaming, deleteMessage],
+  );
+
   const handleRegenerateMessage = useCallback(
     (id: string) => {
       if (!activeConversationId || isStreaming) return;
@@ -770,6 +781,7 @@ export default function WebChatPage() {
                   messages={chatMessages}
                   isLoading={isLoading && !isStreaming}
                   onRegenerate={handleRegenerateMessage}
+                  onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onSendMessage={(text) => setComposerPrefill(text)}
                 />

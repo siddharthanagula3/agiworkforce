@@ -101,6 +101,7 @@ export interface Conversation {
     pinned: boolean;
     archived: boolean;
   };
+  isTemporary?: boolean;
 }
 
 export interface ChatModel {
@@ -227,6 +228,7 @@ export interface ChatActions {
   toggleStarConversation: (id: string) => void;
   togglePinConversation: (id: string) => void;
   toggleArchiveConversation: (id: string) => void;
+  toggleTemporaryConversation: (id: string) => void;
   addConversationTag: (id: string, tag: string) => void;
   removeConversationTag: (id: string, tag: string) => void;
 
@@ -974,6 +976,14 @@ export const useChatStore = create<ChatStore>()(
             }
           }),
 
+        toggleTemporaryConversation: (id: string) =>
+          set((state) => {
+            if (state.conversations[id]) {
+              state.conversations[id].isTemporary = !state.conversations[id].isTemporary;
+              state.conversations[id].metadata.updatedAt = new Date();
+            }
+          }),
+
         addConversationTag: (id: string, tag: string) =>
           set((state) => {
             if (state.conversations[id] && !state.conversations[id].metadata.tags.includes(tag)) {
@@ -1055,7 +1065,9 @@ export const useChatStore = create<ChatStore>()(
         name: 'agi-chat-store',
         version: 1,
         partialize: (state) => ({
-          conversations: state.conversations,
+          conversations: Object.fromEntries(
+            Object.entries(state.conversations).filter(([, c]) => !c.isTemporary),
+          ),
           selectedModel: state.selectedModel,
           defaultSettings: state.defaultSettings,
         }),
