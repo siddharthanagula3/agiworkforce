@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Check,
   Camera,
+  Brain,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -26,6 +27,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
+import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
 import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
@@ -186,6 +188,19 @@ const ChatComposerNewComponent = ({
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
+
+  // Thinking / effort store
+  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const thinkingEffort = useThinkingStore((s) => s.effort);
+  const thinkingToggle = useThinkingStore((s) => s.toggle);
+  const thinkingCycle = useThinkingStore((s) => s.cycleEffort);
+  const handleThinkingClick = useCallback(() => {
+    if (!thinkingEnabled) {
+      thinkingToggle();
+    } else {
+      thinkingCycle();
+    }
+  }, [thinkingEnabled, thinkingToggle, thinkingCycle]);
 
   // Real connector state from the server
   const connectors = useConnectors();
@@ -1017,6 +1032,34 @@ const ChatComposerNewComponent = ({
             >
               <BookOpen className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Research</span>
+            </button>
+
+            <button
+              onClick={handleThinkingClick}
+              disabled={isLoading || disabled}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                thinkingEnabled
+                  ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label={
+                thinkingEnabled
+                  ? `Effort: ${thinkingEffort}. Click to cycle.`
+                  : 'Enable thinking effort'
+              }
+              aria-pressed={thinkingEnabled}
+              title={
+                thinkingEnabled
+                  ? `Thinking effort: ${thinkingEffort}. Click to cycle levels.`
+                  : 'Enable extended thinking with effort control'
+              }
+            >
+              <Brain className="h-3.5 w-3.5" />
+              {thinkingEnabled && (
+                <span className="hidden sm:inline capitalize">{thinkingEffort}</span>
+              )}
             </button>
           </div>
 
