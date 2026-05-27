@@ -40,6 +40,7 @@ export interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
   /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
@@ -166,6 +167,7 @@ interface MessageGroupRowProps {
   group: MessageGroup;
   isLastGroup: boolean;
   onRegenerate?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (messageId: string) => void;
@@ -176,6 +178,7 @@ interface MessageGroupRowProps {
 interface MessageRowProps {
   message: ChatMessage;
   onRegenerate?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
@@ -192,6 +195,7 @@ function getMeta(msg: ChatMessage | undefined): WebChatMessageMetadata | undefin
 const MessageRow = ({
   message,
   onRegenerate,
+  onEdit,
   onDelete,
   onPaywallUpgrade,
   onPaywallDismiss,
@@ -204,6 +208,7 @@ const MessageRow = ({
     [onRegenerate, message.id],
   );
   const handleDelete = useCallback(() => onDelete?.(message.id), [onDelete, message.id]);
+  const handleEdit = useCallback(() => onEdit?.(message.id), [onEdit, message.id]);
   const handlePaywallUpgrade = useCallback(
     () => onPaywallUpgrade?.(message.id),
     [onPaywallUpgrade, message.id],
@@ -239,6 +244,7 @@ const MessageRow = ({
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
       onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
+      onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
     />
   );
@@ -249,6 +255,7 @@ const MessageGroupRow = memo(
     group,
     isLastGroup: _isLastGroup,
     onRegenerate,
+    onEdit,
     onDelete,
     onPaywallUpgrade,
     onPaywallDismiss,
@@ -262,6 +269,7 @@ const MessageGroupRow = memo(
             key={message.id}
             message={message}
             onRegenerate={onRegenerate}
+            onEdit={onEdit}
             onDelete={onDelete}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
@@ -285,6 +293,7 @@ const MessageGroupRow = memo(
       // Re-render when paywall state changes
       getMeta(prevLast)?.paywall === getMeta(nextLast)?.paywall &&
       prev.onRegenerate === next.onRegenerate &&
+      prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss
@@ -303,6 +312,7 @@ const ChatMessageListComponent = ({
   messages,
   isLoading,
   onRegenerate,
+  onEdit,
   onDelete,
   onSendMessage,
   isUserTyping = false,
@@ -372,6 +382,8 @@ const ChatMessageListComponent = ({
 
   const handleRegenerate = useCallback((id: string) => onRegenerate?.(id), [onRegenerate]);
 
+  const handleEdit = useCallback((id: string) => onEdit?.(id, ''), [onEdit]);
+
   const handleDelete = useCallback((id: string) => onDelete?.(id), [onDelete]);
 
   const handlePaywallUpgrade = useCallback(
@@ -433,6 +445,7 @@ const ChatMessageListComponent = ({
                   group={group}
                   isLastGroup={groupIdx === groups.length - 1}
                   onRegenerate={handleRegenerate}
+                  onEdit={handleEdit}
                   onDelete={handleDelete}
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}

@@ -13,6 +13,7 @@ import {
   Check,
   Camera,
   Brain,
+  EyeOff,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ChatAIService, type SkillInfo } from '@features/chat/services/chat-ai-service';
@@ -27,6 +28,7 @@ import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
+import { useChatStore } from '@shared/stores/chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
 import { CONNECTORS } from '@features/connectors/data/connectors';
@@ -188,6 +190,18 @@ const ChatComposerNewComponent = ({
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
+
+  // Incognito / temporary chat
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
+  const isIncognito = useChatStore((s) =>
+    s.activeConversationId
+      ? (s.conversations[s.activeConversationId]?.isTemporary ?? false)
+      : false,
+  );
+  const toggleTemporary = useChatStore((s) => s.toggleTemporaryConversation);
+  const handleIncognitoToggle = useCallback(() => {
+    if (activeConversationId) toggleTemporary(activeConversationId);
+  }, [activeConversationId, toggleTemporary]);
 
   // Thinking / effort store
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
@@ -1060,6 +1074,28 @@ const ChatComposerNewComponent = ({
               {thinkingEnabled && (
                 <span className="hidden sm:inline capitalize">{thinkingEffort}</span>
               )}
+            </button>
+
+            <button
+              onClick={handleIncognitoToggle}
+              disabled={isLoading || disabled}
+              className={cn(
+                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                isIncognito
+                  ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
+                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+              )}
+              aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
+              aria-pressed={isIncognito}
+              title={
+                isIncognito
+                  ? 'Incognito mode: conversation not saved. Click to disable.'
+                  : 'Start an incognito conversation (not saved to history)'
+              }
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Incognito</span>
             </button>
           </div>
 
