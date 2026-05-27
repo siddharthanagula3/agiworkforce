@@ -18,6 +18,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/AlertDialog';
+import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -513,6 +514,11 @@ export default function GeneralSettingsPage() {
               <option value="vale">Vale (calm, precise)</option>
               <option value="echo">Echo (deep, measured)</option>
             </select>
+          </Row>
+
+          {/* Display Language */}
+          <Row label="Display Language">
+            <LanguageSelector />
           </Row>
         </div>
       </div>
