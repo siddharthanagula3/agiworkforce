@@ -15,6 +15,7 @@ import {
   getProviderDefaultModel,
   providerLabels,
 } from '@agiworkforce/types';
+import { useThinkingStore } from './thinking-store';
 
 export interface Message {
   id: string;
@@ -575,6 +576,10 @@ export const useChatStore = create<ChatStore>()(
                 stream: true,
                 temperature: options.temperature ?? defaultSettings.temperature,
                 max_tokens: options.maxTokens ?? defaultSettings.maxTokens,
+                // Thread effort from thinking-store into the LLM request when enabled
+                ...(useThinkingStore.getState().enabled && {
+                  effort: useThinkingStore.getState().effort,
+                }),
               }),
               signal: abortController.signal,
             });
