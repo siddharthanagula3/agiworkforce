@@ -34,9 +34,9 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
   const fg = isDark ? agiPalette.dark.text.primary : agiPalette.light.text.primary;
   const accentColor = isDark ? agiPalette.dark.accent.primary : agiPalette.light.accent.primary;
 
-  // Escape the latex string for safe injection into JS string literal.
-  // We only need to escape backslashes and single-quotes.
-  const escapedLatex = latex.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  // Safely pass latex via JSON.stringify, which properly escapes all special characters
+  // including backslashes, quotes, and </script> sequences.
+  const latexJson = JSON.stringify(latex);
 
   // postMessage height after render so the RN side can size the View.
   const postMessageScript = `
@@ -84,8 +84,9 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
 <script src="${KATEX_JS}"></script>
 <script>
 (function() {
+  var latex = ${latexJson};
   try {
-    katex.render('${escapedLatex}', document.getElementById('math-root'), {
+    katex.render(latex, document.getElementById('math-root'), {
       displayMode: ${display ? 'true' : 'false'},
       throwOnError: false,
       strict: false,
