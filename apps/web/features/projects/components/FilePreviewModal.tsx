@@ -165,7 +165,10 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
     const ext = fileExt(fileName);
     // Prefer extension lang; fall back to sensible MIME-based guess.
     const lang = EXT_LANG[ext] ?? (mimeType === 'application/json' ? 'json' : 'text');
-    const fenced = `\`\`\`${lang}\n${text}\n\`\`\``;
+    // Escape backticks in content to prevent breaking out of the code fence.
+    // Replace ``` with an escaped variant that markdown renderers won't interpret as a fence.
+    const escapedText = text.replace(/`/g, '\\`');
+    const fenced = `\`\`\`${lang}\n${escapedText}\n\`\`\``;
     return (
       <div
         style={{
