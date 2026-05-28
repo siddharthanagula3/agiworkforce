@@ -18,12 +18,12 @@ AGI is the public product brand. AGI Workforce is the formal platform and repo n
 
 AGI is an OpenAI/Anthropic-style application suite across six first-class surfaces:
 
+- Mobile
 - Web
 - Desktop
-- Mobile
 - CLI
-- VS Code extension
 - Chrome extension
+- VS Code extension
 
 The v1 product target is practical parity with the current ChatGPT and Claude application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or private-beta AGI managed cloud instead of being locked into one model lab.
 
@@ -100,6 +100,7 @@ OpenAI/ChatGPT baseline:
 Anthropic/Claude baseline:
 
 - Claude web/desktop includes chat, projects, artifacts, artifacts sidebar, artifact editing/versioning/export, AI-powered artifacts, artifact MCP, artifact storage, connectors/MCP, personalization, settings, and account/team controls.
+- The local Claude reference folder includes Claude Design-style canvas, artboard, prototype, and deck workflows. AGI maps this to an AGI-owned visual artifact/design workspace requirement, not to a separate seventh surface and not to copied Claude assets or product naming.
 - Claude Desktop is a native app surface for Claude chat and Claude Code/Cowork-style workflows.
 - Claude Code is available in terminal, IDE, desktop app, and browser; it reads codebases, edits files, runs commands, uses MCP, supports instructions/skills/hooks, and has permission controls.
 - Claude Code IDE integration supports VS Code, Cursor, Windsurf, and JetBrains-style workflows, editor context, diagnostics, diff viewing, file references, and quick launch.
@@ -253,6 +254,7 @@ These are the highest-risk gaps before calling v1 competitive.
 10. Web/Mobile/Desktop sync must be complete only inside app-chat boundary; CLI/VS Code/Chrome require explicit handoff.
 11. Cloud Managed must stay invite/waitlist/private beta until metering, billing, abuse, retention, deletion, and provider-term controls are verified.
 12. All six surfaces need screenshot/e2e-style UI verification for the launch-critical flows, not only typecheck/build.
+13. Visual artifact/design workspace parity is not yet specified in code: canvas, artboards, layers/assets/files, properties panel, prototype/deck preview, versioning, export, and trust labels must be designed before claiming Claude Design-style parity.
 
 ## Documentation Rule
 
