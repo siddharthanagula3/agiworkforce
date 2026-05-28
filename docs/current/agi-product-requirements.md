@@ -210,6 +210,12 @@ The external Claude reference folder at
 `/Users/siddhartha/Desktop/claude_reference` is evidence for product parity
 research only. Do not copy proprietary assets from it.
 
+The local Claude reference also includes a Claude Design-style visual workspace:
+canvas, artboards, project files, prototype mode, and deck/design generation.
+AGI treats this as a visual artifact/design workspace requirement inside the
+existing Web/Desktop/Mobile artifact model, not as a seventh first-class surface
+and not as permission to copy Claude assets, names, or layouts.
+
 ## 4. Product Principles
 
 ### 4.1 One Product, Six Surfaces
@@ -1384,6 +1390,32 @@ Artifact UI must include:
 - Error-fix loop.
 - Share/publish controls where allowed.
 
+### 17.1 Visual Artifact And Design Workspace
+
+The Claude Design reference folder introduces a deeper artifact mode that AGI
+must track as a future suite requirement. It is not Mobile v1 scope unless the
+founder explicitly narrows it into a small preview/share feature.
+
+AGI's visual artifact/design workspace must support:
+
+- Infinite or large pan/zoom canvas.
+- Fixed-size artboards for screens, slides, documents, or generated views.
+- Layers/assets/files panel.
+- Properties panel for selected object position, size, color, typography, and
+  opacity.
+- Prototype/preview mode for connected screens or deck-like flows.
+- Slide deck and design export where the generated format supports it.
+- Multi-artboard versioning/history.
+- Regenerate/iterate selected artboard or selected object.
+- Trust labels for the model/provider/tool route that created each generated
+  design object.
+- Storage, share, publish, and delete controls that follow artifact retention
+  rules.
+
+This workspace must use AGI-owned interaction and visual design. It may follow
+standard canvas/artboard conventions, but must not copy proprietary Claude
+screens, icons, wording, or assets.
+
 ## 18. Memory Requirements
 
 Memory must be explicit and controllable.
@@ -1630,26 +1662,29 @@ later implementation phases claim release readiness:
 8. Exact artifact renderer and generated-file retention defaults.
 9. Exact Desktop native host protocol for Chrome/Mobile/CLI bridges.
 10. Exact billing/usage ledger before Cloud public launch.
+11. Exact visual artifact/design workspace scope, renderer, export formats, and
+    release surface.
 
 Until resolved, these stay as tracked gaps rather than hidden assumptions.
 
 ## 26. Glossary
 
-| Term           | Meaning                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| AGI            | Public product brand.                                                                            |
-| AGI Workforce  | Formal platform and repo name.                                                                   |
-| Surface        | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                       |
-| Local          | Local-first mode with no silent provider/cloud routing.                                          |
-| BYOK           | Bring Your Own Key, direct user-owned provider route.                                            |
-| Cloud          | AGI-managed compute/provider route, invite-gated until proven.                                   |
-| Provider route | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.          |
-| Native tool    | Tool executed by the model provider's infrastructure/API.                                        |
-| AGI local tool | Tool executed by AGI on local device/host/runtime.                                               |
-| Connector      | Integration that exposes external data/actions, preferably through MCP.                          |
-| Artifact       | Generated or editable output shown outside the normal message stream.                            |
-| Memory         | Saved context AGI may use in future conversations.                                               |
-| Dispatch       | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work. |
+| Term                    | Meaning                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| AGI                     | Public product brand.                                                                                               |
+| AGI Workforce           | Formal platform and repo name.                                                                                      |
+| Surface                 | One of Mobile, Website, Desktop, CLI, Chrome Extension, VS Code Extension.                                          |
+| Local                   | Local-first mode with no silent provider/cloud routing.                                                             |
+| BYOK                    | Bring Your Own Key, direct user-owned provider route.                                                               |
+| Cloud                   | AGI-managed compute/provider route, invite-gated until proven.                                                      |
+| Provider route          | Provider plus endpoint class plus model id plus capabilities and privacy/cost metadata.                             |
+| Native tool             | Tool executed by the model provider's infrastructure/API.                                                           |
+| AGI local tool          | Tool executed by AGI on local device/host/runtime.                                                                  |
+| Connector               | Integration that exposes external data/actions, preferably through MCP.                                             |
+| Artifact                | Generated or editable output shown outside the normal message stream.                                               |
+| Visual design workspace | Canvas/artboard-based artifact workspace for generated designs, prototypes, slide-like flows, and visual documents. |
+| Memory                  | Saved context AGI may use in future conversations.                                                                  |
+| Dispatch                | Task handoff from one surface, especially Mobile, into Desktop/local or Cloud/private-beta work.                    |
 
 ## 27. PRD Maintenance Rule
 
