@@ -15,6 +15,7 @@ import { join } from 'path';
  */
 
 const WEB_ROOT = join(__dirname, '..', '..');
+const DESKTOP_ROOT = join(WEB_ROOT, '..', 'desktop');
 
 const IGNORE_DIRS = new Set([
   'node_modules',
@@ -30,7 +31,7 @@ const IGNORE_DIRS = new Set([
   '__tests__',
 ]);
 
-const VALID_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'];
+const VALID_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.html'];
 
 function walk(dir: string): string[] {
   const entries: string[] = [];
@@ -100,6 +101,42 @@ describe('iframe-sandbox regression (WEB-13)', () => {
         `WEB-13 regression — iframe sandbox combines allow-scripts + allow-same-origin:\n${msg}\n\n` +
           `This combination defeats the iframe sandbox per the W3C spec. Either ` +
           `use the cross-origin sandbox subdomain (apps/sandbox) or sandbox="allow-scripts" alone.`,
+      );
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('dynamic iframe creation assigns a sandbox before use', () => {
+    const files = [...walk(WEB_ROOT), ...walk(DESKTOP_ROOT)];
+    const offenders: { file: string; line: number; content: string }[] = [];
+
+    for (const file of files) {
+      let text: string;
+      try {
+        text = readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        if (!/createElement\(\s*['"]iframe['"]\s*\)/.test(line)) continue;
+
+        const windowText = lines.slice(i, i + 8).join('\n');
+        const hasSandbox =
+          /\.sandbox\s*=/.test(windowText) || /\.setAttribute\(\s*['"]sandbox['"]/.test(windowText);
+
+        if (!hasSandbox) {
+          offenders.push({ file, line: i + 1, content: line.trim() });
+        }
+      }
+    }
+
+    if (offenders.length > 0) {
+      const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
+      throw new Error(
+        `iframe sandbox regression — dynamic iframe creation without sandbox assignment:\n${msg}`,
       );
     }
 

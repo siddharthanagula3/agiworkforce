@@ -130,14 +130,18 @@ describe('joinWaitlist', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('lowercases and trims the email', async () => {
+  it('hashes the normalized email before storage', async () => {
     const db = makeDb(undefined, 1);
 
     await joinWaitlist(db, { email: 'TEST@EXAMPLE.COM' });
 
     expect(db.execute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO cloud_managed_waitlist'),
-      ['test@example.com', 'other'],
+      [expect.stringMatching(/^[0-9a-f]{64}$/), 'tes', 'other'],
+    );
+    expect(db.execute).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.arrayContaining(['test@example.com']),
     );
   });
 
