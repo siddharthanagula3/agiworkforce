@@ -43,6 +43,7 @@ requireIncludes('.github/workflows/ci.yml', 'python3 scripts/check-no-conflict-m
 requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=critical');
 requireIncludes('.github/workflows/ci.yml', 'pnpm audit --audit-level=high');
 requireIncludes('.github/workflows/ci.yml', 'pnpm lint');
+requireIncludes('.github/workflows/ci.yml', 'pnpm check:module-reachability');
 requireIncludes('.github/workflows/ci.yml', 'pnpm typecheck:all');
 requireIncludes('.github/workflows/ci.yml', 'pnpm test');
 requireIncludes('.github/workflows/ci.yml', 'pnpm --filter @agiworkforce/web build');

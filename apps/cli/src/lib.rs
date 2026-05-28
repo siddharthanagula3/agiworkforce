@@ -62,6 +62,7 @@ pub mod voice;
 // Extended CLI modules — used by subcommand handlers
 pub mod app_server;
 pub mod apply_patch;
+pub mod approval_audit;
 pub mod cloud;
 pub mod ecosystem;
 pub mod exec_policy;
@@ -75,6 +76,7 @@ pub mod onboarding;
 pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
+pub mod provenance;
 pub mod review;
 pub mod routing;
 // runtime lives at platform::runtime; re-exported here so all 27 call-sites
