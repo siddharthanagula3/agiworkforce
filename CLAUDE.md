@@ -4,15 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-23
+Last updated: 2026-05-28
 
-Claude-specific notes for Claude Code. `AGENTS.md` is the canonical tool-neutral agent entry point — read it first; the repo map, locked product rules, hook policy, and bug-finding workflow live there and in `docs/agent-context/`. This file mirrors critical safety/product rules so Claude Code sees them directly, while detailed maps and command inventories stay in `AGENTS.md` and `docs/agent-context/`.
+Claude-specific notes for Claude Code. `AGENTS.md` is the canonical tool-neutral agent entry point - read it first; `docs/current/source-of-truth.md` is the compact product source of truth, `docs/current/agi-product-requirements.md` is the long-form PRD and Mobile-first release spec, `docs/current/parity-implementation-matrix.md` is the feature-by-feature implementation map, and `docs/current/byok-open-model-provider-strategy.md` is the BYOK/open-model provider map. The repo map, locked product rules, hook policy, and bug-finding workflow live in `AGENTS.md`, `docs/current/`, and `docs/agent-context/`. This file mirrors critical safety/product rules so Claude Code sees them directly, while detailed maps and command inventories stay in `AGENTS.md` and `docs/agent-context/`.
 
 The repo is a pnpm + cargo monorepo with seven surfaces under `apps/` (cli, desktop, web, mobile, extension, extension-vscode, sandbox), shared TS under `packages/`, shared Rust under `crates/`, backend stubs in `services/`, and canonical migrations in `supabase/`. Path-scoped `AGENTS.md` files at each high-risk surface (`apps/{cli,desktop,web,mobile,extension,extension-vscode}/AGENTS.md`, `packages/providers/AGENTS.md`, `services/AGENTS.md`) add local rules — read the nearest one before editing.
 
 ## Claude-Specific Notes
 
-- Follow `AGENTS.md`, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
+- Follow `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/current/agi-product-requirements.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/byok-open-model-provider-strategy.md` for model/provider/BYOK work, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
 - Follow `docs/engineering/agent-harness-rollout.md` for Claude Code-style context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
 - Follow `docs/engineering/naming-conventions.md` for product names, CLI command examples, file/folder names, commits, and hooks.
 - Follow `docs/engineering/service-layer-architecture.md` when extracting repeated route/action/command mechanics into shared services.
