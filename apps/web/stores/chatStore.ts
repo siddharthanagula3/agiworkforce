@@ -112,6 +112,7 @@ export interface Conversation {
   updatedAt: string;
   model?: string | null;
   messageCount?: number;
+  isTemporary?: boolean;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';
