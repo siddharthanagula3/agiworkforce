@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import {
   searchWithPerplexity,
   searchWithGoogle,
@@ -181,7 +182,7 @@ describe('Web Search Handler', () => {
       );
 
       const requestBody = JSON.parse(mockFetchWithTimeout!.mock.calls[0]![1]!.fetchOptions.body!);
-      expect(requestBody.model).toBe('sonar-pro');
+      expect(requestBody.model).toBe(requireProviderDefaultModel('perplexity'));
       expect(requestBody.messages[1].content).toBe('test query');
     });
   });

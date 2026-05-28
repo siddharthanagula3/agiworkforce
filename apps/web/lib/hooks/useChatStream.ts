@@ -149,8 +149,9 @@ export function useChatStream(): UseChatStreamReturn {
 
       // Save user message to database (fire and forget, don't block)
       // Skip DB persistence for temporary/incognito conversations
-      const isTemporaryConversation =
-        useChatStore.getState().conversations[conversationId]?.isTemporary;
+      const isTemporaryConversation = useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary;
       if (!isTemporaryConversation) {
         saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
           (err) => console.error('[useChatStream] Failed to save user message:', err),

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-27
+Last updated: 2026-05-28
 
 > **All the AIs you already pay for, in one place. Beyond one model. Beyond one surface.**
 >
@@ -12,17 +12,28 @@ Last updated: 2026-05-27
 [![License](https://img.shields.io/badge/license-Proprietary-red)](LICENSE)
 [![Homebrew](https://img.shields.io/badge/brew-siddharthanagula3%2Ftap%2Fagiworkforce-orange)](https://github.com/siddharthanagula3/homebrew-tap)
 
-Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.js web at agiworkforce.com/chat, one Expo mobile companion, one Rust CLI, plus VS Code and Chrome extensions — all wired into the same chat layer with **10+ Providers**, MCP, browser automation, and computer-use.
+Multi-provider, local-first AI application suite. AGI is being built as a
+ChatGPT/Claude-style product across Mobile, Website, Desktop, CLI, Chrome
+Extension, and VS Code Extension, with Local, BYOK, and invite-gated Cloud
+trust modes.
 
-> **BYOK-first launch posture (2026-05-16 → 2026-08-01)** — v1 ships as **BYOK + Local only**. All paid tiers are on **email-only waitlist** until **August 1, 2026 graduation**, when caps will be set from real BYOK telemetry instead of guesses. No subscription you can be over-charged on yet.
+> **Current product lock (2026-05-28)** — development is serial by surface:
+> **Mobile → Website → Desktop → CLI → Chrome Extension → VS Code Extension**.
+> Mobile is the active release surface and is not done until public App Store
+> release. Future-surface work only starts during QA/review waiting periods
+> when explicitly requested.
 >
-> **R29 — Claude parity + launch readiness in flight** (2026-05-27): 368-screenshot Claude audit complete. 173 features verified end-to-end (95.4% passing). Wave 1 shipped: effort/thinking slider, language selector (Hindi + i18n), file preview, mobile LaTeX rendering. 3 bugs found via line-by-line code tracing and fixed (effort API wiring, incognito DB persistence leak, edit message prop chain). 20-artboard Claude Design prototype extracted. 13 parity gaps + 9 design prototype screens remaining across 6 parallel lanes. See `PLAN.md` R29 section.
+> **Launch posture** — public v1 is Local-first with explicit BYOK paths where
+> supported. Managed Cloud remains waitlist/private beta until metering,
+> provider cost snapshots, abuse/fraud controls, refunds/chargebacks,
+> retention/deletion, provider terms, and support/audit workflows are proven.
 >
-> **CLI v1.0 SHIPPED** (2026-05-03). Install: `brew install siddharthanagula3/tap/agiworkforce` or see [Quick start](#quick-start) below.
->
-> **Apple notarization unblocked** (2026-05-16): PLA renewed; macOS signed + notarized builds re-enabled. Signing identity `D2PR62RLT4`.
->
-> **Foundation Sprint shipped** at tag [`v0.7.0-foundation`](https://github.com/siddharthanagula3/agiworkforce/releases/tag/v0.7.0-foundation) (2026-05-13): central state pattern, message-queue priority lane, `packages/llm-runtime`, outbound-worker direction inversion, HKDF dispatch-key rotation, Stripe webhook idempotency RPC live in prod. Stripe wired but **dormant during waitlist period** — flips live Aug 1.
+> **Source of truth** — the long-form PRD is
+> [docs/current/agi-product-requirements.md](docs/current/agi-product-requirements.md).
+> The compact product lock is
+> [docs/current/source-of-truth.md](docs/current/source-of-truth.md), and the
+> implementation-facing parity map is
+> [docs/current/parity-implementation-matrix.md](docs/current/parity-implementation-matrix.md).
 >
 > **For contributors:** [AGI_WORKFORCE.md](AGI_WORKFORCE.md) is the product entry point and [docs/README.md](docs/README.md) gives the organized docs map.
 > **For coding agents:** read [AGENTS.md](AGENTS.md) first, then the relevant scoped `AGENTS.md` and [docs/agent-context/](docs/agent-context/).
@@ -43,20 +54,16 @@ Multi-provider, local-first AI agent platform. One Tauri desktop app, one Next.j
 
 The unique slice: **multi-provider + BYOK + local LLM all in one app, on every surface**. No competitor offers all three.
 
-## Pricing
+## Commercial Posture
 
-| Tier                                                                                 | Monthly       | Available now (until 2026-08-01)    |
-| ------------------------------------------------------------------------------------ | ------------- | ----------------------------------- |
-| Local-only (run Ollama / LM Studio yourself)                                         | Free forever  | ✅ Live                             |
-| BYOK (bring your own API keys to Anthropic/OpenAI/Google/etc.)                       | Free forever  | ✅ Live                             |
-| Hobby (managed cloud, limited credits)                                               | $10           | 📝 Waitlist — graduates Aug 1, 2026 |
-| Pro (full models, higher caps)                                                       | $29.99        | 📝 Waitlist — graduates Aug 1, 2026 |
-| **Pro+** (Pro pool + Opus 4.7 + GPT-5.5 daily caps + 60s Runway Gen-4 + voice 1500m) | $49.99        | 📝 Waitlist — graduates Aug 1, 2026 |
-| **Pro Max** (NEW — uninterrupted deep-work tier, 4-model compare, priority routing)  | **$99**       | 📝 Waitlist — graduates Aug 1, 2026 |
-| Max (highest caps, computer use, voice unlimited)                                    | $299.99       | 📝 Waitlist — graduates Aug 1, 2026 |
-| Enterprise (SSO, SCIM, custom retention)                                             | Contact sales | Contact sales                       |
+| Mode          | Public posture               | Billing posture                                                                                                  |
+| ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Local         | Public v1 direction          | No AGI-managed inference charge.                                                                                 |
+| BYOK          | Explicit user-provider route | User pays their provider directly with their own key.                                                            |
+| Managed Cloud | Waitlist/private beta        | No broad public paid launch until commercial, abuse, retention, deletion, and provider-term controls are proven. |
 
-**Why waitlist?** We're collecting 60-90 days of real BYOK telemetry before committing to per-tier caps. No subscription is sold during the waitlist period — pay your AI providers directly with your own keys. See [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) for the current commercial posture.
+See [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md)
+for the current commercial posture.
 
 ## Quick start
 
@@ -88,23 +95,29 @@ agi                  # interactive TUI
 
 ### Use the desktop app
 
-Download from [agiworkforce.com/download](https://agiworkforce.com/download) — DMG (macOS), EXE (Windows), AppImage (Linux). Auto-update built in.
+Desktop is the planned deep Local/BYOK host and third surface in the locked
+development order. See [BUILD.md](BUILD.md) for local development commands.
 
 ### Use it on the web
 
-[agiworkforce.com/chat](https://agiworkforce.com/chat) — sign in with Google or email, choose Hobby tier or BYOK.
+Website is second in the locked development order. Its launch role is product,
+download, docs, waitlist, invite status, and account shell support.
 
 ### Use it on mobile
 
-iOS App Store + Google Play — see [agiworkforce.com/mobile](https://agiworkforce.com/mobile).
+Mobile is the active release surface. Mobile v1 targets Local-first chat,
+Cloud waitlist/invite entry, privacy-clear onboarding, and public App Store
+release.
 
 ### Add the Chrome extension
 
-[Chrome Web Store listing](https://agiworkforce.com/chrome).
+Chrome Extension is fifth in the locked development order and remains the
+planned browser-context and native-bridge surface.
 
 ### Add the VS Code extension
 
-Search for "AGI Workforce" in VS Code Marketplace, or `code --install-extension agi-workforce`.
+VS Code Extension is sixth in the locked development order and remains a planned
+IDE-native developer surface.
 
 ## Build from source
 
@@ -122,6 +135,10 @@ cargo run -p agiworkforce-cli --bin agi -- exec "hello"
 ## Documentation
 
 - [docs/current/](docs/current/) — compact current product, architecture, commercial, and repo-operability docs
+- [docs/current/source-of-truth.md](docs/current/source-of-truth.md) — compact product lock, trust modes, current repo position, and P0 gaps
+- [docs/current/agi-product-requirements.md](docs/current/agi-product-requirements.md) — long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete requirements
+- [docs/current/parity-implementation-matrix.md](docs/current/parity-implementation-matrix.md) — feature/component parity matrix for implementation agents
+- [docs/current/byok-open-model-provider-strategy.md](docs/current/byok-open-model-provider-strategy.md) — BYOK, hosted open-model, local runtime, and provider/model strategy
 - [docs/current/product-suite.md](docs/current/product-suite.md) — product thesis, surfaces, trust modes, and sync boundary
 - [docs/current/technical-architecture.md](docs/current/technical-architecture.md) — monorepo shape, runtime boundaries, providers, generated files, and enterprise control plane
 - [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md) — waitlist, BYOK, managed-compute, payments, and enterprise launch rules
@@ -142,6 +159,11 @@ This is proprietary software. © 2026 AGI Workforce. All rights reserved.
 
 ## Status
 
-Active development. Pre-v1.0 MVP. CI on `main` should always be green; if it isn't, that's the highest-priority bug.
+Active development. Pre-v1.0 MVP. Current focus is Mobile v1 through public
+App Store release. CI on `main` should always be green; if it is not, that is
+the highest-priority bug.
 
-**R29 parity status** (2026-05-27): 149 Claude features audited — 100 at parity (67%), 68 AGI-ahead features, 13 gaps remaining. 15 providers and 84 models in the canonical catalog (`packages/types/src/models.json`). 165/173 total features verified working via end-to-end code tracing. 3557+ tests passing across all surfaces.
+The source-backed product status now lives in
+[docs/current/agi-product-requirements.md](docs/current/agi-product-requirements.md),
+[docs/current/source-of-truth.md](docs/current/source-of-truth.md), and
+[docs/current/parity-implementation-matrix.md](docs/current/parity-implementation-matrix.md).

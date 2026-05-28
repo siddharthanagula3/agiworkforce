@@ -1236,6 +1236,14 @@ export function getProviderDefaultModel(provider: Provider | string): string | n
   return normalizeModelId(getProviderConfig(provider)?.defaultModel);
 }
 
+export function requireProviderDefaultModel(provider: Provider | string): string {
+  const modelId = getProviderDefaultModel(provider);
+  if (!modelId) {
+    throw new Error(`No default model configured for provider: ${provider}`);
+  }
+  return modelId;
+}
+
 function normalizeProductTier(tier: string | null | undefined): ProductTier {
   switch ((tier ?? '').toLowerCase()) {
     case 'hobby':

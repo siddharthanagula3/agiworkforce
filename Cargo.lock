@@ -141,6 +141,7 @@ dependencies = [
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
  "agiworkforce-task-runtime",
+ "agiworkforce-utils-image",
  "anyhow",
  "arboard",
  "async-trait",

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-23
+Last updated: 2026-05-28
 
 Canonical tool-neutral agent entry point for AGI Workforce.
 
@@ -12,20 +12,30 @@ Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the
 
 ## After This File
 
-1. `docs/agent-context/README.md` - agent context map and rules.
-2. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
-3. `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
-4. `docs/agent-context/shared-files.md` - shared-file and collision policy.
-5. `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+Core read order:
+
+1. `docs/current/source-of-truth.md` - product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
+2. `docs/current/agi-product-requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
+3. `docs/current/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+4. `docs/current/byok-open-model-provider-strategy.md` when touching model/provider/BYOK work.
+5. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
 6. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
 7. `docs/agent-context/commands.json` - canonical commands by surface.
-8. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
-9. `PLAN.md` and `TODO.md` - active strategy and work queue.
-10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
-11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
-12. `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-13. `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
-14. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
+8. Nearest path-scoped `AGENTS.md` before editing a high-risk surface.
+9. `docs/decisions/CURRENT_DECISIONS.md` when a decision conflict appears.
+10. `PLAN.md` and `TODO.md` when planning or queueing work.
+
+On-demand context:
+
+- `docs/agent-context/README.md` - full agent context map and rules.
+- `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
+- `docs/agent-context/shared-files.md` - shared-file and collision policy.
+- `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+- `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
+- `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
+- `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+- `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+- `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
 
@@ -47,6 +57,8 @@ These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-c
 ## Product Lock
 
 AGI Workforce is an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
+
+The compact product source of truth is `docs/current/source-of-truth.md`.
 
 Locked differentiation:
 
