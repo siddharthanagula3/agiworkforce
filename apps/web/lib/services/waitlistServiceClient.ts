@@ -2,10 +2,11 @@
  * Client-side waitlist and invite-code service.
  *
  * This file is the browser-safe companion to waitlistService.ts (server-only).
- * Routes through /api/invite/redeem and /api/waitlist/join — Supabase removed.
+ * Routes through active Next.js API endpoints — Supabase browser access removed.
  */
 
 import type { InviteCodeError } from '@/components/cloud-bridge/types';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 export interface RedeemInviteResult {
   success: boolean;
@@ -19,40 +20,69 @@ export interface WaitlistEntry {
   referralSource?: string;
 }
 
+function toInviteCodeError(value: unknown): InviteCodeError {
+  if (
+    value === 'invalid_code' ||
+    value === 'expired' ||
+    value === 'fully_redeemed' ||
+    value === 'already_redeemed_by_user' ||
+    value === 'anon_signin_failed' ||
+    value === 'rpc_error'
+  ) {
+    return value;
+  }
+
+  const message = typeof value === 'string' ? value.toLowerCase() : '';
+  if (message.includes('invalid')) return 'invalid_code';
+  if (message.includes('expired')) return 'expired';
+  if (message.includes('fully') || message.includes('maximum')) return 'fully_redeemed';
+  if (message.includes('already')) return 'already_redeemed_by_user';
+  return 'rpc_error';
+}
+
 /**
- * Atomic validate + redeem via /api/invite/redeem.
+ * Atomic validate + redeem via the active claim-offer route.
  */
 export async function redeemInviteCode(code: string, source: string): Promise<RedeemInviteResult> {
+  void source;
   try {
-    const res = await fetch('/api/invite/redeem', {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch('/api/claim-offer', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         code: code.trim().toUpperCase(),
-        surface: 'web',
-        source,
       }),
     });
 
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      return { success: false, error: (body.error as InviteCodeError) ?? 'rpc_error' };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string | { code?: string; message?: string };
+      };
+      const error =
+        typeof body.error === 'object' ? (body.error.code ?? body.error.message) : body.error;
+      return { success: false, error: toInviteCodeError(error) };
     }
 
-    const data = (await res.json()) as { success?: boolean; invite_id?: string; error?: string };
+    const data = (await res.json()) as {
+      success?: boolean;
+      inviteId?: string;
+      invite_id?: string;
+      error?: string;
+    };
 
     if (data.success) {
-      return { success: true, inviteId: data.invite_id ?? undefined };
+      return { success: true, inviteId: data.inviteId ?? data.invite_id ?? undefined };
     }
 
-    return { success: false, error: (data.error as InviteCodeError) ?? 'rpc_error' };
+    return { success: false, error: toInviteCodeError(data.error) };
   } catch {
     return { success: false, error: 'rpc_error' };
   }
 }
 
 /**
- * Waitlist signup via /api/waitlist/join.
+ * Waitlist signup via /api/waitlist/cloud-managed.
  */
 export async function joinWaitlist(
   entry: WaitlistEntry,
@@ -64,12 +94,12 @@ export async function joinWaitlist(
         ? entry.referralSource
         : 'other';
 
-    const res = await fetch('/api/waitlist/join', {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch('/api/waitlist/cloud-managed', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         email: entry.email.toLowerCase().trim(),
-        name: entry.name,
         source,
       }),
     });

@@ -26,6 +26,7 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { logger } from '@/lib/logger';
+import { hashEmailForWaitlistStorage } from '@/lib/server/waitlist-email';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -59,7 +60,7 @@ interface ValidateRpcRow {
 
 // ---------------------------------------------------------------------------
 // joinWaitlist
-// Inserts into cloud_managed_waitlist (migration 20260522000000).
+// Inserts into cloud_managed_waitlist with hashed email storage.
 // Accepts a DatabaseAdapter — no auth required.
 // ---------------------------------------------------------------------------
 
@@ -68,14 +69,15 @@ export async function joinWaitlist(
   entry: WaitlistEntry,
 ): Promise<{ success: boolean; error?: string }> {
   const source = entry.source ?? 'other';
+  const { emailHash, emailPrefix } = hashEmailForWaitlistStorage(entry.email);
 
   try {
     await db.execute(
-      `INSERT INTO cloud_managed_waitlist (email, source)
-       VALUES ($1, $2)
-       ON CONFLICT (email, source) DO UPDATE
+      `INSERT INTO cloud_managed_waitlist (email_hash, email_prefix, source)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (email_hash, source) DO UPDATE
          SET updated_at = now()`,
-      [entry.email.toLowerCase().trim(), source],
+      [emailHash, emailPrefix, source],
     );
     return { success: true };
   } catch (err) {

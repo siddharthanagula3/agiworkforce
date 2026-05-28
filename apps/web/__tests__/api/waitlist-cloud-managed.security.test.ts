@@ -6,14 +6,12 @@
  * - NOT leak internal state (table name, Supabase errors, stack traces) in
  *   responses, even on error paths
  *
- * Migration findings (documented here, not blocking):
- * - Email is stored as PLAIN TEXT, not hashed — the waitlist is unauthenticated
- *   signup; email is PII but not a secret. Ops should restrict admin access.
+ * Storage contract:
+ * - Email is SHA-256 hashed before storage; only email_hash and a 3-character
+ *   display prefix are persisted.
  * - RLS posture: anon CAN insert (open signup); anon CANNOT select/update/delete
  *   (service_role only). Correct for a public-signup waitlist.
- * - Rate limit uses 'default' config (100/min/IP) — generous for a signup endpoint;
- *   a tighter 'auth-signup' limit (3/h) would reduce harvesting risk. Flagged to
- *   team-lead as a recommendation, not tested here.
+ * - Rate limit uses the dedicated 'waitlist' config (5/hour/IP), not 'default'.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -245,6 +243,25 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
         expect.stringContaining('cloud_managed_waitlist'),
         expect.arrayContaining(['other']),
       );
+    });
+
+    it('stores only email_hash and email_prefix, not plaintext email', async () => {
+      const request = makePostRequest({ email: 'TestUser@example.com', source: 'byok' });
+      const response = await POST(request);
+
+      expect(response.status).toBe(200);
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('email_hash, email_prefix, source'),
+        [
+          expect.stringMatching(/^[0-9a-f]{64}$/),
+          'tes',
+          'byok',
+          expect.any(String),
+          expect.any(String),
+        ],
+      );
+      expect(mockExecute.mock.calls[0]?.[1]).not.toContain('testuser@example.com');
+      expect(mockExecute.mock.calls[0]?.[1]).not.toContain('TestUser@example.com');
     });
 
     it('returns 400 for completely malformed body', async () => {

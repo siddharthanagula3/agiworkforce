@@ -69,10 +69,10 @@ From V6's 8-item list + cross-lane patterns. Priority-ordered.
 
 - [ ] **R26-1** Module-graph reachability CI check (Rust + TS). Asserts every `.rs` file under `apps/*/src/` has a `mod`/`pub mod` declaration reachable from `lib.rs`/`main.rs`, and every `.ts`/`.tsx` file under `apps/*/src/` resolves from the production entry point. Closes failure mode #11 across all 6 surfaces.
 - [ ] **R26-2** Consolidate `apps/web/lib/llm-providers/openai.ts` (fetch-based, used by `/api/llm/v1`) + `packages/providers/openai/` (SDK-based, used by CLI/desktop via `@agiworkforce/llm-normalize`) into one canonical adapter. R22 audit identified; V3 confirmed still drifting.
-- [ ] **R26-3** Hash `cloud_managed_waitlist.email` (currently plain text PII) + swap rate-limit key from `default` (100/min/IP) to `auth-signup` (3/h) to reduce email-harvesting surface.
+- [x] **R26-3** Hash `cloud_managed_waitlist.email` and ensure the public signup path uses a strict non-default rate-limit bucket. Closed by `20260528000000_hash_cloud_managed_waitlist_email.sql`, `0026_hash_cloud_managed_waitlist_email.sql`, shared waitlist hashing, active waitlist client endpoint wiring, and dedicated `waitlist` rate-limit verification.
 - [ ] **R26-4** Pre-commit subject-vs-payload classifier hook — warn when `docs(...)` or `chore(...)` ships >100 LOC of non-doc files. Catches commit-classifier drift (V6 saw `docs(visual-verification):` shipping 2,360 LOC of mobile feature code).
 - [ ] **R26-5** Verify every model ID in `packages/types/src/models.json` against provider catalogs (extends V2 to all 8 providers). Add `source_doc_date` field to track verification staleness.
-- [ ] **R26-6** Audit every iframe-rendering chat component for `sandbox` attribute. Start with `ArtifactThumbnailCard` (V6 finding).
+- [x] **R26-6** Audit every iframe-rendering chat component for `sandbox` attribute. Start with `ArtifactThumbnailCard` (V6 finding). Closed by sandboxing the remaining dynamic eval-viewer PDF iframes and adding the dynamic iframe regression scan.
 - [ ] **R26-7** Clarify or fix `toOtelAttributes`' `codex.usage.total_tokens` semantic — does it intentionally exclude `cacheReadInputTokens`, or is that a bug? V6 documentation gap.
 - [ ] **R26-8** Re-audit all R18-R22 commits touching CLI surface for orphan-tree pattern. V6 extrapolation: ~20 of 54 commits may carry similar issues.
 - [ ] **R26-9** Rename contradictory test case in `apps/web/lib/llm-providers/__tests__/openai-cache.test.ts` (V6 minor).

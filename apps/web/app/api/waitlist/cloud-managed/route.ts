@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { createHash } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { hashEmailForWaitlistStorage } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -30,20 +30,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
 
 const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'other']);
-
-/**
- * Hash an email and return a safe storage pair.
- * Returns { hash, prefix } where prefix is the first 3 chars of the local
- * part (before @) for loose display without retaining full PII.
- */
-function hashEmailForStorage(email: string): { hash: string; prefix: string } {
-  const normalized = email.toLowerCase().trim();
-  const hash = createHash('sha256').update(normalized).digest('hex');
-  // First 3 chars of the local part (e.g. "joh" for "john@example.com")
-  const localPart = normalized.split('@')[0] ?? normalized;
-  const prefix = localPart.slice(0, 3);
-  return { hash, prefix };
-}
 
 function isValidSource(value: unknown): value is WaitlistSource {
   return typeof value === 'string' && VALID_SOURCES.has(value as WaitlistSource);
@@ -80,7 +66,7 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const source: WaitlistSource = isValidSource(payload.source) ? payload.source : 'other';
   // Hash the email before storage. No plaintext email is persisted; the hash
   // is the dedup key. email_prefix retains 3 chars for display only.
-  const { hash: emailHash, prefix: emailPrefix } = hashEmailForStorage(payload.email as string);
+  const { emailHash, emailPrefix } = hashEmailForWaitlistStorage(payload.email as string);
   const db = getNeonDb();
   const now = new Date().toISOString();
 

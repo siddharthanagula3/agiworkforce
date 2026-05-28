@@ -1,9 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// waitlistServiceClient now routes through /api/invite/redeem and
-// /api/waitlist/join — Supabase was removed. Mock global fetch.
+// waitlistServiceClient routes through active Next.js API endpoints — Supabase
+// browser access was removed. Mock global fetch and CSRF header injection.
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
+
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
+    ...headers,
+    'x-csrf-token': 'csrf-test-token',
+  })),
+}));
 
 import { redeemInviteCode, joinWaitlist } from '../services/waitlistServiceClient';
 
@@ -28,16 +35,17 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('redeemInviteCode', () => {
-  it('POSTs to /api/invite/redeem with uppercased code', async () => {
+  it('POSTs to /api/claim-offer with uppercased code and CSRF header', async () => {
     mockFetch.mockResolvedValue(makeJsonResponse({ success: true, invite_id: 'inv-abc' }));
 
     const result = await redeemInviteCode('abcdef', 'connectors');
 
     expect(mockFetch).toHaveBeenCalledWith(
-      '/api/invite/redeem',
+      '/api/claim-offer',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ code: 'ABCDEF', surface: 'web', source: 'connectors' }),
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-test-token' }),
+        body: JSON.stringify({ code: 'ABCDEF' }),
       }),
     );
     expect(result).toEqual({ success: true, inviteId: 'inv-abc' });
@@ -51,7 +59,7 @@ describe('redeemInviteCode', () => {
   });
 
   it('returns typed error from API body on invalid_code', async () => {
-    mockFetch.mockResolvedValue(makeJsonResponse({ success: false, error: 'invalid_code' }));
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: false, error: 'Invalid invite code' }));
 
     const result = await redeemInviteCode('ABCDEF', 'connectors');
     expect(result).toEqual({ success: false, error: 'invalid_code' });
@@ -98,6 +106,20 @@ describe('joinWaitlist', () => {
 
     const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.email).toBe('test@example.com');
+  });
+
+  it('POSTs to the active Cloud Managed waitlist endpoint with CSRF header', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
+    await joinWaitlist({ email: 'test@example.com' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/waitlist/cloud-managed',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-test-token' }),
+      }),
+    );
   });
 
   it('maps unknown referralSource to other in POST body', async () => {
