@@ -3,6 +3,7 @@ pub mod agi;
 pub mod artifacts;
 pub mod codebase;
 pub mod embeddings;
+pub mod hooks;
 pub mod intent;
 pub mod llm;
 pub mod mcp;

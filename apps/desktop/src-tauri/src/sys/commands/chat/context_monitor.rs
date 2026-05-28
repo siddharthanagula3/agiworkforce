@@ -39,6 +39,10 @@ const MIN_MESSAGES_FOR_AUTO_COMPACT: usize = 12;
 /// Number of recent messages to preserve verbatim during compaction.
 const KEEP_RECENT_MESSAGES: usize = 10;
 
+/// Conservative fallback used when a BYOK/local model is not in the bundled
+/// catalog. Known catalog models still use `models.json` as the source of truth.
+const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
+
 /// Per-conversation cooldown tracker.  Records the last time auto-compaction
 /// was performed for each conversation so we respect the cooldown window.
 static LAST_COMPACT_TIMES: std::sync::LazyLock<Mutex<HashMap<i64, Instant>>> =
@@ -105,7 +109,7 @@ pub async fn maybe_compact_context(
     let total_tokens = TokenCounter::estimate_prompt_tokens(llm_messages) as usize;
 
     // Look up the context window for this model
-    let context_window = models_config::get_context_window(model) as usize;
+    let context_window = resolve_context_window(model);
 
     // Build the auto-compaction config (uses 95% threshold by default)
     let auto_config = CompactionConfig::default();
@@ -251,6 +255,16 @@ pub async fn maybe_compact_context(
     );
 
     Ok(true)
+}
+
+fn resolve_context_window(model: &str) -> usize {
+    let canonical_model_id = models_config::get_canonicalized_id(model);
+    models_config::config()
+        .models
+        .get(&canonical_model_id)
+        .map(|entry| entry.context_window as usize)
+        .filter(|window| *window > 0)
+        .unwrap_or(DEFAULT_CONTEXT_WINDOW)
 }
 
 /// Rebuild the in-memory LLM message list after compaction.

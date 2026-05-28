@@ -15,6 +15,7 @@ pub mod branching;
 pub mod browser_context;
 pub mod cloud;
 pub mod compaction;
+pub mod context_monitor;
 pub mod control;
 pub mod conversation;
 pub mod cost;
