@@ -84,6 +84,11 @@ jobs:
         # run_hooks() call site in apps/cli/src. Static grep — no cargo build.
         run: pnpm check:hook-fire-sites
 
+      - name: Module reachability gate
+        # R26-1 prevention layer: Rust files under CLI/Desktop native sources
+        # must be reachable from lib.rs, main.rs, or bin roots.
+        run: pnpm check:module-reachability
+
       - name: Extension AP-02 — no hardcoded color literals
         # R27-PARITY: extension must use var(--agi-ext-*) design tokens; no hex/rgb/hsl literals.
         run: pnpm --filter @agiworkforce/extension check:no-hex
