@@ -101,6 +101,17 @@ impl ResearchMode {
         }
     }
 
+    /// Returns the default parallelism to use when routing research through
+    /// the swarm executor.
+    pub fn recommended_max_agents(&self) -> usize {
+        match self {
+            ResearchMode::Quick => 1,
+            ResearchMode::Standard => 3,
+            ResearchMode::Deep => 5,
+            ResearchMode::Exhaustive => 8,
+        }
+    }
+
     /// Returns the absolute timeout for this research mode.
     pub fn timeout(&self) -> Duration {
         self.duration_range().1

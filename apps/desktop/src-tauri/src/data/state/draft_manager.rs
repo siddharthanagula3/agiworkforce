@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Result as SqliteResult};
+use rusqlite::{Connection, OptionalExtension, Result as SqliteResult};
 use std::sync::{Arc, Mutex};
 use chrono::Utc;
 use serde_json;

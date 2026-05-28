@@ -6,8 +6,8 @@
 //!
 //! Uses the `LLMRouter` for all API calls. The router normalizes Anthropic
 //! responses into `LLMResponse` with `finish_reason` and `tool_calls`.
-//! Image-based tool results are sent via `ToolResultInput.image_base64`,
-//! which the Anthropic adapter serializes as content arrays with image blocks.
+//! Screenshot tool results are currently returned as JSON text payloads because
+//! the shared `ToolResultInput` contract only carries text content.
 
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
@@ -103,7 +103,7 @@ pub struct ComputerUseResult {
 /// 2. Send via router → get `LLMResponse`
 /// 3. Check `finish_reason` and `tool_calls`
 /// 4. Parse actions from `ToolCall.arguments` → execute via `ActionExecutor`
-/// 5. Build tool result `ChatMessage` with `ToolResultInput.image_base64`
+/// 5. Build tool result `ChatMessage` with text-encoded screenshot payloads
 /// 6. Loop until no more tool calls
 pub struct AnthropicComputerUseAgent {
     llm_router: Arc<RwLock<LLMRouter>>,
@@ -272,7 +272,6 @@ impl AnthropicComputerUseAgent {
                                 tool_call.name
                             ),
                             is_error: true,
-                            image_base64: None,
                         },
                     });
                     continue;
@@ -296,7 +295,6 @@ impl AnthropicComputerUseAgent {
                                 tool_use_id: tool_call.id.clone(),
                                 content: format!("Failed to parse action: {}", e),
                                 is_error: true,
-                                image_base64: None,
                             },
                         });
                         continue;
@@ -304,9 +302,7 @@ impl AnthropicComputerUseAgent {
                 };
 
                 // Safety check
-                let decision = self
-                    .safety_layer
-                    .evaluate_with_session_context(&action, actions_executed);
+                let decision = self.safety_layer.evaluate_action(&action);
 
                 if !decision.allowed {
                     let reason = decision
@@ -321,7 +317,6 @@ impl AnthropicComputerUseAgent {
                             tool_use_id: tool_call.id.clone(),
                             content: format!("Action blocked: {}", reason),
                             is_error: true,
-                            image_base64: None,
                         },
                     });
                     continue;
@@ -335,7 +330,6 @@ impl AnthropicComputerUseAgent {
                                 tool_use_id: tool_call.id.clone(),
                                 content: format!("Action blocked: {}", block_reason),
                                 is_error: true,
-                                image_base64: None,
                             },
                         });
                         continue;
@@ -371,7 +365,6 @@ impl AnthropicComputerUseAgent {
                                 tool_use_id: tool_call.id.clone(),
                                 content: format!("Action failed: {}", e),
                                 is_error: true,
-                                image_base64: None,
                             },
                         });
                         continue;
@@ -399,9 +392,11 @@ impl AnthropicComputerUseAgent {
                 tool_result_parts.push(ContentPart::ToolResult {
                     tool_result: ToolResultInput {
                         tool_use_id: tool_call.id.clone(),
-                        content: String::new(),
+                        content: serde_json::json!({
+                            "screenshot_base64": post_screenshot_b64
+                        })
+                        .to_string(),
                         is_error: false,
-                        image_base64: Some(post_screenshot_b64),
                     },
                 });
             }

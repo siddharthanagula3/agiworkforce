@@ -47,6 +47,7 @@ mod calendar_executor;
 mod cloud_executor;
 mod code_executor;
 mod database_executor;
+pub mod deploy_executor;
 mod email_executor;
 mod file_executor;
 pub mod git_executor;
