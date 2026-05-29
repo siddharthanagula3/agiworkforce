@@ -114,6 +114,28 @@ export interface ModelMetadata {
   deprecated?: boolean;
   /** Lifecycle status. Defaults to 'active' if omitted. */
   status?: ModelStatus;
+  /** Cost per million cached input tokens (USD), when the provider supports prompt caching. */
+  cached_input?: number;
+  /** Per-image cost (USD) for image-generation models (non-token pricing). */
+  imagePerImageCost?: number;
+  /** Per-second cost (USD) for video-generation models (non-token pricing). */
+  videoPerSecondCost?: number;
+  /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
+  pricingNote?: string;
+  /** ISO date after which the model is deprecated; null/absent = not scheduled. */
+  deprecation_date?: string | null;
+  /** ISO timestamp after which promotional pricing reverts to post_promo_prices. */
+  promo_expires_at?: string | null;
+  /** Standard prices that take effect once promo_expires_at has passed. */
+  post_promo_prices?: { input: number; output: number; cached_input?: number };
+  /** Tokenizer drift multiplier vs the catalog baseline (cost/latency estimation safety). */
+  tokenizer_drift_factor?: number;
+  tokenizer_drift_range?: { min: number; max: number; unit: string };
+  tokenizer_drift_warning?: string;
+  /** Legacy/EOL model ids this model supersedes (deprecation-forward redirect aid). */
+  supersedes?: string[];
+  supersedes_effective_date?: string;
+  supersedes_note?: string;
 }
 
 /**
