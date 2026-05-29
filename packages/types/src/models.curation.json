@@ -1038,8 +1038,7 @@
         "Cost-Effective"
       ],
       "deprecation_date": null,
-      "promo_expires_at": "2026-05-31T15:59:00Z",
-      "post_promo_prices": { "input": 1.74, "output": 3.48, "cached_input": 0.0145 }
+      "pricingNote": "DeepSeek made its 75% V4-Pro launch discount permanent on 2026-05-22: flat $0.435/$0.87 per 1M tokens, cache-read $0.003625. No post-promo reversion."
     },
     "qwen-max": {
       "id": "qwen-max",
