@@ -620,7 +620,10 @@ impl AgentOrchestrator {
                         match pdf_handler.extract_text(path).await {
                             Ok(text) => {
                                 let truncated_text = if text.len() > 10000 {
-                                    format!("{}... (truncated)", &text[..10000])
+                                    format!(
+                                        "{}... (truncated)",
+                                        &text[..crate::core::agi::floor_char_boundary(&text, 10000)]
+                                    )
                                 } else {
                                     text
                                 };
