@@ -369,10 +369,28 @@ network)" so the skipped-cloud path is auditable. Added `#[tokio::test]
 test_extract_session_summary_local_only_stays_on_device`. Verify: `cargo check -p agiworkforce-cli` exit 0;
 all 17 memory_pipeline tests pass.
 
-**Part 2 — desktop `sys/commands` panic triage: IN PROGRESS (focused, non-exhaustive).** The crates/ + cli
-production crash surface was already verified clean (prior session). The desktop command surface has 1406
-`#[tauri::command]` handlers and ~283 unwrap/expect/panic sites across them (many are tests/invariants).
-Triaging via workflow for genuinely user-reachable, recoverable panics; fixing a high-confidence set.
+**Part 2 — desktop `sys/commands` + `core/agi` panic triage: VERIFIED CLEAN.** Ran the
+`batch3-panic-triage` workflow (4 Explore agents partitioning sys/commands top-level, sys/commands/chat,
+sys/commands subdirs, and core/agi). Results:
+
+- `sys/commands` (1406 `#[tauri::command]` handlers, top-level + chat + subdirs): **ZERO** genuine
+  user-reachable crashers. Every unwrap/expect is a test, a compile-time constant, an idiomatic mutex lock,
+  `unwrap_or` with a default, or internal serialization of a fixed type.
+- `core/agi`: the agent flagged 3 "high" sites — **I verified all 3 as FALSE POSITIVES** (read-before-write;
+  did not apply the recommended changes, which would have been churn on non-bugs, violating invariant #2):
+  - `project_memory.rs:327` + `:484` (`&json_escaped[1..len-1]`): `style_key`/`decision` are `&str` (Tauri
+    boundary `String`). `serde_json::to_string(&str)` and the `format!("\"{}\"", …)` fallback ALWAYS yield a
+    quoted string ≥2 bytes, so `[1..len-1]` is always a valid slice (min `[1..1]`), and the boundaries sit on
+    the ASCII quotes (no UTF-8 issue). No panic possible.
+  - `conversation_summarizer.rs:694` (`body["choices"][0]["message"]["content"]`): serde_json `Value`
+    indexing returns `Value::Null` for missing keys/wrong types — it never panics; `.as_str()` then yields
+    `None`, handled by `.ok_or_else`. No panic possible.
+
+**Batch 3 DoD ("no panic/unwrap on user-reachable paths; app degrades, never crashes") = MET & verified:**
+crates/ + cli production paths clean (prior session, re-confirmed compiling); desktop UTF-8 byte-slice
+panics fixed (`8653faf74`); desktop command + core/agi surface has zero genuine user-reachable crashers
+(this triage); CLI memory trust-boundary gated + tested (Part 1). The raw audit panic/unwrap counts remain
+high but are verified to be tests + invariants + panic-safe library semantics — the noise the brief warns of.
 
 ### Batch 4 — Auth unification ✅ VERIFIED (the migration already collapsed the fork)
 
