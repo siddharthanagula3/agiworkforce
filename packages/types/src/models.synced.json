@@ -1,27 +1,6 @@
 {
   "source": "models.dev",
   "models": {
-    "auto": {
-      "contextWindow": 128000,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": true,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "speed": "fast",
-      "released": "January 2026"
-    },
     "gpt-5.5": {
       "contextWindow": 1050000,
       "inputCost": 5,
@@ -218,93 +197,6 @@
       "speed": "fast",
       "released": "April 2026"
     },
-    "grok-4": {
-      "contextWindow": 256000,
-      "inputCost": 3,
-      "outputCost": 15,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true
-      },
-      "benchmarks": { "swebench": 55.3, "humaneval": 94.2, "mmlu": 89.8, "gpqa": 74.5, "aime": 70 },
-      "speed": "fast",
-      "released": "January 2026"
-    },
-    "grok-4-fast-non-reasoning": {
-      "contextWindow": 2000000,
-      "inputCost": 0.2,
-      "outputCost": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": { "swebench": 35, "humaneval": 75, "mmlu": 78, "gpqa": 42, "aime": 30 },
-      "speed": "very-fast",
-      "released": "January 2026"
-    },
-    "grok-4-fast-reasoning": {
-      "contextWindow": 2000000,
-      "inputCost": 0.2,
-      "outputCost": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true
-      },
-      "benchmarks": { "swebench": 48, "humaneval": 85, "mmlu": 85, "gpqa": 60, "aime": 55 },
-      "speed": "fast",
-      "released": "January 2026"
-    },
-    "grok-4-1-fast-reasoning": {
-      "contextWindow": 2000000,
-      "inputCost": 0.2,
-      "outputCost": 0.5,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": true
-      },
-      "speed": "fast",
-      "released": "March 2026"
-    },
     "deepseek-v4-flash": {
       "contextWindow": 1000000,
       "inputCost": 0.14,
@@ -439,28 +331,6 @@
       "speed": "very-fast",
       "released": "January 2026"
     },
-    "qwen-coder-plus": {
-      "contextWindow": 128000,
-      "inputCost": 0.5,
-      "outputCost": 2,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": true
-      },
-      "benchmarks": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
-      "speed": "fast",
-      "released": "January 2026"
-    },
     "kimi-k2.6": {
       "contextWindow": 262144,
       "inputCost": 0.6,
@@ -549,28 +419,6 @@
       "speed": "very-fast",
       "released": "January 2025"
     },
-    "codestral-2": {
-      "contextWindow": 256000,
-      "inputCost": 0.3,
-      "outputCost": 0.9,
-      "capabilities": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
-      "speed": "very-fast",
-      "released": "January 2026"
-    },
     "pixtral-large": {
       "contextWindow": 131072,
       "inputCost": 2,
@@ -658,28 +506,6 @@
       "speed": "medium",
       "released": "December 2025"
     },
-    "glm-4.6v-flash": {
-      "contextWindow": 128000,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": { "swebench": 45, "humaneval": 75, "mmlu": 78, "gpqa": 40, "aime": 45 },
-      "speed": "very-fast",
-      "released": "December 2025"
-    },
     "sonar": {
       "contextWindow": 128000,
       "inputCost": 1,
@@ -700,28 +526,6 @@
       },
       "benchmarks": { "mmlu": 75 },
       "speed": "fast",
-      "released": "January 2026"
-    },
-    "sonar-reasoning": {
-      "contextWindow": 128000,
-      "inputCost": 1,
-      "outputCost": 5,
-      "capabilities": {
-        "streaming": true,
-        "tools": false,
-        "vision": false,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": false,
-        "codeExecution": false
-      },
-      "benchmarks": { "mmlu": 82, "gpqa": 55 },
-      "speed": "medium",
       "released": "January 2026"
     },
     "sonar-reasoning-pro": {
@@ -789,27 +593,6 @@
       "benchmarks": { "mmlu": 88 },
       "speed": "slow",
       "released": "January 2026"
-    },
-    "nvidia/llama-3.3-70b-instruct": {
-      "contextWindow": 131072,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speed": "fast",
-      "released": "2024"
     },
     "groq-llama-3.3-70b": {
       "contextWindow": 131072,
