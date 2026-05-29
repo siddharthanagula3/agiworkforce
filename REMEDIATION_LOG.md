@@ -260,3 +260,39 @@ targets are partly stale; each was checked for live-render-path mount status:
 
 This is exactly the audit-is-noisy lesson: a blind fan-out would have "fixed" non-problems and missed
 the real one. Batch 2 will investigate-then-fix.
+
+### Batch 1 — Dependency correctness ✅
+
+DoD = "every app/service builds in isolation from a cold install." Verified each brief-named dep for
+genuine direct-import-but-undeclared status (invariant #2: don't add unused deps).
+
+**ADDED (directly imported, undeclared → would break a strict cold install):**
+
+- `apps/web` deps: `highlight.js@^11.11.1`. `EnhancedMarkdownRenderer.tsx`/`MarkdownContent.tsx`/`BlogPost.tsx`
+  do `import 'highlight.js/styles/github-dark.css'`. The CSS file exists ONLY in 11.x; the tree had both
+  10.7.3 (no CSS) and 11.11.1 (has CSS, pulled by rehype-highlight→lowlight). Declaring 11.11.1 directly
+  makes the CSS import deterministic. Verified: web now resolves highlight.js → 11.11.1.
+- `apps/extension-vscode` devDeps: `glob@^10.5.0`, `mocha@^11.7.5`, `@types/mocha@^10.0.10`.
+  `src/test/suite/index.ts` does `require('glob')` + `require('mocha')` for the integration test runner
+  (the file's own comment said to install them). Test infra → devDeps.
+- root devDeps: `@eslint/js@^9.39.4`. `eslint.config.mjs` does `import js from '@eslint/js'`.
+- `services/api-gateway` devDeps: `@types/qs@^6.14.0`, `@types/express-serve-static-core@^5.1.1`. The brief
+  named `qs`+`express-serve-static-core`, but both are TYPE-ONLY imports (`ParsedQs`, `ParamsDictionary`)
+  in `middleware/asyncHandler.ts` — the correct deps are the `@types/*` packages. (`@types/express@5` is
+  already declared and transitively provides them; the explicit decls make cold install deterministic.)
+
+**NOT ADDED (deliberate, logged — brief's list was partly wrong):**
+
+- `pg` (packages/data-layer): the brief assumed data-layer imports `pg`. It does NOT. `adapters/postgres.ts`
+  is a `NotImplementedError` STUB; every `pg` reference is JSDoc documenting future wiring (even a literal
+  `pnpm add pg` instruction in a comment). The real code import is `from '../types'`. Adding `pg` would
+  introduce an UNUSED runtime dep — violates the brief's own "genuinely-undeclared" principle. **Flagged.**
+- `@expo/config-plugins` (apps/mobile): required directly in `native/android/*.cjs` config plugins, but it
+  is part of `expo`'s contract (expo ~55 bundles & guarantees it; it resolves today, v5). Declaring a
+  divergent direct copy risks the classic duplicate-instance plugin failure. Standard Expo guidance is to
+  let `expo` manage it. **Decision: not added; flagged** (invariant #6 — most-integrated reversible choice).
+
+**Verification:** `pnpm install` (6.8s, no new downloads — versions already present) → `pnpm install
+--frozen-lockfile` **exit 0** (1.2s; lockfile now complete & consistent). `pnpm --filter
+@agiworkforce/api-gateway build` exit 0 (with the explicit @types). web/vscode/root resolution confirmed.
+Audit signals unchanged (dep decls don't touch code). No regression.

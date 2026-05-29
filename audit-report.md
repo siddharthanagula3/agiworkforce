@@ -2,7 +2,7 @@
 
 > RECONSTRUCTED instrument (original deleted). New-instrument numbers — compare deltas only within this script, NOT to the prior documented baseline.
 >
-> HEAD: `6bb5b0417`
+> HEAD: `edad0802e`
 
 | Signal                                      | Count |
 | ------------------------------------------- | ----: |
@@ -15,4 +15,4 @@
 | Duplicate-version files                     |     3 |
 | Rust panic!()                               |   220 |
 | Rust unreachable!()                         |     3 |
-| Rust .unwrap()/.expect()                    |  5798 |
+| Rust .unwrap()/.expect()                    |  5797 |
