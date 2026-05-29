@@ -25,14 +25,7 @@ import { runInlineCommand } from './runInlineCommand';
 import { resolveTier } from '../integrations/tierResolver';
 import { guardProviderSwitch } from '../integrations/providerSwitchGuard';
 import { getActiveWorkspaceFolder } from '../platform/workspaceFolders';
-import {
-  getApiKey,
-  setApiKey,
-  clearApiKey,
-  setSupabaseJwt,
-  clearSupabaseJwt,
-  fetchTierInfo,
-} from '../utils/api';
+import { getApiKey, setApiKey, clearApiKey, fetchTierInfo } from '../utils/api';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
 import {
@@ -332,39 +325,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (choice === 'Clear') {
         await clearApiKey(context.secrets);
         vscode.window.showInformationMessage('AGI Workforce API key cleared.');
-      }
-    }),
-
-    vscode.commands.registerCommand('agi-workforce.setSupabaseJwt', async () => {
-      const jwt = await vscode.window.showInputBox({
-        prompt:
-          'Paste your AGI Workforce Supabase JWT (sign in at agiworkforce.com → Settings → API → "Copy session token")',
-        placeHolder: 'eyJhbGciOiJIUzI1NiIsInR5cCI6...',
-        password: true,
-        ignoreFocusOut: true,
-        validateInput: (value) => {
-          if (!value || value.trim().length === 0) return 'JWT cannot be empty';
-          if (!value.startsWith('eyJ')) return 'Looks malformed — Supabase JWTs start with "eyJ"';
-          return undefined;
-        },
-      });
-      if (jwt && jwt.trim().length > 0) {
-        await setSupabaseJwt(context.secrets, jwt.trim());
-        vscode.window.showInformationMessage(
-          'Supabase JWT stored. Toggle "agiWorkforce.useProviderStream" to route chat through the new pipeline.',
-        );
-      }
-    }),
-
-    vscode.commands.registerCommand('agi-workforce.clearSupabaseJwt', async () => {
-      const choice = await vscode.window.showWarningMessage(
-        'Clear the stored Supabase JWT?',
-        { modal: true },
-        'Clear',
-      );
-      if (choice === 'Clear') {
-        await clearSupabaseJwt(context.secrets);
-        vscode.window.showInformationMessage('Supabase JWT cleared.');
       }
     }),
 

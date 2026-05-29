@@ -114,29 +114,3 @@ export type McpEventType =
   | 'mcp:tool_execution_completed'
   | 'mcp:system_initialized'
   | 'mcp:configuration_updated';
-
-export type McpOAuthProvider = 'github' | 'google_drive' | 'slack';
-
-export interface McpOAuthStartResponse {
-  authUrl: string;
-  state: string;
-}
-
-export interface McpOAuthTokenResponse {
-  provider: string;
-  connected: boolean;
-  expiresAt: number | null;
-}
-
-export interface McpOAuthUserInfo {
-  id: string;
-  name: string | null;
-  email: string | null;
-  avatarUrl: string | null;
-}
-
-export interface McpOAuthConnectionStatus {
-  connected: boolean;
-  userInfo: McpOAuthUserInfo | null;
-  expiresAt: number | null;
-}

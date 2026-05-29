@@ -2,13 +2,138 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Chrome Extension — AI alongside every webpage | AGI',
-  description:
-    'A side panel that lives on top of any tab. Read the page, ask a question, get a tool call back. The extension is the UI; your desktop is the brain. No model runs in the browser.',
+  title: 'Chrome Extension: AI alongside every webpage',
+  description: `A Chrome side panel for page-aware AGI workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
+
+/** Inline screenshot placeholder card — no images needed at launch. */
+function ScreenshotPlaceholder({ label, description }: { label: string; description: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule-strong)',
+        borderRadius: 12,
+        overflow: 'hidden',
+      }}
+    >
+      {/* Mock browser chrome bar */}
+      <div
+        style={{
+          background: 'var(--agi-bg-3)',
+          borderBottom: '1px solid var(--agi-rule)',
+          padding: '10px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            color: 'var(--agi-ink-quiet)',
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          {label}
+        </span>
+      </div>
+      {/* Placeholder body */}
+      <div
+        style={{
+          padding: '32px 24px',
+          minHeight: 160,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
+        }}
+      >
+        <p
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: 'var(--agi-amber)',
+            margin: 0,
+          }}
+        >
+          Screenshot
+        </p>
+        <p
+          style={{
+            fontSize: 14,
+            color: 'var(--agi-ink-2)',
+            textAlign: 'center',
+            maxWidth: 320,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+const FEATURES = [
+  {
+    label: 'Side panel chat',
+    body: 'Persistent side panel alongside any tab. The conversation carries page context automatically.',
+  },
+  {
+    label: 'Page reader',
+    body: 'Content scripts extract structured text from articles, docs, and tickets. No copy-paste.',
+  },
+  {
+    label: 'Desktop bridge',
+    body: 'Native messaging to AGI Desktop lets the extension use Local, BYOK, or invited Cloud without storing model keys in Chrome.',
+  },
+  {
+    label: 'BYOK across providers',
+    body: 'Model execution does not happen inside the extension. Keys stay in the selected Local, BYOK, or invited Cloud boundary.',
+  },
+  {
+    label: 'Privacy by design',
+    body: 'Page context follows the selected trust boundary: Local desktop, chosen BYOK provider, or invited Cloud.',
+  },
+];
 
 export default function ChromeExtensionPage() {
   return (
@@ -16,23 +141,47 @@ export default function ChromeExtensionPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
           <h1 className="agi-page-h1">AI alongside every webpage.</h1>
           <p className="agi-page-lede">
             A side panel that lives on top of any tab. Read the page you&rsquo;re on, ask a
-            question, get a tool call back.{' '}
-            <strong>
-              The extension is the UI. Your desktop is the brain. No model runs in the browser.
-            </strong>
+            question.{' '}
+            <strong>The extension is the UI. Desktop, BYOK, or invited Cloud is the brain.</strong>{' '}
+            {POSITIONING.trustBoundary}
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
-              Install dev build
+              {LAUNCH.ctaLabel}
             </Link>
             <Link href="/desktop" className="agi-cta-ghost">
-              Pair with desktop →
+              Pair with desktop &rarr;
             </Link>
           </div>
         </section>
+
+        {/* ---- SCREENSHOTS ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            <ScreenshotPlaceholder
+              label="Side panel: chat alongside any tab"
+              description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
+            />
+            <ScreenshotPlaceholder
+              label="Page reader"
+              description="Content scripts extract structured text from articles, docs, and tickets. No copy-paste needed."
+            />
+          </div>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">The architecture</p>
           <ol className="agi-steps">
@@ -46,41 +195,58 @@ export default function ChromeExtensionPage() {
             </li>
             <li className="agi-step">
               <span className="agi-step-n">02 / Native messaging bridge</span>
-              <h3 className="agi-step-h">Bridge to your desktop on localhost:8787</h3>
+              <h3 className="agi-step-h">Bridge to your desktop</h3>
               <p className="agi-step-body">
-                The intent flows through Chrome&rsquo;s native messaging API to the AGI desktop
-                process running on your machine.
+                Intent routes through Chrome&rsquo;s native messaging API to the AGI desktop process
+                when the user chooses Local or BYOK execution.
               </p>
             </li>
             <li className="agi-step">
               <span className="agi-step-n">03 / Desktop executes</span>
               <h3 className="agi-step-h">Desktop executes</h3>
               <p className="agi-step-body">
-                Tool calls and model traffic happen on your desktop with full BYOK or local-mode
-                access. Results stream back into the side panel.
+                Tool calls and model traffic happen through the selected trust boundary. Results
+                stream back into the side panel with the active route visible.
               </p>
             </li>
           </ol>
         </section>
+
+        {/* ---- FEATURES GRID ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Features</p>
+          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="Extension features">
+            {FEATURES.map((f) => (
+              <li key={f.label} className="agi-perk-card">
+                <p className="agi-perk-title">{f.label}</p>
+                <p className="agi-perk-description">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">Built-in</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Side panel + popup</h3>
+              <h3 className="agi-reason-h">Side panel chat</h3>
               <p className="agi-reason-p">
-                Chat alongside any tab. Quick-access popup for one-off questions.
+                Persistent side panel alongside any tab. The conversation carries page context
+                automatically.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Platform assistants</h3>
+              <h3 className="agi-reason-h">Page reader</h3>
               <p className="agi-reason-p">
-                Context-aware on Slack, Gmail, Calendar, Docs, GitHub. Triggered automatically.
+                Content scripts extract structured text from articles, docs, and tickets. No
+                copy-paste.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Job autofill</h3>
+              <h3 className="agi-reason-h">Desktop bridge</h3>
               <p className="agi-reason-p">
-                One-click application autofill on LinkedIn and Lever. Pulls your profile context.
+                Native messaging to AGI Desktop keeps model keys and local tools out of the browser
+                extension process.
               </p>
             </li>
           </ul>
@@ -95,15 +261,15 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Bridge</td>
-                <td>Native messaging on localhost:8787</td>
+                <td>Native messaging to AGI Desktop on the July 12 public release path</td>
               </tr>
               <tr>
                 <td>Browser model</td>
-                <td>None — desktop runs all inference</td>
+                <td>None; desktop runs all inference</td>
               </tr>
               <tr>
                 <td>Web Store</td>
-                <td>Listing in review — install the dev build until then</td>
+                <td>Public release aligned to {LAUNCH.date}</td>
               </tr>
             </tbody>
           </table>

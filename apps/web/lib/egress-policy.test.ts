@@ -177,7 +177,6 @@ describe('validateEgressUrl — service allowlist (unchanged behavior)', () => {
   it('allows known providers', () => {
     expect(() => validateEgressUrl('https://api.anthropic.com/v1/messages')).not.toThrow();
     expect(() => validateEgressUrl('https://api.openai.com/v1/chat/completions')).not.toThrow();
-    expect(() => validateEgressUrl('https://my-project.supabase.co/rest/v1/users')).not.toThrow();
   });
 
   it('blocks unlisted host', () => {

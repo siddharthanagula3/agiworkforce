@@ -5,6 +5,10 @@
  *   Merges a patch into message.metadata. Currently used for user reactions
  *   (thumbsUp | thumbsDown | null) but intentionally generic so other metadata
  *   fields can be patched in future without a schema change.
+ *
+ * DELETE /api/chat/conversations/[id]/messages/[messageId]
+ *   Permanently deletes a single message. Verifies ownership of both the
+ *   conversation and the message before deletion.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,7 +17,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
@@ -28,8 +32,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-message');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: client } = await getAuthenticatedUserWithClient(request);
+  const userId = await requireCurrentUserId();
   const { id: conversationId, messageId } = await context.params;
 
   let rawBody: unknown;
@@ -45,43 +48,79 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   }
   const patch = result.data;
 
-  // Verify conversation ownership (web_messages has no user_id column)
-  const { data: conv, error: convError } = await client
-    .from('web_conversations')
-    .select('id')
-    .eq('id', conversationId)
-    .eq('user_id', user.id)
-    .single();
+  const db = getNeonChatDb();
+  const [conv] = await db.query<{ id: string }>(
+    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
+    [conversationId, userId],
+  );
 
-  if (convError || !conv) {
+  if (!conv) {
     throw createError.notFound('Conversation not found');
   }
 
   // Fetch current metadata so we can merge (preserves existing fields)
-  const { data: row, error: fetchError } = await client
-    .from('web_messages')
-    .select('metadata')
-    .eq('id', messageId)
-    .eq('conversation_id', conversationId)
-    .single();
+  const [row] = await db.query<{ metadata: Record<string, unknown> | null }>(
+    'select metadata from web_messages where id = $1 and conversation_id = $2 limit 1',
+    [messageId, conversationId],
+  );
 
-  if (fetchError || !row) {
+  if (!row) {
     throw createError.notFound('Message not found');
   }
 
   const merged = { ...(row.metadata ?? {}), ...patch };
 
-  const { error: updateError } = await client
-    .from('web_messages')
-    .update({ metadata: merged })
-    .eq('id', messageId)
-    .eq('conversation_id', conversationId);
+  const count = await db.execute(
+    'update web_messages set metadata = $1::jsonb where id = $2 and conversation_id = $3',
+    [JSON.stringify(merged), messageId, conversationId],
+  );
 
-  if (updateError) {
+  if (count < 1) {
     throw createError.internal('Failed to update message');
   }
 
   return NextResponse.json({ ok: true });
 }
 
+async function handleDeleteMessage(request: NextRequest, context: RouteContext) {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'chat-message');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const userId = await requireCurrentUserId();
+  const { id: conversationId, messageId } = await context.params;
+
+  const db = getNeonChatDb();
+
+  // Verify conversation ownership first (mirrors PATCH pattern)
+  const [conv] = await db.query<{ id: string }>(
+    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
+    [conversationId, userId],
+  );
+
+  if (!conv) {
+    throw createError.notFound('Conversation not found');
+  }
+
+  // Verify the message exists in this conversation
+  const [msg] = await db.query<{ id: string }>(
+    'select id from web_messages where id = $1 and conversation_id = $2 limit 1',
+    [messageId, conversationId],
+  );
+
+  if (!msg) {
+    throw createError.notFound('Message not found');
+  }
+
+  await db.execute('delete from web_messages where id = $1 and conversation_id = $2', [
+    messageId,
+    conversationId,
+  ]);
+
+  return NextResponse.json({ success: true });
+}
+
 export const PATCH = withErrorHandler(handlePatchMessage);
+export const DELETE = withErrorHandler(handleDeleteMessage);

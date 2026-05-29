@@ -7,8 +7,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getSecurityHeaders, getCorsHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * DELETE /api/user/data
@@ -27,11 +27,28 @@ import { getServiceClient } from '@/lib/supabase-server';
  * - Removes beta redemptions
  * - Clears organization memberships
  *
- * Note: Auth user account deletion must be handled separately via Supabase Auth.
+ * Note: Auth user account deletion must be handled separately via the auth provider.
  *
  * Authentication: Required (Bearer token or session cookie)
  * Rate Limit: 3 requests per hour (security-sensitive)
  */
+
+// Hardcoded deletion order — children first to respect FK constraints.
+// NEVER interpolate user-supplied values into SQL; these names are constants.
+const TABLES_TO_DELETE = [
+  { table: 'credit_transactions', column: 'user_id' },
+  { table: 'token_credits', column: 'user_id' },
+  { table: 'beta_redemptions', column: 'user_id' },
+  { table: 'email_preferences', column: 'user_id' },
+  { table: 'device_authorizations', column: 'user_id' },
+  { table: 'desktop_devices', column: 'user_id' },
+  { table: 'mobile_devices', column: 'user_id' },
+  { table: 'sync_data', column: 'user_id' },
+  { table: 'organization_members', column: 'user_id' },
+  { table: 'subscriptions', column: 'user_id' },
+  { table: 'profiles', column: 'id' },
+] as const;
+
 async function handleDeleteUserData(request: NextRequest) {
   // Handle CORS preflight
   const preflightResponse = handleCorsPreflightRequest(request);
@@ -52,121 +69,89 @@ async function handleDeleteUserData(request: NextRequest) {
   }
 
   try {
-    const { user } = await getAuthenticatedUserWithClient(request);
+    const { userId } = await getClerkAuthUser(request);
+    const db = getNeonDb();
 
     // Log the deletion request for audit purposes
     logger.info(
       {
-        userId: user.id,
-        email: user.email,
+        userId,
         action: 'gdpr_data_deletion_requested',
       },
       'User requested GDPR data deletion',
     );
 
-    // Service-role client required: delete_user_data RPC runs as a privileged
-    // database function that removes data across multiple tables. RLS on the
-    // individual tables would block the cascading deletes.
-    const adminSupabase = getServiceClient();
+    // Attempt the delete_user_data stored procedure first
+    let rpcSucceeded = false;
+    let rpcData: unknown = null;
 
-    // Call the delete_user_data database function
-    const { data, error } = await adminSupabase.rpc('delete_user_data', {
-      target_user_id: user.id,
-    });
+    try {
+      const rows = await db.query<Record<string, unknown>>('select * from delete_user_data($1)', [
+        userId,
+      ]);
+      rpcData = rows[0] ?? null;
+      rpcSucceeded = true;
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      // 42883 = undefined_function in native Postgres
+      const isMissingFn =
+        pgErr.code === '42883' ||
+        pgErr.message?.includes('function') ||
+        pgErr.message?.includes('does not exist');
 
-    if (error) {
-      logger.error(
-        {
-          error,
-          userId: user.id,
-        },
-        'Failed to delete user data via RPC',
-      );
-
-      // If the function doesn't exist, provide a fallback manual deletion
-      if (error.message?.includes('function') || error.code === 'PGRST202') {
-        logger.warn({ userId: user.id }, 'delete_user_data function not found, using fallback');
-
-        // Manual deletion in correct order (respecting foreign key constraints)
-        const deletionResults: Record<string, { deleted: boolean; error?: string }> = {};
-
-        // Delete in order of dependencies (children first, then parents)
-        const tablesToDelete = [
-          { table: 'credit_transactions', column: 'user_id' },
-          { table: 'token_credits', column: 'user_id' },
-          { table: 'beta_redemptions', column: 'user_id' },
-          { table: 'email_preferences', column: 'user_id' },
-          { table: 'device_authorizations', column: 'user_id' },
-          { table: 'desktop_devices', column: 'user_id' },
-          { table: 'mobile_devices', column: 'user_id' },
-          { table: 'sync_data', column: 'user_id' },
-          { table: 'organization_members', column: 'user_id' },
-          { table: 'subscriptions', column: 'user_id' },
-          { table: 'profiles', column: 'id' },
-        ];
-
-        for (const { table, column } of tablesToDelete) {
-          const { error: deleteError } = await adminSupabase
-            .from(table)
-            .delete()
-            .eq(column, user.id);
-
-          if (deleteError && deleteError.code !== 'PGRST116') {
-            // Ignore "not found" errors
-            deletionResults[table] = { deleted: false, error: deleteError.message };
-            logger.warn(
-              { table, error: deleteError, userId: user.id },
-              `Failed to delete from ${table}`,
-            );
-          } else {
-            deletionResults[table] = { deleted: true };
-          }
-        }
-
-        logger.info(
-          {
-            userId: user.id,
-            results: deletionResults,
-          },
-          'Completed fallback data deletion',
-        );
-
-        return NextResponse.json(
-          {
-            success: true,
-            message:
-              'Your data deletion request has been processed. Some data may require manual review.',
-            user_id: user.id,
-            deletion_timestamp: new Date().toISOString(),
-            note: 'To complete account deletion, please also delete your authentication account through account settings.',
-          },
-          {
-            headers: {
-              ...getCorsHeaders(request),
-              ...getSecurityHeaders(),
-            },
-          },
-        );
+      if (!isMissingFn) {
+        logger.error({ err, userId }, 'Failed to delete user data via RPC');
+        throw createError.internal('Failed to delete user data', pgErr.message ?? String(err));
       }
 
-      throw createError.supabase('Failed to delete user data', error.message);
+      logger.warn({ userId }, 'delete_user_data function not found, using fallback');
     }
 
-    logger.info(
-      {
-        userId: user.id,
-        result: data,
-      },
-      'User data deleted successfully via RPC',
-    );
+    if (rpcSucceeded) {
+      logger.info({ userId, result: rpcData }, 'User data deleted successfully via RPC');
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Your data has been successfully deleted.',
+          user_id: userId,
+          deletion_timestamp: new Date().toISOString(),
+          details: rpcData,
+          note: 'To complete account deletion, please also delete your authentication account through account settings.',
+        },
+        {
+          headers: {
+            ...getCorsHeaders(request),
+            ...getSecurityHeaders(),
+          },
+        },
+      );
+    }
+
+    // Fallback: manual deletion in FK-safe order using parameterized SQL.
+    // Table names come from the hardcoded TABLES_TO_DELETE constant — no user input.
+    const deletionResults: Record<string, { deleted: boolean; error?: string }> = {};
+
+    for (const { table, column } of TABLES_TO_DELETE) {
+      try {
+        await db.execute(`delete from ${table} where ${column} = $1`, [userId]);
+        deletionResults[table] = { deleted: true };
+      } catch (deleteErr: unknown) {
+        const pgErr = deleteErr as { message?: string };
+        deletionResults[table] = { deleted: false, error: pgErr.message };
+        logger.warn({ table, deleteErr, userId }, `Failed to delete from ${table}`);
+      }
+    }
+
+    logger.info({ userId, results: deletionResults }, 'Completed fallback data deletion');
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Your data has been successfully deleted.',
-        user_id: user.id,
+        message:
+          'Your data deletion request has been processed. Some data may require manual review.',
+        user_id: userId,
         deletion_timestamp: new Date().toISOString(),
-        details: data,
         note: 'To complete account deletion, please also delete your authentication account through account settings.',
       },
       {

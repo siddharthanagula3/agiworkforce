@@ -73,8 +73,8 @@ export type ResponsesToolChoice = 'auto' | 'none' | 'required' | { type: 'functi
 // ============================================================================
 
 export interface ResponsesReasoningConfig {
-  /** "minimal" | "low" | "medium" | "high" */
-  effort?: 'minimal' | 'low' | 'medium' | 'high';
+  /** OpenAI reasoning effort. `max` is intentionally unsupported by OpenAI. */
+  effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   /** Include reasoning summary text in stream events. */
   summary?: 'auto' | 'concise' | 'detailed';
 }

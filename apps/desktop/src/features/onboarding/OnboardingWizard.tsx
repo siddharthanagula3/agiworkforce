@@ -89,6 +89,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   // BYOK paste field
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [secretError, setSecretError] = useState<string | null>(null);
   const detected = apiKey.trim().length > 8 ? detectProvider(apiKey) : null;
 
   // Detect Ollama on mount
@@ -134,13 +135,18 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
   const handleByokSubmit = useCallback(async () => {
     if (!detected || saving) return;
     setSaving(true);
+    setSecretError(null);
     try {
       await invoke('secret_manager_set', {
         key: detected.secretKey,
         value: apiKey.trim(),
       });
-    } catch {
-      // Secret manager may not be available in dev — proceed anyway
+    } catch (error) {
+      setSecretError(
+        error instanceof Error ? error.message : 'Could not save this API key securely.',
+      );
+      setSaving(false);
+      return;
     }
     setMode('local');
     completeOnboarding();
@@ -313,6 +319,11 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                 </div>
               )}
             </div>
+            {secretError && (
+              <p className="text-xs text-red-400 mt-1.5 text-center" role="alert">
+                {secretError}
+              </p>
+            )}
             <p
               id="byok-providers-hint"
               className="text-xs text-muted-foreground/60 mt-1.5 text-center"
@@ -324,7 +335,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
 
           {/* Cross-mode transfer note */}
           <p className="text-[11px] text-muted-foreground/70 text-center mb-3">
-            You can move chats between modes anytime in Settings.
+            Local chats stay local. Continuing with BYOK creates a consented fork with a preview.
           </p>
 
           {/* Skip link */}

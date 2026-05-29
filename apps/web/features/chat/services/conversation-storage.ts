@@ -1,48 +1,8 @@
 import { logger } from '@shared/lib/logger';
-// Chat persistence service - handles database operations for chat sessions and messages
-import { supabase } from '@shared/lib/supabase-client';
+// Chat persistence service - handles API operations for chat sessions and messages
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 import type { ChatSession, ChatMessage } from '../types';
-
-interface DBChatSession {
-  id: string;
-  user_id: string;
-  employee_id: string | null;
-  role: string | null;
-  provider: string | null;
-  title: string | null;
-  is_active: boolean | null;
-  is_starred?: boolean | null;
-  is_pinned?: boolean | null;
-  is_archived?: boolean | null;
-  shared_link?: string | null;
-  metadata?: unknown;
-  last_message_at: string | null;
-  created_at: string;
-  updated_at: string | null;
-  folder_id?: string | null;
-  deleted_at?: string | null;
-  summary?: string | null;
-  tags?: string[] | null;
-  token_count?: number | null;
-  cost_cents?: number | null;
-  [key: string]: unknown;
-}
-
-interface DBChatMessage {
-  id: string;
-  conversation_id: string;
-  role: string;
-  content: string;
-  created_at: string | null;
-  updated_at?: string | null;
-  edited?: boolean | null;
-  edit_count?: number | null;
-  input_tokens?: number | null;
-  output_tokens?: number | null;
-  cost_cents?: number | null;
-  model?: string | null;
-  [key: string]: unknown;
-}
 
 /**
  * Pagination parameters for list queries
@@ -62,12 +22,145 @@ export interface PaginatedResponse<T> {
   total?: number;
 }
 
+// ---------------------------------------------------------------------------
+// Wire-format row types returned by the API routes
+// ---------------------------------------------------------------------------
+
+interface APIConversationRow {
+  id: string;
+  title: string | null;
+  model?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Fields present on the full /[id] response but not the list response:
+  user_id?: string;
+  is_active?: boolean | null;
+  is_starred?: boolean | null;
+  is_pinned?: boolean | null;
+  is_archived?: boolean | null;
+  shared_link?: string | null;
+  metadata?: unknown;
+  last_message_at?: string | null;
+  folder_id?: string | null;
+  deleted_at?: string | null;
+  summary?: string | null;
+  tags?: string[] | null;
+  token_count?: number | null;
+  cost_cents?: number | null;
+}
+
+interface APIMessageRow {
+  id: string;
+  role: string;
+  content: string;
+  model?: string | null;
+  provider?: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cost_cents?: number | null;
+  created_at: string;
+  updated_at?: string | null;
+  edited?: boolean | null;
+  edit_count?: number | null;
+  metadata?: Record<string, unknown> | null;
+  conversation_id?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Header helpers
+// ---------------------------------------------------------------------------
+
+async function buildMutateHeaders(): Promise<HeadersInit> {
+  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': csrf,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function buildReadHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mapping helpers
+// ---------------------------------------------------------------------------
+
+function mapAPIConversationToSession(
+  row: APIConversationRow,
+  conversationId?: string,
+): ChatSession {
+  const createdAt = row.created_at ? new Date(row.created_at) : new Date();
+  const updatedAt = row.updated_at ? new Date(row.updated_at) : new Date();
+
+  const metadataObj = (
+    typeof row.metadata === 'object' && row.metadata !== null ? row.metadata : {}
+  ) as Record<string, unknown>;
+  const metadataTags = (metadataObj['tags'] as string[]) || row.tags || [];
+
+  return {
+    id: conversationId ?? row.id,
+    title: row.title || 'New Chat',
+    createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
+    updatedAt: isNaN(updatedAt.getTime()) ? new Date() : updatedAt,
+    messageCount: 0,
+    tokenCount: row.token_count ?? 0,
+    cost: row.cost_cents ? row.cost_cents / 100 : 0,
+    isPinned: row.is_pinned ?? false,
+    isArchived: row.is_archived ?? row.is_active === false,
+    isStarred: row.is_starred ?? false,
+    sharedLink: row.shared_link || undefined,
+    tags: metadataTags,
+    participants: row.user_id ? [row.user_id] : [],
+    metadata: {
+      role: metadataObj['role'] as string | undefined,
+      provider: metadataObj['provider'] as string | undefined,
+      starred: row.is_starred ?? false,
+      pinned: row.is_pinned ?? false,
+      archived: row.is_archived ?? false,
+      tags: metadataTags,
+      ...metadataObj,
+    },
+  };
+}
+
+function mapAPIMessageToMessage(row: APIMessageRow, sessionId: string): ChatMessage {
+  const createdAt = row.created_at ? new Date(row.created_at) : new Date();
+  const updatedAt = row.updated_at ? new Date(row.updated_at) : createdAt;
+
+  const rawMetadata = row.metadata;
+  const metadata =
+    rawMetadata && typeof rawMetadata === 'object' && Object.keys(rawMetadata).length > 0
+      ? rawMetadata
+      : undefined;
+
+  return {
+    id: row.id,
+    sessionId: row.conversation_id ?? sessionId,
+    role: row.role as 'user' | 'assistant' | 'system',
+    content: row.content,
+    createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
+    updatedAt: isNaN(updatedAt.getTime()) ? createdAt : updatedAt,
+    edited: row.edited ?? false,
+    editCount: row.edit_count ?? 0,
+    ...(metadata && { metadata }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Service class
+// ---------------------------------------------------------------------------
+
 export class ChatPersistenceService {
   /**
    * Create a new chat session
    */
   async createSession(
-    userId: string,
+    _userId: string,
     title: string,
     metadata?: {
       employeeId?: string;
@@ -75,208 +168,150 @@ export class ChatPersistenceService {
       provider?: string;
     },
   ): Promise<ChatSession> {
-    const { data, error } = await supabase
-      .from('web_conversations')
-      .insert({
-        user_id: userId,
-        title,
-        employee_id: metadata?.employeeId || 'general',
-        role: metadata?.role || 'assistant',
-        provider: metadata?.provider || 'openai',
-        is_active: true,
-      } as never)
-      .select()
-      .maybeSingle();
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/conversations', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title, metadata }),
+    });
 
-    if (error) throw new Error(`Failed to create session: ${error.message}`);
-    if (!data) throw new Error('Failed to create session: No data returned');
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to create session: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
+    }
 
-    return this.mapDBSessionToSession(data as unknown as DBChatSession);
+    const data = (await res.json()) as { conversation: APIConversationRow };
+    if (!data.conversation) throw new Error('Failed to create session: No data returned');
+
+    return mapAPIConversationToSession(data.conversation);
   }
 
   /**
-   * Get all sessions for a user with message counts in a single query
-   * Uses Supabase nested select to avoid N+1 query pattern
+   * Get all sessions for a user
    */
-  async getUserSessions(userId: string): Promise<ChatSession[]> {
-    const { data, error } = await supabase
-      .from('web_conversations')
-      .select('*, web_messages(count)')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('updated_at', { ascending: false });
+  async getUserSessions(_userId: string): Promise<ChatSession[]> {
+    const headers = await buildReadHeaders();
+    const res = await fetch('/api/chat/conversations', { headers });
 
-    if (error) throw new Error(`Failed to load sessions: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to load sessions: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
+    }
 
-    return (data || []).map((session: Record<string, unknown>) => {
-      // Extract message count from nested select result
-      // Supabase returns count as an array with single object or direct count
-      const chatMessages = session['web_messages'] as
-        | { count: number }[]
-        | { count: number }
-        | undefined;
-      const messageCount = Array.isArray(chatMessages)
-        ? (chatMessages[0]?.count ?? 0)
-        : (chatMessages?.count ?? 0);
-
-      // Remove the nested web_messages from the session object before mapping
-      const { web_messages: _, ...sessionData } = session;
-
-      const mappedSession = this.mapDBSessionToSession(sessionData as DBChatSession);
-      return {
-        ...mappedSession,
-        messageCount,
-      };
-    });
+    const data = (await res.json()) as { conversations: APIConversationRow[] };
+    return (data.conversations || []).map((c) => mapAPIConversationToSession(c));
   }
 
   /**
    * Get paginated sessions for a user with cursor-based pagination
-   * Uses updated_at as the cursor for efficient pagination
    */
   async getUserSessionsPaginated(
-    userId: string,
+    _userId: string,
     params: PaginationParams = {},
   ): Promise<PaginatedResponse<ChatSession>> {
     const { limit = 20, cursor } = params;
-    // Fetch one extra to determine if there are more results
-    const fetchLimit = limit + 1;
+    const qp = new URLSearchParams({ limit: String(limit) });
+    if (cursor) qp.set('cursor', cursor);
 
-    let query = supabase
-      .from('web_conversations')
-      .select('*, web_messages(count)')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .order('updated_at', { ascending: false })
-      .limit(fetchLimit);
+    const headers = await buildReadHeaders();
+    const res = await fetch(`/api/chat/conversations?${qp.toString()}`, { headers });
 
-    // Apply cursor filter if provided (cursor is the updated_at timestamp)
-    if (cursor) {
-      query = query.lt('updated_at', cursor);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to load sessions: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    const { data, error } = await query;
-
-    if (error) throw new Error(`Failed to load sessions: ${error.message}`);
-
-    const items = data || [];
+    const data = (await res.json()) as { conversations: APIConversationRow[] };
+    const items = data.conversations || [];
     const hasMore = items.length > limit;
     const resultItems = hasMore ? items.slice(0, limit) : items;
+    const sessions = resultItems.map((c) => mapAPIConversationToSession(c));
 
-    const sessions = resultItems.map((session: Record<string, unknown>) => {
-      const chatMessages = session['web_messages'] as
-        | { count: number }[]
-        | { count: number }
-        | undefined;
-      const messageCount = Array.isArray(chatMessages)
-        ? (chatMessages[0]?.count ?? 0)
-        : (chatMessages?.count ?? 0);
-
-      const { web_messages: _, ...sessionData } = session;
-
-      const mappedSession = this.mapDBSessionToSession(sessionData as DBChatSession);
-      return {
-        ...mappedSession,
-        messageCount,
-      };
-    });
-
-    // The next cursor is the updated_at of the last item
-    const lastItem = resultItems[resultItems.length - 1] as
-      | { updated_at?: string; created_at?: string }
-      | undefined;
+    const lastItem = resultItems[resultItems.length - 1];
     const nextCursor = hasMore && lastItem ? (lastItem.updated_at ?? null) : null;
 
-    return {
-      data: sessions,
-      nextCursor,
-      hasMore,
-    };
+    return { data: sessions, nextCursor, hasMore };
   }
 
   /**
    * Get a specific session by ID
-   * Note: RLS policies ensure users can only access their own sessions
    */
-  async getSession(sessionId: string, userId?: string): Promise<ChatSession | null> {
-    let query = supabase.from('web_conversations').select('*').eq('id', sessionId);
+  async getSession(sessionId: string, _userId?: string): Promise<ChatSession | null> {
+    const headers = await buildReadHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      headers,
+    });
 
-    // Add user_id filter if provided for extra security (RLS should handle this, but explicit is better)
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
+    if (res.status === 404) return null;
 
-    const { data, error } = await query.maybeSingle();
-
-    if (error) {
-      // Note: PGRST116 is now handled by maybeSingle() returning null
-      // RLS policy violation - user doesn't own this session
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         logger.warn('Access denied to session:', sessionId);
         return null;
       }
-      throw new Error(`Failed to load session: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to load session: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    if (!data) return null;
-    return this.mapDBSessionToSession(data as unknown as DBChatSession);
+    const data = (await res.json()) as { conversation: APIConversationRow };
+    if (!data.conversation) return null;
+
+    return mapAPIConversationToSession(data.conversation, sessionId);
   }
 
   /**
    * Update session title
-   * Note: RLS policies ensure users can only update their own sessions
    */
-  async updateSessionTitle(sessionId: string, title: string, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        title,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
+  async updateSessionTitle(sessionId: string, title: string, _userId?: string): Promise<void> {
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ title }),
+    });
 
-    // Add user_id filter if provided for extra security
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      // RLS policy violation
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to update this session');
       }
-      throw new Error(`Failed to update session: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to update session: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
   /**
    * Delete (archive) a session
-   * Note: RLS policies ensure users can only delete their own sessions
    */
-  async deleteSession(sessionId: string, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({ is_active: false, updated_at: new Date().toISOString() })
-      .eq('id', sessionId);
+  async deleteSession(sessionId: string, _userId?: string): Promise<void> {
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'DELETE',
+      headers,
+    });
 
-    // Add user_id filter if provided for extra security
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      // RLS policy violation
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to delete this session');
       }
-      throw new Error(`Failed to delete session: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to delete session: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
   /**
-   * Save a message to the database
+   * Save a message to the database (skipLlm=true so only the message is stored)
    */
   async saveMessage(
     sessionId: string,
@@ -284,333 +319,222 @@ export class ChatPersistenceService {
     content: string,
     metadata?: Record<string, unknown>,
   ): Promise<ChatMessage> {
-    const insertData: Record<string, unknown> = {
-      conversation_id: sessionId,
-      role,
-      content,
-    };
-    if (metadata && Object.keys(metadata).length > 0) {
-      insertData['metadata'] = metadata;
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}/messages`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ role, content, skipLlm: true, metadata }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to save message: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
-    const { data, error } = await (
-      supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
-    )
-      .insert(insertData)
-      .select()
-      .maybeSingle();
 
-    if (error) throw new Error(`Failed to save message: ${error.message}`);
-    if (!data) throw new Error('Failed to save message: No data returned');
+    const data = (await res.json()) as { message: APIMessageRow };
+    if (!data.message) throw new Error('Failed to save message: No data returned');
 
-    // Update session's last_message_at
-    await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        last_message_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
-
-    return this.mapDBMessageToMessage(data as unknown as DBChatMessage);
+    return mapAPIMessageToMessage(data.message, sessionId);
   }
 
   /**
    * Get all messages for a session
-   * Note: RLS policies ensure users can only access messages from their own sessions
    */
   async getSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    const { data, error } = await supabase
-      .from('web_messages')
-      .select('*')
-      .eq('conversation_id', sessionId)
-      .order('created_at', { ascending: true });
+    const headers = await buildReadHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      headers,
+    });
 
-    if (error) {
-      // RLS policy violation - user doesn't own this session
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         logger.warn('Access denied to messages for session:', sessionId);
-        return []; // Return empty array instead of throwing
+        return [];
       }
-      throw new Error(`Failed to load messages: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to load messages: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    return (data || []).map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
+    const data = (await res.json()) as {
+      conversation: APIConversationRow;
+      messages: APIMessageRow[];
+    };
+
+    return (data.messages || []).map((m) => mapAPIMessageToMessage(m, sessionId));
   }
 
   /**
    * Get paginated messages for a session with cursor-based pagination
-   * Messages are ordered by created_at ascending, so we use the message ID as cursor
-   * for consistent pagination even when new messages are added
    */
   async getSessionMessagesPaginated(
     sessionId: string,
     params: PaginationParams = {},
   ): Promise<PaginatedResponse<ChatMessage>> {
+    // The conversations/[id] route returns all messages; paginate client-side
+    const allMessages = await this.getSessionMessages(sessionId);
     const { limit = 50, cursor } = params;
-    const fetchLimit = limit + 1;
 
-    let query = supabase
-      .from('web_messages')
-      .select('*', { count: 'exact' })
-      .eq('conversation_id', sessionId)
-      .order('created_at', { ascending: true })
-      .limit(fetchLimit);
-
-    // Apply cursor filter - cursor is the created_at timestamp of the last loaded message
+    let startIdx = 0;
     if (cursor) {
-      query = query.gt('created_at', cursor);
+      const idx = allMessages.findIndex((m) => new Date(m.createdAt).toISOString() > cursor);
+      startIdx = idx === -1 ? allMessages.length : idx;
     }
 
-    const { data, error, count } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
-        logger.warn('Access denied to messages for session:', sessionId);
-        return { data: [], nextCursor: null, hasMore: false, total: 0 };
-      }
-      throw new Error(`Failed to load messages: ${error.message}`);
-    }
-
-    const items = data || [];
-    const hasMore = items.length > limit;
-    const resultItems = hasMore ? items.slice(0, limit) : items;
-
-    const messages = resultItems.map((msg) =>
-      this.mapDBMessageToMessage(msg as unknown as DBChatMessage),
-    );
-
-    // The next cursor is the created_at of the last item
-    const lastItem = resultItems[resultItems.length - 1] as
-      | { updated_at?: string; created_at?: string }
-      | undefined;
-    const nextCursor = hasMore && lastItem ? (lastItem.created_at ?? null) : null;
+    const slice = allMessages.slice(startIdx, startIdx + limit + 1);
+    const hasMore = slice.length > limit;
+    const resultItems = hasMore ? slice.slice(0, limit) : slice;
+    const lastItem = resultItems[resultItems.length - 1];
+    const nextCursor = hasMore && lastItem ? new Date(lastItem.createdAt).toISOString() : null;
 
     return {
-      data: messages,
+      data: resultItems,
       nextCursor,
       hasMore,
-      total: count ?? undefined,
+      total: allMessages.length,
     };
   }
 
   /**
    * Get messages before a specific cursor (for loading older messages)
-   * Useful for bidirectional infinite scroll
    */
   async getSessionMessagesBeforeCursor(
     sessionId: string,
     params: PaginationParams = {},
   ): Promise<PaginatedResponse<ChatMessage>> {
+    const allMessages = await this.getSessionMessages(sessionId);
     const { limit = 50, cursor } = params;
-    const fetchLimit = limit + 1;
 
-    let query = supabase
-      .from('web_messages')
-      .select('*', { count: 'exact' })
-      .eq('conversation_id', sessionId)
-      .order('created_at', { ascending: false }) // Reverse order for fetching older
-      .limit(fetchLimit);
-
-    // Apply cursor filter - cursor is the created_at timestamp
+    let endIdx = allMessages.length;
     if (cursor) {
-      query = query.lt('created_at', cursor);
+      const idx = allMessages.findIndex((m) => new Date(m.createdAt).toISOString() >= cursor);
+      endIdx = idx === -1 ? allMessages.length : idx;
     }
 
-    const { data, error, count } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
-        logger.warn('Access denied to messages for session:', sessionId);
-        return { data: [], nextCursor: null, hasMore: false, total: 0 };
-      }
-      throw new Error(`Failed to load messages: ${error.message}`);
-    }
-
-    const items = data || [];
-    const hasMore = items.length > limit;
-    const resultItems = hasMore ? items.slice(0, limit) : items;
-
-    // Reverse to get chronological order
-    const messages = resultItems
-      .reverse()
-      .map((msg) => this.mapDBMessageToMessage(msg as unknown as DBChatMessage));
-
-    // The next cursor is the created_at of the first item (oldest in this batch)
-    const oldestItem = resultItems[resultItems.length - 1] as
-      | { updated_at?: string; created_at?: string }
-      | undefined;
-    const nextCursor = hasMore && oldestItem ? (oldestItem.created_at ?? null) : null;
+    const startIdx = Math.max(0, endIdx - (limit + 1));
+    const slice = allMessages.slice(startIdx, endIdx);
+    const hasMore = slice.length > limit;
+    const resultItems = hasMore ? slice.slice(1) : slice;
+    const oldestItem = resultItems[0];
+    const nextCursor = hasMore && oldestItem ? new Date(oldestItem.createdAt).toISOString() : null;
 
     return {
-      data: messages,
+      data: resultItems,
       nextCursor,
       hasMore,
-      total: count ?? undefined,
+      total: allMessages.length,
     };
   }
 
   /**
    * Update a message's content
-   * Note: RLS policies ensure users can only update messages from their own sessions
+   * The /api/chat/conversations/[id]/messages/[messageId] route only supports
+   * PATCH for metadata (reaction). Full content update has no route yet.
    */
-  async updateMessage(messageId: string, newContent: string): Promise<ChatMessage> {
-    const { data, error } = await (
-      supabase.from('web_messages') as unknown as ReturnType<typeof supabase.from>
-    )
-      .update({
-        content: newContent,
-        // updated_at, edited, and edit_count are automatically handled by the database trigger
-      })
-      .eq('id', messageId)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      // RLS policy violation
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
-        throw new Error('You do not have permission to edit this message');
-      }
-      throw new Error(`Failed to update message: ${error.message}`);
-    }
-
-    if (!data) {
-      throw new Error('Message not found or you do not have permission to edit it');
-    }
-
-    return this.mapDBMessageToMessage(data as unknown as DBChatMessage);
-  }
-
-  /**
-   * Get edit history for a message
-   * Note: RLS policies ensure users can only view edit history for their own messages
-   */
-  async getMessageEditHistory(messageId: string): Promise<
-    Array<{
-      id: string;
-      previousContent: string;
-      editedAt: Date;
-    }>
-  > {
-    const { data, error } = await supabase
-      .from('chat_message_edits' as never)
-      .select('id, previous_content, edited_at')
-      .eq('message_id', messageId)
-      .order('edited_at', { ascending: false });
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
-        logger.warn('Access denied to edit history for message:', messageId);
-        return [];
-      }
-      throw new Error(`Failed to load edit history: ${error.message}`);
-    }
-
-    return ((data || []) as Array<{ id: string; previous_content: string; edited_at: string }>).map(
-      (edit) => ({
-        id: edit.id,
-        previousContent: edit.previous_content,
-        editedAt: new Date(edit.edited_at),
-      }),
+  async updateMessage(messageId: string, _newContent: string): Promise<ChatMessage> {
+    throw new Error(
+      `updateMessage (id: ${messageId}) is not supported via the API — no content-update route exists`,
     );
   }
 
   /**
-   * Delete a message
-   * Note: RLS policies ensure users can only delete messages from their own sessions
+   * Get edit history for a message
+   * No route exists for this operation.
    */
-  async deleteMessage(messageId: string): Promise<void> {
-    const { error } = await supabase.from('web_messages').delete().eq('id', messageId);
+  async getMessageEditHistory(
+    _messageId: string,
+  ): Promise<Array<{ id: string; previousContent: string; editedAt: Date }>> {
+    logger.warn('[ChatPersistence] getMessageEditHistory has no API route');
+    return [];
+  }
 
-    if (error) {
-      // RLS policy violation
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
-        throw new Error('You do not have permission to delete this message');
-      }
-      throw new Error(`Failed to delete message: ${error.message}`);
-    }
+  /**
+   * Delete a message
+   * No route exists for this operation.
+   */
+  async deleteMessage(_messageId: string): Promise<void> {
+    throw new Error('deleteMessage is not supported via the API — no delete-message route exists');
   }
 
   /**
    * Get message count for a session
    */
   async getMessageCount(sessionId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('web_messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('conversation_id', sessionId);
-
-    if (error) throw new Error(`Failed to count messages: ${error.message}`);
-
-    return count || 0;
+    try {
+      const messages = await this.getSessionMessages(sessionId);
+      return messages.length;
+    } catch {
+      throw new Error(`Failed to count messages for session: ${sessionId}`);
+    }
   }
 
   /**
    * Search sessions by title
    */
-  async searchSessions(userId: string, query: string): Promise<ChatSession[]> {
-    const { data, error } = await supabase
-      .from('web_conversations')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('is_active', true)
-      .ilike('title', `%${query}%`)
-      .order('updated_at', { ascending: false });
+  async searchSessions(_userId: string, query: string): Promise<ChatSession[]> {
+    const headers = await buildReadHeaders();
+    const res = await fetch(`/api/chat/conversations?q=${encodeURIComponent(query)}`, { headers });
 
-    if (error) throw new Error(`Failed to search sessions: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to search sessions: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
+    }
 
-    return (data || []).map((s) => this.mapDBSessionToSession(s as unknown as DBChatSession));
+    const data = (await res.json()) as { conversations: APIConversationRow[] };
+    return (data.conversations || []).map((c) => mapAPIConversationToSession(c));
   }
 
   /**
    * Update session starred state
+   * No dedicated route; uses PUT /[id] with is_starred field.
    */
   async updateSessionStarred(
     sessionId: string,
     isStarred: boolean,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        is_starred: isStarred,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ is_starred: isStarred }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to update this session');
       }
-      throw new Error(`Failed to update starred state: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to update starred state: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
   /**
    * Update session pinned state
    */
-  async updateSessionPinned(sessionId: string, isPinned: boolean, userId?: string): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        is_pinned: isPinned,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
+  async updateSessionPinned(sessionId: string, isPinned: boolean, _userId?: string): Promise<void> {
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ is_pinned: isPinned }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to update this session');
       }
-      throw new Error(`Failed to update pinned state: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to update pinned state: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
@@ -620,26 +544,23 @@ export class ChatPersistenceService {
   async updateSessionArchived(
     sessionId: string,
     isArchived: boolean,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        is_archived: isArchived,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ is_archived: isArchived }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to update this session');
       }
-      throw new Error(`Failed to update archived state: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to update archived state: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
@@ -649,159 +570,44 @@ export class ChatPersistenceService {
   async updateSessionSharedLink(
     sessionId: string,
     sharedLink: string | null,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    let query = (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-      .update({
-        shared_link: sharedLink,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', sessionId);
+    const headers = await buildMutateHeaders();
+    const res = await fetch(`/api/chat/conversations/${encodeURIComponent(sessionId)}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ shared_link: sharedLink }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      if (error.code === '42501' || error.message?.includes('permission denied')) {
+    if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
         throw new Error('You do not have permission to update this session');
       }
-      throw new Error(`Failed to update shared link: ${error.message}`);
+      const err = await res.json().catch(() => ({}));
+      throw new Error(
+        `Failed to update shared link: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
   /**
    * Copy messages from one session to another
+   * No dedicated route; copies message-by-message via saveMessage.
    */
   async copySessionMessages(
     sourceSessionId: string,
     targetSessionId: string,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    // Verify both sessions belong to the user
-    if (userId) {
-      const { data: sessions, error } = await supabase
-        .from('web_conversations')
-        .select('id')
-        .in('id', [sourceSessionId, targetSessionId])
-        .eq('user_id', userId);
-
-      if (error || !sessions || sessions.length !== 2) {
-        throw new Error('Invalid session IDs or permission denied');
-      }
-    }
-
-    // Get all messages from source session
     const sourceMessages = await this.getSessionMessages(sourceSessionId);
 
-    // Insert messages into target session
-    if (sourceMessages.length > 0) {
-      const { error } = await supabase.from('web_messages').insert(
-        sourceMessages.map((msg) => ({
-          conversation_id: targetSessionId,
-          role: msg.role,
-          content: msg.content,
-          created_at: new Date(msg.createdAt).toISOString(),
-        })) as never,
+    for (const msg of sourceMessages) {
+      await this.saveMessage(
+        targetSessionId,
+        msg.role as 'user' | 'assistant' | 'system',
+        msg.content,
       );
-
-      if (error) {
-        throw new Error(`Failed to copy messages: ${error.message}`);
-      }
-
-      // Update target session's last_message_at
-      await (supabase.from('web_conversations') as unknown as ReturnType<typeof supabase.from>)
-        .update({
-          last_message_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', targetSessionId);
     }
-  }
-
-  // Mapping functions
-  private mapDBSessionToSession(dbSession: DBChatSession): ChatSession {
-    // Safely convert timestamps to Date objects
-    const createdAt = dbSession.created_at ? new Date(dbSession.created_at) : new Date();
-    const updatedAt = dbSession.updated_at ? new Date(dbSession.updated_at) : new Date();
-
-    // Validate dates
-    if (isNaN(createdAt.getTime())) {
-      logger.warn('Invalid createdAt for session:', dbSession.id);
-    }
-    if (isNaN(updatedAt.getTime())) {
-      logger.warn('Invalid updatedAt for session:', dbSession.id);
-    }
-
-    // Extract tags from metadata if available
-    const metadataObj = (
-      typeof dbSession.metadata === 'object' && dbSession.metadata !== null
-        ? dbSession.metadata
-        : {}
-    ) as Record<string, unknown>;
-    const metadataTags = (metadataObj['tags'] as string[]) || [];
-
-    return {
-      id: dbSession.id,
-      title: dbSession.title || 'New Chat',
-      createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
-      updatedAt: isNaN(updatedAt.getTime()) ? new Date() : updatedAt,
-      messageCount: 0, // Will be populated separately if needed
-      tokenCount: 0,
-      cost: 0,
-      isPinned: dbSession.is_pinned ?? false,
-      isArchived: dbSession.is_archived ?? !dbSession.is_active,
-      isStarred: dbSession.is_starred ?? false,
-      sharedLink: dbSession.shared_link || undefined,
-      tags: metadataTags,
-      participants: [dbSession.user_id],
-      metadata: {
-        employeeId: dbSession.employee_id,
-        role: dbSession.role,
-        provider: dbSession.provider,
-        starred: dbSession.is_starred ?? false,
-        pinned: dbSession.is_pinned ?? false,
-        archived: dbSession.is_archived ?? false,
-        tags: metadataTags,
-        ...metadataObj,
-      },
-    };
-  }
-
-  private mapDBMessageToMessage(dbMessage: DBChatMessage): ChatMessage {
-    // Safely convert timestamps to Date objects
-    const createdAt = dbMessage.created_at ? new Date(dbMessage.created_at) : new Date();
-
-    const updatedAt = dbMessage.updated_at ? new Date(dbMessage.updated_at) : createdAt;
-
-    // Validate dates
-    if (isNaN(createdAt.getTime())) {
-      logger.warn('Invalid createdAt for message:', dbMessage.id);
-    }
-    if (isNaN(updatedAt.getTime())) {
-      logger.warn('Invalid updatedAt for message:', dbMessage.id);
-    }
-
-    // Restore metadata from the JSONB column (if present)
-    const rawMetadata = dbMessage['metadata'] as Record<string, unknown> | null | undefined;
-    const metadata =
-      rawMetadata && typeof rawMetadata === 'object' && Object.keys(rawMetadata).length > 0
-        ? rawMetadata
-        : undefined;
-
-    return {
-      id: dbMessage.id,
-      sessionId: dbMessage.conversation_id,
-      role: dbMessage.role as 'user' | 'assistant' | 'system',
-      content: dbMessage.content,
-      createdAt: isNaN(createdAt.getTime()) ? new Date() : createdAt,
-      updatedAt: isNaN(updatedAt.getTime()) ? createdAt : updatedAt,
-      edited: dbMessage.edited ?? false,
-      editCount: dbMessage.edit_count ?? 0,
-      ...(metadata && { metadata }),
-    };
   }
 }
 

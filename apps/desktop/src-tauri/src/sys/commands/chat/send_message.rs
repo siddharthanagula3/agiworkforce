@@ -54,35 +54,50 @@ pub async fn chat_send_message(
         "Chat send_message started"
     );
 
-    #[cfg(feature = "billing")]
-    {
-        let billing = _billing_state.0.lock().await;
-        check_billing_and_budget(&billing, &_db, &request.user_id)?;
-    }
-    #[cfg(not(feature = "billing"))]
-    {
-        check_billing_and_budget(&_db, &request.user_id)?;
-    }
-
     let flags = resolve_request_flags(&request, &app_handle);
     let (provider_enum, model) = resolve_provider_and_model(&request);
+    let uses_managed_cloud =
+        request_uses_managed_cloud(provider_enum, request.prefer_cloud_credits);
+
+    if uses_managed_cloud {
+        #[cfg(feature = "billing")]
+        {
+            let billing = _billing_state.0.lock().await;
+            check_billing_and_budget(&billing, &_db, &request.user_id)?;
+        }
+        #[cfg(not(feature = "billing"))]
+        {
+            check_billing_and_budget(&_db, &request.user_id)?;
+        }
+    } else {
+        info!(
+            target: "chat",
+            correlation_id = %correlation_id,
+            provider = ?provider_enum,
+            "Skipping subscription gate for Local/BYOK chat request"
+        );
+    }
 
     #[cfg(feature = "billing")]
     let plan_tier = {
-        let billing_guard = _billing_state.0.lock().await;
-        if let Ok(service) = billing_guard.stripe_service() {
-            if let Ok(Some(subscription)) = service.get_primary_subscription() {
-                subscription.plan_name.to_lowercase()
+        if uses_managed_cloud {
+            let billing_guard = _billing_state.0.lock().await;
+            if let Ok(service) = billing_guard.stripe_service() {
+                if let Ok(Some(subscription)) = service.get_primary_subscription() {
+                    subscription.plan_name.to_lowercase()
+                } else {
+                    "free".to_string()
+                }
             } else {
                 "free".to_string()
             }
         } else {
-            "free".to_string()
+            "byok".to_string()
         }
     };
 
     #[cfg(not(feature = "billing"))]
-    let plan_tier = "free".to_string();
+    let plan_tier = if uses_managed_cloud { "free" } else { "byok" }.to_string();
 
     let preferences = build_router_preferences(&request, provider_enum, &model, plan_tier);
     let db = AppDatabase {

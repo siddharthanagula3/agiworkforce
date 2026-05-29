@@ -18,7 +18,7 @@ const ConsultingBusinessesPage: React.FC = () => {
     if (user) {
       router.push('/chat');
     } else {
-      router.push('/register');
+      router.push('/signup');
     }
   };
 

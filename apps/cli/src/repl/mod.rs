@@ -609,7 +609,7 @@ fn handle_memory_prefix(input: &str) {
         .strip_prefix("# ")
         .unwrap_or(input.strip_prefix('#').unwrap_or(""));
     if text.trim().is_empty() {
-        output::print_warn("Usage: # <text to append to CLAUDE.md>");
+        output::print_warn("Usage: # <text to append to AGENTS.md>");
         return;
     }
 

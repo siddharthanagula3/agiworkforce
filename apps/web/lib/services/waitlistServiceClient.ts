@@ -2,22 +2,11 @@
  * Client-side waitlist and invite-code service.
  *
  * This file is the browser-safe companion to waitlistService.ts (server-only).
- * It imports from @/lib/supabase (client singleton) and handles anonymous
- * sign-in inline — the modal must not hold auth state itself.
- *
- * Only call redeemInviteCode from the invite-code submit path. validateInviteCode
- * in the server service is a read-only admin helper; this client path always
- * does atomic validate + redeem via the security-definer RPC.
+ * Routes through active Next.js API endpoints — direct browser database access removed.
  */
 
-import { getSupabase } from '@/lib/supabase';
 import type { InviteCodeError } from '@/components/cloud-bridge/types';
-
-interface RedeemRow {
-  valid: boolean;
-  invite_id: string | null;
-  error: string | null;
-}
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 export interface RedeemInviteResult {
   success: boolean;
@@ -31,86 +20,96 @@ export interface WaitlistEntry {
   referralSource?: string;
 }
 
-/**
- * Atomic validate + redeem via the validate_and_redeem_invite_code RPC.
- * Ensures an anonymous Supabase session exists before calling — the RPC
- * is GRANT'd to `authenticated` only and requires auth.uid() != null.
- */
-export async function redeemInviteCode(code: string, source: string): Promise<RedeemInviteResult> {
-  const client = getSupabase();
-
-  // Ensure an authenticated session (anonymous sign-in if needed).
-  const {
-    data: { session },
-  } = await client.auth.getSession();
-
-  if (!session) {
-    const { error: signInError } = await client.auth.signInAnonymously();
-    if (signInError) {
-      return { success: false, error: 'anon_signin_failed' };
-    }
+function toInviteCodeError(value: unknown): InviteCodeError {
+  if (
+    value === 'invalid_code' ||
+    value === 'expired' ||
+    value === 'fully_redeemed' ||
+    value === 'already_redeemed_by_user' ||
+    value === 'anon_signin_failed' ||
+    value === 'rpc_error'
+  ) {
+    return value;
   }
 
-  // cast to any: validate_and_redeem_invite_code is not yet in the generated
-  // Supabase types (migration 20260523000000_beta_invites.sql) — types regenerate
-  // after supabase db pull. The RPC signature and return shape are stable.
-  const anyClient = client as unknown as {
-    rpc: (name: string, args: Record<string, string>) => Promise<{ data: unknown; error: unknown }>;
-  };
-  const { data, error } = await anyClient.rpc('validate_and_redeem_invite_code', {
-    p_code: code.trim().toUpperCase(),
-    p_surface: 'web',
-    p_source: source,
-  });
-
-  if (error) {
-    return { success: false, error: 'rpc_error' };
-  }
-
-  const rows = data as RedeemRow[] | null;
-  const row = Array.isArray(rows) ? rows[0] : null;
-  if (!row) {
-    return { success: false, error: 'rpc_error' };
-  }
-
-  if (row.valid) {
-    return { success: true, inviteId: row.invite_id ?? undefined };
-  }
-
-  return { success: false, error: (row.error as InviteCodeError) ?? 'rpc_error' };
+  const message = typeof value === 'string' ? value.toLowerCase() : '';
+  if (message.includes('invalid')) return 'invalid_code';
+  if (message.includes('expired')) return 'expired';
+  if (message.includes('fully') || message.includes('maximum')) return 'fully_redeemed';
+  if (message.includes('already')) return 'already_redeemed_by_user';
+  return 'rpc_error';
 }
 
 /**
- * Waitlist signup. Maps name + referralSource onto the cloud_managed_waitlist
- * schema. The table's source column has a check constraint
- * ('byok'|'sync'|'billing'|'other') so InviteCodeSource values are coerced
- * to 'other' when they fall outside that set.
+ * Atomic validate + redeem via the active claim-offer route.
+ */
+export async function redeemInviteCode(code: string, source: string): Promise<RedeemInviteResult> {
+  void source;
+  try {
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch('/api/claim-offer', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        code: code.trim().toUpperCase(),
+      }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string | { code?: string; message?: string };
+      };
+      const error =
+        typeof body.error === 'object' ? (body.error.code ?? body.error.message) : body.error;
+      return { success: false, error: toInviteCodeError(error) };
+    }
+
+    const data = (await res.json()) as {
+      success?: boolean;
+      inviteId?: string;
+      invite_id?: string;
+      error?: string;
+    };
+
+    if (data.success) {
+      return { success: true, inviteId: data.inviteId ?? data.invite_id ?? undefined };
+    }
+
+    return { success: false, error: toInviteCodeError(data.error) };
+  } catch {
+    return { success: false, error: 'rpc_error' };
+  }
+}
+
+/**
+ * Waitlist signup via /api/waitlist/cloud-managed.
  */
 export async function joinWaitlist(
   entry: WaitlistEntry,
 ): Promise<{ success: boolean; error?: string }> {
-  const client = getSupabase();
+  try {
+    const allowedSources = new Set(['byok', 'sync', 'billing', 'other']);
+    const source =
+      entry.referralSource && allowedSources.has(entry.referralSource)
+        ? entry.referralSource
+        : 'other';
 
-  const allowedSources = new Set(['byok', 'sync', 'billing', 'other']);
-  const source =
-    entry.referralSource && allowedSources.has(entry.referralSource)
-      ? entry.referralSource
-      : 'other';
+    const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+    const res = await fetch('/api/waitlist/cloud-managed', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email: entry.email.toLowerCase().trim(),
+        source,
+      }),
+    });
 
-  // cloud_managed_waitlist is not yet in the generated Supabase types
-  // (migration 20260522000000_cloud_managed_waitlist.sql — types regenerate after db pull).
+    if (!res.ok) {
+      return { success: false, error: 'Failed to join waitlist. Please try again.' };
+    }
 
-  const { error } = await (client as any).from('cloud_managed_waitlist').upsert(
-    {
-      email: entry.email.toLowerCase().trim(),
-      source,
-    },
-    { onConflict: 'email,source' },
-  );
-
-  if (error) {
+    return { success: true };
+  } catch {
     return { success: false, error: 'Failed to join waitlist. Please try again.' };
   }
-
-  return { success: true };
 }

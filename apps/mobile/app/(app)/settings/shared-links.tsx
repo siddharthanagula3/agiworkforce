@@ -1,7 +1,6 @@
 /**
  * Shared Links screen — v1 placeholder.
- * Cloud feature gated via CloudWaitlistSheet per v1-cloud-bridge lock.
- * TODO: swap CloudWaitlistSheet to InviteCodeModal when Stage 0 lands.
+ * Cloud feature gated via InviteCodeModal (invite code + waitlist tabs).
  */
 import { useCallback, useState } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -11,28 +10,17 @@ import { ArrowLeft, Link2, Lock } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useThemeColors } from '@/src/ui/theme';
-import {
-  CloudWaitlistSheet,
-  type WaitlistSubmission,
-  type WaitlistResult,
-} from '@/src/features/waitlist/CloudWaitlistSheet';
-import { submitWaitlistForSource } from '@/src/features/waitlist/service';
+import { InviteCodeModal } from '@/src/features/cloud-bridge/InviteCodeModal';
 
 export default function SharedLinksScreen() {
   const router = useRouter();
   const c = useThemeColors();
-  const [showWaitlist, setShowWaitlist] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
-
-  const handleWaitlistSubmit = useCallback(
-    (submission: WaitlistSubmission): Promise<WaitlistResult> =>
-      submitWaitlistForSource(submission, 'shared-links'),
-    [],
-  );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
@@ -120,7 +108,7 @@ export default function SharedLinksScreen() {
         </Card>
 
         <Pressable
-          onPress={() => setShowWaitlist(true)}
+          onPress={() => setShowModal(true)}
           style={{
             marginTop: 16,
             borderRadius: 14,
@@ -128,18 +116,14 @@ export default function SharedLinksScreen() {
             alignItems: 'center',
             backgroundColor: c.teal,
           }}
-          accessibilityLabel="Join the Cloud waitlist"
+          accessibilityLabel="Join the Cloud waitlist or enter invite code"
           accessibilityRole="button"
         >
-          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Join the waitlist</Text>
+          <Text style={{ color: c.white, fontSize: 16, fontWeight: '600' }}>Unlock Cloud</Text>
         </Pressable>
       </ScrollView>
 
-      <CloudWaitlistSheet
-        visible={showWaitlist}
-        onClose={() => setShowWaitlist(false)}
-        onSubmit={handleWaitlistSubmit}
-      />
+      <InviteCodeModal open={showModal} onClose={() => setShowModal(false)} source="shared-links" />
     </SafeAreaView>
   );
 }

@@ -1,14 +1,35 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Code2, X, Copy, Check, Download, FileCode, PanelRightOpen } from 'lucide-react';
-import { toast } from 'sonner';
+import { Code2, X, FileCode, PanelRightOpen, FolderDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { Button } from '@shared/ui/button';
-import { ScrollArea } from '@shared/ui/scroll-area';
 import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
+import { ArtifactPreview } from './ArtifactPreview';
+
+// ============================================================================
+// Download All helper (Fix 41)
+// ============================================================================
+
+async function downloadAllArtifacts(artifacts: Artifact[]) {
+  const JSZip = (await import('jszip')).default;
+  const zip = new JSZip();
+
+  artifacts.forEach((artifact) => {
+    const ext = artifact.language || artifact.type || 'txt';
+    const safeName = (artifact.title || 'artifact').replace(/[/\\:*?"<>|]/g, '_');
+    zip.file(`${safeName}.${ext}`, artifact.content);
+  });
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'artifacts.zip';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 // ============================================================================
 // Artifact Tab
@@ -61,103 +82,14 @@ function EmptyState() {
 }
 
 // ============================================================================
-// Artifact Content Viewer
+// Artifact Content Viewer — delegates to ArtifactPreview for full
+// Preview/Code tabs, versioning, sharing, and download functionality.
 // ============================================================================
 
 function ArtifactViewer({ artifact }: { artifact: Artifact }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(artifact.content);
-      setCopied(true);
-      toast.success('Copied to clipboard');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Failed to copy');
-    }
-  }, [artifact.content]);
-
-  const handleDownload = useCallback(() => {
-    const extensionMap: Record<string, string> = {
-      typescript: 'ts',
-      javascript: 'js',
-      python: 'py',
-      rust: 'rs',
-      ruby: 'rb',
-      csharp: 'cs',
-      cpp: 'cpp',
-      markdown: 'md',
-    };
-
-    const ext = extensionMap[artifact.language] || artifact.language || 'txt';
-
-    // Use title as filename if it looks like a filename (has extension)
-    const filename = artifact.title.includes('.') ? artifact.title : `artifact.${ext}`;
-
-    const blob = new Blob([artifact.content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success(`Downloaded ${filename}`);
-  }, [artifact]);
-
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* Code display */}
-      <ScrollArea className="flex-1">
-        <SyntaxHighlighter
-          language={artifact.language}
-          style={vscDarkPlus}
-          customStyle={{
-            margin: 0,
-            borderRadius: 0,
-            fontSize: '13px',
-            lineHeight: '1.6',
-            padding: '16px',
-            background: 'transparent',
-          }}
-          showLineNumbers
-          lineNumberStyle={{
-            minWidth: '2.5em',
-            paddingRight: '1em',
-            color: 'rgba(255,255,255,0.2)',
-            userSelect: 'none',
-          }}
-          wrapLongLines
-        >
-          {artifact.content}
-        </SyntaxHighlighter>
-      </ScrollArea>
-
-      {/* Action bar */}
-      <div className="flex items-center gap-2 border-t border-border/30 px-3 py-2">
-        <Button variant="ghost" size="sm" onClick={handleCopy} className="h-8 gap-1.5 text-xs">
-          {copied ? (
-            <>
-              <Check className="h-3.5 w-3.5 text-green-500" />
-              Copied
-            </>
-          ) : (
-            <>
-              <Copy className="h-3.5 w-3.5" />
-              Copy
-            </>
-          )}
-        </Button>
-        <Button variant="ghost" size="sm" onClick={handleDownload} className="h-8 gap-1.5 text-xs">
-          <Download className="h-3.5 w-3.5" />
-          Download
-        </Button>
-        <span className="ml-auto text-[10px] uppercase tracking-wider text-muted-foreground/50">
-          {artifact.language}
-        </span>
-      </div>
+      <ArtifactPreview artifact={artifact} className="mt-0 rounded-none border-0" />
     </div>
   );
 }
@@ -190,8 +122,8 @@ export function ArtifactsPanel() {
           'bg-card/95 backdrop-blur-xl',
           // Mobile: full-screen overlay
           'fixed inset-y-0 right-0 z-40 w-full',
-          // Desktop: inline panel
-          'sm:relative sm:inset-auto sm:z-auto sm:w-[400px] sm:shrink-0',
+          // Desktop: inline panel — responsive width
+          'sm:relative sm:inset-auto sm:z-auto sm:w-full md:w-1/2 lg:w-[480px] sm:shrink-0',
           // Slide-in animation
           'animate-in slide-in-from-right duration-300',
         )}
@@ -207,15 +139,29 @@ export function ArtifactsPanel() {
               </span>
             )}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setPanelOpen(false)}
-            className="h-7 w-7 p-0"
-            aria-label="Close artifacts panel"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            {artifacts.length > 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void downloadAllArtifacts(artifacts)}
+                className="h-7 px-2 text-xs"
+                title="Download all artifacts as zip"
+              >
+                <FolderDown className="h-3.5 w-3.5" />
+                <span className="ml-1 hidden sm:inline">Download all</span>
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPanelOpen(false)}
+              className="h-7 w-7 p-0"
+              aria-label="Close artifacts panel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
 
         {artifacts.length === 0 ? (

@@ -1,157 +1,156 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { SupabaseClient } from '@supabase/supabase-js';
 
-vi.mock('@/lib/supabase', () => ({
-  getSupabase: vi.fn(),
+// waitlistServiceClient routes through active Next.js API endpoints — Neon
+// browser access was removed. Mock global fetch and CSRF header injection.
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => ({
+    ...headers,
+    'x-csrf-token': 'csrf-test-token',
+  })),
 }));
 
-import { getSupabase } from '@/lib/supabase';
 import { redeemInviteCode, joinWaitlist } from '../services/waitlistServiceClient';
 
-const mockGetSupabase = vi.mocked(getSupabase);
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-function makeMockClient(overrides: Record<string, unknown> = {}): SupabaseClient {
-  const rpc = vi.fn();
-  const upsert = vi.fn();
-  const from = vi.fn(() => ({ upsert }));
-  const getSession = vi.fn();
-  const signInAnonymously = vi.fn();
-
+function makeJsonResponse(body: unknown, status = 200): Response {
   return {
-    auth: { getSession, signInAnonymously },
-    rpc,
-    from,
-    ...overrides,
-  } as unknown as SupabaseClient;
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn().mockResolvedValue(body),
+  } as unknown as Response;
 }
 
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+// ---------------------------------------------------------------------------
+// redeemInviteCode
+// ---------------------------------------------------------------------------
+
 describe('redeemInviteCode', () => {
-  let client: ReturnType<typeof makeMockClient>;
-
-  beforeEach(() => {
-    client = makeMockClient();
-    mockGetSupabase.mockReturnValue(client as unknown as ReturnType<typeof getSupabase>);
-  });
-
-  it('returns anon_signin_failed when signInAnonymously fails and no session', async () => {
-    (client.auth.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { session: null },
-    });
-    (client.auth.signInAnonymously as ReturnType<typeof vi.fn>).mockResolvedValue({
-      error: new Error('fail'),
-    });
-
-    const result = await redeemInviteCode('ABCDEF', 'connectors');
-    expect(result).toEqual({ success: false, error: 'anon_signin_failed' });
-  });
-
-  it('calls RPC with uppercased code after existing session', async () => {
-    (client.auth.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { session: { access_token: 'tok' } },
-    });
-    (client.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ valid: true, invite_id: 'inv-abc', error: null }],
-      error: null,
-    });
+  it('POSTs to /api/claim-offer with uppercased code and CSRF header', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true, invite_id: 'inv-abc' }));
 
     const result = await redeemInviteCode('abcdef', 'connectors');
-    expect(client.rpc).toHaveBeenCalledWith('validate_and_redeem_invite_code', {
-      p_code: 'ABCDEF',
-      p_surface: 'web',
-      p_source: 'connectors',
-    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/claim-offer',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-test-token' }),
+        body: JSON.stringify({ code: 'ABCDEF' }),
+      }),
+    );
     expect(result).toEqual({ success: true, inviteId: 'inv-abc' });
   });
 
-  it('returns rpc_error on Supabase transport error', async () => {
-    (client.auth.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { session: { access_token: 'tok' } },
-    });
-    (client.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: null,
-      error: { message: 'network error', code: '500' },
-    });
+  it('returns rpc_error when response is not ok', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ error: 'rpc_error' }, 500));
 
     const result = await redeemInviteCode('ABCDEF', 'connectors');
     expect(result).toEqual({ success: false, error: 'rpc_error' });
   });
 
-  it('returns typed error from RPC on invalid_code', async () => {
-    (client.auth.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { session: { access_token: 'tok' } },
-    });
-    (client.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ valid: false, invite_id: null, error: 'invalid_code' }],
-      error: null,
-    });
+  it('returns typed error from API body on invalid_code', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: false, error: 'Invalid invite code' }));
 
     const result = await redeemInviteCode('ABCDEF', 'connectors');
     expect(result).toEqual({ success: false, error: 'invalid_code' });
   });
 
-  it('signs in anonymously when no existing session then calls RPC', async () => {
-    (client.auth.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: { session: null },
-    });
-    (client.auth.signInAnonymously as ReturnType<typeof vi.fn>).mockResolvedValue({
-      error: null,
-    });
-    (client.rpc as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: [{ valid: true, invite_id: 'inv-xyz', error: null }],
-      error: null,
-    });
+  it('returns rpc_error when fetch throws (network failure)', async () => {
+    mockFetch.mockRejectedValue(new Error('network error'));
+
+    const result = await redeemInviteCode('ABCDEF', 'connectors');
+    expect(result).toEqual({ success: false, error: 'rpc_error' });
+  });
+
+  it('returns rpc_error when API body has no error field and success=false', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: false }));
 
     const result = await redeemInviteCode('ABCDEF', 'web-search');
-    expect(client.auth.signInAnonymously).toHaveBeenCalled();
+    expect(result).toEqual({ success: false, error: 'rpc_error' });
+  });
+
+  it('returns inviteId from invite_id field in response body', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true, invite_id: 'inv-xyz' }));
+
+    const result = await redeemInviteCode('ABCDEF', 'web-search');
     expect(result).toEqual({ success: true, inviteId: 'inv-xyz' });
   });
 });
 
+// ---------------------------------------------------------------------------
+// joinWaitlist
+// ---------------------------------------------------------------------------
+
 describe('joinWaitlist', () => {
-  let client: ReturnType<typeof makeMockClient>;
-  let upsert: ReturnType<typeof vi.fn>;
+  it('returns success on 200 response', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
 
-  beforeEach(() => {
-    upsert = vi.fn().mockResolvedValue({ error: null });
-    const from = vi.fn(() => ({ upsert }));
-    client = {
-      ...makeMockClient(),
-      from,
-    } as unknown as ReturnType<typeof makeMockClient>;
-    mockGetSupabase.mockReturnValue(client as unknown as ReturnType<typeof getSupabase>);
-  });
-
-  it('returns success on upsert without error', async () => {
     const result = await joinWaitlist({ email: 'test@example.com' });
     expect(result).toEqual({ success: true });
   });
 
-  it('normalizes email to lowercase', async () => {
+  it('normalizes email to lowercase in POST body', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
     await joinWaitlist({ email: 'TEST@EXAMPLE.COM' });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'test@example.com' }),
-      expect.anything(),
+
+    const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.email).toBe('test@example.com');
+  });
+
+  it('POSTs to the active Cloud Managed waitlist endpoint with CSRF header', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
+    await joinWaitlist({ email: 'test@example.com' });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/waitlist/cloud-managed',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'x-csrf-token': 'csrf-test-token' }),
+      }),
     );
   });
 
-  it('maps InviteCodeSource values outside allowed set to other', async () => {
+  it('maps unknown referralSource to other in POST body', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
     await joinWaitlist({ email: 'a@b.com', referralSource: 'connectors' });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'other' }),
-      expect.anything(),
-    );
+
+    const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.source).toBe('other');
   });
 
-  it('passes byok source through', async () => {
+  it('passes byok source through in POST body', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
+
     await joinWaitlist({ email: 'a@b.com', referralSource: 'byok' });
-    expect(upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'byok' }),
-      expect.anything(),
-    );
+
+    const body = JSON.parse((mockFetch.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.source).toBe('byok');
   });
 
-  it('returns error message on upsert failure', async () => {
-    upsert.mockResolvedValue({ error: { code: '23505', message: 'duplicate' } });
+  it('returns error message on non-ok response', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({}, 400));
+
+    const result = await joinWaitlist({ email: 'a@b.com' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/failed to join/i);
+  });
+
+  it('returns error message when fetch throws (network failure)', async () => {
+    mockFetch.mockRejectedValue(new Error('timeout'));
+
     const result = await joinWaitlist({ email: 'a@b.com' });
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/failed to join/i);

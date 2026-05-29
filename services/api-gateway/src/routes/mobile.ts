@@ -21,7 +21,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { isValidUuid } from '../validations/ids';
@@ -138,13 +138,13 @@ router.post(
     const deviceId = clientId ?? randomUUID();
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
 
     // SECURITY: Verify ownership before upsert to prevent device registration hijack.
     // Without this check, an attacker who knows another user's device ID could
     // overwrite their registration by supplying it as clientId.
     if (clientId) {
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from('mobile_devices')
         .select('user_id')
         .eq('id', clientId)
@@ -155,7 +155,7 @@ router.post(
       }
     }
 
-    const { error } = await supabase.from('mobile_devices').upsert(
+    const { error } = await db.from('mobile_devices').upsert(
       {
         id: deviceId,
         user_id: user.userId,
@@ -194,9 +194,9 @@ router.post(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // First verify the device exists and belongs to the user
-    const { data: device, error: fetchError } = await supabase
+    const { data: device, error: fetchError } = await db
       .from('mobile_devices')
       .select('id, user_id')
       .eq('id', deviceId)
@@ -212,7 +212,7 @@ router.post(
     }
 
     // Update the push token
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('mobile_devices')
       .update({ push_token: pushToken })
       .eq('id', deviceId);
@@ -326,8 +326,8 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  const { data: devices, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data: devices, error } = await db
     .from('mobile_devices')
     .select('*')
     .eq('user_id', user.userId)
@@ -425,9 +425,9 @@ router.delete(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // First verify ownership
-    const { data: device, error: fetchError } = await supabase
+    const { data: device, error: fetchError } = await db
       .from('mobile_devices')
       .select('id, user_id')
       .eq('id', deviceId)
@@ -441,10 +441,7 @@ router.delete(
       throw new AppError('Device not found', 404);
     }
 
-    const { error: deleteError } = await supabase
-      .from('mobile_devices')
-      .delete()
-      .eq('id', deviceId);
+    const { error: deleteError } = await db.from('mobile_devices').delete().eq('id', deviceId);
 
     if (deleteError) {
       logger.error({ error: deleteError }, 'Failed to delete device');

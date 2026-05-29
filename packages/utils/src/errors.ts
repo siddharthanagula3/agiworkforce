@@ -110,9 +110,9 @@ export const createError = {
   stripe: (message: string, details?: unknown): AppError =>
     new AppError(ErrorCode.STRIPE_ERROR, message, 502, details),
 
-  /** Create a Supabase (502) error */
-  supabase: (message: string, details?: unknown): AppError =>
-    new AppError(ErrorCode.SUPABASE_ERROR, message, 502, details),
+  /** Create a cloud DB/API (502) error */
+  cloudDatabase: (message: string, details?: unknown): AppError =>
+    new AppError(ErrorCode.CLOUD_DB_ERROR, message, 502, details),
 
   /** Create an internal server (500) error */
   internal: (message = 'Internal server error', details?: unknown): AppError =>
@@ -242,7 +242,7 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Please check your payment method and try again.',
     icon: 'payment',
   },
-  [ErrorCode.SUPABASE_ERROR]: {
+  [ErrorCode.CLOUD_DB_ERROR]: {
     title: 'Database Error',
     message: 'There was a problem accessing your data.',
     suggestion: 'Please try again. If this persists, contact support.',

@@ -20,7 +20,8 @@ const {
   mockEq,
   mockSelect,
   mockSingle,
-  mockGetAuthenticatedUserWithClient,
+  mockGetClerkAuthUser,
+  mockNeonQuery,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -28,7 +29,8 @@ const {
   const mockUpdate = vi.fn();
   const mockInsert = vi.fn();
   const mockFrom = vi.fn();
-  const mockGetAuthenticatedUserWithClient = vi.fn();
+  const mockGetClerkAuthUser = vi.fn();
+  const mockNeonQuery = vi.fn();
   return {
     mockFrom,
     mockUpdate,
@@ -36,7 +38,8 @@ const {
     mockEq,
     mockSelect,
     mockSingle,
-    mockGetAuthenticatedUserWithClient,
+    mockGetClerkAuthUser,
+    mockNeonQuery,
   };
 });
 
@@ -53,8 +56,19 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUserWithClient: mockGetAuthenticatedUserWithClient,
+  getClerkAuthUser: mockGetClerkAuthUser,
+  getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // ── Route imports (after mocks) ───────────────────────────────────────────────
@@ -93,18 +107,23 @@ function makePostRequest(body: unknown): NextRequest {
   });
 }
 
-// Wire auth mock to a fresh supabase builder each test.
+// Wire auth mock.
 // vitest.config.ts sets mockReset: true so we must re-register implementations
 // in every beforeEach rather than relying on module-level defaults.
 function wireAuthAndDb() {
-  mockGetAuthenticatedUserWithClient.mockResolvedValue({
-    user: { id: 'user-abc' },
-    userDb: { from: (...args: unknown[]) => mockFrom(...args) },
-  });
+  mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
 }
 
-// Set up supabase builder chain: from().update()/insert().eq().select().single()
+// Set up neon query chain: db.query() resolves with row array (update/select returning *)
 function setupUpdateChain(resolvedValue: { data: unknown; error: unknown }) {
+  // Route calls db.query(sql, params) and expects row array.
+  // Simulate: first call (with round-10 fields) returns the updated row or PG error.
+  if (resolvedValue.error) {
+    mockNeonQuery.mockRejectedValue(resolvedValue.error);
+  } else {
+    mockNeonQuery.mockResolvedValue(resolvedValue.data ? [resolvedValue.data] : []);
+  }
+  // Keep cloud database builder chain wired for mockUpdate assertion in allowedSurfaces test
   mockSingle.mockResolvedValue(resolvedValue);
   mockSelect.mockReturnValue({ single: mockSingle });
   mockEq.mockReturnValue({ eq: mockEq, select: mockSelect });
@@ -113,6 +132,11 @@ function setupUpdateChain(resolvedValue: { data: unknown; error: unknown }) {
 }
 
 function setupInsertChain(resolvedValue: { data: unknown; error: unknown }) {
+  if (resolvedValue.error) {
+    mockNeonQuery.mockRejectedValue(resolvedValue.error);
+  } else {
+    mockNeonQuery.mockResolvedValue(resolvedValue.data ? [resolvedValue.data] : []);
+  }
   mockSingle.mockResolvedValue(resolvedValue);
   mockSelect.mockReturnValue({ single: mockSingle });
   mockInsert.mockReturnValue({ select: mockSelect });
@@ -196,9 +220,11 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    // Verify the update payload was called with only the valid surfaces
-    const updatePayload = mockUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(updatePayload['allowed_surfaces']).toEqual(['web', 'desktop']);
+    // Verify the SQL params passed to db.query contain only the valid surfaces
+    const callArgs = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    const sqlParams = callArgs[1];
+    // params is an array; one element should be the filtered surfaces array
+    expect(sqlParams).toContainEqual(['web', 'desktop']);
   });
 
   it('partial PUT — only iconEmoji provided leaves other fields untouched', async () => {
@@ -214,35 +240,30 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    // Only updated_at and icon_emoji should be in the update payload
-    const updatePayload = mockUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(Object.keys(updatePayload)).toContain('icon_emoji');
-    expect(Object.keys(updatePayload)).not.toContain('default_privacy_mode');
-    expect(Object.keys(updatePayload)).not.toContain('default_provider_mode');
-    expect(Object.keys(updatePayload)).not.toContain('accent_color');
+    // SQL should reference icon_emoji but NOT default_privacy_mode, default_provider_mode, accent_color
+    const callArgs = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    const sql = callArgs[0];
+    expect(sql).toContain('icon_emoji');
+    expect(sql).not.toContain('default_privacy_mode');
+    expect(sql).not.toContain('default_provider_mode');
+    expect(sql).not.toContain('accent_color');
   });
 
   it('retries without round-10 fields when DB returns 42703 undefined_column', async () => {
     const pgError = { code: '42703', message: 'column does not exist' };
-    // First call (with round-10 fields) returns PG error; second (legacy only) succeeds
-    mockSingle
-      .mockResolvedValueOnce({ data: null, error: pgError })
-      .mockResolvedValueOnce({ data: BASE_DB_ROW, error: null });
-    mockSelect.mockReturnValue({ single: mockSingle });
-    mockEq.mockReturnValue({ eq: mockEq, select: mockSelect });
-    mockUpdate.mockReturnValue({ eq: mockEq });
-    mockFrom.mockReturnValue({ update: mockUpdate, eq: mockEq });
+    // First call (with round-10 fields) rejects with PG error; second (legacy only) succeeds
+    mockNeonQuery.mockRejectedValueOnce(pgError).mockResolvedValueOnce([BASE_DB_ROW]);
 
     const req = makePutRequest('proj-1', { iconEmoji: '🔥', name: 'Updated Name' });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
 
     expect(res.status).toBe(200);
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
-    const firstPayload = mockUpdate.mock.calls[0]?.[0] as Record<string, unknown>;
-    const secondPayload = mockUpdate.mock.calls[1]?.[0] as Record<string, unknown>;
-    expect(firstPayload).toHaveProperty('icon_emoji');
-    expect(secondPayload).not.toHaveProperty('icon_emoji');
-    expect(secondPayload).toHaveProperty('name', 'Updated Name');
+    expect(mockNeonQuery).toHaveBeenCalledTimes(2);
+    const firstSql = (mockNeonQuery.mock.calls[0] as [string, unknown[]])[0];
+    const secondSql = (mockNeonQuery.mock.calls[1] as [string, unknown[]])[0];
+    expect(firstSql).toContain('icon_emoji');
+    expect(secondSql).not.toContain('icon_emoji');
+    expect(secondSql).toContain('name');
   });
 });
 

@@ -6,22 +6,26 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 
 import en from './locales/en/common.json';
 import es from './locales/es/common.json';
+import hi from './locales/hi/common.json';
 import enErrors from './locales/en/errors.json';
 import esErrors from './locales/es/errors.json';
+import hiErrors from './locales/hi/errors.json';
 import enAuth from './locales/en/auth.json';
 import esAuth from './locales/es/auth.json';
 import enChat from './locales/en/chat.json';
 import esChat from './locales/es/chat.json';
 import enSettings from './locales/en/settings.json';
 import esSettings from './locales/es/settings.json';
+import hiSettings from './locales/hi/settings.json';
 import enPricing from './locales/en/pricing.json';
 import esPricing from './locales/es/pricing.json';
 import enModels from './locales/en/models.json';
 import esModels from './locales/es/models.json';
 
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en', name: 'English', nativeName: 'English' },
-  { code: 'es', name: 'Spanish', nativeName: 'Espanol' },
+  { code: 'en', name: 'English', nativeName: 'English', flag: '🇺🇸' },
+  { code: 'es', name: 'Spanish', nativeName: 'Español', flag: '🇪🇸' },
+  { code: 'hi', name: 'Hindi', nativeName: 'हिन्दी', flag: '🇮🇳' },
 ] as const;
 
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number]['code'];
@@ -46,6 +50,11 @@ const resources = {
     settings: esSettings,
     pricing: esPricing,
     models: esModels,
+  },
+  hi: {
+    common: hi,
+    errors: hiErrors,
+    settings: hiSettings,
   },
 };
 

@@ -21,12 +21,12 @@ import { getOptionalEnv } from '@/utils/env';
 
 export interface AnthropicProviderOptions {
   thinking?: { type: 'enabled' | 'disabled'; budgetTokens?: number };
-  effort?: 'low' | 'medium' | 'high';
+  effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   contextManagement?: 'auto' | 'manual';
 }
 
 export interface OpenAIProviderOptions {
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   reasoningSummary?: 'auto' | 'concise' | 'detailed' | 'none';
   serviceTier?: 'auto' | 'default' | 'flex';
 }
@@ -69,7 +69,7 @@ export function buildAnthropicProviderOptions(
   }
 
   if (options.effort) {
-    anthropic['effort'] = options.effort;
+    anthropic['output_config'] = { effort: options.effort };
   }
 
   if (options.contextManagement) {

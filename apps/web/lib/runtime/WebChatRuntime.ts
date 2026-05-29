@@ -14,15 +14,12 @@ import type {
   Conversation,
   ChatMessage,
 } from '@agiworkforce/unified-chat';
-import { getSupabaseClient } from '@/services/supabase';
+import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
 
 async function getAuthToken(): Promise<string> {
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) throw new Error('Not authenticated');
-  return session.access_token;
+  const token = await getClerkToken();
+  if (!token) throw new Error('Not authenticated');
+  return token;
 }
 
 function authHeaders(token: string): Record<string, string> {

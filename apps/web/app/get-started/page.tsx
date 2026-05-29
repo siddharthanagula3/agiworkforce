@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export default function GetStartedPage() {
   const localLabel = formatPrivacyModeLabel('local');
@@ -17,7 +18,9 @@ export default function GetStartedPage() {
           <h1 className="agi-page-h1">Get started.</h1>
           <p className="agi-page-lede">
             Five minutes from zero to a working chat across multiple providers.{' '}
-            <strong>Pick your install path, log in or skip auth, and try it.</strong>
+            <strong>
+              {LAUNCH.publicLabel}. {POSITIONING.trustBoundary}
+            </strong>
           </p>
         </section>
         <section className="agi-section">
@@ -49,20 +52,21 @@ export default function GetStartedPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">{localLabel} — free forever</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce --provider ollama</code> after installing Ollama. No keys, no
-                quotas, fully offline.
+                <code>agi --provider ollama</code> after installing Ollama. No keys, no quotas,
+                fully offline.
               </p>
             </li>
             <li className="agi-reason">
               <h3 className="agi-reason-h">{byokLabel} — free forever</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce login</code>. Paste your provider key. Encrypted on device.
+                <code>agi login</code>. Paste your provider key. Encrypted on device.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Hobby cloud</h3>
+              <h3 className="agi-reason-h">Managed cloud waitlist</h3>
               <p className="agi-reason-p">
-                Sign in to our managed cloud. We handle the keys; you just chat.
+                Request an invite code if you want AGI-hosted compute later. Local and BYOK stay
+                free acquisition paths.
               </p>
             </li>
           </ul>
@@ -72,10 +76,10 @@ export default function GetStartedPage() {
           <div className="agi-terminal">
             <div className="agi-terminal-bar">first command</div>
             <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$</span>agiworkforce exec &quot;sketch a Rust
-              HTTP router&quot;
+              <span className="agi-terminal-prompt">$</span>agi exec &quot;sketch a Rust HTTP
+              router&quot;
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce
+              <span className="agi-terminal-prompt">$</span>agi
               {'\n'}
               <span className="agi-terminal-comment"># interactive TUI</span>
             </pre>

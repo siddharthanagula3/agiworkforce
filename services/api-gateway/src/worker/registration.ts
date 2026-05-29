@@ -26,7 +26,7 @@ import { z } from 'zod';
 import { randomUUID, createHash, randomBytes } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { getServiceClient, getUserScopedClient } from '../lib/supabaseClients';
+import { getServiceClient, getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 import { requireEnv } from '../env';
 import {

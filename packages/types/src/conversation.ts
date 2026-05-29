@@ -11,7 +11,8 @@
  * The shared contract uses `string` for all identifiers (`ConversationId`,
  * `MessageId`, `ActionId`). This is the lowest-common-denominator type that
  * works across all surfaces:
- *   - **Web / Mobile / Extension**: UUIDs from Supabase (already strings).
+ *   - **Web / Mobile / Extension**: UUIDs from the shared cloud persistence
+ *     layer (string IDs, not provider-specific).
  *   - **Desktop**: SQLite autoincrement integers. The desktop surface widens
  *     its local types to `string | number` and coerces at the boundary.
  *
@@ -52,7 +53,7 @@ declare const __brand: unique symbol;
 /**
  * Branded string alias for conversation identifiers.
  *
- * - Web / Mobile / Extension: UUID from Supabase.
+ * - Web / Mobile / Extension: UUID from the cloud store.
  * - Desktop: Stringified SQLite autoincrement integer.
  */
 export type ConversationId = string & { readonly [__brand]: 'ConversationId' };
@@ -60,7 +61,7 @@ export type ConversationId = string & { readonly [__brand]: 'ConversationId' };
 /**
  * Branded string alias for message identifiers.
  *
- * - Web / Mobile / Extension: UUID from Supabase.
+ * - Web / Mobile / Extension: UUID from the cloud store.
  * - Desktop: Stringified SQLite integer or a `msg-*` prefixed string.
  */
 export type MessageId = string & { readonly [__brand]: 'MessageId' };
@@ -120,8 +121,8 @@ export type MessageStatus =
 /**
  * Lifecycle status of an agent action (tool call, MCP request, etc.).
  *
- * Matches the status vocabulary used in database.ts `AgentActionStatus` and
- * runtime.ts `RuntimeActivityStatus`, establishing a single canonical set.
+ * Matches the status vocabulary used in runtime.ts `RuntimeActivityStatus`,
+ * establishing a single canonical set.
  */
 export type ActionStatus =
   /** Action is queued but has not started executing. */
@@ -325,7 +326,6 @@ export interface MessageBase {
  * request, a file operation, etc. Actions belong to a message and carry their
  * own lifecycle status.
  *
- * Corresponds to `vibe_agent_actions` in the database schema.
  */
 export interface ActionBase {
   /** Unique action identifier. */

@@ -16,8 +16,7 @@ import { isAppError } from '@/lib/errors';
  * This endpoint now requires an admin app-metadata role; the duplicate has been
  * deleted. Cron-style probes should use a service-role JWT.
  *
- * Returns env-presence booleans + a masked Supabase host. Never returns raw
- * secret values.
+ * Returns env-presence booleans. Never returns raw secret values.
  */
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');
@@ -39,26 +38,14 @@ export async function GET(request: NextRequest) {
 
   const host = request.headers.get('host') || 'unknown';
 
-  // AUDIT-P3-008-011: Mask supabaseUrl to prevent info disclosure
-  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-  let maskedSupabaseUrl = 'NOT_SET';
-  if (supabaseUrl) {
-    try {
-      const url = new URL(supabaseUrl);
-      maskedSupabaseUrl = url.hostname;
-    } catch {
-      maskedSupabaseUrl = 'INVALID_URL';
-    }
-  }
-
   const config = {
     environment: process.env['NODE_ENV'],
     host,
     hasStripeKey: !!process.env['STRIPE_SECRET_KEY'],
     hasStripeWebhookSecret: !!process.env['STRIPE_WEBHOOK_SECRET'],
-    hasSupabaseUrl: !!supabaseUrl,
-    hasSupabaseServiceKey: !!process.env['SUPABASE_SERVICE_ROLE_KEY'],
-    supabaseHost: maskedSupabaseUrl,
+    hasClerkPublishableKey: !!process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'],
+    hasClerkSecretKey: !!process.env['CLERK_SECRET_KEY'],
+    hasDatabaseUrl: !!process.env['DATABASE_URL'],
     timestamp: new Date().toISOString(),
   };
 

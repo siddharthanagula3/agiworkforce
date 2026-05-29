@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { loadUserAIPreferences } from '@core/ai/llm/user-ai-preferences';
 import type { LLMProvider } from '@core/ai/llm/unified-language-model';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 export interface AIPreferences {
   provider: LLMProvider;
@@ -23,7 +24,7 @@ export interface AIPreferences {
 export function useAIPreferences() {
   const [preferences, setPreferences] = useState<AIPreferences>({
     provider: 'openai',
-    model: 'gpt-5.4',
+    model: requireProviderDefaultModel('openai'),
     temperature: 0.7,
     maxTokens: 4000,
     isLoading: true,

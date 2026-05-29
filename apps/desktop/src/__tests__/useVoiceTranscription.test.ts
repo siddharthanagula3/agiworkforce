@@ -7,8 +7,8 @@ vi.mock('../lib/tauri-mock', () => ({
   isTauriContext: () => false,
 }));
 
-vi.mock('../services/supabaseAuth', () => ({
-  supabaseAuth: {
+vi.mock('../services/cloudAccountAuth', () => ({
+  cloudAccountAuth: {
     getSession: () => ({ access_token: 'test-token' }),
   },
 }));

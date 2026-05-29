@@ -53,7 +53,7 @@ if (!exists(codeownersPath)) {
     '/packages/unified-chat/',
     '/crates/',
     '/services/',
-    '/supabase/migrations/',
+    '/apps/web/db/neon/',
     '/docs/enterprise/',
     '/docs/security/',
     '/docs/legal/',

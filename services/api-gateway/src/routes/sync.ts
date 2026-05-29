@@ -19,7 +19,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -32,7 +32,7 @@ router.use(createRateLimiter('default'));
 // =============================================================================
 // Sync API - Aligned with Rust CloudSyncClient
 // =============================================================================
-// Sync data is stored in Supabase (sync_data table)
+// Sync data is stored in Neon (sync_data table)
 // This ensures data survives server restarts and scales across instances
 // TTL cleanup and max entries are handled by database triggers
 
@@ -98,13 +98,13 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
+  const db = getUserScopedClient(user.userId);
 
   // SECURITY (H11): Validate device_id ownership — prevent cross-user device contamination
   const rawDeviceId = (req.headers['x-device-id'] as string | undefined) ?? batch.device_id;
   let deviceId: string | undefined;
   if (rawDeviceId) {
-    const { data: pairing } = await supabase
+    const { data: pairing } = await db
       .from('device_pairings')
       .select('id')
       .eq('user_id', user.userId)
@@ -134,7 +134,7 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
   for (const item of batch.items) {
     try {
       // Check for conflicts - look for existing entries with same entity_id
-      const { data: existing } = await supabase
+      const { data: existing } = await db
         .from('sync_data')
         .select('*')
         .eq('user_id', user.userId)
@@ -185,7 +185,7 @@ router.post('/batch', createRateLimiter('sync-batch'), async (req: Request, res:
         }
       }
 
-      const { error } = await supabase.from('sync_data').insert({
+      const { error } = await db.from('sync_data').insert({
         user_id: user.userId,
         device_id: deviceId ?? batch.device_id,
         sync_type: item.entity_type,
@@ -228,9 +228,9 @@ router.get('/updates', createRateLimiter('sync-updates'), async (req: Request, r
   const deviceId = req.headers['x-device-id'] as string | undefined;
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  // Query sync data from Supabase
-  let query = supabase
+  const db = getUserScopedClient(user.userId);
+  // Query sync data from Neon
+  let query = db
     .from('sync_data')
     .select('*')
     .eq('user_id', user.userId)
@@ -279,10 +279,10 @@ router.post(
     const deviceId = req.headers['x-device-id'] as string | undefined;
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // For now, just insert the resolved data as a new entry
     // Full implementation would update existing entry with version check
-    const { error } = await supabase.from('sync_data').insert({
+    const { error } = await db.from('sync_data').insert({
       user_id: user.userId,
       device_id: deviceId ?? resolution.device_id,
       sync_type: 'conflict_resolution',
@@ -314,15 +314,15 @@ router.get('/status', createRateLimiter('sync-status'), async (req: Request, res
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
+  const db = getUserScopedClient(user.userId);
   // Get counts for this user
-  const { count: pendingCount } = await supabase
+  const { count: pendingCount } = await db
     .from('sync_data')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.userId);
 
   // Get last sync timestamp
-  const { data: lastSync } = await supabase
+  const { data: lastSync } = await db
     .from('sync_data')
     .select('created_at')
     .eq('user_id', user.userId)
@@ -354,11 +354,11 @@ router.post(
     const registration = deviceRegistrationSchema.parse(req.body);
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
 
     // Store device registration in sync_data as a special type
     // Full implementation would have a dedicated devices table
-    const { error } = await supabase.from('sync_data').upsert(
+    const { error } = await db.from('sync_data').upsert(
       {
         user_id: user.userId,
         device_id: registration.device_id,
@@ -403,9 +403,9 @@ router.delete(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // Delete device registration and all sync data for this device
-    const { error } = await supabase
+    const { error } = await db
       .from('sync_data')
       .delete()
       .eq('user_id', user.userId)
@@ -443,8 +443,8 @@ router.post('/push', createRateLimiter('sync-legacy'), async (req: Request, res:
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  const { error } = await supabase.from('sync_data').insert({
+  const db = getUserScopedClient(user.userId);
+  const { error } = await db.from('sync_data').insert({
     user_id: user.userId,
     device_id: deviceId,
     sync_type: type,
@@ -482,8 +482,8 @@ router.get('/pull', createRateLimiter('sync-legacy'), async (req: Request, res: 
   const sinceDate = new Date(since).toISOString();
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  let query = supabase
+  const db = getUserScopedClient(user.userId);
+  let query = db
     .from('sync_data')
     .select('*')
     .eq('user_id', user.userId)
@@ -524,8 +524,8 @@ router.delete('/clear', createRateLimiter('sync-legacy'), async (req: Request, r
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  const { error } = await supabase.from('sync_data').delete().eq('user_id', user.userId);
+  const db = getUserScopedClient(user.userId);
+  const { error } = await db.from('sync_data').delete().eq('user_id', user.userId);
 
   if (error) {
     logger.error({ error }, 'Clear error');

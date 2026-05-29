@@ -1,5 +1,5 @@
-import { asPlanTier, type PlanTier } from '../lib/supabase';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { asPlanTier, type PlanTier } from '../lib/cloudAccountTypes';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 export type SubscriptionStatus = 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
 
@@ -23,7 +23,7 @@ const PLAN_TIER_HIERARCHY: PlanTier[] = [
 ];
 
 export function checkSubscriptionGate(): SubscriptionGateResult {
-  const authState = supabaseAuth.getState();
+  const authState = cloudAccountAuth.getState();
 
   if (!authState.user || !authState.session) {
     return {
@@ -82,7 +82,7 @@ export function checkSubscriptionGate(): SubscriptionGateResult {
 }
 
 export function checkAutoModeAccess(): SubscriptionGateResult {
-  const authState = supabaseAuth.getState();
+  const authState = cloudAccountAuth.getState();
 
   if (!authState.subscription) {
     return {

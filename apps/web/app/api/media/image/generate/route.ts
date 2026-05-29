@@ -1,13 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
-import { requireEnv, getOptionalEnv } from '@/utils/env';
+import { getOptionalEnv, requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -23,7 +22,7 @@ import { randomUUID } from 'crypto';
  * - OpenAI DALL-E 3
  * - Stability AI Stable Image Core (v2beta)
  *
- * Users authenticate with their Supabase JWT and must have an active subscription.
+ * Users authenticate with Clerk and must have an active subscription.
  */
 
 // Next.js route configuration - image generation takes 10–30s, so we extend to 60s.
@@ -417,67 +416,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const rateLimitResponse = await withRateLimit(request, 'image-generation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Authentication - validate Bearer token format to reject malformed/injected values
-  const authHeader = request.headers.get('authorization');
-  const bearerMatch = authHeader?.match(/^Bearer\s+([\w\-.~+/]+=*)$/i);
-  if (!bearerMatch) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Missing or invalid authorization header',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-
-  const token = bearerMatch[1]!;
-
-  // Verify user with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Invalid authentication token',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-
-  // RLS-bound client for all downstream DB ops on behalf of this user.
-  const userClient = getUserClient(token);
+  // Authentication
+  const { userId } = await getClerkAuthUser(request);
 
   // Check subscription
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     return NextResponse.json(
@@ -650,11 +593,11 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   const estimatedCostCents = maxProviderCost * n;
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, user.id);
+    const balance = await CreditService.getBalance(userId);
     logger.warn(
-      { userId: user.id, estimatedCostCents, balance },
+      { userId: userId, estimatedCostCents, balance },
       'Insufficient credits for image generation',
     );
     return NextResponse.json(
@@ -680,10 +623,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   // Reserve credits before generation to prevent race conditions
   const requestId = randomUUID();
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation: image generation (${provider})`,
     { provider, type: 'reservation', requestId, imageCount: n },
@@ -692,7 +634,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
   if (!reserveResult.success) {
     logger.warn(
-      { userId: user.id, estimatedCostCents, reserveResult },
+      { userId: userId, estimatedCostCents, reserveResult },
       'Failed to reserve image credits',
     );
     return NextResponse.json(
@@ -718,7 +660,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   try {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         provider,
         prompt: prompt.substring(0, 100),
         size,
@@ -742,7 +684,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         provider,
         model: result.model,
         imageCount: result.images.length,
@@ -751,10 +693,9 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     );
   } catch (error) {
     // Refund the reserved credits on generation failure
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
-      userClient,
-      user.id,
+      userId,
       -estimatedCostCents,
       `Refund: image generation failed (${provider})`,
       { provider, type: 'refund', reason: 'generation_failure', requestId },
@@ -764,7 +705,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     logger.error(
       {
         error: error instanceof Error ? error.message : String(error),
-        userId: user.id,
+        userId: userId,
         provider,
       },
       'Image generation failed - credits refunded',
@@ -820,13 +761,12 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   if (costDifference !== 0) {
     // Adjust credits: positive diff = additional charge, negative = refund
     const reconciliationKey = CreditService.generateIdempotencyKey(
-      user.id,
+      userId,
       'reconciliation',
       requestId,
     );
     await CreditService.deductCredits(
-      userClient,
-      user.id,
+      userId,
       costDifference,
       costDifference > 0
         ? `Additional charge: image generation (${provider}/${result.model})`
@@ -844,7 +784,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   logger.info(
-    { userId: user.id, provider, model: result.model, costEstimate, estimatedCostCents },
+    { userId: userId, provider, model: result.model, costEstimate, estimatedCostCents },
     'Image generation credits deducted',
   );
 

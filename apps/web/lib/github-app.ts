@@ -7,8 +7,7 @@ import {
   createDecipheriv,
   createSign,
 } from 'crypto';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * SECURITY: Validate GitHub API path segments to prevent SSRF and path traversal.
@@ -115,36 +114,18 @@ function decryptToken(encryptedValue: string): string {
   return Buffer.concat([decipher.update(data), decipher.final()]).toString('utf8');
 }
 
-async function createSupabaseServerClient() {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    },
-  );
-}
-
 export async function getInstallationAccessToken(installationId: number): Promise<string> {
-  const supabase = await createSupabaseServerClient();
+  const db = getNeonDb();
 
   // Check cached token
-  const { data: installation } = await supabase
-    .from('github_installations')
-    .select('access_token_enc, access_token_expires_at')
-    .eq('installation_id', installationId)
-    .single();
+  const rows = await db.query<{
+    access_token_enc: string | null;
+    access_token_expires_at: string | null;
+  }>(
+    'SELECT access_token_enc, access_token_expires_at FROM github_installations WHERE installation_id = $1 LIMIT 1',
+    [installationId],
+  );
+  const installation = rows[0] ?? null;
 
   const fiveMinFromNow = new Date(Date.now() + 5 * 60 * 1000);
   if (
@@ -178,13 +159,10 @@ export async function getInstallationAccessToken(installationId: number): Promis
   const { token, expires_at } = (await res.json()) as { token: string; expires_at: string };
 
   // Cache encrypted token
-  await supabase
-    .from('github_installations')
-    .update({
-      access_token_enc: encryptToken(token),
-      access_token_expires_at: expires_at,
-    })
-    .eq('installation_id', installationId);
+  await db.execute(
+    'UPDATE github_installations SET access_token_enc = $1, access_token_expires_at = $2 WHERE installation_id = $3',
+    [encryptToken(token), expires_at, installationId],
+  );
 
   return token;
 }

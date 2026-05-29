@@ -123,9 +123,10 @@ impl MasterPasswordEncryption {
     }
 
     fn derive_key(&self, purpose: KeyPurpose) -> Result<Vec<u8>, MasterPasswordError> {
-        let manager = self.manager.lock().map_err(|e| {
-            MasterPasswordError::CryptoError(format!("manager lock poisoned: {e}"))
-        })?;
+        let manager = self
+            .manager
+            .lock()
+            .map_err(|e| MasterPasswordError::CryptoError(format!("manager lock poisoned: {e}")))?;
         manager.derive_key(purpose)
     }
 }
@@ -216,7 +217,10 @@ mod tests {
         let err = helper
             .decrypt(KeyPurpose::McpCredentials, "this-is-not-base64!!")
             .expect_err("garbage input must fail");
-        assert!(matches!(err, MasterPasswordError::CryptoError(_)), "{err:?}");
+        assert!(
+            matches!(err, MasterPasswordError::CryptoError(_)),
+            "{err:?}"
+        );
     }
 
     #[test]

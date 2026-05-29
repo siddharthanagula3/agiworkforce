@@ -197,10 +197,10 @@ describe('ReasoningAccordion — auto-expand during streaming', () => {
 // ─── Streaming visual cues ────────────────────────────────────────────────────
 
 describe('ReasoningAccordion — streaming visual cues', () => {
-  it('applies purple border when streaming', () => {
+  it('applies amber accent border when streaming', () => {
     render(<ReasoningAccordion steps={['step']} isStreaming />);
     const container = screen.getByRole('button').closest('div');
-    expect(container?.className).toContain('border-purple-500/50');
+    expect(container?.className).toContain('border-[var(--chat-accent-primary');
   });
 
   it('applies zinc border when not streaming', () => {

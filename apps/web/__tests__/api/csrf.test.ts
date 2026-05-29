@@ -48,38 +48,22 @@ vi.mock('@/lib/csrf', () => ({
   getSessionIdFromRequest: vi.fn(() => Promise.resolve('session-123')),
 }));
 
-// ─── Supabase ─────────────────────────────────────────────────────────────────
-const mockGetUser = vi.fn();
-const mockSupabaseQuery = {
-  from: vi.fn().mockReturnThis(),
-  select: vi.fn().mockReturnThis(),
-  eq: vi.fn().mockReturnThis(),
-  is: vi.fn().mockReturnThis(),
-  update: vi.fn().mockReturnThis(),
-  single: vi.fn().mockResolvedValue({
-    data: {
-      id: 'mem-1',
-      content: 'test',
-      category: 'note',
-      source: 'user',
-      created_at: '2026-01-01',
-      updated_at: '2026-01-01',
-    },
-    error: null,
-  }),
-  order: vi.fn().mockResolvedValue({ data: [], error: null }),
-};
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
-    ...mockSupabaseQuery,
-  })),
+// ─── Clerk auth — used by memory/[id]/route ───────────────────────────────────
+const mockGetClerkAuthUser = vi.fn();
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
+// ─── Neon DB — used by memory/[id]/route ─────────────────────────────────────
+const mockMemoryNeonQuery = vi.fn();
+const mockMemoryNeonExecute = vi.fn();
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockMemoryNeonQuery(...args),
+    execute: (...args: unknown[]) => mockMemoryNeonExecute(...args),
+    transaction: vi.fn(),
+    withUser: vi.fn(),
+    dispose: vi.fn(),
   })),
 }));
 
@@ -89,6 +73,18 @@ vi.mock('next/headers', () => ({
     set: vi.fn(),
     delete: vi.fn(),
   })),
+}));
+
+// ─── Neon DB + Clerk auth — used by chat/conversations/[id]/route ─────────────
+// The conversation routes were migrated from Neon to Neon + Clerk in Wave 3.
+const mockNeonQuery = vi.fn();
+const mockNeonExecute = vi.fn();
+const mockRequireCurrentUserId = vi.fn();
+
+vi.mock('@/lib/server/neon-chat', () => ({
+  getNeonChatDb: () => ({ query: mockNeonQuery, execute: mockNeonExecute }),
+  requireCurrentUserId: (...args: unknown[]) => mockRequireCurrentUserId(...args),
+  normalizeMessageMetadata: (v: unknown) => v,
 }));
 
 // ─── Import routes under test ─────────────────────────────────────────────
@@ -142,20 +138,12 @@ describe('CSRF protection on state-changing endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
-    mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1', email: 'test@test.com' } },
-      error: null,
-    });
+    // Default: authenticated user (Clerk auth for memory routes)
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'test@test.com' });
 
-    // Reset supabase chain mocks
-    mockSupabaseQuery.from.mockReturnThis();
-    mockSupabaseQuery.select.mockReturnThis();
-    mockSupabaseQuery.eq.mockReturnThis();
-    mockSupabaseQuery.is.mockReturnThis();
-    mockSupabaseQuery.update.mockReturnThis();
-    mockSupabaseQuery.single.mockResolvedValue({
-      data: {
+    // Default Neon mock for memory routes
+    mockMemoryNeonQuery.mockResolvedValue([
+      {
         id: 'test-id',
         content: 'memory content',
         category: 'note',
@@ -163,13 +151,21 @@ describe('CSRF protection on state-changing endpoints', () => {
         created_at: '2026-01-01',
         updated_at: '2026-01-01',
       },
-      error: null,
-    });
-    mockSupabaseQuery.order.mockResolvedValue({ data: [], error: null });
+    ]);
+    mockMemoryNeonExecute.mockResolvedValue(undefined);
 
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
-    process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-key';
+    // Default Neon + Clerk mocks for conversation routes
+    mockRequireCurrentUserId.mockResolvedValue('user-1');
+    mockNeonQuery.mockResolvedValue([
+      {
+        id: 'test-conv-id',
+        title: 'Test',
+        model: 'auto',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+      },
+    ]);
+    mockNeonExecute.mockResolvedValue(undefined);
 
     // By default pass CSRF
     mockRequireCsrfToken.mockResolvedValue(null);
@@ -229,11 +225,8 @@ describe('CSRF protection on state-changing endpoints', () => {
 
     it('proceeds normally with valid CSRF token', async () => {
       mockRequireCsrfToken.mockResolvedValue(null);
-      // Simulate successful delete (update returns no error)
-      mockSupabaseQuery.update.mockReturnValue({
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockResolvedValue({ error: null }),
-      });
+      // Simulate successful delete (Neon execute resolves with no error)
+      mockMemoryNeonExecute.mockResolvedValueOnce(undefined);
 
       const response = await memoryDELETE(makeMemoryRequest('DELETE'), routeContext);
 
@@ -307,11 +300,7 @@ describe('CSRF protection on state-changing endpoints', () => {
 
     it('proceeds normally with valid CSRF token', async () => {
       mockRequireCsrfToken.mockResolvedValue(null);
-      // Mock the update chain for soft delete
-      mockSupabaseQuery.update.mockReturnValue({
-        eq: vi.fn().mockReturnThis(),
-        is: vi.fn().mockResolvedValue({ error: null }),
-      });
+      // Neon execute is already mocked to resolve in beforeEach
 
       const response = await convDELETE(makeConvRequest('DELETE'), convRouteContext);
 

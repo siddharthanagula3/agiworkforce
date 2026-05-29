@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Sparkles, Zap, Shield, Bot, CheckCircle2, Loader2 } from 'lucide-react';
 import { AuthForm } from './AuthForm';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { Button } from '@/components/ui/Button';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 
@@ -61,12 +61,12 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
       if (accessToken && refreshToken) {
         // Manually set session if tokens are present
-        supabaseAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+        cloudAccountAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       }
 
       if (code && !accessToken) {
         setPageState('verifying');
-        supabaseAuth.exchangeCodeForSession(code).then((response) => {
+        cloudAccountAuth.exchangeCodeForSession(code).then((response) => {
           if (response.error) {
             setErrorMessage(getSimpleErrorMessage(response.error));
             setPageState('error');
@@ -89,7 +89,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         setPageState('verifying');
 
         scheduleTimeout(() => {
-          const isAuth = supabaseAuth.isAuthenticated();
+          const isAuth = cloudAccountAuth.isAuthenticated();
           if (isAuth) {
             setPageState('verified');
             // Clear URL hash
@@ -100,8 +100,8 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             }, 2000);
           } else {
             // Retry session check just in case
-            supabaseAuth.checkSession().then(() => {
-              if (supabaseAuth.isAuthenticated()) {
+            cloudAccountAuth.checkSession().then(() => {
+              if (cloudAccountAuth.isAuthenticated()) {
                 setPageState('verified');
                 onAuthSuccess?.();
               } else {
@@ -117,12 +117,12 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       if (accessToken) {
         setPageState('verifying');
         scheduleTimeout(() => {
-          if (supabaseAuth.isAuthenticated()) {
+          if (cloudAccountAuth.isAuthenticated()) {
             setPageState('verified');
             onAuthSuccess?.();
           } else {
-            supabaseAuth.checkSession().then(() => {
-              if (supabaseAuth.isAuthenticated()) {
+            cloudAccountAuth.checkSession().then(() => {
+              if (cloudAccountAuth.isAuthenticated()) {
                 setPageState('verified');
                 onAuthSuccess?.();
               } else {

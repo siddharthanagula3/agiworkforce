@@ -76,12 +76,10 @@ async function cleanupAllStores(): Promise<void> {
 
     // Artifact store cleanup
     const artifactState = useArtifactStore.getState();
-    if (typeof artifactState.clearAllArtifacts === 'function') {
-      artifactState.clearAllArtifacts();
-    } else if (typeof artifactState.reset === 'function') {
+    if (typeof artifactState.reset === 'function') {
       artifactState.reset();
     } else {
-      logger.auth('Warning: Artifact store has no clearAllArtifacts or reset method');
+      logger.auth('Warning: Artifact store has no reset method');
     }
 
     // Layout store cleanup (prevents data leaks between users)
@@ -220,7 +218,7 @@ export const useAuthStore = create<AuthState>()(
               logger.debug('No existing session:', error);
               // Clear any invalid auth data from localStorage
               try {
-                localStorage.removeItem('supabase.auth.token');
+                localStorage.removeItem('__clerk_db_jwt');
                 localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
               } catch (_e) {
                 logger.debug('Could not clear localStorage');
@@ -234,7 +232,7 @@ export const useAuthStore = create<AuthState>()(
             logger.error('Initialization error:', error);
             // Clear any invalid auth data
             try {
-              localStorage.removeItem('supabase.auth.token');
+              localStorage.removeItem('__clerk_db_jwt');
               localStorage.removeItem('sb-lywdzvfibhzbljrgovwr-auth-token');
             } catch (_e) {
               logger.debug('Could not clear localStorage');

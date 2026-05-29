@@ -40,6 +40,10 @@ jest.mock('@react-navigation/native', () => ({
   DrawerActions: { openDrawer: () => ({ type: 'OPEN_DRAWER' }) },
 }));
 
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children, ...rest }: { children: React.ReactNode; [key: string]: unknown }) => {
     const { View } = require('react-native');
@@ -54,11 +58,16 @@ jest.mock('lucide-react-native', () => {
   );
   return {
     ArrowLeft: factory('arrow-left'),
+    Clock: factory('clock'),
+    FileText: factory('file-text'),
     Folder: factory('folder'),
     KeyRound: factory('key-round'),
     Lock: factory('lock'),
     LogIn: factory('log-in'),
     Menu: factory('menu'),
+    MessageSquare: factory('message-square'),
+    Plus: factory('plus'),
+    Trash2: factory('trash-2'),
     Users: factory('users'),
   };
 });
@@ -103,10 +112,19 @@ jest.mock('@/src/features/projects/service', () => ({
 }));
 
 jest.mock('@/src/features/projects/store', () => ({
-  useProjectStore: (selector: (s: { projects: unknown[] }) => unknown) =>
+  useProjectStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
-      projects: [{ id: 'proj_snapshot', name: 'Snapshot project' }],
+      projects: [{ id: 'proj_snapshot', name: 'Snapshot project', sources: [] }],
+      activeProjectId: null,
+      setActiveProject: jest.fn(),
+      addSource: jest.fn(),
+      removeSource: jest.fn(),
     }),
+}));
+
+jest.mock('@/stores/chatStore', () => ({
+  useChatMessageStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ conversations: [] }),
 }));
 
 import ProjectDetailScreen from '@/app/(app)/projects/[id]';

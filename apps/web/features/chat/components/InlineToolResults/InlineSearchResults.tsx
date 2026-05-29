@@ -13,8 +13,7 @@
  */
 
 import { useState, useMemo } from 'react';
-import { Globe, ExternalLink, Loader2, Search, Clock, Zap } from 'lucide-react';
-import { cn } from '@shared/lib/utils';
+import { Globe, Loader2, Search, Clock, Zap } from 'lucide-react';
 import type { ToolResultProps } from './index';
 
 // ---------------------------------------------------------------------------
@@ -61,7 +60,8 @@ function getFaviconUrl(url: string): string | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Search result card
+// Search result row — compact flat list: favicon + title + URL on one line,
+// snippet on the next. No borders, minimal padding.
 // ---------------------------------------------------------------------------
 
 function SearchResultCard({ result }: { result: SearchResult }) {
@@ -72,56 +72,33 @@ function SearchResultCard({ result }: { result: SearchResult }) {
       href={/^https?:\/\//i.test(result.url || '') ? result.url : '#'}
       target="_blank"
       rel="noopener noreferrer"
-      className={cn(
-        'group flex items-start gap-3 p-3 rounded-lg',
-        'bg-muted/30 hover:bg-muted/50',
-        'border border-border/30 hover:border-primary/30',
-        'transition-all duration-150',
-      )}
+      className="group flex flex-col gap-0.5 py-1.5 transition-opacity hover:opacity-90"
     >
-      {/* Favicon */}
-      <div className="shrink-0 mt-0.5">
+      {/* Line 1: favicon + title + domain */}
+      <div className="flex items-center gap-1.5 min-w-0">
         {result.favicon && !imgError ? (
           <img
             src={result.favicon}
             alt=""
-            className="w-5 h-5 rounded"
+            className="h-3.5 w-3.5 shrink-0 rounded-sm"
             onError={() => setImgError(true)}
           />
         ) : (
-          <div className="w-5 h-5 rounded bg-muted flex items-center justify-center">
-            <Globe className="h-3 w-3 text-muted-foreground" />
-          </div>
+          <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
         )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0 space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <h4 className="font-medium text-sm text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-            {result.title || 'Untitled'}
-          </h4>
-          <ExternalLink className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-
+        <span className="truncate text-xs font-medium text-foreground group-hover:text-primary transition-colors">
+          {result.title || 'Untitled'}
+        </span>
         {result.domain && (
-          <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-            {result.domain}
-          </div>
-        )}
-
-        {result.snippet && (
-          <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-            {result.snippet}
-          </p>
+          <span className="shrink-0 text-[10px] text-muted-foreground/60">{result.domain}</span>
         )}
       </div>
 
-      {/* Position badge */}
-      {result.position != null && (
-        <div className="shrink-0 text-xs font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded opacity-60 group-hover:opacity-100 transition-opacity">
-          [{result.position}]
-        </div>
+      {/* Line 2: snippet */}
+      {result.snippet && (
+        <p className="line-clamp-1 pl-5 text-[11px] text-muted-foreground leading-snug">
+          {result.snippet}
+        </p>
       )}
     </a>
   );
@@ -234,8 +211,8 @@ export const InlineSearchResults: React.FC<ToolResultProps> = ({ result, status 
         </div>
       )}
 
-      {/* Results list */}
-      <div className="space-y-2">
+      {/* Results list — compact, divider-separated */}
+      <div className="divide-y divide-border/20">
         {displayResults.map((r, i) => (
           <SearchResultCard key={`${r.url}-${i}`} result={r} />
         ))}

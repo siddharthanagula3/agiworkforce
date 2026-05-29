@@ -5,9 +5,6 @@
 // provide the missing global.
 const { Animated, NativeModules } = require('react-native');
 
-process.env.EXPO_PUBLIC_SUPABASE_URL ??= 'https://test.supabase.co';
-process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??= 'test-anon-key';
-
 if (!NativeModules.UIManager) {
   NativeModules.UIManager = {};
 }

@@ -7,7 +7,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { CreditService, type CreditBalance } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
@@ -138,15 +138,9 @@ async function handleLLMCompletion(request: NextRequest) {
     throw createError.unauthorized('Missing or invalid authorization header');
   }
 
-  // getAuthenticatedUserWithClient handles JWT verification via the documented
-  // service-role exception and returns an RLS-bound client for all downstream
-  // DB access.
-  let user;
-  let userClient;
+  let userId: string;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    user = auth.user;
-    userClient = auth.userDb;
+    ({ userId } = await getClerkAuthUser(request));
   } catch (err) {
     logger.warn({ error: err }, 'Authentication failed');
     throw createError.unauthorized('Invalid authentication token');
@@ -156,7 +150,7 @@ async function handleLLMCompletion(request: NextRequest) {
   const requestId = randomUUID();
 
   // Get subscription
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
     throw createError.forbidden('No active subscription found');
@@ -193,7 +187,7 @@ async function handleLLMCompletion(request: NextRequest) {
     const requiredTierDisplay = requiredTiers?.[0]?.toUpperCase() ?? 'PRO';
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         model: llmRequest.model,
         userTier: subscription.plan_tier,
         requiredTiers,
@@ -272,14 +266,14 @@ async function handleLLMCompletion(request: NextRequest) {
   );
 
   // Check if user has enough credits (both daily and monthly)
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
 
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, user.id);
+    const balance = await CreditService.getBalance(userId);
 
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         estimatedCostCents,
         balance,
         requestedModel: llmRequest.model,
@@ -305,16 +299,12 @@ async function handleLLMCompletion(request: NextRequest) {
         llmRequest.max_tokens || 1000,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(
-        userClient,
-        user.id,
-        fallbackCostCents,
-      );
+      const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
 
       if (hasFallbackCredits) {
         logger.info(
           {
-            userId: user.id,
+            userId: userId,
             originalModel: llmRequest.model,
             fallbackModel: fallbackModel.model,
             originalCost: estimatedCostCents,
@@ -343,10 +333,9 @@ async function handleLLMCompletion(request: NextRequest) {
   // This prevents race conditions where concurrent requests could exceed limits
   // After the request completes, we reconcile by adjusting for actual usage
   const reservationDescription = `Credit reservation: ${provider}/${llmRequest.model}`;
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     reservationDescription,
     {
@@ -363,7 +352,7 @@ async function handleLLMCompletion(request: NextRequest) {
   if (!reserveResult.success) {
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         estimatedCostCents,
         reserveResult,
       },
@@ -371,13 +360,13 @@ async function handleLLMCompletion(request: NextRequest) {
     );
 
     // Return appropriate error based on the failure reason
-    const balance = await CreditService.getBalance(userClient, user.id);
+    const balance = await CreditService.getBalance(userId);
     return handleCreditError(reserveResult, balance);
   }
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       estimatedCostCents,
       model: llmRequest.model,
       provider,
@@ -392,7 +381,6 @@ async function handleLLMCompletion(request: NextRequest) {
 
       // Create a transform stream that tracks usage data from SSE events
       // and reconciles credits after streaming completes
-      const userId = user.id;
       const modelUsed = llmRequest.model;
       const providerUsed = provider;
 
@@ -470,7 +458,6 @@ async function handleLLMCompletion(request: NextRequest) {
                 requestId,
               );
               await CreditService.deductCredits(
-                userClient,
                 userId,
                 costDifference,
                 adjustmentDescription,
@@ -529,7 +516,7 @@ async function handleLLMCompletion(request: NextRequest) {
             if (watchdog) clearTimeout(watchdog);
             watchdog = setTimeout(() => {
               logger.warn(
-                { userId: user.id, model: llmRequest.model },
+                { userId: userId, model: llmRequest.model },
                 'Streaming response idle for >60s - aborting and refunding',
               );
               reader.cancel('idle-timeout').catch(() => {});
@@ -563,13 +550,12 @@ async function handleLLMCompletion(request: NextRequest) {
     } catch (error) {
       // Refund the reserved credits on failure with idempotency key
       logger.info(
-        { userId: user.id, estimatedCostCents },
+        { userId: userId, estimatedCostCents },
         'Refunding reserved credits after stream failure',
       );
-      const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+      const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
       await CreditService.deductCredits(
-        userClient,
-        user.id,
+        userId,
         -estimatedCostCents, // Negative amount = refund
         `Refund for failed streaming request: ${provider}/${llmRequest.model}`,
         { type: 'refund', reason: 'streaming_failure', requestId },
@@ -580,7 +566,7 @@ async function handleLLMCompletion(request: NextRequest) {
           error: error instanceof Error ? error.message : String(error),
           provider,
           model: llmRequest.model,
-          userId: user.id,
+          userId: userId,
         },
         'Streaming request failed',
       );
@@ -594,13 +580,12 @@ async function handleLLMCompletion(request: NextRequest) {
   } catch (error) {
     // Refund the reserved credits on failure with idempotency key
     logger.info(
-      { userId: user.id, estimatedCostCents },
+      { userId: userId, estimatedCostCents },
       'Refunding reserved credits after request failure',
     );
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
-      userClient,
-      user.id,
+      userId,
       -estimatedCostCents, // Negative amount = refund
       `Refund for failed request: ${provider}/${llmRequest.model}`,
       { type: 'refund', reason: 'request_failure', requestId },
@@ -611,7 +596,7 @@ async function handleLLMCompletion(request: NextRequest) {
         error: error instanceof Error ? error.message : String(error),
         provider,
         model: llmRequest.model,
-        userId: user.id,
+        userId: userId,
       },
       'LLM request failed',
     );
@@ -638,13 +623,12 @@ async function handleLLMCompletion(request: NextRequest) {
         : `Credit adjustment: ${provider}/${llmResponse.model} (actual less than estimate)`;
 
     const reconciliationKey = CreditService.generateIdempotencyKey(
-      user.id,
+      userId,
       'reconciliation',
       requestId,
     );
     const adjustmentResult = await CreditService.deductCredits(
-      userClient,
-      user.id,
+      userId,
       costDifference, // Positive = additional charge, negative = refund
       adjustmentDescription,
       {
@@ -666,7 +650,7 @@ async function handleLLMCompletion(request: NextRequest) {
       // The user already got the response, so we absorb the difference
       logger.warn(
         {
-          userId: user.id,
+          userId: userId,
           costDifference,
           adjustmentResult,
         },
@@ -678,7 +662,7 @@ async function handleLLMCompletion(request: NextRequest) {
 
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         estimatedCostCents,
         actualCostCents,
         costDifference,
@@ -689,7 +673,7 @@ async function handleLLMCompletion(request: NextRequest) {
   }
 
   // Get updated balance for response
-  await CreditService.getBalance(userClient, user.id);
+  await CreditService.getBalance(userId);
 
   // Calculate cache savings if applicable
   const cacheMetrics = calculateCacheSavings(
@@ -699,7 +683,7 @@ async function handleLLMCompletion(request: NextRequest) {
 
   // Log cache analytics for monitoring
   if (llmResponse.cacheCreationInputTokens || llmResponse.cachedInputTokens) {
-    logCacheAnalytics(user.id, llmResponse.model, provider, llmResponse, cacheMetrics);
+    logCacheAnalytics(userId, llmResponse.model, provider, llmResponse, cacheMetrics);
   }
 
   // Return response in OpenAI-compatible format

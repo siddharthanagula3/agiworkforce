@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-28
 
 AGI Workforce is an OpenAI/Anthropic-style application suite across Web, Desktop, Mobile, CLI, VS Code, Chrome, shared engines, and future managed compute. The product baseline is Claude/ChatGPT-style application parity. The differentiation is local-first privacy, explicit BYOK, multi-provider routing, and privacy-controlled managed compute.
 
@@ -10,21 +10,25 @@ This file is now a compact entry point. The former long historical version is ar
 
 ## Current Sources
 
-| Doc                                                                                      | Purpose                                                                              |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| [README.md](README.md)                                                                   | User-facing pitch and quick start.                                                   |
-| [ONBOARDING.md](ONBOARDING.md)                                                           | Role-based first-day route for humans and agents.                                    |
-| [BUILD.md](BUILD.md)                                                                     | Build prerequisites and per-surface commands.                                        |
-| [PLAN.md](PLAN.md)                                                                       | Active Anthropic/OpenAI application-suite transition plan.                           |
-| [TODO.md](TODO.md)                                                                       | Active execution queue.                                                              |
-| [CHANGELOG.md](CHANGELOG.md)                                                             | Completed work log.                                                                  |
-| [docs/current/README.md](docs/current/README.md)                                         | Compact current docs map.                                                            |
-| [docs/current/product-suite.md](docs/current/product-suite.md)                           | Product thesis, surfaces, trust modes, and sync boundary.                            |
-| [docs/current/technical-architecture.md](docs/current/technical-architecture.md)         | Monorepo shape, contracts, providers, generated files, and enterprise control plane. |
-| [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md)           | Waitlist, BYOK, managed-compute, payment, and enterprise launch rules.               |
-| [docs/current/agent-and-repo-operability.md](docs/current/agent-and-repo-operability.md) | A+ repo/docs/agent workflow rules.                                                   |
-| [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md)               | Locked decisions and conflict rules.                                                 |
-| [docs/agent-context/](docs/agent-context/)                                               | Machine-readable repo map for coding agents.                                         |
+| Doc                                                                                                    | Purpose                                                                                         |
+| ------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| [README.md](README.md)                                                                                 | User-facing pitch and quick start.                                                              |
+| [ONBOARDING.md](ONBOARDING.md)                                                                         | Role-based first-day route for humans and agents.                                               |
+| [BUILD.md](BUILD.md)                                                                                   | Build prerequisites and per-surface commands.                                                   |
+| [PLAN.md](PLAN.md)                                                                                     | Active Anthropic/OpenAI application-suite transition plan.                                      |
+| [TODO.md](TODO.md)                                                                                     | Active execution queue.                                                                         |
+| [CHANGELOG.md](CHANGELOG.md)                                                                           | Completed work log.                                                                             |
+| [docs/current/README.md](docs/current/README.md)                                                       | Compact current docs map.                                                                       |
+| [docs/current/source-of-truth.md](docs/current/source-of-truth.md)                                     | Single product definition, v1 target, current position, parity baseline, and gaps.              |
+| [docs/current/agi-product-requirements.md](docs/current/agi-product-requirements.md)                   | Long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete requirements. |
+| [docs/current/parity-implementation-matrix.md](docs/current/parity-implementation-matrix.md)           | Feature/component parity matrix for implementation agents.                                      |
+| [docs/current/byok-open-model-provider-strategy.md](docs/current/byok-open-model-provider-strategy.md) | BYOK/open-model provider strategy and model priority map.                                       |
+| [docs/current/product-suite.md](docs/current/product-suite.md)                                         | Product thesis, surfaces, trust modes, and sync boundary.                                       |
+| [docs/current/technical-architecture.md](docs/current/technical-architecture.md)                       | Monorepo shape, contracts, providers, generated files, and enterprise control plane.            |
+| [docs/current/commercial-and-launch.md](docs/current/commercial-and-launch.md)                         | Waitlist, BYOK, managed-compute, payment, and enterprise launch rules.                          |
+| [docs/current/agent-and-repo-operability.md](docs/current/agent-and-repo-operability.md)               | A+ repo/docs/agent workflow rules.                                                              |
+| [docs/decisions/CURRENT_DECISIONS.md](docs/decisions/CURRENT_DECISIONS.md)                             | Locked decisions and conflict rules.                                                            |
+| [docs/agent-context/](docs/agent-context/)                                                             | Machine-readable repo map for coding agents.                                                    |
 
 ## Product Lock
 
@@ -44,7 +48,7 @@ This file is now a compact entry point. The former long historical version is ar
 - `packages/` owns shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.
 - `crates/` owns reusable Rust runtime/protocol/command/sandbox pieces.
 - `services/` owns deployable backend services.
-- `supabase/migrations/` is the canonical database migration root.
+- `apps/web/db/neon/` is the canonical Neon database migration root.
 - `patches/` owns pnpm dependency patches only.
 - App code must not import another app.
 - Packages must not import app code.

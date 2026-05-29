@@ -2,7 +2,7 @@
 // Shared types for the schedules feature
 // ---------------------------------------------------------------------------
 
-import { getCoreManualModelOptions } from '@agiworkforce/types';
+import { getCoreManualModelOptions, listCanonicalModels } from '@agiworkforce/types';
 
 export interface Schedule {
   id: string;
@@ -99,18 +99,14 @@ export const TIMEZONES = [
   { value: 'UTC', label: 'UTC' },
 ];
 
-// Filter set for which catalog models appear in the schedule picker.
-// These are filter keys matched against getCoreManualModelOptions() IDs,
-// not routing literals. Suppressed until eslint.config.mjs covers this path.
-
-const SCHEDULE_MODEL_IDS = new Set([
-  'claude-opus-4.6',
-  'claude-sonnet-4.6',
-  'gpt-5.4',
-  'gpt-5.4-mini',
-  'gemini-3.1-pro-preview',
-  'gemini-3.1-flash-lite',
-]);
+// Build the allowed model ID set from the catalog: include chat, code, and reasoning models
+// only (exclude image/video/audio). This replaces the previous hardcoded ID list.
+const SCHEDULE_ALLOWED_TYPES = new Set(['chat', 'code', 'reasoning']);
+const SCHEDULE_MODEL_IDS = new Set(
+  listCanonicalModels()
+    .filter((m) => SCHEDULE_ALLOWED_TYPES.has(m.modelType))
+    .map((m) => m.id),
+);
 
 export const AVAILABLE_MODELS = [
   { value: 'auto-balanced', label: 'Auto (Balanced)' },

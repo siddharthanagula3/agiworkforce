@@ -2,7 +2,7 @@ use super::llm::LLMState;
 
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
-use crate::data::supabase_sync;
+use crate::data::cloud_sync;
 use chrono::Utc;
 use std::sync::Arc;
 use tauri::{Emitter, Manager, State};
@@ -15,6 +15,7 @@ pub mod branching;
 pub mod browser_context;
 pub mod cloud;
 pub mod compaction;
+pub mod context_monitor;
 pub mod control;
 pub mod conversation;
 pub mod cost;
@@ -75,7 +76,7 @@ use crate::sys::commands::chat::prompt_context::{
     build_os_context, build_project_context_message, sanitize_multiline_for_prompt,
 };
 use crate::sys::commands::chat::provider_access::{
-    check_billing_and_budget, ensure_managed_cloud_provider,
+    check_billing_and_budget, ensure_managed_cloud_provider, request_uses_managed_cloud,
 };
 use crate::sys::commands::chat::stream_runtime::consume_llm_stream;
 use crate::sys::commands::chat::tool_config::{build_tool_definitions, normalize_tool_calls};

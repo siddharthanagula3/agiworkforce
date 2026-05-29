@@ -28,44 +28,56 @@ vi.mock('@/lib/cors', () => ({
 // Mock environment variables
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
+    if (key === 'DEVICE_TOKEN_ENCRYPTION_KEY') return 'a'.repeat(64); // 64 hex chars = 32 bytes
     return 'test-value';
   }),
 }));
 
-// Mock session for authenticated requests
-const mockSession = {
-  user: {
-    id: 'user-123',
-    email: 'test@example.com',
-    user_metadata: { full_name: 'Test User' },
-  },
-  access_token: 'access-token-123',
-  refresh_token: 'refresh-token-456',
-};
+// Mock Clerk auth — route calls auth() from @clerk/nextjs/server
+const mockClerkAuth = vi.fn();
 
-// Mock Supabase server client
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: mockSession.user }, error: null }),
-      getSession: vi.fn().mockResolvedValue({ data: { session: mockSession } }),
-    },
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockClerkAuth(),
+}));
+
+// Mock Neon DB — route calls getNeonDb() for all DB operations
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: mockExecute,
+    transaction: vi.fn(),
+    dispose: vi.fn(),
   })),
 }));
 
-// Mock Supabase admin client
-const mockAdminFrom = vi.fn();
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockAdminFrom,
-  })),
+// Mock device token crypto — encryptToken is called on approval
+vi.mock('@/lib/device-token-crypto', () => ({
+  encryptToken: vi.fn(() => 'encrypted-token-value'),
+  decryptToken: vi.fn((t: string) => t),
 }));
 
 // Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/approve/route';
 import { requireCsrfToken } from '@/lib/csrf';
+
+// Helpers for building consistent pending records
+function makePendingRecord(
+  overrides: Partial<{
+    device_id: string;
+    status: string;
+    expires_at: string;
+  }> = {},
+) {
+  return {
+    device_id: 'device-123',
+    status: 'pending',
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+    ...overrides,
+  };
+}
 
 describe('Device Approve API', () => {
   // Valid hex code per schema
@@ -73,19 +85,27 @@ describe('Device Approve API', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Default: authenticated Clerk user with valid token
+    mockClerkAuth.mockResolvedValue({
+      userId: 'user-123',
+      getToken: vi.fn().mockResolvedValue('clerk-session-token'),
+    });
+
+    // Default: DB query returns a valid pending record (SELECT)
+    mockQuery.mockResolvedValue([makePendingRecord()]);
+
+    // Default: DB execute succeeds (UPDATE ... RETURNING)
+    mockExecute.mockResolvedValue(undefined);
   });
 
   describe('POST /api/device/approve', () => {
     describe('Authentication', () => {
       it('should return 401 for unauthenticated request', async () => {
-        // Override mock to return no user (getUser is the server-side JWT validation path)
-        const { createSupabaseServerClient } = await import('@/services/supabase-server');
-        vi.mocked(createSupabaseServerClient).mockResolvedValueOnce({
-          auth: {
-            getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }),
-            getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-          },
-        } as never);
+        mockClerkAuth.mockResolvedValueOnce({
+          userId: null,
+          getToken: vi.fn().mockResolvedValue(null),
+        });
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
@@ -186,32 +206,10 @@ describe('Device Approve API', () => {
       });
 
       it('should accept valid approve action', async () => {
-        mockAdminFrom.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  device_id: 'device-123',
-                  status: 'pending',
-                  expires_at: new Date(Date.now() + 60000).toISOString(),
-                },
-                error: null,
-              }),
-            }),
-          }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                select: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: { status: 'approved' },
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          }),
-        });
+        // SELECT returns pending record
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        // UPDATE ... RETURNING status = 'approved'
+        mockQuery.mockResolvedValueOnce([{ status: 'approved' }]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
@@ -234,32 +232,10 @@ describe('Device Approve API', () => {
       });
 
       it('should accept valid deny action', async () => {
-        mockAdminFrom.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  device_id: 'device-123',
-                  status: 'pending',
-                  expires_at: new Date(Date.now() + 60000).toISOString(),
-                },
-                error: null,
-              }),
-            }),
-          }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              eq: vi.fn().mockReturnValue({
-                select: vi.fn().mockReturnValue({
-                  maybeSingle: vi.fn().mockResolvedValue({
-                    data: { status: 'denied' },
-                    error: null,
-                  }),
-                }),
-              }),
-            }),
-          }),
-        });
+        // SELECT returns pending record
+        mockQuery.mockResolvedValueOnce([makePendingRecord()]);
+        // UPDATE ... RETURNING status = 'denied'
+        mockQuery.mockResolvedValueOnce([{ status: 'denied' }]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
@@ -289,16 +265,8 @@ describe('Device Approve API', () => {
 
     describe('Device Code Validation', () => {
       it('should return 400 for non-existent code', async () => {
-        mockAdminFrom.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: { code: 'PGRST116' },
-              }),
-            }),
-          }),
-        });
+        // SELECT returns no rows
+        mockQuery.mockResolvedValueOnce([]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
@@ -311,23 +279,12 @@ describe('Device Approve API', () => {
       });
 
       it('should return 400 for expired code', async () => {
-        mockAdminFrom.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  device_id: 'device-123',
-                  status: 'pending',
-                  expires_at: new Date(Date.now() - 60000).toISOString(), // Expired
-                },
-                error: null,
-              }),
-            }),
-          }),
-          update: vi.fn().mockReturnValue({
-            eq: vi.fn().mockResolvedValue({ error: null }),
-          }),
-        });
+        // SELECT returns expired record
+        mockQuery.mockResolvedValueOnce([
+          makePendingRecord({ expires_at: new Date(Date.now() - 60_000).toISOString() }),
+        ]);
+        // UPDATE to set status = 'expired'
+        mockExecute.mockResolvedValueOnce(undefined);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',
@@ -340,20 +297,8 @@ describe('Device Approve API', () => {
       });
 
       it('should return 409 for already processed code', async () => {
-        mockAdminFrom.mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: {
-                  device_id: 'device-123',
-                  status: 'approved', // Already approved
-                  expires_at: new Date(Date.now() + 60000).toISOString(),
-                },
-                error: null,
-              }),
-            }),
-          }),
-        });
+        // SELECT returns already-approved record
+        mockQuery.mockResolvedValueOnce([makePendingRecord({ status: 'approved' })]);
 
         const request = new NextRequest('http://localhost/api/device/approve', {
           method: 'POST',

@@ -7,7 +7,7 @@ export interface RemoteChatFeatureFlags {
 }
 
 export const MOBILE_REMOTE_CHAT_DISABLED_MESSAGE =
-  'Remote chat is disabled while Mobile is in Local Mode + Local LLMs. Mobile BYOK is disabled until secure device key storage ships; generated PDFs, docs, slides, code execution, and browser environments require Desktop or Cloud Managed waitlist access.';
+  'Remote chat is disabled while Mobile is in Local Mode. Mobile supports Local and Cloud Managed invite/waitlist only; BYOK belongs to supported Desktop and developer surfaces. Generated PDFs, docs, slides, code execution, and browser environments require Desktop or Cloud Managed access.';
 
 export class RemoteChatDisabledError extends Error {
   readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';
@@ -21,7 +21,8 @@ export class RemoteChatDisabledError extends Error {
 export function getRemoteChatDisabledReason(
   flags: RemoteChatFeatureFlags = FEATURES,
 ): string | null {
-  if (flags.v1LocalOnly && !flags.cloudChat && !flags.byokKeys) {
+  void flags.byokKeys;
+  if (flags.v1LocalOnly && !flags.cloudChat) {
     return MOBILE_REMOTE_CHAT_DISABLED_MESSAGE;
   }
   return null;

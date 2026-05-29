@@ -1558,7 +1558,7 @@ fn parse_mcp_config_contents(
     let mut configs = HashMap::new();
 
     // Flat format: { "server_name": { "command": "...", ... } }
-    if let Ok(parsed) = serde_json::from_str::<HashMap<String, McpServerConfig>>(&contents) {
+    if let Ok(parsed) = serde_json::from_str::<HashMap<String, McpServerConfig>>(contents) {
         for (name, config) in parsed {
             configs.insert(name, config);
         }

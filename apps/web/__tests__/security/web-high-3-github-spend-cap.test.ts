@@ -6,7 +6,7 @@
  *    in-flight de-dupe, no spend cap on the server's ANTHROPIC_API_KEY."
  *
  * These are STRUCTURAL tests against the route source. The processReview
- * closure is fire-and-forget and threads through five separate Supabase
+ * closure is fire-and-forget and threads through five separate Neon
  * call patterns (recent-attempt select, quota count select, pending insert,
  * skipped insert, terminal update) — exercising it with an integration-
  * level mock proved fragile in earlier iterations. The structural checks
@@ -28,7 +28,7 @@ const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
 const ROUTE_PATH = join(REPO_ROOT, 'apps/web/app/api/github/webhook/route.ts');
 const MIGRATION_PATH = join(
   REPO_ROOT,
-  'supabase/migrations/20260505000004_create_github_pr_review_attempts.sql',
+  'cloudDb/migrations/20260505000004_create_github_pr_review_attempts.sql',
 );
 
 const routeSource = readFileSync(ROUTE_PATH, 'utf8');
@@ -98,10 +98,11 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('debounce branch: queries recent same-PR attempts within DEBOUNCE_WINDOW_MS', () => {
-    expect(routeSource).toMatch(/from\('github_pr_review_attempts'\)/);
+    // Route migrated to Neon raw SQL — match the SQL string directly.
+    expect(routeSource).toMatch(/from github_pr_review_attempts/);
     // The order-by-attempted_at desc with limit 1 is the debounce signature.
     const debounceBlock = routeSource.match(
-      /\.from\('github_pr_review_attempts'\)[\s\S]{0,800}\.order\('attempted_at'[\s\S]{0,200}\.limit\(1\)/,
+      /from github_pr_review_attempts[\s\S]{0,800}order by attempted_at desc limit 1/,
     );
     expect(debounceBlock).not.toBeNull();
   });
@@ -111,11 +112,14 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('debounce branch: writes a skipped_debounce row when the LLM call is skipped', () => {
-    expect(routeSource).toMatch(/status:\s*'skipped_debounce'/);
+    // Route migrated to Neon raw SQL — status value appears as a positional param string.
+    expect(routeSource).toMatch(/'skipped_debounce'/);
   });
 
   it('quota branch: counts completed+pending in the last 30 days', () => {
-    expect(routeSource).toMatch(/\.in\('status',\s*\['completed',\s*'pending'\]\)/);
+    // Route migrated to Neon raw SQL — status filter uses any() with array param.
+    expect(routeSource).toMatch(/status = any\(\$\d+\)/);
+    expect(routeSource).toMatch(/\['completed',\s*'pending'\]/);
   });
 
   it('quota branch: posts a user-visible quota-exhausted comment', () => {
@@ -123,7 +127,8 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
   });
 
   it('quota branch: writes a skipped_quota row before posting the comment', () => {
-    expect(routeSource).toMatch(/status:\s*'skipped_quota'/);
+    // Route migrated to Neon raw SQL — status value appears as a positional param string.
+    expect(routeSource).toMatch(/'skipped_quota'/);
   });
 
   it('happy path: inserts a pending row BEFORE the LLM fetch call', () => {
@@ -132,22 +137,25 @@ describe('web-HIGH-3 route: processReview spend-cap branches', () => {
     const beforeFetch = routeSource.slice(0, fetchIdx);
     // The pending insert must happen prior to the LLM call so concurrent
     // webhook deliveries see the in-flight row and debounce.
-    expect(beforeFetch).toMatch(/status:\s*'pending'/);
-    expect(beforeFetch).toMatch(/\.insert\(\{[\s\S]{0,200}status:\s*'pending'/);
+    // Route migrated to Neon raw SQL — match insert SQL string + 'pending' param.
+    expect(beforeFetch).toMatch(/insert into github_pr_review_attempts/);
+    expect(beforeFetch).toMatch(/'pending'/);
   });
 
   it('happy path: marks the pending row completed after the LLM returns', () => {
-    expect(routeSource).toMatch(/status:\s*'completed'/);
+    // Route migrated to Neon raw SQL — 'completed' appears as a positional param string.
+    expect(routeSource).toMatch(/'completed'/);
     expect(routeSource).toMatch(/tokens_used/);
   });
 
   it('failure path: marks the pending row failed in the catch block', () => {
     // The error catch block updates status to 'failed' so the debounce
     // doesn't get stuck on a crashed pending row.
+    // Route migrated to Neon raw SQL — 'failed' appears as a positional param string.
     const catchIdx = routeSource.indexOf("logger.error({ error }, 'PR review processing error')");
     expect(catchIdx).toBeGreaterThan(0);
     const catchBlock = routeSource.slice(catchIdx, catchIdx + 600);
-    expect(catchBlock).toMatch(/status:\s*'failed'/);
+    expect(catchBlock).toMatch(/'failed'/);
   });
 
   it('best-effort: spend-cap query failure is logged + proceeds (does not block legitimate PRs on outage)', () => {

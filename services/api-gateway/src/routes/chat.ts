@@ -16,7 +16,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -68,8 +68,8 @@ async function verifyDesktopOwnership(desktopId: string, userId: string): Promis
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client for ownership lookup.
-  const supabase = getUserScopedClient(userId);
-  const { data: desktop, error } = await supabase
+  const db = getUserScopedClient(userId);
+  const { data: desktop, error } = await db
     .from('desktop_devices')
     .select('id, user_id')
     .eq('id', desktopId)
@@ -116,9 +116,9 @@ router.post(
     const messageId = randomUUID();
     const timestamp = Date.now();
 
-    const supabase = getUserScopedClient(user.userId);
-    // Persist the message to Supabase for history (best-effort)
-    const { error: insertError } = await supabase.from('chat_messages').insert({
+    const db = getUserScopedClient(user.userId);
+    // Persist the message to Neon for history (best-effort)
+    const { error: insertError } = await db.from('chat_messages').insert({
       id: messageId,
       user_id: user.userId,
       desktop_id: desktopId,
@@ -192,9 +192,9 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
     await verifyDesktopOwnership(query.desktopId, user.userId);
   }
 
-  const supabase = getUserScopedClient(user.userId);
-  // Build Supabase query
-  let dbQuery = supabase
+  const db = getUserScopedClient(user.userId);
+  // Build Neon query
+  let dbQuery = db
     .from('chat_messages')
     .select('*')
     .eq('user_id', user.userId)
@@ -263,9 +263,9 @@ router.get(
       await verifyDesktopOwnership(desktopId, user.userId);
     }
 
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // Fetch distinct conversations with their latest message
-    let dbQuery = supabase
+    let dbQuery = db
       .from('chat_messages')
       .select('conversation_id, desktop_id, content, role, created_at')
       .eq('user_id', user.userId)

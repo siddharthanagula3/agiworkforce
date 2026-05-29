@@ -30,9 +30,16 @@ function DeviceForm() {
     setLoading(true);
     setMessage(null);
     try {
+      const csrfRes = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
+      const csrfJson = (await csrfRes.json().catch(() => null)) as { token?: string } | null;
+      if (!csrfRes.ok || !csrfJson?.token) {
+        throw new Error('Failed to acquire CSRF token');
+      }
+
       const res = await fetch('/api/auth/device/approve', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfJson.token },
+        credentials: 'include',
         body: JSON.stringify({ user_code: code.trim().toUpperCase() }),
       });
       if (!res.ok) {
@@ -77,7 +84,7 @@ function DeviceForm() {
         {message && (
           <p
             style={{
-              color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+              color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-amber)',
               fontSize: 13,
               margin: 0,
             }}

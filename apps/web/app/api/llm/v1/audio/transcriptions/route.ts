@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireEnv } from '@/utils/env';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -70,48 +70,7 @@ async function handleTranscriptions(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'audio-transcription');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Missing or invalid authorization header',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
-
-  const token = authHeader.substring(7);
-  const supabase = getUserClient(token);
-
-  const { data, error } = await supabase.auth.getUser(token);
-  if (error || !data?.user) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Authentication failed',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: {
-          ...getCorsHeaders(request),
-          ...getSecurityHeaders(),
-        },
-      },
-    );
-  }
+  await getClerkAuthUser(request);
 
   let formData: FormData;
   try {

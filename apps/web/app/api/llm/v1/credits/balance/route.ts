@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { CreditService } from '@/lib/services/credit-service';
@@ -34,50 +34,11 @@ async function handleGetBalance(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  // Authentication required
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Missing or invalid authorization header',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      { status: 401 },
-    );
-  }
+  const { userId } = await getClerkAuthUser(request);
 
-  const token = authHeader.substring(7);
-
-  // Verify user with Supabase (RLS-bound client, not service-role)
-  const supabase = getUserClient(token);
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Invalid authentication token',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      { status: 401 },
-    );
-  }
-
-  // Get subscription and credits with error isolation
-  // Use Promise.allSettled to prevent one failure from blocking the other
-  const userClient = getUserClient(token);
   const [subscriptionResult, balanceResult] = await Promise.allSettled([
-    SubscriptionService.getSubscription(userClient, user.id),
-    CreditService.getBalance(userClient, user.id),
+    SubscriptionService.getSubscription(userId),
+    CreditService.getBalance(userId),
   ]);
 
   // Extract results, providing null for rejected promises
@@ -87,12 +48,12 @@ async function handleGetBalance(request: NextRequest) {
   // Log any errors that occurred
   if (subscriptionResult.status === 'rejected') {
     logger.error(
-      { error: subscriptionResult.reason, userId: user.id },
+      { error: subscriptionResult.reason, userId: userId },
       'Failed to fetch subscription',
     );
   }
   if (balanceResult.status === 'rejected') {
-    logger.error({ error: balanceResult.reason, userId: user.id }, 'Failed to fetch balance');
+    logger.error({ error: balanceResult.reason, userId: userId }, 'Failed to fetch balance');
   }
 
   if (!subscription) {

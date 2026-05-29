@@ -10,7 +10,6 @@ const VOICE_CAPS: Record<string, string> = {
   free: `${byokLabel} only`,
   hobby: '60 min/mo',
   pro: '300 min/mo',
-  pro_plus: '1,500 min/mo',
   max: 'Unlimited',
   enterprise: 'Unlimited',
 };
@@ -44,7 +43,7 @@ export default function VoiceSettingsPage() {
       {!hasVoice && (
         <div
           style={{
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
             padding: '20px 24px',
@@ -85,7 +84,7 @@ export default function VoiceSettingsPage() {
       {/* Voice settings */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -96,7 +95,7 @@ export default function VoiceSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -129,7 +128,7 @@ export default function VoiceSettingsPage() {
       {/* BYOK voice */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -138,7 +137,7 @@ export default function VoiceSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -156,7 +155,7 @@ export default function VoiceSettingsPage() {
             style={{
               padding: '7px 14px',
               background: 'transparent',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius)',
               color: 'var(--text-2)',
               fontSize: 13,

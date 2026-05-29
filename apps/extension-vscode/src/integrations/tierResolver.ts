@@ -13,7 +13,7 @@
 
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
-import { getDesktopBridge } from '../features/desktop-bridge';
+import { getBridgeAuthHeaders, getDesktopBridge } from '../features/desktop-bridge';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
 
@@ -71,9 +71,12 @@ export async function fetchTierFromBridge(): Promise<Tier | undefined> {
   const timeout = setTimeout(() => controller.abort(), BRIDGE_TIER_TIMEOUT_MS);
 
   try {
+    const authHeaders = getBridgeAuthHeaders();
+    if (authHeaders === undefined) return undefined;
+
     const res = await fetch(`${bridge.baseUrl}/billing/tier`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       signal: controller.signal,
     });
 

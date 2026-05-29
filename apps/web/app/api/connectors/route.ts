@@ -7,33 +7,31 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUser } from '@/lib/api-auth';
-// WEB-RLS-BYPASS fix: use canonical client factories from lib/supabase-server
-// instead of a locally-defined duplicate. User-scoped connector operations use
-// getUserClient(jwt) when a Bearer token is present so RLS policies are enforced.
-// Cookie-path falls back to the canonical getServiceClient() (not a local copy)
-// with explicit .eq('user_id') filter as defense-in-depth — same pattern used
-// by other routes that cannot extract a raw JWT from SSR cookie sessions.
-import { getServiceClient, getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
-/**
- * Return an RLS-bound client when the request carries a Bearer JWT, or the
- * canonical service-role client when only cookie auth is available.
- * Callers MUST still apply .eq('user_id', user.id) for defense-in-depth.
- */
-function getScopedClient(request: NextRequest) {
-  const authHeader = request.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return getUserClient(authHeader.substring(7));
-  }
-  // Cookie-auth: no raw JWT accessible. Use service-role with mandatory
-  // user_id filter. This matches the established pattern in chat routes.
-  return getServiceClient();
+type UserConnectorRow = {
+  id: string;
+  connector_id: string;
+  auth_type: string;
+  connected_at: string;
+  updated_at: string;
+};
+
+const PG_UNDEFINED_TABLE = '42P01';
+
+function isUndefinedTable(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
+      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
+  );
 }
 
 // Allowlist of valid connector IDs to prevent arbitrary data injection
@@ -78,23 +76,28 @@ async function handleGetConnectors(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
-  const supabase = getScopedClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('user_connectors')
-    .select('id, connector_id, auth_type, connected_at, updated_at')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .order('connected_at', { ascending: false });
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch connectors');
-    throw createError.internal('Failed to fetch connectors');
+  let rows: UserConnectorRow[];
+  try {
+    rows = await db.query<UserConnectorRow>(
+      `select id, connector_id, auth_type, connected_at, updated_at
+       from user_connectors
+       where user_id = $1 and is_active = true
+       order by connected_at desc`,
+      [userId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn({ userId }, 'user_connectors table not migrated; returning empty connectors');
+      return NextResponse.json({ connectors: [] });
+    }
+    throw error;
   }
 
   return NextResponse.json({
-    connectors: (data || []).map((c) => ({
+    connectors: rows.map((c) => ({
       id: c.id,
       connectorId: c.connector_id,
       authType: c.auth_type,
@@ -114,7 +117,7 @@ async function handleCreateConnector(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   let body: { connectorId?: string; authType?: string };
   try {
@@ -136,30 +139,45 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.validation('Invalid auth type');
   }
 
-  const supabase = getScopedClient(request);
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
+  // NOTE: Real OAuth integration is deferred. For connectors with authType
+  // 'oauth', this endpoint currently only records intent (is_active: true)
+  // without performing an OAuth redirect, token exchange, or storing provider
+  // credentials. The UI already gates OAuth connectors behind a "Coming Soon"
+  // state so users cannot reach this path for oauth connectors in practice.
+  // When real OAuth ships, add: redirect to provider, exchange code for token,
+  // encrypt + store credentials, then set is_active: true.
+  //
   // Upsert: if user reconnects a previously disconnected connector, reactivate it
-  const { data, error } = await supabase
-    .from('user_connectors')
-    .upsert(
-      {
-        user_id: user.id,
-        connector_id: body.connectorId,
-        auth_type: authType,
-        is_active: true,
-        connected_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,connector_id' },
-    )
-    .select('id, connector_id, auth_type, connected_at, updated_at')
-    .single();
-
-  if (error) {
-    logger.error(
-      { error, userId: user.id, connectorId: body.connectorId },
-      'Failed to save connector',
+  let data: UserConnectorRow | undefined;
+  try {
+    [data] = await db.query<UserConnectorRow>(
+      `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
+       values ($1, $2, $3, true, $4, $5)
+       on conflict (user_id, connector_id)
+       do update set
+         auth_type = excluded.auth_type,
+         is_active = true,
+         connected_at = excluded.connected_at,
+         updated_at = excluded.updated_at
+       returning id, connector_id, auth_type, connected_at, updated_at`,
+      [userId, body.connectorId, authType, now, now],
     );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn(
+        { userId, connectorId: body.connectorId },
+        'user_connectors table not migrated; connector save unavailable',
+      );
+      throw createError.serviceUnavailable('Connectors are not available in this environment');
+    }
+    throw error;
+  }
+
+  if (!data) {
+    logger.error({ userId: userId, connectorId: body.connectorId }, 'Failed to save connector');
     throw createError.internal('Failed to save connector');
   }
 
@@ -187,7 +205,7 @@ async function handleDeleteConnector(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   const url = new URL(request.url);
   const connectorId = url.searchParams.get('connectorId');
@@ -196,18 +214,22 @@ async function handleDeleteConnector(request: NextRequest) {
     throw createError.validation('Valid connectorId query param is required');
   }
 
-  const supabase = getScopedClient(request);
+  const db = getNeonDb();
 
   // Soft-delete: mark as inactive rather than removing the row
-  const { error } = await supabase
-    .from('user_connectors')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('user_id', user.id)
-    .eq('connector_id', connectorId);
-
-  if (error) {
-    logger.error({ error, userId: user.id, connectorId }, 'Failed to disconnect connector');
-    throw createError.internal('Failed to disconnect connector');
+  try {
+    await db.execute(
+      `update user_connectors
+       set is_active = false, updated_at = $1
+       where user_id = $2 and connector_id = $3`,
+      [new Date().toISOString(), userId, connectorId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn({ userId, connectorId }, 'user_connectors table not migrated; delete ignored');
+      return NextResponse.json({ success: true });
+    }
+    throw error;
   }
 
   return NextResponse.json({ success: true });

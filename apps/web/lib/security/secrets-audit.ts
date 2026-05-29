@@ -15,12 +15,12 @@ const SECRET_PATTERNS: Array<{
   { name: 'Stripe Secret Key', pattern: /sk_live_[a-zA-Z0-9]{24,}/g, severity: 'critical' },
   { name: 'Stripe Test Key', pattern: /sk_test_[a-zA-Z0-9]{24,}/g, severity: 'high' },
   {
-    name: 'Supabase Service Role',
+    name: 'Neon Service Role',
     pattern: /eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g,
     severity: 'critical',
   },
-  // NOTE: The above JWT pattern also matches the Supabase anon key, which is a
-  // public, non-secret key. Use isPublicSupabaseKey() below to filter false positives.
+  // NOTE: The above JWT pattern also matches the Neon anon key, which is a
+  // public, non-secret key. Use isPublicNeonKey() below to filter false positives.
   { name: 'OpenAI API Key', pattern: /sk-[a-zA-Z0-9]{48,}/g, severity: 'critical' },
   { name: 'Anthropic API Key', pattern: /sk-ant-[a-zA-Z0-9-]{90,}/g, severity: 'critical' },
   { name: 'Google API Key', pattern: /AIza[0-9A-Za-z_-]{35}/g, severity: 'critical' },
@@ -88,10 +88,10 @@ const SECRET_PATTERNS: Array<{
 ];
 
 /**
- * Check if a JWT is a Supabase anon key (public, non-secret).
- * Supabase anon keys have a payload containing "role":"anon" and are safe to expose.
+ * Check if a JWT is a Neon anon key (public, non-secret).
+ * Neon anon keys have a payload containing "role":"anon" and are safe to expose.
  */
-function isPublicSupabaseKey(jwt: string): boolean {
+function isPublicNeonKey(jwt: string): boolean {
   try {
     const parts = jwt.split('.');
     if (parts.length !== 3) return false;
@@ -124,8 +124,8 @@ export function scanForSecrets(content: string): SecretDetection[] {
     while ((match = pattern.exec(content)) !== null) {
       const matchedText = match[0];
 
-      // Skip Supabase anon keys (public, non-secret JWTs)
-      if (name === 'Supabase Service Role' && isPublicSupabaseKey(matchedText)) {
+      // Skip Neon anon keys (public, non-secret JWTs)
+      if (name === 'Neon Service Role' && isPublicNeonKey(matchedText)) {
         continue;
       }
 
@@ -159,8 +159,8 @@ export function containsSecrets(content: string): boolean {
     pattern.lastIndex = 0;
     let match;
     while ((match = pattern.exec(content)) !== null) {
-      // Skip Supabase anon keys (public, non-secret)
-      if (name === 'Supabase Service Role' && isPublicSupabaseKey(match[0])) {
+      // Skip Neon anon keys (public, non-secret)
+      if (name === 'Neon Service Role' && isPublicNeonKey(match[0])) {
         continue;
       }
       return true;
@@ -178,10 +178,10 @@ export function redactSecrets(content: string): string {
 
   for (const { name, pattern } of SECRET_PATTERNS) {
     pattern.lastIndex = 0;
-    if (name === 'Supabase Service Role') {
+    if (name === 'Neon Service Role') {
       // Preserve public anon keys, only redact service role keys
       redacted = redacted.replace(pattern, (match) =>
-        isPublicSupabaseKey(match) ? match : '[REDACTED]',
+        isPublicNeonKey(match) ? match : '[REDACTED]',
       );
     } else {
       redacted = redacted.replace(pattern, '[REDACTED]');

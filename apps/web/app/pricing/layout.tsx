@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 export const metadata: Metadata = {
   title: 'Pricing Plans | AGI',
   description:
-    'Choose the perfect plan for your AI automation needs. From hobbyists to enterprises, AGI has a plan for you. Start free or upgrade anytime.',
+    'AGI pricing: local and BYOK are the MVP paths. Managed cloud remains waitlisted until metering, abuse controls, and provider terms are proven.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Pricing Plans | AGI',
     description:
-      'Affordable AI agent automation. Hobby, Pro, and Max plans. Start free or upgrade anytime.',
+      'Local and BYOK first. Managed cloud stays waitlisted while production controls are proven.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Pricing Plans | AGI',
     description:
-      'Affordable AI agent automation plans. Start free, upgrade when ready. No credit card required.',
+      'Local and BYOK first. Managed cloud stays waitlisted while production controls are proven.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },
@@ -40,56 +40,6 @@ export const metadata: Metadata = {
   },
 };
 
-// JSON-LD for Product/Pricing schema
-const pricingSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'AggregateOffer',
-  priceCurrency: 'USD',
-  offers: [
-    {
-      '@type': 'Offer',
-      name: 'Hobby Plan',
-      description: 'Perfect for getting started with AI automation',
-      price: '10',
-      priceCurrency: 'USD',
-      priceValidUntil: '2026-12-31',
-      url: 'https://agiworkforce.com/pricing',
-      availability: 'https://schema.org/InStock',
-      billingDuration: 'P1M',
-    },
-    {
-      '@type': 'Offer',
-      name: 'Pro Plan',
-      description: 'Less than $1/day for full AI automation',
-      price: '29.99',
-      priceCurrency: 'USD',
-      priceValidUntil: '2026-12-31',
-      url: 'https://agiworkforce.com/pricing',
-      availability: 'https://schema.org/InStock',
-      billingDuration: 'P1M',
-    },
-    {
-      '@type': 'Offer',
-      name: 'Max Plan',
-      description: 'Power users running complex autonomous workflows',
-      price: '299.99',
-      priceCurrency: 'USD',
-      priceValidUntil: '2026-12-31',
-      url: 'https://agiworkforce.com/pricing',
-      availability: 'https://schema.org/InStock',
-      billingDuration: 'P1M',
-    },
-  ],
-};
-
 export default function PricingLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(pricingSchema) }}
-      />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

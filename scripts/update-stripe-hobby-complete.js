@@ -1,20 +1,17 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
 const Stripe = require('stripe');
-
-const { createClient } = require('@supabase/supabase-js');
+const { neon } = require('@neondatabase/serverless');
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const SUPABASE_SERVICE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+const DATABASE_URL = process.env.NEON_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!STRIPE_SECRET_KEY) {
   console.error('❌ STRIPE_SECRET_KEY environment variable is required');
   process.exit(1);
 }
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-  console.error('❌ SUPABASE_URL and SUPABASE_SERVICE_KEY environment variables are required');
+if (!DATABASE_URL) {
+  console.error('❌ NEON_DATABASE_URL or DATABASE_URL environment variable is required');
   process.exit(1);
 }
 
@@ -22,9 +19,7 @@ const stripe = new Stripe(STRIPE_SECRET_KEY, {
   apiVersion: '2025-12-15.clover',
 });
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
-  auth: { persistSession: false },
-});
+const sql = neon(DATABASE_URL);
 
 async function updateHobbyPlan() {
   try {
@@ -57,27 +52,25 @@ async function updateHobbyPlan() {
     console.log('📋 Price ID:', price.id);
     console.log('📋 Product ID:', productId);
 
-    console.log('\n🔄 Step 3: Updating Supabase pricing_plans table...');
+    console.log('\n🔄 Step 3: Updating Neon pricing_plans table...');
 
-    const { data, error } = await supabase
-      .from('pricing_plans')
-      .update({
-        stripe_price_id: price.id,
-        stripe_product_id: productId,
-        name: 'Hobby',
-        price_cents: 1000,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('tier', 'hobby')
-      .eq('interval', 'month')
-      .select();
+    const data = await sql`
+      update pricing_plans
+      set stripe_price_id = ${price.id},
+          stripe_product_id = ${productId},
+          name = 'Hobby',
+          price_cents = 1000,
+          updated_at = now()
+      where tier = 'hobby'
+        and interval = 'month'
+      returning *
+    `;
 
-    if (error) {
-      console.error('❌ Error updating Supabase:', error);
-      throw error;
+    if (data.length === 0) {
+      throw new Error('No Hobby monthly pricing_plans row found to update');
     }
 
-    console.log('✅ Updated Supabase pricing_plans:', data);
+    console.log('✅ Updated Neon pricing_plans:', data);
 
     console.log('\n✅ COMPLETE! Summary:');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

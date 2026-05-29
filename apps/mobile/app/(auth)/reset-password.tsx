@@ -1,16 +1,8 @@
 /**
  * reset-password.tsx
  *
- * MED-MOB-07 fix (2026-05-04): Handles agiworkforce://reset-password deep links
- * from Supabase password-reset emails. Previously there was no registered route
- * for this path; the recovery token in the URL fragment was silently lost (or
- * exposed in getInitialURL() parse path if the share-intent handler ran first).
- *
- * This screen:
- * 1. Reads the recovery token from the URL (Expo Router passes it via params).
- * 2. Exchanges it with Supabase via exchangeCodeForSession / setSession.
- * 3. Prompts the user to enter and confirm a new password.
- * 4. Clears the recovery token from memory immediately after exchange.
+ * Password reset is owned by the Web/Clerk account surface. Mobile v1 keeps
+ * this route as a gated deep-link placeholder so old links do not crash.
  */
 import { useState, useEffect } from 'react';
 import { View, TextInput, Pressable, Alert, ActivityIndicator } from 'react-native';
@@ -18,7 +10,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { useTheme } from '@/src/ui/theme';
-import { supabase } from '@/services/supabase';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
 export default function ResetPasswordScreen() {
@@ -27,18 +18,8 @@ export default function ResetPasswordScreen() {
   // Expo Router passes URL fragment params as query params when the route is
   // matched via a deep link.
   //
-  // CRIT-MOB-01 fix (2026-05): three entry paths now feed this screen, in
-  // descending order of preference:
-  //   (a) `?recovery=1` — _layout.tsx already exchanged the PKCE code (or
-  //       legacy-fragment access_token) via supabase.auth and set a session.
-  //       We just trust supabase.auth.getSession() here.
-  //   (b) Legacy fragment with `access_token` + `type=recovery` — older
-  //       Supabase emails. We exchange via setSession ourselves.
-  //   (c) No params — direct navigation to the screen with no recovery
-  //       context. We surface an error and ask the user to re-request.
-  //
-  // The previous implementation only handled (b) and lost the token in (a),
-  // and silently no-op'd on (c).
+  // Account recovery is web-owned. This route only prevents stale deep links
+  // from falling through to unrelated handlers.
   const params = useLocalSearchParams<{
     access_token?: string;
     refresh_token?: string;
@@ -52,49 +33,10 @@ export default function ResetPasswordScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Exchange the recovery token for a session — this must happen once.
   useEffect(() => {
-    const accessToken = params.access_token;
-    const refreshToken = params.refresh_token;
-    const type = params.type;
-    const recoveryFlag = params.recovery;
-
-    // Path (a): _layout.tsx already established a session for us.
-    if (recoveryFlag === '1') {
-      supabase.auth
-        .getSession()
-        .then(({ data, error: err }) => {
-          if (err || !data?.session) {
-            setError('Recovery session not found. Please request a new password reset email.');
-            return;
-          }
-          setSessionReady(true);
-        })
-        .catch(() => {
-          setError('Could not validate recovery link. Please try again.');
-        });
-      return;
-    }
-
-    // Path (b): legacy fragment-bearing URL routed directly to this screen.
-    if (accessToken && type === 'recovery') {
-      supabase.auth
-        .setSession({ access_token: accessToken, refresh_token: refreshToken ?? '' })
-        .then(({ error: err }) => {
-          if (err) {
-            setError('Recovery link has expired or is invalid. Please request a new one.');
-          } else {
-            setSessionReady(true);
-          }
-        })
-        .catch(() => {
-          setError('Could not validate recovery link. Please try again.');
-        });
-      return;
-    }
-
-    // Path (c): no recovery context.
-    setError('Invalid or missing recovery link. Please request a new password reset email.');
+    if (!FEATURES.auth) return;
+    void params;
+    setError('Password reset is handled on the AGI web account page.');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -110,20 +52,10 @@ export default function ResetPasswordScreen() {
     setLoading(true);
     setError(null);
     try {
-      const { error: updateError } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setError(updateError.message);
-      } else {
-        Alert.alert('Password updated', 'Your password has been changed. Please log in.', [
-          {
-            text: 'OK',
-            onPress: () => {
-              supabase.auth.signOut().catch(() => null);
-              router.replace({ pathname: '/(auth)/login' as const });
-            },
-          },
-        ]);
-      }
+      void password;
+      Alert.alert('Password reset', 'Open agiworkforce.com/login to reset your password.', [
+        { text: 'OK', onPress: () => router.replace({ pathname: '/(auth)/login' as const }) },
+      ]);
     } finally {
       setLoading(false);
     }

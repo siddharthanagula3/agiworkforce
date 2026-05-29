@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { SignalingClient } from '@agiworkforce/utils/signaling';
 import type { SignalingEvent, SignalKind } from '@agiworkforce/types';
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate } from 'react-native-webrtc';
@@ -870,12 +870,7 @@ export const useConnectionStore = create<ConnectionState>()(
   ),
 );
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useConnectionStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useConnectionStore, 'connection-store');
 
 /**
  * Convert raw signaling error strings to user-friendly messages.

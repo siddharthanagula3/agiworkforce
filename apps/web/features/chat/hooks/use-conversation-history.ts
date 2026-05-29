@@ -7,7 +7,6 @@
 import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { supabase } from '@shared/lib/supabase-client';
 import { chatPersistenceService } from '../services/conversation-storage';
 import { queryKeys } from '@shared/stores/query-client';
 import { logger } from '@shared/lib/logger';
@@ -25,11 +24,15 @@ import {
 } from './use-chat-queries';
 
 // Get current user helper
-async function getCurrentUser() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  try {
+    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
+      | { user?: { id: string } | null }
+      | undefined;
+    return clerk?.user?.id ? { id: clerk.user.id } : null;
+  } catch {
+    return null;
+  }
 }
 
 export const useChatHistory = () => {

@@ -6,7 +6,7 @@ use std::path::{Component, Path, PathBuf};
 
 use thiserror::Error;
 
-pub use parser::{Hunk, ParseError, ParsedPatch, UpdateFileChunk, parse_patch};
+pub use parser::{parse_patch, Hunk, ParseError, ParsedPatch, UpdateFileChunk};
 
 #[derive(Debug, Error)]
 pub enum ApplyPatchError {
@@ -41,7 +41,9 @@ pub struct PatchApplyOutcome {
 /// changes are NOT rolled back (matches reference behavior in scenario 015).
 pub fn apply_patch(patch: &ParsedPatch, root: &Path) -> Result<PatchApplyOutcome, ApplyPatchError> {
     if patch.hunks.is_empty() {
-        return Err(ApplyPatchError::Apply("No files were modified.".to_string()));
+        return Err(ApplyPatchError::Apply(
+            "No files were modified.".to_string(),
+        ));
     }
 
     let mut added: Vec<PathBuf> = Vec::new();
@@ -106,7 +108,10 @@ pub fn apply_patch(patch: &ParsedPatch, root: &Path) -> Result<PatchApplyOutcome
 }
 
 /// Parse the patch text and apply it, returning an outcome.
-pub fn parse_and_apply(patch_text: &str, root: &Path) -> Result<PatchApplyOutcome, ApplyPatchError> {
+pub fn parse_and_apply(
+    patch_text: &str,
+    root: &Path,
+) -> Result<PatchApplyOutcome, ApplyPatchError> {
     let parsed = parse_patch(patch_text)?;
     apply_patch(&parsed, root)
 }
@@ -131,22 +136,43 @@ fn resolve(root: &Path, path: &Path) -> Result<PathBuf, ApplyPatchError> {
         }
     }
 
-    let joined = root.join(path);
     let canonical_root = match root.canonicalize() {
         Ok(p) => p,
         Err(_) => lexical_normalize(root),
     };
-    let canonical_joined = match joined.canonicalize() {
-        Ok(p) => p,
-        Err(_) => lexical_normalize(&joined),
-    };
-    if !canonical_joined.starts_with(&canonical_root) {
+    let candidate = canonical_root.join(path);
+
+    if let Ok(canonical_candidate) = candidate.canonicalize() {
+        if !canonical_candidate.starts_with(&canonical_root) {
+            return Err(ApplyPatchError::Apply(format!(
+                "Patch path escapes workspace root: {}",
+                path.display()
+            )));
+        }
+        return Ok(canonical_candidate);
+    }
+
+    let mut existing_ancestor = candidate.as_path();
+    while !existing_ancestor.exists() {
+        existing_ancestor = existing_ancestor.parent().ok_or_else(|| {
+            ApplyPatchError::Apply(format!(
+                "Patch path has no existing ancestor: {}",
+                path.display()
+            ))
+        })?;
+    }
+
+    let canonical_ancestor = existing_ancestor
+        .canonicalize()
+        .map_err(|e| ApplyPatchError::io(existing_ancestor, e))?;
+    if !canonical_ancestor.starts_with(&canonical_root) {
         return Err(ApplyPatchError::Apply(format!(
             "Patch path escapes workspace root: {}",
             path.display()
         )));
     }
-    Ok(canonical_joined)
+
+    Ok(candidate)
 }
 
 fn lexical_normalize(p: &Path) -> PathBuf {
@@ -236,8 +262,7 @@ fn compute_replacements(
         let mut pattern: &[String] = &chunk.old_lines;
         let mut new_slice: &[String] = &chunk.new_lines;
 
-        let mut found =
-            seek_sequence(original, pattern, line_index, chunk.is_end_of_file);
+        let mut found = seek_sequence(original, pattern, line_index, chunk.is_end_of_file);
 
         // Retry without trailing empty line (represents final-newline in file).
         if found.is_none() && pattern.last().is_some_and(String::is_empty) {

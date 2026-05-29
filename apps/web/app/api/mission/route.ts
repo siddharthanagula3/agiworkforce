@@ -1,15 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -160,45 +159,13 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   if (rateLimitResponse) return rateLimitResponse;
 
   // Authentication
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      { error: { message: 'Missing or invalid authorization header', code: 'unauthorized' } },
-      {
-        status: 401,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
-  }
+  const { userId } = await getClerkAuthUser(request);
 
-  const token = authHeader.substring(7);
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return NextResponse.json(
-      { error: { message: 'Invalid authentication token', code: 'unauthorized' } },
-      {
-        status: 401,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
-  }
-
-  // RLS-bound client for all downstream DB ops on behalf of this user.
-  const userClient = getUserClient(token);
+  // Service-role client for all downstream DB ops.
+  const userClient = getNeonDb();
 
   // Validate subscription
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, userId);
   if (!subscription || !['active', 'trialing'].includes(subscription.status)) {
     throw createError.forbidden('An active subscription is required to use Mission Control.');
   }
@@ -247,9 +214,9 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     Math.ceil((estimatedTokens * 2 * 0.001) / 1000), // rough: $0.001/1K tokens average
   );
 
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, user.id);
+    const balance = await CreditService.getBalance(userClient, userId);
     return NextResponse.json(
       {
         error: {
@@ -267,10 +234,10 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
 
   // Reserve credits
   const requestId = randomUUID();
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation: mission control planning`,
     { provider: missionProvider, model: missionModel, type: 'reservation', requestId },
@@ -312,10 +279,10 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     });
     const costDiff = actualCostCents - estimatedCostCents;
     if (costDiff !== 0) {
-      const reconcKey = CreditService.generateIdempotencyKey(user.id, 'reconciliation', requestId);
+      const reconcKey = CreditService.generateIdempotencyKey(userId, 'reconciliation', requestId);
       await CreditService.deductCredits(
         userClient,
-        user.id,
+        userId,
         costDiff,
         `Credit adjustment: mission control (${missionProvider}/${missionModel})`,
         { provider: missionProvider, model: missionModel, type: 'reconciliation', requestId },
@@ -324,16 +291,16 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
     }
   } catch (error) {
     // Refund reserved credits on failure
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
       userClient,
-      user.id,
+      userId,
       -estimatedCostCents,
       `Refund: mission control planning failed`,
       { type: 'refund', reason: 'llm_failure', requestId },
       refundKey,
     );
-    logger.error({ error, userId: user.id, requestId }, 'Mission control LLM call failed');
+    logger.error({ error, userId: userId, requestId }, 'Mission control LLM call failed');
     throw createError.internal('Failed to process mission. Please try again.');
   }
 
@@ -347,7 +314,7 @@ async function handleMissionControl(request: NextRequest): Promise<NextResponse>
   const missionId = `mission-${requestId}`;
 
   logger.info(
-    { userId: user.id, missionId, taskCount: plan.length, agents },
+    { userId: userId, missionId, taskCount: plan.length, agents },
     'Mission plan generated',
   );
 

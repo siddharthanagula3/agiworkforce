@@ -88,7 +88,7 @@ export function WaitlistForm({
           }}
         />
         {state === 'error' && errorMsg && (
-          <span style={{ fontSize: 12, color: 'var(--red, #e54d4d)' }}>{errorMsg}</span>
+          <span style={{ fontSize: 12, color: 'var(--agi-error)' }}>{errorMsg}</span>
         )}
       </div>
 
@@ -97,10 +97,10 @@ export function WaitlistForm({
         disabled={state === 'submitting'}
         style={{
           padding: '8px 16px',
-          background: 'var(--amber, #c8892a)',
+          background: 'var(--agi-button-bg)',
           border: 'none',
           borderRadius: 'var(--radius-md, 6px)',
-          color: '#fff',
+          color: 'var(--agi-button-ink)',
           fontSize: 14,
           fontWeight: 600,
           cursor: state === 'submitting' ? 'wait' : 'pointer',

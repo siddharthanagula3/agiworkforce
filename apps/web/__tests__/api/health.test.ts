@@ -33,14 +33,15 @@ vi.mock('stripe', () => ({
   },
 }));
 
-// Mock Supabase
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        limit: vi.fn().mockResolvedValue({ data: [], error: null }),
-      })),
-    })),
+// Mock Neon DB
+const mockNeonQuery = vi.fn().mockResolvedValue([{ '?column?': 1 }]);
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockNeonQuery,
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
@@ -50,11 +51,11 @@ import { GET } from '@/app/api/health/route';
 describe('Health Check API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Set required env vars
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
-    process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key';
+    // Set required env vars — health route checks DATABASE_URL (Neon)
+    process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
+    // Re-apply mockNeonQuery default after clearAllMocks
+    mockNeonQuery.mockResolvedValue([{ '?column?': 1 }]);
   });
 
   afterEach(() => {
@@ -81,18 +82,8 @@ describe('Health Check API', () => {
     });
 
     it('should return unhealthy status when database check fails', async () => {
-      // Override Supabase mock to return error
-      const { createClient } = await import('@supabase/supabase-js');
-      vi.mocked(createClient).mockReturnValueOnce({
-        from: vi.fn(() => ({
-          select: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Connection failed', code: 'UNKNOWN' },
-            }),
-          })),
-        })),
-      } as never);
+      // Override Neon mock to throw an error
+      mockNeonQuery.mockRejectedValueOnce(new Error('Connection failed'));
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -123,9 +114,9 @@ describe('Health Check API', () => {
     });
 
     it('should return unhealthy status when environment variables are missing', async () => {
-      // Remove required env vars
-      delete process.env['NEXT_PUBLIC_SUPABASE_URL'];
-      delete process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+      // Remove required Neon env vars
+      delete process.env['DATABASE_URL'];
+      delete process.env['AGI_DATABASE_URL'];
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -138,19 +129,9 @@ describe('Health Check API', () => {
       expect(data.checks.environment.missingCount).toBeGreaterThan(0);
     });
 
-    it('should handle PGRST116 error as healthy (no rows found)', async () => {
-      // PGRST116 is "not found" which is fine for health check
-      const { createClient } = await import('@supabase/supabase-js');
-      vi.mocked(createClient).mockReturnValueOnce({
-        from: vi.fn(() => ({
-          select: vi.fn(() => ({
-            limit: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: 'PGRST116', message: 'No rows found' },
-            }),
-          })),
-        })),
-      } as never);
+    it('should handle empty result from DB as healthy (no rows found)', async () => {
+      // Neon returning an empty array is a successful query — DB is reachable
+      mockNeonQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',
@@ -190,9 +171,8 @@ describe('Health Check API', () => {
       expect(data.checks.stripe.message).toBe('unavailable');
     });
 
-    it('should handle missing Supabase credentials gracefully', async () => {
-      delete process.env['NEXT_PUBLIC_SUPABASE_URL'];
-      delete process.env['SUPABASE_SERVICE_ROLE_KEY'];
+    it('should handle DB connection failure gracefully', async () => {
+      mockNeonQuery.mockRejectedValueOnce(new Error('ECONNREFUSED'));
 
       const request = new NextRequest('http://localhost/api/health', {
         method: 'GET',

@@ -64,7 +64,9 @@ impl DailyBudgetGuard {
     /// Auto-creates the `budget_daily_spend` table on first use.
     pub fn new(conn: Arc<Mutex<Connection>>) -> Result<Self, String> {
         {
-            let conn_guard = conn.lock().map_err(|e| format!("budget conn poisoned: {e}"))?;
+            let conn_guard = conn
+                .lock()
+                .map_err(|e| format!("budget conn poisoned: {e}"))?;
             conn_guard
                 .execute(CREATE_TABLE_SQL, [])
                 .map_err(|e| format!("Failed to create budget_daily_spend: {e}"))?;
@@ -122,13 +124,14 @@ impl DailyBudgetGuard {
         estimated_cost_usd: f64,
     ) -> Result<BudgetStatus, BudgetExceededError> {
         let day = current_day_utc();
-        let spent = self
-            .spent_today(user_id, &day)
-            .unwrap_or(0.0);
+        let spent = self.spent_today(user_id, &day).unwrap_or(0.0);
         let cap = self.cap_usd();
 
         if spent >= cap {
-            return Err(BudgetExceededError { spent_usd: spent, cap_usd: cap });
+            return Err(BudgetExceededError {
+                spent_usd: spent,
+                cap_usd: cap,
+            });
         }
 
         // Record the reservation. If the upsert itself fails we treat
@@ -289,7 +292,10 @@ mod tests {
         let guard = fresh_guard();
         guard.reserve_or_reject("alice", 20.0).unwrap();
         let bob_status = guard.status("bob").unwrap();
-        assert_eq!(bob_status.spent_usd, 0.0, "bob's bucket must not see alice's spend");
+        assert_eq!(
+            bob_status.spent_usd, 0.0,
+            "bob's bucket must not see alice's spend"
+        );
         guard.reserve_or_reject("bob", 5.0).unwrap();
         let alice_status = guard.status("alice").unwrap();
         assert_eq!(alice_status.spent_usd, 20.0);

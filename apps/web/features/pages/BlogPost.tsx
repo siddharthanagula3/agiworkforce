@@ -12,7 +12,6 @@ import { motion } from 'framer-motion';
 import { Calendar, Clock, ArrowLeft, Share2, BookOpen, User } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { supabase } from '@shared/lib/supabase-client';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -68,29 +67,22 @@ const BlogPostPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
-        .from('blog_posts')
-        .select(
-          `
-          *,
-          author:blog_authors(id, display_name, avatar_emoji, avatar_url, bio),
-          category:blog_categories(id, name, slug)
-        `,
-        )
-        .eq('slug', postSlug)
-        .eq('published', true)
-        .maybeSingle();
+      const res = await fetch(`/api/blog/posts/${encodeURIComponent(postSlug)}`);
 
-      if (error) {
-        throw error;
+      if (res.status === 404) {
+        throw new Error('Blog post not found');
       }
+      if (!res.ok) {
+        throw new Error(`Failed to fetch blog post: ${res.status}`);
+      }
+
+      const data = (await res.json()) as BlogPost | null;
 
       if (!data) {
         throw new Error('Blog post not found');
       }
 
-      // Updated: Jan 15th 2026 - Removed console statements for production
-      setPost(data as BlogPost);
+      setPost(data);
     } catch (err) {
       setError((err as Error).message || 'Failed to fetch blog post');
       toast.error('Failed to load blog post');

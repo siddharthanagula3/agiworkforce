@@ -132,7 +132,6 @@ const activeReferencePaths = [
   ...walk('docs/research'),
   'apps/mobile/README.md',
   'packages/data-layer/README.md',
-  'supabase/README.md',
   ...walk('packages/data-layer/src'),
   ...walk('packages/unified-chat/src'),
   'apps/web/app/api/me/route.ts',

@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
@@ -41,47 +41,24 @@ export async function GET(request: NextRequest) {
     environment: { status: 'unhealthy' },
   };
 
-  // Check environment variables
-  const requiredEnvVars = [
-    'NEXT_PUBLIC_SUPABASE_URL',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
-  ];
-
-  const missingEnvVars = requiredEnvVars.filter((key) => !process.env[key]);
-  if (missingEnvVars.length === 0) {
+  // Check environment variables — require at least one Neon connection string
+  const neonEnvVars = ['DATABASE_URL', 'AGI_DATABASE_URL'];
+  const missingEnvVars = neonEnvVars.filter((key) => !process.env[key]);
+  if (missingEnvVars.length < neonEnvVars.length) {
+    // At least one Neon URL is set
     checks.environment.status = 'healthy';
   } else {
     // Security: Only expose count, not names (prevents information disclosure)
     checks.environment.missingCount = missingEnvVars.length;
     // Log the actual missing vars server-side for debugging
-    logger.warn({ missingEnvVars }, 'Health check: missing environment variables');
+    logger.warn({ missingEnvVars }, 'Health check: missing Neon environment variables');
   }
 
-  // Check database connectivity
+  // Check database connectivity via Neon
   try {
-    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-    const supabaseKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-
-    if (supabaseUrl && supabaseKey) {
-      const supabase = createClient(supabaseUrl, supabaseKey, {
-        auth: { persistSession: false },
-      });
-
-      // Simple query to check connectivity
-      const { error } = await supabase.from('subscriptions').select('id').limit(1);
-
-      if (!error || error.code === 'PGRST116') {
-        // PGRST116 is "not found" which is fine for health check
-        checks.database.status = 'healthy';
-      } else {
-        checks.database.status = 'unhealthy';
-        checks.database.message = 'unavailable';
-        logger.error({ error: error.message }, 'Database health check query failed');
-      }
-    } else {
-      checks.database.message = 'unavailable';
-    }
+    const db = getNeonDb();
+    await db.query('select 1');
+    checks.database.status = 'healthy';
   } catch (error) {
     checks.database.status = 'unhealthy';
     checks.database.message = 'unavailable';

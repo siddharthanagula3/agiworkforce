@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import {
   useChatStore,
   type Message,
@@ -8,6 +9,9 @@ import {
   type MessageMetadata,
   type MessageToolEntry,
 } from '@/stores/chatStore';
+import { useThinkingStore } from '@shared/stores/thinking-store';
+import type { Effort } from '@agiworkforce/types';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 interface SendMessageOptions {
   model?: string;
@@ -19,7 +23,18 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
+  /** Output style hint. When set and not 'normal', a system message is prepended. */
+  styleMode?: string;
+  /** Skill body injected as a system message at the start of the request. */
+  skillBody?: string;
 }
+
+const STYLE_SYSTEM_INSTRUCTIONS: Record<string, string> = {
+  concise: 'Be concise. Give short, direct answers without unnecessary detail.',
+  formal: 'Use formal, professional language. Be precise and structured.',
+  explanatory: 'Be thorough and educational. Explain concepts in detail with examples.',
+};
 
 interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
@@ -36,12 +51,13 @@ async function saveMessageToDb(
   authToken: string,
 ): Promise<{ id: string } | null> {
   try {
+    const headers = await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    });
     const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${authToken}`,
-      },
+      headers,
       body: JSON.stringify({
         role: message.role,
         content: message.content,
@@ -68,6 +84,7 @@ async function saveMessageToDb(
  * Hook for handling SSE streaming chat with the LLM API
  */
 export function useChatStream(): UseChatStreamReturn {
+  const { getToken } = useAuth();
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Store actions
@@ -116,7 +133,10 @@ export function useChatStream(): UseChatStreamReturn {
       abortControllerRef.current = new AbortController();
 
       const model = options.model || selectedModel;
-      const authToken = await getAuthToken();
+      const authToken = await getToken();
+      if (!authToken) {
+        throw new Error('Not authenticated');
+      }
 
       // Add user message to UI immediately
       const userMessageId = crypto.randomUUID();
@@ -130,9 +150,15 @@ export function useChatStream(): UseChatStreamReturn {
       addMessage(userMessage);
 
       // Save user message to database (fire and forget, don't block)
-      saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
-        (err) => console.error('[useChatStream] Failed to save user message:', err),
-      );
+      // Skip DB persistence for temporary/incognito conversations
+      const isTemporaryConversation = useChatStore
+        .getState()
+        .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary;
+      if (!isTemporaryConversation) {
+        saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
+          (err) => console.error('[useChatStream] Failed to save user message:', err),
+        );
+      }
 
       // Create assistant message placeholder
       const assistantMessageId = crypto.randomUUID();
@@ -275,6 +301,22 @@ export function useChatStream(): UseChatStreamReturn {
             })),
         ];
 
+        // Prepend the selected skill's body as a system message. This is injected
+        // invisibly and does not appear in chat bubbles.
+        if (options.skillBody) {
+          apiMessages.unshift({ role: 'system', content: options.skillBody });
+        }
+
+        // Prepend a style system message when the user has selected a non-default style.
+        // This is injected invisibly into the API call and does not appear in chat bubbles.
+        // Placed after skillBody so style sits at index 0 (processed last by the model).
+        if (options.styleMode && options.styleMode !== 'normal') {
+          const styleInstruction = STYLE_SYSTEM_INSTRUCTIONS[options.styleMode];
+          if (styleInstruction) {
+            apiMessages.unshift({ role: 'system', content: styleInstruction });
+          }
+        }
+
         // If there are image attachments, format the last user message for the API
         if (options.attachments?.some((a) => a.type === 'image')) {
           const lastUserMsgIndex = apiMessages.length - 1;
@@ -292,12 +334,16 @@ export function useChatStream(): UseChatStreamReturn {
           }
         }
 
+        const headers = await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        });
+        const thinkingState = useThinkingStore.getState();
+        const thinkingEnabled = options.thinkingEnabled ?? thinkingState.enabled;
+        const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${authToken}`,
-          },
+          headers,
           body: JSON.stringify({
             model,
             messages: apiMessages,
@@ -307,7 +353,8 @@ export function useChatStream(): UseChatStreamReturn {
             web_search: options.webSearch || undefined,
             web_fetch: options.webFetch || undefined,
             code_execution: options.codeExecution || undefined,
-            thinking_mode: options.thinkingEnabled || undefined,
+            thinking_mode: thinkingEnabled || undefined,
+            effort: thinkingEnabled ? thinkingEffort : undefined,
             use_prompt_cache: true,
           }),
           signal: abortControllerRef.current.signal,
@@ -329,6 +376,89 @@ export function useChatStream(): UseChatStreamReturn {
         let fullAssistantContent = '';
         // Extended-thinking state: tracks whether we're currently inside a <thinking> block
         let inThinkingBlock = false;
+        // Content buffer for split-chunk thinking marker detection.
+        // SSE chunks can arrive mid-tag (e.g. "<thin" then "king>"), so we
+        // accumulate raw content here and scan for complete markers before
+        // dispatching to the thinking or regular content paths.
+        let contentBuffer = '';
+
+        // Minimum bytes to hold back so a split marker at the tail is caught
+        // on the next iteration. Length of "</thinking>" minus 1 = 11 chars.
+        const HOLD_BACK = 11;
+
+        /**
+         * Flush as much of contentBuffer as is safe without losing a partial
+         * marker at the tail.
+         *
+         * The caller passes `isFinal = true` when the stream is done so we
+         * emit everything regardless of a potential partial marker.
+         */
+        const flushContentBuffer = (isFinal = false) => {
+          // Process all complete <thinking> / </thinking> markers in the buffer.
+          while (true) {
+            const openIdx = contentBuffer.indexOf('<thinking>');
+            const closeIdx = contentBuffer.indexOf('</thinking>');
+
+            if (!inThinkingBlock && openIdx !== -1) {
+              // Emit everything before the marker as regular content.
+              const before = contentBuffer.slice(0, openIdx);
+              if (before) {
+                fullAssistantContent += before;
+                appendToMessage(assistantMessageId, before);
+              }
+              inThinkingBlock = true;
+              updateMessage(assistantMessageId, {
+                metadata: {
+                  isThinkingStreaming: true,
+                  thinkingStartedAt: new Date().toISOString(),
+                },
+              });
+              contentBuffer = contentBuffer.slice(openIdx + '<thinking>'.length);
+              continue;
+            }
+
+            if (inThinkingBlock && closeIdx !== -1) {
+              // Emit thinking content before the closing marker.
+              const thinkingPart = contentBuffer.slice(0, closeIdx);
+              if (thinkingPart) {
+                appendToThinking(assistantMessageId, thinkingPart);
+              }
+              inThinkingBlock = false;
+              updateMessage(assistantMessageId, {
+                metadata: {
+                  isThinkingStreaming: false,
+                  thinkingCompletedAt: new Date().toISOString(),
+                },
+              });
+              contentBuffer = contentBuffer.slice(closeIdx + '</thinking>'.length);
+              continue;
+            }
+
+            // No complete marker found. If final, emit everything; otherwise
+            // hold back enough bytes to catch a split marker on the next call.
+            if (isFinal) {
+              if (contentBuffer) {
+                if (inThinkingBlock) {
+                  appendToThinking(assistantMessageId, contentBuffer);
+                } else {
+                  fullAssistantContent += contentBuffer;
+                  appendToMessage(assistantMessageId, contentBuffer);
+                }
+                contentBuffer = '';
+              }
+            } else if (contentBuffer.length > HOLD_BACK) {
+              const safe = contentBuffer.slice(0, contentBuffer.length - HOLD_BACK);
+              if (inThinkingBlock) {
+                appendToThinking(assistantMessageId, safe);
+              } else {
+                fullAssistantContent += safe;
+                appendToMessage(assistantMessageId, safe);
+              }
+              contentBuffer = contentBuffer.slice(contentBuffer.length - HOLD_BACK);
+            }
+            break;
+          }
+        };
 
         while (true) {
           const { done, value } = await reader.read();
@@ -345,6 +475,8 @@ export function useChatStream(): UseChatStreamReturn {
 
             const data = trimmedLine.slice(6);
             if (data === '[DONE]') {
+              // Flush any remaining buffered content before closing.
+              flushContentBuffer(true);
               // Close any dangling thinking block
               if (inThinkingBlock) {
                 updateMessage(assistantMessageId, {
@@ -359,7 +491,7 @@ export function useChatStream(): UseChatStreamReturn {
               finishRunningTools();
               setSearching(assistantMessageId, false);
               setExecutingCode(assistantMessageId, false);
-              if (fullAssistantContent) {
+              if (fullAssistantContent && !isTemporaryConversation) {
                 saveMessageToDb(
                   conversationId,
                   {
@@ -390,30 +522,9 @@ export function useChatStream(): UseChatStreamReturn {
               }
 
               if (chunk !== null) {
-                if (chunk === '<thinking>') {
-                  // Server signals the start of an extended thinking block
-                  inThinkingBlock = true;
-                  updateMessage(assistantMessageId, {
-                    metadata: {
-                      isThinkingStreaming: true,
-                      thinkingStartedAt: new Date().toISOString(),
-                    },
-                  });
-                } else if (chunk === '</thinking>') {
-                  // Server signals the end of an extended thinking block
-                  inThinkingBlock = false;
-                  updateMessage(assistantMessageId, {
-                    metadata: {
-                      isThinkingStreaming: false,
-                      thinkingCompletedAt: new Date().toISOString(),
-                    },
-                  });
-                } else if (inThinkingBlock) {
-                  appendToThinking(assistantMessageId, chunk);
-                } else {
-                  fullAssistantContent += chunk;
-                  appendToMessage(assistantMessageId, chunk);
-                }
+                // Accumulate into content buffer and scan for split thinking markers.
+                contentBuffer += chunk;
+                flushContentBuffer(false);
               }
 
               // Handle server-managed tool status indicators
@@ -493,9 +604,11 @@ export function useChatStream(): UseChatStreamReturn {
           }
         }
 
+        // Flush any remaining buffered content (in case [DONE] wasn't received)
+        flushContentBuffer(true);
         // Save the complete assistant message to database (in case [DONE] wasn't received)
         finishRunningTools();
-        if (fullAssistantContent) {
+        if (fullAssistantContent && !isTemporaryConversation) {
           saveMessageToDb(
             conversationId,
             {
@@ -549,6 +662,7 @@ export function useChatStream(): UseChatStreamReturn {
       stopStreaming,
       setLoading,
       setError,
+      getToken,
     ],
   );
 
@@ -566,22 +680,4 @@ export function useChatStream(): UseChatStreamReturn {
     stopGeneration,
     isStreaming,
   };
-}
-
-/**
- * Get the current auth token from Supabase
- */
-async function getAuthToken(): Promise<string> {
-  // For client-side, we need to get the token from the Supabase client
-  const { getSupabaseClient } = await import('@/services/supabase');
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-
-  return session.access_token;
 }

@@ -12,56 +12,67 @@ const OPTION_A = { label: 'Builder-focused', content: 'Build AGI quickly with Ru
 const OPTION_B = { label: 'Vision-forward', content: 'Think big: multi-surface, agent-native.' };
 
 describe('ComparisonResponse', () => {
-  it('renders both options with labels', () => {
+  it('renders both tab buttons with labels', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
-    expect(screen.getByText('Builder-focused')).toBeInTheDocument();
-    expect(screen.getByText('Vision-forward')).toBeInTheDocument();
-    expect(screen.getByText(OPTION_A.content)).toBeInTheDocument();
-    expect(screen.getByText(OPTION_B.content)).toBeInTheDocument();
+    expect(screen.getByTestId('comparison-tab-a')).toBeInTheDocument();
+    expect(screen.getByTestId('comparison-tab-b')).toBeInTheDocument();
+    expect(screen.getByTestId('comparison-tab-a').textContent).toContain('Builder-focused');
+    expect(screen.getByTestId('comparison-tab-b').textContent).toContain('Vision-forward');
   });
 
-  it('renders Choose A and Choose B CTA buttons when no choice made', () => {
+  it('shows option A content by default', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    expect(screen.getByText(OPTION_A.content)).toBeInTheDocument();
+    expect(screen.queryByText(OPTION_B.content)).not.toBeInTheDocument();
+  });
+
+  it('switches to option B content when B tab is clicked', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    fireEvent.click(screen.getByTestId('comparison-tab-b'));
+    expect(screen.getByText(OPTION_B.content)).toBeInTheDocument();
+    expect(screen.queryByText(OPTION_A.content)).not.toBeInTheDocument();
+  });
+
+  it('renders a Choose CTA button for the active tab when no choice made', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
     expect(screen.getByRole('button', { name: /choose option a/i })).toBeInTheDocument();
+  });
+
+  it('shows Choose B CTA when tab B is active', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    fireEvent.click(screen.getByTestId('comparison-tab-b'));
     expect(screen.getByRole('button', { name: /choose option b/i })).toBeInTheDocument();
   });
 
-  it('calls onChoose with "a" when Choose A is clicked', () => {
+  it('calls onChoose with "a" when Choose A is clicked on tab A', () => {
     const onChoose = vi.fn();
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} onChoose={onChoose} />);
     fireEvent.click(screen.getByRole('button', { name: /choose option a/i }));
     expect(onChoose).toHaveBeenCalledWith('a');
   });
 
-  it('calls onChoose with "b" when Choose B is clicked', () => {
+  it('calls onChoose with "b" when Choose B is clicked on tab B', () => {
     const onChoose = vi.fn();
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} onChoose={onChoose} />);
+    fireEvent.click(screen.getByTestId('comparison-tab-b'));
     fireEvent.click(screen.getByRole('button', { name: /choose option b/i }));
     expect(onChoose).toHaveBeenCalledWith('b');
   });
 
-  it('hides CTA buttons once a choice is made', () => {
+  it('hides Choose CTA once a choice is made', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="a" />);
-    expect(screen.queryByRole('button', { name: /choose option a/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /choose option b/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /choose option/i })).not.toBeInTheDocument();
   });
 
-  it('shows check icon on the chosen option when choice=a', () => {
-    const { container } = render(
-      <ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="a" />,
-    );
-    const optionA = container.querySelector('[data-testid="comparison-option-a"]');
-    expect(optionA).not.toBeNull();
-    // Check icon has aria-label "Option A chosen"
+  it('shows check icon on chosen tab button when choice=a', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="a" />);
     expect(screen.getByLabelText('Option A chosen')).toBeInTheDocument();
   });
 
-  it('dims unchosen option when choice=b', () => {
-    const { container } = render(
-      <ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="b" />,
-    );
-    const optionA = container.querySelector('[data-testid="comparison-option-a"]');
-    expect(optionA?.className).toMatch(/opacity-50/);
+  it('shows check icon on chosen tab button when choice=b', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="b" />);
+    // Tab defaults to the chosen option, so B is active and check is shown
+    expect(screen.getByLabelText('Option B chosen')).toBeInTheDocument();
   });
 
   it('shows confirmation text after choice', () => {
@@ -69,24 +80,26 @@ describe('ComparisonResponse', () => {
     expect(screen.getByText(/you chose option a/i)).toBeInTheDocument();
   });
 
-  // Structural snapshots: verify exact rendered output for regression detection
-  it('structural snapshot: unchosen state renders exactly two CTA buttons', () => {
-    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
-    const buttons = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'));
-    expect(buttons).toEqual(['Choose option A', 'Choose option B']);
-  });
-
-  it('structural snapshot: choice=a state has no buttons, check mark, and confirmation text', () => {
-    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="a" />);
-    expect(screen.queryAllByRole('button').length).toBe(0);
-    expect(screen.getByLabelText('Option A chosen')).toBeInTheDocument();
-    expect(screen.getByText(/you chose option a/i)).toBeInTheDocument();
-  });
-
-  it('structural snapshot: choice=b state shows correct confirmation message', () => {
+  it('shows confirmation text for choice=b', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} choice="b" />);
     expect(screen.getByText(/you chose option b/i).textContent).toBe(
-      'You chose option B. The other response has been dimmed.',
+      'You chose option B. Tap the other tab to compare.',
     );
+  });
+
+  it('tab A is active by default (aria-selected=true)', () => {
+    render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    expect(screen.getByTestId('comparison-tab-a').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('comparison-tab-b').getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('content area testid updates when tab switches', () => {
+    const { container } = render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    expect(container.querySelector('[data-testid="comparison-option-a"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="comparison-option-b"]')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('comparison-tab-b'));
+    expect(container.querySelector('[data-testid="comparison-option-b"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="comparison-option-a"]')).toBeNull();
   });
 });

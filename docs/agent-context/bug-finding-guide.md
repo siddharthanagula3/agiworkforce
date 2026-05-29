@@ -20,7 +20,7 @@ Last updated: 2026-05-20
 - Security randomness: `rg "Math\\.random|Date\\.now\\(\\).*id|nonce|token" apps packages services`
 - Provider/model drift: `rg "gpt-|claude-|gemini-|sonnet|opus|haiku" apps packages services crates`
 - Privacy boundary drift: `rg "privacy_mode|PrivacyMode|BYOK|Managed|Local" apps packages crates services`
-- Supabase service role: `rg "SERVICE_ROLE|service_role|getServiceClient|createClient" apps services packages supabase`
+- Cloud database secret: `rg "SERVICE_ROLE|service_role|getServiceClient|createClient" apps services packages apps/web/db/neon`
 - Unsafe rendering: `rg "dangerouslySetInnerHTML|srcDoc|Blob\\(|text/html|iframe" apps packages`
 - Tool execution: `rg "Bash|Read|Write|Edit|apply_patch|shell|command" apps/cli apps/desktop crates packages`
 - Generated files/artifacts: `rg "Artifact|GeneratedFile|ComputeSession|download|preview" apps packages crates`

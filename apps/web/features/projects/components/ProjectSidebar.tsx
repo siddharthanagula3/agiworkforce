@@ -40,9 +40,9 @@ function ProjectCard({ project, isActive, onSelect, onOpenSettings }: ProjectCar
       {/* Color dot + folder icon */}
       <div className="mt-0.5 shrink-0">
         {isActive ? (
-          <FolderOpen className="h-4 w-4" style={{ color: project.color }} />
+          <FolderOpen className="h-4 w-4" style={{ color: project.color ?? '#6366f1' }} />
         ) : (
-          <Folder className="h-4 w-4" style={{ color: project.color }} />
+          <Folder className="h-4 w-4" style={{ color: project.color ?? '#6366f1' }} />
         )}
       </div>
 
@@ -86,7 +86,7 @@ export function ProjectSidebar() {
     activeProjectId,
     createProject,
     updateProject,
-    deleteProject,
+    removeProject: deleteProject,
     setActiveProject,
   } = useProjectStore();
 

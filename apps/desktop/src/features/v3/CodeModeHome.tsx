@@ -4,51 +4,30 @@ import { cn } from '../../lib/utils';
 
 type StatRange = 'All' | '30d' | '7d';
 
-const STATS_ALL = {
-  sessions: '612',
-  messages: '697,587',
-  tokens: '134.6M',
-  activeDays: '70',
-  currentStreak: '0d',
-  longestStreak: '18d',
-  peakHour: '2 AM',
-  favorite: 'Opus 4.7',
+// Honest empty state. This screen is not yet wired to a real session-stats source;
+// it previously shipped fabricated numbers + a Math.random heatmap. Until the stats
+// backend is wired, every range renders an explicit "no data" placeholder.
+const EMPTY_STATS = {
+  sessions: '—',
+  messages: '—',
+  tokens: '—',
+  activeDays: '—',
+  currentStreak: '—',
+  longestStreak: '—',
+  peakHour: '—',
+  favorite: '—',
 };
 
-const STATS_30D = {
-  sessions: '48',
-  messages: '21,340',
-  tokens: '12.1M',
-  activeDays: '28',
-  currentStreak: '0d',
-  longestStreak: '9d',
-  peakHour: '11 PM',
-  favorite: 'Sonnet 4.6',
-};
-
-const STATS_7D = {
-  sessions: '8',
-  messages: '3,421',
-  tokens: '2.4M',
-  activeDays: '5',
-  currentStreak: '0d',
-  longestStreak: '3d',
-  peakHour: '1 AM',
-  favorite: 'Opus 4.7',
-};
-
-const STATS_MAP: Record<StatRange, typeof STATS_ALL> = {
-  All: STATS_ALL,
-  '30d': STATS_30D,
-  '7d': STATS_7D,
+const STATS_MAP: Record<StatRange, typeof EMPTY_STATS> = {
+  All: EMPTY_STATS,
+  '30d': EMPTY_STATS,
+  '7d': EMPTY_STATS,
 };
 
 function Heatmap() {
+  // No activity data source yet — render an empty grid rather than random activity.
   const grid = useMemo(
-    () =>
-      Array.from({ length: 16 }, () =>
-        Array.from({ length: 7 }, () => (Math.random() < 0.45 ? Math.floor(Math.random() * 4) : 0)),
-      ),
+    () => Array.from({ length: 16 }, () => Array.from({ length: 7 }, () => 0)),
     [],
   );
 
@@ -56,17 +35,8 @@ function Heatmap() {
     <div className="flex gap-1">
       {grid.map((col, ci) => (
         <div key={ci} className="flex flex-col gap-1">
-          {col.map((v, ri) => (
-            <div
-              key={ri}
-              className={cn(
-                'h-2.5 w-2.5 rounded-sm',
-                v === 0 && 'bg-white/5',
-                v === 1 && 'bg-teal-600/40',
-                v === 2 && 'bg-teal-500/60',
-                v === 3 && 'bg-teal-400/80',
-              )}
-            />
+          {col.map((_v, ri) => (
+            <div key={ri} className="h-2.5 w-2.5 rounded-sm bg-white/5" />
           ))}
         </div>
       ))}
@@ -152,44 +122,12 @@ export function CodeModeHome() {
 
                 {/* Heatmap */}
                 <Heatmap />
-
-                {/* Fun fact */}
-                <div className="text-xs text-white/30 italic">
-                  You&apos;ve used <strong className="text-white/50">~6,119×</strong> more tokens
-                  than <em>The Little Prince</em>.
-                </div>
               </>
             )}
 
             {statsTab === 'Models' && (
-              <div className="space-y-2 py-2 text-xs text-white/40">
-                <div className="flex justify-between">
-                  <span>Opus 4.7</span>
-                  <div className="flex items-center gap-3">
-                    <span>62%</span>
-                    <div className="h-1.5 w-24 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full w-[62%] rounded-full bg-teal-500" />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span>Sonnet 4.6</span>
-                  <div className="flex items-center gap-3">
-                    <span>28%</span>
-                    <div className="h-1.5 w-24 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full w-[28%] rounded-full bg-teal-500/60" />
-                    </div>
-                  </div>
-                </div>
-                <div className="flex justify-between">
-                  <span>Other</span>
-                  <div className="flex items-center gap-3">
-                    <span>10%</span>
-                    <div className="h-1.5 w-24 rounded-full bg-white/10 overflow-hidden">
-                      <div className="h-full w-[10%] rounded-full bg-teal-500/30" />
-                    </div>
-                  </div>
-                </div>
+              <div className="py-4 text-center text-xs text-white/35">
+                No model usage recorded yet.
               </div>
             )}
           </div>

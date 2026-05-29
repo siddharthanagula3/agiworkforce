@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { Avatar } from '@/components/ui/avatar';
 import { StreamingIndicator } from './StreamingIndicator';
-import { ThinkingLine } from './ThinkingLine';
+import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
 import { InlineToolCall } from './InlineToolCall';
@@ -71,8 +71,6 @@ interface MessageBubbleProps {
   onRetryMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onReaction?: (messageId: string, reaction: ReactionType) => void;
-  /** Called to open the shared thinking bottom sheet with this message's reasoning */
-  onOpenThinking?: (content: string, duration?: number) => void;
 }
 
 /**
@@ -90,7 +88,6 @@ export const MessageBubble = memo(function MessageBubble({
   onRetryMessage,
   onEditMessage,
   onReaction,
-  onOpenThinking,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -155,12 +152,6 @@ export const MessageBubble = memo(function MessageBubble({
     },
     [isAssistant, hapticsEnabled, message.id, onReaction],
   );
-
-  const handleOpenThinkingSheet = useCallback(() => {
-    if (message.reasoning && onOpenThinking) {
-      onOpenThinking(message.reasoning, message.metadata?.thinkingDuration as number | undefined);
-    }
-  }, [message.reasoning, message.metadata?.thinkingDuration, onOpenThinking]);
 
   const handleOpenEditModal = useCallback(() => {
     setEditText(message.content);
@@ -338,12 +329,12 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             )}
 
-            {/* Thinking line (before main content, assistant only) */}
+            {/* Inline thinking chip (before main content, assistant only) */}
             {isAssistant && message.reasoning ? (
-              <ThinkingLine
+              <ThinkingChip
+                thinkingText={message.reasoning}
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
-                onPress={handleOpenThinkingSheet}
               />
             ) : null}
 

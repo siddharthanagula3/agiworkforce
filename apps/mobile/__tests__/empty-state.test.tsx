@@ -60,6 +60,7 @@ const mockStorageSet = jest.fn();
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
+  rehydrateWhenMmkvReady: jest.fn((store) => store.persist.rehydrate()),
   storage: {
     getString: (...args: unknown[]) => mockStorageGetString(...args),
     set: (...args: unknown[]) => mockStorageSet(...args),
@@ -71,12 +72,13 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('react-native-safe-area-context', () => {

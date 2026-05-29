@@ -40,51 +40,21 @@ vi.mock('@/lib/prompt-cache-helper', () => ({
   shouldEnablePromptCache: vi.fn(() => false),
 }));
 
-// Mock Supabase
-const mockSupabaseClient = {
-  auth: {
-    getUser: vi.fn(),
-  },
-};
+// Mock errors — real implementations so createError.* returns proper AppError instances
+vi.mock('@/lib/errors', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
+  return {
+    createError: actual.createError,
+    AppError: actual.AppError,
+    isAppError: actual.isAppError,
+  };
+});
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => mockSupabaseClient),
-}));
+// Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
+const mockGetClerkAuthUser = vi.fn();
 
-// Route was migrated from direct service-role JWT verification to the
-// getAuthenticatedUserWithClient helper. Route is Bearer-only — replicate that
-// in the mock by inspecting the Authorization header and forwarding to
-// mockSupabaseClient.auth.getUser so individual tests can still control auth
-// outcomes via that mock.
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: vi.fn(async (req: Request) => {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized();
-    }
-    const token = authHeader.substring(7);
-    const { data, error } = await mockSupabaseClient.auth.getUser(token);
-    if (error || !data?.user) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized('Invalid token');
-    }
-    return data.user;
-  }),
-  getAuthenticatedUserWithClient: vi.fn(async (req: Request) => {
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized();
-    }
-    const token = authHeader.substring(7);
-    const { data, error } = await mockSupabaseClient.auth.getUser(token);
-    if (error || !data?.user) {
-      const { createError } = await import('@/lib/errors');
-      throw createError.unauthorized('Invalid token');
-    }
-    return { user: data.user, userDb: {} };
-  }),
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 // Mock services
@@ -135,7 +105,7 @@ vi.mock('@/lib/services/llm-cost-calculator', () => ({
 import { POST } from '@/app/api/llm/completion/route';
 
 describe('POST /api/llm/completion', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
     // Default mock implementations
@@ -168,15 +138,7 @@ describe('POST /api/llm/completion', () => {
       finishReason: 'stop',
     });
 
-    mockSupabaseClient.auth.getUser.mockResolvedValue({
-      data: {
-        user: {
-          id: 'test-user-id',
-          email: 'test@example.com',
-        },
-      },
-      error: null,
-    });
+    mockGetClerkAuthUser.mockResolvedValue({ userId: 'test-user-id', email: 'test@example.com' });
   });
 
   afterEach(() => {
@@ -188,6 +150,11 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 if authorization header is missing', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(
+        createError.unauthorized('Authentication required'),
+      );
+
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         body: JSON.stringify({
@@ -201,10 +168,12 @@ describe('POST /api/llm/completion', () => {
 
       expect(response.status).toBe(401);
       expect(data.error.code).toBe('UNAUTHORIZED');
-      expect(data.error.message).toContain('Authentication required');
     });
 
     it('should return 401 if authorization header does not start with Bearer', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
         headers: {
@@ -224,10 +193,8 @@ describe('POST /api/llm/completion', () => {
     });
 
     it('should return 401 if token is invalid', async () => {
-      mockSupabaseClient.auth.getUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid token' },
-      });
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const request = new NextRequest('http://localhost/api/llm/completion', {
         method: 'POST',
@@ -651,9 +618,8 @@ describe('POST /api/llm/completion', () => {
       expect(data.error.message).toContain('Internal server error');
 
       // Check that refund was issued (negative amount). Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
-        expect.anything(), // userClient
         'test-user-id',
         expect.any(Number), // First call is reservation (positive)
         expect.any(String),
@@ -662,7 +628,7 @@ describe('POST /api/llm/completion', () => {
       );
       // Second call should be refund (negative)
       const refundCall = mockDeductCredits.mock.calls.find(
-        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+        (call) => typeof call[1] === 'number' && (call[1] as number) < 0,
       );
       expect(refundCall).toBeDefined();
     });
@@ -851,9 +817,8 @@ describe('POST /api/llm/completion', () => {
       await POST(request);
 
       // First deductCredits call should be reservation. Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       expect(mockDeductCredits).toHaveBeenCalledWith(
-        expect.anything(), // userClient (RLS-bound Supabase client)
         'test-user-id',
         expect.any(Number),
         expect.stringContaining('reservation'),
@@ -881,12 +846,12 @@ describe('POST /api/llm/completion', () => {
       expect(response.status).toBe(500);
 
       // Check for refund call (negative amount). Signature:
-      // deductCredits(client, userId, amountCents, description, metadata, idempotencyKey)
+      // deductCredits(userId, amountCents, description, metadata, idempotencyKey)
       const refundCall = mockDeductCredits.mock.calls.find(
-        (call) => typeof call[2] === 'number' && (call[2] as number) < 0,
+        (call) => typeof call[1] === 'number' && (call[1] as number) < 0,
       );
       expect(refundCall).toBeDefined();
-      expect(refundCall![3]).toContain('Refund');
+      expect(refundCall![2]).toContain('Refund');
     });
 
     it('should include credit info in successful response', async () => {

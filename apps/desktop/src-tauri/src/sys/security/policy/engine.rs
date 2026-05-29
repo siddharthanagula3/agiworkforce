@@ -552,7 +552,6 @@ impl PolicyEngine {
         let safe_domains = [
             "api.agiworkforce.com",
             "agiworkforce.com",
-            "supabase.co",
             "github.com",
             "api.github.com",
             "localhost",

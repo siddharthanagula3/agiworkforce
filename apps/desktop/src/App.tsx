@@ -55,7 +55,7 @@ import { ErrorBoundary } from './features/error-handling';
 import { TooltipProvider } from './components/ui/Tooltip';
 import { getModelMetadata, getProviderDefaultModel } from './constants/llm';
 import { errorReportingService } from './services/errorReporting';
-import { initializeWebAuth, supabaseAuth } from './services/supabaseAuth';
+import { initializeWebAuth, cloudAccountAuth } from './services/cloudAccountAuth';
 import {
   useAuthStore,
   useAccountStore,
@@ -225,8 +225,13 @@ const DesktopShell = () => {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const isAuthLoading = useAuthStore((state) => state.isLoading);
   const sessionValidated = useAuthStore((state) => state.sessionValidated);
+  const accessToken = useAuthStore((state) => state.accessToken);
+  const appMode = useAppModeStore((s) => s.mode);
+  const isCloudMode = appMode === 'cloud';
+  const hasCloudSession = isAuthenticated && !!accessToken;
 
-  // Hard 8 s boot timeout: if sessionValidated is still false (e.g. Supabase
+  // Hard 8 s boot timeout: if sessionValidated is still false (for example,
+  // cloud auth warm-up stalls), move to a recoverable state.
   // unreachable and the auth-state listener never fires), force it true so
   // the skeleton never hangs indefinitely. Uses setSessionValidated so that
   // the clearAuth path already ran — this is a last-resort guard only.
@@ -248,12 +253,14 @@ const DesktopShell = () => {
 
   // Track when subscription fetch fails so we can show the degraded-state banner
   useEffect(() => {
-    if (subscriptionFetchStatus === 'failed') {
+    if (!isCloudMode) {
+      setSubscriptionFetchFailed(false);
+    } else if (subscriptionFetchStatus === 'failed') {
       setSubscriptionFetchFailed(true);
     } else if (subscriptionFetchStatus === 'succeeded') {
       setSubscriptionFetchFailed(false);
     }
-  }, [subscriptionFetchStatus]);
+  }, [isCloudMode, subscriptionFetchStatus]);
 
   const clearHistory = useUnifiedChatStore((store) => store.clearHistory);
   const ensureActiveConversation = useUnifiedChatStore((store) => store.ensureActiveConversation);
@@ -495,32 +502,26 @@ const DesktopShell = () => {
         });
         if (disposed) return;
 
-        // Sync access token to keyring if user is already authenticated
+        // Sync managed-cloud access token to keyring if user is already authenticated.
         if (isTauri) {
           await runStartupStep(
             'Managed cloud credential sync',
             async () => {
-              // Forward Supabase credentials to Rust only in cloud mode.
-              // Local-mode users have no use for the Supabase anon key in the
-              // Rust process — forwarding it unconditionally violates least-
-              // privilege and lets local-mode code accidentally reach Supabase
-              // (e.g. submit_feedback).
-              if (useAppModeStore.getState().mode === 'cloud') {
-                await invoke('set_supabase_credentials', {
-                  url: import.meta.env['VITE_SUPABASE_URL'] ?? '',
-                  anonKey: import.meta.env['VITE_SUPABASE_ANON_KEY'] ?? '',
-                }).catch((e) => console.warn('[App] set_supabase_credentials failed:', e));
-              }
               // Ensure Rust uses the same backend base URL as the UI (critical in local dev).
               await invoke('account_store_api_base_url', { apiBaseUrl: API_BASE_URL });
-              if (disposed) return;
+
+              // Forward cloud credentials only in Managed Cloud mode. Local and
+              // BYOK chat must not wait on or hydrate managed auth.
+              if (useAppModeStore.getState().mode !== 'cloud') {
+                return;
+              }
 
               // Wait for auth state to be ready before accessing session data
               // This prevents race conditions where we read stale/empty state
               await waitForAuthReady();
               if (disposed) return;
 
-              const authState = supabaseAuth.getState();
+              const authState = cloudAccountAuth.getState();
               if (!authState.session?.access_token || disposed) {
                 return;
               }
@@ -540,7 +541,7 @@ const DesktopShell = () => {
               // Start surface heartbeat — fires immediately then every 60 s
               if (!disposed) {
                 const { startDesktopHeartbeat } = await import('./services/heartbeat');
-                const userId = supabaseAuth.getState().user?.id;
+                const userId = cloudAccountAuth.getState().user?.id;
                 if (userId) {
                   const stopHeartbeat = startDesktopHeartbeat(userId);
                   registerCleanup(stopHeartbeat);
@@ -582,7 +583,9 @@ const DesktopShell = () => {
     async function initModels() {
       try {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
-        await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
+        if (useAppModeStore.getState().mode === 'cloud') {
+          await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
+        }
 
         const { useChatModelStore } = await import('@agiworkforce/unified-chat');
         interface RustModelInfo {
@@ -787,7 +790,7 @@ const DesktopShell = () => {
       } else if (detail.type === 'keyboard-shortcuts') {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
-        supabaseAuth.signOut();
+        cloudAccountAuth.signOut();
       } else if (detail.type === 'open-plans-modal') {
         setPlansModalOpen(true);
       }
@@ -1024,7 +1027,11 @@ const DesktopShell = () => {
       void (async () => {
         try {
           const { selectedModel, selectedProvider, selectModel } = useModelStore.getState();
-          if (model && (selectedModel !== model || selectedProvider !== 'managed_cloud')) {
+          if (
+            useAppModeStore.getState().mode === 'cloud' &&
+            model &&
+            (selectedModel !== model || selectedProvider !== 'managed_cloud')
+          ) {
             await selectModel(model, 'managed_cloud');
           }
 
@@ -1243,10 +1250,10 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (isAuthLoading || !sessionValidated) {
+  if (isCloudMode && (isAuthLoading || !sessionValidated)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
-        {/* Skeleton layout — shown while Supabase session is being validated */}
+        {/* Skeleton layout — shown while the cloud session is being validated */}
         <div className="flex w-full max-w-sm flex-col items-center gap-4 px-6">
           <div className="h-10 w-10 animate-pulse rounded-xl bg-muted" />
           <div className="h-4 w-32 animate-pulse rounded bg-muted" />
@@ -1256,7 +1263,7 @@ const DesktopShell = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (isCloudMode && !hasCloudSession) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <AuthPage />
@@ -1308,7 +1315,7 @@ const DesktopShell = () => {
           <Suspense fallback={null}>
             <OfflineIndicator position="top" />
           </Suspense>
-          {subscriptionFetchFailed && (
+          {isCloudMode && subscriptionFetchFailed && (
             <div className="bg-amber-500/15 border-b border-amber-500/40 px-4 py-2 flex items-center justify-between text-sm text-amber-300">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
@@ -1501,24 +1508,44 @@ const App = () => {
         await waitForHydration();
         if (cancelled) return;
 
-        if (supabaseAuth.isAuthenticated()) {
+        if (cloudAccountAuth.isAuthenticated()) {
           console.debug('[App] Store hydrated, forcing account sync with backend...');
           await useAccountStore.getState().syncWithBackend();
-        } else if (isTauri && !useAuthStore.getState().isAuthenticated) {
-          // W2a-PRO-00A: local-only users have no Supabase session — synthesize a
+        } else if (
+          isTauri &&
+          useAppModeStore.getState().mode === 'local' &&
+          !useAuthStore.getState().accessToken
+        ) {
+          // W2a-PRO-00A: local-only users have no cloud session — synthesize a
           // stable user.id from the machine install ID so downstream chat stores
           // can own conversations without crashing on a null user.
+          const applyLocalAccount = (id: string) => {
+            useAuthStore.getState().setAccount({
+              id,
+              email: '',
+              displayName: 'Local User',
+              plan: 'local-only',
+              planDisplayName: 'Local Mode',
+              subscriptionStatus: 'none',
+              subscriptionFetchStatus: 'succeeded',
+              currentPeriodEnd: null,
+              stripeCustomerId: null,
+              featureFlags: {},
+              credits: null,
+              accessToken: null,
+              refreshToken: null,
+              lastSyncedAt: Date.now(),
+            });
+          };
           try {
             const localId = await invoke<string>('get_local_user_id');
-            if (!cancelled && localId && !useAuthStore.getState().isAuthenticated) {
-              useAuthStore.getState().setUser({ id: localId, email: '', name: 'Local User' });
+            if (!cancelled && localId && !useAuthStore.getState().accessToken) {
+              applyLocalAccount(localId);
             }
           } catch (e) {
             console.warn('[App] get_local_user_id failed, using fallback id:', e);
-            if (!cancelled && !useAuthStore.getState().isAuthenticated) {
-              useAuthStore
-                .getState()
-                .setUser({ id: 'local-fallback', email: '', name: 'Local User' });
+            if (!cancelled && !useAuthStore.getState().accessToken) {
+              applyLocalAccount('local-fallback');
             }
           }
         }

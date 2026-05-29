@@ -14,7 +14,6 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { queryKeys } from '@shared/stores/query-client';
-import { supabase } from '@shared/lib/supabase-client';
 import settingsService, {
   type UserProfile,
   type UserSettings,
@@ -22,7 +21,7 @@ import settingsService, {
 } from '../services/user-preferences';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -130,7 +129,7 @@ export function useUserSettings(): UseQueryResult<UserSettings, Error> {
           max_concurrent_jobs: 10,
           default_ai_provider: 'openai',
           // MODEL-IDS-HARDCODED fix per UNIFIED_LAUNCH_PLAN.md §1: read from models.json catalog
-          default_ai_model: getProviderDefaultModel('openai') ?? 'gpt-5.4',
+          default_ai_model: requireProviderDefaultModel('openai'),
           prefer_streaming: true,
           ai_temperature: 0.7,
           ai_max_tokens: 4000,
@@ -565,53 +564,9 @@ export function useOrganizationSettings(
 ): UseQueryResult<OrganizationSettings | null, Error> {
   return useQuery<OrganizationSettings | null, Error>({
     queryKey: ['settings', 'organization', organizationId ?? 'current'],
+    // TODO: Add /api/settings/organization route for organization settings.
     queryFn: async (): Promise<OrganizationSettings | null> => {
-      // Try to get organization from database
-
-      let query = (
-        supabase.from('organizations' as never) as unknown as ReturnType<typeof supabase.from>
-      ).select('*');
-
-      if (organizationId) {
-        query = query.eq('id', organizationId);
-      }
-
-      const { data, error } = await query.maybeSingle();
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useOrganizationSettings] Organizations table does not exist');
-          return null;
-        }
-        throw error;
-      }
-
-      if (!data) return null;
-
-      const row = data as Record<string, unknown>;
-      return {
-        id: row['id'] as string,
-        name: row['name'] as string,
-        slug: row['slug'] as string,
-        logoUrl: (row['logo_url'] as string | null) ?? null,
-        description: (row['description'] as string | null) ?? null,
-        website: (row['website'] as string | null) ?? null,
-        billingEmail: (row['billing_email'] as string | null) ?? null,
-        plan: (row['plan'] as OrganizationSettings['plan']) || 'free',
-        memberCount: (row['member_count'] as number) || 1,
-        maxMembers: (row['max_members'] as number) || 5,
-        createdAt: row['created_at'] as string,
-        updatedAt: row['updated_at'] as string,
-        settings: (row['settings'] as OrganizationSettings['settings']) || {
-          allowMemberInvites: true,
-          requireEmailVerification: true,
-          defaultRole: 'member',
-          allowedDomains: [],
-          enforceSSO: false,
-          auditLogRetention: 90,
-          dataRetention: 365,
-        },
-      };
+      return null;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -638,21 +593,8 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     Error,
     { organizationId: string; updates: Partial<OrganizationSettings> }
   >({
-    mutationFn: async ({ organizationId, updates }) => {
-      const { error } = await (
-        supabase.from('organizations' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({
-          name: updates.name,
-          description: updates.description,
-          website: updates.website,
-          billing_email: updates.billingEmail,
-          settings: updates.settings,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', organizationId);
-
-      if (error) throw error;
+    // TODO: Add PATCH /api/settings/organization route.
+    mutationFn: async ({ updates }) => {
       return updates;
     },
     onSuccess: (_, { organizationId }) => {
@@ -701,64 +643,9 @@ export function useTeamMembers(
 ): UseQueryResult<TeamMember[], Error> {
   return useQuery<TeamMember[], Error>({
     queryKey: ['settings', 'team', organizationId ?? ''],
+    // TODO: Add /api/settings/team route for team member management.
     queryFn: async (): Promise<TeamMember[]> => {
-      if (!organizationId) return [];
-
-      const { data, error } = await (
-        supabase.from('organization_members' as never) as unknown as ReturnType<
-          typeof supabase.from
-        >
-      )
-        .select(
-          `
-          id,
-          user_id,
-          organization_id,
-          role,
-          status,
-          invited_at,
-          joined_at,
-          last_active_at,
-          permissions,
-          users:user_id (
-            email,
-            display_name,
-            avatar_url
-          )
-        `,
-        )
-        .eq('organization_id', organizationId)
-        .order('joined_at', { ascending: false });
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useTeamMembers] Organization members table does not exist');
-          return [];
-        }
-        throw error;
-      }
-
-      return ((data || []) as Array<Record<string, unknown>>).map((member) => {
-        const user = member['users'] as {
-          email: string;
-          display_name: string;
-          avatar_url: string | null;
-        } | null;
-        return {
-          id: member['id'] as string,
-          userId: member['user_id'] as string,
-          organizationId: member['organization_id'] as string,
-          email: user?.email || '',
-          name: user?.display_name || '',
-          avatarUrl: user?.avatar_url || null,
-          role: (member['role'] as TeamMember['role']) || 'member',
-          status: (member['status'] as TeamMember['status']) || 'active',
-          invitedAt: member['invited_at'] as string,
-          joinedAt: member['joined_at'] as string,
-          lastActiveAt: member['last_active_at'] as string,
-          permissions: (member['permissions'] as string[]) || [],
-        };
-      });
+      return [];
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -786,39 +673,15 @@ export function useInviteTeamMember(): UseMutationResult<
     Error,
     { organizationId: string; email: string; role: TeamMember['role'] }
   >({
-    mutationFn: async ({ organizationId, email, role }) => {
-      const { data, error } = await (
-        supabase.from('organization_members' as never) as unknown as ReturnType<
-          typeof supabase.from
-        >
-      )
-        .insert({
-          organization_id: organizationId,
-          email,
-          role,
-          status: 'pending',
-          invited_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const row = data as Record<string, unknown>;
-      return {
-        id: row['id'] as string,
-        userId: row['user_id'] as string,
-        organizationId: row['organization_id'] as string,
-        email: email,
-        name: '',
-        avatarUrl: null,
-        role: row['role'] as TeamMember['role'],
-        status: 'pending' as const,
-        invitedAt: row['invited_at'] as string | null,
-        joinedAt: null,
-        lastActiveAt: null,
-        permissions: [],
-      };
+    // TODO: Add POST /api/settings/team/invite route.
+    mutationFn: async (_params: {
+      organizationId: string;
+      email: string;
+      role: TeamMember['role'];
+    }): Promise<TeamMember> => {
+      throw new Error(
+        'Team member invitations require a dedicated server route (pending implementation)',
+      );
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -846,16 +709,11 @@ export function useRemoveTeamMember(): UseMutationResult<
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<void, Error, { memberId: string; organizationId: string }>({
-    mutationFn: async ({ memberId }) => {
-      const { error } = await (
-        supabase.from('organization_members' as never) as unknown as ReturnType<
-          typeof supabase.from
-        >
-      )
-        .delete()
-        .eq('id', memberId);
-
-      if (error) throw error;
+    // TODO: Add DELETE /api/settings/team/[memberId] route.
+    mutationFn: async ({ memberId: _memberId }) => {
+      throw new Error(
+        'Team member removal requires a dedicated server route (pending implementation)',
+      );
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -887,16 +745,11 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
     Error,
     { memberId: string; organizationId: string; role: TeamMember['role'] }
   >({
-    mutationFn: async ({ memberId, role }) => {
-      const { error } = await (
-        supabase.from('organization_members' as never) as unknown as ReturnType<
-          typeof supabase.from
-        >
-      )
-        .update({ role })
-        .eq('id', memberId);
-
-      if (error) throw error;
+    // TODO: Add PATCH /api/settings/team/[memberId] route.
+    mutationFn: async ({ memberId: _memberId, role: _role }) => {
+      throw new Error(
+        'Team member role update requires a dedicated server route (pending implementation)',
+      );
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -950,38 +803,9 @@ export function useUserActivity(
 ): UseQueryResult<UserActivity[], Error> {
   return useQuery<UserActivity[], Error>({
     queryKey: ['settings', 'activity', userId ?? 'current', limit],
+    // TODO: Add /api/settings/activity route for user activity history.
     queryFn: async (): Promise<UserActivity[]> => {
-      const { data: authUser } = await supabase.auth.getUser();
-      const targetUserId = userId || authUser.user?.id;
-
-      if (!targetUserId) return [];
-
-      const { data, error } = await (
-        supabase.from('user_activity' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .eq('user_id', targetUserId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useUserActivity] User activity table does not exist');
-          return [];
-        }
-        throw error;
-      }
-
-      return ((data || []) as Array<Record<string, unknown>>).map((activity) => ({
-        id: activity['id'] as string,
-        userId: activity['user_id'] as string,
-        type: (activity['type'] as UserActivity['type']) || 'other',
-        description: (activity['description'] as string) || '',
-        ipAddress: activity['ip_address'] as string,
-        userAgent: activity['user_agent'] as string,
-        metadata: (activity['metadata'] as Record<string, unknown>) || {},
-        createdAt: activity['created_at'] as string,
-      }));
+      return [];
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -1042,6 +866,14 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
     limit = 100,
     offset = 0,
   } = filters || {};
+  // Query key includes filter params so React Query re-fetches when filters change.
+  void userId;
+  void action;
+  void resourceType;
+  void startDate;
+  void endDate;
+  void limit;
+  void offset;
 
   return useQuery<AuditLogEntry[], Error>({
     queryKey: [
@@ -1057,54 +889,9 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         offset,
       },
     ],
+    // TODO: Add /api/settings/audit-logs route for audit log access.
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      let query = (
-        supabase.from('audit_logs' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      if (action) {
-        query = query.eq('action', action);
-      }
-
-      if (resourceType) {
-        query = query.eq('resource_type', resourceType);
-      }
-
-      if (startDate) {
-        query = query.gte('created_at', startDate.toISOString());
-      }
-
-      if (endDate) {
-        query = query.lte('created_at', endDate.toISOString());
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useAuditLogs] Audit logs table does not exist');
-          return [];
-        }
-        throw error;
-      }
-
-      return ((data || []) as Array<Record<string, unknown>>).map((log) => ({
-        id: log['id'] as string,
-        userId: (log['user_id'] as string | null) ?? null,
-        action: log['action'] as string,
-        resourceType: (log['resource_type'] as string | null) ?? null,
-        resourceId: (log['resource_id'] as string | null) ?? null,
-        details: (log['details'] as Record<string, unknown>) || {},
-        ipAddress: (log['ip_address'] as string | null) ?? null,
-        createdAt: log['created_at'] as string,
-      }));
+      return [];
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -1122,26 +909,9 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
 export function useAuditLogActions(): UseQueryResult<string[], Error> {
   return useQuery<string[], Error>({
     queryKey: ['audit', 'actions'],
+    // TODO: Add /api/settings/audit-logs/actions route for filter dropdown.
     queryFn: async (): Promise<string[]> => {
-      const { data, error } = await (
-        supabase.from('audit_logs' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('action')
-        .limit(1000);
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          return [];
-        }
-        throw error;
-      }
-
-      const actions = new Set<string>();
-      ((data || []) as Array<{ action?: string }>).forEach((row) => {
-        if (row.action) actions.add(row.action);
-      });
-
-      return Array.from(actions).sort();
+      return [];
     },
     staleTime: 30 * 60 * 1000, // 30 minutes
     gcTime: 60 * 60 * 1000, // 1 hour

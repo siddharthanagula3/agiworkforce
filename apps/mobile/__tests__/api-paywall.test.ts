@@ -13,14 +13,11 @@
 // Mocks — must be declared before imports
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(),
-      refreshSession: jest.fn(),
-      signOut: jest.fn(),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(),
+  getAuthHeaders: jest.fn(),
+  refreshAuthSession: jest.fn(),
+  clearAuthSession: jest.fn(),
 }));
 
 jest.mock('react-native', () => ({
@@ -41,10 +38,17 @@ jest.mock('../lib/abortSignal', () => ({
 // ---------------------------------------------------------------------------
 
 import { api, ApiPaywallError } from '../services/api';
-import { supabase } from '../services/supabase';
+import {
+  clearAuthSession,
+  getAuthHeaders,
+  getAuthToken,
+  refreshAuthSession,
+} from '../services/authSession';
 
-const mockGetSession = supabase.auth.getSession as jest.Mock;
-const mockRefreshSession = supabase.auth.refreshSession as jest.Mock;
+const mockGetAuthToken = getAuthToken as jest.Mock;
+const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
+const mockRefreshAuthSession = refreshAuthSession as jest.Mock;
+const mockClearAuthSession = clearAuthSession as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -67,12 +71,10 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
-  mockRefreshSession.mockResolvedValue({
-    data: { session: null },
-    error: new Error('no-refresh'),
-  });
-  (supabase.auth.signOut as jest.Mock).mockResolvedValue({ error: null });
+  mockGetAuthToken.mockResolvedValue('test-token');
+  mockGetAuthHeaders.mockResolvedValue({ Authorization: 'Bearer test-token' });
+  mockRefreshAuthSession.mockResolvedValue(false);
+  mockClearAuthSession.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------

@@ -60,35 +60,53 @@ export function InlineCitation({ citation }: InlineCitationProps) {
 }
 
 /**
- * CitationFooter — shows all citations at the bottom of a message as a compact list.
+ * InlineSourceTags — renders citations as compact inline superscript-style tags
+ * positioned immediately after the response prose, matching Claude's visual pattern
+ * where source names appear as `[Source Name]` chips rather than a separate footer list.
  */
-export function CitationFooter({ citations }: { citations: Citation[] }) {
+export function InlineSourceTags({ citations }: { citations: Citation[] }) {
   if (citations.length === 0) return null;
 
   return (
-    <div className="mt-3 border-t border-border/30 pt-3">
-      <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        Sources
-      </p>
-      <div className="space-y-1">
-        {citations.map((c) => (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {citations.map((c) => {
+        let hostname = '';
+        try {
+          hostname = new URL(c.url).hostname.replace(/^www\./, '');
+        } catch {
+          hostname = c.title;
+        }
+        const label = c.title || hostname;
+
+        return (
           <a
             key={c.index}
             href={c.url}
             target="_blank"
             rel="noopener noreferrer"
+            title={c.snippet ?? c.title}
             className={cn(
-              'flex items-center gap-2 rounded-md px-2 py-1 text-xs transition-colors hover:bg-muted/40',
+              'inline-flex items-center gap-1 rounded px-1.5 py-0.5',
+              'border border-border/40 bg-muted/30 text-[11px] text-muted-foreground',
+              'transition-colors hover:border-border/70 hover:bg-muted/50 hover:text-foreground',
             )}
+            aria-label={`Source ${c.index}: ${label}`}
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-teal-500/15 text-[9px] font-bold text-teal-500">
+            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-teal-500/20 text-[9px] font-bold text-teal-500">
               {c.index}
             </span>
-            <span className="flex-1 truncate text-muted-foreground">{c.title}</span>
-            <span className="text-[10px] text-muted-foreground/50">{new URL(c.url).hostname}</span>
+            <span className="max-w-[160px] truncate">{label}</span>
           </a>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
+}
+
+/**
+ * CitationFooter — kept for backward compat; new callers should prefer InlineSourceTags.
+ * @deprecated Use InlineSourceTags for inline placement after prose.
+ */
+export function CitationFooter({ citations }: { citations: Citation[] }) {
+  return <InlineSourceTags citations={citations} />;
 }

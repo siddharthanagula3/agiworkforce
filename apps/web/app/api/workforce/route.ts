@@ -1,13 +1,14 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { AI_EMPLOYEES } from '@/data/marketplace-employees';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 /**
  * Workforce API
@@ -22,18 +23,15 @@ import { AI_EMPLOYEES } from '@/data/marketplace-employees';
 export const runtime = 'nodejs';
 
 /**
- * Authenticate the request and return the user ID + RLS-bound DB client.
- *
- * The returned client is bound to the user's JWT, so RLS policies enforce
- * tenant isolation on hired_employees and credit_transactions. The
- * .eq('user_id', userId) filters in callers remain as defense-in-depth.
+ * Authenticate the request and return the user ID + Neon DB client.
  */
 async function authenticateRequest(
   request: NextRequest,
-): Promise<{ userId: string; supabase: SupabaseClient }> {
+): Promise<{ userId: string; db: DatabaseAdapter }> {
   try {
-    const { user, userDb } = await getAuthenticatedUserWithClient(request);
-    return { userId: user.id, supabase: userDb };
+    const { userId } = await getClerkAuthUser(request);
+    const db = getNeonDb();
+    return { userId, db };
   } catch {
     throw new Error('UNAUTHORIZED');
   }
@@ -51,19 +49,32 @@ export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const { userId, supabase } = await authenticateRequest(request);
+    const { userId, db } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     // Fetch hired employees
-    const { data: hiredData, error: hiredError } = await supabase
-      .from('hired_employees')
-      .select('*')
-      .eq('user_id', userId)
-      .order('hired_at', { ascending: false });
-
-    if (hiredError) {
-      // Table might not exist yet
-      if (hiredError.message?.includes('does not exist') || hiredError.code === '42P01') {
+    let hiredData: {
+      id: string;
+      employee_id: string;
+      employee_name: string | null;
+      hired_at: string | null;
+    }[];
+    try {
+      hiredData = await db.query<{
+        id: string;
+        employee_id: string;
+        employee_name: string | null;
+        hired_at: string | null;
+      }>(
+        `select id, employee_id, employee_name, hired_at
+         from hired_employees
+         where user_id = $1
+         order by hired_at desc`,
+        [userId],
+      );
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.message?.includes('does not exist') || pgErr.code === '42P01') {
         return NextResponse.json(
           {
             success: true,
@@ -79,46 +90,39 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           { status: 200, headers: corsHeaders },
         );
       }
-      throw hiredError;
+      throw err;
     }
 
     // Enrich hired records with catalog data
-    const enrichedEmployees = (hiredData || []).map(
-      (record: {
-        id: string;
-        employee_id: string;
-        employee_name: string | null;
-        hired_at: string | null;
-      }) => {
-        const catalogEntry = AI_EMPLOYEES.find((e) => e.id === record.employee_id);
+    const enrichedEmployees = hiredData.map((record) => {
+      const catalogEntry = AI_EMPLOYEES.find((e) => e.id === record.employee_id);
 
-        return {
-          id: record.id,
-          employeeId: record.employee_id,
-          name: catalogEntry?.name || record.employee_name || 'AI Employee',
-          role: catalogEntry?.role || catalogEntry?.specialty || 'AI Specialist',
-          category: catalogEntry?.category || 'General',
-          description: catalogEntry?.description || '',
-          provider: catalogEntry?.provider || 'unknown',
-          avatar: catalogEntry?.avatar || '',
-          skills: catalogEntry?.skills || [],
-          specialty: catalogEntry?.specialty || '',
-          popular: catalogEntry?.popular || false,
-          hiredAt: record.hired_at,
-        };
-      },
-    );
+      return {
+        id: record.id,
+        employeeId: record.employee_id,
+        name: catalogEntry?.name || record.employee_name || 'AI Employee',
+        role: catalogEntry?.role || catalogEntry?.specialty || 'AI Specialist',
+        category: catalogEntry?.category || 'General',
+        description: catalogEntry?.description || '',
+        provider: catalogEntry?.provider || 'unknown',
+        avatar: catalogEntry?.avatar || '',
+        skills: catalogEntry?.skills || [],
+        specialty: catalogEntry?.specialty || '',
+        popular: catalogEntry?.popular || false,
+        hiredAt: record.hired_at,
+      };
+    });
 
     // Fetch task count from credit_transactions (optional)
     let totalTasksCompleted = 0;
     try {
-      const { count } = await supabase
-        .from('credit_transactions')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .eq('type', 'deduction');
-
-      totalTasksCompleted = count ?? 0;
+      const countRows = await db.query<{ count: number }>(
+        `select count(*)::int as count
+         from credit_transactions
+         where user_id = $1 and type = 'deduction'`,
+        [userId],
+      );
+      totalTasksCompleted = countRows[0]?.count ?? 0;
     } catch {
       // Table may not exist
     }
@@ -171,7 +175,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const { userId, supabase } = await authenticateRequest(request);
+    const { userId, db } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     const body = (await request.json()) as { employeeId?: string };
@@ -194,34 +198,34 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Upsert into hired_employees
-    const { data, error } = await supabase
-      .from('hired_employees')
-      .upsert(
-        {
-          user_id: userId,
-          employee_id: employeeId,
-          employee_name: catalogEntry.name,
-        },
-        { onConflict: 'user_id,employee_id' },
-      )
-      .select('*')
-      .maybeSingle();
-
-    if (error) {
-      if (error.message?.includes('does not exist') || error.code === '42P01') {
+    let rows: { id: string; hired_at: string | null }[];
+    try {
+      rows = await db.query<{ id: string; hired_at: string | null }>(
+        `insert into hired_employees (user_id, employee_id, employee_name)
+         values ($1, $2, $3)
+         on conflict (user_id, employee_id) do update
+           set employee_name = excluded.employee_name
+         returning id, hired_at`,
+        [userId, employeeId, catalogEntry.name],
+      );
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.message?.includes('does not exist') || pgErr.code === '42P01') {
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'TABLE_NOT_FOUND',
-              message: 'The hired_employees table needs to be created in Supabase',
+              message: 'The hired_employees table needs to be created in Neon',
             },
           },
           { status: 503, headers: corsHeaders },
         );
       }
-      throw error;
+      throw err;
     }
+
+    const data = rows[0] ?? null;
 
     return NextResponse.json(
       {
@@ -268,7 +272,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
     if (rateLimitResponse) return rateLimitResponse;
 
-    const { userId, supabase } = await authenticateRequest(request);
+    const { userId, db } = await authenticateRequest(request);
     const corsHeaders = getCorsHeaders(request);
 
     const { searchParams } = new URL(request.url);
@@ -284,20 +288,21 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const { error } = await supabase
-      .from('hired_employees')
-      .delete()
-      .eq('user_id', userId)
-      .eq('employee_id', employeeId);
-
-    if (error) {
-      if (error.message?.includes('does not exist') || error.code === '42P01') {
+    try {
+      await db.execute(
+        `delete from hired_employees
+         where user_id = $1 and employee_id = $2`,
+        [userId, employeeId],
+      );
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.message?.includes('does not exist') || pgErr.code === '42P01') {
         return NextResponse.json(
           { success: true, message: 'Employee not found (table does not exist)' },
           { status: 200, headers: corsHeaders },
         );
       }
-      throw error;
+      throw err;
     }
 
     return NextResponse.json(

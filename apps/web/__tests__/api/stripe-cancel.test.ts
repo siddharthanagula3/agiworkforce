@@ -17,14 +17,10 @@ import crypto from 'crypto';
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'test_service_key',
 };
 
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', mockEnv.NEXT_PUBLIC_SUPABASE_URL);
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', mockEnv.SUPABASE_SERVICE_ROLE_KEY);
 
 // Mock logger
 const mockLoggerInfo = vi.fn();
@@ -45,21 +41,20 @@ vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Supabase client factory
-const mockFrom = vi.fn();
-const mockRpc = vi.fn();
-const mockUpdate = vi.fn();
+// Neon DB mock — module-level refs survive clearAllMocks because they use
+// vi.fn() wrappers that we call inside beforeEach.
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+const mockDb = {
+  query: mockQuery,
+  execute: mockExecute,
+  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  withUser: vi.fn(() => mockDb),
+  dispose: vi.fn(),
+};
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockFrom,
-    rpc: mockRpc,
-    auth: {
-      admin: {
-        listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-      },
-    },
-  })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => mockDb),
 }));
 
 // Mock subscription service
@@ -179,40 +174,26 @@ vi.mock('stripe', () => ({
 describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.deleted)', () => {
   const canceledAt = Math.floor(Date.now() / 1000);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Default mock setup for idempotency
-    mockRpc.mockResolvedValue({ data: true, error: null });
+    // Re-establish getNeonDb mock after resetModules
+    const neonModule = await import('@/lib/server/neon-db');
+    (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Default mock for update operations
-    mockUpdate.mockResolvedValue({ data: null, error: null });
-
-    // Default subscription lookup
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: 'sub_db_123', user_id: 'user_123' },
-            error: null,
-          }),
-          single: vi.fn().mockResolvedValue({
-            data: { id: 'sub_db_123', user_id: 'user_123' },
-            error: null,
-          }),
-        }),
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-      }),
-      upsert: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { id: 'sub_db_123' }, error: null }),
-        }),
-      }),
-      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    // Default idempotency: should process (true)
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('process_stripe_event_idempotent')) {
+        return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+      }
+      if (sql.includes('select id, user_id from subscriptions')) {
+        return Promise.resolve([{ id: 'sub_db_123', user_id: 'user_123' }]);
+      }
+      return Promise.resolve([]);
     });
+
+    mockExecute.mockResolvedValue(1);
 
     // Default credit balance (has credits to revoke)
     mockGetBalance.mockResolvedValue({
@@ -263,7 +244,11 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+      // Verify the DB execute was called to update subscription to canceled
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining("status = 'canceled'"),
+        expect.anything(),
+      );
     });
 
     it('should revoke remaining credits on cancellation', async () => {
@@ -349,7 +334,7 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
   });
 
   describe('Subscription Lookup', () => {
-    it('should find subscription by stripe_subscription_id', async () => {
+    it('should query subscription by stripe_subscription_id', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
       const eventPayload = JSON.stringify({
@@ -379,23 +364,20 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
       await POST(request);
 
-      expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+      // Verify the DB was queried for subscriptions
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('subscriptions'),
+        expect.arrayContaining(['sub_unique_stripe_id']),
+      );
     });
 
     it('should handle subscription not found in database', async () => {
-      // Override subscription lookup to return no subscription
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        }),
+      // Override to return no subscription
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        return Promise.resolve([]);
       });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -477,10 +459,7 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
     it('should handle credit revocation failure gracefully', async () => {
       // Override to make deduction fail
-      mockDeductCredits.mockResolvedValue({
-        success: false,
-        error: 'Deduction failed',
-      });
+      mockDeductCredits.mockRejectedValue(new Error('Deduction failed'));
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -590,24 +569,9 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
       expect(response.status).toBe(200);
     });
 
-    it('should handle database update error', async () => {
-      // Override to make update fail
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: 'Update failed', code: 'PGRST500' },
-          }),
-        }),
-      });
+    it('should handle database execute error gracefully', async () => {
+      // Override execute to fail for the update call
+      mockExecute.mockRejectedValue(new Error('Update failed'));
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -645,18 +609,14 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
 
     it('should handle cancellation for subscription without user_id', async () => {
       // Override to return subscription without user_id
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: null },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-        }),
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('select id, user_id from subscriptions')) {
+          return Promise.resolve([{ id: 'sub_db_123', user_id: null }]);
+        }
+        return Promise.resolve([]);
       });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -697,7 +657,12 @@ describe('Stripe Subscription Cancellation Webhook Tests (customer.subscription.
   describe('Idempotency', () => {
     it('should skip already processed cancellation events', async () => {
       // Mock idempotency check to return false (already processed)
-      mockRpc.mockResolvedValue({ data: false, error: null });
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 

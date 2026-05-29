@@ -185,16 +185,6 @@ export const TOOL_RENDERERS: Record<
   mcp__filesystem__edit_file: InlineTerminalOutput,
 
   // ============================================
-  // SUPABASE TOOLS
-  // ============================================
-  mcp__supabase__list_tables: InlineSearchResults,
-  mcp__supabase__list_extensions: InlineSearchResults,
-  mcp__supabase__list_migrations: InlineSearchResults,
-  mcp__supabase__execute_sql: InlineDatabaseResults,
-  mcp__supabase__get_logs: InlineSearchResults,
-  mcp__supabase__list_edge_functions: InlineSearchResults,
-
-  // ============================================
   // CLAUDE IN CHROME TOOLS
   // ============================================
   mcp__claude_in_chrome__read_page: InlineSearchResults,

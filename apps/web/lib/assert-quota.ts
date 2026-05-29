@@ -38,7 +38,7 @@
  *   - Usage increment: SECURITY DEFINER RPC `increment_usage` — atomic, no
  *     direct UPDATE with service_role.
  *
- * DO NOT add this logic to proxy.ts or middleware.ts.
+ * DO NOT add this logic to proxy.ts.
  */
 
 import 'server-only';
@@ -46,7 +46,7 @@ import 'server-only';
 import { cache } from 'react';
 import { getTierPolicy, getRoutingSlotModel } from '@agiworkforce/types';
 import type { ProductTier, TierPolicy, TierCapBehavior, RoutingSlot } from '@agiworkforce/types';
-import { getUserClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 
 // ---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ function nextTierUp(tier: ProductTier | string): string {
     case 'hobby':
       return 'pro';
     case 'pro':
-      return 'pro_plus';
+      return 'max';
     default:
       return 'enterprise';
   }
@@ -172,7 +172,7 @@ function nextTierUp(tier: ProductTier | string): string {
 const _fetchUsageRow = cache(
   async (
     userId: string,
-    token: string,
+    _token: string,
   ): Promise<{
     credits_used_cents: number;
     credits_allocated_cents: number;
@@ -180,61 +180,34 @@ const _fetchUsageRow = cache(
     flagship_daily_tokens: number | null;
     flagship_daily_reset_at: string | null;
   } | null> => {
-    const userClient = getUserClient(token);
-    // Cast through unknown because generated supabase types may not yet
-    // include the flagship_daily_* columns added by the
-    // 20260508120000_flagship_daily_cap_tracking.sql migration.
-    const builder = userClient.from('token_credits') as unknown as {
-      select: (cols: string) => {
-        eq: (
-          col: string,
-          val: string,
-        ) => {
-          gt: (
-            col: string,
-            val: string,
-          ) => {
-            order: (
-              col: string,
-              opts: { ascending: boolean },
-            ) => {
-              limit: (n: number) => {
-                maybeSingle: () => Promise<{
-                  data: {
-                    credits_used_cents: number;
-                    credits_allocated_cents: number;
-                    daily_used_cents: number | null;
-                    flagship_daily_tokens: number | null;
-                    flagship_daily_reset_at: string | null;
-                  } | null;
-                  error: { message: string } | null;
-                }>;
-              };
-            };
-          };
-        };
+    const db = getNeonDb();
+    try {
+      type UsageRow = {
+        credits_used_cents: number;
+        credits_allocated_cents: number;
+        daily_used_cents: number | null;
+        flagship_daily_tokens: number | null;
+        flagship_daily_reset_at: string | null;
       };
-    };
-
-    const { data, error } = await builder
-      .select(
-        'credits_used_cents, credits_allocated_cents, daily_used_cents, flagship_daily_tokens, flagship_daily_reset_at',
-      )
-      .eq('user_id', userId)
-      .gt('period_end', new Date().toISOString())
-      .order('period_end', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (error) {
+      const [row] = await db.query<UsageRow>(
+        `select credits_used_cents, credits_allocated_cents,
+                flagship_used_today_cents as daily_used_cents,
+                flagship_used_today_cents as flagship_daily_tokens,
+                flagship_cap_reset_date::text as flagship_daily_reset_at
+         from token_credits
+         where user_id = $1 and period_end > $2
+         order by period_end desc
+         limit 1`,
+        [userId, new Date().toISOString()],
+      );
+      return row ?? null;
+    } catch (error) {
       logger.warn(
-        { userId, error: error.message },
+        { userId, error: error instanceof Error ? error.message : String(error) },
         '[assertQuota] Failed to fetch usage row — treating as 0 used',
       );
       return null;
     }
-
-    return data ?? null;
   },
 );
 
@@ -298,56 +271,16 @@ function evaluateCapBehavior(
  *
  * Wrapped with `cache()` to dedup within a single request.
  */
-const _fetchImageUsageCount = cache(async (userId: string, token: string): Promise<number> => {
-  const userClient = getUserClient(token);
-  // Count image generation records for the current billing period.
-  // Uses the `media_generations` table (if available) with RLS enforced.
-  // Falls back to 0 on any error so we don't incorrectly gate the user.
+const _fetchImageUsageCount = cache(async (userId: string, _token: string): Promise<number> => {
+  const db = getNeonDb();
   try {
-    // Cast to `unknown` first to escape the generated types which don't
-    // include the `media_generations` table yet.
-    const builder = (
-      userClient as unknown as {
-        from: (table: string) => {
-          select: (
-            cols: string,
-            opts: { count: string; head: boolean },
-          ) => {
-            eq: (
-              col: string,
-              val: string,
-            ) => {
-              eq: (
-                col: string,
-                val: string,
-              ) => {
-                gte: (
-                  col: string,
-                  val: string,
-                ) => Promise<{
-                  count: number | null;
-                  error: { message: string } | null;
-                }>;
-              };
-            };
-          };
-        };
-      }
-    ).from('media_generations');
-
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-
-    const { count, error } = await builder
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('media_type', 'image')
-      .gte('created_at', startOfMonth);
-
-    if (error) {
-      return 0;
-    }
-
-    return count ?? 0;
+    const [row] = await db.query<{ count: number }>(
+      `select count(*)::int as count from media_generations
+       where user_id = $1 and media_type = 'image' and created_at >= $2`,
+      [userId, startOfMonth],
+    );
+    return row?.count ?? 0;
   } catch {
     return 0;
   }
@@ -544,47 +477,21 @@ async function _checkVideoQuota(
  * error so the user is never wrongly gated by an infra glitch. RLS-bound.
  */
 const _fetchVideoSecondsThisMonth = cache(
-  async (userId: string, token: string): Promise<number> => {
-    const userClient = getUserClient(token);
+  async (userId: string, _token: string): Promise<number> => {
+    const db = getNeonDb();
     try {
       const startOfMonth = new Date(
         new Date().getFullYear(),
         new Date().getMonth(),
         1,
       ).toISOString();
-
-      // Cast through unknown — generated types may not include the
-      // media_generations table or its `duration_seconds` column yet.
-      const builder = userClient.from('media_generations') as unknown as {
-        select: (cols: string) => {
-          eq: (
-            col: string,
-            val: string,
-          ) => {
-            eq: (
-              col: string,
-              val: string,
-            ) => {
-              gte: (
-                col: string,
-                val: string,
-              ) => Promise<{
-                data: Array<{ duration_seconds: number | null }> | null;
-                error: { message: string } | null;
-              }>;
-            };
-          };
-        };
-      };
-
-      const { data, error } = await builder
-        .select('duration_seconds')
-        .eq('user_id', userId)
-        .eq('media_type', 'video')
-        .gte('created_at', startOfMonth);
-
-      if (error || !data) return 0;
-      return data.reduce((sum, row) => sum + (row.duration_seconds ?? 0), 0);
+      const [row] = await db.query<{ total_seconds: number }>(
+        `select coalesce(sum(duration_seconds), 0)::int as total_seconds
+         from media_generations
+         where user_id = $1 and media_type = 'video' and created_at >= $2`,
+        [userId, startOfMonth],
+      );
+      return row?.total_seconds ?? 0;
     } catch {
       return 0;
     }
@@ -637,49 +544,20 @@ async function _checkComputerUseQuota(
 }
 
 const _fetchComputerUseActionsThisMonth = cache(
-  async (userId: string, token: string): Promise<number> => {
-    const userClient = getUserClient(token);
+  async (userId: string, _token: string): Promise<number> => {
+    const db = getNeonDb();
     try {
       const startOfMonth = new Date(
         new Date().getFullYear(),
         new Date().getMonth(),
         1,
       ).toISOString();
-
-      const builder = userClient.from('credit_transactions') as unknown as {
-        select: (
-          cols: string,
-          opts: { count: string; head: boolean },
-        ) => {
-          eq: (
-            col: string,
-            val: string,
-          ) => {
-            gte: (
-              col: string,
-              val: string,
-            ) => {
-              filter: (
-                col: string,
-                op: string,
-                val: string,
-              ) => Promise<{
-                count: number | null;
-                error: { message: string } | null;
-              }>;
-            };
-          };
-        };
-      };
-
-      const { count, error } = await builder
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .gte('created_at', startOfMonth)
-        .filter('metadata->>feature', 'eq', 'computer_use');
-
-      if (error) return 0;
-      return count ?? 0;
+      const [row] = await db.query<{ count: number }>(
+        `select count(*)::int as count from credit_transactions
+         where user_id = $1 and created_at >= $2 and metadata->>'feature' = 'computer_use'`,
+        [userId, startOfMonth],
+      );
+      return row?.count ?? 0;
     } catch {
       return 0;
     }
@@ -785,32 +663,35 @@ async function _checkFlagshipDailyQuota(
  * already been sent, so errors are logged but not re-thrown.
  */
 export async function reconcileUsage(opts: ReconcileUsageOptions): Promise<void> {
-  const { userId, token, actualTokens, feature, isFlagship } = opts;
+  const { userId, actualTokens, feature, isFlagship } = opts;
 
   if (actualTokens <= 0) return;
 
-  const userClient = getUserClient(token);
+  const db = getNeonDb();
 
-  // Call SECURITY DEFINER RPC — atomic, RLS-safe increment.
-  const { error } = await (
-    userClient.rpc as unknown as (
-      name: string,
-      args: Record<string, unknown>,
-    ) => Promise<{ error: { message: string } | null }>
-  )('increment_usage', {
-    p_user_id: userId,
-    p_tokens: actualTokens,
-    p_feature: feature ?? 'chat',
-    p_is_flagship: isFlagship ?? false,
-  });
-
-  if (error) {
-    // reconcileUsage is called after the stream — cannot surface errors to caller.
-    // Log for monitoring. The credit_service deductCredits path provides the
-    // primary reconciliation; this RPC is the quota-counter update path.
-    logger.error(
-      { userId, actualTokens, feature, isFlagship, error: error.message },
-      '[reconcileUsage] increment_usage RPC failed — usage counter may drift',
-    );
+  try {
+    await db.execute('select increment_usage($1, $2, $3, $4)', [
+      userId,
+      actualTokens,
+      feature ?? 'chat',
+      isFlagship ?? false,
+    ]);
+  } catch (rpcError) {
+    const error = rpcError;
+    if (error) {
+      // reconcileUsage is called after the stream — cannot surface errors to caller.
+      // Log for monitoring. The credit_service deductCredits path provides the
+      // primary reconciliation; this RPC is the quota-counter update path.
+      logger.error(
+        {
+          userId,
+          actualTokens,
+          feature,
+          isFlagship,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        '[reconcileUsage] increment_usage RPC failed — usage counter may drift',
+      );
+    }
   }
 }

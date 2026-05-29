@@ -6,13 +6,13 @@ import {
   Search,
   Plus,
   Check,
-  MoreHorizontal,
   Zap,
   Lock,
   ExternalLink,
   Loader2,
   Link2,
   BookOpen,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -27,6 +27,9 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
+import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
+import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
+import { getCsrfToken } from '@/lib/client/csrf';
 import Image from 'next/image';
 
 // ─── Connector Data ────────────────────────────────────────────────────────────
@@ -39,6 +42,12 @@ type ConnectorCategory =
   | 'Finance'
   | 'Social'
   | 'AI'
+  | 'Communication'
+  | 'Cloud'
+  | 'Data'
+  | 'Design'
+  | 'Storage'
+  | 'Healthcare'
   | 'Exclusive';
 type AuthType = 'oauth' | 'api_key' | 'connection_string' | 'pat';
 type Phase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -462,18 +471,722 @@ const CONNECTORS: Connector[] = [
     iconEmoji: '🦙',
     exclusive: true,
   },
+
+  // ── Productivity (additional) ──────────────────────────────────────────────
+  {
+    id: 'airtable',
+    name: 'Airtable',
+    description: 'Manage tables, records, and views in your Airtable bases programmatically.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 2,
+    iconBg: 'from-yellow-400 to-orange-500',
+    iconText: 'AT',
+    iconEmoji: '🗂️',
+  },
+  {
+    id: 'monday',
+    name: 'Monday.com',
+    description: 'Create boards, items, and automations in your Monday.com workspace.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-rose-500 to-pink-600',
+    iconText: 'M',
+    iconEmoji: '📋',
+  },
+  {
+    id: 'clickup',
+    name: 'ClickUp',
+    description: 'Manage tasks, docs, goals, and workspaces in ClickUp.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 2,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'CU',
+    iconEmoji: '✅',
+  },
+  {
+    id: 'trello',
+    name: 'Trello',
+    description: 'Create and move cards, manage boards and lists in Trello.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-blue-500 to-cyan-500',
+    iconText: 'TR',
+    iconEmoji: '📌',
+  },
+  {
+    id: 'todoist',
+    name: 'Todoist',
+    description: 'Create tasks, manage projects, and sync your Todoist inbox.',
+    category: 'Productivity',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-red-500 to-rose-600',
+    iconText: 'TD',
+    iconEmoji: '✅',
+  },
+  {
+    id: 'basecamp',
+    name: 'Basecamp',
+    description: 'Access projects, to-dos, messages, and schedules in Basecamp.',
+    category: 'Productivity',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-600 to-emerald-700',
+    iconText: 'BC',
+    iconEmoji: '⛺',
+  },
+  {
+    id: 'evernote',
+    name: 'Evernote',
+    description: 'Search, create, and manage notes and notebooks in Evernote.',
+    category: 'Productivity',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-green-500 to-green-700',
+    iconText: 'EN',
+    iconEmoji: '🐘',
+  },
+
+  // ── Developer (additional) ─────────────────────────────────────────────────
+  {
+    id: 'vercel',
+    name: 'Vercel',
+    description: 'Trigger deployments, inspect logs, and manage projects on Vercel.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 2,
+    iconBg: 'from-gray-700 to-black',
+    iconText: 'VL',
+    iconEmoji: '▲',
+  },
+  {
+    id: 'sentry',
+    name: 'Sentry',
+    description: 'Query errors, manage issues, and inspect stack traces in Sentry.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 2,
+    iconBg: 'from-violet-600 to-purple-800',
+    iconText: 'SN',
+    iconEmoji: '🐛',
+  },
+  {
+    id: 'datadog',
+    name: 'Datadog',
+    description: 'Query metrics, logs, and traces; manage monitors and dashboards.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 3,
+    iconBg: 'from-purple-500 to-violet-700',
+    iconText: 'DD',
+    iconEmoji: '📊',
+  },
+  {
+    id: 'pagerduty',
+    name: 'PagerDuty',
+    description: 'Acknowledge incidents, manage on-call schedules, and view alerts.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-500 to-emerald-700',
+    iconText: 'PD',
+    iconEmoji: '🚨',
+  },
+  {
+    id: 'circleci',
+    name: 'CircleCI',
+    description: 'Trigger pipelines, inspect job results, and manage workflows.',
+    category: 'Developer',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'CI',
+    iconEmoji: '🔄',
+  },
+  {
+    id: 'gitlab',
+    name: 'GitLab',
+    description: 'Manage repos, merge requests, pipelines, and issues in GitLab.',
+    category: 'Developer',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 2,
+    iconBg: 'from-orange-500 to-red-600',
+    iconText: 'GL',
+    iconEmoji: '🦊',
+  },
+  {
+    id: 'bitbucket',
+    name: 'Bitbucket',
+    description: 'Manage pull requests, pipelines, and repositories in Bitbucket.',
+    category: 'Developer',
+    authType: 'oauth',
+    actionCount: 7,
+    phase: 3,
+    iconBg: 'from-blue-500 to-indigo-700',
+    iconText: 'BB',
+    iconEmoji: '🪣',
+  },
+
+  // ── Communication ──────────────────────────────────────────────────────────
+  {
+    id: 'telegram',
+    name: 'Telegram',
+    description: 'Send messages, manage bots, and interact with Telegram channels.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'TG',
+    iconEmoji: '✈️',
+  },
+  {
+    id: 'whatsapp',
+    name: 'WhatsApp Business',
+    description: 'Send messages and notifications via the WhatsApp Business API.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 4,
+    iconBg: 'from-green-500 to-emerald-600',
+    iconText: 'WA',
+    iconEmoji: '💬',
+  },
+  {
+    id: 'twilio',
+    name: 'Twilio',
+    description: 'Send SMS, WhatsApp messages, and make voice calls via Twilio.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-red-600 to-rose-700',
+    iconText: 'TW',
+    iconEmoji: '📱',
+  },
+  {
+    id: 'sendgrid',
+    name: 'SendGrid',
+    description: 'Send transactional and marketing emails via SendGrid.',
+    category: 'Communication',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-blue-500 to-cyan-600',
+    iconText: 'SG',
+    iconEmoji: '📧',
+  },
+
+  // ── Cloud / Infra ──────────────────────────────────────────────────────────
+  {
+    id: 'aws',
+    name: 'Amazon Web Services',
+    description: 'Manage S3 buckets, Lambda functions, EC2 instances, and more via AWS APIs.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 10,
+    phase: 4,
+    iconBg: 'from-orange-400 to-amber-600',
+    iconText: 'AWS',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'gcp',
+    name: 'Google Cloud',
+    description: 'Manage GCS, Pub/Sub, BigQuery, and Cloud Run via GCP APIs.',
+    category: 'Cloud',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 4,
+    iconBg: 'from-blue-400 to-green-500',
+    iconText: 'GCP',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'azure',
+    name: 'Microsoft Azure',
+    description: 'Manage Blob Storage, Functions, VMs, and Azure services.',
+    category: 'Cloud',
+    authType: 'oauth',
+    actionCount: 8,
+    phase: 4,
+    iconBg: 'from-blue-500 to-cyan-600',
+    iconText: 'AZ',
+    iconEmoji: '☁️',
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    description: 'Manage DNS, Workers, Pages, KV storage, and CDN rules via Cloudflare API.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 7,
+    phase: 4,
+    iconBg: 'from-orange-500 to-amber-500',
+    iconText: 'CF',
+    iconEmoji: '🔥',
+  },
+  {
+    id: 'digitalocean',
+    name: 'DigitalOcean',
+    description: 'Create and manage Droplets, Spaces, databases, and apps on DigitalOcean.',
+    category: 'Cloud',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconText: 'DO',
+    iconEmoji: '🌊',
+  },
+
+  // ── Data ──────────────────────────────────────────────────────────────────
+  {
+    id: 'snowflake',
+    name: 'Snowflake',
+    description: 'Run queries, manage warehouses, and access data in Snowflake.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'SF',
+    iconEmoji: '❄️',
+  },
+  {
+    id: 'bigquery',
+    name: 'BigQuery',
+    description: 'Run SQL queries and manage datasets in Google BigQuery.',
+    category: 'Data',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-blue-400 to-indigo-500',
+    iconText: 'BQ',
+    iconEmoji: '📊',
+  },
+  {
+    id: 'databricks',
+    name: 'Databricks',
+    description: 'Run notebooks, manage clusters, and query Delta tables in Databricks.',
+    category: 'Data',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 5,
+    iconBg: 'from-red-500 to-orange-600',
+    iconText: 'DB',
+    iconEmoji: '🧱',
+  },
+  {
+    id: 'postgresql',
+    name: 'PostgreSQL',
+    description: 'Connect to any PostgreSQL database and run queries directly.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-blue-600 to-indigo-800',
+    iconText: 'PG',
+    iconEmoji: '🐘',
+  },
+  {
+    id: 'mongodb',
+    name: 'MongoDB',
+    description: 'Query collections, insert documents, and manage indexes in MongoDB.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-green-500 to-emerald-700',
+    iconText: 'MG',
+    iconEmoji: '🍃',
+  },
+  {
+    id: 'redis',
+    name: 'Redis',
+    description: 'Get, set, and manage keys in Redis or Upstash.',
+    category: 'Data',
+    authType: 'connection_string',
+    actionCount: 4,
+    phase: 3,
+    iconBg: 'from-red-500 to-rose-700',
+    iconText: 'RD',
+    iconEmoji: '⚡',
+  },
+  {
+    id: 'elasticsearch',
+    name: 'Elasticsearch',
+    description: 'Index documents, run full-text queries, and manage Elasticsearch clusters.',
+    category: 'Data',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-yellow-400 to-amber-600',
+    iconText: 'ES',
+    iconEmoji: '🔍',
+  },
+
+  // ── CRM (additional) ───────────────────────────────────────────────────────
+  {
+    id: 'pipedrive',
+    name: 'Pipedrive',
+    description: 'Manage deals, contacts, and pipelines in your Pipedrive CRM.',
+    category: 'CRM',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 3,
+    iconBg: 'from-green-500 to-teal-600',
+    iconText: 'PD',
+    iconEmoji: '🎯',
+  },
+  {
+    id: 'zendesk',
+    name: 'Zendesk',
+    description: 'Manage tickets, users, and support workflows in Zendesk.',
+    category: 'CRM',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 3,
+    iconBg: 'from-green-600 to-teal-700',
+    iconText: 'ZD',
+    iconEmoji: '💬',
+  },
+  {
+    id: 'freshdesk',
+    name: 'Freshdesk',
+    description: 'Create and update tickets, contacts, and agents in Freshdesk.',
+    category: 'CRM',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-teal-500 to-cyan-600',
+    iconText: 'FD',
+    iconEmoji: '🎧',
+  },
+
+  // ── Design ────────────────────────────────────────────────────────────────
+  {
+    id: 'figma',
+    name: 'Figma',
+    description: 'Read files, inspect components, and export assets from Figma.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'FG',
+    iconEmoji: '🎨',
+  },
+  {
+    id: 'canva',
+    name: 'Canva',
+    description: 'Create designs, access brand assets, and manage Canva templates.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 5,
+    iconBg: 'from-cyan-400 to-blue-500',
+    iconText: 'CV',
+    iconEmoji: '🖼️',
+  },
+  {
+    id: 'adobe',
+    name: 'Adobe Creative Cloud',
+    description: 'Access Creative Cloud assets, fonts, and collaborate on projects.',
+    category: 'Design',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-red-600 to-rose-800',
+    iconText: 'Ae',
+    iconEmoji: '🎨',
+  },
+
+  // ── Finance (additional) ───────────────────────────────────────────────────
+  {
+    id: 'quickbooks',
+    name: 'QuickBooks',
+    description: 'Manage invoices, expenses, and financial reports in QuickBooks.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 7,
+    phase: 6,
+    iconBg: 'from-green-600 to-emerald-700',
+    iconText: 'QB',
+    iconEmoji: '💰',
+  },
+  {
+    id: 'xero',
+    name: 'Xero',
+    description: 'Manage accounts, invoices, and payroll in Xero accounting.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 6,
+    iconBg: 'from-sky-400 to-blue-600',
+    iconText: 'XR',
+    iconEmoji: '💵',
+  },
+  {
+    id: 'paypal',
+    name: 'PayPal',
+    description: 'Send payments, manage invoices, and query transactions via PayPal.',
+    category: 'Finance',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 6,
+    iconBg: 'from-blue-600 to-indigo-700',
+    iconText: 'PP',
+    iconEmoji: '💳',
+  },
+  {
+    id: 'square',
+    name: 'Square',
+    description: 'Manage payments, inventory, and customers via the Square API.',
+    category: 'Finance',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 6,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'SQ',
+    iconEmoji: '⬛',
+  },
+  {
+    id: 'plaid',
+    name: 'Plaid',
+    description: 'Connect bank accounts and access financial data via Plaid.',
+    category: 'Finance',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 7,
+    iconBg: 'from-indigo-500 to-blue-700',
+    iconText: 'PL',
+    iconEmoji: '🏦',
+  },
+
+  // ── Storage ───────────────────────────────────────────────────────────────
+  {
+    id: 'dropbox',
+    name: 'Dropbox',
+    description: 'Upload, download, and manage files in your Dropbox account.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 3,
+    iconBg: 'from-blue-500 to-indigo-600',
+    iconText: 'DX',
+    iconEmoji: '📦',
+  },
+  {
+    id: 'box',
+    name: 'Box',
+    description: 'Manage files, folders, and collaborations in Box cloud storage.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 4,
+    iconBg: 'from-blue-600 to-blue-800',
+    iconText: 'BX',
+    iconEmoji: '📦',
+  },
+  {
+    id: 'sharepoint',
+    name: 'SharePoint',
+    description: 'Read, write, and manage files and sites in Microsoft SharePoint.',
+    category: 'Storage',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 4,
+    iconBg: 'from-blue-500 to-indigo-700',
+    iconText: 'SP',
+    iconEmoji: '📁',
+  },
+
+  // ── Social (additional) ────────────────────────────────────────────────────
+  {
+    id: 'instagram',
+    name: 'Instagram',
+    description: 'Post content, manage media, and retrieve insights via the Instagram Graph API.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 4,
+    phase: 7,
+    iconBg: 'from-purple-500 to-pink-500',
+    iconText: 'IG',
+    iconEmoji: '📸',
+  },
+  {
+    id: 'facebook',
+    name: 'Facebook',
+    description: 'Manage pages, posts, ads, and audience insights via Facebook API.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 7,
+    iconBg: 'from-blue-600 to-blue-800',
+    iconText: 'FB',
+    iconEmoji: '👤',
+  },
+  {
+    id: 'youtube',
+    name: 'YouTube',
+    description: 'Search videos, manage playlists, and access channel analytics.',
+    category: 'Social',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 7,
+    iconBg: 'from-red-500 to-red-700',
+    iconText: 'YT',
+    iconEmoji: '▶️',
+  },
+
+  // ── Marketing (additional) ─────────────────────────────────────────────────
+  {
+    id: 'posthog',
+    name: 'PostHog',
+    description: 'Query events, funnels, feature flags, and analytics in PostHog.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 6,
+    phase: 5,
+    iconBg: 'from-orange-500 to-red-600',
+    iconText: 'PH',
+    iconEmoji: '🦔',
+  },
+  {
+    id: 'segment',
+    name: 'Segment',
+    description: 'Track events, manage audiences, and configure destinations in Segment.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-green-500 to-teal-600',
+    iconText: 'SG',
+    iconEmoji: '📡',
+  },
+  {
+    id: 'mixpanel',
+    name: 'Mixpanel',
+    description: 'Query events, funnels, and retention data in Mixpanel.',
+    category: 'Marketing',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 5,
+    iconBg: 'from-purple-500 to-indigo-600',
+    iconText: 'MX',
+    iconEmoji: '📊',
+  },
+
+  // ── AI / ML (additional) ──────────────────────────────────────────────────
+  {
+    id: 'huggingface',
+    name: 'Hugging Face',
+    description: 'Run inference on hosted models and browse the Hub via the Hugging Face API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 8,
+    iconBg: 'from-yellow-400 to-amber-600',
+    iconText: 'HF',
+    iconEmoji: '🤗',
+  },
+  {
+    id: 'wandb',
+    name: 'Weights and Biases',
+    description: 'Log experiments, compare runs, and manage ML artifacts in W&B.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 5,
+    phase: 8,
+    iconBg: 'from-amber-500 to-yellow-600',
+    iconText: 'WB',
+    iconEmoji: '📈',
+  },
+  {
+    id: 'anthropic-api',
+    name: 'Anthropic',
+    description: 'Run Claude models and manage API usage directly via the Anthropic API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 8,
+    iconBg: 'from-orange-400 to-amber-600',
+    iconText: 'AN',
+    iconEmoji: '🤖',
+  },
+  {
+    id: 'replicate',
+    name: 'Replicate',
+    description: 'Run open-source ML models in the cloud via the Replicate API.',
+    category: 'AI',
+    authType: 'api_key',
+    actionCount: 4,
+    phase: 8,
+    iconBg: 'from-gray-700 to-gray-900',
+    iconText: 'RC',
+    iconEmoji: '🔁',
+  },
+
+  // ── Healthcare ─────────────────────────────────────────────────────────────
+  {
+    id: 'epic-fhir',
+    name: 'Epic FHIR',
+    description: 'Access patient records, appointments, and clinical data via Epic FHIR R4.',
+    category: 'Healthcare',
+    authType: 'oauth',
+    actionCount: 6,
+    phase: 9,
+    iconBg: 'from-red-500 to-rose-700',
+    iconText: 'EP',
+    iconEmoji: '🏥',
+  },
+  {
+    id: 'cerner',
+    name: 'Cerner',
+    description: 'Query patient data, clinical events, and care plans via Cerner FHIR APIs.',
+    category: 'Healthcare',
+    authType: 'oauth',
+    actionCount: 5,
+    phase: 9,
+    iconBg: 'from-blue-600 to-indigo-800',
+    iconText: 'CN',
+    iconEmoji: '🏥',
+  },
 ];
 
 const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
   { label: 'All', value: 'All' },
   { label: 'Productivity', value: 'Productivity' },
   { label: 'Developer', value: 'Developer' },
+  { label: 'Communication', value: 'Communication' },
   { label: 'CRM', value: 'CRM' },
   { label: 'Marketing', value: 'Marketing' },
   { label: 'Finance', value: 'Finance' },
   { label: 'Social', value: 'Social' },
+  { label: 'Cloud', value: 'Cloud' },
+  { label: 'Data', value: 'Data' },
+  { label: 'Design', value: 'Design' },
+  { label: 'Storage', value: 'Storage' },
   { label: 'AI', value: 'AI' },
-  { label: '⭐ AGI Exclusive', value: 'Exclusive' },
+  { label: 'Healthcare', value: 'Healthcare' },
+  { label: 'AGI Exclusive', value: 'Exclusive' },
 ];
 
 // ─── Connection status filter ──────────────────────────────────────────────────
@@ -496,43 +1209,33 @@ interface AddCustomConnectorDialogProps {
 function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDialogProps) {
   const [mcpUrl, setMcpUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
-  const [registering, setRegistering] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
 
-  const handleRegister = useCallback(async () => {
+  // MCP server registration is coming soon. For now, save the URL to
+  // localStorage so we can pre-populate when the backend ships, and
+  // open the MCP docs so the user can verify their server URL format.
+  const handleRegister = useCallback(() => {
     if (!mcpUrl.trim()) {
       setError('MCP server URL is required.');
       return;
     }
     setError(null);
-    setRegistering(true);
     try {
-      const res = await fetch('/api/connectors/mcp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: mcpUrl.trim(), token: authToken.trim() || undefined }),
-      });
-      if (!res.ok) {
-        // MCP registration API may not exist yet; fall back to opening docs.
-        window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
-        onOpenChange(false);
-        return;
+      const pending = JSON.parse(
+        localStorage.getItem('agi.mcp.pendingServers') ?? '[]',
+      ) as string[];
+      if (!pending.includes(mcpUrl.trim())) {
+        pending.push(mcpUrl.trim());
+        localStorage.setItem('agi.mcp.pendingServers', JSON.stringify(pending));
       }
-      setSuccess(true);
-      setTimeout(() => {
-        setSuccess(false);
-        setMcpUrl('');
-        setAuthToken('');
-        onOpenChange(false);
-      }, 1500);
     } catch {
-      window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
-      onOpenChange(false);
-    } finally {
-      setRegistering(false);
+      // localStorage unavailable; proceed without saving
     }
-  }, [mcpUrl, authToken, onOpenChange]);
+    window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
+    setMcpUrl('');
+    setAuthToken('');
+    onOpenChange(false);
+  }, [mcpUrl, onOpenChange]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -578,17 +1281,10 @@ function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDial
               <Button
                 size="sm"
                 className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={() => void handleRegister()}
-                disabled={registering}
+                onClick={handleRegister}
               >
-                {registering ? (
-                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-                ) : success ? (
-                  <Check className="mr-1.5 h-3 w-3 text-emerald-400" />
-                ) : (
-                  <Plus className="mr-1.5 h-3 w-3" />
-                )}
-                {success ? 'Connected!' : 'Connect server'}
+                <Plus className="mr-1.5 h-3 w-3" />
+                Connect server
               </Button>
             </div>
           </div>
@@ -672,17 +1368,6 @@ const ConnectorLogo: React.FC<ConnectorLogoProps> = ({ connector }) => {
   );
 };
 
-// ─── ConnectorCard ─────────────────────────────────────────────────────────────
-
-interface ConnectorCardProps {
-  connector: Connector;
-  connected: boolean;
-  mutating: boolean;
-  connectedAt?: string | null;
-  onConnect: () => void;
-  onDisconnect: () => void;
-}
-
 function formatRelativeTime(isoString: string | null | undefined): string {
   if (!isoString) return 'Never';
   const diff = Date.now() - new Date(isoString).getTime();
@@ -696,88 +1381,146 @@ function formatRelativeTime(isoString: string | null | undefined): string {
   return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const ConnectorCard: React.FC<ConnectorCardProps> = ({
+// ─── ConnectorListRow ─────────────────────────────────────────────────────────
+// Compact left-panel list row: icon + name + connected status dot
+
+interface ConnectorListRowProps {
+  connector: Connector;
+  selected: boolean;
+  connected: boolean;
+  onClick: () => void;
+}
+
+const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
+  connector,
+  selected,
+  connected,
+  onClick,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={cn(
+      'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors duration-100',
+      selected
+        ? 'bg-primary/10 text-foreground'
+        : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
+    )}
+  >
+    <ConnectorLogo connector={connector} />
+    <span className="min-w-0 flex-1 truncate text-xs font-medium">{connector.name}</span>
+    {connected ? (
+      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+    ) : connector.exclusive ? (
+      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/60" />
+    ) : null}
+  </button>
+);
+
+// ─── ConnectorDetailPanel ─────────────────────────────────────────────────────
+// Right-side detail view for the selected connector
+
+interface ConnectorDetailPanelProps {
+  connector: Connector;
+  connected: boolean;
+  mutating: boolean;
+  connectedAt?: string;
+  onBack: () => void;
+  onConnect: () => void;
+  onDisconnect: () => void;
+  onOpenPermissions: () => void;
+}
+
+// Inline tool lookup — avoids a second import statement at top-level that
+// would duplicate the existing `getConnectorTools` used by ToolPermissionsPanel.
+function useConnectorTools(connectorId: string): string[] {
+  return React.useMemo(() => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('../config/connector-logos') as {
+      getConnectorTools: (id: string) => string[];
+    };
+    return mod.getConnectorTools(connectorId);
+  }, [connectorId]);
+}
+
+const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   connector,
   connected,
   mutating,
   connectedAt,
+  onBack,
   onConnect,
   onDisconnect,
+  onOpenPermissions,
 }) => {
   const isComingSoon = connector.phase > 1;
+  const isOAuth = connector.authType === 'oauth';
+  const hasRealCredentials = connected && !isOAuth;
+  const tools = useConnectorTools(connector.id);
 
   return (
-    <div
-      className={cn(
-        'group relative flex flex-col rounded-xl border bg-card p-5 transition-all duration-200',
-        connected
-          ? 'border-primary/30 bg-primary/5'
-          : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]',
-        connector.exclusive && 'border-amber-500/20 bg-amber-500/5 hover:border-amber-500/30',
-      )}
-    >
-      {/* Exclusive badge */}
-      {connector.exclusive && (
-        <div className="absolute right-3 top-3">
-          <Badge className="border-0 bg-amber-500/20 px-1.5 py-0 text-[10px] font-semibold text-amber-400">
-            EXCLUSIVE
-          </Badge>
-        </div>
-      )}
+    <div className="rounded-xl border border-white/[0.06] bg-card p-5">
+      {/* Mobile back button */}
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-4 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground lg:hidden"
+      >
+        Back
+      </button>
 
-      {/* Coming Soon overlay */}
-      {isComingSoon && (
-        <div className="absolute right-3 top-3">
-          <Badge
-            variant="outline"
-            className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
-          >
-            Phase {connector.phase}
-          </Badge>
-        </div>
-      )}
-
-      {/* Icon + Name */}
-      <div className="mb-3 flex items-start gap-3">
+      {/* Header row */}
+      <div className="mb-4 flex flex-wrap items-start gap-3">
         <ConnectorLogo connector={connector} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-sm font-semibold text-foreground">{connector.name}</h3>
-          <p className="text-xs text-muted-foreground">{connector.actionCount} actions</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-base font-semibold text-foreground">{connector.name}</h2>
+            {connector.exclusive && (
+              <Badge className="border-0 bg-amber-500/20 px-1.5 py-0 text-[10px] font-semibold text-amber-400">
+                EXCLUSIVE
+              </Badge>
+            )}
+            {isComingSoon && !connector.exclusive && (
+              <Badge
+                variant="outline"
+                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+              >
+                Phase {connector.phase}
+              </Badge>
+            )}
+            {!isComingSoon && isOAuth && !connector.exclusive && (
+              <Badge
+                variant="outline"
+                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
+              >
+                Coming Soon
+              </Badge>
+            )}
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {connector.authType === 'oauth'
+              ? 'OAuth 2.0'
+              : connector.authType === 'api_key'
+                ? 'API Key'
+                : connector.authType === 'pat'
+                  ? 'Personal Access Token'
+                  : 'Connection String'}{' '}
+            &middot; {connector.actionCount} actions
+          </p>
         </div>
-      </div>
 
-      {/* Description */}
-      <p className="mb-4 flex-1 text-xs leading-relaxed text-muted-foreground/80">
-        {connector.description}
-      </p>
-
-      {/* Activity timestamp */}
-      {connected && connectedAt && (
-        <p className="mb-3 text-[10px] text-muted-foreground/60">
-          Connected {formatRelativeTime(connectedAt)}
-        </p>
-      )}
-
-      {/* Action Row */}
-      <div className="flex items-center justify-between">
-        {connected ? (
-          <>
-            <div className="flex items-center gap-1.5">
-              {mutating ? (
-                <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-              ) : (
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              )}
-              <span className="text-xs font-medium text-emerald-400">Connected</span>
-            </div>
+        {/* Primary action */}
+        <div className="shrink-0">
+          {hasRealCredentials ? (
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                aria-label="Open in new tab"
+                onClick={onOpenPermissions}
+                aria-label="Tool permissions"
               >
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
@@ -785,50 +1528,89 @@ const ConnectorCard: React.FC<ConnectorCardProps> = ({
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                 onClick={onDisconnect}
                 disabled={mutating}
-                aria-label="More options"
               >
-                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                {mutating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
               </Button>
             </div>
-          </>
-        ) : isComingSoon && !connector.exclusive ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 w-full cursor-not-allowed text-xs text-muted-foreground opacity-50"
-            disabled
-          >
-            <Lock className="mr-1.5 h-3 w-3" />
-            Coming Soon
-          </Button>
-        ) : (
-          <Button
-            size="sm"
-            className={cn(
-              'h-7 w-full text-xs',
-              connector.exclusive
-                ? 'bg-amber-500 text-black hover:bg-amber-400'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90',
-            )}
-            onClick={onConnect}
-            disabled={mutating}
-          >
-            {mutating ? (
-              <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-            ) : connector.exclusive ? (
-              <>
-                <Zap className="mr-1.5 h-3 w-3" />
-                Enable
-              </>
-            ) : (
-              <>
-                <Plus className="mr-1.5 h-3 w-3" />
-                Connect
-              </>
-            )}
-          </Button>
-        )}
+          ) : (isComingSoon && !connector.exclusive) || isOAuth ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 cursor-not-allowed px-3 text-xs text-muted-foreground opacity-50"
+              disabled
+            >
+              <Lock className="mr-1.5 h-3 w-3" />
+              Coming Soon
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className={cn(
+                'h-7 px-3 text-xs',
+                connector.exclusive
+                  ? 'bg-amber-500 text-black hover:bg-amber-400'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
+              )}
+              onClick={onConnect}
+              disabled={mutating}
+            >
+              {mutating ? (
+                <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+              ) : connector.exclusive ? (
+                <>
+                  <Zap className="mr-1.5 h-3 w-3" />
+                  Enable
+                </>
+              ) : (
+                <>
+                  <Plus className="mr-1.5 h-3 w-3" />
+                  Connect
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
+
+      {hasRealCredentials && connectedAt && (
+        <p className="mb-3 text-[10px] text-muted-foreground/60">
+          Connected {formatRelativeTime(connectedAt)}
+        </p>
+      )}
+
+      {/* Description */}
+      <p className="mb-5 text-sm leading-relaxed text-muted-foreground">{connector.description}</p>
+
+      {/* Tools */}
+      {tools.length > 0 && (
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
+            {hasRealCredentials && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
+                onClick={onOpenPermissions}
+              >
+                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
+                Permissions
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {tools.map((tool) => (
+              <Badge
+                key={tool}
+                variant="outline"
+                className="border-white/[0.08] px-2 py-0.5 text-[11px] text-muted-foreground"
+              >
+                {tool}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -847,6 +1629,14 @@ export function ConnectorsPage() {
   const [loading, setLoading] = useState(true);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [permissionsConnector, setPermissionsConnector] = useState<Connector | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  // Master-detail: which connector row is selected in the left list
+  const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
+  // Overview dialog: shown before connecting
+  const [overviewConnector, setOverviewConnector] = useState<Connector | null>(null);
+
+  const ITEMS_PER_PAGE = 20;
 
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
@@ -866,7 +1656,7 @@ export function ConnectorsPage() {
     [router, pathname, searchParams],
   );
 
-  // Fetch connected connectors from Supabase on mount
+  // Fetch connected connectors from Neon on mount
   useEffect(() => {
     let cancelled = false;
     async function fetchConnectors() {
@@ -900,6 +1690,20 @@ export function ConnectorsPage() {
     };
   }, []);
 
+  // Reset to page 1 whenever filters change
+  const prevFiltersRef = React.useRef({ searchQuery, activeCategory, activeStatus });
+  React.useEffect(() => {
+    const prev = prevFiltersRef.current;
+    if (
+      prev.searchQuery !== searchQuery ||
+      prev.activeCategory !== activeCategory ||
+      prev.activeStatus !== activeStatus
+    ) {
+      setCurrentPage(1);
+      prevFiltersRef.current = { searchQuery, activeCategory, activeStatus };
+    }
+  }, [searchQuery, activeCategory, activeStatus]);
+
   const filteredConnectors = useMemo(() => {
     return CONNECTORS.filter((c) => {
       const matchesCategory = activeCategory === 'All' || c.category === activeCategory;
@@ -918,6 +1722,12 @@ export function ConnectorsPage() {
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
 
+  const totalAvailablePages = Math.ceil(availableConnectors.length / ITEMS_PER_PAGE);
+  const pagedAvailableConnectors = availableConnectors.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE,
+  );
+
   const handleConnect = useCallback(async (id: string) => {
     const connector = CONNECTORS.find((c) => c.id === id);
     if (!connector) return;
@@ -927,9 +1737,10 @@ export function ConnectorsPage() {
     setMutatingIds((prev) => new Set([...prev, id]));
 
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch('/api/connectors', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
         body: JSON.stringify({ connectorId: id, authType: connector.authType }),
       });
       if (!res.ok) {
@@ -966,8 +1777,10 @@ export function ConnectorsPage() {
     setMutatingIds((prev) => new Set([...prev, id]));
 
     try {
+      const csrfToken = await getCsrfToken();
       const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
         method: 'DELETE',
+        headers: { 'x-csrf-token': csrfToken },
       });
       if (!res.ok) {
         // Revert on failure
@@ -1069,98 +1882,148 @@ export function ConnectorsPage() {
           </div>
         </div>
 
-        {/* Content */}
+        {/* Master-detail layout */}
         <div className="mx-auto max-w-6xl px-6 py-6">
-          {/* Loading skeleton */}
-          {loading && (
+          {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          )}
+          ) : (
+            <div className="flex gap-0 lg:gap-4">
+              {/* ── Left: scrollable compact list ───────────────────────────── */}
+              <div
+                className={cn(
+                  'w-full lg:w-64 xl:w-72 shrink-0',
+                  // On mobile, hide list when a connector is selected (drill-down)
+                  selectedConnector ? 'hidden lg:block' : 'block',
+                )}
+              >
+                {/* Connected group */}
+                {connectedConnectors.length > 0 && (
+                  <div className="mb-4">
+                    <div className="mb-1.5 flex items-center gap-1.5 px-1">
+                      <Check className="h-3 w-3 text-emerald-400" />
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Connected ({connectedConnectors.length})
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {connectedConnectors.map((connector) => (
+                        <ConnectorListRow
+                          key={connector.id}
+                          connector={connector}
+                          selected={selectedConnector?.id === connector.id}
+                          connected
+                          onClick={() => setSelectedConnector(connector)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
 
-          {/* Connected Section */}
-          {connectedConnectors.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <Check className="h-4 w-4 text-emerald-400" />
-                <h2 className="text-sm font-semibold text-foreground">
-                  Connected ({connectedConnectors.length})
-                </h2>
+                {/* Available group */}
+                {availableConnectors.length > 0 && (
+                  <div className="mb-4">
+                    <div className="mb-1.5 px-1">
+                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        Available ({availableConnectors.length})
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {pagedAvailableConnectors.map((connector) => (
+                        <ConnectorListRow
+                          key={connector.id}
+                          connector={connector}
+                          selected={selectedConnector?.id === connector.id}
+                          connected={false}
+                          onClick={() => setSelectedConnector(connector)}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Pagination */}
+                    {totalAvailablePages > 1 && (
+                      <div className="mt-3 flex items-center justify-between px-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                          disabled={currentPage <= 1}
+                        >
+                          Prev
+                        </Button>
+                        <span className="text-[11px] text-muted-foreground">
+                          {currentPage}/{totalAvailablePages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
+                          onClick={() =>
+                            setCurrentPage((p) => Math.min(totalAvailablePages, p + 1))
+                          }
+                          disabled={currentPage >= totalAvailablePages}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Empty states */}
+                {activeStatus === 'connected' && filteredConnectors.length === 0 && (
+                  <div className="py-10 text-center">
+                    <p className="text-xs text-muted-foreground">No connected connectors yet.</p>
+                  </div>
+                )}
+                {filteredConnectors.length === 0 && activeStatus !== 'connected' && (
+                  <div className="py-10 text-center">
+                    <p className="text-xs text-muted-foreground">No connectors found.</p>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {connectedConnectors.map((connector) => (
-                  <ConnectorCard
-                    key={connector.id}
-                    connector={connector}
-                    connected={true}
-                    mutating={mutatingIds.has(connector.id)}
-                    connectedAt={connectedAtMap[connector.id]}
-                    onConnect={() => void handleConnect(connector.id)}
-                    onDisconnect={() => void handleDisconnect(connector.id)}
+
+              {/* ── Right: detail panel ──────────────────────────────────────── */}
+              <div
+                className={cn(
+                  'min-w-0 flex-1',
+                  // On mobile show detail panel only when something is selected
+                  selectedConnector ? 'block' : 'hidden lg:block',
+                )}
+              >
+                {selectedConnector ? (
+                  <ConnectorDetailPanel
+                    connector={selectedConnector}
+                    connected={connectedIds.has(selectedConnector.id)}
+                    mutating={mutatingIds.has(selectedConnector.id)}
+                    connectedAt={connectedAtMap[selectedConnector.id]}
+                    onBack={() => setSelectedConnector(null)}
+                    onConnect={() => setOverviewConnector(selectedConnector)}
+                    onDisconnect={() => void handleDisconnect(selectedConnector.id)}
+                    onOpenPermissions={() => setPermissionsConnector(selectedConnector)}
                   />
-                ))}
+                ) : (
+                  /* Placeholder shown on desktop when nothing is selected */
+                  <div className="hidden h-full items-center justify-center lg:flex">
+                    <div className="text-center">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/[0.04]">
+                        <Zap className="h-5 w-5 text-muted-foreground/60" />
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Select a connector to view details
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </section>
-          )}
-
-          {/* Available Section */}
-          {availableConnectors.length > 0 && (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold text-foreground">
-                  Available
-                  {activeCategory === 'All' || activeCategory === 'Exclusive'
-                    ? ''
-                    : ` - ${activeCategory}`}
-                  <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-                    ({availableConnectors.length})
-                  </span>
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {availableConnectors.map((connector) => (
-                  <ConnectorCard
-                    key={connector.id}
-                    connector={connector}
-                    connected={false}
-                    mutating={mutatingIds.has(connector.id)}
-                    onConnect={() => void handleConnect(connector.id)}
-                    onDisconnect={() => void handleDisconnect(connector.id)}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Empty state for "Connected" filter with no results */}
-          {activeStatus === 'connected' && filteredConnectors.length === 0 && !loading && (
-            <div className="py-20 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-                <Check className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-medium text-foreground">No connected connectors yet</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Switch to &ldquo;Available&rdquo; to browse connectors you can add.
-              </p>
             </div>
           )}
 
-          {/* Empty state */}
-          {filteredConnectors.length === 0 && activeStatus !== 'connected' && (
-            <div className="py-20 text-center">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-                <Search className="h-7 w-7 text-muted-foreground" />
-              </div>
-              <h3 className="text-base font-medium text-foreground">No connectors found</h3>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Try a different search term or category.
-              </p>
-            </div>
-          )}
-
-          {/* Roadmap Callout */}
-          {(activeCategory === 'All' || activeCategory !== 'Exclusive') && (
-            <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+          {/* Roadmap Callout - shown below master-detail */}
+          {!loading && (activeCategory === 'All' || activeCategory !== 'Exclusive') && (
+            <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
                   <Zap className="h-5 w-5 text-primary" />
@@ -1209,6 +2072,25 @@ export function ConnectorsPage() {
       </div>
 
       <AddCustomConnectorDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+
+      <ConnectorOverviewDialog
+        connector={overviewConnector}
+        open={overviewConnector !== null}
+        onOpenChange={(open) => {
+          if (!open) setOverviewConnector(null);
+        }}
+        onConnect={() => {
+          if (overviewConnector) void handleConnect(overviewConnector.id);
+        }}
+      />
+
+      <ToolPermissionsPanel
+        connector={permissionsConnector}
+        open={permissionsConnector !== null}
+        onOpenChange={(open) => {
+          if (!open) setPermissionsConnector(null);
+        }}
+      />
     </ErrorBoundary>
   );
 }

@@ -1,6 +1,6 @@
 /**
- * Canonical 6-tier taxonomy (kebab-case strings matching Supabase
- * `subscriptions.tier` and the Rust `PlanTier` enum's `serde(rename)` values).
+ * Canonical 6-tier taxonomy (kebab-case strings matching cloud subscription
+ * tiers and the Rust `PlanTier` enum's `serde(rename)` values).
  *
  * Legacy aliases `'free'` and `'pay_per_result'` are retained so older rows /
  * pricing-plan rows persisted under the previous schema continue to type-check.

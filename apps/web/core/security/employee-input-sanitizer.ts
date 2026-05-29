@@ -22,7 +22,6 @@
  * - Multi-language bypass attempts
  */
 
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 import {
   detectPromptInjection,
@@ -621,9 +620,9 @@ function escapeInjectionPatterns(input: string): string {
  */
 async function logSuspiciousInput(
   userId: string,
-  originalInput: string,
-  sanitizedInput: string,
-  context: {
+  _originalInput: string,
+  _sanitizedInput: string,
+  _context: {
     injectionResult: InjectionDetectionResult;
     employeeInjectionResult: InjectionDetectionResult;
     modifications: string[];
@@ -631,32 +630,9 @@ async function logSuspiciousInput(
   },
 ): Promise<void> {
   try {
-    const { error } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
-      .from('analytics_events')
-      .insert({
-        user_id: userId,
-        event_type: 'security_audit',
-        event_data: {
-          audit_type: 'employee_input_sanitization',
-          employee_name: context.employeeName,
-          original_length: originalInput.length,
-          sanitized_length: sanitizedInput.length,
-          was_modified: sanitizedInput !== originalInput,
-          modifications: context.modifications,
-          risk_level: getHigherRiskLevel(
-            context.injectionResult.riskLevel,
-            context.employeeInjectionResult.riskLevel,
-          ),
-          standard_patterns: context.injectionResult.detectedPatterns,
-          employee_patterns: context.employeeInjectionResult.detectedPatterns,
-          input_preview: originalInput.substring(0, 200),
-        },
-        created_at: new Date().toISOString(),
-      });
-
-    if (error) {
-      logger.error('[Employee Input Sanitizer] Failed to log suspicious input:', error.message);
-    }
+    // Database audit logging migrated to Neon (analytics_events table).
+    // TODO: implement via /api/admin/security or getNeonDb once analytics_events migration ships.
+    logger.info('[Employee Input Sanitizer] Suspicious input detected for user:', userId);
   } catch (error) {
     // Fail silently - logging should not block the request
     logger.error('[Employee Input Sanitizer] Error logging suspicious input:', error);

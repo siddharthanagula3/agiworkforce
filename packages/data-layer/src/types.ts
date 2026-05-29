@@ -5,14 +5,13 @@
  * # Cloud-provider-portable data layer interfaces
  *
  * These interfaces are the **only** contract feature code should rely on for
- * persistence, auth, blob storage, and pub/sub. The codebase is wired to
- * Supabase today; tomorrow we should be able to swap to Neon, RDS, S3,
- * Auth0, Pusher, etc. by swapping adapter implementations — NOT by rewriting
- * feature code.
+ * persistence, auth, blob storage, and pub/sub. Hosted account data is wired
+ * to Neon for Postgres and Clerk for identity; future providers must be added
+ * through adapters, not direct SDK calls in app features.
  *
  * ## Design rules
  *
- * 1. **Vendor-neutral.** No Supabase, Postgres, S3, or Auth0 types leak through
+ * 1. **Vendor-neutral.** No provider SDK types leak through
  *    these interfaces.
  * 2. **Minimal surface.** Add a method only when at least one concrete adapter
  *    can implement it cheaply. Don't pre-design for hypothetical providers.
@@ -28,9 +27,9 @@
  * ## When you add a new method
  *
  * - Add it to the interface here with a JSDoc explaining the contract.
- * - Implement it in `adapters/supabase.ts` (today's default).
- * - Stub it in `adapters/neon.ts` and `adapters/postgres.ts` with
- *   `throw new NotImplementedError(...)`.
+ * - Implement it in the active adapter (`adapters/neon.ts` for hosted DB,
+ *   `adapters/clerk.ts` for hosted auth).
+ * - Stub future adapters with `throw new NotImplementedError(...)`.
  * - Add a unit test in `src/__tests__/`.
  */
 
@@ -41,7 +40,6 @@
 /**
  * Connection string + options for any Postgres-compatible backend.
  *
- * - Supabase: `postgresql://postgres:[pwd]@db.[ref].supabase.co:5432/postgres`
  * - Neon: `postgresql://[user]:[pwd]@[project].neon.tech/[db]?sslmode=require`
  * - RDS: `postgresql://[user]:[pwd]@[host]:5432/[db]`
  * - PlanetScale: not Postgres-compatible (MySQL); needs separate adapter.
@@ -65,7 +63,7 @@ export interface DatabaseConnectionConfig {
  * All methods are parameterized — never concatenate user input into SQL.
  *
  * @example
- *   const db = createDatabaseClient({ provider: 'supabase' });
+ *   const db = createDatabaseClient({ provider: 'neon' });
  *   const userDb = db.withUser(jwt);
  *   const rows = await userDb.query<{ id: string }>(
  *     'select id from conversations where user_id = $1',
@@ -148,8 +146,8 @@ export interface RefreshedTokens {
  * and refreshes expired access tokens.
  *
  * Implementations:
- * - Supabase: calls `auth.getUser(token)` on the auth schema.
- * - Auth0 / Clerk: verifies signature against published JWKS.
+ * - Clerk: verifies signature against Clerk session-token keys/JWKS.
+ * - Auth0: verifies signature against published JWKS.
  * - Cognito: verifies against AWS-published JWKS for the user pool.
  *
  * Sign-up, password reset, OAuth callback flows live OUTSIDE this interface
@@ -185,12 +183,11 @@ export interface StoragePutResult {
 /**
  * Storage adapter for blobs (file uploads, exports, attachment payloads).
  *
- * Bucket semantics are vendor-portable: if your Supabase setup has a
- * `user-uploads` bucket, the S3 / R2 adapter just maps it to a prefix or
- * a separate bucket. Bucket names should be short kebab-case strings.
+ * Bucket semantics are vendor-portable. S3-compatible providers can map a
+ * logical bucket to a real bucket or prefix. Bucket names should be short
+ * kebab-case strings.
  *
  * Implementations:
- * - Supabase: storage.from(bucket).upload(key, ...).
  * - S3: PutObjectCommand({ Bucket, Key, Body }).
  * - R2: same SDK as S3 with R2 endpoint.
  * - B2: native B2 SDK.
@@ -215,9 +212,9 @@ export interface StorageAdapter {
   /**
    * Mint a short-lived signed URL for downloading. TTL must be > 0.
    *
-   * Adapters MAY clamp the TTL (S3 caps at 7 days for SigV4; Supabase at
-   * 1 year). If the requested TTL is unsupportable, throw rather than
-   * silently extending or shortening.
+   * Adapters MAY clamp the TTL (S3 caps at 7 days for SigV4). If the
+   * requested TTL is unsupportable, throw rather than silently extending or
+   * shortening.
    */
   signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string>;
 }
@@ -231,7 +228,6 @@ export interface StorageAdapter {
  * use a separate adapter (TODO: add `QueueAdapter` when we ship background jobs).
  *
  * Implementations:
- * - Supabase Realtime: `channel.on('broadcast', ...)`.
  * - Pusher: `channel.bind(event, ...)`.
  * - Ably: `channel.subscribe(name, ...)`.
  * - Self-hosted ws: thin wrapper over a single websocket connection.
@@ -259,25 +255,24 @@ export interface RealtimeAdapter {
  * Database providers we have adapters for or are committed to building.
  * Add a new entry only when you also add an adapter file under `adapters/`.
  */
-export type DatabaseProvider = 'supabase' | 'neon' | 'postgres';
+export type DatabaseProvider = 'neon' | 'postgres';
 
 /**
- * Auth providers. `supabase` is current. `auth0`, `clerk`, `cognito` are
- * skeletons documented in `docs/current/technical-architecture.md`.
+ * Auth providers. `clerk` has a server verification adapter. `auth0` and
+ * `cognito` are documented targets.
  */
-export type AuthProvider = 'supabase' | 'auth0' | 'clerk' | 'cognito';
+export type AuthProvider = 'auth0' | 'clerk' | 'cognito';
 
 /**
- * Storage providers. `supabase` is current. `s3` covers AWS + R2 + B2 +
- * MinIO (any S3-compatible backend).
+ * Storage providers. `s3` covers AWS + R2 + B2 + MinIO (any S3-compatible
+ * backend).
  */
-export type StorageProvider = 'supabase' | 's3' | 'r2' | 'b2';
+export type StorageProvider = 's3' | 'r2' | 'b2';
 
 /**
- * Realtime providers. `supabase` is current. `pusher` and `ably` are
- * documented migration targets.
+ * Realtime providers. `pusher` and `ably` are documented targets.
  */
-export type RealtimeProvider = 'supabase' | 'pusher' | 'ably' | 'self-hosted';
+export type RealtimeProvider = 'pusher' | 'ably' | 'self-hosted';
 
 /**
  * Top-level configuration. The factory reads the provider field, picks an
@@ -286,16 +281,9 @@ export type RealtimeProvider = 'supabase' | 'pusher' | 'ably' | 'self-hosted';
  * ENV resolution:
  * - `AGI_DATABASE_PROVIDER` -> `provider`
  * - `AGI_DATABASE_URL` or `DATABASE_URL` -> `connectionString`
- * - For Supabase: `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
- *   (server) / `NEXT_PUBLIC_SUPABASE_ANON_KEY` (browser).
  */
 export interface DataLayerConfig {
-  database: { provider: DatabaseProvider } & Partial<DatabaseConnectionConfig> & {
-      /** Supabase-specific: URL + key. */
-      supabaseUrl?: string;
-      supabaseAnonKey?: string;
-      supabaseServiceRoleKey?: string;
-    };
+  database: { provider: DatabaseProvider } & Partial<DatabaseConnectionConfig>;
   auth: { provider: AuthProvider } & Record<string, unknown>;
   storage: { provider: StorageProvider } & Record<string, unknown>;
   realtime: { provider: RealtimeProvider } & Record<string, unknown>;

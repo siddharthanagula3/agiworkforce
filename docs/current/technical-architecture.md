@@ -6,16 +6,16 @@ Last updated: 2026-05-21
 
 ## Monorepo Shape
 
-| Path        | Owner             | Purpose                                                                            |
-| ----------- | ----------------- | ---------------------------------------------------------------------------------- |
-| `apps/`     | Surface leads     | User-facing surfaces. One folder per shippable surface.                            |
-| `packages/` | Platform          | Shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.    |
-| `crates/`   | Rust platform     | Shared Rust runtime, protocol, command registry, plugin, task, and sandbox crates. |
-| `services/` | Backend/platform  | Deployable services such as API gateway and signaling.                             |
-| `supabase/` | Data/backend      | Canonical database migrations and Supabase config.                                 |
-| `docs/`     | Docs/platform     | Current docs, decisions, plans, support/legal/marketing docs, and archive.         |
-| `audit/`    | Platform/security | Evidence ledgers, scan output, parity research, and source-backed claims.          |
-| `patches/`  | Platform          | pnpm dependency patches with upstream/version-specific rationale.                  |
+| Path                | Owner             | Purpose                                                                            |
+| ------------------- | ----------------- | ---------------------------------------------------------------------------------- |
+| `apps/`             | Surface leads     | User-facing surfaces. One folder per shippable surface.                            |
+| `packages/`         | Platform          | Shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.    |
+| `crates/`           | Rust platform     | Shared Rust runtime, protocol, command registry, plugin, task, and sandbox crates. |
+| `services/`         | Backend/platform  | Deployable services such as API gateway and signaling.                             |
+| `apps/web/db/neon/` | Data/backend      | Canonical Neon database migrations.                                                |
+| `docs/`             | Docs/platform     | Current docs, decisions, plans, support/legal/marketing docs, and archive.         |
+| `audit/`            | Platform/security | Evidence ledgers, scan output, parity research, and source-backed claims.          |
+| `patches/`          | Platform          | pnpm dependency patches with upstream/version-specific rationale.                  |
 
 ## Surface Feature Roots
 
@@ -33,7 +33,7 @@ Last updated: 2026-05-21
 - App code must not import another app.
 - Packages must not import from apps.
 - Services must not import UI packages.
-- Root `supabase/migrations` is canonical for database schema changes.
+- Root `apps/web/db/neon` is canonical for database schema changes.
 - Root `patches/` is reserved for pnpm dependency patches; remove entries when upstream/dependency changes make them unnecessary.
 
 ## Cross-Surface Data Ownership
@@ -114,7 +114,7 @@ Generated files need:
 Enterprise readiness now spans:
 
 - shared types in `packages/types/src/enterprise`,
-- canonical database tables in root `supabase/migrations`,
+- canonical database tables in root `apps/web/db/neon`,
 - API gateway enterprise routes,
 - Web admin readiness route,
 - docs under `docs/enterprise`.

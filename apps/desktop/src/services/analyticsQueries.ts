@@ -72,48 +72,20 @@ export async function queryAvgSessionDuration(_dateRange?: {
 }
 
 export async function queryRetentionRate(cohortDate: Date): Promise<RetentionCohort> {
+  // No backend retention-cohort command exists (see analytics.rs). Return an honest
+  // empty cohort rather than fabricated retention curves.
   return {
     cohort_date: cohortDate.toISOString(),
-    users_count: 100,
-    day_1_retention: 85,
-    day_7_retention: 60,
-    day_30_retention: 40,
+    users_count: 0,
+    day_1_retention: 0,
+    day_7_retention: 0,
+    day_30_retention: 0,
   };
 }
 
-export async function queryConversionFunnel(funnelName: string): Promise<FunnelStep[]> {
-  if (funnelName === 'onboarding') {
-    return [
-      {
-        step_name: 'App Opened',
-        step_order: 1,
-        users_count: 1000,
-        conversion_rate: 100,
-      },
-      {
-        step_name: 'Signed Up',
-        step_order: 2,
-        users_count: 800,
-        conversion_rate: 80,
-        avg_time_to_next_step_ms: 60000,
-      },
-      {
-        step_name: 'First Automation',
-        step_order: 3,
-        users_count: 600,
-        conversion_rate: 75,
-        avg_time_to_next_step_ms: 300000,
-      },
-      {
-        step_name: 'First Goal',
-        step_order: 4,
-        users_count: 400,
-        conversion_rate: 66.67,
-        avg_time_to_next_step_ms: 600000,
-      },
-    ];
-  }
-
+export async function queryConversionFunnel(_funnelName: string): Promise<FunnelStep[]> {
+  // No backend funnel-analytics command exists. Return an honest empty funnel
+  // instead of a hardcoded 1000→800→600→400 demo curve.
   return [];
 }
 
@@ -121,26 +93,9 @@ export async function queryErrorStats(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<ErrorStats[]> {
-  return [
-    {
-      error_type: 'NetworkError',
-      count: 45,
-      unique_users: 12,
-      first_seen: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      last_seen: new Date().toISOString(),
-      severity: 'medium',
-      resolved: false,
-    },
-    {
-      error_type: 'ValidationError',
-      count: 23,
-      unique_users: 8,
-      first_seen: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      last_seen: new Date().toISOString(),
-      severity: 'low',
-      resolved: true,
-    },
-  ];
+  // No backend error-aggregation command exists. Return an honest empty list
+  // instead of fabricated NetworkError/ValidationError rows.
+  return [];
 }
 
 export async function queryTimeSeriesData(
@@ -182,34 +137,22 @@ export async function queryCategoryData(
   category: 'features' | 'errors' | 'pages',
 ): Promise<CategoryData[]> {
   if (category === 'features') {
-    return [
-      { category: 'Parallel Execution', value: 350, percentage: 35 },
-      { category: 'Browser Automation', value: 280, percentage: 28 },
-      { category: 'Code Completion', value: 180, percentage: 18 },
-      { category: 'Vision Automation', value: 120, percentage: 12 },
-      { category: 'Other', value: 70, percentage: 7 },
-    ];
+    // Derive the feature breakdown from REAL feature-usage telemetry
+    // (analytics_get_feature_usage) instead of hardcoded category percentages.
+    const usage = await queryFeatureUsage();
+    const total = usage.reduce((sum, f) => sum + f.usage_count, 0);
+    if (total === 0) return [];
+    return usage
+      .map((f) => ({
+        category: f.feature_name,
+        value: f.usage_count,
+        percentage: Math.round((f.usage_count / total) * 1000) / 10,
+      }))
+      .sort((a, b) => b.value - a.value);
   }
 
-  if (category === 'errors') {
-    return [
-      { category: 'Network Errors', value: 45, percentage: 45 },
-      { category: 'Validation Errors', value: 30, percentage: 30 },
-      { category: 'Runtime Errors', value: 15, percentage: 15 },
-      { category: 'Other', value: 10, percentage: 10 },
-    ];
-  }
-
-  if (category === 'pages') {
-    return [
-      { category: 'Chat', value: 400, percentage: 40 },
-      { category: 'Automation', value: 250, percentage: 25 },
-      { category: 'Settings', value: 150, percentage: 15 },
-      { category: 'Browser', value: 120, percentage: 12 },
-      { category: 'Other', value: 80, percentage: 8 },
-    ];
-  }
-
+  // 'errors' and 'pages' have no backend aggregation command (see analytics.rs);
+  // return an honest empty breakdown rather than fabricated category splits.
   return [];
 }
 
@@ -226,33 +169,17 @@ export async function queryTopEvents(
     .slice(0, limit);
 }
 
-export async function queryPerformanceMetrics(dateRange: { start: Date; end: Date }): Promise<{
+export async function queryPerformanceMetrics(_dateRange: { start: Date; end: Date }): Promise<{
   avg_page_load_time: TimeSeriesData[];
   avg_api_response_time: TimeSeriesData[];
   memory_usage: TimeSeriesData[];
 }> {
-  const days = Math.ceil(
-    (dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24),
-  );
-
-  const generateData = (baseValue: number) => {
-    const data: TimeSeriesData[] = [];
-    for (let i = 0; i < days; i++) {
-      const date = new Date(dateRange.start);
-      date.setDate(date.getDate() + i);
-      data.push({
-        timestamp: date.getTime(),
-        value: baseValue + Math.random() * 100,
-        label: date.toLocaleDateString(),
-      });
-    }
-    return data;
-  };
-
+  // No backend performance-metrics command exists (see analytics.rs). Return honest
+  // empty series instead of Math.random()-generated page-load/latency/memory curves.
   return {
-    avg_page_load_time: generateData(200),
-    avg_api_response_time: generateData(150),
-    memory_usage: generateData(500),
+    avg_page_load_time: [],
+    avg_api_response_time: [],
+    memory_usage: [],
   };
 }
 

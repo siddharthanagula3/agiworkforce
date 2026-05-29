@@ -1,5 +1,18 @@
 'use client';
 
+/**
+ * Canonical web chat store for the main chat page flow.
+ *
+ * Used by: WebChatPage, useChatStream, useConversations, UnifiedChatPage,
+ * ChatSettings, CommandPalette, and localByokHandoff.
+ *
+ * Persist key: 'agiworkforce-web-chat' (persists model selection + sidebar state only).
+ *
+ * Related stores (distinct purposes, different shapes -- do NOT merge):
+ *   - shared/stores/chat-store.ts         (MGX-style conversation store; persist key 'agi-chat-store')
+ *   - packages/unified-chat/src/stores/chatStore.ts  (shared package, persist key 'agi-web-chat')
+ */
+
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkforce/types';
@@ -45,7 +58,7 @@ export interface MessageMetadata {
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
   documentData?: { title?: string; content?: string; [key: string]: unknown };
-  /** Persisted user reaction (stored in Supabase messages.metadata) */
+  /** Persisted user reaction (stored in cloud messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
 }
 
@@ -99,6 +112,7 @@ export interface Conversation {
   updatedAt: string;
   model?: string | null;
   messageCount?: number;
+  isTemporary?: boolean;
 }
 
 export type ModelTier = 'economy' | 'balanced' | 'premium';

@@ -537,7 +537,29 @@
     --chat-text-secondary: #636363;
     --chat-accent: #21808d;
     --chat-accent-secondary: #da7756;
-    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border, --chat-accent-primary,
+    /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
+    --chat-accent-primary: #c8892a;
+    /*
+     * Legacy product-surface aliases used by /settings and older shared pages.
+     * Keep them derived from semantic tokens so light/dark mode stays readable
+     * without hard-coding a separate settings palette.
+     */
+    --bg-base: hsl(var(--background));
+    --bg-elev: hsl(var(--card));
+    --bg-hover: hsl(var(--muted));
+    --text-1: hsl(var(--foreground));
+    --text-2: hsl(var(--foreground) / 0.78);
+    --text-3: hsl(var(--muted-foreground));
+    --settings-border: hsl(var(--border));
+    --settings-destructive: hsl(var(--destructive));
+    --settings-destructive-foreground: hsl(var(--destructive-foreground));
+    --terracotta: var(--chat-accent-secondary);
+    --chat-surface-elevated: hsl(var(--card));
+    --serif: var(--font-heading);
+    --mono: var(--font-mono);
+    --teal: var(--chat-accent);
+    --amber: var(--chat-accent-primary);
+    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
        @agiworkforce/design-tokens/chat.css (imported above) */
@@ -627,7 +649,9 @@
     --chat-text-secondary: #a1a1a6;
     --chat-accent: #21808d;
     --chat-accent-secondary: #da7756;
-    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border, --chat-accent-primary,
+    /* Override design-tokens default (#da7756 terracotta) with AGI amber. */
+    --chat-accent-primary: #c8892a;
+    /* --chat-fg, --chat-surface-*, --chat-text-*, --chat-border,
        --chat-user-bubble-bg, --chat-thinking-*, --chat-badge-*, --chat-destructive,
        --chat-info, --chat-success, --chat-warning, --chat-radius-* come from
        @agiworkforce/design-tokens/chat.css (imported above) */
@@ -1534,21 +1558,35 @@
  * ────────────────────────────────────────────────────────────────────── */
 
 [data-design='agi'] {
-  --agi-bg: #060604;
-  --agi-bg-2: #0d0d0a;
-  --agi-bg-3: #16161a;
-  --agi-card: #111110;
+  --agi-bg: #141511;
+  --agi-bg-2: #1b1c18;
+  --agi-bg-3: #24251f;
+  --agi-card: #1a1b17;
 
-  --agi-rule: rgba(245, 244, 238, 0.12);
-  --agi-rule-strong: rgba(245, 244, 238, 0.22);
+  --agi-rule: rgba(226, 220, 207, 0.12);
+  --agi-rule-strong: rgba(226, 220, 207, 0.2);
 
-  --agi-ink: #f5f4ee;
-  --agi-ink-2: #b8b5ac;
-  --agi-ink-quiet: #7a7770;
-  --agi-ink-faint: #4a4843;
+  --agi-ink: #e7e0d2;
+  --agi-ink-2: #c8c0b2;
+  --agi-ink-quiet: #938b7d;
+  --agi-ink-faint: #696358;
 
-  --agi-amber: #ffb800;
-  --agi-amber-soft: rgba(255, 184, 0, 0.16);
+  --agi-amber: #b9985c;
+  --agi-amber-soft: rgba(185, 152, 92, 0.15);
+  --agi-surface-wash: rgba(226, 220, 207, 0.035);
+  --agi-line-soft: rgba(226, 220, 207, 0.045);
+  --agi-glow-soft: rgba(185, 152, 92, 0.11);
+  --agi-console-tint: rgba(23, 24, 20, 0.62);
+  --agi-console-tint-strong: rgba(23, 24, 20, 0.72);
+  --agi-button-bg: #ddd3c1;
+  --agi-button-bg-hover: #cdbfaa;
+  --agi-button-ink: #1e1f1a;
+  --agi-error: #c97870;
+  --agi-shadow: rgba(8, 8, 6, 0.34);
+  --agi-header-sheen: rgba(226, 220, 207, 0.018);
+  --agi-code-bg: rgba(226, 220, 207, 0.07);
+  --agi-selection-bg: rgba(185, 152, 92, 0.28);
+  --agi-selection-text: var(--agi-ink);
 
   --agi-font: var(--font-geist-sans), 'Helvetica Neue', system-ui, sans-serif;
   --agi-font-mono: var(--font-geist-mono), ui-monospace, monospace;
@@ -1582,8 +1620,8 @@
 }
 
 [data-design='agi'] ::selection {
-  background: var(--agi-amber);
-  color: var(--agi-bg);
+  background: var(--agi-selection-bg);
+  color: var(--agi-selection-text);
 }
 
 /* chrome band — full-bleed wrapper for header and footer rows */
@@ -1607,6 +1645,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 22px 0;
+  border-bottom: 1px solid var(--agi-rule);
 }
 [data-design='agi'] .agi-mark {
   font-family: var(--agi-font);
@@ -1615,8 +1654,14 @@
   letter-spacing: -0.02em;
   color: var(--agi-ink);
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
+  min-height: 34px;
+  line-height: 1;
   text-decoration: none;
+}
+[data-design='agi'] .agi-mark svg {
+  display: block;
+  flex-shrink: 0;
 }
 [data-design='agi'] .agi-mark-dot {
   color: var(--agi-amber);
@@ -1628,8 +1673,16 @@
   align-items: center;
   gap: 24px;
 }
+[data-design='agi'] .agi-top-nav-desktop,
+[data-design='agi'] .agi-top-actions-desktop {
+  align-items: center;
+}
 [data-design='agi'] .agi-top-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
   font-size: 13.5px;
+  line-height: 1;
   font-weight: 500;
   color: var(--agi-ink-2);
   text-decoration: none;
@@ -1644,18 +1697,22 @@
   color: var(--agi-ink);
 }
 [data-design='agi'] .agi-top-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
   font-size: 13.5px;
+  line-height: 1;
   font-weight: 600;
   letter-spacing: -0.005em;
-  color: var(--agi-bg);
-  background: var(--agi-ink);
+  color: var(--agi-button-ink);
+  background: var(--agi-button-bg);
   padding: 8px 14px;
   border-radius: 6px;
   text-decoration: none;
   transition: background var(--agi-dur-fast) var(--agi-ease-out);
 }
 [data-design='agi'] .agi-top-cta:hover {
-  background: var(--agi-ink-2);
+  background: var(--agi-button-bg-hover);
 }
 
 /* hero */
@@ -1688,7 +1745,8 @@
 }
 [data-design='agi'] .agi-h1-line {
   display: block;
-  white-space: nowrap;
+  white-space: normal;
+  text-wrap: balance;
 }
 [data-design='agi'] .agi-h1-line--quiet {
   color: var(--agi-ink-2);
@@ -1715,15 +1773,15 @@
 [data-design='agi'] .agi-cta-primary {
   font-size: 14px;
   font-weight: 600;
-  color: var(--agi-bg);
-  background: var(--agi-ink);
+  color: var(--agi-button-ink);
+  background: var(--agi-button-bg);
   padding: 11px 18px;
   border-radius: 6px;
   text-decoration: none;
   transition: background var(--agi-dur-fast) var(--agi-ease-out);
 }
 [data-design='agi'] .agi-cta-primary:hover {
-  background: var(--agi-ink-2);
+  background: var(--agi-button-bg-hover);
 }
 [data-design='agi'] .agi-cta-ghost {
   font-size: 14px;
@@ -1779,6 +1837,356 @@
   font-weight: 600;
 }
 
+/* campaign landing system */
+[data-design='agi'] .agi-campaign-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: 44px;
+  align-items: stretch;
+  padding: 92px 0 70px;
+  border-bottom: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-campaign-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+[data-design='agi'] .agi-campaign-title {
+  font-size: clamp(2.55rem, 7vw, 6.35rem);
+  line-height: 0.96;
+  letter-spacing: 0;
+  font-weight: 650;
+  margin: 0;
+  max-width: 10.6ch;
+  color: var(--agi-ink);
+}
+[data-design='agi'] .agi-campaign-lede {
+  margin: 26px 0 0;
+  max-width: 64ch;
+  font-size: 1.0625rem;
+  line-height: 1.64;
+  color: var(--agi-ink-2);
+}
+[data-design='agi'] .agi-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+[data-design='agi'] .agi-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 10px;
+  border: 1px solid var(--agi-rule);
+  border-radius: 999px;
+  color: var(--agi-ink-2);
+  background: linear-gradient(180deg, var(--agi-surface-wash), transparent), var(--agi-bg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+[data-design='agi'] .agi-campaign-console {
+  position: relative;
+  min-height: 520px;
+  padding: 18px;
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--agi-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--agi-line-soft) 1px, transparent 1px),
+    radial-gradient(circle at 12% 18%, var(--agi-glow-soft), transparent 26%), var(--agi-card);
+  background-size:
+    28px 28px,
+    28px 28px,
+    auto,
+    auto;
+  overflow: hidden;
+}
+[data-design='agi'] .agi-campaign-console::after {
+  content: '';
+  position: absolute;
+  inset: 56px 18px auto;
+  height: 1px;
+  background: var(--agi-rule-strong);
+}
+[data-design='agi'] .agi-console-topline {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--agi-ink-quiet);
+  font-family: var(--agi-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+[data-design='agi'] .agi-console-stats {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 66px;
+}
+[data-design='agi'] .agi-console-stat {
+  min-width: 0;
+  min-height: 118px;
+  padding: 14px;
+  border: 1px solid var(--agi-rule);
+  background: var(--agi-console-tint);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+[data-design='agi'] .agi-console-stat-value {
+  font-size: clamp(1.45rem, 3vw, 2.3rem);
+  line-height: 1;
+  color: var(--agi-amber);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+[data-design='agi'] .agi-console-stat-label {
+  margin-top: 8px;
+  color: var(--agi-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+[data-design='agi'] .agi-console-stat-note {
+  margin-top: 4px;
+  color: var(--agi-ink-quiet);
+  font-size: 11px;
+  line-height: 1.35;
+}
+[data-design='agi'] .agi-console-ledger {
+  position: absolute;
+  z-index: 1;
+  left: 18px;
+  right: 18px;
+  bottom: 18px;
+  margin: 0;
+  border-top: 1px solid var(--agi-rule);
+  background: var(--agi-console-tint-strong);
+  backdrop-filter: blur(8px);
+}
+[data-design='agi'] .agi-console-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-console-row:last-child {
+  border-bottom: none;
+}
+[data-design='agi'] .agi-console-row dt {
+  margin: 0;
+  color: var(--agi-ink-quiet);
+  font-size: 11px;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+[data-design='agi'] .agi-console-row dd {
+  margin: 0;
+  color: var(--agi-ink-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+[data-design='agi'] .agi-proof-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-proof-item {
+  min-height: 132px;
+  padding: 24px 18px;
+  border-right: 1px solid var(--agi-rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+[data-design='agi'] .agi-proof-item:last-child {
+  border-right: none;
+}
+[data-design='agi'] .agi-proof-value {
+  color: var(--agi-ink);
+  font-size: clamp(1.4rem, 3vw, 2.15rem);
+  line-height: 1;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+[data-design='agi'] .agi-proof-label {
+  margin-top: 9px;
+  color: var(--agi-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+[data-design='agi'] .agi-proof-note {
+  margin-top: 7px;
+  color: var(--agi-ink-quiet);
+  font-size: 12px;
+  line-height: 1.45;
+}
+[data-design='agi'] .agi-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid var(--agi-rule);
+  border-left: 1px solid var(--agi-rule);
+}
+[data-design='agi'] .agi-signal-card {
+  min-height: 236px;
+  padding: 24px;
+  border-right: 1px solid var(--agi-rule);
+  border-bottom: 1px solid var(--agi-rule);
+  background: linear-gradient(180deg, var(--agi-surface-wash), transparent);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    background var(--agi-dur-fast) var(--agi-ease-out),
+    transform var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-signal-link:hover {
+  background: var(--agi-bg-2);
+  transform: translateY(-2px);
+}
+[data-design='agi'] .agi-signal-meta {
+  margin: 0 0 18px;
+  color: var(--agi-amber);
+  font-family: var(--agi-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+[data-design='agi'] .agi-signal-title {
+  margin: 0;
+  color: var(--agi-ink);
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 650;
+}
+[data-design='agi'] .agi-signal-body {
+  margin: 14px 0 0;
+  color: var(--agi-ink-2);
+  font-size: 14px;
+  line-height: 1.58;
+}
+[data-design='agi'] .agi-route-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+[data-design='agi'] .agi-route-card {
+  min-height: 154px;
+  padding: 22px;
+  border: 1px solid var(--agi-rule);
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  background: linear-gradient(90deg, var(--agi-glow-soft), transparent 46%), var(--agi-card);
+  display: flex;
+  flex-direction: column;
+  transition:
+    border-color var(--agi-dur-fast) var(--agi-ease-out),
+    transform var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-route-card:hover {
+  border-color: var(--agi-rule-strong);
+  transform: translateY(-2px);
+}
+[data-design='agi'] .agi-route-meta {
+  color: var(--agi-ink-quiet);
+  font-family: var(--agi-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+[data-design='agi'] .agi-route-title {
+  margin-top: 16px;
+  color: var(--agi-ink);
+  font-size: 18px;
+  font-weight: 650;
+}
+[data-design='agi'] .agi-route-body {
+  margin-top: 10px;
+  color: var(--agi-ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+[data-design='agi'] .agi-launch-cta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 32px;
+  align-items: end;
+  padding: 34px;
+  border: 1px solid var(--agi-rule-strong);
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--agi-glow-soft), transparent 36%), var(--agi-card);
+}
+[data-design='agi'] .agi-launch-title {
+  margin: 0;
+  color: var(--agi-ink);
+  font-size: clamp(1.5rem, 3.4vw, 2.65rem);
+  line-height: 1.05;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+[data-design='agi'] .agi-launch-body {
+  margin: 16px 0 0;
+  max-width: 62ch;
+  color: var(--agi-ink-2);
+  font-size: 15px;
+  line-height: 1.62;
+}
+
+@media (max-width: 980px) {
+  [data-design='agi'] .agi-campaign-hero {
+    grid-template-columns: 1fr;
+    padding: 62px 0 44px;
+  }
+  [data-design='agi'] .agi-campaign-console {
+    min-height: 440px;
+  }
+  [data-design='agi'] .agi-proof-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  [data-design='agi'] .agi-proof-item:nth-child(2n) {
+    border-right: none;
+  }
+  [data-design='agi'] .agi-signal-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  [data-design='agi'] .agi-campaign-title {
+    font-size: clamp(2.3rem, 13vw, 3.6rem);
+    max-width: 11ch;
+  }
+  [data-design='agi'] .agi-campaign-console {
+    min-height: auto;
+  }
+  [data-design='agi'] .agi-console-stats,
+  [data-design='agi'] .agi-proof-strip,
+  [data-design='agi'] .agi-signal-grid,
+  [data-design='agi'] .agi-route-grid,
+  [data-design='agi'] .agi-launch-cta {
+    grid-template-columns: 1fr;
+  }
+  [data-design='agi'] .agi-console-ledger {
+    position: static;
+    margin-top: 18px;
+  }
+  [data-design='agi'] .agi-console-row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  [data-design='agi'] .agi-proof-item {
+    border-right: none;
+  }
+  [data-design='agi'] .agi-signal-card,
+  [data-design='agi'] .agi-route-card {
+    min-height: auto;
+  }
+}
+
 /* generic section */
 [data-design='agi'] .agi-section {
   padding: 64px 0;
@@ -1828,8 +2236,8 @@
   font-family: inherit;
 }
 [data-design='agi'] .agi-tier-toggle-btn--active {
-  background: var(--agi-ink);
-  color: var(--agi-bg);
+  background: var(--agi-button-bg);
+  color: var(--agi-button-ink);
 }
 [data-design='agi'] .agi-tier-toggle-save {
   font-size: 11px;
@@ -1922,15 +2330,15 @@
   font-size: 14px;
   font-weight: 600;
   text-decoration: none;
-  color: var(--agi-bg);
-  background: var(--agi-ink);
+  color: var(--agi-button-ink);
+  background: var(--agi-button-bg);
   padding: 11px 16px;
   border-radius: 8px;
   text-align: center;
   transition: background var(--agi-dur-fast) var(--agi-ease-out);
 }
 [data-design='agi'] .agi-tier-cta:hover {
-  background: var(--agi-ink-2);
+  background: var(--agi-button-bg-hover);
 }
 [data-design='agi'] .agi-tier-cta--ghost {
   background: transparent;
@@ -2011,8 +2419,8 @@
 }
 [data-design='agi'] .agi-provider-pricing {
   font-size: 11px;
-  color: var(--agi-accent);
-  font-family: var(--mono);
+  color: var(--agi-amber);
+  font-family: var(--agi-font-mono);
   letter-spacing: 0.02em;
   display: flex;
   align-items: center;
@@ -2231,7 +2639,7 @@
   border: 1px solid var(--agi-rule);
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 24px 60px var(--agi-shadow);
 }
 [data-design='agi'] .agi-chat-header {
   display: flex;
@@ -2239,7 +2647,7 @@
   gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--agi-rule);
-  background: linear-gradient(0deg, transparent, rgba(255, 255, 255, 0.015));
+  background: linear-gradient(0deg, transparent, var(--agi-header-sheen));
 }
 [data-design='agi'] .agi-chat-model {
   font-size: 14px;
@@ -2282,7 +2690,7 @@
 [data-design='agi'] .agi-msg-text code {
   font-family: var(--agi-font-mono);
   font-size: 0.92em;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--agi-code-bg);
   padding: 1px 6px;
   border-radius: 4px;
   color: var(--agi-ink);
@@ -2336,25 +2744,26 @@
   border-top: 1px solid var(--agi-rule);
 }
 [data-design='agi'] .agi-footer-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.25fr) repeat(4, minmax(120px, 1fr));
   align-items: flex-start;
-  gap: 48px;
-  flex-wrap: wrap;
+  column-gap: clamp(36px, 5vw, 92px);
+  row-gap: 36px;
 }
 [data-design='agi'] .agi-footer-mark {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   font-weight: 600;
   font-size: 16px;
+  line-height: 1;
   letter-spacing: -0.018em;
   color: var(--agi-ink);
   text-decoration: none;
+  min-height: 24px;
 }
-[data-design='agi'] .agi-footer-cols {
-  display: flex;
-  gap: 56px;
-  flex-wrap: wrap;
+[data-design='agi'] .agi-footer-mark svg {
+  display: block;
+  flex-shrink: 0;
 }
 [data-design='agi'] .agi-footer-col {
   list-style: none;
@@ -2391,6 +2800,23 @@
   flex-wrap: wrap;
   font-size: 12px;
   color: var(--agi-ink-quiet);
+}
+
+@media (max-width: 940px) {
+  [data-design='agi'] .agi-footer-row {
+    grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(130px, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  [data-design='agi'] .agi-footer-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 28px;
+  }
+
+  [data-design='agi'] .agi-footer-mark {
+    grid-column: 1 / -1;
+  }
 }
 
 @keyframes agi-blink {
@@ -2473,8 +2899,8 @@
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
-  color: var(--agi-bg);
-  background: var(--agi-ink);
+  color: var(--agi-button-ink);
+  background: var(--agi-button-bg);
   padding: 9px 16px;
   border-radius: 7px;
   text-align: center;
@@ -2482,7 +2908,7 @@
   transition: background var(--agi-dur-fast) var(--agi-ease-out);
 }
 [data-design='agi'] .agi-perk-cta:hover {
-  background: var(--agi-ink-2);
+  background: var(--agi-button-bg-hover);
 }
 
 /* light-mode token overrides for [data-design='agi'] pages
@@ -2490,21 +2916,35 @@
    Tokens map to perceptually-equivalent light-surface values. */
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
-  --agi-bg: #f5f5f2;
-  --agi-bg-2: #ebebea;
-  --agi-bg-3: #e0e0de;
-  --agi-card: #ffffff;
+  --agi-bg: #f2f0ea;
+  --agi-bg-2: #ebe7dc;
+  --agi-bg-3: #dfd8c8;
+  --agi-card: #f8f5ee;
 
-  --agi-rule: rgba(10, 13, 10, 0.1);
-  --agi-rule-strong: rgba(10, 13, 10, 0.2);
+  --agi-rule: rgba(48, 45, 38, 0.12);
+  --agi-rule-strong: rgba(48, 45, 38, 0.22);
 
-  --agi-ink: #0a0d0a;
-  --agi-ink-2: #3a3c38;
-  --agi-ink-quiet: #6a6c68;
-  --agi-ink-faint: #9a9c98;
+  --agi-ink: #39362e;
+  --agi-ink-2: #5e5749;
+  --agi-ink-quiet: #7f7769;
+  --agi-ink-faint: #aaa292;
 
-  --agi-amber: #a06800;
-  --agi-amber-soft: rgba(160, 104, 0, 0.12);
+  --agi-amber: #9b7a3e;
+  --agi-amber-soft: rgba(155, 122, 62, 0.13);
+  --agi-surface-wash: rgba(111, 95, 64, 0.05);
+  --agi-line-soft: rgba(48, 45, 38, 0.055);
+  --agi-glow-soft: rgba(155, 122, 62, 0.09);
+  --agi-console-tint: rgba(232, 226, 215, 0.72);
+  --agi-console-tint-strong: rgba(237, 231, 220, 0.84);
+  --agi-button-bg: #51493b;
+  --agi-button-bg-hover: #625848;
+  --agi-button-ink: #efe8dc;
+  --agi-error: #a75b55;
+  --agi-shadow: rgba(70, 63, 50, 0.16);
+  --agi-header-sheen: rgba(250, 246, 236, 0.22);
+  --agi-code-bg: rgba(48, 45, 38, 0.06);
+  --agi-selection-bg: rgba(155, 122, 62, 0.22);
+  --agi-selection-text: var(--agi-ink);
 
   background: var(--agi-bg);
   color: var(--agi-ink);

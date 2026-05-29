@@ -1,229 +1,38 @@
-'use client';
-
-import { Suspense, useState, useMemo } from 'react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
-import { useTranslation } from 'react-i18next';
-import { getSupabaseClient } from '../../services/supabase';
-import { Header } from '../../components/layout/Header';
+import { SignUp } from '@clerk/nextjs';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { Header } from '../../components/layout/Header';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 
-const getAppUrl = () =>
-  process.env['NEXT_PUBLIC_APP_URL'] ||
-  (typeof window !== 'undefined' ? window.location.origin : '');
+const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--agi-bg-2)',
-  border: '1px solid var(--agi-rule)',
-  color: 'var(--agi-ink)',
-  padding: '10px 14px',
-  borderRadius: 6,
-  fontSize: 14,
-  fontFamily: 'inherit',
-  width: '100%',
-};
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string; next?: string }>;
+}) {
+  const params = await searchParams;
+  const redirectTo = getSafeRedirectUrl(params.redirectTo ?? params.next, getAppUrl(), '/chat');
 
-const labelStyle: React.CSSProperties = {
-  fontSize: 12,
-  color: 'var(--agi-ink-quiet)',
-  letterSpacing: '0.04em',
-  textTransform: 'uppercase',
-};
-
-function SignupForm() {
-  const { t } = useTranslation('auth');
-  const searchParams = useSearchParams();
-  const appUrl = useMemo(() => getAppUrl(), []);
-  // WEB-23: validate against allowlist to prevent open redirects via the
-  // emailRedirectTo callback. Mirrors the /login pattern.
-  const redirectTo = useMemo(
-    () => getSafeRedirectUrl(searchParams.get('redirectTo'), appUrl, '/chat'),
-    [searchParams, appUrl],
-  );
-
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setMessage(null);
-    try {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${appUrl}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
-          data: { full_name: name || undefined },
-        },
-      });
-      if (error) throw error;
-      setMessage({
-        text: t('accountCreatedVerify'),
-        type: 'info',
-      });
-    } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'Sign-up failed', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function onOAuth(provider: 'google' | 'github') {
-    setOauthLoading(provider);
-    try {
-      const supabase = getSupabaseClient();
-      await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${appUrl}/auth/callback?redirectTo=${encodeURIComponent(redirectTo)}`,
-        },
-      });
-    } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'OAuth failed', type: 'error' });
-      setOauthLoading(null);
-    }
-  }
-
-  return (
-    <section
-      className="agi-section"
-      style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
-    >
-      <p className="agi-section-eyebrow">{t('createAccountEyebrow')}</p>
-      <h1 className="agi-page-h1" style={{ marginBottom: 32 }}>
-        {t('getStartedHeading')}
-      </h1>
-
-      <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>{t('nameOptional')}</span>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoComplete="name"
-            style={inputStyle}
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>{t('email')}</span>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            style={inputStyle}
-          />
-        </label>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <span style={labelStyle}>{t('password')}</span>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-            minLength={8}
-            style={inputStyle}
-          />
-        </label>
-        {message && (
-          <p
-            style={{
-              color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
-              fontSize: 13,
-              margin: 0,
-            }}
-          >
-            {message.text}
-          </p>
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="agi-cta-primary"
-          style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
-        >
-          {loading ? t('creatingAccount') : t('createAccount')}
-        </button>
-      </form>
-
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          margin: '28px 0',
-          color: 'var(--agi-ink-quiet)',
-          fontSize: 12,
-        }}
-      >
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-        {t('orContinueWith')}
-        <span style={{ flex: 1, height: 1, background: 'var(--agi-rule)' }} />
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <button
-          type="button"
-          onClick={() => onOAuth('google')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'google' ? t('redirecting') : t('continueWithGoogle')}
-        </button>
-        <button
-          type="button"
-          onClick={() => onOAuth('github')}
-          disabled={oauthLoading !== null}
-          className="agi-tier-cta agi-tier-cta--ghost"
-          style={{ border: '1px solid var(--agi-rule-strong)', cursor: 'pointer' }}
-        >
-          {oauthLoading === 'github' ? t('redirecting') : t('continueWithGithub')}
-        </button>
-      </div>
-
-      <p
-        style={{ marginTop: 32, fontSize: 13, color: 'var(--agi-ink-quiet)', textAlign: 'center' }}
-      >
-        {t('byCreatingAccount')}{' '}
-        <Link href="/terms" style={{ color: 'var(--agi-ink-2)' }}>
-          {t('terms')}
-        </Link>{' '}
-        {t('and')}{' '}
-        <Link href="/privacy" style={{ color: 'var(--agi-ink-2)' }}>
-          {t('privacyPolicy')}
-        </Link>
-        .
-      </p>
-
-      <p style={{ marginTop: 16, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>
-        {t('alreadyHaveAccount')}{' '}
-        <Link href="/login" style={{ color: 'var(--agi-ink)' }}>
-          {t('signIn')}
-        </Link>
-      </p>
-    </section>
-  );
-}
-
-export default function SignupPage() {
   return (
     <div data-design="agi">
       <main className="agi-shell">
         <Header />
-        <Suspense fallback={null}>
-          <SignupForm />
-        </Suspense>
+        <section
+          className="agi-section"
+          style={{
+            minHeight: 'calc(100vh - 220px)',
+            display: 'grid',
+            placeItems: 'center',
+            borderBottom: 'none',
+          }}
+        >
+          <SignUp
+            routing="hash"
+            signInUrl="/login"
+            fallbackRedirectUrl={redirectTo}
+            signInFallbackRedirectUrl={redirectTo}
+          />
+        </section>
         <MarketingFooter />
       </main>
     </div>

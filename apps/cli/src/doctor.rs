@@ -300,7 +300,7 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
     #[cfg(target_os = "macos")]
     {
         let available = crate::platform::policy::macos_sandbox::is_available();
-        return vec![check(
+        vec![check(
             "sandbox.os",
             "OS sandbox",
             if available {
@@ -314,7 +314,7 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
                 "sandbox-exec is unavailable; shell tools will need fallback policy"
             },
             details,
-        )];
+        )]
     }
 
     #[cfg(target_os = "linux")]
@@ -322,7 +322,7 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
         let mut details = details;
         let seccomp = crate::platform::policy::linux_sandbox::is_available();
         details.push(format!("seccomp status present: {seccomp}"));
-        return vec![check(
+        vec![check(
             "sandbox.os",
             "OS sandbox",
             if detected == crate::sandbox::SandboxType::None && !seccomp {
@@ -332,13 +332,13 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
             },
             "Linux sandbox probe completed",
             details,
-        )];
+        )]
     }
 
     #[cfg(target_os = "windows")]
     {
         let available = crate::platform::policy::windows_sandbox::is_available();
-        return vec![check(
+        vec![check(
             "sandbox.os",
             "OS sandbox",
             if available {
@@ -348,7 +348,7 @@ fn sandbox_checks() -> Vec<DoctorCheck> {
             },
             "Windows AppContainer probe completed",
             details,
-        )];
+        )]
     }
 
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]

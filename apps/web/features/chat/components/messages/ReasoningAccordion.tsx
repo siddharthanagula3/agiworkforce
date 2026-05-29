@@ -102,7 +102,9 @@ export function ReasoningAccordion({
       className={cn(
         'overflow-hidden rounded-2xl border',
         'bg-zinc-950',
-        isStreaming ? 'border-purple-500/50 shadow-lg shadow-purple-500/10' : 'border-zinc-800',
+        isStreaming
+          ? 'border-[var(--chat-accent-primary,#c8892a)]/50 shadow-lg shadow-[var(--chat-accent-primary,#c8892a)]/10'
+          : 'border-zinc-800',
         className,
       )}
     >
@@ -112,30 +114,37 @@ export function ReasoningAccordion({
         onClick={handleToggle}
         aria-expanded={isOpen}
         aria-label={`${isOpen ? 'Hide' : 'Show'} thinking process`}
-        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-zinc-900/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500/50 cursor-pointer"
+        className="flex w-full items-center gap-2 px-4 py-3 text-left hover:bg-zinc-900/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary,#c8892a)]/50 cursor-pointer"
       >
         {/* Brain icon — animated sparkle overlay when streaming */}
         {isStreaming ? (
           <div className="relative shrink-0">
-            <Brain className="w-4 h-4 text-purple-400" />
-            <Sparkles className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-purple-400 animate-pulse" />
+            <Brain className="w-4 h-4 text-[var(--chat-accent-primary,#c8892a)]" />
+            <Sparkles className="w-2.5 h-2.5 absolute -top-0.5 -right-0.5 text-[var(--chat-accent-primary,#c8892a)] animate-pulse" />
           </div>
         ) : (
-          <Brain className={cn('w-4 h-4 shrink-0', isOpen ? 'text-purple-400' : 'text-zinc-400')} />
+          <Brain
+            className={cn(
+              'w-4 h-4 shrink-0',
+              isOpen ? 'text-[var(--chat-accent-primary,#c8892a)]' : 'text-zinc-400',
+            )}
+          />
         )}
 
         {/* Label */}
         <span
           className={cn(
             'flex-1 truncate text-sm font-semibold',
-            isStreaming ? 'text-purple-400' : 'text-zinc-200',
+            isStreaming ? 'text-[var(--chat-accent-primary,#c8892a)]' : 'text-zinc-200',
           )}
         >
           {durationSeconds != null && !isStreaming ? `Thought for ${durationSeconds}s` : summary}
         </span>
 
         {/* Streaming spinner */}
-        {isStreaming && <Loader2 className="w-3 h-3 shrink-0 text-purple-400 animate-spin" />}
+        {isStreaming && (
+          <Loader2 className="w-3 h-3 shrink-0 text-[var(--chat-accent-primary,#c8892a)] animate-spin" />
+        )}
 
         {/* Animated chevron */}
         <motion.div
@@ -169,7 +178,7 @@ export function ReasoningAccordion({
                   {content}
                   {isStreaming && (
                     <span
-                      className="inline-block w-1.5 h-3.5 bg-purple-400 ml-1 animate-pulse align-middle"
+                      className="inline-block w-1.5 h-3.5 bg-[var(--chat-accent-primary,#c8892a)] ml-1 animate-pulse align-middle"
                       aria-hidden="true"
                     />
                   )}

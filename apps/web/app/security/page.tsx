@@ -92,8 +92,8 @@ export default function SecurityPage() {
               <tr>
                 <td>Database</td>
                 <td>
-                  Supabase Postgres in us-east-2. Row-level security on every table; service-role
-                  keys never used on user-data paths.
+                  Managed Postgres in the United States. Row-level security on every table;
+                  service-role keys never used on user-data paths.
                 </td>
               </tr>
               <tr>
@@ -107,7 +107,7 @@ export default function SecurityPage() {
               <tr>
                 <td>Auth</td>
                 <td>
-                  Supabase auth, JWT cookies (HttpOnly, SameSite=Strict). CSRF tokens on
+                  Managed auth, JWT cookies (HttpOnly, SameSite=Strict). CSRF tokens on
                   state-changing endpoints.
                 </td>
               </tr>

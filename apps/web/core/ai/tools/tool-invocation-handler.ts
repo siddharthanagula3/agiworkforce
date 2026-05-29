@@ -1,12 +1,5 @@
-import { supabase } from '@shared/lib/supabase-client';
-import { logger } from '@shared/lib/logger';
 import { DEFAULT_ANTHROPIC_COLLABORATION_MODEL } from '@shared/config/supported-models';
-
-// Use type assertion to access tables not in generated schema
-const db = supabase as unknown as {
-  from: (table: string) => ReturnType<typeof supabase.from>;
-  rpc: (fn: string, params?: Record<string, unknown>) => ReturnType<typeof supabase.rpc>;
-};
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // Local type definitions
 interface ToolDefinition {
@@ -88,33 +81,10 @@ class ToolInvocationService {
   }
 
   // Register a new tool
+  // TODO: Add /api/agents/tools route for tool registration persistence.
   async registerTool(tool: ToolDefinition) {
     this.toolRegistry.set(tool.id, tool);
-
-    // Store in database
-    try {
-      const { error } = await db.from('ai_tools').upsert({
-        id: tool.id,
-        name: tool.name,
-        type: tool.type,
-        description: tool.description,
-        parameters: tool.parameters,
-        invocation_pattern: tool.invocationPattern,
-        integration_type: tool.integrationType,
-        config: tool.config as Record<string, string>,
-        is_active: tool.isActive,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
-
-      if (error) throw error;
-      return { success: true, error: null };
-    } catch (error: unknown) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
+    return { success: true, error: null };
   }
 
   // Execute a tool
@@ -265,10 +235,8 @@ class ToolInvocationService {
     const { model, temperature, maxTokens } = tool.config as Record<string, string>;
 
     // Get auth token for proxy authentication
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) {
+    const token = await getAuthToken();
+    if (!token) {
       throw new Error('Authentication required for OpenAI API calls');
     }
 
@@ -276,7 +244,7 @@ class ToolInvocationService {
     const response = await fetch('/.netlify/functions/llm-proxies/openai-proxy', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -306,10 +274,8 @@ class ToolInvocationService {
     const { model, maxTokens } = tool.config as Record<string, string>;
 
     // Get auth token for proxy authentication
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) {
+    const token = await getAuthToken();
+    if (!token) {
       throw new Error('Authentication required for Anthropic API calls');
     }
 
@@ -317,7 +283,7 @@ class ToolInvocationService {
     const response = await fetch('/.netlify/functions/llm-proxies/anthropic-proxy', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -489,17 +455,16 @@ class ToolInvocationService {
     }
 
     // Get current user for security - all operations must be user-scoped
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const clerkUserId =
+      (window as unknown as Record<string, unknown> & { Clerk?: { user?: { id?: string } } })?.Clerk
+        ?.user?.id ?? null;
 
-    if (authError || !user) {
+    if (!clerkUserId) {
       throw new Error('User authentication required for database operations');
     }
 
     // Extract user context from parameters or context object
-    const userId = (context as { userId?: string })?.userId || user.id;
+    const userId = (context as { userId?: string })?.userId || clerkUserId;
 
     // Security: For user-specific tables, always filter by user_id
     const userScopedTables = [
@@ -516,84 +481,35 @@ class ToolInvocationService {
 
     const isUserScopedTable = userScopedTables.includes(table!);
 
-    let result;
-    switch (operation) {
-      case 'select': {
-        let queryBuilder = db.from(table!).select(parameters['select'] || '*');
-
-        // Automatically add user_id filter for user-scoped tables
-        if (isUserScopedTable && !parameters['user_id']) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional filters from parameters
-        if (parameters['filters']) {
-          const filters = parameters['filters'] as Record<string, unknown>;
-          for (const [key, value] of Object.entries(filters)) {
-            queryBuilder = queryBuilder.eq(key, value);
-          }
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'insert': {
-        // Automatically add user_id for user-scoped tables
-        const insertData = isUserScopedTable
-          ? { ...(parameters['data'] as Record<string, unknown>), user_id: userId }
-          : (parameters['data'] as Record<string, unknown>);
-
-        result = await db.from(table!).insert(insertData);
-        break;
-      }
-      case 'update': {
-        let queryBuilder = db.from(table!).update(parameters['data'] as Record<string, unknown>);
-
-        // For user-scoped tables, require user_id in where clause
-        if (isUserScopedTable) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional where conditions
-        if (parameters['column'] && parameters['value']) {
-          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'delete': {
-        let queryBuilder = db.from(table!).delete();
-
-        // For user-scoped tables, require user_id in where clause
-        if (isUserScopedTable) {
-          queryBuilder = queryBuilder.eq('user_id', userId);
-        }
-
-        // Apply additional where conditions
-        if (parameters['column'] && parameters['value']) {
-          queryBuilder = queryBuilder.eq(parameters['column'] as string, parameters['value']);
-        }
-
-        result = await queryBuilder;
-        break;
-      }
-      case 'custom':
-        // For custom RPC calls, pass userId in parameters
-        result = await db.rpc(query!, {
-          ...parameters,
-          user_id: userId,
-        });
-        break;
-      default:
-        throw new Error(`Unsupported database operation: ${operation}`);
+    // Route database operations through the server-side API endpoint to avoid
+    // direct client-side DB access (Neon removed; Neon is server-only).
+    const token = await getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required for database operations');
     }
 
-    if (result.error) {
-      throw new Error(`Database operation failed: ${result.error.message}`);
+    const response = await fetch('/api/agents/db-operation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        operation,
+        table,
+        query,
+        parameters,
+        userId,
+        isUserScopedTable,
+      }),
+    });
+
+    if (!response.ok) {
+      const err = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(`Database operation failed: ${err.error ?? response.statusText}`);
     }
 
-    return result.data;
+    return (await response.json()) as unknown;
   }
 
   // File System Operation Execution
@@ -614,91 +530,47 @@ class ToolInvocationService {
   }
 
   // Log tool execution
+  // TODO: Add /api/agents/tool-executions route for execution logging persistence.
   private async logToolExecution(
-    toolId: string,
-    parameters: Record<string, unknown>,
-    result: unknown,
-    context?: unknown,
+    _toolId: string,
+    _parameters: Record<string, unknown>,
+    _result: unknown,
+    _context?: unknown,
   ) {
-    try {
-      await db.from('tool_executions').insert({
-        tool_id: toolId,
-        parameters,
-        result,
-        context,
-        executed_at: new Date().toISOString(),
-        success: true,
-      });
-    } catch (error) {
-      logger.error('Failed to log tool execution:', error);
-    }
+    // no-op: client-side tool execution logging deferred pending /api/agents/tool-executions route
   }
 
   // Get tool by ID
+  // TODO: Add /api/agents/tools/:id route for persistent tool lookup.
   async getTool(toolId: string) {
     const tool = this.toolRegistry.get(toolId);
     if (tool) {
       return { data: tool, error: null };
     }
-
-    try {
-      const { data, error } = await db.from('ai_tools').select('*').eq('id', toolId).single();
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    return { data: null, error: 'Tool not found in registry' };
   }
 
   // Get all tools
+  // TODO: Add /api/agents/tools route for persistent tool listing.
   async getAllTools() {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values());
+    return { data: tools, error: null };
   }
 
   // Get tools by type
+  // TODO: Add /api/agents/tools?type= route for filtered tool listing.
   async getToolsByType(type: ToolType) {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('type', type)
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values()).filter((t) => t.type === type);
+    return { data: tools, error: null };
   }
 
   // Get tools by integration type
+  // TODO: Add /api/agents/tools?integrationType= route for filtered tool listing.
   async getToolsByIntegrationType(integrationType: IntegrationType) {
-    try {
-      const { data, error } = await supabase
-        .from('ai_tools')
-        .select('*')
-        .eq('integration_type', integrationType)
-        .eq('is_active', true)
-        .order('name');
-
-      if (error) throw error;
-      return { data, error: null };
-    } catch (error: unknown) {
-      return { data: null, error: error instanceof Error ? error.message : String(error) };
-    }
+    const tools = Array.from(this.toolRegistry.values()).filter(
+      (t) => t.integrationType === integrationType,
+    );
+    return { data: tools, error: null };
   }
 }
 

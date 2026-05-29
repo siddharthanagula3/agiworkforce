@@ -30,8 +30,8 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
     expect(privacySource).toContain('Google Tag Manager');
   });
 
-  it('states Supabase data region (us-east-2)', () => {
-    expect(privacySource).toContain('us-east-2');
+  it('states data hosting region (United States)', () => {
+    expect(privacySource).toContain('United States');
   });
 
   it('states EU residency status', () => {

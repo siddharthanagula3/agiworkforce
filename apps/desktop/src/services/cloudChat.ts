@@ -102,7 +102,7 @@ export async function transferLocalToCloud(
   userId: string,
   deleteSource: boolean,
 ): Promise<TransferResult> {
-  return invoke<TransferResult>('cloud_transfer_local_to_cloud', {
+  return invoke<TransferResult>('transfer_local_to_cloud', {
     conversationId,
     userId,
     deleteSource,
@@ -114,7 +114,7 @@ export async function transferCloudToLocal(
   userId: string,
   deleteSource: boolean,
 ): Promise<TransferResult> {
-  return invoke<TransferResult>('cloud_transfer_cloud_to_local', {
+  return invoke<TransferResult>('transfer_cloud_to_local', {
     cloudConversationId,
     userId,
     deleteSource,

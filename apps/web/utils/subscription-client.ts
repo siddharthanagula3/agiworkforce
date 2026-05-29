@@ -1,6 +1,6 @@
 'use client';
 
-import { getSupabaseClient } from '../services/supabase';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 export interface ClientSubscription {
   id: string;
@@ -12,33 +12,31 @@ export interface ClientSubscription {
 // SyncSubscriptionResponse removed - manual sync functionality removed
 
 /**
- * Client-side function to refresh subscription status from Supabase
+ * Client-side function to refresh subscription status from the API
  * Use this in client components to poll for subscription updates
  */
 export async function refreshSubscriptionStatus(): Promise<ClientSubscription | null> {
   try {
-    const supabase = getSupabaseClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    const token = await getAuthToken();
+    if (!token) {
       return null;
     }
 
-    const { data: subscription, error } = await supabase
-      .from('subscriptions')
-      .select('id, plan_tier, status, current_period_end')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const response = await fetch('/api/me', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-    if (error) {
-      // Silently handle subscription refresh failure
+    if (!response.ok) {
       return null;
     }
 
-    return subscription;
-  } catch (error) {
+    const data = (await response.json()) as {
+      subscription?: ClientSubscription | null;
+    };
+    return data.subscription ?? null;
+  } catch {
     // Silently handle subscription refresh failure
     return null;
   }

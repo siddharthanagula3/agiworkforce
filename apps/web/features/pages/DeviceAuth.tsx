@@ -9,7 +9,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { Button } from '@shared/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@shared/ui/card';
 import { Badge } from '@shared/ui/badge';
@@ -32,9 +32,7 @@ const DeviceAuthPage: React.FC = () => {
   // Redirect to login if not authenticated (after auth finishes loading)
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace(
-        `/auth/login?from=${encodeURIComponent(`/device-auth?user_code=${userCode}`)}`,
-      );
+      router.replace(`/login?from=${encodeURIComponent(`/device-auth?user_code=${userCode}`)}`);
     }
   }, [authLoading, isAuthenticated, router, userCode]);
 
@@ -45,21 +43,23 @@ const DeviceAuthPage: React.FC = () => {
     setErrorMessage('');
 
     try {
-      const { error } = await (
-        supabase.from('device_authorization_codes') as ReturnType<typeof supabase.from>
-      )
-        .update({
-          user_id: user.id,
-          is_used: false,
-        })
-        .eq('user_code', userCode.toUpperCase());
+      const token = await getAuthToken();
+      const res = await fetch('/api/device-auth/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ user_code: userCode.toUpperCase() }),
+      });
 
-      if (error) {
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
         setStatus('error');
         setErrorMessage(
-          error.code === 'PGRST116'
+          res.status === 404
             ? 'Authorization code not found or expired. Please try again from the desktop app.'
-            : `Failed to authorize: ${error.message}`,
+            : (body.error ?? `Failed to authorize: ${res.status}`),
         );
         return;
       }

@@ -2,11 +2,28 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 
+/** A knowledge file attached to a project as context source. */
+export interface ProjectSource {
+  id: string;
+  /** Original file name shown in the UI */
+  name: string;
+  /** MIME type returned by the document picker */
+  mimeType: string;
+  /** File size in bytes */
+  size: number;
+  /** Local file URI from expo-document-picker / expo-file-system */
+  uri: string;
+  addedAt: string;
+}
+
 export interface Project {
   id: string;
   name: string;
   description: string;
   instructions: string;
+  /** Attached knowledge files. Optional for backward-compat with persisted
+   *  projects that predate this field; always coerce via `?? []` at read sites. */
+  sources?: ProjectSource[];
   createdAt: string;
   updatedAt: string;
 }
@@ -21,6 +38,8 @@ interface ProjectState {
   updateProject: (id: string, updates: Partial<Omit<Project, 'id' | 'createdAt'>>) => void;
   deleteProject: (id: string) => void;
   setActiveProject: (id: string | null) => void;
+  addSource: (projectId: string, source: Omit<ProjectSource, 'id' | 'addedAt'>) => void;
+  removeSource: (projectId: string, sourceId: string) => void;
 }
 
 function generateId(): string {
@@ -41,6 +60,7 @@ export const useProjectStore = create<ProjectState>()(
           name,
           description,
           instructions,
+          sources: [],
           createdAt: now,
           updatedAt: now,
         };
@@ -72,6 +92,36 @@ export const useProjectStore = create<ProjectState>()(
           if (!exists) return;
         }
         set({ activeProjectId: id });
+      },
+
+      addSource: (projectId, source) => {
+        const sourceId = `src_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+        const addedAt = new Date().toISOString();
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  sources: [...(p.sources ?? []), { ...source, id: sourceId, addedAt }],
+                  updatedAt: addedAt,
+                }
+              : p,
+          ),
+        }));
+      },
+
+      removeSource: (projectId, sourceId) => {
+        set((state) => ({
+          projects: state.projects.map((p) =>
+            p.id === projectId
+              ? {
+                  ...p,
+                  sources: (p.sources ?? []).filter((s) => s.id !== sourceId),
+                  updatedAt: new Date().toISOString(),
+                }
+              : p,
+          ),
+        }));
       },
     }),
     {

@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { Header } from '../../../components/layout/Header';
+import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
   title: 'MCP Directory | AGI',
   description:
     'Browse community-built MCP servers for databases, APIs, developer tools, and more. Connect any MCP-compatible server to AGI.',
-  alternates: { canonical: '/connectors/mcp-directory' },
+  alternates: { canonical: 'https://agiworkforce.com/connectors/mcp-directory' },
 };
 
 const FEATURED_MCPS = [
@@ -50,74 +52,73 @@ const FEATURED_MCPS = [
 
 export default function McpDirectoryPage() {
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#edebe8]">
-      <div className="mx-auto max-w-3xl px-6 py-12">
-        {/* Back link */}
-        <Link
-          href="/connectors"
-          className="mb-8 inline-flex items-center gap-1.5 text-sm text-[#888480] transition-colors hover:text-[#edebe8]"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
-          Back to Connectors
-        </Link>
-
-        <h1 className="text-2xl font-bold">MCP Directory</h1>
-        <p className="mt-2 text-sm text-[#888480]">
-          Community and official MCP servers. Copy a server URL and paste it into the custom
-          connector dialog to connect instantly.
-        </p>
-
-        <div className="mt-8 space-y-3">
-          {FEATURED_MCPS.map((mcp) => (
-            <div
-              key={mcp.name}
-              className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-[#edebe8]">{mcp.name}</p>
-                  <p className="mt-0.5 text-xs text-[#888480]">{mcp.description}</p>
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {mcp.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-md border border-white/[0.06] px-1.5 py-0.5 text-[10px] text-[#555150]"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-                <a
-                  href={mcp.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-white/[0.06] px-3 py-1.5 text-xs text-[#888480] transition-colors hover:border-white/[0.12] hover:text-[#edebe8]"
-                >
-                  View
-                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                </a>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="mt-10 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
-          <p className="text-sm font-medium">Browse all MCP servers</p>
-          <p className="mt-1 text-xs text-[#888480]">
-            The official MCP registry lists hundreds of community-contributed servers.
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="agi-page-hero">
+          <Link href="/connectors" className="agi-cta-ghost" style={{ paddingTop: 0 }}>
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+            Back to Connectors
+          </Link>
+          <h1 className="agi-page-h1" style={{ marginTop: 18 }}>
+            MCP Directory.
+          </h1>
+          <p className="agi-page-lede">
+            Community and official MCP servers for databases, APIs, developer tools, search, and
+            browser automation. Copy a server URL into the custom connector dialog when you are
+            ready to connect it.
           </p>
-          <a
-            href="https://modelcontextprotocol.io"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-3 inline-flex items-center gap-1.5 text-sm text-[#c8892a] transition-colors hover:text-[#d49a3a]"
-          >
-            Open MCP registry
-            <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-          </a>
-        </div>
-      </div>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Featured MCP servers</p>
+          <div className="agi-route-grid">
+            {FEATURED_MCPS.map((mcp) => (
+              <a
+                key={mcp.name}
+                href={mcp.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="agi-route-card"
+              >
+                <span className="agi-route-meta">{mcp.tags.join(' / ')}</span>
+                <span className="agi-route-title">{mcp.name}</span>
+                <span className="agi-route-body">{mcp.description}</span>
+                <span
+                  className="agi-cta-ghost"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 18 }}
+                >
+                  View server
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+              </a>
+            ))}
+          </div>
+        </section>
+
+        <section className="agi-section">
+          <div className="agi-launch-cta">
+            <div>
+              <h2 className="agi-launch-title">Bring your own tools.</h2>
+              <p className="agi-launch-body">
+                The official MCP registry lists hundreds of community-contributed servers. AGI
+                should expose each server only inside the mode and permission boundary the user
+                selected.
+              </p>
+            </div>
+            <a
+              href="https://modelcontextprotocol.io"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="agi-cta-primary"
+            >
+              Open MCP Registry
+            </a>
+          </div>
+        </section>
+
+        <MarketingFooter />
+      </main>
     </div>
   );
 }

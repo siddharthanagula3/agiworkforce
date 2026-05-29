@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'FAQ | AGI',
+  title: 'FAQ',
   description: 'Frequently asked questions — providers, BYOK, local mode, pricing, security.',
   alternates: { canonical: 'https://agiworkforce.com/faq' },
 };
@@ -28,11 +29,11 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'What does Hobby cost?',
-    a: '$10/mo, or $5/mo if you pay annually. The only paid tier shipping today. Pro / Pro+ / Max are on the waitlist until our security audit closes.',
+    a: 'Hobby managed cloud is waitlisted. Local and BYOK are the MVP paths until metering, fraud controls, refunds, deletion, and provider terms are proven.',
   },
   {
     q: 'Do you train on my data?',
-    a: 'No. We do not train on customer data. Local mode never sends your prompts off your machine.',
+    a: `AGI does not use customer conversation content to train AGI-owned models. ${POSITIONING.trustBoundary}`,
   },
   {
     q: 'What happens to my master password?',
@@ -44,7 +45,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Where do you host data?',
-    a: 'us-east-2 by default (Supabase). EU on the roadmap. Custom regions on Enterprise contracts.',
+    a: 'United States by default. EU residency and custom regions are on the Enterprise roadmap.',
   },
 ];
 

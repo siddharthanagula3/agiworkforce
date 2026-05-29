@@ -16,14 +16,10 @@ import crypto from 'crypto';
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'test_service_key',
 };
 
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', mockEnv.NEXT_PUBLIC_SUPABASE_URL);
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', mockEnv.SUPABASE_SERVICE_ROLE_KEY);
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -40,20 +36,19 @@ vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Supabase client factory
-const mockFrom = vi.fn();
-const mockRpc = vi.fn();
+// Neon DB mock
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+const mockDb = {
+  query: mockQuery,
+  execute: mockExecute,
+  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  withUser: vi.fn(() => mockDb),
+  dispose: vi.fn(),
+};
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockFrom,
-    rpc: mockRpc,
-    auth: {
-      admin: {
-        listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-      },
-    },
-  })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => mockDb),
 }));
 
 // Mock subscription service
@@ -80,6 +75,7 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   resolvePlanTier: vi.fn(() => 'pro'),
   isValidPlanTier: vi.fn(() => true),
   getTierMapping: vi.fn(() => ({})),
+  isPriceIdRegistered: vi.fn(() => true),
 }));
 
 // Utility to generate Stripe signature
@@ -171,37 +167,27 @@ vi.mock('stripe', () => ({
 }));
 
 describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Default mock setup for idempotency
-    mockRpc.mockResolvedValue({ data: true, error: null });
+    // Re-establish getNeonDb mock after resetModules
+    const neonModule = await import('@/lib/server/neon-db');
+    (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Default profile lookup
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: { id: 'user_123', email: 'test@example.com' },
-            error: null,
-          }),
-          single: vi.fn().mockResolvedValue({
-            data: { id: 'user_123', email: 'test@example.com' },
-            error: null,
-          }),
-        }),
-      }),
-      upsert: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({ data: { id: 'sub_123' }, error: null }),
-        }),
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
-      }),
-      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    // Default idempotency: should process (true)
+    // Default profile lookup: returns user
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('process_stripe_event_idempotent')) {
+        return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+      }
+      if (sql.includes('profiles')) {
+        return Promise.resolve([{ id: 'user_123' }]);
+      }
+      return Promise.resolve([]);
     });
+
+    mockExecute.mockResolvedValue(1);
   });
 
   afterEach(() => {
@@ -209,7 +195,7 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
   });
 
   describe('Successful Refund Processing', () => {
-    it('should process full refund and revoke all credits', async () => {
+    it('should process full refund and return 200', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
       const refundedAmount = 1200; // Full refund of pro plan ($12)
@@ -240,13 +226,15 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       const response = await POST(request);
 
-      expect(response.status).not.toBe(400);
-      expect(mockRpc).toHaveBeenCalledWith('process_stripe_event_idempotent', {
-        p_event_id: 'evt_refund_full',
-      });
+      expect(response.status).toBe(200);
+      // Verify idempotency check used process_stripe_event_idempotent
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('process_stripe_event_idempotent'),
+        ['evt_refund_full'],
+      );
     });
 
-    it('should process partial refund and revoke proportional credits', async () => {
+    it('should process partial refund and return 200', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
       const eventPayload = JSON.stringify({
@@ -275,10 +263,10 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       const response = await POST(request);
 
-      expect(response.status).not.toBe(400);
+      expect(response.status).toBe(200);
     });
 
-    it('should call handle_refund RPC with correct parameters', async () => {
+    it('should call handle_refund SQL with correct parameters', async () => {
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
       const refundedAmount = 500;
@@ -309,12 +297,15 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       await POST(request);
 
-      // Verify the handle_refund RPC was called with correct params
-      expect(mockRpc).toHaveBeenCalledWith('handle_refund', {
-        p_user_id: 'user_123',
-        p_refund_amount_cents: refundedAmount,
-        p_reason: expect.stringContaining('ch_test_rpc'),
-      });
+      // Verify the handle_refund SQL execute was called with correct params
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('handle_refund'),
+        expect.arrayContaining([
+          'user_123',
+          refundedAmount,
+          expect.stringContaining('ch_test_rpc'),
+        ]),
+      );
     });
   });
 
@@ -348,21 +339,21 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       await POST(request);
 
-      // Verify profile lookup was performed
-      expect(mockFrom).toHaveBeenCalledWith('profiles');
+      // Verify profile lookup was performed by stripe_customer_id
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('profiles'),
+        expect.arrayContaining(['cus_customer_id_123']),
+      );
     });
 
     it('should skip refund processing when no user found for customer', async () => {
-      // Override profile lookup to return no user
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: null,
-            }),
-          }),
-        }),
+      // Override: profile lookup returns nothing
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        // No profile found
+        return Promise.resolve([]);
       });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -395,6 +386,10 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       // Should still return 200 but not call handle_refund
       expect(response.status).toBe(200);
+      expect(mockExecute).not.toHaveBeenCalledWith(
+        expect.stringContaining('handle_refund'),
+        expect.anything(),
+      );
     });
   });
 
@@ -430,6 +425,10 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       // Zero refund should not trigger credit revocation
       expect(response.status).toBe(200);
+      expect(mockExecute).not.toHaveBeenCalledWith(
+        expect.stringContaining('handle_refund'),
+        expect.anything(),
+      );
     });
 
     it('should handle missing customer ID', async () => {
@@ -465,17 +464,16 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
       expect(response.status).toBe(200);
     });
 
-    it('should handle database error during profile lookup', async () => {
-      // Override profile lookup to return error
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: { message: 'Database connection failed', code: 'PGRST500' },
-            }),
-          }),
-        }),
+    it('should handle database error during profile lookup gracefully', async () => {
+      // Override: profile lookup throws error
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('profiles')) {
+          return Promise.reject(new Error('Database connection failed'));
+        }
+        return Promise.resolve([]);
       });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
@@ -506,16 +504,13 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       const response = await POST(request);
 
-      // Should still return 200 as webhook was processed (error is logged)
+      // Should still return 200 as webhook was processed (error is caught and logged)
       expect(response.status).toBe(200);
     });
 
-    it('should handle handle_refund RPC failure gracefully', async () => {
-      // First call is for idempotency check (should succeed)
-      // Second call is for handle_refund (should fail)
-      mockRpc
-        .mockResolvedValueOnce({ data: true, error: null }) // idempotency
-        .mockResolvedValueOnce({ data: null, error: { message: 'RPC failed' } }); // handle_refund
+    it('should handle handle_refund SQL failure gracefully', async () => {
+      // Profile lookup succeeds, handle_refund execute fails
+      mockExecute.mockRejectedValueOnce(new Error('RPC failed'));
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -553,7 +548,12 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
   describe('Idempotency', () => {
     it('should skip already processed refund events', async () => {
       // Mock idempotency check to return false (already processed)
-      mockRpc.mockResolvedValue({ data: false, error: null });
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -626,17 +626,22 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
 
       // Reset mocks for second request
       vi.clearAllMocks();
-      mockRpc.mockResolvedValue({ data: true, error: null });
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: 'user_123', email: 'test@example.com' },
-              error: null,
-            }),
-          }),
-        }),
+      vi.resetModules();
+
+      // Re-establish neon mock
+      const neonModule = await import('@/lib/server/neon-db');
+      (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('profiles')) {
+          return Promise.resolve([{ id: 'user_123' }]);
+        }
+        return Promise.resolve([]);
       });
+      mockExecute.mockResolvedValue(1);
 
       // Second refund - another 25% (total 50%)
       const secondRefundPayload = JSON.stringify({
@@ -666,8 +671,6 @@ describe('Stripe Refund Webhook Tests (charge.refunded)', () => {
         },
       });
 
-      // Need to re-import to get fresh module with new mocks
-      vi.resetModules();
       const { POST: POST2 } = await import('@/app/api/stripe-webhook/route');
       const response2 = await POST2(request2);
       expect(response2.status).toBe(200);

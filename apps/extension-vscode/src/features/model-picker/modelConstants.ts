@@ -12,12 +12,11 @@ import {
   getModelContextLimits,
   getModelCostRates,
   getModelMetadataById,
+  getPickerModelTier,
   normalizeModelId,
   resolveAutoModeModel,
   PROVIDER_DISPLAY,
-  CAPABILITY_LABEL,
   type ProviderId,
-  type CapabilityTier,
 } from '@agiworkforce/types';
 
 export interface ModelPickerOption {
@@ -26,39 +25,6 @@ export interface ModelPickerOption {
   description: string;
   detail: string;
 }
-
-// ─── Capability tier per model ────────────────────────────────────────────────
-
-/**
- * Maps model IDs to a capability tier for picker sub-labels.
- * Mirrors the CLI's models.rs catalog: fastest/balanced/most-capable.
- * Derived from speed + quality fields in models.json.
- */
-export const MODEL_CAPABILITY: Record<string, CapabilityTier> = {
-  // Anthropic
-  'claude-haiku-4.5': 'fastest',
-  'claude-sonnet-4.6': 'balanced',
-  'claude-opus-4.6': 'most-capable',
-  // OpenAI
-  'gpt-5.4-mini': 'fastest',
-  'gpt-5.4-codex': 'fastest',
-  'gpt-5.4': 'balanced',
-  'gpt-5.4-pro': 'most-capable',
-  // Google
-  'gemini-3.1-flash-lite': 'fastest',
-  'gemini-3.1-pro-preview': 'balanced',
-  // DeepSeek
-  'deepseek-chat': 'balanced',
-  'deepseek-reasoner': 'most-capable',
-  // Qwen
-  'qwen-max': 'balanced',
-  // Moonshot
-  'kimi-k2.5-thinking': 'most-capable',
-  // Zhipu
-  'glm-4.7': 'balanced',
-  // xAI
-  'grok-4': 'most-capable',
-};
 
 // ─── Provider → ProviderId bridge ─────────────────────────────────────────────
 // The Provider type (used in ModelMetadata.provider) uses snake_case identifiers
@@ -87,6 +53,12 @@ function codiconForProvider(providerId: ProviderId): string {
   if (display.isLocal) return '$(home)';
   if (providerId === 'agi-cloud') return '$(sparkle)';
   return '$(cloud)';
+}
+
+function getPickerCapabilityLabel(modelId: string, catalogDetail: string): string {
+  const tier = getPickerModelTier(modelId);
+  const tierLabel = tier === 'premium' ? 'Premium' : tier === 'economy' ? 'Economy' : 'Balanced';
+  return catalogDetail === '' ? tierLabel : catalogDetail;
 }
 
 // ─── Grouped QuickPick builder ────────────────────────────────────────────────
@@ -153,18 +125,11 @@ export function buildGroupedQuickPickItems(): GroupedQuickPickItem[] {
 
     const modelsForProvider = manualOptions.filter((o) => String(o.provider) === provider);
     for (const opt of modelsForProvider) {
-      const capTier: CapabilityTier = MODEL_CAPABILITY[opt.id] ?? 'balanced';
-      const capLabel = CAPABILITY_LABEL[capTier];
-      const supportsThinking = providerId
-        ? (PROVIDER_DISPLAY[providerId]?.supportsEffort ?? false)
-        : false;
-
-      // Also check individual model's thinking capability from catalog
       const metadata = getModelMetadataById(opt.id);
       const modelHasThinking = metadata?.capabilities.thinking ?? false;
 
-      const descriptionParts: string[] = [capLabel];
-      if (supportsThinking && modelHasThinking) {
+      const descriptionParts: string[] = [getPickerCapabilityLabel(opt.id, opt.detail)];
+      if (modelHasThinking) {
         descriptionParts.push('Thinking');
       }
       const description = descriptionParts.join(' · ');
@@ -206,10 +171,13 @@ export function getModelProviderInfo(modelId: string): ModelProviderInfo {
 
 const DEFAULT_CONTEXT_LIMIT = 128_000;
 
-const AUTO_MODEL_DEFAULTS = {
-  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro') ?? 'gpt-5.5',
-  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby') ?? 'gpt-5.5-mini',
-  'auto-premium': resolveAutoModeModel('auto-premium', 'max') ?? 'claude-opus-4-6',
+const AUTO_MODEL_DEFAULTS: Record<
+  'auto-balanced' | 'auto-economy' | 'auto-premium',
+  string | null
+> = {
+  'auto-balanced': resolveAutoModeModel('auto-balanced', 'pro'),
+  'auto-economy': resolveAutoModeModel('auto-economy', 'hobby'),
+  'auto-premium': resolveAutoModeModel('auto-premium', 'max'),
 } as const;
 
 const MANUAL_MODEL_OPTIONS = getCoreManualModelOptions();
@@ -218,11 +186,12 @@ const MANUAL_MODEL_IDS = MANUAL_MODEL_OPTIONS.map((option) => option.id);
 const manualContextLimits = getModelContextLimits(MANUAL_MODEL_IDS);
 const manualCostRates = getModelCostRates(MANUAL_MODEL_IDS);
 
-function getAutoContextLimit(modelId: string): number {
+function getAutoContextLimit(modelId: string | null): number {
   return getModelMetadataById(modelId)?.contextWindow ?? DEFAULT_CONTEXT_LIMIT;
 }
 
-function getAutoCostRate(modelId: string): { input: number; output: number } {
+function getAutoCostRate(modelId: string | null): { input: number; output: number } {
+  if (modelId === null) return { input: 0, output: 0 };
   const rate = getModelCostRates([modelId])[modelId];
   return rate ? { input: rate.input, output: rate.output } : { input: 0, output: 0 };
 }

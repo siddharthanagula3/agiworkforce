@@ -13,7 +13,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 async function handleBatchGetTags(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for cookie-auth POST endpoint
@@ -23,8 +24,8 @@ async function handleBatchGetTags(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: { conversationIds?: string[] };
   try {
@@ -49,14 +50,16 @@ async function handleBatchGetTags(request: NextRequest) {
   }
 
   // Fetch existing tags for this user's conversations
-  const { data, error } = await supabase
-    .from('conversation_tags')
-    .select('conversation_id, tag')
-    .eq('user_id', user.id)
-    .in('conversation_id', conversationIds);
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch batch tags');
+  let rows: { conversation_id: string; tag: string }[];
+  try {
+    rows = await db.query<{ conversation_id: string; tag: string }>(
+      `select conversation_id, tag
+       from conversation_tags
+       where user_id = $1 and conversation_id = any($2::text[])`,
+      [userId, conversationIds],
+    );
+  } catch (err) {
+    logger.error({ err, userId }, 'Failed to fetch batch tags');
     throw createError.internal('Failed to fetch tags');
   }
 
@@ -65,7 +68,7 @@ async function handleBatchGetTags(request: NextRequest) {
   for (const id of conversationIds) {
     tags[id] = 'general';
   }
-  for (const row of data ?? []) {
+  for (const row of rows) {
     tags[row.conversation_id] = row.tag;
   }
 

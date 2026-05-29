@@ -99,6 +99,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
 };
 
 /**
@@ -358,8 +359,8 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
 // ─── Gateway URL validation ─────────────────────────────────────────────────
 
 /**
- * Allowlist of api-gateway origins the extension may send the user's Supabase
- * JWT to. EXACT match only — the previous open-subdomain rule (M-02 audit
+ * Allowlist of api-gateway origins the extension may send user-authenticated
+ * gateway requests to. EXACT match only — the previous open-subdomain rule (M-02 audit
  * 2026-05-19) would accept any `*.agiworkforce.com` host including attacker-
  * controlled subdomains if any were ever delegated externally.
  *

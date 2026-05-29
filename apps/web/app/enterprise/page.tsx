@@ -19,7 +19,7 @@ const INCLUDED: { k: string; v: string }[] = [
     k: 'BYOK enforcement',
     v: 'Force BYOK across the org. Zero managed-cloud spend unless you opt in.',
   },
-  { k: 'Residency', v: 'Default us-east-2. EU on roadmap. Custom regions on contract.' },
+  { k: 'Residency', v: 'United States by default. EU on roadmap. Custom regions on contract.' },
   { k: 'SLA', v: 'Four-hour response. Named support contact.' },
   { k: 'MSA', v: 'Negotiate against your procurement. We do not require a click-through.' },
 ];

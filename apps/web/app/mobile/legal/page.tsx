@@ -4,13 +4,13 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Mobile Legal — Privacy Policy and Terms of Service | AGI',
+  title: 'Mobile Legal — Privacy Policy and Terms of Service',
   description:
-    'Privacy policy and terms of service for AGI Mobile (iOS and Android). On-device only: your conversations never leave your device.',
+    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local, BYOK, and Cloud invite modes.',
   alternates: { canonical: 'https://agiworkforce.com/mobile/legal' },
 };
 
-const EFFECTIVE_DATE = '2026-08-16';
+const EFFECTIVE_DATE = '2026-07-12';
 const COMPANY = 'AGI Automation LLC';
 const COMPANY_STATE = 'a Delaware limited liability company';
 const SUPPORT_EMAIL = 'support@agiworkforce.com';
@@ -28,8 +28,8 @@ export default function MobileLegalPage() {
           <p className="agi-page-lede">
             Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
             <strong>
-              Inference runs on your device. Your conversations are never transmitted to our
-              servers.
+              Local mode runs on your device. BYOK and Cloud modes use explicit provider labels and
+              separate trust boundaries.
             </strong>
           </p>
           <div className="agi-cta-row" style={{ marginTop: 16 }}>
@@ -56,14 +56,13 @@ export default function MobileLegalPage() {
 
           <div className="agi-callout" style={{ marginBottom: 32 }}>
             <h3 className="agi-callout-h">
-              <span className="agi-callout-amber">Core fact.</span> Inference is on-device.
+              <span className="agi-callout-amber">Core fact.</span> Mobile has Local and invite-only
+              Cloud modes.
             </h3>
             <p className="agi-callout-p">
-              When you send a message in AGI Mobile v1, the AI model runs on your phone. There is no
-              network call during inference. Your conversation content is never transmitted to AGI
-              Automation LLC servers, to model provider servers, or to any third party during a
-              conversation. This is the architecture of the product, not a policy commitment that
-              can be revoked.
+              In Local mode, the AI model runs on your device or a local model route and is not
+              silently routed to AGI Cloud. Mobile v1 does not accept provider keys; BYOK belongs to
+              Desktop and developer surfaces. Cloud mode is invite-gated and visibly labeled.
             </p>
           </div>
 
@@ -80,8 +79,11 @@ export default function MobileLegalPage() {
               <tr>
                 <td>Conversation content</td>
                 <td>Text, images, voice input, documents you share in chat</td>
-                <td>Stored on your device only (expo-sqlite). Never transmitted.</td>
-                <td>To run the AI assistant. On-device only.</td>
+                <td>
+                  Local mode stores and processes on device. Cloud is invite-gated and
+                  subscription-backed.
+                </td>
+                <td>To run the AI assistant in the mode you selected.</td>
               </tr>
               <tr>
                 <td>Crash reports</td>
@@ -107,7 +109,7 @@ export default function MobileLegalPage() {
                   Email address and authentication token, if you create an account for the cloud
                   waitlist.
                 </td>
-                <td>Supabase (database). US region. Encrypted at rest.</td>
+                <td>Managed database. US region. Encrypted at rest.</td>
                 <td>To manage your waitlist position for cloud features.</td>
               </tr>
               <tr>
@@ -140,12 +142,12 @@ export default function MobileLegalPage() {
               marginBottom: 16,
             }}
           >
-            We do not train on your data.
+            AGI-owned models are not trained on customer conversations.
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
-            Conversations in AGI Mobile are not used to train any AI model, by {COMPANY} or by any
-            third party. We do not sell your data. We do not share your conversation content with
-            any party.
+            {COMPANY} does not use your AGI Mobile conversation content to train AGI-owned models.
+            BYOK requests are governed by the selected provider account and terms. We do not sell
+            your conversation content.
           </p>
 
           <h3
@@ -160,11 +162,10 @@ export default function MobileLegalPage() {
             DPDP Act 2023 (India)
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
-            Because conversation inference runs on-device, your conversation data is not a
-            &ldquo;digital personal data&rdquo; asset that is processed by {COMPANY} within the
-            meaning of the DPDP Act. No cross-border transfer of conversation data occurs. Account
-            data (email address) is processed with your consent for the purpose of waitlist
-            management. You may request deletion at any time by emailing{' '}
+            In Local mode, conversation inference runs on-device and is not processed by {COMPANY}{' '}
+            for inference. BYOK and Cloud modes may involve provider or AGI processing according to
+            the user-selected mode. Account data is processed with your consent for authentication,
+            invite, and support workflows. You may request deletion at any time by emailing{' '}
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
@@ -183,15 +184,16 @@ export default function MobileLegalPage() {
             GDPR (European Union / European Economic Area)
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
-            Conversation inference is on-device. The legal basis question for inference data does
-            not arise because inference data is not transferred to any controller or processor.
-            Account data processed in connection with the cloud waitlist falls under Art. 6(1)(b)
-            GDPR (performance of a contract). You have the right of access, rectification, erasure,
-            restriction, data portability, and objection. Exercise these rights by emailing{' '}
+            Local-mode conversation inference is on-device. BYOK and Cloud modes may involve the
+            selected provider or AGI acting under the relevant controller/processor relationship and
+            terms. Account data processed in connection with invite and authentication workflows
+            falls under Art. 6(1)(b) GDPR (performance of a contract). You have the right of access,
+            rectification, erasure, restriction, data portability, and objection. Exercise these
+            rights by emailing{' '}
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
-            . An EU representative per Art. 27 GDPR will be appointed before the 2026-08-16 launch
+            . An EU representative per Art. 27 GDPR will be appointed before the 2026-07-12 launch
             date; contact details will be published at{' '}
             <Link href="/legal/eu-representative" style={{ color: 'var(--agi-amber)' }}>
               agiworkforce.com/legal/eu-representative

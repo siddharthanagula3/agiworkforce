@@ -17,8 +17,8 @@ import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
 export type AppMode = 'local' | 'cloud';
-export type { PlanTier } from '../lib/supabase';
-import type { PlanTier } from '../lib/supabase';
+export type { PlanTier } from '../lib/cloudAccountTypes';
+import type { PlanTier } from '../lib/cloudAccountTypes';
 
 interface AppModeState {
   mode: AppMode;
@@ -35,11 +35,18 @@ interface AppModeState {
 }
 
 const APP_MODE_STORE_VERSION = 1;
+const CLOUD_MANAGED_TIERS: ReadonlySet<PlanTier> = new Set([
+  'hobby',
+  'pro',
+  'pro_plus',
+  'max',
+  'enterprise',
+]);
 
 export const useAppModeStore = create<AppModeState>()(
   devtools(
     persist(
-      subscribeWithSelector((set) => ({
+      subscribeWithSelector((set, get) => ({
         mode: isTauri ? 'local' : 'cloud',
         planTier: 'free',
         hasOnboarded: false,
@@ -60,11 +67,16 @@ export const useAppModeStore = create<AppModeState>()(
           }
           // Managed mode requires authentication
           if (mode === 'cloud') {
-            const isAuthenticated = useAuthStore.getState().isAuthenticated;
-            if (!isAuthenticated) {
+            const authState = useAuthStore.getState();
+            const hasCloudSession = authState.isAuthenticated && !!authState.accessToken;
+            if (!hasCloudSession) {
               toast.error(
                 `Sign in to join the ${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
               );
+              return;
+            }
+            if (!CLOUD_MANAGED_TIERS.has(get().planTier)) {
+              toast.error('Managed Cloud is available to Hobby, Pro, Max, and Enterprise tiers.');
               return;
             }
             set({ mode }, undefined, 'appMode/setMode');

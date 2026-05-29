@@ -346,7 +346,7 @@ pub(crate) async fn try_subscription_auth(
             }
             let account_id = auth_store.entries.get(sub_name).and_then(|e| match e {
                 crate::auth::AuthEntry::OAuth { account_id, .. } => account_id.clone(),
-                _ => None,
+                crate::auth::AuthEntry::ApiKey { .. } => None,
             });
             // Persist any token refreshes that happened during resolve_auth
             let _ = crate::auth::save_auth(&auth_store);

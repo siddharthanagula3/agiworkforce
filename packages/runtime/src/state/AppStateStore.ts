@@ -31,7 +31,7 @@
 // ---------------------------------------------------------------------------
 
 export interface AuthState {
-  /** Supabase user ID, null if not authenticated. */
+  /** Identity user ID, null if not authenticated. */
   userId: string | null;
   /** Email, null if not authenticated. */
   email: string | null;

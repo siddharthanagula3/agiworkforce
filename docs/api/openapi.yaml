@@ -10,7 +10,7 @@ info:
 
     Most endpoints require authentication via Bearer token or session cookie:
     ```
-    Authorization: Bearer <supabase_access_token>
+    Authorization: Bearer <clerk_session_token>
     ```
 
     ## CSRF Protection
@@ -2247,7 +2247,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Supabase access token
+      description: Clerk session token or gateway-issued service token
 
   parameters:
     ConversationId:

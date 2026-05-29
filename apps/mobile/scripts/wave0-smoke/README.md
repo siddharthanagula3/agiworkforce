@@ -231,7 +231,7 @@ The procedure is identical for Pixel with these differences:
 | First token never arrives            | LLMController initialization. Check `lib/llmController.ts` — model path may not match download path                                                                |
 | App crashes during inference         | Memory pressure on low-RAM device. Try Tier 3 (llama.rn) fallback. Report model name + device RAM                                                                  |
 | Article 50 modal doesn't appear      | `composeFirstRunDisclosure` returned null — check `@agiworkforce/compliance` package build. Run `pnpm typecheck` in `apps/mobile`                                  |
-| Cloud waitlist submit fails          | Supabase `cloud_waitlist` table may not exist. Run the migration: `supabase db push` in repo root                                                                  |
+| Cloud waitlist submit fails          | AGI Web/API waitlist endpoint may be unavailable or blocked by auth/CSRF/rate limits. Verify the hosted endpoint before launch                                     |
 
 ---
 

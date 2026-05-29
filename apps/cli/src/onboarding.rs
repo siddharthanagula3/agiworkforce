@@ -78,7 +78,7 @@ fn print_welcome_banner() {
     eprintln!("{}", amber(logo));
     eprintln!(
         "  {} {}",
-        amber_bold("Welcome to AGI Workforce"),
+        amber_bold("Welcome to AGI"),
         format!("v{}", env!("CARGO_PKG_VERSION")).dimmed(),
     );
     eprintln!("  {}\n", "Multi-model AI agent in your terminal.".dimmed());
@@ -205,9 +205,10 @@ fn maybe_trust_current_directory() -> Result<bool> {
 
 fn select_auth_provider() -> Result<AuthChoice> {
     let choices = &[
-        "AGI Workforce                    Usage included with your subscription",
+        "Local model                      Run AI locally — no account required",
         "Provide your own API key         Pay for what you use (Anthropic, OpenAI, Google)",
-        "Other providers                  ChatGPT, Claude, GitHub Copilot OAuth",
+        "Other providers                  ChatGPT, Anthropic, GitHub Copilot OAuth",
+        "AGI cloud                        Waitlist only — join at agiworkforce.com",
         "Skip for now                     Configure later with /login",
     ];
 
@@ -219,9 +220,10 @@ fn select_auth_provider() -> Result<AuthChoice> {
         .context("Failed to display auth menu")?;
 
     match selection {
-        0 => Ok(AuthChoice::Provider("agiworkforce")),
+        0 => Ok(AuthChoice::Provider("ollama")),
         1 => Ok(AuthChoice::ApiKey),
         2 => Ok(AuthChoice::OtherProviders),
+        3 => Ok(AuthChoice::Provider("agiworkforce")),
         _ => Ok(AuthChoice::Skip),
     }
 }
@@ -229,7 +231,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
 fn select_other_provider() -> Result<AuthChoice> {
     let choices = &[
         "Sign in with ChatGPT             Usage included with Plus, Pro, Business, Enterprise",
-        "Sign in with Claude              Usage included with Pro, Max, Team, Enterprise",
+        "Sign in with Anthropic           Usage included with Pro, Max, Team, Enterprise",
         "Sign in with GitHub Copilot      Usage included with Copilot subscription",
         "OpenRouter                       API key — access 200+ models",
         "NVIDIA NIM                       API key — NVIDIA hosted models",
@@ -508,7 +510,7 @@ fn print_safety_notes() {
     eprintln!("\n  {}", amber_bold("Before you start:"));
     eprintln!("  {}", "─".repeat(50).dimmed());
     eprintln!();
-    eprintln!("  {}  AGI Workforce can make mistakes.", "•".yellow());
+    eprintln!("  {}  AGI can make mistakes.", "•".yellow());
     eprintln!(
         "      {}",
         "Review the code it writes and commands it runs.".dimmed()

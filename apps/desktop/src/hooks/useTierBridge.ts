@@ -10,7 +10,7 @@ import { useEffect } from 'react';
 import { useTierStore } from '@agiworkforce/unified-chat';
 import type { UIPlanTier } from '@agiworkforce/types';
 import { useUnifiedAuthStore, selectPlan } from '../stores/auth';
-import type { PlanTier } from '../lib/supabase';
+import type { PlanTier } from '../lib/cloudAccountTypes';
 
 /**
  * Map the desktop's wider `PlanTier` (which includes `local-only`, `free`,

@@ -147,22 +147,11 @@ pub async fn submit_feedback(
     metadata: FeedbackMetadata,
     logs: Option<String>,
 ) -> Result<(), String> {
-    // SECURITY: Using the anon key intentionally here because feedback can be submitted
-    // before the user is authenticated (e.g., from the login screen). The `feedback` table
-    // MUST have an RLS policy that only allows INSERT for anon and restricts SELECT/UPDATE/DELETE
-    // to service_role. If authenticated-only feedback is desired, accept a user JWT parameter instead.
-    let supabase_url = crate::sys::account::get_supabase_url()
-        .filter(|s| !s.is_empty())
-        .ok_or("Missing Supabase configuration")?;
-    let supabase_key = crate::sys::account::get_supabase_anon_key()
-        .filter(|s| !s.is_empty())
-        .ok_or("Missing Supabase configuration")?;
-
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let url = format!("{}/rest/v1/feedback", supabase_url);
+    let url = format!("{}/api/feedback", crate::sys::account::get_api_base_url());
 
     let payload = FeedbackPayload {
         subject,
@@ -174,10 +163,7 @@ pub async fn submit_feedback(
 
     let res = client
         .post(&url)
-        .header("apikey", &supabase_key)
-        .header("Authorization", format!("Bearer {}", supabase_key))
         .header("Content-Type", "application/json")
-        .header("Prefer", "return=minimal")
         .json(&payload)
         .send()
         .await
@@ -186,7 +172,7 @@ pub async fn submit_feedback(
     if !res.status().is_success() {
         let status = res.status();
         let text = res.text().await.unwrap_or_default();
-        return Err(format!("Supabase error {}: {}", status, text));
+        return Err(format!("Feedback API error {}: {}", status, text));
     }
 
     Ok(())

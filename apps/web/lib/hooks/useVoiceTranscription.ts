@@ -109,20 +109,15 @@ export interface UseVoiceTranscriptionReturn extends VoiceTranscriptionState {
 }
 
 /**
- * Get the auth token from Supabase for REST API calls
+ * Get the auth token from Clerk for REST API calls
  */
 async function getAuthToken(): Promise<string> {
-  const { getSupabaseClient } = await import('@/services/supabase');
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
+  const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
+  const token = await getClerkToken();
+  if (!token) {
     throw new Error('Authentication required for Whisper Cloud transcription');
   }
-
-  return session.access_token;
+  return token;
 }
 
 /**

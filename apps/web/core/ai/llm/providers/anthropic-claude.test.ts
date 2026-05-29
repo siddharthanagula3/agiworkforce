@@ -7,15 +7,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AnthropicProvider, AnthropicError, AnthropicMessage } from './anthropic-claude';
 
 // Mock external dependencies
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-  },
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 vi.mock('@shared/lib/logger', () => ({
@@ -47,7 +40,7 @@ vi.mock('@anthropic-ai/sdk', () => ({
 }));
 
 // Get mocked modules
-const { supabase } = await import('@shared/lib/supabase-client');
+const { getAuthToken } = await import('@shared/lib/get-auth-token');
 const { toast } = await import('sonner');
 
 describe('AnthropicProvider', () => {
@@ -58,10 +51,7 @@ describe('AnthropicProvider', () => {
     vi.clearAllMocks();
 
     // Setup default auth mock
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    } as never);
+    vi.mocked(getAuthToken).mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -197,16 +187,7 @@ describe('AnthropicProvider', () => {
     });
 
     it('should throw NOT_AUTHENTICATED error when not logged in', async () => {
-      // Mock getSession twice because we call sendMessage twice
-      vi.mocked(supabase.auth.getSession)
-        .mockResolvedValueOnce({
-          data: { session: null },
-          error: null,
-        } as never)
-        .mockResolvedValueOnce({
-          data: { session: null },
-          error: null,
-        } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(AnthropicError);
       await expect(provider.sendMessage(mockMessages)).rejects.toMatchObject({
@@ -335,35 +316,6 @@ describe('AnthropicProvider', () => {
       expect(response.userId).toBe('user-456');
     });
 
-    it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            content: 'Response',
-            usage: { input_tokens: 5, output_tokens: 10 },
-            id: 'resp-123',
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', 'user-456');
-
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
-        }),
-      );
-    });
-
     it('should handle empty response gracefully', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -462,10 +414,7 @@ describe('AnthropicProvider', () => {
     });
 
     it('should throw NOT_AUTHENTICATED error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
       const stream = provider.streamMessage(mockMessages);
 
@@ -546,36 +495,16 @@ describe('AnthropicProvider', () => {
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(AnthropicError);
     });
 
-    it('should handle auth session error', async () => {
+    it('should handle auth token error', async () => {
       // Mock twice because we call sendMessage twice (toThrow + toMatchObject)
-      vi.mocked(supabase.auth.getSession)
+      vi.mocked(getAuthToken)
         .mockRejectedValueOnce(new Error('Auth failed'))
         .mockRejectedValueOnce(new Error('Auth failed'));
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(AnthropicError);
       await expect(provider.sendMessage(mockMessages)).rejects.toMatchObject({
-        code: 'NOT_AUTHENTICATED',
+        code: 'REQUEST_FAILED',
       });
-    });
-
-    it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            content: 'Response',
-            usage: { input_tokens: 5 },
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, undefined, 'user-123');
-
-      expect(insertMock).not.toHaveBeenCalled();
     });
   });
 });

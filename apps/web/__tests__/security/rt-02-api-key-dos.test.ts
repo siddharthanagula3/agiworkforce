@@ -16,16 +16,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('@/utils/env', () => ({
-  requireEnv: (key: string) => {
-    const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
-    };
-    return map[key] ?? '';
-  },
-}));
-
 // ─── Argon2 mock — track call count ──────────────────────────────────────────
 const mockArgon2Verify = vi.fn();
 const mockArgon2Hash = vi.fn().mockResolvedValue('$argon2id$mocked-hash');
@@ -37,37 +27,17 @@ vi.mock('argon2', () => ({
   },
 }));
 
-// ─── Supabase mock ────────────────────────────────────────────────────────────
-const mockSelect = vi.fn();
-const mockEq = vi.fn();
-const mockIs = vi.fn();
-const mockOr = vi.fn();
-const mockLimit = vi.fn();
-const mockMaybeSingle = vi.fn();
-const mockInsert = vi.fn();
-const mockUpdate = vi.fn();
-const mockThen = vi.fn().mockResolvedValue({ error: null });
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+const mockNeonQuery = vi.fn();
+const mockNeonExecute = vi.fn().mockResolvedValue(1);
 
-const mockFrom = vi.fn().mockReturnValue({
-  select: mockSelect,
-  insert: mockInsert,
-});
-
-mockSelect.mockReturnValue({
-  eq: mockEq,
-  is: mockIs,
-  or: mockOr,
-});
-mockEq.mockReturnValue({ or: mockOr, maybeSingle: mockMaybeSingle, limit: mockLimit, eq: mockEq });
-mockIs.mockReturnValue({ or: mockOr });
-mockOr.mockReturnValue({ limit: mockLimit });
-mockLimit.mockReturnValue([]);
-mockInsert.mockReturnValue({ select: mockSelect });
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockFrom,
-    auth: { getUser: vi.fn() },
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: (...args: unknown[]) => mockNeonExecute(...args),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
   })),
 }));
 
@@ -77,17 +47,9 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArgon2Verify.mockResolvedValue(false);
-    mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
-    mockSelect.mockReturnValue({ eq: mockEq, is: mockIs, or: mockOr });
-    mockEq.mockReturnValue({
-      or: mockOr,
-      maybeSingle: mockMaybeSingle,
-      limit: mockLimit,
-      eq: mockEq,
-    });
-    mockIs.mockReturnValue({ or: mockOr });
-    mockOr.mockReturnValue({ limit: mockLimit });
-    mockLimit.mockResolvedValue({ data: [], error: null });
+    // Default: no key found
+    mockNeonQuery.mockResolvedValue([]);
+    mockNeonExecute.mockResolvedValue(1);
   });
 
   describe('KEY_ID_REGEX format validation', () => {
@@ -136,14 +98,17 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const rawKey = `sk_live_${keyId}_someSecretValue`;
 
       // Mock: no matching key found (invalid key)
-      mockLimit.mockResolvedValue({ data: [], error: null });
+      mockNeonQuery.mockResolvedValue([]);
 
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).toBeNull();
 
-      // Should have called from('api_keys') and used eq('key_prefix', keyId)
-      expect(mockFrom).toHaveBeenCalledWith('api_keys');
-      expect(mockEq).toHaveBeenCalledWith('key_prefix', keyId);
+      // Should have queried api_keys table with the key_prefix
+      expect(mockNeonQuery).toHaveBeenCalledOnce();
+      const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+      expect(sql).toContain('api_keys');
+      expect(sql).toContain('key_prefix');
+      expect(params).toContain(keyId);
       // Should NOT have run Argon2 (no matching key)
       expect(mockArgon2Verify).not.toHaveBeenCalled();
     });
@@ -154,31 +119,20 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const storedHash = '$argon2id$v=19$m=65536,t=3,p=4$fakehash';
 
       // Mock: found a matching key
-      mockLimit.mockResolvedValue({
-        data: [
-          {
-            id: 'key-1',
-            user_id: 'user-123',
-            name: 'My Key',
-            key_hash: storedHash,
-            key_prefix: keyId,
-            scopes: [],
-            created_at: '2026-01-01',
-            expires_at: null,
-            last_used_at: null,
-          },
-        ],
-        error: null,
-      });
+      mockNeonQuery.mockResolvedValue([
+        {
+          id: 'key-1',
+          user_id: 'user-123',
+          name: 'My Key',
+          key_hash: storedHash,
+          key_prefix: keyId,
+          scopes: [],
+          created_at: '2026-01-01',
+          expires_at: null,
+          last_used_at: null,
+        },
+      ]);
       mockArgon2Verify.mockResolvedValue(true);
-
-      // Mock the update call for last_used_at
-      mockFrom.mockReturnValue({
-        select: mockSelect,
-        insert: mockInsert,
-        update: mockUpdate,
-      });
-      mockUpdate.mockReturnValue({ eq: vi.fn().mockReturnValue({ then: mockThen }) });
 
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).not.toBeNull();
@@ -192,22 +146,19 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const keyId = '1a2b3c4d5e6f7890';
       const rawKey = `sk_live_${keyId}_wrongSecret`;
 
-      mockLimit.mockResolvedValue({
-        data: [
-          {
-            id: 'key-1',
-            user_id: 'user-123',
-            name: 'My Key',
-            key_hash: '$argon2id$v=19$m=65536,t=3,p=4$fakehash',
-            key_prefix: keyId,
-            scopes: [],
-            created_at: '2026-01-01',
-            expires_at: null,
-            last_used_at: null,
-          },
-        ],
-        error: null,
-      });
+      mockNeonQuery.mockResolvedValue([
+        {
+          id: 'key-1',
+          user_id: 'user-123',
+          name: 'My Key',
+          key_hash: '$argon2id$v=19$m=65536,t=3,p=4$fakehash',
+          key_prefix: keyId,
+          scopes: [],
+          created_at: '2026-01-01',
+          expires_at: null,
+          last_used_at: null,
+        },
+      ]);
       mockArgon2Verify.mockResolvedValue(false);
 
       const result = await ApiKeyService.verifyKey(rawKey);
@@ -223,29 +174,20 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const rawKey = `sk_live_${keyId}_someSecretValue`;
       const storedHash = '$argon2id$v=19$m=65536,t=3,p=4$fakehash';
 
-      mockLimit.mockResolvedValue({
-        data: [
-          {
-            id: 'key-1',
-            user_id: 'user-123',
-            name: 'My Key',
-            key_hash: storedHash,
-            key_prefix: keyId,
-            scopes: [],
-            created_at: '2026-01-01',
-            expires_at: null,
-            last_used_at: null,
-          },
-        ],
-        error: null,
-      });
+      mockNeonQuery.mockResolvedValue([
+        {
+          id: 'key-1',
+          user_id: 'user-123',
+          name: 'My Key',
+          key_hash: storedHash,
+          key_prefix: keyId,
+          scopes: [],
+          created_at: '2026-01-01',
+          expires_at: null,
+          last_used_at: null,
+        },
+      ]);
       mockArgon2Verify.mockResolvedValue(true);
-      mockFrom.mockReturnValue({
-        select: mockSelect,
-        insert: mockInsert,
-        update: mockUpdate,
-      });
-      mockUpdate.mockReturnValue({ eq: vi.fn().mockReturnValue({ then: mockThen }) });
 
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).not.toBeNull();

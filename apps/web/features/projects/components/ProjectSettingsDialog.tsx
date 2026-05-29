@@ -69,9 +69,9 @@ export function ProjectSettingsDialog({
   onDelete,
 }: ProjectSettingsDialogProps) {
   const [name, setName] = useState(project.name);
-  const [description, setDescription] = useState(project.description);
-  const [instructions, setInstructions] = useState(project.instructions);
-  const [color, setColor] = useState(project.color);
+  const [description, setDescription] = useState(project.description ?? '');
+  const [instructions, setInstructions] = useState(project.instructions ?? '');
+  const [color, setColor] = useState(project.color ?? '#6366f1');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [knowledgeFiles, setKnowledgeFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,9 +79,9 @@ export function ProjectSettingsDialog({
   // Sync local state when project changes (e.g., switching between projects)
   useEffect(() => {
     setName(project.name);
-    setDescription(project.description);
-    setInstructions(project.instructions);
-    setColor(project.color);
+    setDescription(project.description ?? '');
+    setInstructions(project.instructions ?? '');
+    setColor(project.color ?? '#6366f1');
   }, [project.id, project.name, project.description, project.instructions, project.color]);
 
   const handleSave = () => {

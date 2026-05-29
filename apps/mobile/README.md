@@ -96,7 +96,7 @@ Capability-routed per device, configured in `lib/models.ts` + `src/features/mode
 | T2   | react-native-executorch       | A15+ / mid-range Android       | Llama 3.2 1B/3B, Phi-3.5 mini |
 | T3   | llama.rn (GGUF, llama.cpp)    | Older devices, manual override | Llama 3.2 1B Q4               |
 
-BYOK providers via `@agiworkforce/llm-normalize`: Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Moonshot, Zhipu, Mistral, Qwen + Ollama + LMStudio. Mobile BYOK is direct-to-provider by default; any AGI relay path needs separate disclosure.
+Mobile v1 does not expose BYOK. It ships small on-device/local LLM routes plus Cloud Managed invite/waitlist. Cloud sends require invite/subscription-backed account state and must stay visually separate from Local.
 
 ## Stack pins
 

@@ -55,8 +55,7 @@
       "react-dom": "19.2.6",
       "react-test-renderer": "19.2.6",
       "typescript": "5.9.3",
-      "@types/node": "^22.19.15",
-      "@supabase/supabase-js": "2.105.4"
+      "@types/node": "^22.19.15"
     },
     "patchedDependencies": {
       "expo@55.0.24": "patches/expo@55.0.24.patch"
@@ -71,6 +70,7 @@
     "check:repo-organization": "node scripts/check-repo-organization.mjs",
     "check:workspace-scripts": "node scripts/check-workspace-scripts.mjs",
     "check:boundaries": "node scripts/check-boundaries.mjs",
+    "check:module-reachability": "node scripts/check-module-reachability.mjs",
     "check:structure-conventions": "node scripts/check-structure-conventions.mjs",
     "check:mobile-hygiene": "node scripts/check-mobile-hygiene.mjs",
     "check:no-hex-mobile": "node scripts/check-no-hex-colors-mobile.mjs",
@@ -78,7 +78,7 @@
     "check:lane-ownership": "node scripts/check-lane-ownership.mjs",
     "check:generated-artifacts": "node scripts/check-generated-artifacts.mjs",
     "check:report-retention": "node scripts/check-report-retention.mjs",
-    "check:supabase-migrations": "node scripts/check-supabase-migrations.mjs",
+    "check:neon-migrations": "node scripts/check-neon-migrations.mjs",
     "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs",
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
     "check:readme-ownership": "node scripts/check-readme-ownership.mjs",
@@ -86,8 +86,11 @@
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:hook-fire-sites": "node apps/cli/scripts/check-hook-fire-sites.mjs",
     "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
+    "sync:models": "node scripts/sync-models.mjs",
+    "sync:models:check": "node scripts/sync-models.mjs --check",
+    "sync:models:refresh": "node scripts/sync-models.mjs --refresh",
     "check:lock-drift": "node scripts/check-lock-build-drift.mjs",
-    "check:llm-operability": "pnpm check:agent-context && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:report-retention && pnpm check:supabase-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites",
+    "check:llm-operability": "pnpm check:agent-context && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:module-reachability && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:report-retention && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites",
     "audit:file-ledger": "node scripts/generate-surface-file-ledger.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -107,6 +110,7 @@
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
+    "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.58.2",
     "@types/node": "^22.19.15",
     "@typescript-eslint/eslint-plugin": "^8.57.2",

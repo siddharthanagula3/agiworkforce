@@ -5,7 +5,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@shared/lib/supabase-client';
 import { queryKeys } from '@shared/stores/query-client';
 import {
   messageReactionsService,
@@ -27,11 +26,15 @@ export const reactionQueryKeys = queryKeys.reactions;
 /**
  * Get current authenticated user
  */
-async function getCurrentUser() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  try {
+    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
+      | { user?: { id: string } | null }
+      | undefined;
+    return clerk?.user?.id ? { id: clerk.user.id } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

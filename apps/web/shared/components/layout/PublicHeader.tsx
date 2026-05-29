@@ -43,14 +43,14 @@ const PublicHeader: React.FC = () => {
   // Menus aligned with footer
   const productMenu = [
     {
-      label: 'AI Marketplace',
-      path: '/marketplace',
+      label: 'Apps',
+      path: '/apps',
       icon: Bot,
-      description: 'Browse specialized AI employees',
+      description: 'Browse apps and connectors',
     },
     {
       label: 'AI Chat',
-      path: '/features/ai-chat',
+      path: '/',
       icon: MessageSquare,
       description: 'Intelligent conversations',
     },

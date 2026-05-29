@@ -7,7 +7,7 @@
 
 services:
   # ===========================================================================
-  # PostgreSQL 16 — Primary local database (mirrors production Supabase schema)
+  # PostgreSQL 16 — Primary local database (mirrors production Neon schema)
   # ===========================================================================
   postgres:
     image: postgres:16-alpine
@@ -26,7 +26,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       # Mount migration files so they run automatically on first init
-      - ./apps/web/supabase/migrations:/docker-entrypoint-initdb.d:ro
+      - ./apps/web/db/neon:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres']
       interval: 10s

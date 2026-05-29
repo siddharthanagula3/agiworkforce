@@ -52,7 +52,8 @@ Shared message schemas belong in `packages/types`; reusable queue/runtime behavi
 
 ## Environment / Secrets
 
-Use `.env.example` as the template. Never commit service tokens, Supabase service-role keys, production URLs with credentials, pairing secrets, or relay credentials.
+Use `.env.example` as the template. Never commit service tokens, Neon credentials,
+production URLs with credentials, pairing secrets, or relay credentials.
 
 ## Security, Privacy, Data Boundaries
 

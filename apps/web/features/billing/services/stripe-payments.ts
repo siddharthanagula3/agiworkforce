@@ -5,20 +5,8 @@
  * UPDATED: January 17, 2026 - Added authorization headers to all API calls
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-
-// Lazy loader with guard
-
-/**
- * Get authorization token for API calls
- */
-async function getAuthToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
-}
 
 // Employee purchase functions removed - hiring is now free
 

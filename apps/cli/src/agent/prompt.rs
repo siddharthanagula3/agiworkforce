@@ -75,7 +75,7 @@ pub(super) fn build_system_prompt(
     rules_context: &str,
 ) -> String {
     let base = custom_system_prompt.unwrap_or(
-        "You are AGI Workforce CLI, a powerful AI assistant running in the user's terminal.\n\
+        "You are AGI CLI, a powerful AI assistant running in the user's terminal.\n\
          You help users with coding, system administration, writing, analysis, and general tasks.\n\
          \n\
          You are direct, concise, and precise. When showing code, use fenced code blocks with the language specified.",

@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { router } from 'expo-router';
-import type { Session } from '@supabase/supabase-js';
+import type { MobileAuthSession } from './authSession';
 import { api } from './api';
 import { getDeviceId } from '@/lib/deviceId';
 
@@ -15,8 +15,8 @@ import { getDeviceId } from '@/lib/deviceId';
 // the layout to push the current session into this module before any
 // notification can navigate. Notifications that fire while no session is
 // known route to /(auth)/login.
-let _currentSession: Session | null = null;
-export function setCurrentSession(session: Session | null): void {
+let _currentSession: MobileAuthSession | null = null;
+export function setCurrentSession(session: MobileAuthSession | null): void {
   _currentSession = session;
 }
 

@@ -4,26 +4,9 @@
  * Updated: Jan 6th 2026 - Migrated to @google/genai SDK
  */
 
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    logger.error('[Google Provider] Failed to get auth token:', error);
-    return null;
-  }
-}
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 
 // All API calls use Netlify proxy functions for security
 // Proxy endpoints: /.netlify/functions/llm-proxies/google-proxy
@@ -104,7 +87,7 @@ export class GoogleProvider {
 
   constructor(config?: Partial<GoogleConfig>) {
     this.config = {
-      model: 'gemini-3.1-pro-preview' as GoogleModel,
+      model: (getProviderDefaultModel('google') ?? 'gemini-3.1-pro-preview') as GoogleModel,
       maxTokens: 4096,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',
@@ -383,18 +366,20 @@ export class GoogleProvider {
     metadata: Record<string, unknown>;
   }): Promise<void> {
     try {
-      const { error } = await db.from('agent_messages').insert({
-        session_id: message.sessionId,
-        user_id: message.userId,
-        role: message.role,
-        content: message.content,
-        metadata: message.metadata,
-        created_at: new Date().toISOString(),
+      const token = await getAuthToken();
+      await fetch('/api/agents/log-message', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          sessionId: message.sessionId,
+          role: message.role,
+          content: message.content,
+          metadata: message.metadata,
+        }),
       });
-
-      if (error) {
-        logger.error('[Google Provider] Error saving message:', error);
-      }
     } catch (error) {
       logger.error('[Google Provider] Unexpected error saving message:', error);
     }

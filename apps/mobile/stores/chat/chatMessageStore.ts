@@ -1,16 +1,14 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
 
 export interface ForkConversationOptions {
   title?: string;
   model?: string;
-  handoffPreview?: LocalToByokHandoffPreview;
-  handoffAcceptedAt?: string;
 }
 
 interface MessageState {
@@ -60,6 +58,7 @@ export const useChatMessageStore = create<MessageState>()(
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
+          if (!isCloudChatEnabled()) return;
           const data = await api.get<{ conversations: ConversationSummary[] }>(
             '/api/chat/conversations',
           );
@@ -74,6 +73,9 @@ export const useChatMessageStore = create<MessageState>()(
       createConversation: async (title?: string, projectId?: string) => {
         const effectiveProjectId =
           projectId ?? useProjectStore.getState().activeProjectId ?? undefined;
+        if (!isCloudChatEnabled()) {
+          return createLocalConversation(set, title, effectiveProjectId);
+        }
         try {
           const data = await api.post<{ conversation: ConversationSummary }>(
             '/api/chat/conversations',
@@ -87,22 +89,7 @@ export const useChatMessageStore = create<MessageState>()(
           }));
           return conversation.id;
         } catch {
-          const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-          const localConversation: ConversationSummary = {
-            id: localId,
-            title: title ?? 'New Chat',
-            updatedAt: new Date().toISOString(),
-            createdAt: new Date().toISOString(),
-            messageCount: 0,
-            pinned: false,
-            projectId: effectiveProjectId,
-          };
-          set((state) => ({
-            conversations: [localConversation, ...state.conversations],
-            currentConversationId: localId,
-            messages: { ...state.messages, [localId]: [] },
-          }));
-          return localId;
+          return createLocalConversation(set, title, effectiveProjectId);
         }
       },
 
@@ -111,30 +98,24 @@ export const useChatMessageStore = create<MessageState>()(
         const sourceMessages = get().messages[sourceConversationId] ?? [];
         const forkTitle =
           options?.title ??
-          `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'BYOK'} fork)`;
-        const handoffPreview = options?.handoffPreview;
-        if (handoffPreview) {
-          assertLocalToByokHandoffPreview(handoffPreview);
-        }
+          `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'copy'} fork)`;
         const forkId = await get().createConversation(forkTitle, sourceConversation?.projectId);
         const now = Date.now();
-        const forkedMessages = handoffPreview
-          ? [buildAcceptedHandoffMessage(forkId, handoffPreview, options, now)]
-          : sourceMessages.map((message, index) => {
-              const {
-                isStreaming: _isStreaming,
-                isQueued: _isQueued,
-                offlineQueueId: _offlineQueueId,
-                ...safeMessage
-              } = message;
+        const forkedMessages = sourceMessages.map((message, index) => {
+          const {
+            isStreaming: _isStreaming,
+            isQueued: _isQueued,
+            offlineQueueId: _offlineQueueId,
+            ...safeMessage
+          } = message;
 
-              return {
-                ...safeMessage,
-                id: `${message.id}_fork_${now}_${index}`,
-                conversationId: forkId,
-                model: options?.model ?? message.model,
-              };
-            });
+          return {
+            ...safeMessage,
+            id: `${message.id}_fork_${now}_${index}`,
+            conversationId: forkId,
+            model: options?.model ?? message.model,
+          };
+        });
 
         set((state) => ({
           conversations: state.conversations.map((conversation) =>
@@ -164,6 +145,7 @@ export const useChatMessageStore = create<MessageState>()(
               state.currentConversationId === id ? null : state.currentConversationId,
           };
         });
+        if (!isCloudChatEnabled()) return;
         try {
           await api.delete(`/api/chat/conversations/${id}`);
         } catch {
@@ -177,6 +159,7 @@ export const useChatMessageStore = create<MessageState>()(
 
         set({ isLoadingMessages: true });
         try {
+          if (!isCloudChatEnabled()) return;
           const data = await api.get<{ messages: ChatMessage[] }>(
             `/api/chat/conversations/${conversationId}`,
           );
@@ -199,6 +182,7 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
+        if (!isCloudChatEnabled()) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { title });
         } catch {
@@ -213,6 +197,7 @@ export const useChatMessageStore = create<MessageState>()(
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
         }));
+        if (!isCloudChatEnabled()) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { pinned });
         } catch {
@@ -323,61 +308,35 @@ export const useChatMessageStore = create<MessageState>()(
   ),
 );
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useChatMessageStore.persist.rehydrate();
-});
-
-function assertLocalToByokHandoffPreview(preview: LocalToByokHandoffPreview): void {
-  if (preview.redactionReport.blocked || preview.draft.redactionReport.blocked) {
-    throw new Error('Blocked Local to BYOK handoff preview cannot be forked.');
-  }
-  if (preview.draft.targetPrivacyMode !== 'byok') {
-    throw new Error('Local to BYOK fork requires a BYOK handoff draft.');
-  }
-  if (preview.draft.targetProviderMode !== 'DirectByok') {
-    throw new Error('Local to BYOK fork requires direct BYOK provider mode.');
-  }
-  if (!preview.draft.previewHashSha256 || preview.draft.previewHashSha256.length < 16) {
-    throw new Error('Local to BYOK fork requires preview hash evidence.');
-  }
-
-  const idHashPrefix = preview.draft.id.replace(/^handoff-/, '');
-  if (!preview.draft.previewHashSha256.startsWith(idHashPrefix)) {
-    throw new Error('Local to BYOK handoff draft hash does not match its id.');
-  }
+function isCloudChatEnabled(): boolean {
+  return FEATURES.cloudChat && !FEATURES.v1LocalOnly;
 }
 
-function buildAcceptedHandoffMessage(
-  forkId: string,
-  preview: LocalToByokHandoffPreview,
-  options: ForkConversationOptions | undefined,
-  now: number,
-): ChatMessage {
-  const acceptedAt = options?.handoffAcceptedAt ?? new Date(now).toISOString();
-  const draft = { ...preview.draft, consentedAt: acceptedAt };
-
-  return {
-    id: `${preview.draft.id}_accepted_${now}`,
-    conversationId: forkId,
-    role: 'system',
-    content: [
-      'Local to BYOK handoff accepted.',
-      'Only this redacted preview payload is available in the BYOK fork. The original Local thread remains on device and is not copied into this conversation.',
-      preview.redactedPayload,
-    ].join('\n\n'),
-    createdAt: acceptedAt,
-    model: options?.model,
-    metadata: {
-      kind: 'local_to_byok_handoff',
-      sourceSessionId: preview.draft.sourceSessionId,
-      handoffDraft: draft,
-      previewHashSha256: preview.draft.previewHashSha256,
-      redactionReport: preview.redactionReport,
-      selectedContext: preview.draft.selectedContext,
-      sourceMessagePolicy: 'redacted_preview_only',
-    },
+function createLocalConversation(
+  set: (
+    partial: Partial<MessageState> | ((state: MessageState) => Partial<MessageState>),
+    replace?: false,
+  ) => void,
+  title: string | undefined,
+  projectId: string | undefined,
+): string {
+  const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+  const now = new Date().toISOString();
+  const localConversation: ConversationSummary = {
+    id: localId,
+    title: title ?? 'New Chat',
+    updatedAt: now,
+    createdAt: now,
+    messageCount: 0,
+    pinned: false,
+    projectId,
   };
+  set((state) => ({
+    conversations: [localConversation, ...state.conversations],
+    currentConversationId: localId,
+    messages: { ...state.messages, [localId]: [] },
+  }));
+  return localId;
 }
+
+rehydrateWhenMmkvReady(useChatMessageStore, 'chat-message-store');

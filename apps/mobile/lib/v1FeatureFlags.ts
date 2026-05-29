@@ -1,8 +1,9 @@
 /**
  * v1 Feature Flags — master switch for cloud-only features.
  *
- * AGI Mobile v1 ships local-only. Cloud features are preserved in the codebase
- * for v1.1 but hidden at runtime via this module.
+ * AGI Mobile v1 ships Local plus Cloud Managed invite/waitlist. Cloud features
+ * are preserved in the codebase but hidden at runtime via this module until the
+ * invite path is explicitly enabled.
  *
  * Usage pattern:
  *   import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -26,7 +27,7 @@ export const FEATURES = {
   /** Projects tab — ships in v1 per FOUNDER DECISION 2026-05-18. */
   projects: true,
 
-  /** Cloud chat / conversation sync to Supabase. */
+  /** Cloud chat / conversation sync through Clerk-authenticated Web/API. */
   cloudChat: false,
 
   /** Billing / subscription / Stripe portal. */
@@ -35,7 +36,7 @@ export const FEATURES = {
   /** Auth (login, OAuth, password reset). No auth in v1 — local only. */
   auth: false,
 
-  /** BYOK key management UI (the keys screen still ships in v1 for local providers). */
+  /** Mobile has no BYOK surface in v1. Desktop/CLI own BYOK. */
   byokKeys: false,
 
   /** Cloud agent orchestration (Agents screen, agent stores). */

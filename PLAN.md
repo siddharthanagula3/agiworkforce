@@ -105,7 +105,7 @@ AGI Workforce surface corpus:
 - `packages`
 - `crates`
 - `services`
-- `supabase`
+- `apps/web/db/neon`
 - `docs`
 - `tasks`
 
@@ -151,7 +151,7 @@ This is not enough to claim Claude Code parity. It is the foundation.
 | Claude mobile                | Chat, files, voice, camera, privacy mode, local/BYOK onboarding                                                | `apps/mobile`, `packages/local-llm`                                                                                             | Mobile                    | Partial         |
 | Claude desktop               | Rich chat shell, MCP, local files, artifacts, connectors                                                       | `apps/desktop`, `src-tauri`                                                                                                     | Desktop                   | Partial         |
 | Claude web                   | Chat, projects, artifacts, sharing, account, onboarding                                                        | `apps/web`                                                                                                                      | Web                       | Partial         |
-| Claude enterprise            | Admin policy, audit logs, SSO, team billing, compliance                                                        | `services`, `supabase`, `packages/compliance`                                                                                   | Web/Desktop               | Early           |
+| Claude enterprise            | Admin policy, audit logs, SSO, team billing, compliance                                                        | `services`, `apps/web/db/neon`, `packages/compliance`                                                                           | Web/Desktop               | Early           |
 | Claude GitHub automation     | PR/issue mention workflow, review comments, CI action                                                          | `services`, GitHub app future                                                                                                   | Web/Cloud/CLI             | Early           |
 
 ## Transition Workstreams
@@ -211,7 +211,7 @@ Goal: make AGI Workforce simple for future engineers, marketing, GTM, support, a
 Rules:
 
 - Treat this as a pre-release cleanup window. There are no public users, release promises, or migration commitments yet, so structural cleanup is allowed when it preserves behavior and history.
-- Keep the product code root shape: `apps/`, `packages/`, `crates/`, `services/`, `supabase/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, `scripts/`.
+- Keep the product code root shape: `apps/`, `packages/`, `crates/`, `services/`, `docs/`, `audit/`, `tasks/`, `reports/`, `examples/`, `scripts/`, with Neon migrations under `apps/web/db/neon/`.
 - Remove root clutter by moving scratch markdown/images and generated reports into dated archive/report folders.
 - Keep tool-required folders such as `.claude`, `.codex`, `.cursor`, `.opencode`, and `.agents` until each tool contract is documented.
 - Use the existing domain-first app reorganization plan as a sub-plan, not the whole repo strategy.
@@ -451,10 +451,10 @@ Goal: enterprise-grade trust without creating uncapped bootstrapped burn.
 
 Tasks:
 
-- Admin policy model for Local/BYOK/Managed availability. First shared contract and database foundation exists in `packages/types/src/enterprise` and `supabase/migrations/20260521100000_enterprise_control_plane_foundation.sql`.
+- Admin policy model for Local/BYOK/Managed availability. First shared contract and database foundation exists in `packages/types/src/enterprise` and `apps/web/db/neon/`.
 - Audit log schema. Enterprise audit events and audit export request tables now exist in the canonical migration path.
 - Team key vault / BYOK policy. Provider policy tables exist; key vault implementation remains open.
-- SSO/SAML/OIDC. Existing Web SSO/SCIM tables are now backfilled into root migrations so fresh environments no longer depend on legacy `apps/web/supabase` migrations.
+- SSO/SAML/OIDC. Existing Web SSO/SCIM tables are represented in the canonical Neon migration path so fresh environments do not depend on retired migration roots.
 - Billing waitlist and invoice-first enterprise option. Managed credit accounts default to `public_launch_blocked = true` and `billing_mode = invoice_ach`.
 - Support and feedback loops. Support cases, feedback cases, and release-fix links now have shared schema foundations.
 

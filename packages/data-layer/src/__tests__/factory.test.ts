@@ -1,6 +1,5 @@
 /**
- * Factory tests. We assert env-resolution and error paths — the
- * adapters themselves are tested in `supabase-adapter.test.ts`.
+ * Factory tests. We assert env-resolution and error paths.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -10,10 +9,7 @@ import {
   createRealtimeClient,
   DataLayerConfigError,
   NotImplementedError,
-  SupabaseDatabaseAdapter,
-  SupabaseAuthAdapter,
-  SupabaseStorageAdapter,
-  SupabaseRealtimeAdapter,
+  ClerkAuthAdapter,
   NeonDatabaseAdapter,
   PostgresDatabaseAdapter,
 } from '../index';
@@ -26,9 +22,9 @@ const ENV_KEYS = [
   'AGI_REALTIME_PROVIDER',
   'AGI_DATABASE_URL',
   'DATABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-  'SUPABASE_SERVICE_ROLE_KEY',
+  'CLERK_SECRET_KEY',
+  'CLERK_JWT_KEY',
+  'CLERK_AUTHORIZED_PARTIES',
 ];
 
 beforeEach(() => {
@@ -45,14 +41,13 @@ afterEach(() => {
 });
 
 describe('createDatabaseClient', () => {
-  it('defaults to supabase when no env is set and creds provided', () => {
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'anon-key-test';
+  it('defaults to neon when no env is set and connection string provided', () => {
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
     const db = createDatabaseClient();
-    expect(db).toBeInstanceOf(SupabaseDatabaseAdapter);
+    expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
-  it('throws when supabase chosen without env', () => {
+  it('throws when default Neon has no connection string', () => {
     expect(() => createDatabaseClient()).toThrow(DataLayerConfigError);
   });
 
@@ -94,13 +89,12 @@ describe('createDatabaseClient', () => {
 
   it('respects explicit options over env', () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
+    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep1.neon.tech/db';
     const db = createDatabaseClient({
-      provider: 'supabase',
-      supabaseUrl: 'https://override.supabase.co',
-      supabaseKey: 'override-key',
+      provider: 'postgres',
+      connectionString: 'postgresql://u:p@override:5432/db',
     });
-    expect(db).toBeInstanceOf(SupabaseDatabaseAdapter);
+    expect(db).toBeInstanceOf(PostgresDatabaseAdapter);
   });
 
   it('falls back to DATABASE_URL when AGI_DATABASE_URL is unset', () => {
@@ -117,11 +111,10 @@ describe('createDatabaseClient', () => {
 });
 
 describe('createAuthClient', () => {
-  it('defaults to supabase', () => {
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'anon-key';
+  it('defaults to clerk', () => {
+    process.env['CLERK_JWT_KEY'] = 'test-jwt-key';
     const auth = createAuthClient();
-    expect(auth).toBeInstanceOf(SupabaseAuthAdapter);
+    expect(auth).toBeInstanceOf(ClerkAuthAdapter);
   });
 
   it('throws on unimplemented providers (auth0)', () => {
@@ -129,7 +122,14 @@ describe('createAuthClient', () => {
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });
 
-  it('throws on unimplemented providers (clerk)', () => {
+  it('returns Clerk adapter when AGI_AUTH_PROVIDER=clerk', () => {
+    process.env['AGI_AUTH_PROVIDER'] = 'clerk';
+    process.env['CLERK_JWT_KEY'] = 'test-jwt-key';
+    const auth = createAuthClient();
+    expect(auth).toBeInstanceOf(ClerkAuthAdapter);
+  });
+
+  it('throws when Clerk is chosen without verification keys', () => {
     process.env['AGI_AUTH_PROVIDER'] = 'clerk';
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });
@@ -139,17 +139,20 @@ describe('createAuthClient', () => {
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });
 
-  it('throws when supabase chosen without env', () => {
+  it('throws when a removed legacy auth provider is configured', () => {
+    process.env['AGI_AUTH_PROVIDER'] = 'legacy-auth';
     expect(() => createAuthClient()).toThrow(DataLayerConfigError);
   });
 });
 
 describe('createStorageClient', () => {
-  it('defaults to supabase', () => {
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.supabase.co';
-    process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'svc-key';
-    const storage = createStorageClient();
-    expect(storage).toBeInstanceOf(SupabaseStorageAdapter);
+  it('throws when no storage provider is configured', () => {
+    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
+  });
+
+  it('throws when a removed legacy storage provider is configured', () => {
+    process.env['AGI_STORAGE_PROVIDER'] = 'legacy-storage';
+    expect(() => createStorageClient()).toThrow(DataLayerConfigError);
   });
 
   it('throws on unimplemented providers (s3)', () => {
@@ -164,11 +167,13 @@ describe('createStorageClient', () => {
 });
 
 describe('createRealtimeClient', () => {
-  it('defaults to supabase', () => {
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://example.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'anon-key';
-    const rt = createRealtimeClient();
-    expect(rt).toBeInstanceOf(SupabaseRealtimeAdapter);
+  it('throws when no realtime provider is configured', () => {
+    expect(() => createRealtimeClient()).toThrow(DataLayerConfigError);
+  });
+
+  it('throws when a removed legacy realtime provider is configured', () => {
+    process.env['AGI_REALTIME_PROVIDER'] = 'legacy-realtime';
+    expect(() => createRealtimeClient()).toThrow(DataLayerConfigError);
   });
 
   it('throws on unimplemented providers (pusher)', () => {

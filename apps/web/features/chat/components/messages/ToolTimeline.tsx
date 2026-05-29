@@ -2,9 +2,58 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, GitBranch, Wrench } from 'lucide-react';
+import { ChevronDown, CheckCircle2, GitBranch, Wrench } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { ToolCallCard, type ToolCall, type ToolCallStatus } from '../ToolCallCard';
+
+// ─── File-type badge helpers ──────────────────────────────────────────────────
+
+/** Known file extension -> badge label + Tailwind color classes */
+const EXT_BADGE_MAP: Record<string, { label: string; classes: string }> = {
+  html: { label: 'HTML', classes: 'bg-orange-500/20 text-orange-300' },
+  htm: { label: 'HTML', classes: 'bg-orange-500/20 text-orange-300' },
+  css: { label: 'CSS', classes: 'bg-blue-500/20 text-blue-300' },
+  scss: { label: 'SCSS', classes: 'bg-pink-500/20 text-pink-300' },
+  less: { label: 'LESS', classes: 'bg-indigo-500/20 text-indigo-300' },
+  js: { label: 'JS', classes: 'bg-yellow-400/20 text-yellow-300' },
+  jsx: { label: 'JSX', classes: 'bg-yellow-400/20 text-yellow-300' },
+  ts: { label: 'TS', classes: 'bg-blue-400/20 text-blue-300' },
+  tsx: { label: 'TSX', classes: 'bg-blue-400/20 text-blue-300' },
+  py: { label: 'Python', classes: 'bg-sky-500/20 text-sky-300' },
+  rs: { label: 'Rust', classes: 'bg-rose-500/20 text-rose-300' },
+  sh: { label: 'Script', classes: 'bg-emerald-500/20 text-emerald-300' },
+  bash: { label: 'Script', classes: 'bg-emerald-500/20 text-emerald-300' },
+  json: { label: 'JSON', classes: 'bg-amber-500/20 text-amber-300' },
+  md: { label: 'MD', classes: 'bg-zinc-500/20 text-zinc-300' },
+  mdx: { label: 'MDX', classes: 'bg-zinc-500/20 text-zinc-300' },
+  sql: { label: 'SQL', classes: 'bg-purple-500/20 text-purple-300' },
+  yaml: { label: 'YAML', classes: 'bg-teal-500/20 text-teal-300' },
+  yml: { label: 'YAML', classes: 'bg-teal-500/20 text-teal-300' },
+  toml: { label: 'TOML', classes: 'bg-teal-500/20 text-teal-300' },
+  env: { label: 'ENV', classes: 'bg-rose-500/20 text-rose-300' },
+  go: { label: 'Go', classes: 'bg-cyan-500/20 text-cyan-300' },
+  java: { label: 'Java', classes: 'bg-orange-600/20 text-orange-300' },
+  rb: { label: 'Ruby', classes: 'bg-red-500/20 text-red-300' },
+  php: { label: 'PHP', classes: 'bg-violet-500/20 text-violet-300' },
+  swift: { label: 'Swift', classes: 'bg-orange-400/20 text-orange-300' },
+  kt: { label: 'Kotlin', classes: 'bg-purple-400/20 text-purple-300' },
+  txt: { label: 'TXT', classes: 'bg-zinc-500/20 text-zinc-300' },
+  csv: { label: 'CSV', classes: 'bg-green-500/20 text-green-300' },
+  xml: { label: 'XML', classes: 'bg-orange-400/20 text-orange-300' },
+};
+
+/**
+ * Extract a file-type badge from a tool's args string.
+ * Returns null when no recognizable file extension is found.
+ */
+function getFileBadge(args?: string): { label: string; classes: string } | null {
+  if (!args) return null;
+  // Match the last path-like segment and extract its extension
+  const match = args.match(/[^\s/\\]+\.([a-z0-9]+)(?:\s|$)/i);
+  if (!match) return null;
+  const ext = match[1]!.toLowerCase();
+  return EXT_BADGE_MAP[ext] ?? null;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,74 +142,74 @@ function formatDuration(ms: number): string {
 }
 
 /**
- * Build a compact human-readable summary from a list of tool entries.
- * Groups by canonical tool name, counts occurrences, and returns a phrase like:
- *   "Ran 5 commands, created a file, read 3 files"
+ * Build a compact semantic summary from a list of tool entries.
+ * Returns a human-readable description of what was accomplished, not a
+ * mechanical count. For example: "Read and analyzed files", "Searched the
+ * codebase", "Ran shell commands and edited code".
  */
 function buildCompactSummary(tools: ToolEntry[]): string {
-  // Normalize tool names to a canonical action phrase
-  function canonicalize(name: string): string {
+  // Bucket each tool into a semantic category
+  type Bucket =
+    | 'shell'
+    | 'file-read'
+    | 'file-write'
+    | 'web-search'
+    | 'web-fetch'
+    | 'codebase-search'
+    | 'list';
+
+  function categorize(name: string): Bucket {
     const n = name.toLowerCase();
-    if (n.includes('bash') || n.includes('command') || n.includes('exec') || n.includes('run')) {
-      return 'command';
+    if (n.includes('bash') || n.includes('exec') || n.includes('run') || n.includes('command')) {
+      return 'shell';
     }
-    if (n.includes('write') || n.includes('create') || n.includes('edit')) {
-      return 'file write';
+    if (n.includes('write') || n.includes('create') || n.includes('edit') || n.includes('patch')) {
+      return 'file-write';
     }
-    if (n.includes('read') || n.includes('view') || n.includes('cat')) {
-      return 'file read';
+    if (n.includes('read') || n.includes('view') || n.includes('cat') || n.includes('open')) {
+      return 'file-read';
     }
-    if (n.includes('search') || n.includes('grep') || n.includes('find')) {
-      return 'search';
+    if (n.includes('web') && (n.includes('search') || n.includes('query'))) {
+      return 'web-search';
+    }
+    if (n.includes('fetch') || n.includes('http') || n.includes('url') || n.includes('web')) {
+      return 'web-fetch';
+    }
+    if (n.includes('search') || n.includes('grep') || n.includes('find') || n.includes('ripgrep')) {
+      return 'codebase-search';
     }
     if (n.includes('list') || n.includes('ls') || n.includes('dir')) {
-      return 'listing';
+      return 'list';
     }
-    if (n.includes('web') || n.includes('fetch') || n.includes('http')) {
-      return 'web request';
-    }
-    return name;
+    return 'shell';
   }
 
-  // Count by canonical name
-  const counts: Record<string, number> = {};
+  // Collect unique categories in order of first appearance
+  const seen = new Set<Bucket>();
   for (const tool of tools) {
-    const key = canonicalize(tool.name);
-    counts[key] = (counts[key] ?? 0) + 1;
+    seen.add(categorize(tool.name));
   }
+  const categories = [...seen];
 
-  // Build readable phrases
-  const phrases: string[] = [];
-  for (const [key, count] of Object.entries(counts)) {
-    switch (key) {
-      case 'command':
-        phrases.push(count === 1 ? 'ran a command' : `ran ${count} commands`);
-        break;
-      case 'file write':
-        phrases.push(count === 1 ? 'created a file' : `created ${count} files`);
-        break;
-      case 'file read':
-        phrases.push(count === 1 ? 'read a file' : `read ${count} files`);
-        break;
-      case 'search':
-        phrases.push(count === 1 ? 'searched' : `searched ${count} times`);
-        break;
-      case 'listing':
-        phrases.push(count === 1 ? 'listed files' : `listed files ${count} times`);
-        break;
-      case 'web request':
-        phrases.push(count === 1 ? 'made a web request' : `made ${count} web requests`);
-        break;
-      default:
-        phrases.push(count === 1 ? `used ${key}` : `used ${key} ${count} times`);
-    }
-  }
+  // Semantic label per bucket (no counts)
+  const semanticLabel: Record<Bucket, string> = {
+    'file-read': 'Read and analyzed files',
+    'file-write': 'Edited code',
+    shell: 'Ran shell commands',
+    'web-search': 'Searched the web',
+    'web-fetch': 'Fetched web content',
+    'codebase-search': 'Searched the codebase',
+    list: 'Listed directory contents',
+  };
 
-  if (phrases.length === 0) return `${tools.length} tool${tools.length !== 1 ? 's' : ''}`;
-  if (phrases.length === 1) return phrases[0]!;
-  if (phrases.length === 2) return `${phrases[0]} and ${phrases[1]}`;
-  const last = phrases.pop()!;
-  return `${phrases.join(', ')}, and ${last}`;
+  if (categories.length === 0) return 'Used tools';
+
+  // Combine multiple semantic labels with commas + "and"
+  const labels = categories.map((c) => semanticLabel[c]);
+  if (labels.length === 1) return labels[0]!;
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  const last = labels.pop()!;
+  return `${labels.join(', ')}, and ${last}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -298,59 +347,97 @@ function ToolTimeline({ tools, className, compact: compactProp }: ToolTimelinePr
             }}
             className="overflow-hidden"
           >
-            <div className="px-3 pb-3 pt-2 space-y-1.5 border-t border-border/20">
-              {groups.map((group, gi) => {
-                const isParallel = group.parallelGroup != null && group.entries.length > 1;
+            {/* Vertical connector line wraps all sequential steps */}
+            <div className="border-t border-border/20">
+              <div className="relative ml-4 border-l border-border/30 pl-3 pb-3 pt-2 space-y-1.5">
+                {groups.map((group, gi) => {
+                  const isParallel = group.parallelGroup != null && group.entries.length > 1;
 
-                if (isParallel) {
-                  return (
-                    <div
-                      key={group.parallelGroup ?? gi}
-                      className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5 mx-0"
-                    >
-                      <div className="flex items-center gap-1 mb-0.5">
-                        <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
-                        <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                  if (isParallel) {
+                    return (
+                      <div
+                        key={group.parallelGroup ?? gi}
+                        className="border-l-2 border-blue-500/30 pl-2 py-0.5 space-y-1.5 mx-0"
+                      >
+                        <div className="flex items-center gap-1 mb-0.5">
+                          <GitBranch className="w-2.5 h-2.5 text-blue-400/70 shrink-0" />
+                          <span className="text-[10px] text-blue-400/70 font-mono">parallel</span>
+                        </div>
+                        {group.entries.map((tool, ti) => {
+                          const id = stableId(tool, gi * 100 + ti);
+                          const toolCall: ToolCall = {
+                            id,
+                            name: tool.name,
+                            status: toToolCallStatus(tool.status),
+                            durationMs: tool.durationMs,
+                            parameters: buildParameters(tool.args, tool.parameters),
+                          };
+                          const fileBadge = getFileBadge(tool.args);
+                          return (
+                            <div key={id} className="relative">
+                              {fileBadge && (
+                                <span
+                                  className={cn(
+                                    'absolute right-0 top-0.5 z-10 rounded px-1 py-px text-[9px] font-semibold tracking-wide',
+                                    fileBadge.classes,
+                                  )}
+                                >
+                                  {fileBadge.label}
+                                </span>
+                              )}
+                              <ToolCallCard
+                                toolCall={toolCall}
+                                showParameters={Boolean(tool.args ?? tool.parameters)}
+                              />
+                            </div>
+                          );
+                        })}
                       </div>
-                      {group.entries.map((tool, ti) => {
-                        const id = stableId(tool, gi * 100 + ti);
-                        const toolCall: ToolCall = {
-                          id,
-                          name: tool.name,
-                          status: toToolCallStatus(tool.status),
-                          durationMs: tool.durationMs,
-                          parameters: buildParameters(tool.args, tool.parameters),
-                        };
-                        return (
-                          <ToolCallCard
-                            key={id}
-                            toolCall={toolCall}
-                            showParameters={Boolean(tool.args ?? tool.parameters)}
-                          />
-                        );
-                      })}
-                    </div>
-                  );
-                }
+                    );
+                  }
 
-                return group.entries.map((tool, ti) => {
-                  const id = stableId(tool, gi * 100 + ti);
-                  const toolCall: ToolCall = {
-                    id,
-                    name: tool.name,
-                    status: toToolCallStatus(tool.status),
-                    durationMs: tool.durationMs,
-                    parameters: buildParameters(tool.args, tool.parameters),
-                  };
-                  return (
-                    <ToolCallCard
-                      key={id}
-                      toolCall={toolCall}
-                      showParameters={Boolean(tool.args ?? tool.parameters)}
+                  return group.entries.map((tool, ti) => {
+                    const id = stableId(tool, gi * 100 + ti);
+                    const toolCall: ToolCall = {
+                      id,
+                      name: tool.name,
+                      status: toToolCallStatus(tool.status),
+                      durationMs: tool.durationMs,
+                      parameters: buildParameters(tool.args, tool.parameters),
+                    };
+                    const fileBadge = getFileBadge(tool.args);
+                    return (
+                      <div key={id} className="relative">
+                        {fileBadge && (
+                          <span
+                            className={cn(
+                              'absolute right-0 top-0.5 z-10 rounded px-1 py-px text-[9px] font-semibold tracking-wide',
+                              fileBadge.classes,
+                            )}
+                          >
+                            {fileBadge.label}
+                          </span>
+                        )}
+                        <ToolCallCard
+                          toolCall={toolCall}
+                          showParameters={Boolean(tool.args ?? tool.parameters)}
+                        />
+                      </div>
+                    );
+                  });
+                })}
+
+                {/* Done row — shown when every tool completed without error */}
+                {!hasRunning && errorCount === 0 && (
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <CheckCircle2
+                      className="w-3.5 h-3.5 shrink-0 text-emerald-500"
+                      aria-hidden="true"
                     />
-                  );
-                });
-              })}
+                    <span className="text-xs text-emerald-500 font-medium">Done</span>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

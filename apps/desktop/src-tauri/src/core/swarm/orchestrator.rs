@@ -16,7 +16,7 @@ use super::{
     AgentHealth, SwarmError, SwarmMetrics, SwarmResultType,
 };
 use crate::automation::AutomationService;
-use crate::core::agi::Goal;
+use crate::core::agi::{Goal, Priority};
 use crate::core::llm::LLMRouter;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -312,6 +312,143 @@ impl SwarmOrchestrator {
             result.succeeded + result.failed,
             result.speedup_ratio
         );
+
+        Ok(result)
+    }
+
+    /// Executes a pre-built dependency graph without asking the LLM decomposer
+    /// to create subtasks first.
+    pub async fn execute_with_graph(
+        &self,
+        goal_description: String,
+        mut dependency_graph: DependencyGraph,
+    ) -> SwarmResultType<SwarmResult> {
+        let goal = Goal {
+            id: format!("swarm_{}", uuid::Uuid::new_v4()),
+            description: goal_description,
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: Vec::new(),
+            success_criteria: Vec::new(),
+        };
+
+        let start_time = Instant::now();
+        self.is_running.store(true, Ordering::SeqCst);
+        self.stop_signal.store(false, Ordering::SeqCst);
+
+        let initial_stats = dependency_graph.stats();
+        tracing::info!(
+            "[SwarmOrchestrator] Starting pre-built graph execution: {} subtasks",
+            initial_stats.total_subtasks
+        );
+
+        self.emit_event(
+            "swarm:started",
+            serde_json::json!({
+                "goal_id": goal.id,
+                "description": goal.description,
+            }),
+        );
+
+        self.emit_event(
+            "swarm:decomposed",
+            serde_json::json!({
+                "goal_id": goal.id,
+                "total_subtasks": initial_stats.total_subtasks,
+                "critical_path_length": initial_stats.critical_path_length,
+                "max_parallelism": initial_stats.max_parallelism,
+            }),
+        );
+
+        {
+            let mut stats = self.stats.write();
+            stats.goals_processed += 1;
+            stats.subtasks_created += initial_stats.total_subtasks as u64;
+        }
+
+        if self.config.optimize_critical_path {
+            self.decomposer
+                .optimize_critical_path(&mut dependency_graph);
+        }
+
+        let results = match self.execute_parallel(&goal, &mut dependency_graph).await {
+            Ok(results) => results,
+            Err(error) => {
+                self.is_running.store(false, Ordering::SeqCst);
+                let mut spawned = self.spawned_subtask_ids.lock().await;
+                spawned.clear();
+                return Err(error);
+            }
+        };
+
+        let wall_time = start_time.elapsed();
+        let aggregated = self.aggregator.aggregate(results, wall_time)?;
+        let final_stats = dependency_graph.stats();
+        let result = SwarmResult {
+            success: aggregated.success,
+            goal_id: goal.id.clone(),
+            output: aggregated.output,
+            summary: aggregated.summary,
+            succeeded: aggregated.succeeded_count,
+            failed: aggregated.failed_count,
+            wall_time,
+            speedup_ratio: aggregated.speedup_ratio,
+            critical_path_length: final_stats.critical_path_length,
+            max_parallelism: final_stats.max_parallelism,
+            metrics: SwarmMetrics {
+                tasks_submitted: initial_stats.total_subtasks as u64,
+                tasks_completed: aggregated.succeeded_count as u64,
+                tasks_failed: aggregated.failed_count as u64,
+                active_agents: self.spawner.active_agent_count(),
+                peak_agents: final_stats.max_parallelism,
+                total_agent_time_ms: aggregated.total_agent_time.as_millis() as u64,
+                wall_clock_time_ms: wall_time.as_millis() as u64,
+                speedup_ratio: aggregated.speedup_ratio,
+                avg_task_latency_ms: if aggregated.subtask_results.is_empty() {
+                    0.0
+                } else {
+                    aggregated.total_agent_time.as_millis() as f64
+                        / aggregated.subtask_results.len() as f64
+                },
+                circuit_breaker_trips: self.spawner.get_stats().circuit_breaker_trips,
+                agent_restarts: self.spawner.get_stats().restart_count,
+            },
+        };
+
+        {
+            let mut stats = self.stats.write();
+            stats.subtasks_completed += aggregated.succeeded_count as u64;
+            stats.subtasks_failed += aggregated.failed_count as u64;
+            stats.total_wall_time_ms += wall_time.as_millis() as u64;
+            stats.total_agent_time_ms += aggregated.total_agent_time.as_millis() as u64;
+
+            let total_executions = stats.goals_processed;
+            stats.avg_speedup_ratio = (stats.avg_speedup_ratio * (total_executions - 1) as f64
+                + aggregated.speedup_ratio)
+                / total_executions as f64;
+
+            if final_stats.max_parallelism > stats.peak_agents {
+                stats.peak_agents = final_stats.max_parallelism;
+            }
+        }
+
+        self.emit_event(
+            "swarm:completed",
+            serde_json::json!({
+                "goal_id": goal.id,
+                "success": result.success,
+                "succeeded": result.succeeded,
+                "failed": result.failed,
+                "wall_time_ms": wall_time.as_millis(),
+                "speedup_ratio": result.speedup_ratio,
+            }),
+        );
+
+        self.is_running.store(false, Ordering::SeqCst);
+        {
+            let mut spawned = self.spawned_subtask_ids.lock().await;
+            spawned.clear();
+        }
 
         Ok(result)
     }
