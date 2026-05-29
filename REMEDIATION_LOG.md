@@ -557,3 +557,26 @@ SSOT effort). The reconstructed audit instrument's coarse file-level counts bare
 literal markers, not semantic fabrication — the real wins (de-fake, privacy gate, dep correctness, crash
 verification) are evidenced by the 2-reviewer passes, targeted tests, and compile/typecheck green, not by those
 counts.
+
+### 2026-05-29 — Branch consolidation + PR #379 survival audit
+
+Consolidated all active branches into `main` (single-branch goal): fast-forwarded `main` to
+`hardening/execution`, merged `model-routing/ssot` (catalog SSOT — clean) and `hardening/non-migration`
+(docs), skipped stale `r27-parity-d-stage3-web-no-hex` (its only unique commit reverts the Neon migration;
+real work already present). Verified the merged catalog (`sync-models.mjs` zero-diff, routing 220/220,
+anthropic 21/21, desktop typecheck, Rust `model_catalog` 21/0) and pushed `main` (`28d6eeeda..dc03bc9db`).
+Removed all secondary worktrees; deleted all local branches except `main`.
+
+**PR #379 survival audit (cloud branch `claude/jolly-goldberg-JXa65`, left in place — not deleted).**
+PR #379 ("Security: Harden tool execution and path validation") was squash-merged (`b0909ec`) on 2026-05-23;
+`main` has since taken 201 commits incl. the Supabase→Neon/Clerk migration. Verified that every PR #379 change
+survived. Method: of 77 PR files, 54 are byte-identical to the merged state (guaranteed intact); the 23 that
+`main` modified afterward were each property-checked (PR's security intent present / intentionally superseded
+/ regressed) by 4 parallel read-only reviewers quoting real code. **Result: 22 INTACT, 1 intentional
+supersession (`projectStore.ts` — a stub re-export PR #379 only `any→unknown`-cleaned, carried no security
+property; deleted in the client-auth migration), 0 regressions, 0 re-application needed.** Confirmed-intact
+properties include: tool_executor fail-closed path/confirmation guards, websocket `disconnect_all_clients` on
+token rotation, dispatch_hmac `zeroize()`, app_permissions exact/suffix allowlist match, CLI `fence_untrusted`
+prompt-injection containment, mobile refresh-failure backoff, SSO Zod validation (UUID/URL/500KB cap), share
+CORS preflight, and the qs DoS pin `>=6.15.2` (pnpm audit: qs absent). Incidental (out of scope, pre-existing,
+dev-only): 1 `high` advisory `tmp@0.2.5` path traversal via `@vscode/vsce` — 0 critical, CI gate clean.
