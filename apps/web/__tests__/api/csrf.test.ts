@@ -76,7 +76,7 @@ vi.mock('next/headers', () => ({
 }));
 
 // ─── Neon DB + Clerk auth — used by chat/conversations/[id]/route ─────────────
-// The conversation routes were migrated from Supabase to Neon + Clerk in Wave 3.
+// The conversation routes were migrated from Neon to Neon + Clerk in Wave 3.
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();

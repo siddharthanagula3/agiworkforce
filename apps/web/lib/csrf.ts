@@ -166,10 +166,9 @@ function constantTimeSignatureMatch(
 /**
  * Extract session ID from request.
  *
- * M3 FIX: For authenticated users, uses the Supabase server client to get the
- * verified user ID - this is more secure than parsing raw cookie bytes since
- * the user ID is verified through Supabase Auth, not derived from untrusted
- * cookie values.
+ * For authenticated users, uses Clerk server auth to get the verified user ID.
+ * This is more secure than parsing raw cookie bytes since the user ID is
+ * verified through Clerk, not derived from untrusted cookie values.
  *
  * Falls back to cookie-based session binding for anonymous users.
  *
@@ -273,7 +272,7 @@ export async function getOrCreateAnonSession(
  * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
  * auth fail later — leaving any endpoint that checked CSRF before auth vulnerable.
  *
- * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Supabase
+ * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Clerk
  * user. If verification fails, fall through to the CSRF token check as normal.
  *
  * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
@@ -282,7 +281,7 @@ export async function getOrCreateAnonSession(
  * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) — Bearer-bypass invariant         │
  * │                                                                          │
  * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
- * │ cannot forge a valid Supabase JWT (same-origin policy blocks reading     │
+ * │ cannot forge a valid Clerk JWT (same-origin policy blocks reading        │
  * │ another origin's localStorage / injecting Authorization on third-party   │
  * │ requests). It is NOT a generic "skip CSRF if any Bearer header is        │
  * │ present" — that pattern was the RT-04 vulnerability.                     │
@@ -290,7 +289,7 @@ export async function getOrCreateAnonSession(
  * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
  * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
  * │ <forged-but-shaped-correctly>`, the bypass attempts a verify call but    │
- * │ that call's network failure mode (Supabase auth-server reachable?)       │
+ * │ that call's network failure mode (Clerk auth reachable?)                 │
  * │ becomes part of the CSRF surface. The required order on any new route is:│
  * │     1. validate the Bearer JWT (or cookie session)                       │
  * │     2. THEN call requireCsrfToken / validateCsrfFromRequest              │

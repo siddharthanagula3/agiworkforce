@@ -320,8 +320,8 @@ pub async fn privacy_delete_account(
 // written with `purge_at = now + 7 days`, and the actual purge runs in a
 // later sprint. The user can cancel the request during the grace window.
 //
-// The actual marshaling-and-purge logic depends on Supabase schema work that
-// is tracked separately. For Wave 2 we ship the disclosure + UI affordance
+// The actual marshaling-and-purge logic depends on cloud data deletion work
+// tracked separately. For Wave 2 we ship the disclosure + UI affordance
 // so Stripe / App Store / Play Store / GDPR / CCPA reviewers see a working
 // data-control surface.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -363,7 +363,7 @@ fn pending_deletion_path(app_handle: &tauri::AppHandle) -> Result<std::path::Pat
 ///
 /// Writes a marker file at `<app_data>/pending_deletion.json` containing the
 /// request timestamp and the scheduled purge time. The actual purge of
-/// Supabase rows / Stripe subscriptions runs in a later sprint once the
+/// cloud rows / Stripe subscriptions runs in a later sprint once the
 /// cross-surface data marshaling lands. The marker is reversible via
 /// `privacy_cancel_pending_deletion`.
 #[tauri::command]
@@ -438,9 +438,7 @@ pub async fn privacy_get_pending_deletion(
 /// Cancel a pending account-deletion request by removing the marker file.
 /// Safe to call even when no marker exists.
 #[tauri::command]
-pub async fn privacy_cancel_pending_deletion(
-    app_handle: tauri::AppHandle,
-) -> Result<(), String> {
+pub async fn privacy_cancel_pending_deletion(app_handle: tauri::AppHandle) -> Result<(), String> {
     let path = pending_deletion_path(&app_handle)?;
     if path.exists() {
         std::fs::remove_file(&path)

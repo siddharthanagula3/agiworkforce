@@ -5,7 +5,7 @@
  * Used by:
  *   - Web dashboard (AgentStatusPanel)
  *   - VS Code extension (status bar + quick pick)
- *   - Desktop app (dual-write to Supabase)
+ *   - Desktop app (dual-write to managed cloud DB)
  *   - API gateway (polling endpoint)
  *
  * @module agent-status
@@ -33,7 +33,7 @@ export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
 /**
  * Represents a single agent execution session.
  *
- * Tracked in the `agent_sessions` Supabase table (when available) or
+ * Tracked in the `agent_sessions` cloud table (when available) or
  * polled from the API gateway. The desktop app dual-writes these records
  * so that the web dashboard and VS Code extension can display live status.
  *

@@ -288,7 +288,7 @@ const AIConfigurationPageContent: React.FC = () => {
     setTestResults((prev) => ({ ...prev, [provider]: 'pending' }));
 
     try {
-      // Auth is managed via Supabase SSR cookies (set by middleware) — no manual token needed.
+      // Auth is managed via Clerk session cookies (set by middleware) — no manual token needed.
       // SECURITY (web-MED-1): the prior `csrf-token` cookie reader was dead
       // code — the server never sets that cookie; CSRF is bound to the
       // `anon-session-id` cookie + an HMAC token returned by `/api/csrf`.

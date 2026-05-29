@@ -10,7 +10,7 @@ import {
   type DallEGenerationRequest,
 } from './dalle-image-service';
 
-// Mock auth token (replaces former supabase.auth.getSession usage)
+// Mock auth token (replaces former cloudDb.auth.getSession usage)
 vi.mock('@shared/lib/get-auth-token', () => ({
   getAuthToken: vi.fn(),
 }));

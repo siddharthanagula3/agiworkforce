@@ -101,7 +101,7 @@ export async function addTokensToUserBalance(
       });
     }
 
-    // Route through the server-side API (Supabase RPC removed; Neon is server-only).
+    // Route through the server-side API (Neon SQL removed; Neon is server-only).
     const authToken = await getAuthToken();
     if (!authToken) {
       throw new Error('Not authenticated');

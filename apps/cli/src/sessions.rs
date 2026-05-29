@@ -17,8 +17,8 @@
 //! - All session data is written to the local filesystem under
 //!   `~/.agiworkforce/managed_sessions/` and
 //!   `~/.agiworkforce/conversations/`.
-//! - No code in `apps/cli/` reads or writes the `chat_messages`,
-//!   `conversations`, or `user_projects` Supabase tables.
+//! - No code in `apps/cli/` reads or writes the synced app `chat_messages`,
+//!   `conversations`, or `user_projects` cloud tables.
 //! - No code in `apps/cli/` constructs `ProjectSourceSurface::Web`,
 //!   `::Desktop`, or `::Mobile`.
 //! - `tier_cache.rs` calls `/api/me` over HTTPS for subscription-tier

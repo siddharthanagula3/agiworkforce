@@ -344,7 +344,7 @@ export class SubscriptionService {
         // It accepted the customer if the metadata field was MISSING -
         // which is exactly the case for legacy customers created before
         // metadata was attached. Combined with the email-fallback path,
-        // a user who changed their Supabase email to one that previously
+        // a user who changed their account email to one that previously
         // belonged to someone else's Stripe customer would inherit that
         // customer's billing record.
         //
@@ -353,8 +353,7 @@ export class SubscriptionService {
         // refused - operators can run a one-time backfill to attach
         // metadata to legacy customers, after which the email fallback
         // becomes safe.
-        const recordedUserId =
-          customer.metadata?.['user_id'] || customer.metadata?.['supabase_user_id'];
+        const recordedUserId = customer.metadata?.['user_id'];
         if (!recordedUserId || recordedUserId !== userId) {
           logger.warn(
             {

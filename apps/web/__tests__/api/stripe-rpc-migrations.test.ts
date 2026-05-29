@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '../../../..');
-const canonicalMigrationsDir = path.join(repoRoot, 'supabase/migrations');
+const canonicalMigrationsDir = path.join(repoRoot, 'cloudDb/migrations');
 
 function readCanonicalMigrations(): string {
   return readdirSync(canonicalMigrationsDir)

@@ -242,13 +242,13 @@ const SecurityPage: React.FC = () => {
                   </li>
                 </ul>
                 <div className="flex gap-4 pt-4">
-                  <Link href="/legal/privacy-policy">
+                  <Link href="/privacy">
                     <Button variant="outline">
                       <FileText className="mr-2 h-4 w-4" />
                       Privacy Policy
                     </Button>
                   </Link>
-                  <Link href="/legal/terms-of-service">
+                  <Link href="/terms">
                     <Button variant="outline">
                       <FileText className="mr-2 h-4 w-4" />
                       Terms of Service

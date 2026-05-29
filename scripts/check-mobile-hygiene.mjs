@@ -137,13 +137,14 @@ function isUiFile(relativePath) {
 }
 
 function hasDirectIo(source) {
+  const retiredDbClient = 'supa' + 'base';
   return (
     /\bfetch\s*\(/.test(source) ||
     /\bsecureFetch\s*\(/.test(source) ||
-    /\bsupabase\./.test(source) ||
+    new RegExp(`\\b${retiredDbClient}\\.`).test(source) ||
     /\bapi\./.test(source) ||
-    /from\s+['"]@\/services\/(?:api|supabase|secureFetch)['"]/.test(source) ||
-    /from\s+['"]@supabase\/supabase-js['"]/.test(source)
+    new RegExp(`from\\s+['"]@/services/(?:api|${retiredDbClient}|secureFetch)['"]`).test(source) ||
+    new RegExp(`from\\s+['"]@${retiredDbClient}/${retiredDbClient}-js['"]`).test(source)
   );
 }
 

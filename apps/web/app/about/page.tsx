@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'About — Multi-provider by design | AGI',
+  title: 'About — Multi-provider by design',
   description:
     'AGI Automation LLC. Austin, Texas. The CLI is the engine; the apps are surfaces over it. The bet: the user owns the keys, the data, and the choice of model.',
   alternates: { canonical: 'https://agiworkforce.com/about' },
@@ -18,7 +19,7 @@ const COLOPHON: { key: string; val: string }[] = [
   { key: 'Engine', val: 'Pure Rust CLI' },
   { key: 'Surfaces', val: 'Desktop · Web · Mobile · CLI · Chrome · VS Code' },
   { key: 'Providers', val: 'Multi-provider — 10+ wired, BYO endpoints supported' },
-  { key: 'Data policy', val: 'We do not train on your data.' },
+  { key: 'Data policy', val: POSITIONING.trustBoundary },
   { key: 'Compliance', val: 'Security review in progress' },
 ];
 

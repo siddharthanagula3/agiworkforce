@@ -2,9 +2,6 @@ import { useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
-  MessageSquare,
-  Zap,
-  Code2,
   Plus,
   Search,
   FolderOpen,
@@ -12,7 +9,6 @@ import {
   Sliders,
   RefreshCw,
   GitBranch,
-  Repeat,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -70,25 +66,13 @@ type NavItem = {
 };
 
 function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
-  if (mode === 'chat') {
-    return [
-      { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
-      { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
-      { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
-    ];
-  }
-  if (mode === 'cowork') {
-    return [
-      { id: 'cw-projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
-      { id: 'cw-scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
-      { id: 'cw-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
-      { id: 'cw-dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
-      { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
-    ];
-  }
-  // code
+  void mode;
   return [
-    { id: 'routines', label: t('sidebar.nav.routines'), icon: Repeat },
+    { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
+    { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+    { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
+    { id: 'live-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
+    { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
     { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
   ];
 }
@@ -119,7 +103,6 @@ function initials(name?: string | null, email?: string | null): string {
 
 export interface SidebarProps {
   mode: V3Mode;
-  onModeChange: (mode: V3Mode) => void;
   onNewChat?: () => void;
   onOpenSearch?: () => void;
   onNavigateView?: (view: string) => void;
@@ -130,7 +113,6 @@ export interface SidebarProps {
 
 export function Sidebar({
   mode,
-  onModeChange,
   onNewChat,
   onOpenSearch,
   onNavigateView,
@@ -171,12 +153,10 @@ export function Sidebar({
       const viewMap: Record<string, string> = {
         projects: 'projects',
         artifacts: 'artifacts',
+        scheduled: 'cowork-scheduled',
+        'live-artifacts': 'cowork-artifacts',
+        dispatch: 'cowork-dispatch',
         customize: 'customize-home',
-        'cw-projects': 'cowork-projects',
-        'cw-scheduled': 'cowork-scheduled',
-        'cw-artifacts': 'cowork-artifacts',
-        'cw-dispatch': 'cowork-dispatch',
-        routines: 'code',
         settings: 'voice-settings',
       };
       const view = viewMap[id];
@@ -185,7 +165,7 @@ export function Sidebar({
     [onNavigateView],
   );
 
-  const newLabel = mode === 'code' ? t('sidebar.newSession') : t('sidebar.newChat');
+  const newLabel = t('sidebar.newChat');
 
   return (
     <aside
@@ -244,53 +224,6 @@ export function Sidebar({
           {collapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
         </button>
       </div>
-
-      {/* Mode switcher (expanded only) */}
-      {!collapsed && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 2,
-            margin: '0 8px 4px',
-            background: 'var(--chat-border)',
-            borderRadius: 8,
-            padding: 2,
-          }}
-        >
-          {(
-            [
-              { id: 'chat' as V3Mode, label: t('sidebar.modes.chat'), icon: MessageSquare },
-              { id: 'cowork' as V3Mode, label: t('sidebar.modes.cowork'), icon: Zap },
-              { id: 'code' as V3Mode, label: t('sidebar.modes.code'), icon: Code2 },
-            ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => onModeChange(id)}
-              data-active={mode === id}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                padding: '4px 6px',
-                borderRadius: 6,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: mode === id ? 600 : 400,
-                background: mode === id ? 'var(--chat-surface-elevated)' : 'transparent',
-                color: mode === id ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
-                transition: 'background 120ms, color 120ms',
-              }}
-            >
-              <Icon size={12} />
-              <span>{label}</span>
-            </button>
-          ))}
-        </div>
-      )}
 
       {/* New chat button */}
       <div style={{ padding: '4px 8px', flexShrink: 0 }}>

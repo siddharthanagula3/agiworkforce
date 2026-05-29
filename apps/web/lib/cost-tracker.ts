@@ -8,7 +8,7 @@
  *  - Reference persists to project config (CLI pattern). Web runs serverless;
  *    localStorage is unreachable from Next.js API routes. Module-level state
  *    survives warm Lambda instances and resets on cold start.
- *  - Durable cross-session persistence requires Supabase wiring — out of scope
+ *  - Durable cross-session persistence requires Neon wiring — out of scope
  *    for R24; flagged as follow-up.
  *  - LRU eviction after MAX_SESSIONS prevents unbounded growth on warm instances.
  *

@@ -814,7 +814,7 @@ export async function incrementParticipantStats(
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      // Use parameterized SQL for atomic increment (replaces Supabase RPC).
+      // Use parameterized SQL for atomic increment (replaces Neon SQL).
       await db.execute(
         `update conversation_participants set
            message_count   = message_count   + $1,

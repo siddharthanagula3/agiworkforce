@@ -1,6 +1,6 @@
 # AGI Mobile — Launch Tweet Drafts
 
-**Target date:** 2026-08-16  
+**Target date:** 2026-07-12
 **Character limit:** 240 (leave room for replies/quote-tweets)
 
 ---
@@ -9,11 +9,11 @@
 
 > AGI Mobile is live.
 >
-> Free. On-device. Works in airplane mode.
+> Free Local. Free BYOK. Cloud by invite.
 >
 > iOS + Android, today.
 >
-> No subscription to think. No cloud to trust. Your phone already has the AI — we just gave it a front door.
+> Choose your route: on-device local, your provider key, or AGI Cloud invite.
 >
 > App Store + Play links: agiworkforce.com/mobile
 
@@ -25,7 +25,7 @@
 
 > Your phone has AI built in. ChatGPT doesn't know that. We do.
 >
-> AGI Mobile — free, on-device, works offline.
+> AGI Mobile — free Local, free BYOK, Cloud by invite.
 >
 > iOS + Android: agiworkforce.com/mobile
 
@@ -37,7 +37,7 @@
 
 > Free AI. On your phone. No subscription.
 >
-> Works on Redmi Note, Vivo Y series, mid-range Android — not just flagships.
+> Local works on Redmi Note, Vivo Y series, mid-range Android — not just flagships.
 >
 > AGI Mobile is live today. iOS + Android.
 >
@@ -49,11 +49,11 @@
 
 ## Alternate C — privacy angle
 
-> Every AI assistant you've used has sent your conversations to a server.
+> Every AI assistant you've used makes one model company the default.
 >
 > AGI Mobile doesn't.
 >
-> On-device. Free. Works offline.
+> Local. BYOK. Cloud by invite.
 >
 > iOS + Android: agiworkforce.com/mobile
 
@@ -65,7 +65,7 @@
 
 Reply 1:
 
-> How it works: your phone runs the AI. Apple Foundation Models on iPhone 15 Pro+. Gemma + Qwen3-4B on Android. Nothing leaves the device during a conversation.
+> How it works: Local mode uses Apple Foundation Models on iPhone 15 Pro+ and Gemma + Qwen3-4B on Android where supported. BYOK and Cloud are explicit.
 
 Reply 2:
 
@@ -73,7 +73,7 @@ Reply 2:
 
 Reply 3:
 
-> Cloud is coming. Bigger models, sync, team features — join the waitlist at agiworkforce.com/mobile. Local is free. Always.
+> Cloud is invite-only. Bigger models, sync, team features — request access at agiworkforce.com/mobile. Local + BYOK are free launch paths.
 
 ---
 

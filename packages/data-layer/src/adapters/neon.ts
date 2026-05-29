@@ -21,24 +21,16 @@
  *
  * ## RLS contract
  *
- * Unlike the Supabase adapter — which leans on `Authorization: Bearer <jwt>`
- * to drive `auth.uid()` in PostgREST — this adapter binds the JWT subject
- * via a Postgres-native session GUC:
+ * This adapter binds the Clerk JWT subject via a Postgres-native session GUC:
  *
  * ```sql
  * SET LOCAL request.jwt.claim.sub = '<sub>';
  * ```
  *
- * Your RLS policies must read it back with `current_setting('request.jwt.claim.sub', true)`,
- * not `auth.uid()` — the latter is a Supabase-only helper. Example policy
- * port:
+ * Your RLS policies must read it back with
+ * `current_setting('request.jwt.claim.sub', true)`.
  *
  * ```sql
- * -- Supabase original
- * CREATE POLICY "owner_only" ON conversations
- *   USING (user_id = auth.uid());
- *
- * -- Neon equivalent
  * CREATE POLICY "owner_only" ON conversations
  *   USING (user_id::text = current_setting('request.jwt.claim.sub', true));
  * ```
@@ -74,27 +66,19 @@ import {
 } from '../types';
 
 /**
- * Step-by-step Supabase-to-Neon migration. Surfaced via the public export
- * below so consumers can read it from the package without spelunking the
- * source — and so the ops runbook can render it.
+ * Step-by-step Neon runbook. Surfaced via the public export below so
+ * consumers can read it from the package without spelunking the source.
  */
 export const MIGRATION_GUIDE = `
 1. Provision a Neon project. Create a database. Copy the connection string
    (Dashboard -> Connection Details -> "Pooled connection"); it looks like
    "postgresql://user:pwd@ep-xxx.us-east-2.aws.neon.tech/db?sslmode=require".
 
-2. Port the schema. The 32 canonical migrations under supabase/migrations/
-   are vanilla Postgres — apply them with the Neon CLI or psql:
-     for f in supabase/migrations/*.sql; do
-       psql "$AGI_DATABASE_URL" -f "$f"
-     done
-   RLS policies port verbatim except the auth.uid() reference: rewrite
-   each "auth.uid()" to "current_setting('request.jwt.claim.sub', true)::uuid".
+2. Apply the canonical Neon migrations under apps/web/db/neon/ with the
+   Neon CLI or your migration runner.
 
-3. Pick an AuthAdapter. Neon doesn't ship auth — choose Auth0, Clerk, or
-   Cognito. The new IdP mints JWTs that you pass to db.withUser(jwt) before
-   running queries; the GUC binding (set local request.jwt.claim.sub) drives
-   your rewritten RLS policies.
+3. Verify Clerk session tokens before calling db.withUser(jwt). The GUC
+   binding (set local request.jwt.claim.sub) drives your RLS policies.
 
 4. Flip env vars (no code change required):
      AGI_DATABASE_PROVIDER=neon
@@ -103,16 +87,14 @@ export const MIGRATION_GUIDE = `
 
 5. Verify. Run a smoke test: db.withUser(testJwt).query('select 1') from a
    server route, plus an RLS-fenced read to confirm row filtering. Then
-   migrate hot paths off any direct supabase-js fluent calls (.from('table')
-   -> adapter.query/execute) — those are the last bits of vendor coupling.
+   migrate hot paths to adapter.query/execute with parameterized SQL.
 
-Full guide: docs/archive/2026-05-21-docs-consolidation/SCALING.md "Supabase to Neon".
+Full guide: docs/current/source-of-truth.md and docs/current/technical-architecture.md.
 `.trim();
 
 /**
  * Lazy-load the driver so the package can be consumed in environments that
- * don't have `@neondatabase/serverless` installed (Supabase-only deploys).
- * Mirrors the loadSupabase() pattern in adapters/supabase.ts.
+ * don't have `@neondatabase/serverless` installed until the adapter is used.
  */
 type NeonModule = typeof import('@neondatabase/serverless');
 

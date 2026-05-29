@@ -20,7 +20,7 @@ import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { sendCommandToDesktop } from '../websocket';
 import { logger } from '../lib/logger';
@@ -157,8 +157,8 @@ router.post(
     const now = new Date().toISOString();
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
-    const { error } = await supabase.from('desktop_devices').insert({
+    const db = getUserScopedClient(user.userId);
+    const { error } = await db.from('desktop_devices').insert({
       id: desktopId,
       user_id: user.userId,
       name,
@@ -204,8 +204,8 @@ router.get(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
-    const { data: desktop, error } = await supabase
+    const db = getUserScopedClient(user.userId);
+    const { data: desktop, error } = await db
       .from('desktop_devices')
       .select('*')
       .eq('id', desktopId)
@@ -258,8 +258,8 @@ router.post(
     const { type, payload } = commandSchema.parse(req.body);
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
-    const { data: desktop, error } = await supabase
+    const db = getUserScopedClient(user.userId);
+    const { data: desktop, error } = await db
       .from('desktop_devices')
       .select('id, user_id')
       .eq('id', desktopId)
@@ -311,8 +311,8 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
   }
 
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(user.userId);
-  const { data: devices, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data: devices, error } = await db
     .from('desktop_devices')
     .select('*')
     .eq('user_id', user.userId)
@@ -358,8 +358,8 @@ router.post(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
-    const { data: desktop, error: fetchError } = await supabase
+    const db = getUserScopedClient(user.userId);
+    const { data: desktop, error: fetchError } = await db
       .from('desktop_devices')
       .select('id, user_id')
       .eq('id', desktopId)
@@ -373,7 +373,7 @@ router.post(
       throw new AppError('Desktop not found', 404);
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from('desktop_devices')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('id', desktopId);
@@ -410,9 +410,9 @@ router.delete(
     }
 
     // Wave 1.5+ singleton sweep: user-scoped client.
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
     // First verify ownership
-    const { data: desktop, error: fetchError } = await supabase
+    const { data: desktop, error: fetchError } = await db
       .from('desktop_devices')
       .select('id, user_id')
       .eq('id', desktopId)
@@ -426,10 +426,7 @@ router.delete(
       throw new AppError('Desktop not found', 404);
     }
 
-    const { error: deleteError } = await supabase
-      .from('desktop_devices')
-      .delete()
-      .eq('id', desktopId);
+    const { error: deleteError } = await db.from('desktop_devices').delete().eq('id', desktopId);
 
     if (deleteError) {
       logger.error({ error: deleteError }, 'Failed to delete desktop');

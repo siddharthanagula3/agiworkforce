@@ -25,7 +25,7 @@ This is the active checklist for the transition described in `PLAN.md`. Keep it 
 
 R27 Phase D landed all 5 stages on origin/main (42 commits, 137 files, +14267/-808):
 
-- [x] Stage 0 — Cloud-bridge foundation (Supabase migration + RPC + canonical `InviteCodeModal` + 4 surface ports)
+- [x] Stage 0 — Cloud-bridge foundation (Neon migration + RPC + canonical `InviteCodeModal` + 4 surface ports)
 - [x] Stage 1 — 6 P0 release blockers (boot hang, mobile billing → InviteCodeModal, CLI hooks 33 events, 49 Color literals tokenized, web stale IDs)
 - [x] Stage 1.5 — Cleanup (BYOK 3-way gate, i18n on 4 components/61 keys, scrim token + 6 sites)
 - [x] Stage 2 — Desktop sidebar UpdatePill + Help menu for in-app updater
@@ -112,10 +112,10 @@ All six surfaces now have visual-verification coverage:
 
 ### Backend round-10 — landed `bf499e57d`
 
-- [x] Supabase migration completes the cross-language project schema (TS + Rust + Postgres now match).
+- [x] Neon migration completes the cross-language project schema (TS + Rust + Postgres now match).
 - [x] `project_members` + `project_knowledge_files` tables with RLS + denormalized count triggers.
 
-Not auto-applied — review migration before `supabase db push`.
+Applied through the canonical Neon migration path before promoting to shared environments.
 
 ## 2026-05-21 Suite Transformation Session — Round 9 (in progress)
 
@@ -175,7 +175,7 @@ Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full
 - [x] Chrome ext pendingAttachments wire fix (P0 #3 chrome-side) — `38034fedb`
 - [x] `packages/unified-chat` ArtifactPanel version-stepper toolbar (P0 #9 first slice) — `7d0f9ecd2`
 - [x] Web theme persistence via next-themes — `eb375f84b`
-- [x] Web profile sync to Supabase user_metadata — `5630924d7`
+- [x] Web profile sync to managed user metadata — `5630924d7`
 - [x] Web `/projects` route mounting shared ProjectGallery — `34f33169e`
 - [x] `packages/types` `assertSurfaceCanSyncChats` runtime guard + test — `3c9f57d48` + `1b8617b13`
 - [x] `packages/unified-chat` ArtifactPanel handlePublish portable snapshot — `b1c2bb428`
@@ -240,7 +240,7 @@ Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full
 - [ ] Chrome: audit `apps/extension` for browser connector/research parity.
 - [ ] Shared packages: audit `packages/*` for common contracts that should become source of truth.
 - [ ] Rust crates: audit `crates/*` for engine/runtime/protocol contracts.
-- [ ] Services: audit `services/*` and `supabase/` for future managed cloud readiness.
+- [ ] Services: audit `services/*` and `apps/web/db/neon/` for future managed cloud readiness.
 - [x] References: audit `reference/src`, `codex-cli`, `claw-code`, `openclaw`, `opencode`, and `gemini-cli` for reusable patterns.
 - [x] References: read all 1902 scoped files in `/Users/siddhartha/Desktop/reference/src`.
 - [ ] References: verify root/license status for `claw-code` and `reference/src` before any reuse beyond architecture.
@@ -297,7 +297,7 @@ Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full
 - [x] Move the Mobile schedules domain into `apps/mobile/src/features/schedules` and remove old schedule component/service/store paths.
 - [x] Require ownership READMEs for every top-level Web, Mobile, and Desktop feature folder.
 - [x] Remove the duplicate CLI release workflow and enforce the canonical `release-cli.yml` / stable `v-cli-*` artifact contract.
-- [x] Freeze legacy `apps/web/supabase/migrations` with `pnpm check:supabase-migrations` so new migrations can only land in root `supabase/migrations`.
+- [x] Retire legacy database migration roots with `pnpm check:neon-migrations` so new migrations can only land in `apps/web/db/neon/`.
 - [x] Add report-retention READMEs and `pnpm check:report-retention` for `reports/` and `audit/reports/`.
 - [x] Add `pnpm check:ci-guardrails` for the CI baseline and explicit Semgrep advisory debt.
 - [x] Add `pnpm check:codeowners` for provisional CODEOWNERS coverage before real GitHub teams exist.

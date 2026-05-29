@@ -87,12 +87,12 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock Supabase server client (auth-gate creates one for subscription lookup)
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
+// Mock cloud database server client (auth-gate creates one for subscription lookup)
+vi.mock('@/services/neon-db', () => ({
+  createNeonServerClient: vi.fn().mockResolvedValue({}),
 }));
 
-vi.mock('@/lib/supabase-server', () => ({
+vi.mock('@/lib/neon-db', () => ({
   getUserClient: vi.fn().mockReturnValue({}),
   getServiceClient: vi.fn(() => ({})),
 }));

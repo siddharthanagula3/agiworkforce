@@ -13,11 +13,11 @@
 // ============================================================================
 
 /**
- * Basic user identity from Supabase auth.
+ * Basic user identity from Clerk auth.
  * Minimal info needed for auth checks across all platforms.
  */
 export interface AuthUser {
-  /** Supabase user ID (UUID). */
+  /** Identity provider user ID (UUID). */
   id: string;
 
   /** User's email address. */
@@ -47,14 +47,14 @@ export interface UserProfile {
 // ============================================================================
 
 /**
- * A Supabase auth session that can be transferred between platforms.
+ * A Clerk session that can be transferred between platforms.
  * Used for desktop-to-extension auth bridging.
  */
 export interface AuthSession {
-  /** Supabase JWT access token. */
+  /** Access token from the session principal. */
   accessToken: string;
 
-  /** Supabase refresh token for session renewal. */
+  /** Refresh token for session renewal. */
   refreshToken: string;
 
   /** User identity associated with this session. */
@@ -90,7 +90,7 @@ export interface SubscriptionInfo {
  * Consumed by the desktop app via deep link.
  */
 export interface DesktopAuthTokenPayload {
-  /** The Supabase session to transfer. */
+  /** The auth session to transfer. */
   session: AuthSession;
 
   /** Unix timestamp (ms) when this token was created. */

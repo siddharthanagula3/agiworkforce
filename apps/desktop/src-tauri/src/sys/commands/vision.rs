@@ -1,8 +1,8 @@
+use crate::core::llm::models_config;
+use crate::core::llm::Provider;
 use crate::core::llm::{
     ChatMessage, ContentPart, ImageDetail, ImageFormat, ImageInput, LLMRequest,
 };
-use crate::core::llm::Provider;
-use crate::core::llm::models_config;
 use crate::sys::commands::{AppDatabase, LLMState};
 use image::codecs::jpeg::JpegEncoder;
 use image::imageops::FilterType;

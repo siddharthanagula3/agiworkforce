@@ -1,25 +1,23 @@
 import { Router, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { createClient } from '@supabase/supabase-js';
+import { verifyToken } from '@clerk/backend';
 import { z } from 'zod';
 import { requireEnv } from '../env';
-import { getServiceClient } from '../lib/supabaseClients';
+import { getServiceClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { AppError } from '../middleware/errorHandler';
 import { logger } from '../lib/logger';
 
-// Wave 1.5+ singleton sweep (task #17, 2026-05-08): every Supabase call in
-// this file runs without a verified user JWT — the device-code flow IS the
-// login. Service-role is the correct client for `device_codes` writes and
-// post-approval `profiles` lookups. The /approve handler still constructs
-// its own anon-key+userJWT client inline (line ~190) to validate the
-// browser-side Supabase token; that path is unchanged.
-const supabase = getServiceClient();
+// The device-code flow starts before the CLI has a cloud account token.
+// Server-side Neon access is the correct boundary for code creation and
+// post-approval lookups; /approve validates the browser's Clerk bearer token.
+const db = getServiceClient();
 
 const router: Router = Router();
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
+const DEVICE_AUTH_TABLE = 'device_authorization_codes';
 
 // Device code expires after 15 minutes
 const DEVICE_CODE_EXPIRES_SECONDS = 900;
@@ -68,12 +66,22 @@ router.post('/code', createRateLimiter('device-register'), async (_req: Request,
   const userCode = generateUserCode();
   const expiresAt = new Date(Date.now() + DEVICE_CODE_EXPIRES_SECONDS * 1000).toISOString();
 
-  const { error } = await supabase.from('device_codes').insert({
-    device_code: deviceCode,
+  const { error } = await db.from(DEVICE_AUTH_TABLE).insert({
+    device_id: deviceCode,
+    device_name: 'AGI CLI',
+    device_type: 'cli',
     user_code: userCode,
     expires_at: expiresAt,
     status: 'pending',
     user_id: null,
+    user_email: null,
+    user_name: null,
+    access_token: null,
+    refresh_token: null,
+    authorized_at: null,
+    consumed_at: null,
+    denied_at: null,
+    revoked_at: null,
   });
 
   if (error) {
@@ -102,10 +110,10 @@ router.post('/code', createRateLimiter('device-register'), async (_req: Request,
 router.post('/token', createRateLimiter('device-register'), async (req: Request, res: Response) => {
   const { device_code: deviceCode } = tokenPollSchema.parse(req.body);
 
-  const { data: record, error } = await supabase
-    .from('device_codes')
-    .select('*')
-    .eq('device_code', deviceCode)
+  const { data: record, error } = await db
+    .from(DEVICE_AUTH_TABLE)
+    .select('device_id, expires_at, status, user_id, user_email')
+    .eq('device_id', deviceCode)
     .single();
 
   if (error || !record) {
@@ -115,8 +123,20 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
   // Check expiration
   const expiresAt = new Date(record.expires_at as string).getTime();
   if (Date.now() > expiresAt) {
-    // Clean up expired code
-    await supabase.from('device_codes').delete().eq('device_code', deviceCode);
+    await db
+      .from(DEVICE_AUTH_TABLE)
+      .update({ status: 'expired', updated_at: new Date().toISOString() })
+      .eq('device_id', deviceCode);
+    res.status(400).json({ error: 'expired_token' });
+    return;
+  }
+
+  if (record.status === 'denied' || record.status === 'revoked') {
+    res.status(400).json({ error: 'access_denied' });
+    return;
+  }
+
+  if (record.status === 'consumed') {
     res.status(400).json({ error: 'expired_token' });
     return;
   }
@@ -127,34 +147,32 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
     return;
   }
 
-  // Approved — fetch user email for JWT payload.
-  // Wave 1 task #10 cleanup (2026-05-08): `public.users` does not exist
-  // in production; the canonical user table is `public.profiles` per the
-  // billing-layer foundation migration (20260506120001). Both columns
-  // referenced here (`id`, `email`) live on profiles; the rename is a
-  // straight column-set match. Verified via mcp__supabase introspection.
-  const { data: user, error: userError } = await supabase
+  const userId = record.user_id as string;
+  let email = typeof record.user_email === 'string' ? record.user_email : '';
+
+  // Approved — enrich the JWT payload with profile email when it exists, but
+  // don't make device login depend on a best-effort profile sync row.
+  const { data: user } = await db
     .from('profiles')
     .select('id, email')
-    .eq('id', record.user_id)
-    .single();
+    .eq('id', userId)
+    .maybeSingle();
 
-  if (userError || !user) {
-    throw new AppError('User not found', 500);
+  if (user && typeof user.email === 'string') {
+    email = user.email;
   }
 
-  const accessToken = jwt.sign(
-    { userId: user.id as string, email: user.email as string },
-    JWT_SECRET,
-    {
-      expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
-      issuer: 'agiworkforce-api-gateway',
-      audience: 'agiworkforce',
-    },
-  );
+  const accessToken = jwt.sign({ userId, email }, JWT_SECRET, {
+    expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
+    issuer: 'agiworkforce-api-gateway',
+    audience: 'agiworkforce',
+  });
 
-  // Clean up used device code
-  await supabase.from('device_codes').delete().eq('device_code', deviceCode);
+  const consumedAt = new Date().toISOString();
+  await db
+    .from(DEVICE_AUTH_TABLE)
+    .update({ status: 'consumed', consumed_at: consumedAt, updated_at: consumedAt })
+    .eq('device_id', deviceCode);
 
   res.json({
     access_token: accessToken,
@@ -171,8 +189,7 @@ const approveSchema = z.object({
  * POST /auth/device/approve
  *
  * Called by the web app when the user submits the device code.
- * Requires a Supabase auth token in the Authorization header (sent by the
- * browser client, NOT an API gateway JWT).
+ * Requires a Clerk bearer token in the Authorization header.
  *
  * - 200 { approved: true }                          — success
  * - 401 { error: "..." }                            — missing or invalid auth token
@@ -182,7 +199,7 @@ router.post(
   '/approve',
   createRateLimiter('device-register'),
   async (req: Request, res: Response) => {
-    // --- Authenticate via Supabase token ---
+    // --- Authenticate via Clerk token ---
     const parts = req.headers.authorization?.split(' ');
     const accessToken =
       parts?.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : undefined;
@@ -191,22 +208,20 @@ router.post(
       throw new AppError('No auth token provided', 401);
     }
 
-    // Verify the Supabase JWT by creating a client scoped to the user's token.
-    // This calls Supabase's getUser() which validates the JWT server-side.
-    const supabaseUrl = requireEnv('SUPABASE_URL');
-    const supabaseAnonKey = requireEnv('SUPABASE_ANON_KEY');
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: `Bearer ${accessToken}` } },
-      auth: { autoRefreshToken: false, persistSession: false },
-    });
-
-    const {
-      data: { user },
-      error: userError,
-    } = await userClient.auth.getUser();
-
-    if (userError || !user) {
-      logger.warn({ error: userError?.message }, 'Device approve: invalid Supabase token');
+    let userId: string;
+    let userEmail: string | null = null;
+    try {
+      const claims = await verifyToken(accessToken, { secretKey: requireEnv('CLERK_SECRET_KEY') });
+      if (typeof claims.sub !== 'string' || claims.sub.length === 0) {
+        throw new Error('Clerk token missing subject');
+      }
+      userId = claims.sub;
+      userEmail =
+        typeof (claims as Record<string, unknown>)['email'] === 'string'
+          ? ((claims as Record<string, unknown>)['email'] as string)
+          : null;
+    } catch (error) {
+      logger.warn({ error }, 'Device approve: invalid Clerk token');
       throw new AppError('Invalid or expired auth token', 401);
     }
 
@@ -214,9 +229,9 @@ router.post(
     const { user_code: userCode } = approveSchema.parse(req.body);
 
     // --- Look up the pending device code ---
-    const { data: record, error: lookupError } = await supabase
-      .from('device_codes')
-      .select('device_code, expires_at, status')
+    const { data: record, error: lookupError } = await db
+      .from(DEVICE_AUTH_TABLE)
+      .select('device_id, expires_at, status')
       .eq('user_code', userCode)
       .eq('status', 'pending')
       .single();
@@ -228,19 +243,25 @@ router.post(
     // Verify not expired
     const expiresAt = new Date(record.expires_at as string).getTime();
     if (Date.now() > expiresAt) {
-      await supabase.from('device_codes').delete().eq('device_code', record.device_code);
+      await db
+        .from(DEVICE_AUTH_TABLE)
+        .update({ status: 'expired', updated_at: new Date().toISOString() })
+        .eq('device_id', record.device_id as string);
       throw new AppError('Code has expired. Please run the login command again.', 404);
     }
 
     // --- Approve ---
-    const { error: updateError } = await supabase
-      .from('device_codes')
+    const authorizedAt = new Date().toISOString();
+    const { error: updateError } = await db
+      .from(DEVICE_AUTH_TABLE)
       .update({
         status: 'approved',
-        user_id: user.id,
-        approved_at: new Date().toISOString(),
+        user_id: userId,
+        user_email: userEmail,
+        authorized_at: authorizedAt,
+        updated_at: authorizedAt,
       })
-      .eq('device_code', record.device_code as string)
+      .eq('device_id', record.device_id as string)
       .eq('status', 'pending');
 
     if (updateError) {

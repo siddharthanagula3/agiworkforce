@@ -48,7 +48,7 @@ This file is now a compact entry point. The former long historical version is ar
 - `packages/` owns shared TypeScript contracts, providers, runtime, UI, compliance, and utilities.
 - `crates/` owns reusable Rust runtime/protocol/command/sandbox pieces.
 - `services/` owns deployable backend services.
-- `supabase/migrations/` is the canonical database migration root.
+- `apps/web/db/neon/` is the canonical Neon database migration root.
 - `patches/` owns pnpm dependency patches only.
 - App code must not import another app.
 - Packages must not import app code.

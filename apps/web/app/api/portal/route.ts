@@ -218,12 +218,8 @@ async function handlePortal(request: NextRequest) {
         // Verify customer ownership via metadata if available
         if (customerId) {
           const matchedCustomer = customers.data.find((c) => c.id === customerId);
-          if (
-            matchedCustomer?.metadata?.['user_id'] ||
-            (matchedCustomer?.metadata?.['supabase_user_id'] &&
-              (matchedCustomer.metadata['user_id'] ||
-                matchedCustomer.metadata['supabase_user_id']) !== userId)
-          ) {
+          const recordedUserId = matchedCustomer?.metadata?.['user_id'];
+          if (recordedUserId && recordedUserId !== userId) {
             logger.error(
               { userId: userId, customerId: matchedCustomer.id },
               'Stripe customer belongs to different user - email fallback blocked',

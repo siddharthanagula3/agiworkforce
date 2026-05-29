@@ -45,7 +45,7 @@
       "path": "apps/mobile",
       "owner": "Mobile lead",
       "stack": "Expo, React Native",
-      "purpose": "Local/BYOK onboarding, continuity, capture, approvals, preview/download/share",
+      "purpose": "Small Local LLM mobile app, Cloud invite/waitlist, continuity, capture, approvals, preview/download/share",
       "primaryChecks": [
         "pnpm --filter @agiworkforce/mobile typecheck",
         "pnpm --filter @agiworkforce/mobile test"
@@ -104,11 +104,11 @@
     },
     {
       "name": "Database",
-      "path": "supabase",
+      "path": "apps/web/db/neon",
       "owner": "Backend/data lead",
-      "purpose": "Canonical Supabase migrations and database docs",
+      "purpose": "Canonical Neon migrations and database docs",
       "primaryChecks": ["review migrations manually before billing/security changes"],
-      "rule": "Root supabase/migrations is canonical."
+      "rule": "apps/web/db/neon is canonical."
     },
     {
       "name": "Enterprise Control Plane",

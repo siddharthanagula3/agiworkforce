@@ -4,7 +4,7 @@
  * Decision D1 (DECISIONS.md): HYBRID
  *   - Local mode (Tauri): encrypted via master_password.rs vault at
  *     `~/.agiworkforce/connector-permissions.json`
- *   - Cloud mode (non-Tauri): Supabase `connector_tool_permissions` table
+ *   - Cloud mode (non-Tauri): managed Neon `connector_tool_permissions` table
  *
  * Usage:
  *   import { getConnectorPermissionStore } from './connectorPermissionStore';
@@ -60,7 +60,7 @@ export function getConnectorPermissionStore(): ConnectorPermissionStore {
   if (isTauriEnv) {
     return new LocalVaultStore();
   }
-  return new SupabaseStore();
+  return new CloudStore();
 }
 
 // ── Local Vault Store (Tauri / Desktop) ──────────────────────────────────────
@@ -116,31 +116,31 @@ class LocalVaultStore implements ConnectorPermissionStore {
   }
 }
 
-// ── Supabase Store (Cloud / Web) ─────────────────────────────────────────────
+// ── Cloud Store (Cloud / Web) ───────────────────────────────────────────────
 
-class SupabaseStore implements ConnectorPermissionStore {
-  readonly storage: ConnectorPermissionStorage = 'cloud-supabase';
+class CloudStore implements ConnectorPermissionStore {
+  readonly storage: ConnectorPermissionStorage = 'cloud-neon';
 
-  /** Lazily import supabase client from the host app bundle. */
+  /** Lazily import cloud DB client from the host app bundle. */
   private async getClient() {
-    // Dynamically resolve the supabase singleton that the host app configures.
-    // We can't import from '@/lib/supabase' (that's desktop-app relative),
+    // Dynamically resolve the cloud DB singleton that the host app configures.
+    // We can't import from '@/lib/cloud-db' (that's desktop-app relative),
     // so we use a well-known global that the host app is expected to provide.
     // Fall back to a no-op shim so the package compiles cleanly in isolation.
     const g = globalThis as Record<string, unknown>;
-    if (g['__agi_supabase__']) {
-      return g['__agi_supabase__'] as SupabaseClient;
+    if (g['__agi_cloud_db__']) {
+      return g['__agi_cloud_db__'] as CloudDbClient;
     }
     return null;
   }
 
   /**
-   * Resolve the current user's id from the Supabase client. Returns null
+   * Resolve the current user's id from the cloud DB client. Returns null
    * when unauthenticated (or when the client doesn't expose `auth.getUser`,
    * as in older test stubs); the caller treats that as a no-op upsert
    * rather than an INSERT under the wrong user_id.
    */
-  private async getUserId(client: SupabaseClient): Promise<string | null> {
+  private async getUserId(client: CloudDbClient): Promise<string | null> {
     const auth = client.auth;
     if (!auth || typeof auth.getUser !== 'function') return null;
     try {
@@ -175,9 +175,8 @@ class SupabaseStore implements ConnectorPermissionStore {
     if (!client) return;
     // The table's UNIQUE constraint is (user_id, connector_id, tool_name)
     // so the upsert payload MUST include user_id — without it the second
-    // call inserts a duplicate row instead of updating the prior one. The
-    // RLS policy `WITH CHECK (auth.uid() = user_id)` independently
-    // requires that user_id matches the authed user.
+    // call inserts a duplicate row instead of updating the prior one. Access
+    // controls still require that the token belongs to this user_id.
     const userId = await this.getUserId(client);
     if (!userId) return;
     const { error } = await client.from('connector_tool_permissions').upsert(
@@ -192,7 +191,7 @@ class SupabaseStore implements ConnectorPermissionStore {
       { onConflict: 'user_id,connector_id,tool_name' },
     );
     if (error) {
-      throw new Error(`[ConnectorPermissions] supabase upsert: ${error.message}`);
+      throw new Error(`[ConnectorPermissions] cloud db upsert: ${error.message}`);
     }
   }
 
@@ -212,39 +211,39 @@ class SupabaseStore implements ConnectorPermissionStore {
   }
 }
 
-// ── Minimal Supabase client shape (structural typing, no runtime dep) ────────
+// ── Minimal cloud DB client shape (structural typing, no runtime dep) ───────
 //
-// The real Supabase JS client returns a PostgrestFilterBuilder which is
-// both thenable (resolves to {data, error}) and has terminal methods like
-// maybeSingle().  We model it as a Promise-like with extra methods.
+// The real cloud client returns a query builder that is both thenable (resolves to
+// {data, error}) and has terminal methods like maybeSingle().  We model it as
+// a Promise-like value with extra methods.
 
-interface SupabaseResult {
+interface CloudDbResult {
   data: unknown;
   error: { message: string } | null;
 }
 
-interface SupabaseFilterBuilder extends Promise<SupabaseResult> {
-  eq(col: string, val: unknown): SupabaseFilterBuilder;
-  maybeSingle(): Promise<SupabaseResult>;
+interface CloudDbFilterBuilder extends Promise<CloudDbResult> {
+  eq(col: string, val: unknown): CloudDbFilterBuilder;
+  maybeSingle(): Promise<CloudDbResult>;
 }
 
-interface SupabaseQueryBuilder {
-  select(cols: string): SupabaseFilterBuilder;
-  upsert(values: Record<string, unknown>, opts?: { onConflict?: string }): Promise<SupabaseResult>;
+interface CloudDbQueryBuilder {
+  select(cols: string): CloudDbFilterBuilder;
+  upsert(values: Record<string, unknown>, opts?: { onConflict?: string }): Promise<CloudDbResult>;
 }
 
-interface SupabaseAuthGetUserResult {
+interface CloudDbAuthGetUserResult {
   data: { user: { id: string } | null } | null;
   error: { message: string } | null;
 }
 
-interface SupabaseAuthClient {
-  getUser(): Promise<SupabaseAuthGetUserResult>;
+interface CloudDbAuthClient {
+  getUser(): Promise<CloudDbAuthGetUserResult>;
 }
 
-interface SupabaseClient {
-  from(table: string): SupabaseQueryBuilder;
-  auth?: SupabaseAuthClient;
+interface CloudDbClient {
+  from(table: string): CloudDbQueryBuilder;
+  auth?: CloudDbAuthClient;
 }
 
 // Re-export the defaultPermissionForTool helper so callers can import from one place.

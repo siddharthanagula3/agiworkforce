@@ -318,6 +318,24 @@ pub fn handle_privacy_mode(session: &mut AgentSession, arg: &str) -> String {
         return "Usage: /privacy-mode local | byok | managed".to_string();
     };
 
+    if mode == PrivacyMode::Managed {
+        return [
+            "Managed cloud mode is private beta and is not wired in this CLI build.",
+            "Privacy mode was not changed.",
+            "Use local mode, or use /continue-with-byok to create a reviewable BYOK handoff draft.",
+        ]
+        .join("\n");
+    }
+
+    if session.privacy_mode == PrivacyMode::Local && mode == PrivacyMode::Byok {
+        return [
+            "Privacy mode was not changed.",
+            "Local -> BYOK requires an explicit reviewable handoff.",
+            "Run /continue-with-byok to draft a fork with selected context, secret-scan redaction, payload preview, and consent before sending.",
+        ]
+        .join("\n");
+    }
+
     session.set_privacy_mode(mode);
     let mut lines = vec![
         format!("Privacy mode set: {}", mode.label()),
@@ -1180,11 +1198,49 @@ mod tests {
     #[test]
     fn privacy_mode_command_sets_boundary() {
         let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Byok);
+
+        let result = handle_shared_command("/privacy-mode", "local", &mut session);
+
+        assert!(matches!(result, ParityCommandResult::SystemMessage(_)));
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn privacy_mode_byok_blocks_direct_local_handoff() {
+        let mut session = test_session();
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
         let result = handle_shared_command("/privacy-mode", "byok", &mut session);
 
-        assert!(matches!(result, ParityCommandResult::SystemMessage(_)));
-        assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+        match result {
+            ParityCommandResult::SystemMessage(message) => {
+                assert!(
+                    message.contains("Privacy mode was not changed"),
+                    "{message}"
+                );
+                assert!(message.contains("/continue-with-byok"), "{message}");
+                assert!(message.contains("secret-scan"), "{message}");
+            }
+            other => panic!("expected system message, got {other:?}"),
+        }
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn privacy_mode_managed_is_private_beta_not_wired() {
+        let mut session = test_session();
+
+        let result = handle_shared_command("/privacy-mode", "managed", &mut session);
+
+        match result {
+            ParityCommandResult::SystemMessage(message) => {
+                assert!(message.contains("private beta"), "{message}");
+                assert!(message.contains("not wired"), "{message}");
+            }
+            other => panic!("expected system message, got {other:?}"),
+        }
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
     }
 
     #[test]

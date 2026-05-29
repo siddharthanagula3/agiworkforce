@@ -110,8 +110,7 @@ fn enforce_password_complexity(password: &str) -> Result<(), MasterPasswordError
     let has_other = password
         .chars()
         .any(|c| !c.is_ascii_alphanumeric() && !c.is_whitespace());
-    let class_count =
-        has_lower as u32 + has_upper as u32 + has_digit as u32 + has_other as u32;
+    let class_count = has_lower as u32 + has_upper as u32 + has_digit as u32 + has_other as u32;
     if class_count < 3 {
         return Err(MasterPasswordError::CryptoError(
             "Password must contain at least three of: lowercase, uppercase, digit, symbol"
@@ -396,8 +395,7 @@ impl MasterPasswordManager {
         drop(conn);
 
         // Cache the derived key using the KDF version we just stored.
-        let derived_key =
-            self.derive_password_key(password, &salt, KDF_VERSION_CURRENT)?;
+        let derived_key = self.derive_password_key(password, &salt, KDF_VERSION_CURRENT)?;
         if let Ok(mut cache) = self.cached_key.lock() {
             *cache = Some(derived_key);
         }
@@ -457,8 +455,7 @@ impl MasterPasswordManager {
         let salt = SaltString::from_b64(&stored_salt)
             .map_err(|e| MasterPasswordError::CryptoError(format!("Invalid stored salt: {}", e)))?;
 
-        let derived_key =
-            self.derive_password_key(password, &salt, kdf_version as u32)?;
+        let derived_key = self.derive_password_key(password, &salt, kdf_version as u32)?;
 
         if let Ok(mut cache) = self.cached_key.lock() {
             *cache = Some(derived_key);
@@ -712,11 +709,7 @@ impl MasterPasswordManager {
                 // PRESERVED: pass the base64 salt string as bytes. This is
                 // wrong-but-historical and must not change for v1 records.
                 argon2
-                    .hash_password_into(
-                        password.as_bytes(),
-                        salt.as_str().as_bytes(),
-                        &mut output,
-                    )
+                    .hash_password_into(password.as_bytes(), salt.as_str().as_bytes(), &mut output)
                     .map_err(|e| {
                         MasterPasswordError::CryptoError(format!(
                             "Failed to derive key (v1): {}",
@@ -729,15 +722,9 @@ impl MasterPasswordManager {
                 // writes into a caller buffer and returns a `&[u8]` view.
                 use argon2::password_hash::Salt;
                 let mut salt_buf = [0u8; Salt::MAX_LENGTH];
-                let raw_salt = salt
-                    .as_salt()
-                    .decode_b64(&mut salt_buf)
-                    .map_err(|e| {
-                        MasterPasswordError::CryptoError(format!(
-                            "Failed to decode salt (v2): {}",
-                            e
-                        ))
-                    })?;
+                let raw_salt = salt.as_salt().decode_b64(&mut salt_buf).map_err(|e| {
+                    MasterPasswordError::CryptoError(format!("Failed to decode salt (v2): {}", e))
+                })?;
                 argon2
                     .hash_password_into(password.as_bytes(), raw_salt, &mut output)
                     .map_err(|e| {
@@ -781,11 +768,7 @@ impl MasterPasswordManager {
                 // `get_manager()` is the singleton accessor returning a
                 // `&'static MachineKeyManager`.
                 let install_id = machine_key::get_manager().get_install_id();
-                format!(
-                    "com.agiworkforce.desktop:master_password:v2:{}",
-                    install_id
-                )
-                .into_bytes()
+                format!("com.agiworkforce.desktop:master_password:v2:{}", install_id).into_bytes()
             }
         };
         let mut extract_hmac = <Hmac<Sha256> as Mac>::new_from_slice(&salt)
@@ -855,10 +838,18 @@ mod tests {
         let salt = SaltString::generate(&mut OsRng);
         let pw = valid_test_passphrase();
 
-        let v1_a = manager.derive_password_key(pw, &salt, KDF_VERSION_LEGACY).unwrap();
-        let v1_b = manager.derive_password_key(pw, &salt, KDF_VERSION_LEGACY).unwrap();
-        let v2_a = manager.derive_password_key(pw, &salt, KDF_VERSION_CURRENT).unwrap();
-        let v2_b = manager.derive_password_key(pw, &salt, KDF_VERSION_CURRENT).unwrap();
+        let v1_a = manager
+            .derive_password_key(pw, &salt, KDF_VERSION_LEGACY)
+            .unwrap();
+        let v1_b = manager
+            .derive_password_key(pw, &salt, KDF_VERSION_LEGACY)
+            .unwrap();
+        let v2_a = manager
+            .derive_password_key(pw, &salt, KDF_VERSION_CURRENT)
+            .unwrap();
+        let v2_b = manager
+            .derive_password_key(pw, &salt, KDF_VERSION_CURRENT)
+            .unwrap();
 
         // Determinism per version
         assert_eq!(v1_a, v1_b, "v1 must be deterministic");
@@ -934,10 +925,7 @@ mod tests {
         manager.lock();
         manager.unlock(valid_test_passphrase()).unwrap();
         let v2_key = manager.derive_key(KeyPurpose::McpCredentials).unwrap();
-        assert_ne!(
-            v1_key, v2_key,
-            "v1 and v2 derived purpose keys must differ"
-        );
+        assert_ne!(v1_key, v2_key, "v1 and v2 derived purpose keys must differ");
     }
 
     /// SEV-DESK-11/13: verify `change()` preserves the existing kdf_version.

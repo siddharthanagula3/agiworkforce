@@ -76,12 +76,12 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">05 — BYOK and provider terms</p>
+          <p className="agi-section-eyebrow">05 - BYOK and provider terms</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            When you bring your own API key (BYOK) for any provider — Anthropic, OpenAI, Google,
-            etc. — your use of that provider is governed by <em>their</em> terms, not ours. Provider
-            charges go directly from you to them; we add zero markup and do not process those
-            payments.
+            When you bring your own API key (BYOK) for any provider, such as Anthropic, OpenAI, or
+            Google, your use of that provider is governed by <em>their</em> terms, not ours.
+            Provider billing and data handling are route-specific; AGI does not process those
+            provider payments.
           </p>
         </section>
 

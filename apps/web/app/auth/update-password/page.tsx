@@ -113,7 +113,7 @@ export default function UpdatePasswordPage() {
             {message && (
               <p
                 style={{
-                  color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+                  color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-amber)',
                   fontSize: 13,
                   margin: 0,
                 }}

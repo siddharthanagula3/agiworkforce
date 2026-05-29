@@ -6,7 +6,7 @@
  *    in-flight de-dupe, no spend cap on the server's ANTHROPIC_API_KEY."
  *
  * These are STRUCTURAL tests against the route source. The processReview
- * closure is fire-and-forget and threads through five separate Supabase
+ * closure is fire-and-forget and threads through five separate Neon
  * call patterns (recent-attempt select, quota count select, pending insert,
  * skipped insert, terminal update) — exercising it with an integration-
  * level mock proved fragile in earlier iterations. The structural checks
@@ -28,7 +28,7 @@ const REPO_ROOT = join(__dirname, '..', '..', '..', '..');
 const ROUTE_PATH = join(REPO_ROOT, 'apps/web/app/api/github/webhook/route.ts');
 const MIGRATION_PATH = join(
   REPO_ROOT,
-  'supabase/migrations/20260505000004_create_github_pr_review_attempts.sql',
+  'cloudDb/migrations/20260505000004_create_github_pr_review_attempts.sql',
 );
 
 const routeSource = readFileSync(ROUTE_PATH, 'utf8');

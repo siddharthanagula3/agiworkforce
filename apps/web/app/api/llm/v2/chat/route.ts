@@ -43,6 +43,7 @@ import {
   type AnthropicProviderOptions,
   type OpenAIProviderOptions,
 } from '@/lib/ai-sdk/providers';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 import { createAiSdkStream, toCoreMessages, toAiSdkTools } from '@/lib/ai-sdk/stream-handler';
 import {
   MANAGED_AI_GATEWAY_PROVIDER_MODE_HEADER,
@@ -122,7 +123,7 @@ const V2ChatRequestSchema = z.object({
     .optional(),
   effort: z.string().optional(),
   // OpenAI reasoning-specific
-  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoning_effort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   reasoning_summary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
   service_tier: z.enum(['auto', 'default', 'flex']).optional(),
   providerMode: ProviderModeSchema.optional(),
@@ -159,7 +160,13 @@ function buildAnthropicOptions(req: V2ChatRequest): AnthropicProviderOptions | u
 
   if (req.effort) {
     const effort = req.effort.toLowerCase();
-    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+    if (
+      effort === 'low' ||
+      effort === 'medium' ||
+      effort === 'high' ||
+      effort === 'xhigh' ||
+      effort === 'max'
+    ) {
       opts.effort = effort;
     }
   }
@@ -167,11 +174,20 @@ function buildAnthropicOptions(req: V2ChatRequest): AnthropicProviderOptions | u
   return Object.keys(opts).length > 0 ? opts : undefined;
 }
 
+function openAIModelSupportsXHigh(model: string): boolean {
+  return supportsOpenAIReasoningEffort({ provider: 'openai', id: model }, 'xhigh');
+}
+
 /** Build OpenAI provider options from request body. */
 function buildOpenAIOptions(req: V2ChatRequest): OpenAIProviderOptions | undefined {
   const opts: OpenAIProviderOptions = {};
 
-  if (req.reasoning_effort) opts.reasoningEffort = req.reasoning_effort;
+  if (
+    req.reasoning_effort &&
+    (req.reasoning_effort !== 'xhigh' || openAIModelSupportsXHigh(req.model))
+  ) {
+    opts.reasoningEffort = req.reasoning_effort;
+  }
   if (req.reasoning_summary) opts.reasoningSummary = req.reasoning_summary;
   if (req.service_tier) opts.serviceTier = req.service_tier;
 

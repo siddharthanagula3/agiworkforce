@@ -1,7 +1,7 @@
 /**
  * Chat Real-Time Subscriptions Service (no-op stub)
  *
- * Supabase Realtime has been removed. These functions are retained as no-op
+ * Realtime has been removed. These functions are retained as no-op
  * stubs so that call sites continue to compile. Real-time features will be
  * re-implemented with a different provider or polling approach.
  */
@@ -40,7 +40,7 @@ export class ChatRealtimeSubscriptionManager {
     _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
     console.warn(
-      `[ChatRealtimeSubscriptionManager] subscribeToConversation called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+      `[ChatRealtimeSubscriptionManager] subscribeToConversation called for ${conversationId} but Realtime has been removed. No subscription created.`,
     );
     return () => {};
   }
@@ -54,7 +54,7 @@ export class ChatRealtimeSubscriptionManager {
     _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
     console.warn(
-      `[ChatRealtimeSubscriptionManager] subscribeToParticipants called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+      `[ChatRealtimeSubscriptionManager] subscribeToParticipants called for ${conversationId} but Realtime has been removed. No subscription created.`,
     );
     return () => {};
   }
@@ -68,7 +68,7 @@ export class ChatRealtimeSubscriptionManager {
     _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
     console.warn(
-      `[ChatRealtimeSubscriptionManager] subscribeToCollaborations called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+      `[ChatRealtimeSubscriptionManager] subscribeToCollaborations called for ${conversationId} but Realtime has been removed. No subscription created.`,
     );
     return () => {};
   }
@@ -82,7 +82,7 @@ export class ChatRealtimeSubscriptionManager {
     _onConnectionStateChange?: ConnectionStateCallback,
   ): () => void {
     console.warn(
-      `[ChatRealtimeSubscriptionManager] subscribeToMessages called for ${conversationId} but Supabase Realtime has been removed. No subscription created.`,
+      `[ChatRealtimeSubscriptionManager] subscribeToMessages called for ${conversationId} but Realtime has been removed. No subscription created.`,
     );
     return () => {};
   }
@@ -92,7 +92,7 @@ export class ChatRealtimeSubscriptionManager {
    */
   subscribeToTypingIndicators(_conversationId: string, _onTyping: TypingCallback): () => void {
     console.warn(
-      '[ChatRealtimeSubscriptionManager] subscribeToTypingIndicators called but Supabase Realtime has been removed. No subscription created.',
+      '[ChatRealtimeSubscriptionManager] subscribeToTypingIndicators called but Realtime has been removed. No subscription created.',
     );
     return () => {};
   }
@@ -107,7 +107,7 @@ export class ChatRealtimeSubscriptionManager {
     _isTyping: boolean,
   ): Promise<void> {
     console.warn(
-      '[ChatRealtimeSubscriptionManager] broadcastTyping called but Supabase Realtime has been removed. No broadcast sent.',
+      '[ChatRealtimeSubscriptionManager] broadcastTyping called but Realtime has been removed. No broadcast sent.',
     );
   }
 
@@ -120,7 +120,7 @@ export class ChatRealtimeSubscriptionManager {
     _onPresenceChange: PresenceCallback,
   ): () => void {
     console.warn(
-      '[ChatRealtimeSubscriptionManager] subscribeToPresence called but Supabase Realtime has been removed. No subscription created.',
+      '[ChatRealtimeSubscriptionManager] subscribeToPresence called but Realtime has been removed. No subscription created.',
     );
     return () => {};
   }
@@ -134,7 +134,7 @@ export class ChatRealtimeSubscriptionManager {
     _status: 'online' | 'offline' | 'busy',
   ): Promise<void> {
     console.warn(
-      '[ChatRealtimeSubscriptionManager] updatePresenceStatus called but Supabase Realtime has been removed.',
+      '[ChatRealtimeSubscriptionManager] updatePresenceStatus called but Realtime has been removed.',
     );
   }
 
@@ -212,7 +212,7 @@ export function subscribeToConversationUpdates(
   },
 ): () => void {
   console.warn(
-    `[subscribeToConversationUpdates] Called for ${conversationId} but Supabase Realtime has been removed. No subscriptions created.`,
+    `[subscribeToConversationUpdates] Called for ${conversationId} but Realtime has been removed. No subscriptions created.`,
   );
   void callbacks;
   return () => {};
@@ -227,9 +227,7 @@ export async function broadcastTypingStatus(
   _employeeName: string,
   _isTyping: boolean,
 ): Promise<void> {
-  console.warn(
-    '[broadcastTypingStatus] Called but Supabase Realtime has been removed. No broadcast sent.',
-  );
+  console.warn('[broadcastTypingStatus] Called but Realtime has been removed. No broadcast sent.');
 }
 
 /**
@@ -240,7 +238,7 @@ export async function updatePresence(
   _participantId: string,
   _status: 'online' | 'offline' | 'busy',
 ): Promise<void> {
-  console.warn('[updatePresence] Called but Supabase Realtime has been removed.');
+  console.warn('[updatePresence] Called but Realtime has been removed.');
 }
 
 /**
@@ -263,7 +261,5 @@ export function useConversationSubscription(
   _callbacks: Parameters<typeof subscribeToConversationUpdates>[1],
   _options?: Parameters<typeof subscribeToConversationUpdates>[2],
 ) {
-  console.warn(
-    'useConversationSubscription: Supabase Realtime has been removed. This hook is a no-op.',
-  );
+  console.warn('useConversationSubscription: Realtime has been removed. This hook is a no-op.');
 }

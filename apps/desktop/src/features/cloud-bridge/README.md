@@ -29,10 +29,9 @@ interface InviteCodeModalProps {
 **Tab 1: "Enter invitation code"** (default tab)
 
 - Auto-uppercase input; min 6 chars before enabling submit.
-- Calls `waitlistService.redeemInviteCode(code, source)` — atomic validate + redeem via the
-  `validate_and_redeem_invite_code` security-definer RPC.
-- Anonymous Supabase sign-in happens inline inside the service if no session exists. Each surface's
-  `waitlistService` replicates this pattern — no account is required from the user.
+- Calls `waitlistService.redeemInviteCode(code, source)` through the Clerk/Neon web API.
+- Anonymous cloud sessions are not created on desktop. A user either joins the waitlist or
+  signs in through the web device-link flow before managed cloud unlocks.
 - On success: shows "Cloud unlocked!" confirmation + calls `onRedeemed(inviteId)` (where `inviteId`
   is `result.inviteId` from the RPC response) + closes after 1.5 s.
 - Errors are typed: `friendlyInviteError(result.error)` switches on the `InviteCodeError` union
@@ -55,8 +54,8 @@ export type InviteCodeError =
   | 'expired' // code past expires_at
   | 'fully_redeemed' // current_uses >= max_uses
   | 'already_redeemed_by_user' // same user tried to redeem twice
-  | 'anon_signin_failed' // couldn't create anonymous Supabase session
-  | 'rpc_error'; // Supabase RPC transport error
+  | 'auth_required' // user must finish Clerk sign-in/device-link
+  | 'api_error'; // cloud API transport error
 ```
 
 `InviteCodeError` is the cross-surface contract type. Import it from `./types` (or the surface
@@ -114,10 +113,8 @@ waitlistService.joinWaitlist(entry: WaitlistEntry): Promise<{
 }>
 ```
 
-`redeemInviteCode` creates an anonymous Supabase session if none exists, then calls the
-`validate_and_redeem_invite_code` security-definer RPC (defined in
-`supabase/migrations/20260523000000_beta_invites.sql`). The RPC holds a `FOR UPDATE` lock to
-prevent concurrent double-spend.
+`redeemInviteCode` calls the web API. The server validates Clerk auth, redeems against Neon, and
+holds the database lock that prevents concurrent double-spend.
 
 `validateInviteCode` is retained in the service as a read-only helper for admin UI / pre-flight
 hints but must NOT be called from the invite-code submit path. It cannot read `beta_invites`
@@ -154,7 +151,7 @@ Each port must:
 1. Call `redeemInviteCode(code, source)` not `validateInviteCode(code)`.
 2. Use the typed `InviteCodeError` switch — no prose-string pattern matching.
 3. Pass `result.inviteId` to `onRedeemed`.
-4. Keep anonymous sign-in inside the service (not the modal).
+4. Keep device-link or sign-in redirects inside the service (not the modal).
 5. Use the surface's own token system (no hardcoded colors).
 
 | Surface    | Recommended base                                                         | Notes                                                                                 |

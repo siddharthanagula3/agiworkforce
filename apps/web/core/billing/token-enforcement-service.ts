@@ -188,7 +188,7 @@ export async function deductTokens(
       outputTokens: metadata.outputTokens,
     });
 
-    // Route credit deduction through server-side API (Supabase RPC removed; Neon is server-only).
+    // Route credit deduction through server-side API (Neon SQL removed; Neon is server-only).
     const token = await getAuthToken();
     if (!token) {
       return { success: false, newBalance: 0, error: 'Not authenticated' };

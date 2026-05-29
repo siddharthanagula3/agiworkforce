@@ -13,10 +13,13 @@ describe('remoteChatGate', () => {
     expect(() => assertRemoteChatAllowed(flags)).toThrow(RemoteChatDisabledError);
   });
 
-  it('allows remote chat only after Mobile BYOK or Cloud Managed mode is enabled', () => {
+  it('does not allow remote chat from a Mobile BYOK flag', () => {
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: false, byokKeys: true }),
-    ).toBeNull();
+    ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);
+  });
+
+  it('allows remote chat only after Cloud Managed mode is enabled', () => {
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: true, byokKeys: false }),
     ).toBeNull();

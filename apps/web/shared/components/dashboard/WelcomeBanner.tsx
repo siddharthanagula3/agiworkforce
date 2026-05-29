@@ -85,7 +85,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Connect desktop app',
     description: 'Download and link the desktop agent for full autonomy.',
     icon: Monitor,
-    href: '/chat/settings',
+    href: '/download',
     actionLabel: 'Get Desktop App',
   },
   {
@@ -93,7 +93,7 @@ const CHECKLIST: ChecklistItem[] = [
     label: 'Invite your team',
     description: 'Collaborate with colleagues using shared workspaces.',
     icon: Users,
-    href: '/chat/workforce',
+    href: '/teams',
     actionLabel: 'Invite Team',
   },
 ];

@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
   title: 'Startups — AGI',
@@ -40,8 +41,8 @@ export default function StartupsPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Real CI</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce exec</code> works as a Unix tool. Pipe a task, get JSON. Use in
-                GitHub Actions, in scripts, anywhere a shell runs.
+                <code>agi exec</code> works as a Unix tool. Pipe a task, get JSON. Use in GitHub
+                Actions, in scripts, anywhere a shell runs.
               </p>
             </li>
             <li className="agi-reason">
@@ -72,7 +73,7 @@ export default function StartupsPage() {
               </tr>
               <tr>
                 <td>Privacy</td>
-                <td>We don&rsquo;t train on your data. Local mode never leaves your laptop.</td>
+                <td>{POSITIONING.trustBoundary}</td>
               </tr>
             </tbody>
           </table>

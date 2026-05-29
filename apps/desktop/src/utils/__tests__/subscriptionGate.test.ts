@@ -3,7 +3,7 @@
  *
  * The old version of this file carried a top-of-file
  * `eslint-disable @typescript-eslint/no-explicit-any` and 13 inline
- * `as any` casts on the mocked `supabaseAuth.getState()` return value.
+ * `as any` casts on the mocked `cloudAccountAuth.getState()` return value.
  * Result: any billing-schema drift (new fields on AuthState /
  * Subscription, removed status values) would silently still typecheck
  * even though the production code path could break.
@@ -16,48 +16,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { checkSubscriptionGate, canUseAPIKeys, getUpgradeMessage } from '../subscriptionGate';
 import {
-  supabaseAuth,
+  cloudAccountAuth,
   type AuthState,
+  type Session,
   type SubscriptionFetchStatus,
-} from '../../services/supabaseAuth';
-import type { Session, User } from '@supabase/supabase-js';
-vi.mock('../../services/supabaseAuth', () => ({
-  supabaseAuth: {
+  type User,
+} from '../../services/cloudAccountAuth';
+vi.mock('../../services/cloudAccountAuth', () => ({
+  cloudAccountAuth: {
     getState: vi.fn(),
   },
 }));
 
 /**
- * Build a canonical Supabase User row, overrideable per test.
- *
- * The Supabase typings carry several non-load-bearing fields that the
- * tests don't care about (app_metadata, user_metadata, aud, created_at).
- * We give each a safe default so test bodies stay focused on the auth
- * decision they're exercising.
+ * Build a canonical Clerk-backed desktop User object, overrideable per test.
  */
 function makeUser(overrides: Partial<User> = {}): User {
   const base: User = {
     id: 'user-1',
-    aud: 'authenticated',
     email: 'test@example.com',
     created_at: new Date().toISOString(),
-    app_metadata: {},
     user_metadata: {},
-  } as User;
+  };
   return { ...base, ...overrides };
 }
 
 /**
- * Build a canonical Supabase Session, overrideable per test.
+ * Build a canonical desktop cloud Session, overrideable per test.
  */
 function makeSession(overrides: Partial<Session> = {}): Session {
   const base: Session = {
     access_token: 'token',
     refresh_token: 'refresh',
-    expires_in: 3600,
-    token_type: 'bearer',
     user: makeUser(),
-  } as Session;
+  };
   return { ...base, ...overrides };
 }
 
@@ -87,7 +79,7 @@ describe('subscriptionGate', () => {
 
   describe('checkSubscriptionGate', () => {
     it('should deny access when user is not authenticated', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: null,
           session: null,
@@ -107,7 +99,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should deny access when user has no subscription', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -129,7 +121,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should deny access when subscription is canceled', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -168,7 +160,7 @@ describe('subscriptionGate', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 8);
 
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -207,7 +199,7 @@ describe('subscriptionGate', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 6);
 
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -241,7 +233,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has free tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -276,7 +268,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has hobby tier with active status', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -310,7 +302,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has hobby tier with trialing status', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -344,7 +336,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has pro tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -377,7 +369,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has max tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -410,7 +402,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should allow access when user has enterprise tier', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),
@@ -445,7 +437,7 @@ describe('subscriptionGate', () => {
 
   describe('canUseAPIKeys', () => {
     it('should return false when subscription gate denies access', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: null,
           session: null,
@@ -461,7 +453,7 @@ describe('subscriptionGate', () => {
     });
 
     it('should return true when subscription gate allows access', () => {
-      vi.mocked(supabaseAuth.getState).mockReturnValue(
+      vi.mocked(cloudAccountAuth.getState).mockReturnValue(
         makeAuthState({
           user: makeUser({ id: 'user-1', email: 'test@example.com' }),
           session: makeSession({ access_token: 'token', refresh_token: 'refresh' }),

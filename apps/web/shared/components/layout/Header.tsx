@@ -30,14 +30,14 @@ const Header: React.FC = () => {
   // Product (matches footer Product)
   const productMenu = [
     {
-      label: 'AI Marketplace',
-      path: '/marketplace',
+      label: 'Apps',
+      path: '/apps',
       icon: Bot,
-      description: 'Browse specialized AI employees',
+      description: 'Browse apps and connectors',
     },
     {
       label: 'AI Chat',
-      path: '/features/ai-chat',
+      path: '/',
       icon: MessageSquare,
       description: 'Intelligent conversations',
     },
@@ -74,13 +74,13 @@ const Header: React.FC = () => {
   const resourcesMenu = [
     {
       label: 'Documentation',
-      path: '/documentation',
+      path: '/docs',
       icon: BookOpen,
       description: 'Product guides and docs',
     },
     {
       label: 'API Reference',
-      path: '/api-reference',
+      path: '/api-docs',
       icon: FileCode,
       description: 'Endpoints and examples',
     },
@@ -184,7 +184,7 @@ const Header: React.FC = () => {
                   Contact Sales
                 </Button>
                 <Button
-                  onClick={() => router.push('/register')}
+                  onClick={() => router.push('/signup')}
                   className="bg-gradient-to-r from-primary to-accent text-sm font-medium hover:opacity-90"
                 >
                   Get Started Free
@@ -260,7 +260,7 @@ const Header: React.FC = () => {
                         Contact Sales
                       </Button>
                       <Button
-                        onClick={() => handleNavigation('/register')}
+                        onClick={() => handleNavigation('/signup')}
                         className="w-full bg-gradient-to-r from-primary to-accent"
                       >
                         Get Started Free

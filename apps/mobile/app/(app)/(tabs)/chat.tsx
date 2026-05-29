@@ -53,16 +53,11 @@ export default function ChatTabScreen() {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
 
-  // SendPreview disclosure — Mobile is local-only in v1 (per locks), so the
-  // typical render is the "Stays on this device" Local banner. The mapping
-  // still respects future BYOK/Managed unlocking via `selectedProvider`.
+  // SendPreview disclosure — Mobile supports Local and Cloud Managed invite
+  // only. BYOK is not a Mobile provider mode.
   const sendPreviewPresentation = useMemo(() => {
     const providerMode: ProviderMode =
-      selectedProvider === 'local' || !selectedProvider
-        ? 'Local'
-        : selectedProvider === 'managed_cloud'
-          ? 'ManagedGateway'
-          : 'DirectByok';
+      selectedProvider === 'managed_cloud' ? 'ManagedGateway' : 'Local';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel,

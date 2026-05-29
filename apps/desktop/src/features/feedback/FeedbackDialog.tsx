@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/Input';
 import { Textarea } from '@/components/ui/Textarea';
 import { feedback } from '@agiworkforce/api';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 
 interface FeedbackDialogProps {
   open: boolean;
@@ -74,7 +74,7 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
     setError(null);
 
     try {
-      const user = await supabaseAuth.getUser();
+      const user = await cloudAccountAuth.getUser();
 
       let logsText: string | null = null;
       if (attachLogs) {

@@ -1,4 +1,4 @@
-//! Tier cache — async Supabase tier query with 1-hour on-disk TTL.
+//! Tier cache — async managed-account tier query with 1-hour on-disk TTL.
 //!
 //! The CLI calls `resolve_user_tier()` at startup to determine which model pool
 //! to default to.  It writes the result to
@@ -46,7 +46,7 @@ const DEFAULT_API_BASE: &str = "https://agiworkforce.com";
 
 /// User's current subscription tier as returned by the AGI Workforce API.
 ///
-/// Maps to the `plan_tier` column in `supabase/migrations/…/subscriptions`.
+/// Maps to the `plan_tier` column in the Neon `subscriptions` table.
 /// Keep in sync with the TypeScript `ProductTier` union in
 /// `packages/types/src/model-catalog.ts`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -265,7 +265,7 @@ fn format_token_count(n: u64) -> String {
 /// `tokio::time::timeout` so it never exceeds `TIER_FETCH_TIMEOUT` (3 s).
 ///
 /// # Arguments
-/// * `jwt` — Supabase / AGI Workforce JWT (Bearer token).  If `None`, we skip
+/// * `jwt` — AGI Workforce JWT (Bearer token).  If `None`, we skip
 ///   the network call and return only what's in the cache.
 pub async fn resolve_user_tier(jwt: Option<&str>) -> Option<CachedTier> {
     // Fast path: return fresh cache without touching the network.

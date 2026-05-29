@@ -14,7 +14,7 @@ import {
   getUpgradeMessage,
 } from '../../utils/subscriptionGate';
 import { openPricingPage } from '../../utils/navigation';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 
 interface SubscriptionLockDialogProps {
   open: boolean;
@@ -41,7 +41,7 @@ export function SubscriptionLockDialog({
       setGateResult(checkSubscriptionGate());
     }
 
-    const unsubscribe = supabaseAuth.onAuthStateChange(() => {
+    const unsubscribe = cloudAccountAuth.onAuthStateChange(() => {
       setGateResult(checkSubscriptionGate());
     });
 

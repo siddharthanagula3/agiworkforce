@@ -2,105 +2,55 @@
 
 Status: Current
 Owner role: Backend/data owner
-Last updated: 2026-05-24
+Last updated: 2026-05-28
 Kind: ts-package
 Criticality: high
 
 ## Purpose
 
-Cloud-provider-portable data layer for AGI Workforce. The seam that lets us swap **Supabase → Neon** (or PlanetScale, RDS, self-hosted Postgres) by changing a config value, NOT by rewriting feature code.
+This package is the hosted persistence/auth boundary for AGI Workforce:
 
-## Why this exists
+- Database: Neon Postgres.
+- Auth verification: Clerk.
+- Storage and realtime: explicit providers only; no default is wired yet.
 
-The codebase couples tightly to Supabase today. As traffic + cost + compliance constraints evolve, we need to migrate to other providers without an N-month rewrite. This package is the boundary:
-
-- Feature code calls `createDatabaseClient()` / `createAuthClient()` / `createStorageClient()` / `createRealtimeClient()`.
-- The factory reads `AGI_*_PROVIDER` env vars and returns the right adapter.
-- Adapters wrap each vendor SDK behind the same minimal interface.
-
-See [`docs/current/technical-architecture.md`](../../docs/current/technical-architecture.md) for the current architecture. Legacy migration playbooks are archived under [`docs/archive/2026-05-21-docs-consolidation/SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md).
-
-## Adapter status
-
-| Adapter        | Database | Auth                        | Storage | Realtime |
-| -------------- | -------- | --------------------------- | ------- | -------- |
-| Supabase       | LIVE     | LIVE                        | LIVE    | LIVE     |
-| Neon           | skeleton | —                           | —       | —        |
-| Postgres (raw) | skeleton | —                           | —       | —        |
-| Auth0          | —        | — (skeleton sketch in docs) | —       | —        |
-| Clerk          | —        | LIVE server verification    | —       | —        |
-| Cognito        | —        | —                           | —       | —        |
-| S3             | —        | —                           | —       | —        |
-| R2             | —        | —                           | —       | —        |
-| B2             | —        | —                           | —       | —        |
-| Pusher         | —        | —                           | —       | —        |
-| Ably           | —        | —                           | —       | —        |
-
-"Skeleton" = throws `NotImplementedError` with a pointer to the migration steps. Implement when migrating.
+Feature code should depend on these interfaces instead of importing provider SDKs directly.
 
 ## Usage
 
 ```ts
-import {
-  createDatabaseClient,
-  createAuthClient,
-  createStorageClient,
-  createRealtimeClient,
-} from '@agiworkforce/data-layer';
+import { createAuthClient, createDatabaseClient } from '@agiworkforce/data-layer';
 
-// Reads AGI_DATABASE_PROVIDER env (default 'supabase').
-const db = createDatabaseClient();
+const auth = createAuthClient(); // Clerk by default
+const verified = await auth.verifyJwt(sessionToken);
+if (!verified) throw new Error('Unauthenticated');
 
-// RLS-bound query against the user's JWT.
-const rows = await db.withUser(userJwt).query<User>('SELECT * FROM users WHERE id = $1', [userId]);
-
-// Or use the escape hatch for SDK-specific calls until query/execute RPCs ship:
-const client = db.withUser(userJwt).raw();
-const { data } = await client.from('users').select('*').eq('id', userId).single();
+const db = createDatabaseClient(); // Neon by default
+const rows = await db
+  .withUser(sessionToken)
+  .query<{ id: string }>('select id from web_conversations where user_id = $1', [verified.userId]);
 ```
 
 ## Configuration
 
-Environment variables read at runtime:
-
 ```bash
-AGI_DATABASE_PROVIDER=supabase  # supabase | neon | postgres
-AGI_AUTH_PROVIDER=supabase      # supabase | auth0 | clerk | cognito
-AGI_STORAGE_PROVIDER=supabase   # supabase | s3 | r2 | b2
-AGI_REALTIME_PROVIDER=supabase  # supabase | pusher | ably | self-hosted
+AGI_DATABASE_PROVIDER=neon
+AGI_DATABASE_URL=postgresql://...neon.tech/neondb?sslmode=require
 
-# Plus the provider-specific connection vars (see current technical architecture
-# and the archived scaling playbook when migrating providers)
-SUPABASE_URL=...
-SUPABASE_SERVICE_ROLE_KEY=...
-# OR
-DATABASE_URL=postgresql://...
-
-# Clerk auth verification, when AGI_AUTH_PROVIDER=clerk.
-# Prefer CLERK_JWT_KEY for networkless session JWT verification.
+AGI_AUTH_PROVIDER=clerk
 CLERK_JWT_KEY=...
 CLERK_SECRET_KEY=...
 CLERK_AUTHORIZED_PARTIES=https://agiworkforce.com,http://localhost:3000
 ```
 
-## Adding a new method to an interface
+`AGI_STORAGE_PROVIDER` and `AGI_REALTIME_PROVIDER` are intentionally explicit-only and currently fail closed until their production providers are implemented.
 
-1. Add to `src/types.ts` with a JSDoc explaining the contract.
-2. Implement in `src/adapters/supabase.ts` (today's default).
-3. Stub in `src/adapters/neon.ts` and `src/adapters/postgres.ts` with `throw new NotImplementedError(...)`.
-4. Add a unit test in `src/__tests__/`.
+## Adding Data-Layer Behavior
 
-The interfaces are intentionally minimal: add a method only when at least one concrete adapter can implement it cheaply. Don't pre-design for hypothetical providers.
+1. Add the method to `src/types.ts`.
+2. Implement hosted database behavior in `src/adapters/neon.ts`.
+3. Implement hosted auth behavior in `src/adapters/clerk.ts`.
+4. Stub future provider adapters with `NotImplementedError`.
+5. Add unit tests in `src/__tests__/`.
 
-## Migration patterns
-
-For each kind of move, use the current architecture plus the archived migration playbook:
-
-- **Supabase → Neon**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
-- **Supabase Auth → Clerk / Auth0 / Cognito**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
-- **Supabase Storage → S3 / R2 / B2**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
-- **Supabase Realtime → Pusher / Ably / self-hosted**: [`technical-architecture.md`](../../docs/current/technical-architecture.md) and archived [`SCALING.md`](../../docs/archive/2026-05-21-docs-consolidation/SCALING.md)
-
-## Vertical slice
-
-`apps/web/app/api/me/route.ts` is the proof-of-concept route using `@agiworkforce/data-layer`. Read its inline migration guide as the template for migrating the remaining ~90 web routes.
+Do not add legacy platform database adapters or env paths back into this package.

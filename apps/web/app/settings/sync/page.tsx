@@ -74,7 +74,7 @@ export default function SyncSettingsPage() {
       {/* Cross-device sync — waitlist CTA */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -83,7 +83,7 @@ export default function SyncSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -114,7 +114,7 @@ export default function SyncSettingsPage() {
                 fontWeight: 700,
                 letterSpacing: '0.04em',
                 color: 'var(--text-3)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 9999,
                 padding: '3px 10px',
                 whiteSpace: 'nowrap',
@@ -174,7 +174,7 @@ export default function SyncSettingsPage() {
       {/* Local-first guarantee note */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           padding: '18px 20px',

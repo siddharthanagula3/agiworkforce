@@ -145,7 +145,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-gdrive"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@modelcontextprotocol/server-gdrive",
+                ],
                 &[("GDRIVE_OAUTH_TOKEN", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -160,7 +164,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@gongrzhe/server-gmail-autoauth-mcp"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@gongrzhe/server-gmail-autoauth-mcp",
+                ],
                 &[("GMAIL_OAUTH_PATH", "<from_oauth:google>")],
             ),
             Some("https://console.cloud.google.com/apis/credentials"),
@@ -347,7 +355,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-github"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@modelcontextprotocol/server-github",
+                ],
                 &[("GITHUB_PERSONAL_ACCESS_TOKEN", "<from_oauth:github>")],
             ),
             Some("https://github.com/settings/tokens"),
@@ -362,7 +374,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::ApiKey,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-gitlab"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@modelcontextprotocol/server-gitlab",
+                ],
                 &[("GITLAB_PERSONAL_ACCESS_TOKEN", "YOUR_API_KEY")],
             ),
             Some("https://gitlab.com/-/user_settings/personal_access_tokens"),
@@ -412,24 +428,6 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             ),
             Some("https://vercel.com/account/tokens"),
             Some("https://github.com/vercel/mcp"),
-        ),
-        manifest(
-            "supabase",
-            "Supabase",
-            "Manage databases, auth, storage, and edge functions in Supabase.",
-            ConnectorCategory::Development,
-            "database",
-            AuthType::ApiKey,
-            stdio_config(
-                "npx",
-                &["-y", "--ignore-scripts", "@supabase/mcp-server-supabase"],
-                &[
-                    ("SUPABASE_URL", "YOUR_PROJECT_URL"),
-                    ("SUPABASE_KEY", "YOUR_API_KEY"),
-                ],
-            ),
-            Some("https://supabase.com/dashboard/project/_/settings/api"),
-            Some("https://github.com/anthropics/mcp-server-supabase"),
         ),
         manifest(
             "postgresql",
@@ -487,7 +485,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@modelcontextprotocol/server-slack"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@modelcontextprotocol/server-slack",
+                ],
                 &[("SLACK_BOT_TOKEN", "<from_oauth:slack>")],
             ),
             Some("https://api.slack.com/apps"),
@@ -611,7 +613,11 @@ pub fn get_builtin_connectors() -> Vec<ConnectorManifest> {
             AuthType::OAuth2,
             stdio_config(
                 "npx",
-                &["-y", "--ignore-scripts", "@iflow-mcp/mcp-server-google-analytics"],
+                &[
+                    "-y",
+                    "--ignore-scripts",
+                    "@iflow-mcp/mcp-server-google-analytics",
+                ],
                 &[
                     ("GOOGLE_CLIENT_EMAIL", "YOUR_CLIENT_EMAIL"),
                     ("GOOGLE_PRIVATE_KEY", "YOUR_PRIVATE_KEY"),

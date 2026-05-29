@@ -74,7 +74,7 @@ export interface SendMessageOptions {
    * Reasoning effort level forwarded to the backend.
    * Translated to provider-specific params (thinking.budget_tokens, reasoning.effort, etc.)
    * by the receiving runtime before hitting the provider API.
-   * Values: 'low' | 'medium' | 'high' | 'max'
+   * Values: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
    */
   effort?: string;
 }

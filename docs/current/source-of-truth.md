@@ -76,14 +76,14 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 
 ## Surface Roles
 
-| Surface | Role                                                                                                                                                 | Sync boundary                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Web     | Account, projects, synced app chats, artifacts, billing/waitlist, admin, web routes.                                                                 | Normal app chat sync allowed.                                                                     |
-| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges. | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred. |
-| Mobile  | Local/BYOK onboarding, continuity, approvals, preview/share, lightweight chat.                                                                       | Normal app chat sync allowed for app chats; heavy generation should be Desktop/managed first.     |
-| CLI     | Developer agent and terminal engine.                                                                                                                 | Workspace/session scoped; no automatic sync into app chats.                                       |
-| VS Code | IDE-native developer assistant.                                                                                                                      | Workspace scoped; handoff to app chat must be explicit and redacted.                              |
-| Chrome  | Browser context, page capture/action approvals, native messaging.                                                                                    | Page data is task scoped; no default global chat memory sync.                                     |
+| Surface | Role                                                                                                                                                                       | Sync boundary                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Web     | Account, projects, synced app chats, artifacts, billing/waitlist, admin, web routes. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                     |
+| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                       | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred. |
+| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and Cloud invite/waitlist. Mobile v1 does not expose BYOK.                                           | Normal app chat sync allowed for app chats; heavy generation should be Desktop/managed first.     |
+| CLI     | Developer agent and terminal engine.                                                                                                                                       | Workspace/session scoped; no automatic sync into app chats.                                       |
+| VS Code | IDE-native developer assistant.                                                                                                                                            | Workspace scoped; handoff to app chat must be explicit and redacted.                              |
+| Chrome  | Browser context, page capture/action approvals, native messaging.                                                                                                          | Page data is task scoped; no default global chat memory sync.                                     |
 
 ## Competitive Baseline
 
@@ -201,7 +201,7 @@ Shared contracts:
 Web:
 
 - The Web typecheck now passes after fixing a stale default-model helper import and a temporary-conversation array lookup bug.
-- Web has chat, model/provider plumbing, artifacts/tool timelines, settings hooks, integrations, and admin/account direction, but product parity is partial.
+- Web has chat, model/provider plumbing, artifacts/tool timelines, settings hooks, integrations, and admin/account direction, but product parity is partial. Web runtime data must be Neon-backed; no Web BYOK/free env-key chat.
 - Remaining Web gaps include settings parity, connector/app directory parity, global search, complete projects/files/memory parity, and Cloud Managed invite/waitlist UX that is not allowed to imply public availability.
 
 Desktop:
@@ -214,8 +214,8 @@ Desktop:
 Mobile:
 
 - `apps/mobile/lib/v1FeatureFlags.ts` keeps v1 local-only by default.
-- `apps/mobile/services/remoteChatGate.ts` fails closed when cloud/BYOK sends are disabled.
-- Mobile has BYOK handoff/consent and generated-file preview direction, but BYOK keys and managed sends are still gated.
+- `apps/mobile/services/remoteChatGate.ts` fails closed when Cloud sends are disabled.
+- Mobile v1 has small on-device Local LLM chat plus Cloud invite/waitlist only. Mobile BYOK is not a v1 product path.
 - Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.
 
 CLI:

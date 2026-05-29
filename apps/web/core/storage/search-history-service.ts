@@ -1,6 +1,6 @@
 /**
  * Search History Service
- * Wraps Supabase RPC functions for tracking and retrieving search history
+ * Wraps Neon SQL functions for tracking and retrieving search history
  * Integrates with search_history and search_analytics tables
  */
 

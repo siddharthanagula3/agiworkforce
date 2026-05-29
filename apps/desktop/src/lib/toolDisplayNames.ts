@@ -350,20 +350,6 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
   },
 
   // MCP tools (translate MCP tool IDs)
-  mcp__supabase__execute_sql: {
-    displayName: 'Run database query',
-    activeForm: 'Querying database...',
-    completedForm: 'Query complete',
-    description: 'Execute a database operation',
-    category: 'data',
-  },
-  mcp__supabase__list_tables: {
-    displayName: 'List tables',
-    activeForm: 'Listing tables...',
-    completedForm: 'Listed tables',
-    description: 'View database tables',
-    category: 'data',
-  },
   mcp__filesystem__read_file: {
     displayName: 'Read file',
     activeForm: 'Reading file...',

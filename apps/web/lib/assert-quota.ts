@@ -38,7 +38,7 @@
  *   - Usage increment: SECURITY DEFINER RPC `increment_usage` — atomic, no
  *     direct UPDATE with service_role.
  *
- * DO NOT add this logic to proxy.ts or middleware.ts.
+ * DO NOT add this logic to proxy.ts.
  */
 
 import 'server-only';

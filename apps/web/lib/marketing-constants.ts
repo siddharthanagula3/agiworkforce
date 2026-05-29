@@ -12,17 +12,31 @@
  */
 
 /**
- * Era-current model IDs shown in the marketing model-pill carousel on the
- * homepage. These are intentionally stable display values, not runtime model
- * selectors. Update here when the provider era advances.
- * Current era: GPT-5.5, Claude 4.7 (Opus), Gemini 3.1 Pro.
+ * Provider labels shown in marketing surfaces. Runtime model IDs must come
+ * from the canonical model catalog and provider capability metadata.
  */
 export const MARKETING_MODEL_PILLS = [
-  'gpt-5.5',
-  'claude-opus-4-7',
-  'gemini-3.1-pro-preview',
-  'llama-3.3-70b',
+  'OpenAI',
+  'Anthropic',
+  'Google Gemini',
+  'Local LLMs',
 ] as const;
+
+export const LAUNCH = {
+  date: 'July 12, 2026',
+  isoDate: '2026-07-12',
+  shortDate: 'July 12',
+  publicLabel: 'Public launch: July 12, 2026',
+  allProductsLabel: 'Public launch target: July 12',
+  ctaLabel: 'Get launch access',
+} as const;
+
+export const POSITIONING = {
+  wedge: 'Local on device. Web by subscription. Cloud by invite.',
+  trustBoundary:
+    'Local mode runs on supported devices. BYOK is explicit on supported desktop and developer surfaces. Web uses AGI subscriptions. Cloud is invite-only.',
+  cloudInvite: 'Cloud by invite after Local and subscription demand prove scale.',
+} as const;
 
 export type PricingTabId = 'individual' | 'team' | 'api';
 
@@ -129,5 +143,6 @@ export const MARKETING = {
   models: { count: 70, display: '70+', label: 'AI Models' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
   appSize: { value: 35, display: '~35MB', label: 'App Size' },
-  tagline: 'Beyond one model. Beyond one surface. AGI in your hands.',
+  tagline:
+    'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;

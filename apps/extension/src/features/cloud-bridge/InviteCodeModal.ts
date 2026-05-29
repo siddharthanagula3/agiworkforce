@@ -25,6 +25,8 @@ function friendlyInviteError(code?: InviteCodeError): string {
       return "You've already used this code. Cloud should be unlocked.";
     case 'anon_signin_failed':
       return "Couldn't create your session. Try again in a moment.";
+    case 'not_wired':
+      return 'Cloud unlock is not wired in this extension build.';
     case 'rpc_error':
       return 'Something went wrong on our end. Try again.';
     default:

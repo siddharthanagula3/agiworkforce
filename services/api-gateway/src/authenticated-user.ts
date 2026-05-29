@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const authenticatedUserSchema = z
   .object({
     userId: z.string().min(1),
-    email: z.email(),
+    email: z.email().or(z.literal('')).optional().default(''),
   })
   .transform(({ userId, email }) => ({ userId, email }));
 

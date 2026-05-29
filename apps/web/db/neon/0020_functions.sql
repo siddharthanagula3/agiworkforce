@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 0020_functions.sql
--- Neon-compatible PL/pgSQL port of all Supabase RPC functions.
+-- Neon-compatible PL/pgSQL port of all Neon SQL functions.
 --
--- Key differences from Supabase originals:
+-- Key differences from Neon originals:
 --   1. No auth schema: auth.uid() replaced with p_user_id text parameter.
 --      auth.role() checks removed; authorization is caller-enforced at the
 --      app/API layer (Next.js route handlers validate Clerk JWTs before calling
@@ -11,7 +11,7 @@
 --   3. user_id columns are text (Clerk IDs), not uuid.
 --   4. No GRANT/REVOKE to service_role / authenticated / anon -- these roles
 --      do not exist in Neon.
---   5. Neon token_credits schema differs from legacy Supabase schema:
+--   5. Neon token_credits schema differs from legacy Neon schema:
 --        - No credits_remaining_cents column -- computed as
 --          (credits_allocated_cents - credits_used_cents) inline.
 --        - No daily_used_cents / last_daily_reset_at columns -- daily tracking
@@ -29,7 +29,7 @@
 --   9. validate_and_redeem_invite_code originally used auth.uid() internally;
 --      replaced with p_user_id text parameter.
 --  10. consume_device_authorization_tokens: returned user_id was uuid in
---      Supabase; changed to text to match Neon schema.
+--      Neon; changed to text to match Neon schema.
 -- =============================================================================
 
 -- =============================================================================
@@ -37,7 +37,7 @@
 -- =============================================================================
 
 -- 0a. Extend processed_stripe_events with status-tracking columns that are
---     present in the Supabase migration path (20260108000004) but not in the
+--     present in the Neon migration path (20260108000004) but not in the
 --     Neon 0012_stripe.sql baseline.
 
 alter table if exists public.processed_stripe_events

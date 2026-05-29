@@ -55,8 +55,7 @@
       "react-dom": "19.2.6",
       "react-test-renderer": "19.2.6",
       "typescript": "5.9.3",
-      "@types/node": "^22.19.15",
-      "@supabase/supabase-js": "2.105.4"
+      "@types/node": "^22.19.15"
     },
     "patchedDependencies": {
       "expo@55.0.24": "patches/expo@55.0.24.patch"
@@ -79,7 +78,7 @@
     "check:lane-ownership": "node scripts/check-lane-ownership.mjs",
     "check:generated-artifacts": "node scripts/check-generated-artifacts.mjs",
     "check:report-retention": "node scripts/check-report-retention.mjs",
-    "check:supabase-migrations": "node scripts/check-supabase-migrations.mjs",
+    "check:neon-migrations": "node scripts/check-neon-migrations.mjs",
     "check:ci-guardrails": "node scripts/check-ci-guardrails.mjs",
     "check:codeowners": "node scripts/check-codeowners-contract.mjs",
     "check:readme-ownership": "node scripts/check-readme-ownership.mjs",
@@ -88,7 +87,7 @@
     "check:hook-fire-sites": "node apps/cli/scripts/check-hook-fire-sites.mjs",
     "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
     "check:lock-drift": "node scripts/check-lock-build-drift.mjs",
-    "check:llm-operability": "pnpm check:agent-context && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:module-reachability && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:report-retention && pnpm check:supabase-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites",
+    "check:llm-operability": "pnpm check:agent-context && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:module-reachability && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm check:report-retention && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:codeowners && pnpm check:readme-ownership && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites",
     "audit:file-ledger": "node scripts/generate-surface-file-ledger.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

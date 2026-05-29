@@ -8,8 +8,8 @@
  *
  * Mutation helpers always write to byConversation, tagging source as
  * 'conversation-override'. Project defaults are set explicitly via
- * setProjectDefault (called by project settings UI, not yet wired to Supabase
- * — see follow-up task to persist via connectorsStore pattern).
+ * setProjectDefault (called by project settings UI, not yet wired to cloud
+ * storage).
  */
 
 import { create } from 'zustand';

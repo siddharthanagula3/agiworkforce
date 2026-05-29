@@ -207,7 +207,7 @@ IDE integration with chat participant and commands.
 
 **packages/providers**: 8 provider adapters (Anthropic, OpenAI, Google, DeepSeek, Perplexity, xAI, Ollama, LM Studio). SDK-based, implementing the `@agiworkforce/llm-normalize` contract.
 
-**packages/data-layer**: Database adapter factory. Default provider: Neon. Supports Supabase (legacy), Postgres (stub).
+**packages/data-layer**: Database adapter factory. Default provider: Neon. Postgres adapter support exists for direct managed SQL use cases.
 
 **Sandbox** (`apps/sandbox`): Cross-origin artifact renderer at `sandbox.agiworkforce.com`. Single `index.html` (303 lines) with strict CSP (`connect-src 'none'`, `form-action 'none'`). Receives artifacts via `postMessage` from parent. Provides security isolation so generated code cannot access user tokens.
 

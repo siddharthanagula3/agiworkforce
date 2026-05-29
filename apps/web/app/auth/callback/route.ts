@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 /**
- * This Supabase OAuth callback route is no longer active.
+ * This retired OAuth callback route is no longer active.
  * Authentication is now handled by Clerk. Any OAuth codes sent here
  * are against the wrong auth backend and must not be exchanged.
  *

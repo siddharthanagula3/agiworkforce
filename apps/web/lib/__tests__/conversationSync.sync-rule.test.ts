@@ -10,40 +10,39 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { ConversationSyncService } from '../conversationSync';
 
 describe('ConversationSyncService — /goal sync-rule enforcement', () => {
   // Constructor short-circuits on the sync-rule assertion BEFORE touching
-  // the supabase client, so a stub is fine.
-  const dummySupabase = {} as SupabaseClient;
+  // the ignored legacy constructor argument, so a stub is fine.
+  const ignoredClient = {};
 
   it('accepts Web origin', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'web')).not.toThrow();
+    expect(() => new ConversationSyncService(ignoredClient, 'web')).not.toThrow();
   });
 
   it('accepts Desktop origin', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'desktop')).not.toThrow();
+    expect(() => new ConversationSyncService(ignoredClient, 'desktop')).not.toThrow();
   });
 
   it('accepts Mobile origin', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'mobile')).not.toThrow();
+    expect(() => new ConversationSyncService(ignoredClient, 'mobile')).not.toThrow();
   });
 
   it('rejects CLI origin (developer surface)', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'cli' as never)).toThrow(
+    expect(() => new ConversationSyncService(ignoredClient, 'cli' as never)).toThrow(
       /sync-rule violation/i,
     );
   });
 
   it('rejects VS Code origin (developer surface)', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'vscode' as never)).toThrow(
+    expect(() => new ConversationSyncService(ignoredClient, 'vscode' as never)).toThrow(
       /sync-rule violation/i,
     );
   });
 
   it('rejects Chrome origin (developer surface)', () => {
-    expect(() => new ConversationSyncService(dummySupabase, 'chrome' as never)).toThrow(
+    expect(() => new ConversationSyncService(ignoredClient, 'chrome' as never)).toThrow(
       /sync-rule violation/i,
     );
   });

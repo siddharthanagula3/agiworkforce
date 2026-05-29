@@ -9,4 +9,4 @@ Purpose: Mobile settings domains, including mode status, capabilities, notificat
 
 - Keep settings screens and setting-specific domain folders here.
 - Platform permission calls belong in `src/platform` or approved services.
-- Mobile v1 settings must show Local Mode and local LLMs as active, Cloud Managed as waitlist-only, and Mobile BYOK as disabled until secure key storage ships.
+- Mobile v1 settings must show Local Mode and local LLMs as active, Cloud Managed as waitlist/invite-only, and BYOK as unavailable on Mobile.

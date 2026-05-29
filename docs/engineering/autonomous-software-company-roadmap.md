@@ -51,7 +51,7 @@ Target flow:
 
 | Layer               | Owner Paths                                                      | Purpose                                                          |
 | ------------------- | ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Intake schema       | `packages/types/src/feedback.ts`, `supabase/migrations/**`       | Shared feedback/case/release-link contract.                      |
+| Intake schema       | `packages/types/src/feedback.ts`, `apps/web/db/neon/**`          | Shared feedback/case/release-link contract.                      |
 | Product intake APIs | `apps/web/app/api/feedback/**`, Desktop/mobile feedback commands | Canonical feedback submission with privacy labels and redaction. |
 | Triage service      | `services/ops-triage` or `apps/web/app/api/ops/**`               | Classify, dedupe, route, and create GitHub issues.               |
 | Agent task router   | `docs/agent-context/lanes.json`, future service queue            | Map case to lane, owner, checks, and blocked paths.              |

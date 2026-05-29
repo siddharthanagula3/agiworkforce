@@ -56,7 +56,7 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-const CLOUD_LOCK_REASON = 'Cloud Managed and BYOK are disabled in Mobile v1';
+const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only. Mobile BYOK is not available.';
 
 /**
  * Static model descriptions shown as a subtitle in the picker.
@@ -276,7 +276,7 @@ function toLockedCloudModelDef(model: CloudModelDef): ModelDef {
     surface: 'cloud_managed',
     availability: 'locked',
     runtimeLabel: 'Cloud Managed',
-    detailLabel: 'Cloud Managed - BYOK disabled',
+    detailLabel: 'Cloud Managed - invite required',
     description: MODEL_DESCRIPTIONS[model.id],
     lockReason: CLOUD_LOCK_REASON,
   };

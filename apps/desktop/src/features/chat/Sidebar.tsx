@@ -37,7 +37,7 @@ import {
   type ConversationSummary,
 } from '../../stores/chat/chatStore';
 import { useProjectStore, selectActiveProjects } from '../../stores/projectStore';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { resetInFlightChatState } from '../../lib/newChatReset';
 import { UserProfile } from '@/features/layout/UserProfile';
 import { Button } from '@/components/ui/Button';
@@ -665,7 +665,7 @@ export function Sidebar({
       const cachedMessages = messagesByConversation[id];
       if (!cachedMessages || cachedMessages.length === 0) {
         // Get user ID for the API call
-        const userId = supabaseAuth.getUser()?.id;
+        const userId = cloudAccountAuth.getUser()?.id;
         if (userId) {
           // Load messages from backend asynchronously
           loadConversationMessages(id, userId)

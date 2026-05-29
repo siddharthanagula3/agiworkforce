@@ -338,7 +338,7 @@ describe('GrokProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // Auth check uses getAuthToken(), so simulate unauthenticated by returning null.
       vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
@@ -361,7 +361,7 @@ describe('GrokProvider', () => {
     });
 
     it('should save to database when sessionId and userId provided', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // Provider makes two fetch calls: proxy first, then log-message.
       mockFetch
         .mockResolvedValueOnce({
@@ -522,7 +522,7 @@ describe('GrokProvider', () => {
     });
 
     it('should not save to database when sessionId is missing', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // When sessionId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -540,7 +540,7 @@ describe('GrokProvider', () => {
     });
 
     it('should handle database save error gracefully', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // The provider's saveMessageToDatabase swallows errors so the main response is unaffected.
       mockFetch
         .mockResolvedValueOnce({

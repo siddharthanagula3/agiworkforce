@@ -17,6 +17,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/pricing', priority: 0.9, changeFrequency: 'monthly' },
     { path: '/get-started', priority: 0.9, changeFrequency: 'weekly' },
     { path: '/download', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/business', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/teams', priority: 0.85, changeFrequency: 'weekly' },
+    { path: '/solutions', priority: 0.85, changeFrequency: 'weekly' },
 
     // Differentiator pages
     { path: '/providers', priority: 0.9, changeFrequency: 'weekly' },
@@ -24,26 +27,35 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/local', priority: 0.9, changeFrequency: 'monthly' },
     { path: '/compare', priority: 0.8, changeFrequency: 'monthly' },
     { path: '/compare/claude', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/compare/claude-code', priority: 0.75, changeFrequency: 'monthly' },
     { path: '/compare/chatgpt', priority: 0.7, changeFrequency: 'monthly' },
+    { path: '/compare/codex', priority: 0.75, changeFrequency: 'monthly' },
     { path: '/compare/gemini', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/compare/perplexity', priority: 0.7, changeFrequency: 'monthly' },
 
     // Surface landing pages
     { path: '/desktop', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/mobile', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/mobile/legal', priority: 0.45, changeFrequency: 'monthly' },
     { path: '/cli', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/chrome-extension', priority: 0.8, changeFrequency: 'weekly' },
     { path: '/vscode-extension', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/agi-code', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/cowork', priority: 0.8, changeFrequency: 'weekly' },
 
     // Feature pages
-    { path: '/features/ai-skills', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/features/agents', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/features/plugins', priority: 0.8, changeFrequency: 'weekly' },
-    { path: '/features/ai-chat', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/apps', priority: 0.9, changeFrequency: 'weekly' },
+    { path: '/skills', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/connectors', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/connectors/mcp-directory', priority: 0.6, changeFrequency: 'weekly' },
+    { path: '/features/artifacts', priority: 0.85, changeFrequency: 'weekly' },
+    { path: '/features/deep-research', priority: 0.85, changeFrequency: 'weekly' },
+    { path: '/features/projects', priority: 0.85, changeFrequency: 'weekly' },
+    { path: '/features/memory', priority: 0.8, changeFrequency: 'weekly' },
 
     // Documentation / developer
     { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
+    { path: '/docs/byok-env', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/api-docs', priority: 0.7, changeFrequency: 'weekly' },
     { path: '/integrations', priority: 0.8, changeFrequency: 'weekly' },
 
@@ -58,9 +70,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/resources', priority: 0.6, changeFrequency: 'weekly' },
     { path: '/customers', priority: 0.7, changeFrequency: 'monthly' },
     { path: '/partners', priority: 0.6, changeFrequency: 'monthly' },
+    { path: '/partner-perks', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/press', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/community', priority: 0.6, changeFrequency: 'weekly' },
     { path: '/enterprise', priority: 0.8, changeFrequency: 'monthly' },
+
+    // Use cases
+    { path: '/use-cases', priority: 0.75, changeFrequency: 'weekly' },
+    { path: '/use-cases/consulting', priority: 0.65, changeFrequency: 'monthly' },
+    { path: '/use-cases/it-providers', priority: 0.65, changeFrequency: 'monthly' },
+    { path: '/use-cases/sales-teams', priority: 0.65, changeFrequency: 'monthly' },
+    { path: '/use-cases/startups', priority: 0.65, changeFrequency: 'monthly' },
 
     // Support / help
     { path: '/help', priority: 0.7, changeFrequency: 'weekly' },
@@ -68,7 +88,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/contact', priority: 0.5, changeFrequency: 'monthly' },
     { path: '/contact-sales', priority: 0.6, changeFrequency: 'monthly' },
     { path: '/faq', priority: 0.6, changeFrequency: 'monthly' },
-    { path: '/diagnose', priority: 0.5, changeFrequency: 'weekly' },
     { path: '/status', priority: 0.7, changeFrequency: 'daily' },
 
     // Trust / legal
@@ -83,6 +102,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { path: '/refund-policy', priority: 0.6, changeFrequency: 'yearly' },
     { path: '/cookies', priority: 0.5, changeFrequency: 'yearly' },
     { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
+    { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
 
     // HTML sitemap
     { path: '/sitemap-page', priority: 0.4, changeFrequency: 'monthly' },

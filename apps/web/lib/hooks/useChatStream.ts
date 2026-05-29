@@ -10,6 +10,7 @@ import {
   type MessageToolEntry,
 } from '@/stores/chatStore';
 import { useThinkingStore } from '@shared/stores/thinking-store';
+import type { Effort } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
 interface SendMessageOptions {
@@ -22,6 +23,7 @@ interface SendMessageOptions {
   webFetch?: boolean;
   codeExecution?: boolean;
   thinkingEnabled?: boolean;
+  thinkingEffort?: Effort;
   /** Output style hint. When set and not 'normal', a system message is prepended. */
   styleMode?: string;
   /** Skill body injected as a system message at the start of the request. */
@@ -336,6 +338,9 @@ export function useChatStream(): UseChatStreamReturn {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${authToken}`,
         });
+        const thinkingState = useThinkingStore.getState();
+        const thinkingEnabled = options.thinkingEnabled ?? thinkingState.enabled;
+        const thinkingEffort = options.thinkingEffort ?? thinkingState.effort;
         const response = await fetch('/api/llm/v1/chat/completions', {
           method: 'POST',
           headers,
@@ -348,11 +353,8 @@ export function useChatStream(): UseChatStreamReturn {
             web_search: options.webSearch || undefined,
             web_fetch: options.webFetch || undefined,
             code_execution: options.codeExecution || undefined,
-            thinking_mode: options.thinkingEnabled || undefined,
-            effort: (() => {
-              const ts = useThinkingStore.getState();
-              return ts.enabled ? ts.effort : undefined;
-            })(),
+            thinking_mode: thinkingEnabled || undefined,
+            effort: thinkingEnabled ? thinkingEffort : undefined,
             use_prompt_cache: true,
           }),
           signal: abortControllerRef.current.signal,

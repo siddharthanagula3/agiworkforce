@@ -293,8 +293,8 @@ export class McpProxy {
     // them to subprocesses; the audit-listed missing-startup-validation
     // finding cross-references that web-side check.
     const SENSITIVE_ENV_KEYS = new Set([
-      'SUPABASE_SERVICE_ROLE_KEY',
-      'SUPABASE_ANON_KEY',
+      'NEON_DATABASE_URL',
+      'CLERK_SECRET_KEY',
       'JWT_SECRET',
       'STRIPE_SECRET_KEY',
       'STRIPE_WEBHOOK_SECRET',

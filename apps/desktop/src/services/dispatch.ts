@@ -19,7 +19,7 @@
  *   - Clock drift: ±30s window enforced in Rust (plan says ±5min but Rust
  *     uses 30s which is stricter; +6min drift is rejected).
  *   - Replay: sliding-window nonce cache (1000 IDs / 60s) managed in Rust.
- *   - Key rotation: `rotateDispatchKey()` fetches new salt from Supabase RPC
+ *   - Key rotation: `rotateDispatchKey()` fetches a new salt from the cloud API
  *     and re-initialises the session key. Two active key slots are supported
  *     by the Rust state (current + retry with old key on mismatch).
  *   - Salt collisions: 16-byte random nonce per message; collision probability
@@ -283,21 +283,21 @@ export async function signOutbound(payload: unknown, msgType: string): Promise<s
 /**
  * Rotate the session key.
  *
- * Fetches a new dispatch salt from the Supabase RPC `rotate_dispatch_keys`
- * and re-initialises the Rust session with the new salt. The previous key
+ * Fetches a new dispatch salt from the cloud API and re-initialises the Rust
+ * session with that salt.
+ * The previous key
  * is discarded (Rust only keeps one active key at a time for session keys;
  * multi-key support lives at the session-pairing layer).
  *
  * Retries up to 3 times with exponential backoff on failure.
  *
  * @param pairingCode - The current pairing code.
- * @param supabaseRpc - A function that calls `rotate_dispatch_keys` and
- *   returns `{ new_salt: string }`. Injected to avoid circular dependency
- *   on the Supabase client.
+ * @param rotateKeyRequest - A function that calls the cloud key-rotation
+ *   endpoint and returns `{ new_salt: string }`.
  */
 export async function rotateDispatchKey(
   pairingCode: string,
-  supabaseRpc: () => Promise<{ new_salt: string }>,
+  rotateKeyRequest: () => Promise<{ new_salt: string }>,
 ): Promise<void> {
   const MAX_ATTEMPTS = 3;
   let lastErr: unknown;
@@ -307,7 +307,7 @@ export async function rotateDispatchKey(
       await new Promise((res) => setTimeout(res, 1000 * 2 ** (attempt - 1)));
     }
     try {
-      const { new_salt } = await supabaseRpc();
+      const { new_salt } = await rotateKeyRequest();
       const keyHex = await invoke<string>('dispatch_hmac_init', {
         pairingCode,
         sessionSalt: new_salt,

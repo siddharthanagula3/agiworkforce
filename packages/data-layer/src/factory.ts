@@ -8,34 +8,29 @@
  * `create*Client()` functions, which read either an explicit config
  * argument or the process environment, and return the right adapter.
  *
- * Switching providers becomes a one-line env change:
+ * Switching database providers becomes a one-line env change, but the current
+ * product default is Neon for database and Clerk for auth:
  *
  * ```bash
- * # Today:
- * AGI_DATABASE_PROVIDER=supabase
- *
- * # Tomorrow:
  * AGI_DATABASE_PROVIDER=neon
  * AGI_DATABASE_URL=postgresql://...neon.tech/db?sslmode=require
+ * AGI_AUTH_PROVIDER=clerk
  * ```
  *
  * ## Env vars consumed
  *
  * | Env var                            | Default       | Used by      |
  * |------------------------------------|---------------|--------------|
- * | `AGI_DATABASE_PROVIDER`            | `supabase`    | DB factory   |
- * | `AGI_AUTH_PROVIDER`                | `supabase`    | Auth factory |
- * | `AGI_STORAGE_PROVIDER`             | `supabase`    | Storage      |
- * | `AGI_REALTIME_PROVIDER`            | `supabase`    | Realtime     |
+ * | `AGI_DATABASE_PROVIDER`            | `neon`        | DB factory   |
+ * | `AGI_AUTH_PROVIDER`                | `clerk`       | Auth factory |
+ * | `AGI_STORAGE_PROVIDER`             | explicit only | Storage      |
+ * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
  * | `AGI_DATABASE_URL` / `DATABASE_URL`| —             | Neon, PG     |
  * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`| —            | Clerk auth   |
  * | `CLERK_AUTHORIZED_PARTIES`          | —             | Clerk auth   |
- * | `NEXT_PUBLIC_SUPABASE_URL`         | —             | Supabase     |
- * | `SUPABASE_SERVICE_ROLE_KEY`        | —             | Supabase srv |
- * | `NEXT_PUBLIC_SUPABASE_ANON_KEY`    | —             | Supabase web |
  *
- * Defaults are conservative — if you don't set anything, you get the
- * Supabase adapter (matches today's behavior).
+ * Defaults are fail-closed for anything that is not implemented on the
+ * Clerk + Neon platform boundary.
  */
 
 import {
@@ -50,12 +45,6 @@ import {
   type StorageProvider,
   DataLayerConfigError,
 } from './types';
-import {
-  SupabaseAuthAdapter,
-  SupabaseDatabaseAdapter,
-  SupabaseRealtimeAdapter,
-  SupabaseStorageAdapter,
-} from './adapters/supabase';
 import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter } from './adapters/neon';
 import { PostgresDatabaseAdapter } from './adapters/postgres';
@@ -77,21 +66,31 @@ function readEnvProvider<T extends string>(name: string, fallback: T, allowed: r
   throw new DataLayerConfigError(`Env var ${name}="${raw}" is not one of: ${allowed.join(', ')}`);
 }
 
+function readRequiredEnvProvider<T extends string>(name: string, allowed: readonly T[]): T {
+  const raw = readEnv(name);
+  if (!raw) {
+    throw new DataLayerConfigError(
+      `${name} is required. Storage/realtime have no implicit runtime default; ` +
+        'choose an explicit supported provider for this surface.',
+    );
+  }
+  if ((allowed as readonly string[]).includes(raw)) {
+    return raw as T;
+  }
+  throw new DataLayerConfigError(`Env var ${name}="${raw}" is not one of: ${allowed.join(', ')}`);
+}
+
 // ============================================================================
 // Database
 // ============================================================================
 
-const DATABASE_PROVIDERS = ['supabase', 'neon', 'postgres'] as const;
+const DATABASE_PROVIDERS = ['neon', 'postgres'] as const;
 
 export interface CreateDatabaseClientOptions {
   /** Explicit provider; if omitted, reads `AGI_DATABASE_PROVIDER`. */
   provider?: DatabaseProvider;
   /** Postgres-compatible connection string (Neon / Postgres only). */
   connectionString?: string;
-  /** Supabase URL (Supabase only). */
-  supabaseUrl?: string;
-  /** Supabase service-role or anon key (Supabase only). */
-  supabaseKey?: string;
   poolSize?: number;
   applicationName?: string;
 }
@@ -106,9 +105,8 @@ export interface CreateDatabaseClientOptions {
  * @example
  *   // Explicit override (tests, multi-tenant scenarios):
  *   const db = createDatabaseClient({
- *     provider: 'supabase',
- *     supabaseUrl: '...',
- *     supabaseKey: '...',
+ *     provider: 'neon',
+ *     connectionString: 'postgresql://...',
  *   });
  */
 export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): DatabaseAdapter {
@@ -117,20 +115,6 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
     readEnvProvider<DatabaseProvider>('AGI_DATABASE_PROVIDER', 'neon', DATABASE_PROVIDERS);
 
   switch (provider) {
-    case 'supabase': {
-      const url = opts.supabaseUrl ?? readEnv('NEXT_PUBLIC_SUPABASE_URL');
-      const key =
-        opts.supabaseKey ??
-        readEnv('SUPABASE_SERVICE_ROLE_KEY') ??
-        readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      if (!url || !key) {
-        throw new DataLayerConfigError(
-          'Supabase database adapter requires NEXT_PUBLIC_SUPABASE_URL ' +
-            'and (SUPABASE_SERVICE_ROLE_KEY or NEXT_PUBLIC_SUPABASE_ANON_KEY).',
-        );
-      }
-      return new SupabaseDatabaseAdapter({ supabaseUrl: url, supabaseKey: key });
-    }
     case 'neon': {
       const connectionString =
         opts.connectionString ?? readEnv('AGI_DATABASE_URL') ?? readEnv('DATABASE_URL');
@@ -164,37 +148,23 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
 // Auth
 // ============================================================================
 
-const AUTH_PROVIDERS = ['supabase', 'auth0', 'clerk', 'cognito'] as const;
+const AUTH_PROVIDERS = ['auth0', 'clerk', 'cognito'] as const;
 
 export interface CreateAuthClientOptions {
   provider?: AuthProvider;
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
   clerkSecretKey?: string;
   clerkJwtKey?: string;
   clerkAuthorizedParties?: string[];
 }
 
 /**
- * Build an `AuthAdapter`. Supabase is the current production default. Clerk
- * is implemented for the Supabase-to-Clerk migration path, but callers must
- * still wire surface sign-in/session flows before flipping production env.
+ * Build an `AuthAdapter`. Clerk is the product default.
  */
 export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapter {
   const provider =
-    opts.provider ?? readEnvProvider<AuthProvider>('AGI_AUTH_PROVIDER', 'supabase', AUTH_PROVIDERS);
+    opts.provider ?? readEnvProvider<AuthProvider>('AGI_AUTH_PROVIDER', 'clerk', AUTH_PROVIDERS);
 
   switch (provider) {
-    case 'supabase': {
-      const url = opts.supabaseUrl ?? readEnv('NEXT_PUBLIC_SUPABASE_URL');
-      const key = opts.supabaseAnonKey ?? readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      if (!url || !key) {
-        throw new DataLayerConfigError(
-          'Supabase auth adapter requires NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY.',
-        );
-      }
-      return new SupabaseAuthAdapter({ supabaseUrl: url, supabaseAnonKey: key });
-    }
     case 'clerk': {
       const secretKey = opts.clerkSecretKey ?? readEnv('CLERK_SECRET_KEY');
       const jwtKey = opts.clerkJwtKey ?? readEnv('CLERK_JWT_KEY');
@@ -219,33 +189,18 @@ export function createAuthClient(opts: CreateAuthClientOptions = {}): AuthAdapte
 // Storage
 // ============================================================================
 
-const STORAGE_PROVIDERS = ['supabase', 's3', 'r2', 'b2'] as const;
+const STORAGE_PROVIDERS = ['s3', 'r2', 'b2'] as const;
 
 export interface CreateStorageClientOptions {
   provider?: StorageProvider;
-  supabaseUrl?: string;
-  supabaseKey?: string;
 }
 
 export function createStorageClient(opts: CreateStorageClientOptions = {}): StorageAdapter {
   const provider =
     opts.provider ??
-    readEnvProvider<StorageProvider>('AGI_STORAGE_PROVIDER', 'supabase', STORAGE_PROVIDERS);
+    readRequiredEnvProvider<StorageProvider>('AGI_STORAGE_PROVIDER', STORAGE_PROVIDERS);
 
   switch (provider) {
-    case 'supabase': {
-      const url = opts.supabaseUrl ?? readEnv('NEXT_PUBLIC_SUPABASE_URL');
-      const key =
-        opts.supabaseKey ??
-        readEnv('SUPABASE_SERVICE_ROLE_KEY') ??
-        readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      if (!url || !key) {
-        throw new DataLayerConfigError(
-          'Supabase storage adapter requires NEXT_PUBLIC_SUPABASE_URL + a key.',
-        );
-      }
-      return new SupabaseStorageAdapter({ supabaseUrl: url, supabaseKey: key });
-    }
     case 's3':
     case 'r2':
     case 'b2':
@@ -260,30 +215,18 @@ export function createStorageClient(opts: CreateStorageClientOptions = {}): Stor
 // Realtime
 // ============================================================================
 
-const REALTIME_PROVIDERS = ['supabase', 'pusher', 'ably', 'self-hosted'] as const;
+const REALTIME_PROVIDERS = ['pusher', 'ably', 'self-hosted'] as const;
 
 export interface CreateRealtimeClientOptions {
   provider?: RealtimeProvider;
-  supabaseUrl?: string;
-  supabaseAnonKey?: string;
 }
 
 export function createRealtimeClient(opts: CreateRealtimeClientOptions = {}): RealtimeAdapter {
   const provider =
     opts.provider ??
-    readEnvProvider<RealtimeProvider>('AGI_REALTIME_PROVIDER', 'supabase', REALTIME_PROVIDERS);
+    readRequiredEnvProvider<RealtimeProvider>('AGI_REALTIME_PROVIDER', REALTIME_PROVIDERS);
 
   switch (provider) {
-    case 'supabase': {
-      const url = opts.supabaseUrl ?? readEnv('NEXT_PUBLIC_SUPABASE_URL');
-      const key = opts.supabaseAnonKey ?? readEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-      if (!url || !key) {
-        throw new DataLayerConfigError(
-          'Supabase realtime adapter requires NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY.',
-        );
-      }
-      return new SupabaseRealtimeAdapter({ supabaseUrl: url, supabaseAnonKey: key });
-    }
     case 'pusher':
     case 'ably':
     case 'self-hosted':

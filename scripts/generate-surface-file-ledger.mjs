@@ -108,7 +108,7 @@ function riskTagsFor(filePath) {
     ['sync', 'sync-boundary'],
     ['memory', 'memory-boundary'],
     ['services/', 'cloud-boundary'],
-    ['supabase', 'data-boundary'],
+    ['db/neon', 'data-boundary'],
     ['billing', 'commercial-boundary'],
   ];
   for (const [needle, tag] of checks) {

@@ -494,8 +494,6 @@ export const CSP_CONFIG = {
     "'self'",
     'https://agiworkforce.com',
     'https://*.agiworkforce.com',
-    'https://*.supabase.co',
-    'wss://*.supabase.co',
     'http://localhost:11434',
     'http://127.0.0.1:11434',
   ],

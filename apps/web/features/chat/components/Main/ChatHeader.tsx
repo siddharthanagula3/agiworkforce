@@ -160,7 +160,7 @@ function ProfilePopover() {
           )}
 
           <Link
-            href="/downloads"
+            href="/download"
             className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/60 transition-colors"
           >
             <Download className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

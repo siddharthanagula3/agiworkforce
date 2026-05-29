@@ -343,7 +343,7 @@ const HelpPage: React.FC = () => {
               cta="View Docs"
               color="from-green-500 to-emerald-500"
               index={2}
-              onClick={() => router.push('/documentation')}
+              onClick={() => router.push('/docs')}
             />
           </div>
         </div>

@@ -6,7 +6,7 @@
  * `true` in the generated AndroidManifest.xml. With that default, ADB
  * backup (`adb backup -all`) and Google's auto-backup mechanism could
  * extract the app's EncryptedSharedPreferences — including SecureStore
- * blobs that contain Supabase access + refresh tokens — to a file
+ * blobs that may contain cloud auth tokens — to a file
  * extractable from any device the user later restores onto.
  *
  * The fix sets `android.allowBackup = false` so neither path can extract

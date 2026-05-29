@@ -75,7 +75,7 @@
   "localFeature2": "SQLite storage on disk",
   "localFeature3": "No telemetry, no auth",
   "localFeature4": "Desktop app only",
-  "byokTierBody": "Bring your own keys to any cloud provider. Pay them directly. We add zero markup.",
+  "byokTierBody": "Bring your own keys to supported cloud providers. Provider billing and data handling are route-specific.",
   "byokFeature1": "10+ providers supported",
   "byokFeature2": "AES-256-GCM encryption at rest",
   "byokFeature3": "Optional encrypted cloud sync",

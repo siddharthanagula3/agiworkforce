@@ -7,7 +7,7 @@
  * of `stores/auth.ts` (subscription cache, listener fan-out, plan-tier
  * resolution). The audit flagged the 391-LOC `auth.ts` vs ~400-LOC
  * `authOrchestrator.ts` divergence as a real semantic-drift risk: both
- * subscribe to `supabaseAuth.onAuthStateChange()`, both maintain their own
+ * subscribe to `cloudAccountAuth.onAuthStateChange()`, both maintain their own
  * caches, and the two listener chains can race on subscription refresh.
  *
  * Merging them is intentionally NOT in scope for this audit sweep because
@@ -17,7 +17,7 @@
  *
  * PROBLEM SOLVED:
  * Previously, App.tsx called initializeAuthStore(), initializeAccountStore(),
- * and initializeBillingStore() - each subscribing separately to supabaseAuth.onAuthStateChange().
+ * and initializeBillingStore() - each subscribing separately to cloudAccountAuth.onAuthStateChange().
  * When auth state changed, all 3 listeners fired simultaneously, causing:
  * - Race conditions in async operations (credit fetching, token syncing)
  * - Multiple parallel API calls
@@ -28,7 +28,7 @@
  * It updates all stores in a coordinated, sequential manner.
  */
 
-import { supabaseAuth, type AuthState } from '../services/supabaseAuth';
+import { cloudAccountAuth, type AuthState } from '../services/cloudAccountAuth';
 import {
   useUnifiedAuthStore,
   type CreditBalance,
@@ -36,7 +36,7 @@ import {
   type SubscriptionFetchStatus,
 } from './auth';
 import { useBillingUsageStore } from './billingUsage';
-import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/supabase';
+import { asPlanTier, PLAN_DISPLAY_NAMES, type PlanTier } from '../lib/cloudAccountTypes';
 import { accountApi } from '../api/accountApi';
 import { API_BASE_URL } from '../api/client';
 import { isTauri, invoke } from '../lib/tauri-mock';
@@ -436,7 +436,7 @@ export function initializeAuthOrchestrator(): () => void {
   orchestratorInitialized = true;
 
   // Subscribe to auth state changes
-  unsubscribeFn = supabaseAuth.onAuthStateChange((authState) => {
+  unsubscribeFn = cloudAccountAuth.onAuthStateChange((authState) => {
     void processAuthStateChange(authState);
   });
 

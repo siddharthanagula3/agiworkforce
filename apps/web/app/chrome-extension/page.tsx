@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Chrome Extension: AI alongside every webpage | AGI',
-  description:
-    'A side panel that lives on top of any tab. Read the page, ask a question. Your desktop is the brain. No model runs in the browser.',
+  title: 'Chrome Extension: AI alongside every webpage',
+  description: `A Chrome side panel for page-aware AGI workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
 
@@ -122,16 +122,16 @@ const FEATURES = [
     body: 'Content scripts extract structured text from articles, docs, and tickets. No copy-paste.',
   },
   {
-    label: 'Desktop bridge (planned)',
-    body: 'Planned: native messaging to AGI Desktop. All inference runs on your machine. The bridge is the planned architecture, not yet shipped.',
+    label: 'Desktop bridge',
+    body: 'Native messaging to AGI Desktop lets the extension use Local, BYOK, or invited Cloud without storing model keys in Chrome.',
   },
   {
     label: 'BYOK across providers',
-    body: 'No model runs in the browser. Keys stay on your desktop; the extension never touches them.',
+    body: 'Model execution does not happen inside the extension. Keys stay in the selected Local, BYOK, or invited Cloud boundary.',
   },
   {
     label: 'Privacy by design',
-    body: 'Page text never sent to a server. It goes to your desktop only.',
+    body: 'Page context follows the selected trust boundary: Local desktop, chosen BYOK provider, or invited Cloud.',
   },
 ];
 
@@ -141,18 +141,19 @@ export default function ChromeExtensionPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
           <h1 className="agi-page-h1">AI alongside every webpage.</h1>
           <p className="agi-page-lede">
             A side panel that lives on top of any tab. Read the page you&rsquo;re on, ask a
             question.{' '}
-            <strong>
-              The extension is the UI. Your desktop is the brain. No model runs in the browser.
-            </strong>{' '}
-            The extension is in development.
+            <strong>The extension is the UI. Desktop, BYOK, or invited Cloud is the brain.</strong>{' '}
+            {POSITIONING.trustBoundary}
           </p>
           <div className="agi-cta-row">
-            <Link href="/contact" className="agi-cta-primary">
-              Join the waitlist
+            <Link href="/download" className="agi-cta-primary">
+              {LAUNCH.ctaLabel}
             </Link>
             <Link href="/desktop" className="agi-cta-ghost">
               Pair with desktop &rarr;
@@ -193,19 +194,19 @@ export default function ChromeExtensionPage() {
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">02 / Planned: native messaging bridge</span>
-              <h3 className="agi-step-h">Planned architecture: bridge to your desktop</h3>
+              <span className="agi-step-n">02 / Native messaging bridge</span>
+              <h3 className="agi-step-h">Bridge to your desktop</h3>
               <p className="agi-step-body">
-                The planned design routes intent through Chrome&rsquo;s native messaging API to the
-                AGI desktop process. This bridge is not yet shipped.
+                Intent routes through Chrome&rsquo;s native messaging API to the AGI desktop process
+                when the user chooses Local or BYOK execution.
               </p>
             </li>
             <li className="agi-step">
-              <span className="agi-step-n">03 / Planned: desktop executes</span>
-              <h3 className="agi-step-h">Planned: desktop executes</h3>
+              <span className="agi-step-n">03 / Desktop executes</span>
+              <h3 className="agi-step-h">Desktop executes</h3>
               <p className="agi-step-body">
-                In the target architecture, tool calls and model traffic happen on your desktop with
-                full BYOK or local-mode access. Results stream back into the side panel.
+                Tool calls and model traffic happen through the selected trust boundary. Results
+                stream back into the side panel with the active route visible.
               </p>
             </li>
           </ol>
@@ -242,10 +243,10 @@ export default function ChromeExtensionPage() {
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Desktop bridge (planned)</h3>
+              <h3 className="agi-reason-h">Desktop bridge</h3>
               <p className="agi-reason-p">
-                Planned: native messaging to AGI Desktop so all inference runs on your machine, not
-                in the browser.
+                Native messaging to AGI Desktop keeps model keys and local tools out of the browser
+                extension process.
               </p>
             </li>
           </ul>
@@ -260,7 +261,7 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Bridge</td>
-                <td>Planned: native messaging on localhost:8787 (not yet shipped)</td>
+                <td>Native messaging to AGI Desktop on the July 12 public release path</td>
               </tr>
               <tr>
                 <td>Browser model</td>
@@ -268,7 +269,7 @@ export default function ChromeExtensionPage() {
               </tr>
               <tr>
                 <td>Web Store</td>
-                <td>Coming soon. Join the waitlist for early access.</td>
+                <td>Public release aligned to {LAUNCH.date}</td>
               </tr>
             </tbody>
           </table>

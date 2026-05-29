@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
   createCloudConversation,
   getCloudConversation,
@@ -18,7 +18,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 describe('cloudApi', () => {
   beforeEach(() => {
-    vi.spyOn(supabaseAuth, 'getSession').mockReturnValue({
+    vi.spyOn(cloudAccountAuth, 'getSession').mockReturnValue({
       access_token: 'token',
     } as never);
   });

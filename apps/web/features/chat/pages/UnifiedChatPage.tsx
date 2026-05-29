@@ -49,9 +49,9 @@ function useWebChatRuntime(): WebChatRuntime {
 /**
  * Full v3 web chat surface.
  *
- * Mounts the WebShellV3 layout (WebSidebar + ChatInterface + SearchModalCmdK)
- * with the unified-chat host bridge wired to the existing web chatStore.
- * Activated via ?unified=1 on /chat.
+ * Kept as an internal component while the Web chat implementation converges.
+ * Do not expose a second public chat route or query-param switch; `/chat` is
+ * the single public Web chat URL.
  */
 export default function UnifiedChatPage() {
   const runtime = useWebChatRuntime();

@@ -13,7 +13,7 @@
  * Post-fix:
  *   1. `_layout.tsx` calls `setNavigatorReady(true)` on mount.
  *   2. `_layout.tsx` calls `setCurrentSession(session)` whenever the
- *      Supabase session changes.
+ *      cloud auth session changes.
  *   3. `handleNotificationResponse` checks `_currentSession` and routes
  *      to `/(auth)/login` if null.
  *

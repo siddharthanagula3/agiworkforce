@@ -33,7 +33,7 @@ export function SettingsNavClient({ items }: Props) {
             fontSize: 13,
             color: 'var(--text-1)',
             background: 'var(--bg-hover, rgba(255,255,255,0.06))',
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-md, 6px)',
             outline: 'none',
           }}

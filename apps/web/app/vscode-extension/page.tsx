@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'VS Code Extension: Multi-provider coding assistant | AGI',
-  description:
-    '10+ providers in one VS Code extension. A standalone AGI chat panel for code questions, refactors, and slash commands. Bring your own keys.',
+  title: 'VS Code Extension: Multi-provider coding assistant',
+  description: `Multi-provider coding assistant for VS Code. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/vscode-extension' },
 };
 
@@ -132,11 +132,17 @@ export default function VscodeExtensionPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
           <h1 className="agi-page-h1">Multi-provider coding assistant.</h1>
           <p className="agi-page-lede">
             10+ providers in one VS Code extension. A standalone AGI chat panel for code questions,
             refactors, and slash commands.{' '}
-            <strong>Not locked to one model. Bring your own keys, pay providers directly.</strong>
+            <strong>
+              Not locked to one model. Bring your own keys, run local through Desktop, or use Cloud
+              by invite.
+            </strong>
           </p>
           <div className="agi-cta-row">
             <a
@@ -238,7 +244,7 @@ export default function VscodeExtensionPage() {
             <tbody>
               <tr>
                 <td>Marketplace</td>
-                <td>Listing in review; install via VSIX from GitHub Releases</td>
+                <td>Public release aligned to {LAUNCH.date}; VSIX route remains available</td>
               </tr>
               <tr>
                 <td>Cursor / forks</td>
@@ -250,7 +256,7 @@ export default function VscodeExtensionPage() {
               </tr>
               <tr>
                 <td>Auth</td>
-                <td>BYOK across providers; no keys leave your editor unencrypted</td>
+                <td>{POSITIONING.trustBoundary}</td>
               </tr>
             </tbody>
           </table>

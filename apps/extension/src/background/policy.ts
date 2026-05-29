@@ -99,6 +99,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   SAVE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
 };
 
 /**
@@ -223,40 +224,6 @@ export function validateBridgeUrl(raw: string): string | null {
     if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
     if (!ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) return null;
     return normalized.replace(/\/$/, '');
-  } catch {
-    return null;
-  }
-}
-
-// ─── Cloud API URL validation ───────────────────────────────────────────────
-
-/**
- * Default cloud API endpoint for the direct-cloud fallback path.
- * Used when the desktop bridge (localhost:8787) is unavailable and the user
- * has set an API key in chrome.storage.session.
- */
-export const DEFAULT_AGI_CLOUD_API_URL = 'https://agiworkforce.com/api/llm/v1/chat/completions';
-
-/**
- * Validate a user- or storage-supplied cloud API URL. Returns the normalized
- * URL (trailing slash stripped) or `null` if the URL fails validation.
- *
- * Security contract (opposite of validateBridgeUrl):
- *   - MUST be HTTPS (not HTTP).
- *   - MUST NOT be a loopback/local host — that is the bridge's domain.
- *   - Standard URL-parseable.
- *
- * The user chooses their own cloud endpoint so we cannot use an exact allowlist
- * (unlike validateGatewayUrl which guards Supabase JWTs). We only enforce the
- * transport/locality constraints; the API key scope is the user's responsibility.
- */
-export function validateCloudApiUrl(raw: string): string | null {
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== 'https:') return null;
-    if (ALLOWED_BRIDGE_HOSTS.has(parsed.hostname)) return null; // reject local hostnames
-    return raw.replace(/\/$/, '');
   } catch {
     return null;
   }
@@ -392,8 +359,8 @@ export function validateShortcutActions(actions: ReadonlyArray<RunPageAction>): 
 // ─── Gateway URL validation ─────────────────────────────────────────────────
 
 /**
- * Allowlist of api-gateway origins the extension may send the user's Supabase
- * JWT to. EXACT match only — the previous open-subdomain rule (M-02 audit
+ * Allowlist of api-gateway origins the extension may send user-authenticated
+ * gateway requests to. EXACT match only — the previous open-subdomain rule (M-02 audit
  * 2026-05-19) would accept any `*.agiworkforce.com` host including attacker-
  * controlled subdomains if any were ever delegated externally.
  *

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// waitlistServiceClient routes through active Next.js API endpoints — Supabase
+// waitlistServiceClient routes through active Next.js API endpoints — Neon
 // browser access was removed. Mock global fetch and CSRF header injection.
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);

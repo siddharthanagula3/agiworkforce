@@ -527,9 +527,13 @@ describe('CHROME-HIGH-3 handleChatMessage refuses apiKey from message body', () 
     expect(body).not.toMatch(/const \{[^}]*\bapiKey\b[^}]*\} = message;/);
   });
 
-  it('resolveApiKey path consults chrome.storage.session, not message body', () => {
+  it('does not resolve provider API keys for the Chrome chat path', () => {
     const body = handleChatMessageBody();
-    expect(body).toContain("chrome.storage.session.get('agi_api_key'");
+    expect(body).not.toContain("chrome.storage.session.get('agi_api_key'");
+    expect(body).not.toContain('agi_cloud_api_url');
+    expect(body).not.toContain('handleDirectCloudChat');
+    expect(body).not.toContain('streamChatViaProvider');
+    expect(body).not.toMatch(/Authorization['"]?\]\s*=/);
     // Forbidden: the dead `if (apiKey) { resolve(apiKey); return; }` branch
     // — and any surface variant — must be gone from this function.
     expect(body).not.toMatch(/if\s*\(\s*apiKey\s*\)\s*\{\s*resolve\(apiKey\)/);
@@ -562,6 +566,41 @@ describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
         .replace(/\/\/.*$/gm, ''); // strip // …
       expect(codeOnly).not.toMatch(/\bapiKey\s*:/);
     }
+  });
+});
+
+describe('side panel page-context capture sanitizes raw innerText', () => {
+  const sidePanelSource = readFileSync(join(__dirname, '..', 'src', 'side_panel.ts'), 'utf8');
+
+  it('passes executeScript innerText results through sanitizePageText before attaching context', () => {
+    const start = sidePanelSource.indexOf('async function capturePageContext');
+    const end = sidePanelSource.indexOf('function expandSlashCommand', start);
+    const body = sidePanelSource.slice(start, end);
+    expect(body).toContain('sanitizePageText(raw)');
+    expect(body).not.toContain('resolve(results[0].result as string)');
+  });
+});
+
+describe('Chrome chat fails closed without cloud/API fallback', () => {
+  const backgroundSource = readFileSync(join(__dirname, '..', 'src', 'background.ts'), 'utf8');
+
+  function handleChatMessageBody(): string {
+    const start = backgroundSource.indexOf('async function handleChatMessage');
+    if (start < 0) return '';
+    const afterSignature = start + 'async function handleChatMessage'.length;
+    const tail = backgroundSource.slice(afterSignature);
+    const endRel = tail.search(/\n\}\n\n(?:async )?function /);
+    return endRel > 0
+      ? backgroundSource.slice(start, afterSignature + endRel + 2)
+      : backgroundSource.slice(start);
+  }
+
+  it('background chat handler does not call legacy hosted chat/provider paths', () => {
+    const body = handleChatMessageBody();
+    expect(body).not.toContain('api.agiworkforce.com');
+    expect(body).not.toContain('agi_use_provider_stream');
+    expect(body).not.toContain('/api/v1/providers/');
+    expect(body).not.toContain('/api/llm/v1/chat/completions');
   });
 });
 

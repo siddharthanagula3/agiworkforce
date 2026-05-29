@@ -1,10 +1,9 @@
-use rusqlite::{Connection, OptionalExtension, Result as SqliteResult};
-use std::sync::{Arc, Mutex};
 use chrono::Utc;
+use rusqlite::{Connection, OptionalExtension, Result as SqliteResult};
 use serde_json;
+use std::sync::{Arc, Mutex};
 
 use crate::core::models::advanced_features::*;
-
 
 pub struct DraftManager {
     db: Arc<Mutex<Connection>>,
@@ -28,9 +27,11 @@ impl DraftManager {
         Self { db }
     }
 
-
     pub fn save_draft(&self, draft: &MessageDraft) -> SqliteResult<()> {
-        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         db.execute(
             "INSERT OR REPLACE INTO message_drafts (conversation_id, content, attachments, focus_mode, saved_at)
@@ -47,36 +48,42 @@ impl DraftManager {
         Ok(())
     }
 
-
     pub fn get_draft(&self, conversation_id: &str) -> SqliteResult<Option<MessageDraft>> {
-        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         let mut stmt = db.prepare(
             "SELECT conversation_id, content, attachments, focus_mode, saved_at
              FROM message_drafts
-             WHERE conversation_id = ?1"
+             WHERE conversation_id = ?1",
         )?;
 
-        let draft = stmt.query_row([conversation_id], |row| {
-            let attachments_json: String = row.get(2)?;
-            let attachments = serde_json::from_str(&attachments_json).unwrap_or_default();
+        let draft = stmt
+            .query_row([conversation_id], |row| {
+                let attachments_json: String = row.get(2)?;
+                let attachments = serde_json::from_str(&attachments_json).unwrap_or_default();
 
-            Ok(MessageDraft {
-                conversation_id: row.get(0)?,
-                content: row.get(1)?,
-                attachments,
-                focus_mode: row.get(3)?,
-                saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                    .unwrap_or_else(|| Utc::now()),
+                Ok(MessageDraft {
+                    conversation_id: row.get(0)?,
+                    content: row.get(1)?,
+                    attachments,
+                    focus_mode: row.get(3)?,
+                    saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
+                        .unwrap_or_else(|| Utc::now()),
+                })
             })
-        }).optional()?;
+            .optional()?;
 
         Ok(draft)
     }
 
-
     pub fn clear_draft(&self, conversation_id: &str) -> SqliteResult<()> {
-        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         db.execute(
             "DELETE FROM message_drafts WHERE conversation_id = ?1",
@@ -86,36 +93,42 @@ impl DraftManager {
         Ok(())
     }
 
-
     pub fn get_all_drafts(&self) -> SqliteResult<Vec<MessageDraft>> {
-        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
 
         let mut stmt = db.prepare(
             "SELECT conversation_id, content, attachments, focus_mode, saved_at
              FROM message_drafts
-             ORDER BY saved_at DESC"
+             ORDER BY saved_at DESC",
         )?;
 
-        let drafts = stmt.query_map([], |row| {
-            let attachments_json: String = row.get(2)?;
-            let attachments = serde_json::from_str(&attachments_json).unwrap_or_default();
+        let drafts = stmt
+            .query_map([], |row| {
+                let attachments_json: String = row.get(2)?;
+                let attachments = serde_json::from_str(&attachments_json).unwrap_or_default();
 
-            Ok(MessageDraft {
-                conversation_id: row.get(0)?,
-                content: row.get(1)?,
-                attachments,
-                focus_mode: row.get(3)?,
-                saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                    .unwrap_or_else(|| Utc::now()),
-            })
-        })?.collect::<SqliteResult<Vec<_>>>()?;
+                Ok(MessageDraft {
+                    conversation_id: row.get(0)?,
+                    content: row.get(1)?,
+                    attachments,
+                    focus_mode: row.get(3)?,
+                    saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
+                        .unwrap_or_else(|| Utc::now()),
+                })
+            })?
+            .collect::<SqliteResult<Vec<_>>>()?;
 
         Ok(drafts)
     }
 
-
     pub fn cleanup_old_drafts(&self, days: i64) -> SqliteResult<usize> {
-        let db = self.db.lock().map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
+        let db = self
+            .db
+            .lock()
+            .map_err(|_| rusqlite::Error::ExecuteReturnedResults)?;
         let cutoff = Utc::now() - chrono::Duration::days(days);
 
         let count = db.execute(

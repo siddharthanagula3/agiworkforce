@@ -20,6 +20,7 @@ export type InviteCodeError =
   | 'fully_redeemed'
   | 'already_redeemed_by_user'
   | 'anon_signin_failed'
+  | 'account_auth_not_wired'
   | 'rpc_error';
 
 export interface InviteCodeModalProps {

@@ -8,6 +8,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { getModelMetadataById } from '@agiworkforce/types';
+import { MODEL_PICKER_OPTIONS } from '../features/model-picker/modelConstants';
 
 // ── commandLabel helper ──────────────────────────────────────────────────────
 
@@ -68,9 +70,9 @@ describe('buildStatusBarText', () => {
   });
 
   it('shows plan mode chip', () => {
-    const text = buildStatusBarText('claude-opus-4.6', true, false, false, 8787);
+    const text = buildStatusBarText('current-model', true, false, false, 8787);
     expect(text).toContain('plan');
-    expect(text).toContain('claude-opus-4.6');
+    expect(text).toContain('current-model');
   });
 
   it('shows mcp chip', () => {
@@ -172,44 +174,30 @@ describe('extension command registration', () => {
 // ── Model quick pick items ───────────────────────────────────────────────────
 
 describe('model selection', () => {
-  const MODELS = [
-    'auto-balanced',
-    'auto-economy',
-    'auto-premium',
-    'claude-opus-4.6',
-    'claude-sonnet-4.6',
-    'claude-haiku-4.5',
-    'gpt-5.4-pro',
-    'gpt-5.4',
-    'gpt-5.4-mini',
-    'gemini-3.1-pro-preview',
-    'gemini-3.1-flash-lite',
-    'deepseek-r1',
-    'deepseek-chat',
-    'sonar-pro',
-    'grok-4',
-  ];
+  const MODELS = MODEL_PICKER_OPTIONS.map((option) => option.id);
+  const MANUAL_MODELS = MODELS.filter((model) => !model.startsWith('auto'));
 
-  it('has 15 model options', () => {
-    expect(MODELS).toHaveLength(15);
+  it('loads model options from the catalog-backed picker', () => {
+    expect(MODELS.length).toBeGreaterThan(3);
+    expect(MANUAL_MODELS.every((model) => getModelMetadataById(model) !== null)).toBe(true);
   });
 
   it('includes all major providers', () => {
-    expect(MODELS.some((m) => m.startsWith('claude'))).toBe(true);
-    expect(MODELS.some((m) => m.startsWith('gpt'))).toBe(true);
-    expect(MODELS.some((m) => m.startsWith('gemini'))).toBe(true);
-    expect(MODELS.some((m) => m.startsWith('deepseek'))).toBe(true);
-    expect(MODELS.some((m) => m.includes('sonar'))).toBe(true);
-    expect(MODELS.some((m) => m.includes('grok'))).toBe(true);
+    const providers = new Set(
+      MANUAL_MODELS.map((model) => getModelMetadataById(model)?.provider).filter(Boolean),
+    );
+    expect(providers.size).toBeGreaterThanOrEqual(6);
   });
 
   it('includes auto-routing options', () => {
     const autoModels = MODELS.filter((m) => m.startsWith('auto'));
-    expect(autoModels).toHaveLength(3);
+    expect(autoModels).toEqual(
+      expect.arrayContaining(['auto-balanced', 'auto-economy', 'auto-premium']),
+    );
   });
 
   it('marks current model as picked', () => {
-    const currentModel = 'claude-sonnet-4.6';
+    const currentModel = MANUAL_MODELS[0] ?? 'auto-balanced';
     const items = MODELS.map((m) => ({
       label: m,
       picked: m === currentModel,
@@ -217,7 +205,7 @@ describe('model selection', () => {
 
     const picked = items.filter((i) => i.picked);
     expect(picked).toHaveLength(1);
-    expect(picked[0].label).toBe('claude-sonnet-4.6');
+    expect(picked[0].label).toBe(currentModel);
   });
 });
 

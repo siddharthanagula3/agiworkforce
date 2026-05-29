@@ -238,7 +238,7 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler
-      // resolves the Supabase user via metadata first (O(1) map read) before falling
+      // resolves the Clerk user via metadata first (O(1) map read) before falling
       // back to client_reference_id or a Stripe customer lookup. This is intentional
       // - not redundant - because Stripe customer IDs are not always available at
       // webhook time (e.g. first-time checkout before the customer object is linked).

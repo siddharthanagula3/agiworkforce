@@ -11,9 +11,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useArtifactStore } from './artifact-store';
 import type { ArtifactData } from '@features/chat/components/artifacts/ArtifactPreview';
 
-// Mock supabase so shareArtifact DB calls do not hang in tests
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
+// Mock cloudDb so shareArtifact DB calls do not hang in tests
+vi.mock('@shared/lib/cloud-db-client', () => ({
+  cloudDb: {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }),
     },

@@ -254,11 +254,7 @@ async fn require_confirmation(
 // + record-action logic into private `perform_*_inner` helpers, and
 // have BOTH the IPC command and execute_tool call those.
 
-async fn click_inner(
-    x: i32,
-    y: i32,
-    state: &Arc<Mutex<ComputerUseState>>,
-) -> Result<(), String> {
+async fn click_inner(x: i32, y: i32, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
     tracing::info!("Clicking at ({}, {})", x, y);
     perform_click(x, y).map_err(|e| format!("Failed to click: {}", e))?;
     let computer_state = state.lock().await;
@@ -296,10 +292,7 @@ async fn move_mouse_inner(
     Ok(())
 }
 
-async fn type_text_inner(
-    text: String,
-    state: &Arc<Mutex<ComputerUseState>>,
-) -> Result<(), String> {
+async fn type_text_inner(text: String, state: &Arc<Mutex<ComputerUseState>>) -> Result<(), String> {
     // FIX-003: replaced `tracing::info!("Typing text: {}", text)` — the
     // previous form spilled raw passwords into the log pipeline.
     tracing::info!("Typing {} chars", text.chars().count());
@@ -806,13 +799,10 @@ pub async fn computer_use_execute_opa_task(
     // Stream 1: wire the per-app permission manager into the agent so the
     // safety layer's `check_app_permission` consults the active foreground
     // app on every action. Closes the gap from today's audit.
-    let agent = ComputerUseAgent::with_app_permissions(
-        router,
-        config,
-        permissions_state.inner().clone(),
-    )
-    .map_err(|e| format!("Failed to create ComputerUseAgent: {}", e))?
-    .with_app_handle(app);
+    let agent =
+        ComputerUseAgent::with_app_permissions(router, config, permissions_state.inner().clone())
+            .map_err(|e| format!("Failed to create ComputerUseAgent: {}", e))?
+            .with_app_handle(app);
 
     let task = ComputerUseTask {
         description,
@@ -906,7 +896,10 @@ async fn persist_permissions(app_handle: &tauri::AppHandle, mgr: &Arc<AppPermiss
     let path = match app_handle.path().app_data_dir() {
         Ok(dir) => dir.join("app_permissions.json"),
         Err(e) => {
-            tracing::warn!("Could not resolve app_data_dir for app_permissions.json: {}", e);
+            tracing::warn!(
+                "Could not resolve app_data_dir for app_permissions.json: {}",
+                e
+            );
             return;
         }
     };
@@ -914,7 +907,11 @@ async fn persist_permissions(app_handle: &tauri::AppHandle, mgr: &Arc<AppPermiss
     match mgr.to_json().await {
         Ok(json) => {
             if let Err(e) = tokio::fs::write(&path, json).await {
-                tracing::warn!("Failed to persist app_permissions.json at {:?}: {}", path, e);
+                tracing::warn!(
+                    "Failed to persist app_permissions.json at {:?}: {}",
+                    path,
+                    e
+                );
             }
         }
         Err(e) => {

@@ -20,7 +20,7 @@
 import { Router, type Request, type Response } from 'express';
 import { createHash } from 'crypto';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { getServiceClient } from '../lib/supabaseClients';
+import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 import { requireEnv } from '../env';
 import {

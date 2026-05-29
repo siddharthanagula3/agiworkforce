@@ -123,7 +123,7 @@ function setupUpdateChain(resolvedValue: { data: unknown; error: unknown }) {
   } else {
     mockNeonQuery.mockResolvedValue(resolvedValue.data ? [resolvedValue.data] : []);
   }
-  // Keep Supabase builder chain wired for mockUpdate assertion in allowedSurfaces test
+  // Keep cloud database builder chain wired for mockUpdate assertion in allowedSurfaces test
   mockSingle.mockResolvedValue(resolvedValue);
   mockSelect.mockReturnValue({ single: mockSingle });
   mockEq.mockReturnValue({ eq: mockEq, select: mockSelect });

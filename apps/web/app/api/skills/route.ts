@@ -8,7 +8,7 @@
  * Skills source: a layered scan of skill directories on the gateway host.
  * Today the route reads the `SKILLS_LAYERS` env var as a JSON list of
  * `{rootDir, source}` entries. In production, the path would be
- * supplemented by per-user / per-project skills uploaded via Supabase
+ * supplemented by per-user / per-project skills uploaded via Neon
  * storage; that wiring is deferred.
  *
  * Progressive disclosure: this endpoint never returns body content for

@@ -501,9 +501,8 @@ export function InviteCodeModal({
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
                     Cloud features are gated for v1. Join the waitlist, or enter your invitation
-                    code below to unlock cloud routing. AGI will route your requests through one of:
-                    BYOK (your provider key), Groq (free tier, US-routed), OpenRouter, or DeepSeek
-                    (with explicit data-residency disclosure).
+                    code below to unlock AGI Managed Cloud routing with explicit retention,
+                    residency, quota, and access controls.
                   </Text>
                 </View>
                 <Pressable

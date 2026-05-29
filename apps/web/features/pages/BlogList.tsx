@@ -82,7 +82,7 @@ const BlogPage: React.FC = () => {
     return categoryIcons[slug] || categoryIcons['default'];
   };
 
-  // Fetch blog posts from Supabase function
+  // Fetch blog posts from server function
   const fetchBlogPosts = useCallback(
     async (page = 0, category = selectedCategory, search = searchQuery) => {
       try {

@@ -499,9 +499,9 @@ export default function SettingsTabScreen() {
         {
           key: 'mobile-byok',
           icon: Key,
-          label: 'Mobile BYOK',
+          label: 'BYOK',
           type: 'status',
-          description: 'Disabled until secure device key storage ships.',
+          description: 'Not available on Mobile. Use Desktop or developer surfaces for BYOK.',
           badge: 'Locked',
           badgeTone: 'locked',
         },

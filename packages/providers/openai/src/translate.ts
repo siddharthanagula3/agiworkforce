@@ -23,7 +23,10 @@ import type {
   ToolChoice,
 } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/llm-normalize';
-import { normalizeOpenAIStrictToolParameters } from '@agiworkforce/llm-normalize';
+import {
+  normalizeOpenAIStrictToolParameters,
+  resolveOpenAIReasoningEffortForModel,
+} from '@agiworkforce/llm-normalize';
 
 import type {
   OpenAIChatAssistantToolCall,
@@ -194,6 +197,17 @@ function translateToolChoice(choice: ToolChoice | undefined): OpenAIChatToolChoi
   return { type: 'function', function: { name: choice.name } };
 }
 
+function thinkingBudgetToRequestedEffort(
+  budgetTokens: number | undefined,
+): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
+  if (budgetTokens === undefined) return 'medium';
+  if (budgetTokens >= 30000) return 'xhigh';
+  if (budgetTokens >= 16000) return 'high';
+  if (budgetTokens >= 4000) return 'medium';
+  if (budgetTokens >= 1000) return 'low';
+  return 'minimal';
+}
+
 export interface TranslateOptions {
   /** Result of `detectOpenAICompletionsCompat()` — drives field shape. */
   compat: OpenAICompletionsCompatDefaults;
@@ -239,9 +253,16 @@ export function translateChatRequest(
 
   // Reasoning effort (mapped through compat thinking format)
   if (req.thinking?.type === 'enabled' && compat.supportsReasoningEffort) {
-    // Map thinking budget to reasoning effort heuristically.
-    const budget = req.thinking.budgetTokens ?? 8000;
-    params.reasoning_effort = budget >= 16000 ? 'high' : budget >= 4000 ? 'medium' : 'low';
+    const requested = thinkingBudgetToRequestedEffort(req.thinking.budgetTokens);
+    const resolved = resolveOpenAIReasoningEffortForModel({
+      model: { provider: 'openai', id: req.model },
+      effort: requested,
+    });
+    if (resolved) {
+      params.reasoning_effort = resolved as NonNullable<
+        OpenAIChatCompletionCreateParams['reasoning_effort']
+      >;
+    }
   }
 
   return params;

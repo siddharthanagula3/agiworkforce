@@ -14,7 +14,7 @@ These files are high-contention. Feature agents should not edit them unless the 
 - Tool-specific agent adapters: `CLAUDE.md` and hidden tool folders such as `.claude/`, `.codex/`, `.cursor/`, `.opencode/`, `.agents/`.
 - Agent operating system: `docs/agent-context/**`, `docs/engineering/**`.
 - Shared contracts: `packages/types/**`.
-- Database migrations: `supabase/migrations/**`.
+- Database migrations: `apps/web/db/neon/**`.
 - Native mobile project: `ios/**`.
 
 ## Rules
@@ -23,7 +23,7 @@ These files are high-contention. Feature agents should not edit them unless the 
 2. One implementation agent owns one lane.
 3. Shared files go through `repo-operability`, `release-ci`, or the final integrator.
 4. Lockfiles are changed only after implementation lanes finish, then regenerated once.
-5. Supabase migrations are append-only and require backend/data plus security/privacy review.
+5. Neon migrations are append-only and require backend/data plus security/privacy review.
 6. Mobile native project changes require the `mobile-native-store` lane.
 7. If an agent discovers it must touch a shared file, it stops and reports the need instead of editing.
 

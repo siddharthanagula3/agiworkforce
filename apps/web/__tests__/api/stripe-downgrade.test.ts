@@ -662,7 +662,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
             current_period_end: periodEnd,
             cancel_at_period_end: false,
             canceled_at: null,
-            metadata: { supabase_user_id: 'user_123' },
+            metadata: { user_id: 'user_123' },
           },
         },
       });

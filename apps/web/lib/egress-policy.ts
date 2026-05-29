@@ -21,7 +21,7 @@ const ALLOWED_HOSTNAMES = [
   'generativelanguage.googleapis.com',
   'api.stripe.com',
   'api.upstash.io',
-  // Supabase: wildcard for project-specific subdomains
+  // Neon: wildcard for project-specific subdomains
 ] as const;
 
 // Hostname strings that always identify the local machine.

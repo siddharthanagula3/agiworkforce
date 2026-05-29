@@ -11,7 +11,7 @@ import { OrganizationService } from '../organization-service';
  * viewer-role callers.
  *
  * The implementation uses a Neon DatabaseAdapter (`db.query(sql, params)`),
- * not a Supabase builder. Mocks reflect that contract.
+ * not a cloud database builder. Mocks reflect that contract.
  */
 
 function mockDb() {

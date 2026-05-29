@@ -31,7 +31,7 @@ const TIER_CONTENT: Record<UIPlanTier, TierContent> = {
     bullets: [
       'Bring your own API keys',
       '10+ provider support (GPT, Claude, Gemini…)',
-      'Optional Supabase cloud sync',
+      'Explicit managed-cloud handoff when enabled',
       'No monthly fees',
     ],
     ctaLabel: 'Current plan',

@@ -29,9 +29,8 @@ import { setupVoiceInput } from './features/side-panel/voice';
 import {
   ALLOWED_BRIDGE_HOSTS,
   DEFAULT_AGI_BRIDGE_URL,
-  DEFAULT_AGI_CLOUD_API_URL,
   validateBridgeUrl,
-  validateCloudApiUrl,
+  sanitizePageText,
 } from './background/policy';
 import {
   Terminal,
@@ -98,7 +97,6 @@ export interface SharedSidePanelContext {
   streamTimeoutHandle: ReturnType<typeof setTimeout> | null;
   /** Track how many messages have already been rendered to avoid full DOM rebuilds. */
   lastRenderedCount: number;
-  currentApiKey: string | null;
   isConnected: boolean;
   /**
    * Whether extended thinking is enabled for the next outgoing message.
@@ -120,7 +118,6 @@ function createSharedSidePanelContext(): SharedSidePanelContext {
     currentStreamId: null,
     streamTimeoutHandle: null,
     lastRenderedCount: 0,
-    currentApiKey: null,
     isConnected: false,
     thinkingEnabled: false,
   };
@@ -219,7 +216,6 @@ type SidePanelTab = 'chat' | 'workflows';
 
 const STORAGE_KEY = 'agi_side_panel_messages';
 const MAX_STORED_MESSAGES = 50;
-const API_KEY_STORAGE_KEY = 'agi_api_key';
 
 function saveMessages(): void {
   const toSave = _ctx.messages.slice(-MAX_STORED_MESSAGES);
@@ -249,67 +245,6 @@ async function loadMessages(): Promise<void> {
 function clearStoredMessages(): void {
   chrome.storage.local.remove(STORAGE_KEY).catch((err) => {
     console.warn('[SidePanel] Failed to clear stored messages:', err);
-  });
-}
-
-function saveApiKey(key: string): void {
-  chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: key }).catch((_err: unknown) => {
-    // CRIT-004: Do NOT fall back to chrome.storage.local for credentials.
-    // Credentials must not persist across browser sessions in plaintext storage.
-    console.error('[AGI] Session storage unavailable; API key not saved');
-  });
-}
-
-/**
- * Load the API key from chrome.storage.session.
- * Migrates from chrome.storage.local if a legacy key is found there.
- * Returns null if not set.
- */
-// Guard to prevent concurrent API key migrations from racing.
-let _apiKeyMigrationPromise: Promise<string | null> | null = null;
-
-async function loadApiKey(): Promise<string | null> {
-  if (_apiKeyMigrationPromise) return _apiKeyMigrationPromise;
-  _apiKeyMigrationPromise = loadApiKeyInternal();
-  try {
-    return await _apiKeyMigrationPromise;
-  } finally {
-    _apiKeyMigrationPromise = null;
-  }
-}
-
-function loadApiKeyInternal(): Promise<string | null> {
-  return new Promise((resolve) => {
-    chrome.storage.session.get(API_KEY_STORAGE_KEY, (result) => {
-      if (chrome.runtime.lastError) {
-        resolve(null);
-        return;
-      }
-      const sessionKey = result[API_KEY_STORAGE_KEY] as string | undefined;
-      if (sessionKey && sessionKey.trim()) {
-        resolve(sessionKey.trim());
-        return;
-      }
-      // Fallback: check local storage for a key saved by an older version.
-      chrome.storage.local.get(API_KEY_STORAGE_KEY, (localResult) => {
-        const localKey = localResult[API_KEY_STORAGE_KEY] as string | undefined;
-        if (localKey && localKey.trim()) {
-          // Migrate to session storage and remove from local storage.
-          chrome.storage.session.set({ [API_KEY_STORAGE_KEY]: localKey.trim() }).catch(() => {});
-          chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {});
-          resolve(localKey.trim());
-        } else {
-          resolve(null);
-        }
-      });
-    });
-  });
-}
-
-function clearStoredApiKey(): void {
-  chrome.storage.session.remove(API_KEY_STORAGE_KEY).catch(() => {});
-  chrome.storage.local.remove(API_KEY_STORAGE_KEY).catch(() => {
-    // Ignore storage errors.
   });
 }
 
@@ -2121,7 +2056,8 @@ async function capturePageContext(): Promise<string | null> {
           if (chrome.runtime.lastError || !results?.[0]) {
             resolve(null);
           } else {
-            resolve(results[0].result as string);
+            const raw = typeof results[0].result === 'string' ? results[0].result : '';
+            resolve(sanitizePageText(raw).slice(0, 5000));
           }
         },
       );
@@ -2264,12 +2200,8 @@ function sendMessage(text: string): void {
             // Round-2 audit P0 #3 (2026-05-21): forward the snapshot taken
             // above so the model can see the user's images / pastes.
             attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-            // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
-            // CHAT_MESSAGE wire payload. The background handler ignores any
-            // apiKey field per chrome-HIGH-3 and resolves the key from
-            // chrome.storage.session instead. Sending it here was dead
-            // weight that could mislead future maintainers into restoring
-            // the destructure on the receive side.
+            // SECURITY (H-10 audit 2026-05-19): `apiKey:` stays off the
+            // CHAT_MESSAGE wire payload. Chrome chat remains bridge-scoped.
             // Phase 3 bridge: bridge must consume extendedThinking and
             // forward to providers that support it (Anthropic thinking blocks,
             // OpenAI reasoning effort, Gemini thinkingBudget).
@@ -2338,7 +2270,7 @@ function sendMessage(text: string): void {
       // Round-2 audit P0 #3 (2026-05-21): forward the snapshot so attachments
       // actually reach the model.
       attachments: attachmentsToSend.length > 0 ? attachmentsToSend : undefined,
-      // SECURITY (H-10 audit 2026-05-19): `apiKey:` removed from the
+      // SECURITY (H-10 audit 2026-05-19): `apiKey:` stays off the
       // CHAT_MESSAGE wire payload. See chrome-HIGH-3.
       // Phase 3 bridge: bridge must consume extendedThinking and
       // forward to providers that support it (Anthropic thinking blocks,
@@ -2383,14 +2315,8 @@ function updateConnectionStatus(): void {
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
     pill.replaceChildren(dot, 'Bridge');
-  } else if (_ctx.currentApiKey) {
-    // Bridge offline but API key is set — cloud fallback is active.
-    pill.className = 'cloud';
-    const dot = document.createElement('span');
-    dot.className = 'sp-status-dot';
-    pill.replaceChildren(dot, 'Cloud');
   } else {
-    // No bridge, no API key — fully offline.
+    // No bridge — fail closed inside the extension boundary.
     pill.className = 'disconnected';
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
@@ -2475,18 +2401,6 @@ function renderPermissionCard(requestId: string, domain: string, actionDescripti
   card.appendChild(actionsRow);
   msgsEl.appendChild(card);
   card.scrollIntoView({ behavior: 'smooth', block: 'end' });
-}
-
-async function validateAndSaveApiKey(key: string): Promise<void> {
-  const trimmed = key.trim();
-  if (!trimmed) return;
-
-  _ctx.currentApiKey = trimmed;
-  saveApiKey(trimmed);
-
-  // Optimistically mark connected — real validation happens when a message is sent
-  _ctx.isConnected = true;
-  updateConnectionStatus();
 }
 
 let contextBtn: HTMLButtonElement | null = null;
@@ -3173,25 +3087,6 @@ function buildUI(): void {
   settingsBar.appendChild(bridgeUrlLabel);
   settingsBar.appendChild(bridgeUrlRow);
 
-  // Cloud API URL — used for direct cloud fallback when bridge is offline.
-  const cloudUrlLabel = el('div', { class: 'sp-settings-label' }, 'Cloud API URL');
-  const cloudUrlRow = el('div', { class: 'sp-settings-row' });
-
-  const cloudUrlInput = el('input', {
-    class: 'sp-settings-input',
-    id: 'sp-cloud-url-input',
-    type: 'text',
-    placeholder: DEFAULT_AGI_CLOUD_API_URL,
-    spellcheck: 'false',
-  }) as HTMLInputElement;
-
-  const cloudUrlSaveBtn = el('button', { class: 'sp-settings-btn' }, 'Apply');
-
-  cloudUrlRow.appendChild(cloudUrlInput);
-  cloudUrlRow.appendChild(cloudUrlSaveBtn);
-  settingsBar.appendChild(cloudUrlLabel);
-  settingsBar.appendChild(cloudUrlRow);
-
   document.body.appendChild(settingsBar);
 
   const consolePanel = el('div', { id: 'sp-console-panel' });
@@ -3268,90 +3163,14 @@ function buildUI(): void {
     if (e.key === 'Enter') saveBridgeUrl();
   });
 
-  // Initialize cloud URL input from storage.
-  chrome.storage.local.get('agi_cloud_api_url', (result) => {
-    if (chrome.runtime.lastError) return;
-    const stored = result['agi_cloud_api_url'] as string | undefined;
-    if (stored && cloudUrlInput instanceof HTMLInputElement) {
-      cloudUrlInput.value = stored;
-    }
-  });
-
-  // Save cloud API URL — HTTPS only, non-local.
-  const saveCloudUrl = (): void => {
-    const raw = (cloudUrlInput as HTMLInputElement).value.trim();
-    if (!raw) {
-      chrome.storage.local.remove('agi_cloud_api_url').catch(() => {});
-    } else {
-      const validated = validateCloudApiUrl(raw);
-      if (!validated) {
-        const bar = document.getElementById('sp-settings-bar');
-        if (bar) {
-          const existing = bar.querySelector('.sp-cloud-error');
-          if (existing) existing.remove();
-          const errEl = document.createElement('div');
-          errEl.className = 'sp-cloud-error';
-          errEl.style.cssText = 'color: var(--agi-ext-danger); font-size: 10px; padding: 2px 0;';
-          errEl.textContent = 'Only HTTPS URLs (non-local) are allowed';
-          bar.appendChild(errEl);
-          setTimeout(() => errEl.remove(), 8000);
-        }
-        return;
-      }
-      chrome.storage.local
-        .set({ agi_cloud_api_url: validated })
-        .catch((err: unknown) => console.warn('[SidePanel] Failed to save cloud URL:', err));
-    }
-    const bar = document.getElementById('sp-settings-bar');
-    if (bar) bar.classList.remove('open');
-  };
-
-  cloudUrlSaveBtn.addEventListener('click', saveCloudUrl);
-  cloudUrlInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') saveCloudUrl();
-  });
-
-  const authBar = el('div', { id: 'sp-auth-bar' });
-
-  const authInput = el('input', {
-    id: 'sp-auth-input',
-    type: 'password',
-    placeholder: 'API key (stored locally)',
-    autocomplete: 'off',
-    spellcheck: 'false',
-  }) as HTMLInputElement;
-
-  const authSaveBtn = el('button', { id: 'sp-auth-save-btn' }, 'Save');
-
   const statusPill = el('div', { id: 'sp-status-pill', class: 'disconnected' });
   const statusDot0 = document.createElement('span');
   statusDot0.className = 'sp-status-dot';
   statusPill.replaceChildren(statusDot0, 'Offline');
 
-  authBar.appendChild(authInput);
-  authBar.appendChild(authSaveBtn);
+  const authBar = el('div', { id: 'sp-auth-bar' });
   authBar.appendChild(statusPill);
   document.body.appendChild(authBar);
-
-  const saveKey = (): void => {
-    const val = authInput.value.trim();
-    if (!val) {
-      // Clear key
-      _ctx.currentApiKey = null;
-      _ctx.isConnected = false;
-      clearStoredApiKey();
-      authInput.value = '';
-      updateConnectionStatus();
-      return;
-    }
-    void validateAndSaveApiKey(val);
-    authInput.value = '';
-  };
-
-  authSaveBtn.addEventListener('click', saveKey);
-  authInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') saveKey();
-  });
 
   const tabBar = el('div', { id: 'sp-tab-bar' });
   const chatTabBtn = el('button', { class: 'sp-tab sp-tab-active', 'data-tab': 'chat' }, 'Chat');
@@ -4657,13 +4476,6 @@ buildUI();
 refreshPageHostname();
 
 Promise.all([
-  loadApiKey().then((key) => {
-    if (key) {
-      _ctx.currentApiKey = key;
-      _ctx.isConnected = true;
-      updateConnectionStatus();
-    }
-  }),
   loadMessages().then(() => {
     if (_ctx.messages.length > 0) {
       renderMessages();

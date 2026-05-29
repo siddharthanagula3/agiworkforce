@@ -7,6 +7,7 @@ import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/type
 import { MARKETING_FEATURE_MATRIX, type PricingTabId } from '@/lib/marketing-constants';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { WaitlistForm } from '../byok/WaitlistForm';
 
 function CheckIcon() {
   return (
@@ -324,6 +325,29 @@ export default function PricingPage() {
               </Link>
             </div>
           )}
+        </section>
+
+        <section
+          id="waitlist"
+          className="agi-section"
+          style={{ borderTop: '1px solid var(--agi-rule)', paddingTop: 48 }}
+        >
+          <p className="agi-section-eyebrow">{t('waitlistBadge')}</p>
+          <h2 className="agi-section-h2">Join the Cloud invite list</h2>
+          <p
+            style={{
+              maxWidth: 620,
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: 'var(--agi-ink-2)',
+              marginBottom: 18,
+            }}
+          >
+            Cloud Managed is invite-only until subscription access, usage ledgering, abuse controls,
+            retention, and provider-cost controls are proven. Leave an email and we will notify you
+            when AGI Cloud opens for your surface.
+          </p>
+          <WaitlistForm source="billing" ctaLabel="Join Cloud waitlist" />
         </section>
 
         {/* W1-05: Plan comparison table */}

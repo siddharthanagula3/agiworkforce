@@ -13,7 +13,11 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
+  ANTHROPIC_THINKING_BUDGET,
+  OPENAI_REASONING_EFFORT,
   getEconomyFallbackModels,
+  getModelMetadataById,
+  type Effort,
   getSlotForModel,
   normalizeModelId,
   resolveAutoModeModel,
@@ -155,6 +159,58 @@ export type ProcessedRequest = {
 type ProcessFailure = { ok: false; response: NextResponse };
 type ProcessSuccess = { ok: true } & ProcessedRequest;
 export type ProcessResult = ProcessSuccess | ProcessFailure;
+
+const EFFORT_VALUES: ReadonlySet<string> = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function normalizeEffort(value: string | undefined): Effort | undefined {
+  const normalized = value?.toLowerCase();
+  return normalized && EFFORT_VALUES.has(normalized) ? (normalized as Effort) : undefined;
+}
+
+function modelSupportsEffort(provider: string, model: string): boolean {
+  const metadata = getModelMetadataById(model);
+  if (metadata) return metadata.capabilities.thinking;
+  return provider === 'anthropic' || provider === 'openai' || provider === 'google';
+}
+
+function anthropicUsesAdaptiveThinking(model: string): boolean {
+  const metadata = getModelMetadataById(model);
+  return metadata?.provider === 'anthropic' && metadata.capabilities.thinking;
+}
+
+function buildThinkingConfig({
+  provider,
+  model,
+  explicitThinking,
+  thinkingMode,
+  effort,
+}: {
+  provider: string;
+  model: string;
+  explicitThinking: ChatCompletionRequest['thinking'];
+  thinkingMode: boolean | undefined;
+  effort: Effort | undefined;
+}): { type: string; budget_tokens?: number } | undefined {
+  if (provider !== 'anthropic') return undefined;
+
+  const usesAdaptive = anthropicUsesAdaptiveThinking(model);
+
+  if (explicitThinking) {
+    if (usesAdaptive && explicitThinking.type !== 'adaptive') {
+      return { type: 'adaptive' };
+    }
+    return explicitThinking;
+  }
+
+  if (!thinkingMode) return undefined;
+
+  if (usesAdaptive) return { type: 'adaptive' };
+
+  return {
+    type: 'enabled',
+    budget_tokens: ANTHROPIC_THINKING_BUDGET[effort ?? 'medium'],
+  };
+}
 
 export function extractTextContent(
   content: string | Array<{ type: string; text?: string; image_url?: unknown }>,
@@ -622,7 +678,29 @@ export async function processRequest(
     return sum + baseTokens + overheadTokens;
   }, 0);
 
-  const maxTokens = chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000;
+  const providerLower = provider.toLowerCase();
+  const normalizedEffort = normalizeEffort(chatRequest.effort);
+  const effectiveEffort = modelSupportsEffort(providerLower, chatRequest.model)
+    ? normalizedEffort
+    : undefined;
+  const thinkingConfig = buildThinkingConfig({
+    provider: providerLower,
+    model: chatRequest.model,
+    explicitThinking: chatRequest.thinking,
+    thinkingMode: chatRequest.thinking_mode,
+    effort: effectiveEffort,
+  });
+
+  let maxTokens = chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000;
+  if (
+    providerLower === 'anthropic' &&
+    thinkingConfig?.type === 'enabled' &&
+    typeof thinkingConfig.budget_tokens === 'number' &&
+    thinkingConfig.budget_tokens >= maxTokens
+  ) {
+    maxTokens = Math.min(64000, thinkingConfig.budget_tokens + 1024);
+  }
+
   let estimatedCostCents = LLMCostCalculator.estimateCost(
     provider,
     chatRequest.model,
@@ -762,8 +840,6 @@ export async function processRequest(
 
   // Inject provider-specific built-in tools
   let resolvedTools = chatRequest.tools;
-  const providerLower = provider.toLowerCase();
-
   if (chatRequest.web_search) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -797,10 +873,6 @@ export async function processRequest(
     }
   }
 
-  const thinkingConfig =
-    chatRequest.thinking ??
-    (chatRequest.thinking_mode ? { type: 'enabled', budget_tokens: 10000 } : undefined);
-
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -811,7 +883,10 @@ export async function processRequest(
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
-    effort: chatRequest.effort,
+    effort:
+      providerLower === 'openai' && effectiveEffort
+        ? OPENAI_REASONING_EFFORT[effectiveEffort]
+        : effectiveEffort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
 

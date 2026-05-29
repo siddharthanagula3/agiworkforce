@@ -22,7 +22,7 @@ import type { ChatRequest, StreamChunk } from '@agiworkforce/types';
 
 export interface StreamFromProviderParams {
   providerId: 'anthropic' | 'openai' | 'ollama' | 'google';
-  /** Bearer JWT for the api-gateway. Pulled from Supabase session in the page. */
+  /** Bearer JWT for the api-gateway. Pulled from the Clerk session in the page. */
   authToken: string;
   /** ChatRequest in canonical shape (provider-shape messages, tools, thinking). */
   request: ChatRequest;
