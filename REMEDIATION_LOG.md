@@ -469,3 +469,91 @@ runtime}` contain ZERO non-test `as any`. The brief's "no `as any` in core" DoD 
 - **Meaningful core-path test ADDED** (Batch 3 Part 1): `test_extract_session_summary_local_only_stays_on_device`
   covers the CLI memory trust-boundary (a core privacy path). Further core-path tests (LLM proxy, three-tier
   router, provider adapters, computer-use) remain a Batch-6 follow-up.
+
+---
+
+## ⚠️ VERIFICATION CORRECTION — discovered PRE-EXISTING red cli suite (not my regression)
+
+Honest amendment to the Batch-0 baseline: I gated Batch 0 on **compile-green + typecheck-green** and a
+targeted desktop test, but did NOT run the full `cargo test -p agiworkforce-cli` suite. The final holistic
+verification (advisor-prompted) revealed **25 failing tests in `apps/cli/src/provider.rs` `#[cfg(test)]`**
+(1470 pass / 25 fail).
+
+**Root cause (diagnosed, not mine):** the model-catalog curation at session-start commit `6bb5b0417` removed
+/renamed model IDs in `models.json` (e.g. `claude-opus-4-6`→`claude-opus-4.8`, dropped `gpt-5.4`/`gpt-5.4-pro`,
+`mistral-large-2512`→`mistral-large-3`) and updated the **TS** tests (228/228), but `provider.rs`'s hardcoded
+assertions (last touched `2026-05-20`, `f594eeed9`) still assert the OLD IDs — including a dash-vs-dot
+mismatch (`claude-sonnet-4-6` vs the catalog's `claude-sonnet-4.6`). So the tests went red at `6bb5b0417`,
+**before this session started**.
+
+**Not my regression — verified:** `git log edad0802e^..HEAD --name-only` shows NONE of my batch commits
+touch `provider.rs`, `models.json`, or the model-catalog. provider.rs is unchanged since 2026-05-20.
+
+**Not fixed here — deliberately (collision avoidance + correctness):** this is the prior session's deferred
+"12 hardcoded asserts → catalog-driven decoupling" task, and a CONCURRENT codex agent is actively working the
+model-catalog SSOT (it landed `d9ec70a9f docs(hardening): single model/routing/tier architecture spec` mid-session).
+Editing `provider.rs` now risks colliding with that in-flight work, and a rushed ID swap across 25 capability
+assertions (without fully mapping the capability schema) risks introducing subtly-wrong-but-green assertions.
+**Owner: the model-catalog SSOT effort.** Fix = make the assertions catalog-driven (read current IDs from the
+embedded catalog) rather than hardcoding, exactly as was done for the TS side.
+
+## Batch 7 — Surface parity to end-to-end: NOT STARTED (the long pole; brief says PAUSE for founder)
+
+This is the bulk of "production-credible v1" and the brief explicitly says to PAUSE for founder product input
+here. Per-surface "Partial→E2E" wiring on Local+BYOK is a multi-session effort. Concrete, verified P0/P1 gaps
+already identified (from `docs-hardening/REPO_EXPLORATION.md` + this session) to seed it:
+
+- **Mobile (lead):** code-sessions has no backend (now honest-empty — needs a real store/Dispatch source);
+  first-run local-chat dead-end (default model lacks downloadUrl/checksum so onboarding finishes without
+  provisioning); dispatch HMAC cutover pending.
+- **Desktop:** computer-use OPA destructive-action confirmation-skip default + per-app gate fail-OPEN (safety);
+  `exportAnalyticsReport` CSV branch returns a placeholder string (real `analytics_export_report` cmd exists);
+  AgentOrchestrator never transitions to Completed (chat tasks read as timed out); cowork/code modes orphaned.
+- **Web:** ContactSales/newsletter POST to missing `/api/contact` + `/api/newsletter/subscribe` (live 404);
+  `apps/web/core` legacy stack points at non-existent `/.netlify` proxies (dead/misleading surface).
+- **CLI:** TUI tool-approval prompt broken under raw mode; `mcp-server`/`app-server` advertise tools with no
+  `tools/call` handler; `--max-budget-usd` unenforced.
+- **VS Code:** `agiWorkforce.useProviderStream=true` hard-errors every turn (hide the setting until account-auth).
+
+## Batch 8 — Production hardening: PARTIAL (folded into Batch 4/5 flags)
+
+Security items surfaced + flagged (not yet fixed): `data-layer.withUser` verify-at-edge audit; in-memory
+per-instance rate limiting incl. financial limits; managed LLM proxy has no pre-call credit/ledger enforcement;
+localhost:8787 bridge reachable by same-user processes (move to Unix socket + token all calls); artifact-sandbox
+CSP `unsafe-inline`/`eval`. Observability/perf passes not started.
+
+## ⚠️ DECISIONS NEEDED BEFORE BATCH 7 (founder — consolidated)
+
+1. **First-run sample/onboarding content?** De-faking removed all stand-in artifacts/sessions/stats. If you
+   want curated first-run sample content (clearly labelled as samples), that's an additive product decision;
+   the honest default shipped now is empty-until-real-data. (Affects: mobile artifacts/code-sessions, desktop
+   CodeModeHome.)
+2. **Code-sessions backend:** mobile code-sessions UI is complete but has NO data source. Wire to a real store/
+   Dispatch feed, or keep it gated/hidden for v1?
+3. **`withUser` verify-at-edge:** confirm the intended contract — is `data-layer.withUser(jwt)` ALWAYS called
+   only after gateway/proxy signature verification? (If any raw path reaches it, it's an auth-scoping bypass.)
+4. **Orphaned cowork/code-mode desktop cluster:** delete as dead code, or is it staged for a near-term feature?
+
+## SESSION SUMMARY (2026-05-29)
+
+Executed the brief's batch loop on the merged tree (`hardening/execution-2026-05-28`), two-reviewer discipline,
+commit + log per batch. **Done & verified (committed): Batches 0,1,2,3,4,5; Batch 6 core-clean + re-scoped.**
+
+- B0: reconstructed the deleted `audit.sh` (frozen instrument); fixed desktop test-compile blocker
+  (`draft_manager` `init_database`); compile+typecheck green.
+- B1: declared genuinely-undeclared deps (highlight.js/glob/mocha/@eslint/js/@types); `--frozen-lockfile` green;
+  did NOT add `pg` (stub) or `@expo/config-plugins` (expo-managed) — logged.
+- B2: de-faked desktop analytics (live) + orphaned CodeModeHome + mobile lead-surface (artifacts/code-sessions/
+  quiz) → real data or honest empty; chrome/vscode clean; web items judged non-fabrications. 2-reviewer verified.
+- B3: gated CLI memory pipeline behind the Local privacy boundary (+test); triaged 1406 desktop commands +
+  core/agi → zero genuine user-reachable crashers (3 flagged = false positives, verified).
+- B4: verified auth collapsed to Clerk (zero Supabase; gateway verifies signatures).
+- B5: removed 6 provably-unused cli deps (cargo check green); dup files not deletable; single migration root.
+- B6: core `as any` = 0; skipped tests re-scoped (intentional gating); + a core trust-boundary test.
+
+**Open / not done (honest):** Batch 7 (parity — the long pole, founder-gated) not started; Batch 8 partial
+(security flags raised, not fixed); the 25 pre-existing model-catalog `provider.rs` test failures (owned by the
+SSOT effort). The reconstructed audit instrument's coarse file-level counts barely moved because they grep
+literal markers, not semantic fabrication — the real wins (de-fake, privacy gate, dep correctness, crash
+verification) are evidenced by the 2-reviewer passes, targeted tests, and compile/typecheck green, not by those
+counts.
