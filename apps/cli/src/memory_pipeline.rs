@@ -45,11 +45,16 @@ impl MemoryPipeline {
     ///
     /// If the LLM call fails or times out, falls back to saving raw message
     /// content as the summary.
+    /// `local_only` MUST be true whenever the source session is in Local privacy
+    /// mode. When true, summarization runs entirely on-device (deterministic
+    /// fallback, no network) — Local-session content must never reach a cloud
+    /// summarizer (locked never-silent-egress invariant).
     pub async fn extract_session_summary(
         home: &Path,
         session_id: &str,
         messages: &[Message],
         config: &CliConfig,
+        local_only: bool,
     ) -> Result<()> {
         let summaries_dir = home.join("memories").join("session_summaries");
         fs::create_dir_all(&summaries_dir)?;
@@ -69,26 +74,36 @@ impl MemoryPipeline {
 
         let timestamp = chrono::Utc::now().to_rfc3339();
 
-        // Attempt LLM extraction with timeout
-        let model = resolve_fast_model(config);
-        let extraction = tokio::time::timeout(
-            std::time::Duration::from_secs(LLM_TIMEOUT_SECS),
-            Self::call_extraction_llm(&recent_text, &model, config),
-        )
-        .await;
+        // Privacy boundary (locked invariant): a Local session's content must never
+        // be sent off-device. Summarize on-device with the deterministic fallback
+        // instead of routing recent_text to the (possibly cloud) fast model.
+        let (summary_body, model_label) = if local_only {
+            (
+                build_raw_summary(&recent_text),
+                "on-device fallback (local privacy: no network)".to_string(),
+            )
+        } else {
+            let model = resolve_fast_model(config);
+            let extraction = tokio::time::timeout(
+                std::time::Duration::from_secs(LLM_TIMEOUT_SECS),
+                Self::call_extraction_llm(&recent_text, &model, config),
+            )
+            .await;
 
-        let summary_body = match extraction {
-            Ok(Ok(text)) if !text.trim().is_empty() => text,
-            _ => {
-                // Fallback: save raw message content as summary
-                build_raw_summary(&recent_text)
-            }
+            let body = match extraction {
+                Ok(Ok(text)) if !text.trim().is_empty() => text,
+                _ => {
+                    // Fallback: save raw message content as summary
+                    build_raw_summary(&recent_text)
+                }
+            };
+            (body, model)
         };
 
         // Write with metadata header
         let content = format!(
             "---\nsession_id: {}\ntimestamp: {}\nmodel: {}\n---\n\n{}\n",
-            session_id, timestamp, model, summary_body
+            session_id, timestamp, model_label, summary_body
         );
 
         fs::write(&output_path, content)?;
@@ -150,7 +165,10 @@ impl MemoryPipeline {
     /// Reads all files in `session_summaries/`, concatenates them, and either
     /// calls the LLM to merge/deduplicate or (if the LLM call fails) writes
     /// the concatenation directly.
-    pub async fn consolidate(home: &Path, config: &CliConfig) -> Result<()> {
+    /// `local_only` MUST be true whenever the active session is in Local privacy
+    /// mode: consolidation then merges summaries on-device (deterministic, no
+    /// network) rather than routing their content to a cloud model.
+    pub async fn consolidate(home: &Path, config: &CliConfig, local_only: bool) -> Result<()> {
         let summaries_dir = home.join("memories").join("session_summaries");
         let raw_path = home.join("memories").join("raw_memories.md");
 
@@ -192,19 +210,24 @@ impl MemoryPipeline {
             return Ok(());
         }
 
-        // Attempt LLM consolidation with timeout
-        let model = resolve_fast_model(config);
-        let consolidation = tokio::time::timeout(
-            std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2), // Allow more time
-            Self::call_consolidation_llm(&all_summaries, &model, config),
-        )
-        .await;
+        // Privacy boundary (locked invariant): never route Local-session summaries
+        // through a cloud model. In Local mode, merge on-device deterministically.
+        let consolidated = if local_only {
+            deduplicate_lines(&all_summaries)
+        } else {
+            let model = resolve_fast_model(config);
+            let consolidation = tokio::time::timeout(
+                std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2), // Allow more time
+                Self::call_consolidation_llm(&all_summaries, &model, config),
+            )
+            .await;
 
-        let consolidated = match consolidation {
-            Ok(Ok(text)) if !text.trim().is_empty() => text,
-            _ => {
-                // Fallback: deduplicate lines manually
-                deduplicate_lines(&all_summaries)
+            match consolidation {
+                Ok(Ok(text)) if !text.trim().is_empty() => text,
+                _ => {
+                    // Fallback: deduplicate lines manually
+                    deduplicate_lines(&all_summaries)
+                }
             }
         };
 
@@ -632,5 +655,38 @@ mod tests {
         // Should not crash even if directory doesn't exist
         let result = MemoryPipeline::prune_old_summaries(home);
         assert!(result.is_ok());
+    }
+
+    /// Privacy boundary: a Local-mode session must summarize ON-DEVICE only.
+    /// With `local_only = true` the pipeline must NOT touch the network — it uses
+    /// the deterministic on-device fallback and records that in the metadata header.
+    #[tokio::test]
+    async fn test_extract_session_summary_local_only_stays_on_device() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let messages = vec![
+            Message::text("system", "sys"),
+            Message::text("user", "I always prefer snake_case in Rust."),
+            Message::text("assistant", "Understood."),
+        ];
+        let config = CliConfig::default();
+
+        // local_only=true: no network call is made; deterministic fallback is used.
+        MemoryPipeline::extract_session_summary(home, "sess-local", &messages, &config, true)
+            .await
+            .unwrap();
+
+        let path = home
+            .join("memories")
+            .join("session_summaries")
+            .join("sess-local.md");
+        let content = fs::read_to_string(&path).unwrap();
+        // The header records the on-device fallback (proves the cloud path was skipped).
+        assert!(
+            content.contains("on-device fallback"),
+            "local summary must record the on-device fallback label, got:\n{content}"
+        );
+        // The deterministic keyword fallback surfaces the "prefer" line.
+        assert!(content.contains("snake_case"));
     }
 }
