@@ -296,3 +296,39 @@ genuine direct-import-but-undeclared status (invariant #2: don't add unused deps
 --frozen-lockfile` **exit 0** (1.2s; lockfile now complete & consistent). `pnpm --filter
 @agiworkforce/api-gateway build` exit 0 (with the explicit @types). web/vscode/root resolution confirmed.
 Audit signals unchanged (dep decls don't touch code). No regression.
+
+### Batch 2 — De-fake user/investor-facing surfaces 🟡 (desktop done; mobile in progress)
+
+Run via the `batch2-defake` workflow: 4 parallel cross-surface discovery agents (web/mobile/chrome/vscode,
+read-only Explore) + two independent reviewers per edited desktop file (A: correctness+honesty,
+B: typecheck). Desktop offenders fixed by me first (high judgment), then 2-reviewer-verified.
+
+**DESKTOP — fixed + BOTH reviewers PASS:**
+
+- `apps/desktop/src/services/analyticsQueries.ts` (LIVE — rendered by the settings→Account `UsageDashboard`).
+  The live-rendered `queryCategoryData('features')` now DERIVES from the real `analytics_get_feature_usage`
+  telemetry (honest empty when zero) instead of a hardcoded 35/28/18/12/7 split. The four non-rendered
+  fabricators (`queryRetentionRate`, `queryConversionFunnel`, `queryErrorStats`, `queryPerformanceMetrics` —
+  the last used `Math.random()` curves) now return honest empty/zero state. No `analytics_get_*` command was
+  invented; verified against `sys/commands/analytics.rs` (no retention/funnel/error/category/perf command exists).
+- `apps/desktop/src/features/v3/CodeModeHome.tsx` (ORPHANED — only barrel-re-exported, never mounted; brief-named).
+  De-faked to honest empty: removed the hardcoded session stats (612 sessions / 697,587 messages / 134.6M
+  tokens / streaks / favorites), the `Math.random()` activity heatmap, the hardcoded 62/28/10 model-usage
+  bars, and the "~6,119× The Little Prince" fun-fact. Renders "—" / "No model usage recorded yet."
+
+**CROSS-SURFACE DISCOVERY (read-only):**
+
+- Chrome extension: **0** live fabrications (strong local-only discipline confirmed).
+- VS Code extension: **0** (re-confirms `modelMetrics.ts` is already honest).
+- Web: 2 candidates, both judged **NOT fabrications** (not fixed): `components/agi/AgiChatDemo.tsx` is a scripted
+  marketing demo animation (illustrative, like a product video — not user data passed off as real); `app/page.tsx`
+  ProofStrip `value:'3'` "Trust modes" is a TRUE static product fact (Local/BYOK/Managed = 3), not fabricated.
+- **Mobile (LEAD SURFACE): 3 real LIVE fabrications** (the config arrays VOICE_PRESETS/AUTO_MODES/PROVIDERS
+  were over-flagged — they are legit feature definitions, not fabricated metrics; NOT touched):
+  - `features/artifacts/data.ts` `RECEIVED_ARTIFACTS` (8 fake artifacts) rendered in the live ArtifactsGallery
+    "Inspiration" footer — alongside a REAL `useArtifactStore`. → honest empty (real store is the true source).
+  - `features/code-sessions/data.ts` `CODE_SESSIONS` (12 fake sessions) rendered in the live CodeSessionsScreen.
+  - `features/artifacts/index.tsx` GetInspiredCard hardcoded "53%" fake quiz card.
+    Fix in progress (dispatched to mobile-engineer; honest-empty wired to real stores). **Product flag:** if
+    first-run sample/onboarding content is desired, that is an additive product decision — the honest default
+    (empty until real data) is reversible.
