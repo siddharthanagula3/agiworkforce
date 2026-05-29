@@ -222,9 +222,9 @@
     },
     "deepseek-v4-pro": {
       "contextWindow": 1000000,
-      "inputCost": 0.14,
-      "outputCost": 0.28,
-      "cached_input": 0.0028,
+      "inputCost": 0.435,
+      "outputCost": 0.87,
+      "cached_input": 0.003625,
       "capabilities": {
         "streaming": true,
         "tools": true,
