@@ -297,7 +297,7 @@ genuine direct-import-but-undeclared status (invariant #2: don't add unused deps
 @agiworkforce/api-gateway build` exit 0 (with the explicit @types). web/vscode/root resolution confirmed.
 Audit signals unchanged (dep decls don't touch code). No regression.
 
-### Batch 2 — De-fake user/investor-facing surfaces 🟡 (desktop done; mobile in progress)
+### Batch 2 — De-fake user/investor-facing surfaces ✅
 
 Run via the `batch2-defake` workflow: 4 parallel cross-surface discovery agents (web/mobile/chrome/vscode,
 read-only Explore) + two independent reviewers per edited desktop file (A: correctness+honesty,
@@ -329,6 +329,22 @@ B: typecheck). Desktop offenders fixed by me first (high judgment), then 2-revie
     "Inspiration" footer — alongside a REAL `useArtifactStore`. → honest empty (real store is the true source).
   - `features/code-sessions/data.ts` `CODE_SESSIONS` (12 fake sessions) rendered in the live CodeSessionsScreen.
   - `features/artifacts/index.tsx` GetInspiredCard hardcoded "53%" fake quiz card.
-    Fix in progress (dispatched to mobile-engineer; honest-empty wired to real stores). **Product flag:** if
-    first-run sample/onboarding content is desired, that is an additive product decision — the honest default
-    (empty until real data) is reversible.
+    **MOBILE FIX DONE (mobile-engineer + my review):**
+  - `RECEIVED_ARTIFACTS` deleted entirely (`artifacts/data.ts` removed); the gallery's fake "Inspiration"
+    footer section removed. The screen now renders ONLY real `useArtifactStore` artifacts with the existing
+    honest `ArtifactsEmptyState` ("No artifacts yet") via `ListEmptyComponent`.
+  - GetInspiredCard "How petty are you? / 53%" quiz removed (lived in the same footer).
+  - `CODE_SESSIONS` reduced to `[]` (12 fakes gone); CodeSessionsScreen shows `CodeSessionsEmptyState`
+    ("No code sessions yet"); detail screen renders an honest "Session unavailable" state when not found.
+  - Test suite `__tests__/artifacts-code-sessions.test.tsx` rewritten to assert honest states (6 pass).
+  - Verification: `pnpm --filter @agiworkforce/mobile typecheck` exit 0 (independently re-run); 6 tests pass;
+    grep confirms RECEIVED_ARTIFACTS / quiz literals / fabricated session titles gone repo-wide.
+  - **Product flag (no real backend):** code-sessions has NO store/API/Dispatch source — the feature UI is
+    structurally complete but empty until a real store is wired (a Batch-7 parity task, scoped separately).
+    Artifacts DOES have a real store. First-run sample content, if wanted, is an additive product decision.
+
+**Audit delta:** the reconstructed instrument's file-level "Mock/random" metric is INSENSITIVE to semantic
+de-faking (it greps literal `Math.random`/`mockData`; the removed fabrications were named hardcoded arrays
+like `RECEIVED_ARTIFACTS`, and the two desktop files still contain the token `Math.random` only inside
+explanatory comments documenting the removal). Real deltas are verified by the 2-reviewer pass + grep, not
+by this coarse gauge. DoD ("no fabricated data in any non-test render path") met for all surfaces examined.
