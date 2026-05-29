@@ -143,11 +143,16 @@ impl DraftManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::database::init_database;
+
+    // Migration removed `data::database::init_database`; DraftManager::new creates its own
+    // table, so an empty in-memory connection is all the tests need.
+    fn mem_db() -> Arc<Mutex<Connection>> {
+        Arc::new(Mutex::new(Connection::open_in_memory().unwrap()))
+    }
 
     #[test]
     fn test_draft_save_and_retrieve() {
-        let db = init_database(":memory:").unwrap();
+        let db = mem_db();
         let manager = DraftManager::new(db);
 
         let draft = MessageDraft {
@@ -167,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_draft_clear() {
-        let db = init_database(":memory:").unwrap();
+        let db = mem_db();
         let manager = DraftManager::new(db);
 
         let draft = MessageDraft {
