@@ -22,19 +22,11 @@ vi.mock('@core/ai/llm/providers/grok-ai', () => ({
   })),
 }));
 
-// Mock Supabase client
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    from: vi.fn(),
-  },
-}));
-
 describe('Social Media Analyzer', () => {
   let mockGrokProvider: {
     sendMessage: ReturnType<typeof vi.fn>;
     getConfig: ReturnType<typeof vi.fn>;
   };
-  let mockSupabase: { from: ReturnType<typeof vi.fn> };
   let analyzer: SocialMediaAnalyzer;
 
   beforeEach(async () => {
@@ -46,14 +38,6 @@ describe('Social Media Analyzer', () => {
       getConfig: ReturnType<typeof vi.fn>;
     };
     mockGrokProvider.getConfig.mockReturnValue({ model: 'grok-4' });
-
-    const { supabase } = await import('@shared/lib/supabase-client');
-    mockSupabase = supabase as unknown as { from: ReturnType<typeof vi.fn> };
-
-    // Setup Supabase mock for storing analysis
-    mockSupabase.from.mockReturnValue({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    });
 
     // Cast to unknown first, then to the expected type to avoid direct any cast
     analyzer = new SocialMediaAnalyzer(
@@ -157,7 +141,7 @@ describe('Social Media Analyzer', () => {
       expect(result.recommendations).toEqual([]);
     });
 
-    it('should store analysis when userId provided', async () => {
+    it('should complete analysis when userId provided', async () => {
       mockGrokProvider.sendMessage.mockResolvedValueOnce({
         content: JSON.stringify({
           summary: 'Test',
@@ -166,21 +150,12 @@ describe('Social Media Analyzer', () => {
         }),
       });
 
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      mockSupabase.from.mockReturnValueOnce({ insert: insertMock });
+      const result = await analyzer.analyze({ topic: 'test' }, 'user-123');
 
-      await analyzer.analyze({ topic: 'test' }, 'user-123');
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('social_media_analyses');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          user_id: 'user-123',
-          topic: 'test',
-        }),
-      );
+      expect(result.summary).toBe('Test');
     });
 
-    it('should not store analysis when userId not provided', async () => {
+    it('should complete analysis when userId not provided', async () => {
       mockGrokProvider.sendMessage.mockResolvedValueOnce({
         content: JSON.stringify({
           summary: 'Test',
@@ -189,9 +164,9 @@ describe('Social Media Analyzer', () => {
         }),
       });
 
-      await analyzer.analyze({ topic: 'test' });
+      const result = await analyzer.analyze({ topic: 'test' });
 
-      expect(mockSupabase.from).not.toHaveBeenCalled();
+      expect(result.summary).toBe('Test');
     });
 
     it('should throw error on analysis failure', async () => {
@@ -227,7 +202,7 @@ describe('Social Media Analyzer', () => {
       expect(userPrompt).toContain('Influencer Analysis');
     });
 
-    it('should handle database storage errors gracefully', async () => {
+    it('should not throw when analysis encounters unexpected data', async () => {
       mockGrokProvider.sendMessage.mockResolvedValueOnce({
         content: JSON.stringify({
           summary: 'Test',
@@ -236,11 +211,7 @@ describe('Social Media Analyzer', () => {
         }),
       });
 
-      mockSupabase.from.mockReturnValueOnce({
-        insert: vi.fn().mockResolvedValue({ error: new Error('DB error') }),
-      });
-
-      // Should not throw
+      // Should not throw even with userId
       const result = await analyzer.analyze({ topic: 'test' }, 'user-123');
 
       expect(result.summary).toBe('Test');

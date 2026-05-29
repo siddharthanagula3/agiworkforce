@@ -1,9 +1,10 @@
 import Link from 'next/link';
+import { POSITIONING } from '../../lib/marketing-constants';
 import { AgiMark } from '../agi/AgiMark';
 
 /*
- * Site-wide marketing footer. Three-column compact layout — Product,
- * Surfaces, Company. Bottom strip with copyright + data policy.
+ * Site-wide marketing footer. Compact product, surface, capability, and
+ * company link groups. Bottom strip carries copyright and mode boundary.
  *
  * Same default export as the previous footer so every page importer
  * keeps working.
@@ -11,11 +12,14 @@ import { AgiMark } from '../agi/AgiMark';
 
 const PRODUCT = [
   { href: '/', label: 'Home' },
-  { href: '/providers', label: 'Providers' },
-  { href: '/pricing', label: 'Pricing' },
+  { href: '/business', label: 'Business' },
+  { href: '/teams', label: 'Teams' },
+  { href: '/apps', label: 'Apps' },
+  { href: '/agi-code', label: 'AGI Code' },
+  { href: '/cowork', label: 'Cowork' },
   { href: '/byok', label: 'BYOK' },
   { href: '/local', label: 'Local' },
-  { href: '/compare', label: 'Compare' },
+  { href: '/pricing', label: 'Pricing' },
 ];
 
 const SURFACES = [
@@ -25,6 +29,15 @@ const SURFACES = [
   { href: '/chrome-extension', label: 'Chrome' },
   { href: '/vscode-extension', label: 'VS Code' },
   { href: '/download', label: 'Download' },
+];
+
+const CAPABILITIES = [
+  { href: '/features/artifacts', label: 'Artifacts' },
+  { href: '/features/deep-research', label: 'Deep Research' },
+  { href: '/features/projects', label: 'Projects' },
+  { href: '/features/memory', label: 'Memory' },
+  { href: '/providers', label: 'Providers' },
+  { href: '/compare', label: 'Compare' },
 ];
 
 const COMPANY = [
@@ -38,56 +51,59 @@ const COMPANY = [
 
 export function MarketingFooter() {
   return (
-    <div data-design="agi" className="agi-chrome-band" style={{ marginTop: 96 }}>
-      <footer
-        className="agi-footer"
-        style={{ maxWidth: 1180, margin: '0 auto', padding: '56px 28px 28px' }}
-      >
-        <div className="agi-footer-row">
-          <Link href="/" className="agi-footer-mark" aria-label="AGI home">
-            <AgiMark size={18} />
-            <span style={{ marginLeft: 8 }}>
-              agi<span className="agi-mark-dot">.</span>workforce
-            </span>
-          </Link>
-          <div className="agi-footer-cols">
-            <ul className="agi-footer-col">
-              <li className="agi-footer-col-title">Product</li>
-              {PRODUCT.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="agi-footer-link">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <ul className="agi-footer-col">
-              <li className="agi-footer-col-title">Surfaces</li>
-              {SURFACES.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="agi-footer-link">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <ul className="agi-footer-col">
-              <li className="agi-footer-col-title">Company</li>
-              {COMPANY.map((l) => (
-                <li key={l.href}>
-                  <Link href={l.href} className="agi-footer-link">
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        <div className="agi-footer-strip">
-          <span>© 2026 AGI Automation LLC · Austin, Texas</span>
-          <span>We do not train on your data.</span>
-        </div>
-      </footer>
-    </div>
+    <footer className="agi-footer">
+      <div className="agi-footer-row">
+        <Link href="/" className="agi-footer-mark" aria-label="AGI home">
+          <AgiMark size={18} />
+          <span style={{ marginLeft: 8 }}>
+            agi<span className="agi-mark-dot">.</span>workforce
+          </span>
+        </Link>
+        <ul className="agi-footer-col">
+          <li className="agi-footer-col-title">Product</li>
+          {PRODUCT.map((l) => (
+            <li key={l.href}>
+              <Link href={l.href} className="agi-footer-link">
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <ul className="agi-footer-col">
+          <li className="agi-footer-col-title">Surfaces</li>
+          {SURFACES.map((l) => (
+            <li key={l.href}>
+              <Link href={l.href} className="agi-footer-link">
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <ul className="agi-footer-col">
+          <li className="agi-footer-col-title">Capabilities</li>
+          {CAPABILITIES.map((l) => (
+            <li key={l.href}>
+              <Link href={l.href} className="agi-footer-link">
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <ul className="agi-footer-col">
+          <li className="agi-footer-col-title">Company</li>
+          {COMPANY.map((l) => (
+            <li key={l.href}>
+              <Link href={l.href} className="agi-footer-link">
+                {l.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="agi-footer-strip">
+        <span>© 2026 AGI Workforce. Proprietary.</span>
+        <span>{POSITIONING.trustBoundary}</span>
+      </div>
+    </footer>
   );
 }

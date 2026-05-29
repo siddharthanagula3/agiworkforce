@@ -174,7 +174,9 @@ export default function ContactPage() {
                   }}
                 />
               </label>
-              {error && <p style={{ color: '#ff6b6b', fontSize: 13, margin: 0 }}>{error}</p>}
+              {error && (
+                <p style={{ color: 'var(--agi-error)', fontSize: 13, margin: 0 }}>{error}</p>
+              )}
               <div className="agi-cta-row">
                 <button
                   type="submit"

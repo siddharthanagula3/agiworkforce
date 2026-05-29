@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import {
   getPickerModels,
@@ -15,6 +15,7 @@ import {
   getProviderDefaultModel,
   providerLabels,
 } from '@agiworkforce/types';
+import { useThinkingStore } from './thinking-store';
 
 export interface Message {
   id: string;
@@ -100,6 +101,7 @@ export interface Conversation {
     pinned: boolean;
     archived: boolean;
   };
+  isTemporary?: boolean;
 }
 
 export interface ChatModel {
@@ -226,6 +228,7 @@ export interface ChatActions {
   toggleStarConversation: (id: string) => void;
   togglePinConversation: (id: string) => void;
   toggleArchiveConversation: (id: string) => void;
+  toggleTemporaryConversation: (id: string) => void;
   addConversationTag: (id: string, tag: string) => void;
   removeConversationTag: (id: string, tag: string) => void;
 
@@ -530,11 +533,9 @@ export const useChatStore = create<ChatStore>()(
           });
 
           try {
-            // Get auth session for API calls
-            const {
-              data: { session },
-            } = await supabase.auth.getSession();
-            if (!session) {
+            // Get auth token for API calls
+            const token = await getAuthToken();
+            if (!token) {
               set((state) => {
                 state.isStreamingResponse = false;
                 state.activeStreamId = null;
@@ -569,7 +570,7 @@ export const useChatStore = create<ChatStore>()(
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                Authorization: `Bearer ${session.access_token}`,
+                Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
                 model: modelId,
@@ -577,6 +578,12 @@ export const useChatStore = create<ChatStore>()(
                 stream: true,
                 temperature: options.temperature ?? defaultSettings.temperature,
                 max_tokens: options.maxTokens ?? defaultSettings.maxTokens,
+                // Thread effort from thinking-store into the LLM request when enabled.
+                // Provider-specific API params are normalized by the web LLM route.
+                ...(useThinkingStore.getState().enabled && {
+                  thinking_mode: true,
+                  effort: useThinkingStore.getState().effort,
+                }),
               }),
               signal: abortController.signal,
             });
@@ -971,6 +978,14 @@ export const useChatStore = create<ChatStore>()(
             }
           }),
 
+        toggleTemporaryConversation: (id: string) =>
+          set((state) => {
+            if (state.conversations[id]) {
+              state.conversations[id].isTemporary = !state.conversations[id].isTemporary;
+              state.conversations[id].metadata.updatedAt = new Date();
+            }
+          }),
+
         addConversationTag: (id: string, tag: string) =>
           set((state) => {
             if (state.conversations[id] && !state.conversations[id].metadata.tags.includes(tag)) {
@@ -1052,7 +1067,9 @@ export const useChatStore = create<ChatStore>()(
         name: 'agi-chat-store',
         version: 1,
         partialize: (state) => ({
-          conversations: state.conversations,
+          conversations: Object.fromEntries(
+            Object.entries(state.conversations).filter(([, c]) => !c.isTemporary),
+          ),
           selectedModel: state.selectedModel,
           defaultSettings: state.defaultSettings,
         }),

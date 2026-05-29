@@ -45,7 +45,6 @@ const REQUIRED_PINNED_HOSTS = [
   'agiworkforce.com',
   'signaling.agiworkforce.com',
   'api.agiworkforce.com',
-  'xwmcvbgdyergfnvwbnap.supabase.co',
   'api.openai.com',
   'api.anthropic.com',
 ] as const;
@@ -69,10 +68,6 @@ export const PINS_BY_HOST: Readonly<Record<string, ReadonlyArray<string>>> = Obj
   'api.agiworkforce.com': [
     'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_api_leaf=',
     'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_api_intermediate=',
-  ],
-  'xwmcvbgdyergfnvwbnap.supabase.co': [
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_supabase_leaf=',
-    'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_supabase_intermediate=',
   ],
   'api.openai.com': [
     'sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_openai_leaf=',

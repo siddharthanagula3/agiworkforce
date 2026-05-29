@@ -5,7 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimitHandler } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
@@ -16,22 +16,19 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
  * Used by TokenBalanceDisplay and UsageWarningBanner.
  */
 async function handler(request: NextRequest) {
-  let user;
-  let userClient;
+  let userId: string;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    user = auth.user;
-    userClient = auth.userDb;
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
   } catch {
     throw createError.unauthorized('Authentication required');
   }
-  const userId = user.id;
 
   try {
     // Fetch credit balance and subscription in parallel
     const [balance, subscription] = await Promise.all([
-      CreditService.getBalance(userClient, userId),
-      SubscriptionService.getSubscription(userClient, userId),
+      CreditService.getBalance(userId),
+      SubscriptionService.getSubscription(userId),
     ]);
 
     const planTier = subscription?.plan_tier || 'free';

@@ -3,7 +3,8 @@
  * Handles support tickets, FAQs, and help center functionality
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // =============================================================================
 // EMAIL NOTIFICATION TYPES
@@ -85,36 +86,31 @@ class SupportService {
     message: string;
   }): Promise<{ data: SupportTicket | null; error?: string }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const token = await getAuthToken();
 
-      const { data, error } = await (
-        supabase.from('support_tickets') as ReturnType<typeof supabase.from>
-      )
-        .insert({
-          user_id: user?.id,
-          name: ticket.name,
-          email: ticket.email,
-          subject: ticket.subject,
-          message: ticket.message,
-          status: 'open',
-          priority: 'normal',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
+      const response = await fetch('/api/support', {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        }),
+        body: JSON.stringify(ticket),
+      });
 
-      if (error) {
-        console.error('Error creating support ticket:', error);
-        return { data: null, error: error.message };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: (errorData as { error?: string }).error ?? `HTTP ${response.status}`,
+        };
       }
 
-      // Send email notification via Netlify function
-      await this.sendTicketNotification(ticket.email, data.id, ticket.subject);
+      const result = (await response.json()) as { ticket: SupportTicket };
 
-      return { data: data as SupportTicket };
+      // Send email notification via Netlify function
+      await this.sendTicketNotification(ticket.email, result.ticket.id, ticket.subject);
+
+      return { data: result.ticket };
     } catch (error) {
       console.error('Error submitting ticket:', error);
       return {
@@ -132,25 +128,25 @@ class SupportService {
     error?: string;
   }> {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
+      const token = await getAuthToken();
+      if (!token) {
         return { data: [], error: 'User not authenticated' };
       }
 
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      const response = await fetch('/api/support', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
-      if (error) {
-        console.error('Error fetching tickets:', error);
-        return { data: [], error: error.message };
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          data: [],
+          error: (errorData as { error?: string }).error ?? `HTTP ${response.status}`,
+        };
       }
 
-      return { data: data as SupportTicket[] };
+      const result = (await response.json()) as { tickets: SupportTicket[] };
+      return { data: result.tickets ?? [] };
     } catch (error) {
       console.error('Error getting tickets:', error);
       return {
@@ -162,162 +158,45 @@ class SupportService {
 
   /**
    * Get a specific ticket with replies
+   * TODO: Implement /api/support/[id] route to support individual ticket fetch + replies
    */
-  async getTicket(ticketId: string): Promise<{
+  async getTicket(_ticketId: string): Promise<{
     ticket: SupportTicket | null;
     replies: TicketReply[];
     error?: string;
   }> {
-    try {
-      const { data: ticket, error: ticketError } = await supabase
-        .from('support_tickets')
-        .select('*')
-        .eq('id', ticketId)
-        .maybeSingle();
-
-      if (ticketError) {
-        console.error('Error fetching ticket:', ticketError);
-        return {
-          ticket: null,
-          replies: [],
-          error: ticketError.message,
-        };
-      }
-
-      if (!ticket) {
-        return {
-          ticket: null,
-          replies: [],
-          error: 'Ticket not found',
-        };
-      }
-
-      const { data: replies, error: repliesError } = await supabase
-        .from('support_ticket_replies')
-        .select('*')
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
-      if (repliesError) {
-        console.error('Error fetching replies:', repliesError);
-      }
-
-      return {
-        ticket: ticket as SupportTicket,
-        replies: (replies as TicketReply[]) || [],
-      };
-    } catch (error) {
-      console.error('Error getting ticket:', error);
-      return {
-        ticket: null,
-        replies: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return {
+      ticket: null,
+      replies: [],
+      error: 'Not implemented: individual ticket API route pending',
+    };
   }
 
   /**
    * Add a reply to a ticket
+   * TODO: Implement /api/support/[id]/replies route
    */
   async addReply(
-    ticketId: string,
-    message: string,
+    _ticketId: string,
+    _message: string,
   ): Promise<{ data: TicketReply | null; error?: string }> {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        return { data: null, error: 'User not authenticated' };
-      }
-
-      const { data, error } = await (
-        supabase.from('support_ticket_replies') as ReturnType<typeof supabase.from>
-      )
-        .insert({
-          ticket_id: ticketId,
-          user_id: user.id,
-          message,
-          is_staff: false,
-          created_at: new Date().toISOString(),
-        })
-        .select()
-        .single();
-
-      if (error) {
-        console.error('Error adding reply:', error);
-        return { data: null, error: error.message };
-      }
-
-      // Update ticket's updated_at timestamp
-
-      await (supabase.from('support_tickets') as ReturnType<typeof supabase.from>)
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', ticketId);
-
-      return { data: data as TicketReply };
-    } catch (error) {
-      console.error('Error adding reply:', error);
-      return {
-        data: null,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return { data: null, error: 'Not implemented: ticket reply API route pending' };
   }
 
   /**
    * Get all FAQs
+   * TODO: Implement /api/support/faqs route
    */
   async getFAQs(): Promise<{ data: FAQ[]; error?: string }> {
-    try {
-      const { data, error } = await supabase
-        .from('faqs')
-        .select('*')
-        .eq('is_published', true)
-        .order('category')
-        .order('display_order');
-
-      if (error) {
-        console.error('Error fetching FAQs:', error);
-        return { data: [], error: error.message };
-      }
-
-      return { data: data as FAQ[] };
-    } catch (error) {
-      console.error('Error getting FAQs:', error);
-      return {
-        data: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+    return { data: [] };
   }
 
   /**
    * Search FAQs
+   * TODO: Implement /api/support/faqs route with search param
    */
-  async searchFAQs(query: string): Promise<{ data: FAQ[]; error?: string }> {
-    try {
-      const { data, error } = await supabase
-        .from('faqs')
-        .select('*')
-        .eq('is_published', true)
-        .or(`question.ilike.%${query}%,answer.ilike.%${query}%,category.ilike.%${query}%`)
-        .order('category')
-        .order('display_order');
-
-      if (error) {
-        console.error('Error searching FAQs:', error);
-        return { data: [], error: error.message };
-      }
-
-      return { data: data as FAQ[] };
-    } catch (error) {
-      console.error('Error searching FAQs:', error);
-      return {
-        data: [],
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
-    }
+  async searchFAQs(_query: string): Promise<{ data: FAQ[]; error?: string }> {
+    return { data: [] };
   }
 
   /**
@@ -347,13 +226,10 @@ class SupportService {
     error?: string;
   }> {
     try {
-      // Get the current session for authentication
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession();
+      // Get the current auth token
+      const token = await getAuthToken();
 
-      if (sessionError || !session) {
+      if (!token) {
         console.warn('[Support Service] No session for email notification, skipping');
         return { success: false, error: 'Not authenticated' };
       }
@@ -363,7 +239,7 @@ class SupportService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(data),
       });
@@ -373,11 +249,11 @@ class SupportService {
         console.error('[Support Service] Email notification failed:', response.status, errorData);
         return {
           success: false,
-          error: errorData.error || `HTTP ${response.status}`,
+          error: (errorData as { error?: string }).error || `HTTP ${response.status}`,
         };
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as { messageId?: string };
       if (process.env.NODE_ENV === 'development') {
         console.debug('[Support Service] Email notification sent:', result.messageId);
       }

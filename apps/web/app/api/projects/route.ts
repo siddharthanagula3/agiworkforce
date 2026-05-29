@@ -11,8 +11,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapProjectRow } from '@/lib/projects';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   PRIVACY_MODES,
   PROVIDER_MODES,
@@ -45,8 +46,8 @@ async function handleGetProjects(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   const url = new URL(request.url);
   const parsedLimit = parseInt(url.searchParams.get('limit') ?? '50', 10);
@@ -54,20 +55,22 @@ async function handleGetProjects(request: NextRequest) {
   const limit = Math.max(1, Math.min(Number.isNaN(parsedLimit) ? 50 : parsedLimit, 100));
   const offset = Math.min(Math.max(Number.isNaN(parsedOffset) ? 0 : parsedOffset, 0), 10_000);
 
-  const { data, error } = await supabase
-    .from('user_projects')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + limit - 1);
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch projects');
+  let data: Record<string, unknown>[];
+  try {
+    data = await db.query<Record<string, unknown>>(
+      `select * from user_projects
+       where user_id = $1
+       order by updated_at desc
+       limit $2 offset $3`,
+      [userId, limit, offset],
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch projects');
     throw createError.internal('Failed to fetch projects');
   }
 
   return NextResponse.json({
-    projects: (data || []).map((p) => mapProjectRow(p as Record<string, unknown>)),
+    projects: data.map((p) => mapProjectRow(p)),
   });
 }
 
@@ -79,8 +82,8 @@ async function handleCreateProject(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: {
     name?: string;
@@ -163,58 +166,93 @@ async function handleCreateProject(request: NextRequest) {
     }
   }
 
-  const baseInsert: Record<string, unknown> = {
-    user_id: user.id,
-    name: body.name.trim(),
-    description: body.description?.trim() ?? '',
-    instructions: body.instructions?.trim() ?? '',
-    color: body.color?.trim() || '#3b82f6',
-  };
+  // Build columns/values for the insert, optionally including round-10 fields
+  const baseColumns = ['user_id', 'name', 'description', 'instructions', 'color'];
+  const baseValues: unknown[] = [
+    userId,
+    body.name.trim(),
+    body.description?.trim() ?? '',
+    body.instructions?.trim() ?? '',
+    body.color?.trim() || '#3b82f6',
+  ];
 
   // Round-10 fields — only included when present in the request body
-  const round10Insert: Record<string, unknown> = {};
-  if (body.iconEmoji !== undefined) round10Insert['icon_emoji'] = body.iconEmoji;
-  if (body.accentColor !== undefined) round10Insert['accent_color'] = body.accentColor;
-  if (body.defaultPrivacyMode !== undefined)
-    round10Insert['default_privacy_mode'] = body.defaultPrivacyMode;
-  if (body.defaultProviderMode !== undefined)
-    round10Insert['default_provider_mode'] = body.defaultProviderMode;
+  const round10Columns: string[] = [];
+  const round10Values: unknown[] = [];
+  if (body.iconEmoji !== undefined) {
+    round10Columns.push('icon_emoji');
+    round10Values.push(body.iconEmoji);
+  }
+  if (body.accentColor !== undefined) {
+    round10Columns.push('accent_color');
+    round10Values.push(body.accentColor);
+  }
+  if (body.defaultPrivacyMode !== undefined) {
+    round10Columns.push('default_privacy_mode');
+    round10Values.push(body.defaultPrivacyMode);
+  }
+  if (body.defaultProviderMode !== undefined) {
+    round10Columns.push('default_provider_mode');
+    round10Values.push(body.defaultProviderMode);
+  }
   if (body.allowedSurfaces !== undefined) {
     const filtered = body.allowedSurfaces.filter((s) =>
       (ALL_SURFACES as readonly string[]).includes(s),
     );
-    round10Insert['allowed_surfaces'] = filtered.length > 0 ? filtered : [...SYNCED_APP_SURFACES];
+    round10Columns.push('allowed_surfaces');
+    round10Values.push(filtered.length > 0 ? filtered : [...SYNCED_APP_SURFACES]);
   }
-  if (body.defaultModelId !== undefined) round10Insert['default_model_id'] = body.defaultModelId;
-  if (body.importedFrom !== undefined) round10Insert['imported_from'] = body.importedFrom;
-
-  const hasRound10 = Object.keys(round10Insert).length > 0;
-
-  const doInsert = async (includeRound10: boolean) => {
-    const payload = includeRound10 ? { ...baseInsert, ...round10Insert } : baseInsert;
-    return supabase.from('user_projects').insert(payload).select('*').single();
-  };
-
-  let result = await doInsert(hasRound10);
-
-  if (
-    hasRound10 &&
-    result.error &&
-    (result.error as unknown as { code?: string }).code === PG_UNDEFINED_COLUMN
-  ) {
-    // Migration not yet applied — retry with only legacy fields
-    result = await doInsert(false);
+  if (body.defaultModelId !== undefined) {
+    round10Columns.push('default_model_id');
+    round10Values.push(body.defaultModelId);
+  }
+  if (body.importedFrom !== undefined) {
+    round10Columns.push('imported_from');
+    round10Values.push(body.importedFrom);
   }
 
-  if (result.error) {
-    logger.error({ error: result.error, userId: user.id }, 'Failed to create project');
-    throw createError.internal('Failed to create project');
+  const hasRound10 = round10Columns.length > 0;
+
+  function buildInsertSql(includeRound10: boolean): { sql: string; params: unknown[] } {
+    const cols = includeRound10 ? [...baseColumns, ...round10Columns] : [...baseColumns];
+    const vals = includeRound10 ? [...baseValues, ...round10Values] : [...baseValues];
+    const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ');
+    return {
+      sql: `insert into user_projects (${cols.join(', ')}) values (${placeholders}) returning *`,
+      params: vals,
+    };
   }
 
-  return NextResponse.json(
-    { project: mapProjectRow(result.data as Record<string, unknown>) },
-    { status: 201 },
-  );
+  let rowData: Record<string, unknown>;
+  try {
+    const { sql, params } = buildInsertSql(hasRound10);
+    const [inserted] = await db.query<Record<string, unknown>>(sql, params);
+    if (!inserted) throw new Error('No row returned');
+    rowData = inserted;
+  } catch (firstError) {
+    if (
+      hasRound10 &&
+      firstError &&
+      typeof firstError === 'object' &&
+      (firstError as { code?: string }).code === PG_UNDEFINED_COLUMN
+    ) {
+      // Migration not yet applied — retry with only legacy fields
+      try {
+        const { sql, params } = buildInsertSql(false);
+        const [inserted] = await db.query<Record<string, unknown>>(sql, params);
+        if (!inserted) throw new Error('No row returned');
+        rowData = inserted;
+      } catch (retryError) {
+        logger.error({ error: retryError, userId }, 'Failed to create project');
+        throw createError.internal('Failed to create project');
+      }
+    } else {
+      logger.error({ error: firstError, userId }, 'Failed to create project');
+      throw createError.internal('Failed to create project');
+    }
+  }
+
+  return NextResponse.json({ project: mapProjectRow(rowData) }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleGetProjects);

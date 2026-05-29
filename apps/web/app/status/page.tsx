@@ -21,7 +21,7 @@ const COMPONENTS: {
     note: 'Express on Fly.io. BYOK + managed routing.',
   },
   { name: 'Signaling server', status: 'ok', note: 'WebRTC signaling, deployed on Fly.io.' },
-  { name: 'Supabase (us-east-2)', status: 'ok', note: 'Auth, storage, Realtime.' },
+  { name: 'Core cloud services', status: 'ok', note: 'Auth, storage, and sync services.' },
   {
     name: 'Providers (BYOK passthrough)',
     status: 'ok',
@@ -33,7 +33,7 @@ const STATUS_COPY: Record<(typeof COMPONENTS)[number]['status'], { label: string
   {
     ok: { label: 'Operational', color: 'var(--agi-ink)' },
     degraded: { label: 'Degraded', color: 'var(--agi-amber)' },
-    down: { label: 'Down', color: '#ff6b6b' },
+    down: { label: 'Down', color: 'var(--agi-error)' },
     maintenance: { label: 'Maintenance', color: 'var(--agi-amber)' },
   };
 

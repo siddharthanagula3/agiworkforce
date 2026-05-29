@@ -1705,11 +1705,7 @@ pub async fn find_by_role(
 /// argv quoting. ShellExecuteW takes the URL as a single wide-string and
 /// performs no shell interpretation.
 #[tauri::command]
-pub async fn open_url(
-    url: String,
-    reason: String,
-    app: tauri::AppHandle,
-) -> Result<(), String> {
+pub async fn open_url(url: String, reason: String, app: tauri::AppHandle) -> Result<(), String> {
     let lower = url.to_ascii_lowercase();
     if !lower.starts_with("https://") && !lower.starts_with("http://") {
         return Err(format!("Refusing to open non-http(s) URL: {url}"));

@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-28
 
 ## Goal
 
@@ -12,6 +12,10 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 
 - `AGENTS.md` is the tool-neutral coding-agent entry point.
 - `CLAUDE.md` is a Claude-specific mirror.
+- `docs/current/source-of-truth.md` is the first product definition and parity/gap read.
+- `docs/current/agi-product-requirements.md` is the long-form PRD for decision-complete product and Mobile v1 requirements.
+- `docs/current/parity-implementation-matrix.md` is the first feature/component implementation read.
+- `docs/current/byok-open-model-provider-strategy.md` is the first BYOK/open-model provider read.
 - `PLAN.md` is the active strategy and transition plan.
 - `TODO.md` is the active queue.
 - `CHANGELOG.md` records completed work.
@@ -41,6 +45,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - Generated reports belong in `reports` or `audit`, not root.
 - Report roots and direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata.
 - If a doc is too long to be an entry point, summarize it in `docs/current` and archive the original.
+- Treat `tasks/**`, `reports/**`, `docs/archive/**`, dated audit subdirectories, and local screenshot corpora as evidence or working notes unless promoted by a current doc.
 
 ## Naming Rules
 

@@ -81,7 +81,7 @@ const MODE_OPTIONS: Array<{
 ];
 
 const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
-const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'max'];
+const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /** Auto-approve icon + color config keyed by mode from settingsStore. */
 const AUTO_APPROVE_CONFIG: Record<
@@ -106,7 +106,7 @@ const AUTO_APPROVE_CONFIG: Record<
  * 1. Attachment row (Camera, Photos, File, Skills)
  * 2. Chat mode selector (Chat, Research, Create)
  * 3. Agent mode (Ask / Auto / Plan / Bypass)
- * 4. Effort (Low / Medium / High / Max — shown only when provider supports it)
+ * 4. Effort (Low / Medium / High / X-High / Max — shown only when provider supports it)
  * 5. Session toggles (Auto-approve, Temporary chat)
  * 6. Tool availability (cloud-gated tools + local Health)
  * 7. Config links (Project, Style, Tool access, Connectors)

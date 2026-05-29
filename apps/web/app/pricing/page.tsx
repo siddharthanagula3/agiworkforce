@@ -7,6 +7,7 @@ import { BILLING_PLAN_PRICING, formatPrivacyModeLabel } from '@agiworkforce/type
 import { MARKETING_FEATURE_MATRIX, type PricingTabId } from '@/lib/marketing-constants';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { WaitlistForm } from '../byok/WaitlistForm';
 
 function CheckIcon() {
   return (
@@ -47,8 +48,6 @@ export default function PricingPage() {
   const hobbyMonthly = BILLING_PLAN_PRICING.hobby.monthlyPriceUsd;
   const hobbyYearly = BILLING_PLAN_PRICING.hobby.yearlyPriceUsd;
   const hobbyAnnualPerMonth = hobbyYearly / 12;
-  const hobbyPrice = annual ? `$${hobbyAnnualPerMonth.toFixed(2)}` : `$${hobbyMonthly}`;
-  const hobbySub = annual ? t('perMonthBilledAnnually') : t('perMonthBilledMonthly');
   const hobbySavingsPct = Math.round((1 - hobbyAnnualPerMonth / hobbyMonthly) * 100);
 
   const comparisonRows = MARKETING_FEATURE_MATRIX[activeTab];
@@ -111,8 +110,8 @@ export default function PricingPage() {
             ))}
           </div>
 
-          {/* Billing cadence toggle — only relevant for individual/team */}
-          {activeTab !== 'api' && (
+          {/* Billing cadence toggle — only relevant for waitlisted team tiers. */}
+          {activeTab === 'team' && (
             <div className="agi-tier-toggle" role="tablist" aria-label={t('billingCadenceLabel')}>
               <button
                 type="button"
@@ -208,8 +207,8 @@ export default function PricingPage() {
               <article className="agi-tier">
                 <h2 className="agi-tier-name">{t('hobby')}</h2>
                 <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{hobbyPrice}</span>
-                  <span className="agi-tier-price-sub">{hobbySub}</span>
+                  <span className="agi-tier-price-num">{t('waitlistBadge')}</span>
+                  <span className="agi-tier-price-sub">{t('managedWaitlistSub')}</span>
                 </p>
                 <p className="agi-tier-body">{t('hobbyTierBody')}</p>
                 <ul className="agi-tier-features">
@@ -231,10 +230,10 @@ export default function PricingPage() {
                   </li>
                 </ul>
                 <div className="agi-tier-cta-group">
-                  <Link href="/login" className="agi-tier-cta">
-                    {t('subscribeCta')}
+                  <Link href="/pricing#waitlist" className="agi-tier-cta">
+                    {t('joinWaitlistCta')}
                   </Link>
-                  <p className="agi-tier-cta-note">{t('noCommitment')}</p>
+                  <p className="agi-tier-cta-note">{t('managedWaitlistNote')}</p>
                 </div>
               </article>
             </div>
@@ -243,7 +242,7 @@ export default function PricingPage() {
           {/* Team tab: waitlisted tier cards */}
           {activeTab === 'team' && (
             <div className="agi-tier-grid">
-              {(['pro', 'pro_plus', 'max'] as const).map((planId) => {
+              {(['pro', 'max'] as const).map((planId) => {
                 const plan = BILLING_PLAN_PRICING[planId];
                 const monthlyPrice = plan.monthlyPriceUsd;
                 const yearlyPerMonth = plan.yearlyPriceUsd / 12;
@@ -326,6 +325,29 @@ export default function PricingPage() {
               </Link>
             </div>
           )}
+        </section>
+
+        <section
+          id="waitlist"
+          className="agi-section"
+          style={{ borderTop: '1px solid var(--agi-rule)', paddingTop: 48 }}
+        >
+          <p className="agi-section-eyebrow">{t('waitlistBadge')}</p>
+          <h2 className="agi-section-h2">Join the Cloud invite list</h2>
+          <p
+            style={{
+              maxWidth: 620,
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: 'var(--agi-ink-2)',
+              marginBottom: 18,
+            }}
+          >
+            Cloud Managed is invite-only until subscription access, usage ledgering, abuse controls,
+            retention, and provider-cost controls are proven. Leave an email and we will notify you
+            when AGI Cloud opens for your surface.
+          </p>
+          <WaitlistForm source="billing" ctaLabel="Join Cloud waitlist" />
         </section>
 
         {/* W1-05: Plan comparison table */}

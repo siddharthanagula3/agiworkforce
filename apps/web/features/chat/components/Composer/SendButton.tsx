@@ -28,6 +28,8 @@ export interface SendButtonProps {
   disabled?: boolean;
   /** Unified click handler — caller decides action based on mode. */
   onClick: () => void;
+  /** Optional extra class names forwarded to the root button element. */
+  className?: string;
 }
 
 export function SendButton({
@@ -36,6 +38,7 @@ export function SendButton({
   hasContent = false,
   disabled = false,
   onClick,
+  className,
 }: SendButtonProps) {
   // ── Stop state ──────────────────────────────────────────────────────────────
   if (mode === 'stop') {
@@ -43,7 +46,10 @@ export function SendButton({
       <button
         type="button"
         onClick={onClick}
-        className="rounded-lg p-2 bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600 transition-all duration-200"
+        className={cn(
+          'rounded-full p-2 bg-red-500 text-white shadow-lg shadow-red-500/25 hover:bg-red-600 transition-all duration-200',
+          className,
+        )}
         title="Stop generation"
         aria-label="Stop the current response"
       >
@@ -60,10 +66,11 @@ export function SendButton({
         onClick={onClick}
         disabled={disabled}
         className={cn(
-          'rounded-lg p-2 transition-all duration-200',
+          'rounded-full p-2 transition-all duration-200',
           disabled
             ? 'bg-amber-500/50 text-white/70 cursor-not-allowed'
             : 'bg-amber-500 text-white hover:bg-amber-600 shadow-md',
+          className,
         )}
         title="Queue message — will send after current response finishes"
         aria-label="Add message to queue"
@@ -82,10 +89,11 @@ export function SendButton({
       onClick={onClick}
       disabled={!canSend}
       className={cn(
-        'rounded-lg p-2 transition-all duration-200',
+        'rounded-full p-2 transition-all duration-200',
         canSend
           ? 'bg-terra-cotta-500 hover:bg-terra-cotta-600 text-white shadow-md'
           : 'bg-muted text-muted-foreground cursor-not-allowed',
+        className,
       )}
       title={isSending ? 'Sending…' : 'Send message'}
       aria-label={isSending ? 'Sending message…' : 'Send message'}

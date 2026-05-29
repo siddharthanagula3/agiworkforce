@@ -202,17 +202,17 @@ pub async fn council_query(
     }
 
     // Synthesize consensus
-    let (consensus_summary, agreement_score) = if config.synthesize_consensus && successful_count > 1
-    {
-        synthesize_consensus(router, prompt, &responses).await
-    } else if successful_count == 1 {
-        (
-            "Single model response — no consensus needed.".to_string(),
-            1.0,
-        )
-    } else {
-        ("Consensus synthesis disabled.".to_string(), 0.0)
-    };
+    let (consensus_summary, agreement_score) =
+        if config.synthesize_consensus && successful_count > 1 {
+            synthesize_consensus(router, prompt, &responses).await
+        } else if successful_count == 1 {
+            (
+                "Single model response — no consensus needed.".to_string(),
+                1.0,
+            )
+        } else {
+            ("Consensus synthesis disabled.".to_string(), 0.0)
+        };
 
     let total_latency = start.elapsed().as_millis() as u64;
 

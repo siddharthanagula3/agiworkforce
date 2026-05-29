@@ -15,6 +15,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@shared/ui/dropdown-menu';
 import {
@@ -27,9 +30,20 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@shared/ui/alert-dialog';
-import { Star, Pin, Archive, MoreHorizontal, Edit, Trash2, Share2, Copy } from 'lucide-react';
+import {
+  Star,
+  Pin,
+  Archive,
+  MoreHorizontal,
+  Edit,
+  Trash2,
+  Share2,
+  Copy,
+  FolderInput,
+} from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
+import { useProjectStore } from '@features/projects/stores/project-store';
 
 interface ConversationListItemProps {
   id: string;
@@ -50,6 +64,8 @@ interface ConversationListItemProps {
   onArchive?: () => void;
   onShare?: () => void;
   onDuplicate?: () => void;
+  /** Called with the chosen project id when user selects "Move to project". */
+  onMoveToProject?: (projectId: string) => void;
 }
 
 export const ConversationListItem = memo(function ConversationListItem({
@@ -68,8 +84,10 @@ export const ConversationListItem = memo(function ConversationListItem({
   onArchive,
   onShare,
   onDuplicate,
+  onMoveToProject,
 }: ConversationListItemProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const projects = useProjectStore((s) => s.projects);
 
   // Memoize event handlers to prevent unnecessary re-renders
   const handleKeyDown = useCallback(
@@ -249,6 +267,28 @@ export const ConversationListItem = memo(function ConversationListItem({
                 <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
                 Share
               </DropdownMenuItem>
+            )}
+
+            {onMoveToProject && projects.length > 0 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderInput className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Move to project
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-44">
+                  {projects.map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onMoveToProject(project.id);
+                      }}
+                    >
+                      <span className="truncate">{project.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             )}
 
             <DropdownMenuSeparator />

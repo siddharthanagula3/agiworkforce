@@ -174,7 +174,12 @@ mod tests {
         let calc = CostCalculator::new();
         // deepseek-v4-flash: $0.14/M input, $0.28/M output (canonical id; "deepseek-chat" is alias)
         // 1_000_000 input + 1_000_000 output = $0.14 + $0.28 = $0.42
-        let cost = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
+        let cost = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            1_000_000,
+            1_000_000,
+        );
         assert!(
             (cost - 0.42).abs() < 1e-9,
             "Expected $0.42 for deepseek-v4-flash 1M+1M tokens, got ${}",
@@ -329,7 +334,12 @@ mod tests {
             1_000_000,
             1_000_000,
         );
-        let origin = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
+        let origin = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            1_000_000,
+            1_000_000,
+        );
         assert!(
             (managed - origin).abs() < 1e-9,
             "ManagedCloud must proxy deepseek-v4-flash pricing: managed=${managed}, origin=${origin}"
@@ -420,8 +430,12 @@ mod tests {
     fn test_alias_lookup_matches_canonical_deepseek() {
         let calc = CostCalculator::new();
         let alias = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
-        let canonical =
-            calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 1_000_000, 1_000_000);
+        let canonical = calc.calculate(
+            Provider::DeepSeek,
+            "deepseek-v4-flash",
+            1_000_000,
+            1_000_000,
+        );
         assert!(
             (alias - canonical).abs() < 1e-9,
             "alias deepseek-chat ({alias}) should match canonical deepseek-v4-flash ({canonical})"

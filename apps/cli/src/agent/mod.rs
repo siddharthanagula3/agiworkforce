@@ -107,6 +107,11 @@ pub struct AgentSession {
     pub(crate) team_manager: Option<teams::TeamManager>,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
+    /// Image blocks queued for the next `send()` call.  They are prepended to
+    /// the user message as `ContentBlock::Image` parts so the model receives
+    /// both the images and the text prompt in a single multipart user turn.
+    /// Consumed (drained) by `send()` and empty thereafter.
+    pub pending_image_blocks: Vec<models::ContentBlock>,
 }
 
 /// Metadata returned after a single agent turn.
@@ -142,7 +147,7 @@ impl PrivacyMode {
                 "selected context may be sent directly to the user's configured provider key"
             }
             PrivacyMode::Managed => {
-                "selected context may be sent through AGI Workforce managed cloud"
+                "selected context may be sent through AGI managed cloud"
             }
         }
     }
@@ -291,6 +296,7 @@ impl AgentSession {
             team_manager: None,
             managed_session: None,
             managed_session_path: None,
+            pending_image_blocks: Vec::new(),
         }
     }
 

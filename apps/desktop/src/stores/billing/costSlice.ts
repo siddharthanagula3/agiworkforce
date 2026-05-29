@@ -1,5 +1,5 @@
 import { invoke } from '../../lib/tauri-mock';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import type { CostAnalyticsResponse, CostOverviewResponse } from '../../types/chat';
 
 export interface CostFilters {
@@ -46,7 +46,7 @@ export const createCostSlice = (
   loadCostOverview: async () => {
     set({ loadingCostOverview: true, costError: null });
     try {
-      const userId = supabaseAuth.getUser()?.id;
+      const userId = cloudAccountAuth.getUser()?.id;
       if (!userId) {
         set({ loadingCostOverview: false, costError: null, costOverview: null });
         return;
@@ -69,7 +69,7 @@ export const createCostSlice = (
     if (modelNormalized) sanitized.model = modelNormalized;
     set({ loadingCostAnalytics: true, costError: null, costFilters: sanitized });
     try {
-      const userId = supabaseAuth.getUser()?.id;
+      const userId = cloudAccountAuth.getUser()?.id;
       if (!userId) {
         set({ loadingCostAnalytics: false, costError: null, costAnalytics: null });
         return;
@@ -89,7 +89,7 @@ export const createCostSlice = (
 
   setMonthlyBudget: async (amount) => {
     try {
-      const userId = supabaseAuth.getUser()?.id;
+      const userId = cloudAccountAuth.getUser()?.id;
       if (!userId) throw new Error('User not authenticated');
       await invoke('chat_set_monthly_budget', { userId, amount: amount ?? null });
       await get().loadCostOverview();

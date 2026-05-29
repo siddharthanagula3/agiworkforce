@@ -33,8 +33,8 @@ interface InviteCodeModalProps {
 ## Two tabs
 
 **Invite tab** — calls `redeemInviteCode(code, source)` from `features/waitlist/service.ts`.
-Anonymous Supabase sign-in is inline (per v1-cloud-bridge-strategy lock); the RPC is
-`validate_and_redeem_invite_code` with `surface='mobile'`.
+Mobile v1 fails closed here until invite redemption is available through the
+Clerk-authenticated Web/API account flow.
 
 **Waitlist tab** — preserves the existing mobile rank-in-line UX (email + country).
 This is the consolidation of the former `CloudWaitlistSheet.tsx` content. Calls
@@ -65,5 +65,5 @@ compatibility — will be removed once the Detox suite is migrated in a follow-u
 
 - No BYOK input fields visible (per `v1-local-only-cloud-waitlist-2026-05-18`)
 - Brand string is "AGI" everywhere (per `brand-agi-2026-05-15`)
-- Anonymous Supabase sign-in fulfills v1 "no account required" stance
+- No direct mobile database/auth platform client is used
 - Cloud surfaces opened by this modal are gated behind invite-code redemption

@@ -1,64 +1,28 @@
+import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
-import { createSupabaseServerClient } from '../../services/supabase-server';
 import type { ReactNode } from 'react';
-import { SettingsNavActive } from './SettingsNavActive';
+import { SettingsNavClient } from './SettingsNavClient';
 
 export const dynamic = 'force-dynamic';
 
-type NavSection = {
-  heading: string;
-  links: { href: string; label: string }[];
-};
+export type NavItem = { href: string; label: string };
 
-const NAV_SECTIONS: NavSection[] = [
-  {
-    heading: 'Account',
-    links: [
-      { href: '/settings/general', label: 'General' },
-      { href: '/settings/profile', label: 'Profile' },
-      { href: '/settings/billing', label: 'Billing' },
-    ],
-  },
-  {
-    heading: 'Models',
-    links: [
-      { href: '/settings/capabilities', label: 'Capabilities' },
-      { href: '/settings/voice', label: 'Voice' },
-      { href: '/settings/byok', label: 'API keys' },
-    ],
-  },
-  {
-    heading: 'Privacy',
-    links: [
-      { href: '/settings/privacy', label: 'Privacy & Data' },
-      { href: '/settings/memory', label: 'Memory' },
-    ],
-  },
-  {
-    heading: 'Notifications',
-    links: [{ href: '/settings/notifications', label: 'Notifications' }],
-  },
-  {
-    heading: 'Integrations',
-    links: [{ href: '/settings/connections', label: 'Connections' }],
-  },
-  {
-    heading: 'Cloud',
-    links: [{ href: '/settings/sync', label: 'Sync' }],
-  },
+export const NAV_ITEMS: NavItem[] = [
+  { href: '/settings/general', label: 'General' },
+  { href: '/settings/account', label: 'Account' },
+  { href: '/settings/privacy', label: 'Privacy' },
+  { href: '/settings/billing', label: 'Billing' },
+  { href: '/settings/usage', label: 'Usage' },
+  { href: '/settings/capabilities', label: 'Capabilities' },
+  { href: '/settings/connections', label: 'Connectors' },
+  { href: '/settings/voice', label: 'Voice' },
 ];
 
 export default async function SettingsLayout({ children }: { children: ReactNode }) {
-  // WEB-18 (audit 2026-05-19): getUser() re-validates the JWT against the
-  // auth server. getSession() only reads cookie state without revalidation
-  // and must not be the auth gate.
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { userId } = await auth();
 
-  if (!user) {
-    redirect('/login?next=/settings/general');
+  if (!userId) {
+    redirect('/login?redirectTo=/settings/general');
   }
 
   return (
@@ -66,7 +30,8 @@ export default async function SettingsLayout({ children }: { children: ReactNode
       style={{
         display: 'flex',
         minHeight: '100vh',
-        background: 'var(--bg-base, #09090b)',
+        background: 'var(--bg-base)',
+        color: 'var(--text-1)',
       }}
     >
       {/* Settings sidebar */}
@@ -75,7 +40,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
         style={{
           width: 220,
           flexShrink: 0,
-          borderRight: '1px solid var(--border)',
+          borderRight: '1px solid var(--settings-border)',
           padding: '48px 0 32px',
           display: 'flex',
           flexDirection: 'column',
@@ -84,8 +49,8 @@ export default async function SettingsLayout({ children }: { children: ReactNode
       >
         <div
           style={{
-            fontSize: 13,
-            fontWeight: 600,
+            fontSize: 18,
+            fontWeight: 500,
             color: 'var(--text-1)',
             padding: '0 16px 16px',
             fontFamily: 'var(--serif)',
@@ -94,25 +59,8 @@ export default async function SettingsLayout({ children }: { children: ReactNode
           Settings
         </div>
 
-        {NAV_SECTIONS.map((section) => (
-          <div key={section.heading} style={{ marginBottom: 4 }}>
-            <div
-              style={{
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                color: 'var(--text-3)',
-                padding: '8px 20px 4px',
-                textTransform: 'uppercase',
-              }}
-            >
-              {section.heading}
-            </div>
-            {section.links.map((link) => (
-              <SettingsNavActive key={link.href} href={link.href} label={link.label} />
-            ))}
-          </div>
-        ))}
+        {/* Search + nav items rendered client-side so search can filter */}
+        <SettingsNavClient items={NAV_ITEMS} />
       </nav>
 
       {/* Content */}

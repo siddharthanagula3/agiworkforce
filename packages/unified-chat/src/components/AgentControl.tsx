@@ -5,7 +5,7 @@
  *   [Mode ▼]  [Effort: Medium ▼]  [Temp]
  *
  * - Mode chip: Ask / Auto / Plan / Bypass, with descriptions in a Radix Popover.
- * - Effort chip: Low / Medium / High / Max. Hidden when the active model's provider
+ * - Effort chip: Low / Medium / High / xHigh / Max. Hidden when the active model's provider
  *   does not support effort (supportsEffort === false in PROVIDER_DISPLAY).
  * - Temp chip: single-tap boolean toggle. When ON, the conversation does not persist.
  *
@@ -57,12 +57,13 @@ export interface AgentControlProps {
 // ---------------------------------------------------------------------------
 
 const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
-const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'max'];
+const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 const EFFORT_DESCRIPTION: Readonly<Record<Effort, string>> = {
   low: 'Minimal reasoning budget — fastest, cheapest',
   medium: 'Default reasoning budget',
   high: 'Extended reasoning — better for complex tasks',
+  xhigh: 'Extra-high reasoning — for long-horizon tasks',
   max: 'Maximum reasoning — highest quality, most tokens',
 };
 

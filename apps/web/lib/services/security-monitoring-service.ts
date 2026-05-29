@@ -5,17 +5,18 @@
  *
  * All methods are SERVICE-CONTEXT. `security_audit_logs` is a cross-tenant
  * admin table. Access is gated at the route level by admin authentication.
- * Service-role is correct and intentional throughout this file.
+ * Service-context is correct and intentional throughout this file.
  *
  * No user-context injection is needed here because there are no user-scoped
  * operations in this service (all queries aggregate across all users for admin).
  *
- * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ * Never add a private `getDatabase()` here. See lib/services/README.md.
  */
 import 'server-only';
 
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import type { SecurityAuditLogRow } from '@/lib/server/neon-types';
 import type { SecurityEventType, SecurityEventSeverity } from '@/lib/security-audit';
 
 export interface SecurityEvent {
@@ -117,30 +118,25 @@ export class SecurityMonitoringService {
     eventType?: SecurityEventType,
   ): Promise<SecurityEvent[]> {
     try {
-      // SECURITY: service-role required because security_audit_logs is a cross-tenant
-      // admin table. Route-level admin auth gates access; service-role gives full visibility.
-      const supabase = getServiceClient();
-      let query = supabase
-        .from('security_audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
+      const db = getNeonDb();
+
+      const params: unknown[] = [limit];
+      const conditions: string[] = [];
 
       if (severity) {
-        query = query.eq('severity', severity);
+        params.push(severity);
+        conditions.push(`severity = $${params.length}`);
       }
       if (eventType) {
-        query = query.eq('event_type', eventType);
+        params.push(eventType);
+        conditions.push(`event_type = $${params.length}`);
       }
 
-      const { data, error } = await query;
+      const where = conditions.length > 0 ? `where ${conditions.join(' and ')}` : '';
+      const sql = `select * from security_audit_logs ${where} order by created_at desc limit $1`;
 
-      if (error) {
-        logger.error({ error }, 'Failed to fetch security events');
-        throw error;
-      }
-
-      return (data || []) as SecurityEvent[];
+      const rows = await db.query<SecurityAuditLogRow>(sql, params);
+      return rows as unknown as SecurityEvent[];
     } catch (error) {
       logger.error({ error }, 'Error in getRecentEvents');
       throw error;
@@ -153,25 +149,25 @@ export class SecurityMonitoringService {
    */
   static async getMetrics(): Promise<SecurityMetrics> {
     try {
-      // SECURITY: service-role required because security metrics span all users
-      // and are only accessible via the admin dashboard endpoint.
-      const supabase = getServiceClient();
+      const db = getNeonDb();
       const now = new Date();
       const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
       // Fetch events from last 7 days for all metrics
-      const { data: events, error } = await supabase
-        .from('security_audit_logs')
-        .select('event_type, severity, ip_address, user_id, created_at')
-        .gte('created_at', sevenDaysAgo);
+      const events = await db.query<
+        Pick<
+          SecurityAuditLogRow,
+          'event_type' | 'severity' | 'ip_address' | 'user_id' | 'created_at'
+        >
+      >(
+        `select event_type, severity, ip_address, user_id, created_at
+         from security_audit_logs
+         where created_at >= $1`,
+        [sevenDaysAgo],
+      );
 
-      if (error) {
-        logger.error({ error }, 'Failed to fetch security metrics');
-        throw error;
-      }
-
-      const allEvents = events || [];
+      const allEvents = events;
 
       // Filter for 24h and 7d
       const events24h = allEvents.filter(
@@ -221,10 +217,10 @@ export class SecurityMonitoringService {
           uniqueUsers.add(event.user_id);
         }
 
-        // Count critical/high severity
+        // Count critical/error severity
         if (event.severity === 'critical') {
           criticalCount++;
-        } else if (event.severity === 'high') {
+        } else if (event.severity === 'error') {
           highCount++;
         }
       }
@@ -251,8 +247,7 @@ export class SecurityMonitoringService {
    */
   static async checkAlerts(): Promise<AlertStatus[]> {
     try {
-      // SECURITY: service-role required because alert thresholds aggregate across all users.
-      const supabase = getServiceClient();
+      const db = getNeonDb();
       const alerts: AlertStatus[] = [];
 
       for (const threshold of DEFAULT_THRESHOLDS) {
@@ -260,46 +255,53 @@ export class SecurityMonitoringService {
           Date.now() - threshold.window_minutes * 60 * 1000,
         ).toISOString();
 
-        let query = supabase
-          .from('security_audit_logs')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', windowStart);
+        const params: unknown[] = [windowStart];
+        const conditions: string[] = ['created_at >= $1'];
 
         if (threshold.event_type) {
-          query = query.eq('event_type', threshold.event_type);
+          params.push(threshold.event_type);
+          conditions.push(`event_type = $${params.length}`);
         }
         if (threshold.severity) {
-          query = query.eq('severity', threshold.severity);
+          params.push(threshold.severity);
+          conditions.push(`severity = $${params.length}`);
         }
 
-        const { count, error } = await query;
+        const where = conditions.join(' and ');
 
-        if (error) {
-          logger.error({ error, threshold: threshold.name }, 'Failed to check alert threshold');
-          continue;
-        }
+        try {
+          const [row] = await db.query<{ count: number }>(
+            `select count(*)::int as count from security_audit_logs where ${where}`,
+            params,
+          );
 
-        const currentCount = count || 0;
-        const triggered = currentCount >= threshold.count_threshold;
+          const currentCount = row?.count ?? 0;
+          const triggered = currentCount >= threshold.count_threshold;
 
-        alerts.push({
-          alert_name: threshold.name,
-          triggered,
-          current_count: currentCount,
-          threshold: threshold.count_threshold,
-          window_minutes: threshold.window_minutes,
-          severity: threshold.alert_severity,
-        });
+          alerts.push({
+            alert_name: threshold.name,
+            triggered,
+            current_count: currentCount,
+            threshold: threshold.count_threshold,
+            window_minutes: threshold.window_minutes,
+            severity: threshold.alert_severity,
+          });
 
-        if (triggered) {
-          logger.warn(
-            {
-              alert: threshold.name,
-              count: currentCount,
-              threshold: threshold.count_threshold,
-              window: threshold.window_minutes,
-            },
-            'Security alert threshold exceeded',
+          if (triggered) {
+            logger.warn(
+              {
+                alert: threshold.name,
+                count: currentCount,
+                threshold: threshold.count_threshold,
+                window: threshold.window_minutes,
+              },
+              'Security alert threshold exceeded',
+            );
+          }
+        } catch (queryError) {
+          logger.error(
+            { error: queryError, threshold: threshold.name },
+            'Failed to check alert threshold',
           );
         }
       }
@@ -320,25 +322,18 @@ export class SecurityMonitoringService {
     limit: number = 10,
   ): Promise<Array<{ ip_address: string; event_count: number }>> {
     try {
-      // SECURITY: service-role required because IP-level abuse detection aggregates
-      // across all users and is only accessible via the admin dashboard endpoint.
-      const supabase = getServiceClient();
+      const db = getNeonDb();
       const windowStart = new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString();
 
-      const { data, error } = await supabase
-        .from('security_audit_logs')
-        .select('ip_address')
-        .gte('created_at', windowStart)
-        .not('ip_address', 'is', null);
-
-      if (error) {
-        logger.error({ error }, 'Failed to fetch top IP addresses');
-        throw error;
-      }
+      const rows = await db.query<Pick<SecurityAuditLogRow, 'ip_address'>>(
+        `select ip_address from security_audit_logs
+         where created_at >= $1 and ip_address is not null`,
+        [windowStart],
+      );
 
       // Aggregate by IP
       const ipCounts = new Map<string, number>();
-      for (const row of data || []) {
+      for (const row of rows) {
         if (row.ip_address) {
           ipCounts.set(row.ip_address, (ipCounts.get(row.ip_address) || 0) + 1);
         }
@@ -362,22 +357,15 @@ export class SecurityMonitoringService {
    */
   static async getEventsByUser(userId: string, limit: number = 50): Promise<SecurityEvent[]> {
     try {
-      // SECURITY: service-role required because this is an admin investigation tool
-      // accessible only via the admin dashboard endpoint.
-      const supabase = getServiceClient();
-      const { data, error } = await supabase
-        .from('security_audit_logs')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        logger.error({ error, userId }, 'Failed to fetch user security events');
-        throw error;
-      }
-
-      return (data || []) as SecurityEvent[];
+      const db = getNeonDb();
+      const rows = await db.query<SecurityAuditLogRow>(
+        `select * from security_audit_logs
+         where user_id = $1
+         order by created_at desc
+         limit $2`,
+        [userId, limit],
+      );
+      return rows as unknown as SecurityEvent[];
     } catch (error) {
       logger.error({ error, userId }, 'Error in getEventsByUser');
       throw error;
@@ -415,17 +403,12 @@ export class SecurityMonitoringService {
    */
   static async cleanupOldLogs(): Promise<number> {
     try {
-      // SECURITY: service-role required because log cleanup is a maintenance
-      // operation triggered by the admin endpoint, not by a user request.
-      const supabase = getServiceClient();
-      const { data, error } = await supabase.rpc('cleanup_old_security_logs');
+      const db = getNeonDb();
+      const [row] = await db.query<{ cleanup_old_security_logs: number }>(
+        `select cleanup_old_security_logs() as cleanup_old_security_logs`,
+      );
 
-      if (error) {
-        logger.error({ error }, 'Failed to cleanup old security logs');
-        throw error;
-      }
-
-      const deletedCount = data || 0;
+      const deletedCount = row?.cleanup_old_security_logs ?? 0;
       logger.info({ deletedCount }, 'Cleaned up old security logs');
       return deletedCount;
     } catch (error) {

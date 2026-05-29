@@ -1,9 +1,9 @@
 /**
  * Capabilities Settings Screen
  *
- * Mobile v1 is local-only. Local LLM execution is locked on; Cloud Managed
- * capabilities are waitlisted, and Mobile BYOK remains locked until secure
- * device key storage ships.
+ * Mobile v1 is Local plus Cloud Managed invite/waitlist. Local LLM execution
+ * is locked on, Cloud Managed capabilities are waitlisted, and Mobile has no
+ * BYOK mode.
  */
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -141,8 +141,8 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     key: 'byok-providers',
     icon: Key,
     state: 'locked',
-    label: 'BYOK Providers',
-    description: 'Provider keys are disabled until secure device key storage ships.',
+    label: 'BYOK',
+    description: 'BYOK is available on supported Desktop and developer surfaces, not Mobile.',
     stateLabel: 'Locked',
   },
 ];
@@ -242,8 +242,8 @@ export default function CapabilitiesScreen() {
             </Text>
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Local LLMs stay on for Mobile v1. Cloud Managed and Mobile BYOK are disabled until their
-            security and launch gates are ready.
+            Local LLMs stay on for Mobile v1. Cloud Managed is invite-only, and Mobile has no BYOK
+            mode.
           </Text>
         </View>
 

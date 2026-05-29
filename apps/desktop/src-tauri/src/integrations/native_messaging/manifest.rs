@@ -422,10 +422,11 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
 
     let current_exe =
         std::env::current_exe().map_err(|e| anyhow!("Failed to get executable path: {}", e))?;
-    let mut exe_path = resolve_native_host_executable(&current_exe)?;
+    let exe_path = resolve_native_host_executable(&current_exe)?;
 
     #[cfg(target_os = "macos")]
-    {
+    let exe_path = {
+        let mut exe_path = exe_path;
         let current_exe_str = current_exe.to_string_lossy();
         let helper_is_bundled_sidecar = exe_path
             .file_name()
@@ -447,7 +448,8 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
                 }
             }
         }
-    }
+        exe_path
+    };
 
     let exe_path_str = exe_path
         .to_str()
@@ -730,24 +732,27 @@ pub fn is_native_messaging_installed() -> bool {
 
     #[cfg(target_os = "windows")]
     {
-        return is_windows_native_host_registered(host_name);
+        is_windows_native_host_registered(host_name)
     }
 
-    let manifest_filename = format!("{}.json", host_name);
+    #[cfg(not(target_os = "windows"))]
+    {
+        let manifest_filename = format!("{}.json", host_name);
 
-    if let Ok(chrome_dir) = get_chrome_native_messaging_dir() {
-        if chrome_dir.join(&manifest_filename).exists() {
-            return true;
+        if let Ok(chrome_dir) = get_chrome_native_messaging_dir() {
+            if chrome_dir.join(&manifest_filename).exists() {
+                return true;
+            }
         }
-    }
 
-    if let Ok(edge_dir) = get_edge_native_messaging_dir() {
-        if edge_dir.join(&manifest_filename).exists() {
-            return true;
+        if let Ok(edge_dir) = get_edge_native_messaging_dir() {
+            if edge_dir.join(&manifest_filename).exists() {
+                return true;
+            }
         }
-    }
 
-    false
+        false
+    }
 }
 
 #[cfg(test)]

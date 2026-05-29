@@ -64,7 +64,7 @@ export class ChineseHqProviderNotOptedInError extends Error {
  * The LLM gate.
  *
  * @param providerId        Provider id from `models.json` (lowercased).
- * @param disclosureLedger  Mobile: MMKV-backed. Web: Supabase-backed.
+ * @param disclosureLedger  Mobile: MMKV-backed. Web: cloud DB-backed.
  * @param consentLedger     Mobile + web: same store, indexed by providerId.
  * @param requireManagedCloud  True when the call is going through managed
  *                             routing (Hobby+ tiers). False for BYOK + Local.

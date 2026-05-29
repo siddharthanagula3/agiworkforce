@@ -64,9 +64,9 @@ describe('InlinePaywallCard', () => {
   describe('headline copy', () => {
     const cases: Array<[PaywallFeature, RequiredTier, string]> = [
       ['web_search', 'hobby', 'Upgrade to Hobby for web search'],
-      ['video_generation', 'pro_plus', 'Upgrade to Pro+ for video generation'],
-      ['opus_4_7', 'pro_plus', 'Upgrade to Pro+ for Opus 4.7 access'],
-      ['gpt_5_5', 'pro_plus', 'Upgrade to Pro+ for GPT-5.5 access'],
+      ['video_generation', 'max', 'Upgrade to Max for video generation'],
+      ['opus_4_7', 'max', 'Upgrade to Max for Opus 4.7 access'],
+      ['gpt_5_5', 'max', 'Upgrade to Max for GPT-5.5 access'],
       ['computer_use', 'pro', 'Upgrade to Pro for computer use'],
       ['deep_research', 'max', 'Upgrade to Max for deep research'],
       ['image_quota', 'hobby', 'Upgrade to Hobby for more image generation'],
@@ -93,9 +93,9 @@ describe('InlinePaywallCard', () => {
       expect(screen.getByText('Hobby')).toBeInTheDocument();
     });
 
-    it('shows "Pro+" badge for pro_plus tier', () => {
-      render(<InlinePaywallCard {...makeProps({ requiredTier: 'pro_plus' })} />);
-      expect(screen.getByText('Pro+')).toBeInTheDocument();
+    it('shows "Max" badge for max tier (pro_plus removed)', () => {
+      render(<InlinePaywallCard {...makeProps({ requiredTier: 'max' })} />);
+      expect(screen.getByText('Max')).toBeInTheDocument();
     });
 
     it('shows "Max" badge for max tier', () => {
@@ -131,17 +131,15 @@ describe('InlinePaywallCard', () => {
       );
     });
 
-    it('upgrade link href includes correct tier and feature for pro_plus', () => {
+    it('upgrade link href includes correct tier and feature for max', () => {
       render(
-        <InlinePaywallCard
-          {...makeProps({ feature: 'video_generation', requiredTier: 'pro_plus' })}
-        />,
+        <InlinePaywallCard {...makeProps({ feature: 'video_generation', requiredTier: 'max' })} />,
       );
 
-      const upgradeLink = screen.getByRole('link', { name: /upgrade to pro\+/i });
+      const upgradeLink = screen.getByRole('link', { name: /upgrade to max/i });
       expect(upgradeLink).toHaveAttribute(
         'href',
-        '/pricing?from=paywall&tier=pro_plus&feature=video_generation',
+        '/pricing?from=paywall&tier=max&feature=video_generation',
       );
     });
   });

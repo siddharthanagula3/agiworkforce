@@ -11,7 +11,7 @@
 
 import { Platform } from 'react-native';
 import { api } from '@/services/api';
-import { supabase } from '@/services/supabase';
+import { getCurrentUserId } from '@/services/authSession';
 
 export type HealthPermissionStatus = 'granted' | 'denied' | 'undetermined' | 'unavailable';
 
@@ -85,8 +85,7 @@ export async function requestHealthPermission(): Promise<boolean> {
 export async function getHealthSummary(): Promise<HealthSummary | null> {
   if (!HEALTH_CONTEXT_ENABLED) return null;
   // Invalidate cache if user changed (multi-user privacy)
-  const { data: sessionData } = await supabase.auth.getSession();
-  const currentUserId = sessionData.session?.user?.id ?? null;
+  const currentUserId = await getCurrentUserId();
   if (currentUserId !== cachedUserId) {
     cachedSummary = null;
     lastFetchTime = 0;

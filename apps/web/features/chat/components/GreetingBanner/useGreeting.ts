@@ -5,26 +5,21 @@ import { useAuthStore } from '@shared/stores/authentication-store';
 
 interface GreetingResult {
   headline: string;
-  emoji: string;
-  subtext: string;
 }
 
 type TimeBand = 'earlyMorning' | 'morning' | 'afternoon' | 'evening' | 'night' | 'lateNight';
 
 interface TimeBandConfig {
-  emoji: string;
   variants: string[];
   variantsNamed: string[];
 }
 
 const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
   earlyMorning: {
-    emoji: '☕',
-    variants: ['Rise and shine', 'Early start', 'Good early morning'],
-    variantsNamed: ['Rise and shine, {name}', 'Early start, {name}', 'Good early morning, {name}'],
+    variants: ['Good morning', 'Early start', 'Good early morning'],
+    variantsNamed: ['Good morning, {name}', 'Early start, {name}', 'Good early morning, {name}'],
   },
   morning: {
-    emoji: '🌤️',
     variants: ['Good morning', 'Morning', 'Good to see you this morning'],
     variantsNamed: [
       'Good morning, {name}',
@@ -33,7 +28,6 @@ const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
     ],
   },
   afternoon: {
-    emoji: '☀️',
     variants: ['Good afternoon', 'Afternoon', 'Good to see you this afternoon'],
     variantsNamed: [
       'Good afternoon, {name}',
@@ -42,7 +36,6 @@ const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
     ],
   },
   evening: {
-    emoji: '🌇',
     variants: ['Good evening', 'Evening', 'Good to see you this evening'],
     variantsNamed: [
       'Good evening, {name}',
@@ -51,18 +44,16 @@ const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
     ],
   },
   night: {
-    emoji: '🌙',
-    variants: ['Good night', 'Night session', 'Burning the midnight oil'],
+    variants: ['Good evening', 'Night session', 'Burning the midnight oil'],
     variantsNamed: [
-      'Good night, {name}',
+      'Good evening, {name}',
       'Night session, {name}',
       'Burning the midnight oil, {name}',
     ],
   },
   lateNight: {
-    emoji: '🌙',
-    variants: ['Late night session', 'Up late', 'Night owl mode'],
-    variantsNamed: ['Late night session, {name}', 'Up late, {name}', 'Night owl mode, {name}'],
+    variants: ['Good evening', 'Up late', 'Night owl mode'],
+    variantsNamed: ['Good evening, {name}', 'Up late, {name}', 'Night owl mode, {name}'],
   },
 };
 
@@ -77,7 +68,20 @@ function getTimeBand(hour: number): TimeBand {
 
 export function useGreeting(): GreetingResult {
   const { user } = useAuthStore();
-  const userName = user?.name;
+
+  // localStorage key takes precedence over auth-store display name so users
+  // can set a preferred name without changing their account name.
+  const localPreferredName = React.useMemo(() => {
+    try {
+      return typeof window !== 'undefined'
+        ? (window.localStorage.getItem('agi.profile.preferredName') ?? undefined)
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  }, []);
+
+  const userName = localPreferredName ?? user?.name;
 
   // Memoize: greeting only changes when user name changes (time band is stable per page load)
   const [snapshot] = React.useState(() => {
@@ -107,7 +111,5 @@ export function useGreeting(): GreetingResult {
 
   return {
     headline,
-    emoji: config.emoji,
-    subtext: 'What can I help you with today?',
   };
 }

@@ -54,7 +54,7 @@
       "paths": [
         "apps/web/app/api/stripe-webhook",
         "services",
-        "supabase/migrations",
+        "apps/web/db/neon",
         "packages/types/src/billing-catalog.ts"
       ],
       "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating",
@@ -70,7 +70,7 @@
       "paths": [
         "packages/types/src/enterprise",
         "services/api-gateway/src/routes/enterprise.ts",
-        "supabase/migrations",
+        "apps/web/db/neon",
         "apps/web/app/admin",
         "apps/web/features/admin",
         "docs/enterprise"

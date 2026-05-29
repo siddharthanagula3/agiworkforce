@@ -23,7 +23,7 @@ function ProviderIcon({ text }: { text: string }) {
         height: 36,
         borderRadius: 8,
         background: 'var(--bg-base)',
-        border: '1px solid var(--border)',
+        border: '1px solid var(--settings-border)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -56,7 +56,7 @@ function StatusBadge({ isSet }: { isSet: boolean }) {
         color: isSet ? 'var(--teal, #2eb88a)' : 'var(--text-3)',
         border: isSet
           ? '1px solid color-mix(in srgb, var(--teal, #2eb88a) 30%, transparent)'
-          : '1px solid var(--border)',
+          : '1px solid var(--settings-border)',
       }}
     >
       <span
@@ -114,7 +114,7 @@ export function EnvKeyStatusList({ providers }: Props) {
     <section
       aria-label="API key status by provider"
       style={{
-        border: '1px solid var(--border)',
+        border: '1px solid var(--settings-border)',
         borderRadius: 'var(--radius-lg)',
         background: 'var(--bg-elev)',
         overflow: 'hidden',
@@ -127,7 +127,7 @@ export function EnvKeyStatusList({ providers }: Props) {
             key={provider.id}
             style={{
               padding: '12px 18px',
-              borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+              borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -148,7 +148,7 @@ export function EnvKeyStatusList({ providers }: Props) {
                         fontWeight: 600,
                         color: 'var(--text-3)',
                         padding: '1px 5px',
-                        border: '1px solid var(--border)',
+                        border: '1px solid var(--settings-border)',
                         borderRadius: 4,
                         verticalAlign: 'middle',
                       }}

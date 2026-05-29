@@ -11,7 +11,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { TeamRow, TeamMemberRow } from '@/lib/server/neon-types';
 
 function mapRowToTeam(row: Record<string, unknown>) {
   return {
@@ -32,65 +34,70 @@ async function handleGetTeams(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   // Fetch teams the user owns
-  const { data: ownedTeams, error: ownedError } = await supabase
-    .from('teams')
-    .select('id, name, description, owner_id, created_at, updated_at')
-    .eq('owner_id', user.id)
-    .order('created_at', { ascending: false });
-
-  if (ownedError) {
-    logger.error({ error: ownedError, userId: user.id }, 'Failed to fetch owned teams');
+  let ownedTeams: TeamRow[];
+  try {
+    ownedTeams = await db.query<TeamRow>(
+      `select id, name, description, owner_id, created_at, updated_at
+       from teams
+       where owner_id = $1
+       order by created_at desc`,
+      [userId],
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch owned teams');
     throw createError.internal('Failed to fetch teams');
   }
 
   // Fetch teams the user is a member of (but does not own)
-  const { data: memberships, error: memberError } = await supabase
-    .from('team_members')
-    .select('team_id, role, joined_at')
-    .eq('user_id', user.id);
-
-  if (memberError) {
-    logger.error({ error: memberError, userId: user.id }, 'Failed to fetch team memberships');
+  let memberships: Pick<TeamMemberRow, 'team_id' | 'role' | 'joined_at'>[];
+  try {
+    memberships = await db.query<Pick<TeamMemberRow, 'team_id' | 'role' | 'joined_at'>>(
+      `select team_id, role, joined_at from team_members where user_id = $1`,
+      [userId],
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch team memberships');
     throw createError.internal('Failed to fetch teams');
   }
 
-  const memberTeamIds = (memberships || [])
-    .map((m) => m['team_id'] as string)
-    .filter((id) => !(ownedTeams || []).some((t) => t['id'] === id));
+  const ownedIds = new Set(ownedTeams.map((t) => t.id));
+  const memberTeamIds = memberships.map((m) => m.team_id).filter((id) => !ownedIds.has(id));
 
-  let memberTeams: Record<string, unknown>[] = [];
+  let memberTeams: TeamRow[] = [];
   if (memberTeamIds.length > 0) {
-    const { data: memberTeamRows, error: memberTeamError } = await supabase
-      .from('teams')
-      .select('id, name, description, owner_id, created_at, updated_at')
-      .in('id', memberTeamIds)
-      .order('created_at', { ascending: false });
-
-    if (memberTeamError) {
-      logger.error({ error: memberTeamError, userId: user.id }, 'Failed to fetch member teams');
+    try {
+      const placeholders = memberTeamIds.map((_, i) => `$${i + 1}`).join(', ');
+      memberTeams = await db.query<TeamRow>(
+        `select id, name, description, owner_id, created_at, updated_at
+         from teams
+         where id in (${placeholders})
+         order by created_at desc`,
+        memberTeamIds,
+      );
+    } catch (error) {
+      logger.error({ error, userId }, 'Failed to fetch member teams');
       throw createError.internal('Failed to fetch teams');
     }
-    memberTeams = (memberTeamRows || []) as Record<string, unknown>[];
   }
 
   const membershipByTeamId = Object.fromEntries(
-    (memberships || []).map((m) => [m['team_id'], { role: m['role'], joinedAt: m['joined_at'] }]),
+    memberships.map((m) => [m.team_id, { role: m.role, joinedAt: m.joined_at }]),
   );
 
   const allTeams = [
-    ...(ownedTeams || []).map((t) => ({
-      ...mapRowToTeam(t as Record<string, unknown>),
+    ...ownedTeams.map((t) => ({
+      ...mapRowToTeam(t as unknown as Record<string, unknown>),
       role: 'owner' as const,
-      joinedAt: t['created_at'],
+      joinedAt: t.created_at,
     })),
     ...memberTeams.map((t) => ({
-      ...mapRowToTeam(t),
-      role: membershipByTeamId[t['id'] as string]?.role ?? 'viewer',
-      joinedAt: membershipByTeamId[t['id'] as string]?.joinedAt ?? t['created_at'],
+      ...mapRowToTeam(t as unknown as Record<string, unknown>),
+      role: membershipByTeamId[t.id]?.role ?? 'viewer',
+      joinedAt: membershipByTeamId[t.id]?.joinedAt ?? t.created_at,
     })),
   ];
 
@@ -108,8 +115,8 @@ async function handleCreateTeam(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: { name?: string; description?: string };
   try {
@@ -128,27 +135,27 @@ async function handleCreateTeam(request: NextRequest) {
     throw createError.validation('Description must be 500 characters or less');
   }
 
-  const { data, error } = await supabase
-    .from('teams')
-    .insert({
-      name: body.name.trim(),
-      description: (body.description ?? '').trim(),
-      owner_id: user.id,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create team');
+  let data: TeamRow;
+  try {
+    const [inserted] = await db.query<TeamRow>(
+      `insert into teams (name, description, owner_id)
+       values ($1, $2, $3)
+       returning *`,
+      [body.name.trim(), (body.description ?? '').trim(), userId],
+    );
+    if (!inserted) throw new Error('No row returned');
+    data = inserted;
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to create team');
     throw createError.internal('Failed to create team');
   }
 
   return NextResponse.json(
     {
       team: {
-        ...mapRowToTeam(data as Record<string, unknown>),
+        ...mapRowToTeam(data as unknown as Record<string, unknown>),
         role: 'owner',
-        joinedAt: (data as Record<string, unknown>)['created_at'],
+        joinedAt: data.created_at,
       },
     },
     { status: 201 },

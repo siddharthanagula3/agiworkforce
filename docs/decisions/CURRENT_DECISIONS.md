@@ -2,8 +2,8 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last reviewed: 2026-05-21
-Last updated: 2026-05-21
+Last reviewed: 2026-05-28
+Last updated: 2026-05-28
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -11,6 +11,10 @@ This is the conflict-resolution index for current product and architecture decis
 
 Current sources of truth:
 
+- `docs/current/source-of-truth.md` - single product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
+- `docs/current/agi-product-requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
+- `docs/current/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+- `docs/current/byok-open-model-provider-strategy.md` - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
 - `docs/current/product-suite.md` - product thesis, surfaces, trust modes, and sync boundary.
 - `docs/current/technical-architecture.md` - monorepo shape, runtime boundaries, provider strategy, generated files, and enterprise control plane.
 - `docs/current/commercial-and-launch.md` - Local/BYOK/Managed launch posture, waitlist, payment, and enterprise gates.
@@ -73,6 +77,21 @@ Archived source material:
 
 16. Repo naming follows the locked engineering convention: root `PLAN.md` for strategy, `TODO.md` for active work, `CHANGELOG.md` for completed work, current docs in `docs/current`, plans in `docs/plans`, evidence in `audit`, generated reports in `reports`, and historical material in `docs/archive`.
     Evidence: `docs/engineering/naming-conventions.md`, `docs/current/agent-and-repo-operability.md`, `scripts/check-structure-conventions.mjs`.
+
+17. The preferred new cloud foundation is Clerk for managed identity and Neon for Postgres, but production stays on the existing Supabase path until Clerk web/mobile session flows, Neon schema/RLS migration, storage/realtime replacements, and rollback runbooks are verified. Do not expose broken OAuth buttons or switch providers by docs-only claims.
+    Evidence: `packages/data-layer/src/adapters/clerk.ts`, `packages/data-layer/src/adapters/neon.ts`, `packages/data-layer/README.md`, `apps/web/.env.example`.
+
+18. `docs/current/source-of-truth.md` is the first product read for agents and humans, and `docs/current/parity-implementation-matrix.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, `tasks/**`, `reports/**`, `docs/archive/**`, and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
+    Evidence: `docs/current/source-of-truth.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/README.md`, `docs/agent-context/doc-status.json`.
+
+19. BYOK provider/model work must use provider-plus-model-plus-capability metadata, not model names alone. `docs/current/byok-open-model-provider-strategy.md` is the current priority map for direct provider keys, hosted open-model APIs, local runtimes, model families, and Desktop model-selector grouping.
+    Evidence: `docs/current/byok-open-model-provider-strategy.md`, `packages/types/src/models.json`, `docs/current/provider-capability-matrix.md`.
+
+20. Development is serial by surface: Mobile, Website, Desktop, CLI, Chrome Extension, then VS Code Extension. The active surface is Mobile, and normal Website work does not begin until Mobile v1 is publicly released on the App Store. During QA, testing, App Store review, or other manual waiting periods, next-surface work can start only when the founder explicitly asks for it.
+    Evidence: `docs/current/agi-product-requirements.md`, `docs/current/source-of-truth.md`.
+
+21. BYOK tool orchestration defaults to Native First when BYOK is active and the selected provider/model supports native tools, but only with visible provider/model/tool labels, retention/cost disclosure, and consent for risky payloads. Native First never applies to Local mode.
+    Evidence: `docs/current/agi-product-requirements.md`, `docs/current/byok-open-model-provider-strategy.md`.
 
 ## Outdated Or Historical
 

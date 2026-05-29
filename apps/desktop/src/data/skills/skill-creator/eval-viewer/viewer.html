@@ -875,6 +875,7 @@
             content.appendChild(img);
           } else if (file.type === 'pdf') {
             const iframe = document.createElement('iframe');
+            iframe.sandbox = 'allow-scripts';
             iframe.src = file.data_uri;
             content.appendChild(iframe);
           } else if (file.type === 'xlsx') {
@@ -1042,6 +1043,7 @@
             fc.appendChild(img);
           } else if (file.type === 'pdf') {
             const iframe = document.createElement('iframe');
+            iframe.sandbox = 'allow-scripts';
             iframe.src = file.data_uri;
             fc.appendChild(iframe);
           } else if (file.type === 'xlsx') {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { SecurityMonitoringService } from '@/lib/services/security-monitoring-service';
 import { logSecurityEvent } from '@/lib/security-audit';
 import { logger } from '@/lib/logger';
@@ -22,19 +22,6 @@ function errorResponse(err: AppError, headers?: Record<string, string>): NextRes
   );
 }
 
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-
-// Module-level admin client - created once and reused across requests.
-// Returns null when environment variables are missing so callers can
-// return a 500 without crashing at import time.
-const supabaseAdmin =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-        auth: { persistSession: false },
-      })
-    : null;
-
 /**
  * Security Monitoring API
  *
@@ -52,37 +39,40 @@ const supabaseAdmin =
 async function verifyAdminAccess(
   request: NextRequest,
 ): Promise<{ isAdmin: boolean; userId?: string; error?: string }> {
-  if (!supabaseAdmin) {
-    return { isAdmin: false, error: 'Server configuration error' };
-  }
-
   const authHeader = request.headers.get('authorization');
   if (!authHeader?.startsWith('Bearer ')) {
     return { isAdmin: false, error: 'Missing authorization header' };
   }
 
-  const token = authHeader.slice(7);
+  try {
+    const { clerkClient, verifyToken } = await import('@clerk/nextjs/server');
+    const client = await clerkClient();
 
-  // Verify the JWT and check if user has admin role
-  const {
-    data: { user },
-    error,
-  } = await supabaseAdmin.auth.getUser(token);
+    // Verify JWT and get user via Clerk
+    const payload = await verifyToken(authHeader.slice(7), {
+      secretKey: process.env['CLERK_SECRET_KEY'],
+    });
+    const userId = payload.sub;
 
-  if (error || !user) {
+    if (!userId) {
+      return { isAdmin: false, error: 'Invalid or expired token' };
+    }
+
+    const user = await client.users.getUser(userId);
+
+    // Verify admin via publicMetadata.role (set by Clerk dashboard or admin API only)
+    const meta = user.publicMetadata as Record<string, unknown> | null | undefined;
+    const role = meta?.['role'];
+    const isAdmin = role === 'admin' || role === 'owner';
+
+    if (isAdmin) {
+      return { isAdmin: true, userId };
+    }
+
+    return { isAdmin: false, error: 'User does not have admin privileges' };
+  } catch {
     return { isAdmin: false, error: 'Invalid or expired token' };
   }
-
-  // AUDIT-008-013: Verify admin via app_metadata (set by service role only, not user-editable)
-  // app_metadata is secure because it can only be modified via service role key or admin API
-  // user_metadata is NOT secure as users can modify it themselves
-  const isAdminFromAppMetadata = user.app_metadata?.['role'] === 'admin';
-
-  if (isAdminFromAppMetadata) {
-    return { isAdmin: true, userId: user.id };
-  }
-
-  return { isAdmin: false, error: 'User does not have admin privileges' };
 }
 
 export async function GET(request: NextRequest) {
@@ -231,16 +221,12 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
-        if (!supabaseAdmin) {
-          return errorResponse(createError.internal('Server configuration error'));
-        }
-
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'suspended' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'suspended' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to suspend user');
           return errorResponse(createError.internal('Failed to update account status'));
         }
@@ -281,29 +267,25 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
-        if (!supabaseAdmin) {
-          return errorResponse(createError.internal('Server configuration error'));
-        }
-
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'banned' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'banned' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to ban user');
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // Belt-and-suspenders: also set Supabase-level ban in addition to middleware check
+        // Belt-and-suspenders: also disable via Clerk in addition to middleware check
         try {
-          await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
-            ban_duration: '876600h', // ~100 years
-          });
+          const { clerkClient } = await import('@clerk/nextjs/server');
+          const clerk = await clerkClient();
+          await clerk.users.banUser(targetUserId);
         } catch (banError) {
           logger.warn(
             { error: banError, targetUserId },
-            'Failed to set Supabase ban, relying on middleware check',
+            'Failed to set Clerk ban, relying on middleware check',
           );
         }
 
@@ -340,27 +322,23 @@ export async function POST(request: NextRequest) {
           return errorResponse(createError.badRequest('Cannot modify your own account'));
         }
 
-        if (!supabaseAdmin) {
-          return errorResponse(createError.internal('Server configuration error'));
-        }
-
-        const { error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({ account_status: 'active' })
-          .eq('id', targetUserId);
-
-        if (updateError) {
+        const db = getNeonDb();
+        try {
+          await db.execute("update profiles set account_status = 'active' where id = $1", [
+            targetUserId,
+          ]);
+        } catch (updateError) {
           logger.error({ error: updateError, targetUserId }, 'Failed to reactivate user');
           return errorResponse(createError.internal('Failed to update account status'));
         }
 
-        // Remove any Supabase-level ban
+        // Remove any Clerk-level ban
         try {
-          await supabaseAdmin.auth.admin.updateUserById(targetUserId, {
-            ban_duration: 'none',
-          });
+          const { clerkClient } = await import('@clerk/nextjs/server');
+          const clerk = await clerkClient();
+          await clerk.users.unbanUser(targetUserId);
         } catch (unbanError) {
-          logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Supabase ban');
+          logger.warn({ error: unbanError, targetUserId }, 'Failed to remove Clerk ban');
         }
 
         // Log the admin action

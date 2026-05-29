@@ -136,16 +136,16 @@ if [ "$DEPLOY_NEW" = true ]; then
     flyctl launch --name "$APP_NAME" --no-deploy --region sjc --yes
 fi
 
-# Get Supabase credentials from .env.local
+# Get Neon and Clerk credentials from .env.local
 WEB_ENV="$REPO_ROOT/apps/web/.env.local"
 if [ -f "$WEB_ENV" ]; then
-    SUPABASE_URL=$(grep "NEXT_PUBLIC_SUPABASE_URL" "$WEB_ENV" | cut -d '=' -f2-)
-    SUPABASE_SERVICE_KEY=$(grep "SUPABASE_SERVICE_ROLE_KEY" "$WEB_ENV" | cut -d '=' -f2-)
+    NEON_DATABASE_URL=$(grep -E "^(NEON_DATABASE_URL|DATABASE_URL)=" "$WEB_ENV" | head -1 | cut -d '=' -f2-)
+    CLERK_SECRET_KEY=$(grep "^CLERK_SECRET_KEY=" "$WEB_ENV" | cut -d '=' -f2-)
 else
-    echo -e "${YELLOW}Enter your Supabase URL:${NC}"
-    read -r SUPABASE_URL
-    echo -e "${YELLOW}Enter your Supabase Service Role Key:${NC}"
-    read -rs SUPABASE_SERVICE_KEY
+    echo -e "${YELLOW}Enter your Neon database URL:${NC}"
+    read -rs NEON_DATABASE_URL
+    echo -e "${YELLOW}Enter your Clerk secret key:${NC}"
+    read -rs CLERK_SECRET_KEY
 fi
 
 # Generate admin API key
@@ -154,8 +154,9 @@ ADMIN_API_KEY=$(openssl rand -hex 32)
 # Set secrets
 echo -e "${BLUE}Setting environment variables...${NC}"
 flyctl secrets set \
-    SUPABASE_URL="$SUPABASE_URL" \
-    SUPABASE_SERVICE_ROLE_KEY="$SUPABASE_SERVICE_KEY" \
+    NEON_DATABASE_URL="$NEON_DATABASE_URL" \
+    DATABASE_URL="$NEON_DATABASE_URL" \
+    CLERK_SECRET_KEY="$CLERK_SECRET_KEY" \
     ADMIN_API_KEY="$ADMIN_API_KEY" \
     NODE_ENV="production" \
     LOG_LEVEL="info" \

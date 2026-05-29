@@ -33,6 +33,9 @@ import {
   ThumbsUp,
   ThumbsDown,
   GitFork,
+  FileText,
+  FileImage,
+  File,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,18 +55,17 @@ const MarkdownContent = dynamic(() => import('./MarkdownContent'), {
 import type { ArtifactData } from '../artifacts/ArtifactPreview';
 import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
-import { useArtifactsStore as useChatArtifactsStore } from '../../stores/artifacts-store';
-import { useArtifactStore } from '@shared/stores/artifact-store';
-import { SearchResults } from '../search/SearchResults';
+import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { ArtifactBlock } from '../ArtifactBlock';
-import { CitationFooter } from './InlineCitation';
 import { ComparisonResponse } from './ComparisonResponse';
-import { useChatStore } from '../../stores/chat-store';
+import { useComparisonStore } from '../../stores/comparison-store';
+import { InlineSourcesList } from '../research/ResearchPanel';
+import type { ResearchSource } from '../../stores/research-panel-store';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -139,6 +141,15 @@ interface Message {
     thinkingCompletedAt?: string;
     /** Duration of thinking phase in seconds */
     thinkingDurationSeconds?: number;
+    /** Multi-segment interleaved thinking blocks (ordered with tool calls) */
+    thinkingSegments?: Array<{
+      id: string;
+      content: string;
+      isStreaming: boolean;
+      startedAt: string;
+      completedAt: string | null;
+      durationSeconds?: number;
+    }>;
     isThinking?: boolean;
     isStreaming?: boolean;
     isCollaboration?: boolean;
@@ -181,6 +192,11 @@ interface Message {
     };
     /** Which A/B option the user selected */
     comparisonChoice?: 'a' | 'b';
+    /**
+     * True when this user message was pasted (not typed).
+     * Set by the composer paste handler; renders a "PASTED" badge (Fix 42).
+     */
+    isPasted?: boolean;
   };
 }
 
@@ -193,9 +209,6 @@ interface MessageBubbleProps {
   onReact?: (messageId: string, reactionType: 'up' | 'down' | 'helpful') => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
-  showAvatar?: boolean;
-  showTimestamp?: boolean;
-  enableActions?: boolean;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -237,9 +250,13 @@ const MessageBubbleComponent = function MessageBubble({
   const [videoError, setVideoError] = useState(false);
   const isUser = message.role === 'user';
 
-  const { addArtifact, getMessageArtifacts } = useArtifactStore();
-  const upsertPanelArtifact = useChatArtifactsStore((state) => state.upsertArtifact);
-  const setComparisonChoice = useChatStore((state) => state.setComparisonChoice);
+  const addArtifactForMessage = useArtifactsStore((state) => state.addArtifactForMessage);
+  const getMessageArtifacts = useArtifactsStore((state) => state.getMessageArtifacts);
+  const upsertArtifact = useArtifactsStore((state) => state.upsertArtifact);
+  const setComparisonChoice = useComparisonStore((state) => state.setComparisonChoice);
+  const storedChoice = useComparisonStore((state) =>
+    state.getComparisonChoice(message.sessionId ?? '', message.id),
+  );
 
   // Artifact handling
   const existingArtifacts = getMessageArtifacts(message.id);
@@ -288,20 +305,20 @@ const MessageBubbleComponent = function MessageBubble({
 
   useEffect(() => {
     if (isUser || existingArtifacts.length > 0 || extractedArtifacts.length === 0) return;
-    extractedArtifacts.forEach((artifact) => addArtifact(message.id, artifact));
-  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifact]);
+    extractedArtifacts.forEach((artifact) => addArtifactForMessage(message.id, artifact));
+  }, [message.id, isUser, existingArtifacts.length, extractedArtifacts, addArtifactForMessage]);
 
   useEffect(() => {
     if (isUser || artifacts.length === 0) return;
     for (const artifact of artifacts) {
-      upsertPanelArtifact({
+      upsertArtifact({
         ...artifact,
         title: artifact.title || 'Untitled',
         language: artifact.language || artifact.type,
         messageId: message.id,
       });
     }
-  }, [artifacts, isUser, message.id, upsertPanelArtifact]);
+  }, [artifacts, isUser, message.id, upsertArtifact]);
 
   const cleanedContent = useMemo(() => {
     if (artifacts.length === 0) return message.content;
@@ -386,35 +403,106 @@ const MessageBubbleComponent = function MessageBubble({
               <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
             )}
             {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+            {/* PASTED badge (Fix 42) — shown when isPasted metadata is set by the composer */}
+            {isUser && message.metadata?.isPasted && (
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                pasted
+              </span>
+            )}
           </div>
 
-          {/* ThinkingBlock — extended reasoning content (shown above the main reply) */}
-          {!isUser && message.metadata?.thinkingContent && (
-            <div className="mb-3">
-              <ThinkingBlock
-                content={message.metadata.thinkingContent}
-                isStreaming={message.metadata.isThinkingStreaming ?? false}
-                startedAt={message.metadata.thinkingStartedAt}
-                completedAt={message.metadata.thinkingCompletedAt}
-                durationSeconds={message.metadata.thinkingDurationSeconds}
-                defaultExpanded={message.metadata.isThinkingStreaming ?? false}
-              />
-            </div>
-          )}
+          {/* Interleaved reasoning + tool flow */}
+          {!isUser &&
+            (() => {
+              const segments = message.metadata?.thinkingSegments;
+              const tools = !isUser && message.metadata?.tools ? message.metadata.tools : [];
+
+              // Multi-segment interleaved path: thinking[0], tool[0], thinking[1], tool[1], ...
+              if (segments && segments.length > 0) {
+                const maxLen = Math.max(segments.length, tools.length);
+                const blocks: React.ReactNode[] = [];
+
+                for (let i = 0; i < maxLen; i++) {
+                  const seg = segments[i];
+                  const tool = tools[i];
+
+                  if (seg) {
+                    blocks.push(
+                      <div key={`thinking-seg-${seg.id}`} className="mb-2">
+                        <ThinkingBlock
+                          content={seg.content}
+                          isStreaming={seg.isStreaming}
+                          startedAt={seg.startedAt}
+                          completedAt={seg.completedAt ?? undefined}
+                          durationSeconds={seg.durationSeconds}
+                          defaultExpanded={seg.isStreaming}
+                        />
+                      </div>,
+                    );
+                  }
+
+                  if (tool) {
+                    blocks.push(
+                      <div key={`tool-inline-${tool.id ?? i}`} className="mb-2">
+                        <ToolTimeline tools={[tool]} compact={false} />
+                      </div>,
+                    );
+                  }
+                }
+
+                // Any remaining tools beyond the last segment
+                if (tools.length > segments.length) {
+                  const remaining = tools.slice(segments.length);
+                  blocks.push(
+                    <div key="tool-remainder" className="mb-2">
+                      <ToolTimeline tools={remaining} />
+                    </div>,
+                  );
+                }
+
+                return <div className="mb-3 space-y-0">{blocks}</div>;
+              }
+
+              // Legacy single-block path
+              if (message.metadata?.thinkingContent) {
+                return (
+                  <div className="mb-3">
+                    <ThinkingBlock
+                      content={message.metadata.thinkingContent}
+                      isStreaming={message.metadata.isThinkingStreaming ?? false}
+                      startedAt={message.metadata.thinkingStartedAt}
+                      completedAt={message.metadata.thinkingCompletedAt}
+                      durationSeconds={message.metadata.thinkingDurationSeconds}
+                      defaultExpanded={message.metadata.isThinkingStreaming ?? false}
+                    />
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
 
           {/* A/B comparison response — shown instead of main content when options are present */}
           {!isUser && message.metadata?.comparisonOptions && (
             <ComparisonResponse
               optionA={message.metadata.comparisonOptions.a}
               optionB={message.metadata.comparisonOptions.b}
-              choice={message.metadata.comparisonChoice}
+              choice={storedChoice ?? message.metadata.comparisonChoice}
               isStreaming={message.isStreaming}
               onChoose={(side) => {
-                if (message.sessionId) {
-                  setComparisonChoice(message.sessionId, message.id, side);
-                }
+                setComparisonChoice(message.sessionId ?? '', message.id, side);
               }}
             />
+          )}
+
+          {/* Tool timeline (legacy path) — rendered before prose so it appears as
+              leading context for the response, not an afterthought appended at the end.
+              Only shown when there are no interleaved thinkingSegments (those handle
+              their own per-step tool rendering above). */}
+          {!isUser && toolTimeline.length > 0 && !message.metadata?.thinkingSegments?.length && (
+            <div className="mb-3">
+              <ToolTimeline tools={toolTimeline} />
+            </div>
           )}
 
           {/* Message Content — 15 px body matching desktop .message-text */}
@@ -435,6 +523,66 @@ const MessageBubbleComponent = function MessageBubble({
               <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
             )}
           </div>
+
+          {/* Attachments (Fix 43) — image thumbnails or file-type icons */}
+          {message.attachments && message.attachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {message.attachments.map((attachment) => {
+                const isImage = attachment.type.startsWith('image/');
+                const isDoc =
+                  attachment.type === 'application/pdf' ||
+                  attachment.type.includes('word') ||
+                  attachment.type.includes('document');
+                return (
+                  <a
+                    key={attachment.id}
+                    href={attachment.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(
+                      'flex items-center gap-2 rounded-lg border border-border/50 overflow-hidden',
+                      'bg-muted/40 hover:bg-muted/70 transition-colors text-left no-underline',
+                      isImage ? 'p-0' : 'px-2.5 py-1.5',
+                    )}
+                    title={attachment.name}
+                  >
+                    {isImage ? (
+                      <div className="relative h-24 w-24 overflow-hidden rounded-lg">
+                        <img
+                          src={attachment.thumbnailUrl ?? attachment.url}
+                          alt={attachment.name}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {isDoc ? (
+                          <FileText
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : attachment.type.startsWith('image/') ? (
+                          <FileImage
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <File
+                            className="h-4 w-4 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span className="max-w-[160px] truncate text-xs text-foreground">
+                          {attachment.name}
+                        </span>
+                      </>
+                    )}
+                  </a>
+                );
+              })}
+            </div>
+          )}
 
           {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
           {!isUser && cleanedContent.trim() && (
@@ -499,36 +647,60 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Search Results */}
-          {!isUser && message.metadata?.searchResults && (
-            <div className="mt-4">
-              <SearchResults searchResponse={message.metadata.searchResults} showAnswer />
-            </div>
-          )}
+          {/* Research sources — unified panel for searchResults + citations */}
+          {!isUser &&
+            (() => {
+              // Collect sources from searchResults (legacy) and citations (server-managed tools)
+              const sources: ResearchSource[] = [];
 
-          {/* Tool timeline — compact, progressively disclosed tool activity. */}
-          {!isUser && toolTimeline.length > 0 && (
-            <div className="mt-3">
-              <ToolTimeline tools={toolTimeline} />
-            </div>
-          )}
+              const sr = message.metadata?.searchResults;
+              if (sr) {
+                const query = sr.query;
+                (sr.results ?? []).forEach((r, i) => {
+                  if (r.url) {
+                    sources.push({
+                      url: r.url,
+                      title: r.title || '',
+                      snippet: r.snippet,
+                      favicon: r.favicon,
+                      citationIndex: i + 1,
+                    });
+                  }
+                });
+                // Sources array from Perplexity answer
+                (sr.sources ?? []).forEach((url) => {
+                  if (url && !sources.some((s) => s.url === url)) {
+                    sources.push({ url, title: '', citationIndex: sources.length + 1 });
+                  }
+                });
 
-          {/* Citations (from server-managed web search tools) */}
-          {!isUser && message.metadata?.citations && message.metadata.citations.length > 0 && (
-            <CitationFooter
-              citations={message.metadata.citations
-                .filter(
-                  (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
-                    !!(c.url && c.title),
-                )
-                .map((c, i) => ({
-                  index: i + 1,
-                  url: c.url,
-                  title: c.title,
-                  snippet: c.cited_text,
-                }))}
-            />
-          )}
+                if (sources.length > 0) {
+                  return <InlineSourcesList sources={sources} query={query} />;
+                }
+              }
+
+              const citations = message.metadata?.citations;
+              if (citations && citations.length > 0) {
+                const citSources = citations
+                  .filter(
+                    (c): c is { url: string; title: string; cited_text?: string; type?: string } =>
+                      !!(c.url && c.title),
+                  )
+                  .map((c, i) => ({
+                    url: c.url,
+                    title: c.title,
+                    snippet: c.cited_text,
+                    citationIndex: i + 1,
+                  }));
+                if (citSources.length > 0) {
+                  return <InlineSourcesList sources={citSources} />;
+                }
+              }
+
+              return null;
+            })()}
+
+          {/* Tool timeline rendered above prose (moved before message content section). */}
 
           {/* Thinking Steps (Collapsible) */}
           {hasThinkingSteps && (

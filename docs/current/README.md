@@ -2,18 +2,22 @@
 
 Status: Current
 Owner: Docs/platform
-Last updated: 2026-05-21
+Last updated: 2026-05-28
 
 This folder is the compact source-of-truth layer for AGI Workforce. It replaces the older pattern where product, architecture, launch, pricing, scaling, and handoff decisions were scattered across long top-level docs.
 
 ## Read Order
 
-1. [`product-suite.md`](./product-suite.md) - product thesis, surfaces, trust modes, parity target, and current scope.
-2. [`technical-architecture.md`](./technical-architecture.md) - monorepo shape, runtime boundaries, data ownership, provider strategy, and generated-file architecture.
-3. [`provider-capability-matrix.md`](./provider-capability-matrix.md) - provider route capabilities, privacy claims, and routing constraints.
-4. [`commercial-and-launch.md`](./commercial-and-launch.md) - bootstrap-safe monetization, waitlist/private-beta gates, enterprise posture, and launch rules.
-5. [`agent-and-repo-operability.md`](./agent-and-repo-operability.md) - repo organization, docs rules, agent-native workflow, and A+ criteria.
-6. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
+1. [`source-of-truth.md`](./source-of-truth.md) - single product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
+2. [`agi-product-requirements.md`](./agi-product-requirements.md) - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
+3. [`parity-implementation-matrix.md`](./parity-implementation-matrix.md) - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+4. [`byok-open-model-provider-strategy.md`](./byok-open-model-provider-strategy.md) - BYOK provider classes, hosted open-model APIs, open model priorities, and Desktop model-selector rules.
+5. [`product-suite.md`](./product-suite.md) - product thesis, surfaces, trust modes, parity target, and current scope.
+6. [`technical-architecture.md`](./technical-architecture.md) - monorepo shape, runtime boundaries, data ownership, provider strategy, and generated-file architecture.
+7. [`provider-capability-matrix.md`](./provider-capability-matrix.md) - provider route capabilities, privacy claims, and routing constraints.
+8. [`commercial-and-launch.md`](./commercial-and-launch.md) - bootstrap-safe monetization, waitlist/private-beta gates, enterprise posture, and launch rules.
+9. [`agent-and-repo-operability.md`](./agent-and-repo-operability.md) - repo organization, docs rules, agent-native workflow, and A+ criteria.
+10. [`../engineering/naming-conventions.md`](../engineering/naming-conventions.md) - locked naming rules for product, CLI, repo files, packages, branches, commits, docs, and releases.
 
 ## Canonical Root Docs
 

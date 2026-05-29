@@ -3,16 +3,9 @@
  * Handles server state management and API caching
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
 // ReactQueryDevtools loaded lazily in dev only
-
-let ReactQueryDevtools: React.ComponentType<Record<string, unknown>> | null = null;
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  import('@tanstack/react-query-devtools').then((mod) => {
-    ReactQueryDevtools = mod.ReactQueryDevtools;
-  });
-}
 import { toast } from 'sonner';
 import { useNotificationStore } from './notification-store';
 import { logger } from '@shared/lib/logger';
@@ -143,17 +136,38 @@ interface QueryProviderProps {
   children: React.ReactNode;
 }
 
+function QueryDevtools() {
+  const [Devtools, setDevtools] = useState<React.ComponentType<Record<string, unknown>> | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'development') return;
+
+    let mounted = true;
+    void import('@tanstack/react-query-devtools').then((mod) => {
+      if (mounted) setDevtools(() => mod.ReactQueryDevtools);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return Devtools
+    ? React.createElement(Devtools, {
+        initialIsOpen: false,
+        buttonPosition: 'bottom-right',
+      })
+    : null;
+}
+
 export const QueryProvider: React.FC<QueryProviderProps> = ({ children }) => {
   return React.createElement(
     QueryClientProvider,
     { client: queryClient },
     children,
-    ReactQueryDevtools
-      ? React.createElement(ReactQueryDevtools, {
-          initialIsOpen: false,
-          buttonPosition: 'bottom-right',
-        })
-      : null,
+    React.createElement(QueryDevtools),
   );
 };
 

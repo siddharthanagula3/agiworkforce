@@ -6,8 +6,8 @@ import { vi, beforeAll, afterAll, afterEach } from 'vitest';
 
 // Set test environment variables
 process.env['JWT_SECRET'] = 'test-jwt-secret-key-for-testing-only';
-process.env['SUPABASE_URL'] = 'http://localhost:54321';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key';
+process.env['NEON_DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test';
+process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
 process.env['ALLOWED_ORIGINS'] = 'http://localhost:3000,http://localhost:3001';
 process.env['NODE_ENV'] = 'test';
 process.env['MOCK_LLM_RESPONSES'] = process.env['MOCK_LLM_RESPONSES'] || '1';

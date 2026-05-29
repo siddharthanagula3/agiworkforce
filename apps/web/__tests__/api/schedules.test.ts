@@ -21,21 +21,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock cookies
-vi.mock('next/headers', () => ({
-  cookies: vi.fn().mockResolvedValue({
-    get: vi.fn((name: string) => {
-      if (name === 'sb-test-auth-token') {
-        return { value: 'mock-cookie-token' };
-      }
-      return undefined;
-    }),
-    set: vi.fn(),
-  }),
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 
 const mockUser = {
-  id: 'user-abc',
+  userId: 'user-abc',
   email: 'user@example.com',
 };
 
@@ -59,24 +50,24 @@ const mockScheduleRow = {
   updated_at: '2024-08-15T00:00:00Z',
 };
 
-// Chainable mock for the RLS-bound Supabase client (userDb).
-const mockSingle = vi.fn();
-const mockSelectAfterInsert = vi.fn();
-const mockInsert = vi.fn();
-const mockLimit = vi.fn();
-const mockOrder = vi.fn();
-const mockEqUserId = vi.fn();
-const mockSelectAll = vi.fn();
-const mockFrom = vi.fn();
-
-const mockUserDb = { from: mockFrom };
-
-// Mock api-auth so routes receive {user, userDb: mockUserDb} directly,
-// bypassing the real getServiceClient/getUserClient singleton calls.
-const mockGetAuthenticatedUserWithClient = vi.fn();
+// ── Clerk auth mock ────────────────────────────────────────────────────────────
+const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUserWithClient: (...args: unknown[]) =>
-    mockGetAuthenticatedUserWithClient(...args),
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// ── Neon DB mock ───────────────────────────────────────────────────────────────
+// The schedules route uses raw SQL via db.query() for SELECT and db.query() for INSERT.
+const mockNeonQuery = vi.fn();
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // Import after all mocks are registered
@@ -86,32 +77,11 @@ describe('Schedules API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user — routes receive {user, userDb} via mocked helper.
-    mockGetAuthenticatedUserWithClient.mockResolvedValue({
-      user: mockUser,
-      userDb: mockUserDb,
-    });
+    // Default: authenticated user via Clerk
+    mockGetClerkAuthUser.mockResolvedValue(mockUser);
 
-    // Default GET chain: .select('*').eq('user_id').order().limit()
-    mockLimit.mockResolvedValue({ data: [mockScheduleRow], error: null });
-    mockOrder.mockReturnValue({ limit: mockLimit });
-    mockEqUserId.mockReturnValue({ order: mockOrder });
-    mockSelectAll.mockReturnValue({ eq: mockEqUserId });
-
-    // Default POST chain: .insert().select().single()
-    mockSingle.mockResolvedValue({ data: mockScheduleRow, error: null });
-    mockSelectAfterInsert.mockReturnValue({ single: mockSingle });
-    mockInsert.mockReturnValue({ select: mockSelectAfterInsert });
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'scheduled_tasks') {
-        return {
-          select: mockSelectAll,
-          insert: mockInsert,
-        };
-      }
-      return {};
-    });
+    // Default: GET query returns one schedule row
+    mockNeonQuery.mockResolvedValue([mockScheduleRow]);
   });
 
   // ---------------------------------------------------------------------------
@@ -162,7 +132,7 @@ describe('Schedules API', () => {
     });
 
     it('should return 200 with empty array when user has no schedules', async () => {
-      mockLimit.mockResolvedValue({ data: [], error: null });
+      mockNeonQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -176,7 +146,8 @@ describe('Schedules API', () => {
     });
 
     it('should return 200 with empty array when data is null', async () => {
-      mockLimit.mockResolvedValue({ data: null, error: null });
+      // Route handles empty array; Neon returns [] not null
+      mockNeonQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -191,7 +162,7 @@ describe('Schedules API', () => {
 
     it('should return 401 when user is not authenticated via cookie', async () => {
       const { createError } = await import('@/lib/errors');
-      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -203,9 +174,7 @@ describe('Schedules API', () => {
 
     it('should return 401 when Bearer token is invalid', async () => {
       const { createError } = await import('@/lib/errors');
-      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(
-        createError.unauthorized('Invalid token'),
-      );
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -230,10 +199,7 @@ describe('Schedules API', () => {
     });
 
     it('should return 500 when database query fails', async () => {
-      mockLimit.mockResolvedValue({
-        data: null,
-        error: { message: 'DB error' },
-      });
+      mockNeonQuery.mockRejectedValueOnce(new Error('DB error'));
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'GET',
@@ -278,6 +244,11 @@ describe('Schedules API', () => {
       timeOfDay: '08:00',
       timezone: 'UTC',
     };
+
+    beforeEach(() => {
+      // POST default: INSERT returns the created row
+      mockNeonQuery.mockResolvedValue([mockScheduleRow]);
+    });
 
     it('should return 201 with created schedule for valid request', async () => {
       const request = new NextRequest('http://localhost/api/schedules', {
@@ -397,7 +368,7 @@ describe('Schedules API', () => {
 
     it('should return 401 for unauthenticated request', async () => {
       const { createError } = await import('@/lib/errors');
-      mockGetAuthenticatedUserWithClient.mockRejectedValueOnce(createError.unauthorized());
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'POST',
@@ -419,22 +390,19 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.recurrence).toBe('once');
+      // The INSERT SQL is called with values; check the SQL contains the correct recurrence.
+      // Route builds parameterized SQL: insert into scheduled_tasks (...) values ($1, ...)
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // recurrence is the 5th positional arg: user_id, name, prompt, model, recurrence, ...
+      expect(queryArgs?.[4]).toBe('once');
     });
 
     it('should accept all valid recurrence values', async () => {
       for (const recurrence of ['once', 'daily', 'weekly', 'monthly', 'custom']) {
         vi.clearAllMocks();
-        // Re-wire mocks after clearAllMocks
-        mockGetAuthenticatedUserWithClient.mockResolvedValue({
-          user: mockUser,
-          userDb: mockUserDb,
-        });
-        mockSingle.mockResolvedValue({ data: mockScheduleRow, error: null });
-        mockSelectAfterInsert.mockReturnValue({ single: mockSingle });
-        mockInsert.mockReturnValue({ select: mockSelectAfterInsert });
-        mockFrom.mockImplementation(() => ({ select: mockSelectAll, insert: mockInsert }));
+        mockGetClerkAuthUser.mockResolvedValue(mockUser);
+        mockNeonQuery.mockResolvedValue([mockScheduleRow]);
 
         const request = new NextRequest('http://localhost/api/schedules', {
           method: 'POST',
@@ -445,8 +413,9 @@ describe('Schedules API', () => {
         const response = await POST(request);
         expect(response.status).toBe(201);
 
-        const insertCall = mockInsert.mock.calls[0]![0]!;
-        expect(insertCall.recurrence).toBe(recurrence);
+        const queryCall = mockNeonQuery.mock.calls[0];
+        const queryArgs = queryCall?.[1] as unknown[];
+        expect(queryArgs?.[4]).toBe(recurrence);
       }
     });
 
@@ -460,8 +429,10 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.model).toBe('auto-balanced');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // model is the 4th positional arg: user_id, name, prompt, model, ...
+      expect(queryArgs?.[3]).toBe('auto-balanced');
     });
 
     it('should default timeOfDay to "09:00" for an invalid time format', async () => {
@@ -474,21 +445,17 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.time_of_day).toBe('09:00');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // time_of_day is the 6th positional arg: user_id, name, prompt, model, recurrence, time_of_day
+      expect(queryArgs?.[5]).toBe('09:00');
     });
 
     it('should accept valid HH:MM time formats', async () => {
       for (const timeOfDay of ['00:00', '09:30', '23:59']) {
         vi.clearAllMocks();
-        mockGetAuthenticatedUserWithClient.mockResolvedValue({
-          user: mockUser,
-          userDb: mockUserDb,
-        });
-        mockSingle.mockResolvedValue({ data: mockScheduleRow, error: null });
-        mockSelectAfterInsert.mockReturnValue({ single: mockSingle });
-        mockInsert.mockReturnValue({ select: mockSelectAfterInsert });
-        mockFrom.mockImplementation(() => ({ select: mockSelectAll, insert: mockInsert }));
+        mockGetClerkAuthUser.mockResolvedValue(mockUser);
+        mockNeonQuery.mockResolvedValue([mockScheduleRow]);
 
         const request = new NextRequest('http://localhost/api/schedules', {
           method: 'POST',
@@ -499,8 +466,9 @@ describe('Schedules API', () => {
         const response = await POST(request);
         expect(response.status).toBe(201);
 
-        const insertCall = mockInsert.mock.calls[0]![0]!;
-        expect(insertCall.time_of_day).toBe(timeOfDay);
+        const queryCall = mockNeonQuery.mock.calls[0];
+        const queryArgs = queryCall?.[1] as unknown[];
+        expect(queryArgs?.[5]).toBe(timeOfDay);
       }
     });
 
@@ -514,8 +482,10 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.timezone).toBe('UTC');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // timezone is the 7th positional arg: user_id, name, prompt, model, recurrence, time_of_day, timezone
+      expect(queryArgs?.[6]).toBe('UTC');
     });
 
     it('should include cronExpression in insert when provided', async () => {
@@ -528,8 +498,11 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.cron_expression).toBe('0 9 * * 1');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      const queryArgs = queryCall?.[1] as unknown[];
+      expect(sql).toContain('cron_expression');
+      expect(queryArgs).toContain('0 9 * * 1');
     });
 
     it('should include scheduledAt in insert when provided', async () => {
@@ -546,8 +519,11 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.scheduled_at).toBe('2024-12-25T10:00:00Z');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      const queryArgs = queryCall?.[1] as unknown[];
+      expect(sql).toContain('scheduled_at');
+      expect(queryArgs).toContain('2024-12-25T10:00:00Z');
     });
 
     it('should include valid daysOfWeek (0-6) in insert', async () => {
@@ -560,8 +536,11 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.days_of_week).toEqual([1, 3, 5]);
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      const queryArgs = queryCall?.[1] as unknown[];
+      expect(sql).toContain('days_of_week');
+      expect(queryArgs).toContainEqual([1, 3, 5]);
     });
 
     it('should filter out invalid daysOfWeek values', async () => {
@@ -578,8 +557,10 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.days_of_week).toEqual([1, 5]);
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // Only valid days [1, 5] should be in the args
+      expect(queryArgs).toContainEqual([1, 5]);
     });
 
     it('should omit days_of_week from insert when all values are invalid', async () => {
@@ -592,8 +573,9 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.days_of_week).toBeUndefined();
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      expect(sql).not.toContain('days_of_week');
     });
 
     it('should include valid dayOfMonth (1-31) in insert', async () => {
@@ -606,8 +588,11 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.day_of_month).toBe(15);
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      const queryArgs = queryCall?.[1] as unknown[];
+      expect(sql).toContain('day_of_month');
+      expect(queryArgs).toContain(15);
     });
 
     it('should omit day_of_month from insert when value is out of range', async () => {
@@ -620,8 +605,9 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.day_of_month).toBeUndefined();
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const sql = queryCall?.[0] as string;
+      expect(sql).not.toContain('day_of_month');
     });
 
     it('should default isActive to true when not provided', async () => {
@@ -634,8 +620,10 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.is_active).toBe(true);
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // is_active is the 8th positional arg: user_id, name, prompt, model, recurrence, time_of_day, timezone, is_active
+      expect(queryArgs?.[7]).toBe(true);
     });
 
     it('should set isActive to false when explicitly provided as false', async () => {
@@ -648,15 +636,13 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.is_active).toBe(false);
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      expect(queryArgs?.[7]).toBe(false);
     });
 
     it('should return 500 when database insert fails', async () => {
-      mockSingle.mockResolvedValue({
-        data: null,
-        error: { message: 'Insert failed' },
-      });
+      mockNeonQuery.mockRejectedValueOnce(new Error('Insert failed'));
 
       const request = new NextRequest('http://localhost/api/schedules', {
         method: 'POST',
@@ -705,9 +691,11 @@ describe('Schedules API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      const insertCall = mockInsert.mock.calls[0]![0]!;
-      expect(insertCall.name).toBe('Padded Name');
-      expect(insertCall.prompt).toBe('Padded Prompt');
+      const queryCall = mockNeonQuery.mock.calls[0];
+      const queryArgs = queryCall?.[1] as unknown[];
+      // name is the 2nd positional arg, prompt is 3rd
+      expect(queryArgs?.[1]).toBe('Padded Name');
+      expect(queryArgs?.[2]).toBe('Padded Prompt');
     });
   });
 });

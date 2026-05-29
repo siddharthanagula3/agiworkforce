@@ -1,12 +1,13 @@
 // packages/types/src/design-system/effort.ts
 
 /** UI-facing effort axis. Locked vocabulary per DECISIONS.md D5. */
-export type Effort = 'low' | 'medium' | 'high' | 'max';
+export type Effort = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export const EFFORT_LABEL: Readonly<Record<Effort, string>> = Object.freeze({
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+  xhigh: 'xHigh',
   max: 'Max',
 });
 
@@ -15,23 +16,26 @@ export const ANTHROPIC_THINKING_BUDGET: Readonly<Record<Effort, number>> = Objec
   low: 4096,
   medium: 16384,
   high: 32768,
+  xhigh: 49152,
   max: 65536,
 });
 
-/** OpenAI reasoning.effort string by effort level (note: 'max' falls back to 'high' for o-series). */
-export const OPENAI_REASONING_EFFORT: Readonly<Record<Effort, 'low' | 'medium' | 'high'>> =
-  Object.freeze({
-    low: 'low',
-    medium: 'medium',
-    high: 'high',
-    max: 'high',
-  });
+/** OpenAI reasoning.effort string by effort level. OpenAI has no Max effort. */
+export const OPENAI_REASONING_EFFORT: Readonly<
+  Partial<Record<Effort, 'low' | 'medium' | 'high' | 'xhigh'>>
+> = Object.freeze({
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  xhigh: 'xhigh',
+});
 
 /** Gemini thinkingConfig.thinkingBudget by effort level. */
 export const GEMINI_THINKING_BUDGET: Readonly<Record<Effort, number>> = Object.freeze({
   low: 4096,
   medium: 16384,
   high: 32768,
+  xhigh: 49152,
   max: 65536,
 });
 
@@ -47,8 +51,10 @@ export function effortToProviderParams(
   switch (providerId) {
     case 'anthropic':
       return { thinking: { type: 'enabled', budget_tokens: ANTHROPIC_THINKING_BUDGET[effort] } };
-    case 'openai':
-      return { reasoning: { effort: OPENAI_REASONING_EFFORT[effort] } };
+    case 'openai': {
+      const reasoningEffort = OPENAI_REASONING_EFFORT[effort];
+      return reasoningEffort ? { reasoning: { effort: reasoningEffort } } : null;
+    }
     case 'google':
       return {
         generationConfig: { thinkingConfig: { thinkingBudget: GEMINI_THINKING_BUDGET[effort] } },

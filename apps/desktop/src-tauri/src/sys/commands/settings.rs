@@ -65,7 +65,7 @@ pub struct ChatPreferences {
     pub auto_save_memories: bool,
     /// Where chat history is persisted.
     /// `"local"` — SQLite only, never synced to cloud (default).
-    /// `"cloud"` — SQLite + best-effort Supabase sync on every save.
+    /// `"cloud"` — reserved for explicit cloud storage; unavailable in Desktop v1.
     #[serde(default = "default_chat_storage_mode")]
     pub chat_storage_mode: String,
 }
@@ -264,8 +264,14 @@ mod tests {
             .to_string();
         let temp = std::env::temp_dir().to_string_lossy().to_string();
 
-        assert!(dirs.contains(&cwd), "workspace cwd should be allowed by default");
-        assert!(dirs.contains(&temp), "temp directory should be allowed by default");
+        assert!(
+            dirs.contains(&cwd),
+            "workspace cwd should be allowed by default"
+        );
+        assert!(
+            dirs.contains(&temp),
+            "temp directory should be allowed by default"
+        );
     }
 }
 

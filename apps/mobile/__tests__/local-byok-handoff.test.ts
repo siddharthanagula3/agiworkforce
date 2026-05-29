@@ -1,5 +1,3 @@
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
-
 jest.mock('../services/api', () => ({
   api: {
     get: jest.fn(),
@@ -9,12 +7,13 @@ jest.mock('../services/api', () => ({
   },
 }));
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('../services/streaming', () => ({
@@ -36,71 +35,7 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 import { useChatStore } from '../stores/chatStore';
-
-const HASH = 'abc1234567890defabc1234567890defabc1234567890defabc1234567890def';
-
-function buildPreview(overrides?: {
-  blocked?: boolean;
-  targetProviderMode?: LocalToByokHandoffPreview['draft']['targetProviderMode'];
-}): LocalToByokHandoffPreview {
-  const blocked = overrides?.blocked ?? false;
-  const redactionReport = {
-    scannerVersion: 'test-scanner',
-    findings: [],
-    redactedByteCount: 37,
-    blocked,
-    generatedAt: '2026-05-21T10:00:00.000Z',
-  };
-
-  return {
-    draft: {
-      id: `handoff-${HASH.slice(0, 16)}`,
-      sourceSessionId: 'local-session-1',
-      sourceSurface: 'mobile',
-      targetSurface: 'mobile',
-      targetPrivacyMode: 'byok',
-      targetProviderMode: overrides?.targetProviderMode ?? 'DirectByok',
-      selectedContext: [
-        {
-          id: 'msg-secret',
-          kind: 'message',
-          label: 'user message 1',
-          byteCount: 64,
-          checksumSha256: HASH,
-        },
-      ],
-      redactionReport,
-      previewHashSha256: HASH,
-      consentRequired: true,
-      expiresAt: '2026-05-21T10:30:00.000Z',
-      createdAt: '2026-05-21T10:00:00.000Z',
-    },
-    redactedPayload: JSON.stringify(
-      {
-        selectedContext: [
-          {
-            id: 'msg-secret',
-            label: 'user message 1',
-            content: 'OPENAI_API_KEY=[REDACTED_API_KEY]',
-          },
-        ],
-      },
-      null,
-      2,
-    ),
-    redactedContext: [
-      {
-        id: 'msg-secret',
-        kind: 'message',
-        label: 'user message 1',
-        byteCount: 64,
-        checksumSha256: HASH,
-        redactedContent: 'OPENAI_API_KEY=[REDACTED_API_KEY]',
-      },
-    ],
-    redactionReport,
-  };
-}
+import { api } from '../services/api';
 
 function resetStore() {
   useChatStore.setState({
@@ -118,10 +53,10 @@ function resetStore() {
     messages: {
       'local-conv': [
         {
-          id: 'msg-secret',
+          id: 'msg-user',
           conversationId: 'local-conv',
           role: 'user',
-          content: 'The raw secret is OPENAI_API_KEY=sk-live-raw-secret-1234567890',
+          content: 'Local-only prompt',
           createdAt: '2026-05-21T09:58:00.000Z',
           model: 'llama-local',
         },
@@ -138,44 +73,40 @@ function resetStore() {
   });
 }
 
-describe('mobile Local to BYOK handoff forks', () => {
+describe('mobile local conversation forks', () => {
   beforeEach(() => {
     resetStore();
     jest.clearAllMocks();
   });
 
-  it('creates a BYOK fork with only the accepted redacted preview payload', async () => {
+  it('creates only a local copy fork and does not create a BYOK handoff payload', async () => {
     const forkId = await useChatStore.getState().forkConversation('local-conv', {
-      title: 'BYOK fork',
-      model: 'gpt-5.1',
-      handoffPreview: buildPreview(),
-      handoffAcceptedAt: '2026-05-21T10:01:00.000Z',
+      title: 'Local copy',
+      model: 'llama-local',
     });
 
     const forkMessages = useChatStore.getState().messages[forkId] ?? [];
-    expect(forkMessages).toHaveLength(1);
-    expect(forkMessages[0]?.role).toBe('system');
-    expect(forkMessages[0]?.content).toContain('OPENAI_API_KEY=[REDACTED_API_KEY]');
-    expect(forkMessages[0]?.content).not.toContain('sk-live-raw-secret');
-    expect(forkMessages[0]?.content).not.toContain('Local-only answer');
-    expect(forkMessages[0]?.metadata).toMatchObject({
-      kind: 'local_to_byok_handoff',
-      previewHashSha256: HASH,
-      sourceMessagePolicy: 'redacted_preview_only',
-    });
+    expect(forkMessages).toHaveLength(2);
+    expect(forkMessages[0]?.content).toBe('Local-only prompt');
+    expect(forkMessages.some((message) => message.metadata?.kind === 'local_to_byok_handoff')).toBe(
+      false,
+    );
     expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
   });
 
-  it('rejects blocked previews before creating a fork', async () => {
-    await expect(
-      useChatStore.getState().forkConversation('local-conv', {
-        title: 'Blocked fork',
-        model: 'gpt-5.1',
-        handoffPreview: buildPreview({ blocked: true }),
-      }),
-    ).rejects.toThrow('Blocked Local to BYOK handoff preview');
+  it('does not touch remote chat APIs while mobile v1 is local-only', async () => {
+    const state = useChatStore.getState();
 
-    expect(useChatStore.getState().conversations).toHaveLength(1);
-    expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
+    await state.loadConversations();
+    const localId = await state.createConversation('Local only');
+    await state.loadMessages(localId);
+    await state.renameConversation(localId, 'Renamed local');
+    await state.pinConversation(localId);
+    await state.deleteConversation(localId);
+
+    expect(api.get).not.toHaveBeenCalled();
+    expect(api.post).not.toHaveBeenCalled();
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
   });
 });

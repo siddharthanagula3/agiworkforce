@@ -30,7 +30,7 @@
       "docs/agent-context/**",
       "docs/engineering/**",
       "packages/types/**",
-      "supabase/migrations/**",
+      "apps/web/db/neon/**",
       "ios/**"
     ]
   },
@@ -100,7 +100,7 @@
         "apps/web/lib/**"
       ],
       "readOnlyContextPaths": ["packages/unified-chat/**", "packages/types/**", "apps/sandbox/**"],
-      "blockedPaths": ["apps/web/app/api/**", "supabase/**", "packages/**"],
+      "blockedPaths": ["apps/web/app/api/**", "apps/web/db/neon/**", "packages/**"],
       "requiredChecks": [
         "pnpm --filter @agiworkforce/web typecheck",
         "pnpm --filter @agiworkforce/web test",
@@ -118,8 +118,12 @@
         "apps/web/core/auth/**",
         "apps/web/core/billing/**"
       ],
-      "readOnlyContextPaths": ["supabase/**", "packages/types/**", "packages/data-layer/**"],
-      "blockedPaths": ["supabase/migrations/**", "packages/types/**", "pnpm-lock.yaml"],
+      "readOnlyContextPaths": [
+        "apps/web/db/neon/**",
+        "packages/types/**",
+        "packages/data-layer/**"
+      ],
+      "blockedPaths": ["apps/web/db/neon/**", "packages/types/**", "pnpm-lock.yaml"],
       "requiredChecks": [
         "pnpm --filter @agiworkforce/web test",
         "pnpm --filter @agiworkforce/web typecheck"
@@ -139,14 +143,14 @@
       ],
       "readOnlyContextPaths": [
         "packages/types/src/enterprise/**",
-        "supabase/migrations/**",
+        "apps/web/db/neon/**",
         "apps/web/app/api/admin/**",
         "docs/current/commercial-and-launch.md",
         "docs/current/technical-architecture.md"
       ],
       "blockedPaths": [
         "packages/types/**",
-        "supabase/migrations/**",
+        "apps/web/db/neon/**",
         "services/api-gateway/src/middleware/**",
         "pnpm-lock.yaml"
       ],
@@ -279,8 +283,12 @@
       "name": "Backend services and signaling",
       "ownerRole": "Backend/data owner",
       "ownedWritePaths": ["services/**"],
-      "readOnlyContextPaths": ["supabase/**", "packages/types/**", "packages/data-layer/**"],
-      "blockedPaths": ["supabase/migrations/**", "packages/types/**"],
+      "readOnlyContextPaths": [
+        "apps/web/db/neon/**",
+        "packages/types/**",
+        "packages/data-layer/**"
+      ],
+      "blockedPaths": ["apps/web/db/neon/**", "packages/types/**"],
       "requiredChecks": [
         "pnpm --filter @agiworkforce/api-gateway test",
         "pnpm --filter @agiworkforce/signaling-server test"
@@ -291,7 +299,11 @@
       "id": "database-compliance",
       "name": "Database, compliance, and data layer",
       "ownerRole": "Backend/data owner",
-      "ownedWritePaths": ["supabase/**", "packages/data-layer/**", "packages/compliance/**"],
+      "ownedWritePaths": [
+        "apps/web/db/neon/**",
+        "packages/data-layer/**",
+        "packages/compliance/**"
+      ],
       "readOnlyContextPaths": [
         "apps/web/**",
         "services/**",
@@ -314,7 +326,7 @@
         "CHANGELOG.md",
         "docs/agent-context/**",
         "docs/engineering/**",
-        "audit/repo-organization/**",
+        "audit/**",
         "scripts/check-*.mjs"
       ],
       "readOnlyContextPaths": ["apps/**", "packages/**", "crates/**", "services/**"],

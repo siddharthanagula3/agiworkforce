@@ -70,7 +70,7 @@ import { readMemoryPanelSettings } from '@/features/memory/MemoryPanel';
 import { useExecutionStore } from '../../stores/executionStore';
 import { useExecutionSidecarStore } from '../../stores/executionSidecarStore';
 import { useProjectStore } from '../../stores/projectStore';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import type { ResearchTask } from '../../types/chat';
 import { formatErrorForChat } from '../../lib/friendlyErrors';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
@@ -716,7 +716,7 @@ export const UnifiedAgenticChat: React.FC<{
             case 'compact': {
               const activeConvId = useUnifiedChatStore.getState().activeConversationId;
               const compactDbId = activeConvId ? (uuidToDbId(activeConvId) ?? null) : null;
-              const compactUserId = supabaseAuth.getUser()?.id ?? null;
+              const compactUserId = cloudAccountAuth.getUser()?.id ?? null;
               panel = await executeCompactCommand(slashCommand.args, compactDbId, compactUserId);
               break;
             }
@@ -864,7 +864,7 @@ export const UnifiedAgenticChat: React.FC<{
         try {
           const autoCompactConvId = useUnifiedChatStore.getState().activeConversationId;
           const autoCompactDbId = autoCompactConvId ? uuidToDbId(autoCompactConvId) : undefined;
-          const autoCompactUserId = supabaseAuth.getUser()?.id;
+          const autoCompactUserId = cloudAccountAuth.getUser()?.id;
           await ipcInvoke('chat_compact_context', {
             conversationId: autoCompactDbId,
             focus: undefined,
@@ -1006,7 +1006,7 @@ export const UnifiedAgenticChat: React.FC<{
         // All LLM requests use cloud credits from subscription (except Ollama local)
         // For streaming mode, we pass the frontend message ID and don't wait for the response
         // Events will handle all updates
-        const userId = supabaseAuth.getUser()?.id;
+        const userId = cloudAccountAuth.getUser()?.id;
         if (!userId) {
           throw new Error('User not authenticated');
         }
@@ -1242,10 +1242,8 @@ export const UnifiedAgenticChat: React.FC<{
       // The watchdog now tracks inactivity (not absolute wall time), so long
       // generations stay alive while chunks/tool events are still flowing.
       // Bug 3 note: stream_watchdog_timeout in agent mode was a downstream symptom of
-      // Bug 2 (missing VITE_SUPABASE_URL in production → Supabase module threw at load
-      // → auth never initialized → LLM streaming never started → watchdog fired).
-      // Fix 2 (supabase.ts graceful degradation + .env.production) resolves Bug 3.
-      // If stream_watchdog_timeout recurs without Bug 2 present, check the Rust-side
+      // cloud auth failing during startup, which prevented LLM streaming from starting.
+      // If stream_watchdog_timeout recurs without auth startup errors, check the Rust-side
       // 30-second stream connection timeout in llm_router.rs (stream_timeout variable).
 
       // BUG-IX-04 fix: skip watchdog scheduling for slash command early-returns.
@@ -1456,7 +1454,7 @@ export const UnifiedAgenticChat: React.FC<{
     try {
       const activeConvId = useUnifiedChatStore.getState().activeConversationId;
       const dbId = activeConvId ? uuidToDbId(activeConvId) : undefined;
-      const userId = supabaseAuth.getUser()?.id;
+      const userId = cloudAccountAuth.getUser()?.id;
       await ipcInvoke('chat_compact_context', {
         conversationId: dbId,
         focus: undefined,

@@ -1,10 +1,10 @@
 import type { BillingInterval, BillingPlanTier } from '@agiworkforce/types';
 import { WEB_APP_URL } from '../api/config';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { openExternalUrl } from '../utils/navigation';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  const token = supabaseAuth.getState().session?.access_token;
+  const token = cloudAccountAuth.getState().session?.access_token;
   if (!token) return {};
   return { Authorization: `Bearer ${token}` };
 }

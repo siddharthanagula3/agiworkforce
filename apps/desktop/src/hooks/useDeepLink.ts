@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { onOpenUrl } from '@tauri-apps/plugin-deep-link';
 import { isTauri } from '../lib/tauri-mock';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 const ALLOWED_DEEP_LINK_SCHEME = 'agiworkforce:';
 const ALLOWED_MCP_OAUTH_PROVIDERS = new Set([
@@ -93,7 +93,7 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
     // Extract params from query string
     const queryParams = Object.fromEntries(parsed.searchParams.entries());
 
-    // Extract params from hash fragment (Supabase often puts them here for implicit flow)
+    // Extract params from hash fragment for legacy implicit-flow callbacks.
     // format: #access_token=...&refresh_token=...
     let hashParams: Record<string, string> = {};
     if (parsed.hash) {
@@ -105,7 +105,7 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
     const allParams = { ...queryParams, ...hashParams };
     const normalizedPathname = normalizeDeepLinkPath(parsed);
 
-    // Check for Supabase auth callback (OAuth2 PKCE flow)
+    // Check for cloud auth callback.
     if (normalizedPathname === '/auth/callback') {
       if (!allParams['code'] && !allParams['access_token'] && !allParams['refresh_token']) {
         return null;
@@ -178,7 +178,7 @@ function handleDeepLink(url: string) {
     if (code) {
       (async () => {
         try {
-          await supabaseAuth.exchangeCodeForSession(code);
+          await cloudAccountAuth.exchangeCodeForSession(code);
         } catch (error) {
           console.error('[DeepLink] Auth callback exchange failed:', error);
         }

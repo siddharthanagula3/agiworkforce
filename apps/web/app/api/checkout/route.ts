@@ -3,7 +3,8 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow, SubscriptionRow } from '@/lib/server/neon-types';
 import { STRIPE_PRICE_IDS } from '@/lib/pricing';
 import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -26,11 +27,24 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
+// Fix 6: Gate Stripe checkout for waitlisted plans.
+// All paid cloud plans are waitlist-gated per v1-local-only-cloud-waitlist lock.
+// Set STRIPE_CHECKOUT_ENABLED=true in env to open checkout (invite-only beta).
+const CHECKOUT_ENABLED = process.env['STRIPE_CHECKOUT_ENABLED'] === 'true';
+
 async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
+  }
+
+  // Fix 6: Reject checkout requests when plans are waitlist-gated.
+  // This prevents bypassing the waitlist by hitting the checkout API directly.
+  if (!CHECKOUT_ENABLED) {
+    throw createError.validation(
+      'Paid plans are in private beta. Join the waitlist at /pricing to be notified when checkout opens.',
+    );
   }
 
   // Rate limiting: 10 checkouts per minute per user
@@ -39,17 +53,30 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     return rateLimitResponse;
   }
 
-  const supabase = await createSupabaseServerClient();
-  // Use getUser() for server-side JWT validation - getSession() reads from
-  // the cookie without server verification and must not be trusted for auth.
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (!user || userError) {
+  const { userId } = await (await import('@clerk/nextjs/server')).auth();
+  if (!userId) {
     throw createError.unauthorized('Please sign in to continue');
   }
+
+  // Fetch the user's email from Clerk so Stripe customers are created with a
+  // real address. auth() only returns userId for session-cookie requests;
+  // email is only present on Bearer-token paths. clerkClient().users.getUser
+  // is the reliable cross-path source.
+  let userEmail = '';
+  try {
+    const { clerkClient } = await import('@clerk/nextjs/server');
+    const clerkUser = await (await clerkClient()).users.getUser(userId);
+    userEmail =
+      clerkUser.emailAddresses.find((e) => e.id === clerkUser.primaryEmailAddressId)
+        ?.emailAddress ??
+      clerkUser.emailAddresses[0]?.emailAddress ??
+      '';
+  } catch (err) {
+    logger.warn({ error: err, userId }, 'Could not fetch email from Clerk; proceeding without it');
+  }
+
+  const db = getNeonDb();
+  const user = { id: userId, email: userEmail };
 
   // Type-safe request body parsing with Zod validation
   let rawBody: unknown;
@@ -87,11 +114,17 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
 
   // If user already has an active subscription, do NOT create a new subscription via Checkout.
   // Route them to the Billing Portal instead to prevent duplicate subscriptions / double billing.
-  const { data: existingSubscription } = await supabase
-    .from('subscriptions')
-    .select('status, plan_tier, stripe_customer_id, stripe_subscription_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  type SubRow = Pick<
+    SubscriptionRow,
+    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+  >;
+  const subRows = await db
+    .query<SubRow>(
+      'select status, plan_tier, stripe_customer_id, stripe_subscription_id from subscriptions where user_id = $1 limit 1',
+      [user.id],
+    )
+    .catch(() => [] as SubRow[]);
+  const existingSubscription = subRows[0] ?? null;
 
   const activeStatuses = new Set(['active', 'trialing', 'past_due']);
   const hasActiveSubscription =
@@ -100,11 +133,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     activeStatuses.has(existingSubscription.status);
 
   // First, check if we have a customer ID stored in profiles
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .maybeSingle();
+  const profileRows = await db
+    .query<
+      Pick<ProfileRow, 'stripe_customer_id'>
+    >('select stripe_customer_id from profiles where id = $1 limit 1', [user.id])
+    .catch(() => [] as Pick<ProfileRow, 'stripe_customer_id'>[]);
+  const profile = profileRows[0] ?? null;
 
   if (profile?.stripe_customer_id) {
     stripeCustomerId = profile.stripe_customer_id;
@@ -124,16 +158,18 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
-          supabase_user_id: user.id,
+          user_id: user.id,
         },
       });
       stripeCustomerId = customer.id;
 
       // Store the customer ID in the profile for future use
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: stripeCustomerId })
-        .eq('id', user.id);
+      await db
+        .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+          stripeCustomerId,
+          user.id,
+        ])
+        .catch(() => undefined);
 
       logger.info(
         { userId: user.id, customerId: stripeCustomerId },
@@ -156,10 +192,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
         const customers = await stripe.customers.list({ email: user.email, limit: 1 });
         if (customers.data.length > 0) {
           stripeCustomerId = customers.data[0]?.id ?? null;
-          await supabase
-            .from('profiles')
-            .update({ stripe_customer_id: stripeCustomerId })
-            .eq('id', user.id);
+          await db
+            .execute('update profiles set stripe_customer_id = $1 where id = $2', [
+              stripeCustomerId,
+              user.id,
+            ])
+            .catch(() => undefined);
         }
       }
 
@@ -200,12 +238,12 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       cancel_url: `${process.env['NEXT_PUBLIC_APP_URL']}/pricing`,
       client_reference_id: user.id, // Primary identifier for webhook
       // Metadata duplicates user.id for fast webhook lookups: the webhook handler
-      // resolves the Supabase user via metadata first (O(1) map read) before falling
+      // resolves the Clerk user via metadata first (O(1) map read) before falling
       // back to client_reference_id or a Stripe customer lookup. This is intentional
       // - not redundant - because Stripe customer IDs are not always available at
       // webhook time (e.g. first-time checkout before the customer object is linked).
       metadata: {
-        supabase_user_id: user.id,
+        user_id: user.id,
         plan_tier: plan,
       },
       allow_promotion_codes: true,

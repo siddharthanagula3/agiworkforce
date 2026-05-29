@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -135,8 +135,8 @@ function formatPeriodLabel(date: Date): string {
 
 async function fetchUsageRows(userId: string, start: Date, end: Date): Promise<UsageRow[]> {
   // Wave 1.5+ singleton sweep: user-scoped client.
-  const supabase = getUserScopedClient(userId);
-  const { data, error } = await supabase
+  const db = getUserScopedClient(userId);
+  const { data, error } = await db
     .from('usage_events')
     .select('*')
     .eq('user_id', userId)
@@ -284,8 +284,8 @@ router.get('/history', createRateLimiter('usage-history'), async (req: Request, 
   const limit = Math.max(1, Math.min(100, Number(req.query['limit'] ?? 50)));
   const offset = Math.max(0, Number(req.query['offset'] ?? 0));
 
-  const supabase = getUserScopedClient(user.userId);
-  const { data, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data, error } = await db
     .from('usage_events')
     .select('*')
     .eq('user_id', user.userId)

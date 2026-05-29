@@ -8,15 +8,8 @@ import { DEFAULT_DEEPSEEK_MODEL, SUPPORTED_DEEPSEEK_MODELS } from '@shared/confi
 import { DeepSeekProvider, DeepSeekError, DeepSeekMessage } from './deepseek-ai';
 
 // Mock external dependencies
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
-    auth: {
-      getSession: vi.fn(),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-  },
+vi.mock('@shared/lib/get-auth-token', () => ({
+  getAuthToken: vi.fn(),
 }));
 
 vi.mock('@shared/lib/logger', () => ({
@@ -28,7 +21,7 @@ vi.mock('@shared/lib/logger', () => ({
 }));
 
 // Get mocked modules
-const { supabase } = await import('@shared/lib/supabase-client');
+const { getAuthToken } = await import('@shared/lib/get-auth-token');
 
 describe('DeepSeekProvider', () => {
   let provider: DeepSeekProvider;
@@ -38,10 +31,7 @@ describe('DeepSeekProvider', () => {
     vi.clearAllMocks();
 
     // Setup default auth mock
-    vi.mocked(supabase.auth.getSession).mockResolvedValue({
-      data: { session: { access_token: 'test-token' } },
-      error: null,
-    } as never);
+    vi.mocked(getAuthToken).mockResolvedValue('test-token');
 
     // Setup fetch mock
     mockFetch = vi.fn();
@@ -218,10 +208,7 @@ describe('DeepSeekProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null).mockResolvedValueOnce(null);
 
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(DeepSeekError);
       // Error gets re-wrapped in catch block as REQUEST_FAILED
@@ -275,69 +262,6 @@ describe('DeepSeekProvider', () => {
 
       expect(response.sessionId).toBe('session-123');
       expect(response.userId).toBe('user-456');
-    });
-
-    it('should save message to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-            usage: { prompt_tokens: 5 },
-            id: 'resp-123',
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', 'user-456');
-
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          role: 'assistant',
-          content: 'Response',
-        }),
-      );
-    });
-
-    it('should include reasoningContent in saved metadata', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [
-              {
-                message: {
-                  content: 'Answer',
-                  reasoning_content: 'Reasoning steps',
-                },
-              },
-            ],
-            usage: { prompt_tokens: 5 },
-            id: 'resp-123',
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, 'session-123', 'user-456');
-
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          metadata: expect.objectContaining({
-            reasoningContent: 'Reasoning steps',
-          }),
-        }),
-      );
     });
 
     it('should handle empty response gracefully', async () => {
@@ -411,10 +335,7 @@ describe('DeepSeekProvider', () => {
     });
 
     it('should throw error when not logged in', async () => {
-      vi.mocked(supabase.auth.getSession).mockResolvedValueOnce({
-        data: { session: null },
-        error: null,
-      } as never);
+      vi.mocked(getAuthToken).mockResolvedValueOnce(null);
 
       const stream = provider.streamMessage(mockMessages);
 
@@ -432,36 +353,6 @@ describe('DeepSeekProvider', () => {
       const stream = provider.streamMessage(mockMessages);
 
       await expect(stream.next()).rejects.toThrow(DeepSeekError);
-    });
-
-    it('should save to database when sessionId and userId provided', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: null });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Streamed' } }],
-            usage: { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
-          }),
-      });
-
-      const chunks = [];
-      for await (const chunk of provider.streamMessage(mockMessages, 'session-123', 'user-456')) {
-        chunks.push(chunk);
-      }
-
-      expect(supabase.from).toHaveBeenCalledWith('agent_messages');
-      expect(insertMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          session_id: 'session-123',
-          user_id: 'user-456',
-          content: 'Streamed',
-        }),
-      );
     });
   });
 
@@ -512,32 +403,7 @@ describe('DeepSeekProvider', () => {
       await expect(provider.sendMessage(mockMessages)).rejects.toThrow(DeepSeekError);
     });
 
-    it('should not save to database when sessionId is missing', async () => {
-      const insertMock = vi.fn();
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            choices: [{ message: { content: 'Response' } }],
-            usage: { prompt_tokens: 5 },
-          }),
-      });
-
-      await provider.sendMessage(mockMessages, undefined, 'user-123');
-
-      expect(insertMock).not.toHaveBeenCalled();
-    });
-
-    it('should handle database save error gracefully', async () => {
-      const insertMock = vi.fn().mockResolvedValue({ error: new Error('DB error') });
-      vi.mocked(supabase.from).mockReturnValue({
-        insert: insertMock,
-      } as never);
-
+    it('should handle JSON parse error in response gracefully', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -546,8 +412,7 @@ describe('DeepSeekProvider', () => {
           }),
       });
 
-      // Should not throw even if database save fails
-      const response = await provider.sendMessage(mockMessages, 'session-123', 'user-456');
+      const response = await provider.sendMessage(mockMessages);
       expect(response.content).toBe('Response');
     });
   });

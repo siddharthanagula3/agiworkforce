@@ -113,7 +113,6 @@ export const TOOL_RENDERERS: Record<string, RendererComponent> = {
   db_query: InlineTerminalOutput,
   database_query: InlineTerminalOutput,
   sql_query: InlineTerminalOutput,
-  mcp__supabase__execute_sql: InlineTerminalOutput,
 
   // API
   api_call: InlineTerminalOutput,

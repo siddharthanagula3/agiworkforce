@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../api/client';
 import { voiceCheckLocalWhisper, voiceConfigure, voiceGetSettings } from '../api/voice';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
 /**
  * Transcription mode - kept for backward compatibility
@@ -629,7 +629,7 @@ export function useVoiceTranscription(
         }
 
         try {
-          const session = supabaseAuth.getSession();
+          const session = cloudAccountAuth.getSession();
           const accessToken = session?.access_token;
           if (!accessToken) {
             throw new Error('Authentication required for Whisper Cloud transcription');

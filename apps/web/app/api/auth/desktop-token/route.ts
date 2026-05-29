@@ -4,12 +4,12 @@
  * POST /api/auth/desktop-token
  *
  * Generates a short-lived (60s) encrypted token containing the user's
- * Supabase session. The web app calls this endpoint, then opens
+ * Clerk session. The web app calls this endpoint, then opens
  * `agiworkforce://auth?token=<encrypted_token>` to transfer the session
  * to the desktop app via deep link.
  *
  * Security:
- * - Requires authenticated Supabase session (Bearer token or cookie)
+ * - Requires authenticated Clerk session (Bearer token or cookie)
  * - Token is AES-GCM encrypted with a server-side secret
  * - 60-second TTL prevents replay after window closes
  * - One-time nonce for replay prevention
@@ -18,11 +18,10 @@
 
 export const runtime = 'nodejs';
 
-import { createClient } from '@supabase/supabase-js';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { auth } from '@clerk/nextjs/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
+import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 import crypto from 'crypto';
 
@@ -40,17 +39,6 @@ const TOKEN_TTL_MS = 60 * 1000;
 // with a fixed app-domain salt — chosen over Argon2id because scrypt ships in
 // node:crypto (no native dep), gives raw bytes for direct AES-256-GCM key
 // use, and matches the desktop-side derivation we plan to wire up next.
-//
-// The entropy gate is preserved as defense in depth: even a stretched KDF
-// only delays a low-entropy passphrase by ~2^16 iterations, which is fine for
-// an offline-attacker scenario where they have all the time in the world.
-// Force at least 64 UTF-8 bytes so the unstretched material is itself out of
-// brute-force range.
-//
-// SCRYPT_SALT is a fixed application-domain constant so encryptPayload() and
-// the (forthcoming) desktop decryptPayload() derive the same key from the
-// same env-var without a per-token salt round-trip. Per-token salts would
-// require shipping the salt in the wire envelope; that's a follow-up.
 const MIN_KEYSOURCE_BYTES = 64;
 const HEX_32_BYTE = /^[0-9a-fA-F]{64}$/;
 const SCRYPT_KEY_LENGTH = 32;
@@ -66,14 +54,11 @@ function assertHighEntropyKeysource(name: string, value: string): void {
   if (HEX_32_BYTE.test(value)) return; // hex 32-byte secret — strong
   if (byteLen < MIN_KEYSOURCE_BYTES) {
     throw new Error(
-      `${name} too short: SHA-256 derivation requires ≥ ${MIN_KEYSOURCE_BYTES} UTF-8 bytes ` +
+      `${name} too short: SHA-256 derivation requires >= ${MIN_KEYSOURCE_BYTES} UTF-8 bytes ` +
         '(or a 64-char hex string). Generate with: ' +
         "node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
     );
   }
-  // Reject the most obvious passphrase patterns. This is a coarse guard,
-  // not a full entropy estimator — operators with a real high-entropy
-  // passphrase will pass; copy-paste of "passwordpasswordpassword..." will fail.
   if (/^([\x20-\x7e])\1+$/.test(value)) {
     throw new Error(`${name} appears to be a single repeated character`);
   }
@@ -88,20 +73,13 @@ function getEncryptionKey(): Buffer {
     ? 'TOTP_ENCRYPTION_KEY'
     : 'DESKTOP_TOKEN_SECRET';
   assertHighEntropyKeysource(sourceName, keySource);
-  // If the secret is a hex 32-byte string, treat it as raw key material — no
-  // stretching needed for a uniformly random 256-bit secret.
   if (HEX_32_BYTE.test(keySource)) {
     return Buffer.from(keySource, 'hex');
   }
-  // Otherwise: scrypt-derive a 32-byte AES-GCM key. Synchronous variant is
-  // intentional — this runs on the server during desktop-token mint, which is
-  // already rate-limited to 5/min and not on the hot path.
   return crypto.scryptSync(keySource, SCRYPT_SALT, SCRYPT_KEY_LENGTH, {
     N: SCRYPT_N,
     r: SCRYPT_R,
     p: SCRYPT_P,
-    // node:crypto's scrypt enforces a default 32MB memory cap; lift it so
-    // the N=2^15 parameter set actually runs instead of throwing ERR_OS_OUT_OF_MEMORY.
     maxmem: 128 * 1024 * 1024,
   });
 }
@@ -122,6 +100,9 @@ function encryptPayload(payload: string): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
   // Rate limit: 5 token generations per minute per IP
   const rateLimitResponse = await withRateLimit(request, 'auth-verify');
   if (rateLimitResponse) {
@@ -129,123 +110,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   try {
-    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-    const supabaseAnonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+    // Authenticate via Clerk (handles both cookie sessions and Bearer tokens)
+    const { userId, getToken } = await auth();
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      logger.error({}, 'Supabase environment variables not configured');
-      return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
-    }
-
-    // Authenticate the user via Bearer token or cookies
-    let accessToken: string | null = null;
-    let refreshToken: string | null = null;
-
-    const authHeader = request.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      accessToken = authHeader.substring(7);
-
-      // Validate the token
-      const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-        auth: { persistSession: false, flowType: 'pkce' },
-      });
-
-      const { data: userData, error: userError } = await supabase.auth.getUser(accessToken);
-      if (userError || !userData.user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-
-      // We need the session to get the refresh token
-      // When using Bearer auth, the client must provide the refresh token in the body
-      const body = await request.json().catch(() => ({}));
-      refreshToken = (body as Record<string, string>)['refreshToken'] || null;
-
-      if (!refreshToken) {
-        return NextResponse.json(
-          { error: 'refreshToken is required in the request body' },
-          { status: 400 },
-        );
-      }
-
-      const now = Date.now();
-      const nonce = crypto.randomBytes(16).toString('hex');
-
-      const tokenPayload = {
-        session: {
-          accessToken,
-          refreshToken,
-          user: {
-            id: userData.user.id,
-            email: userData.user.email || '',
-            name: userData.user.user_metadata?.['full_name'] as string | undefined,
-            avatar: userData.user.user_metadata?.['avatar_url'] as string | undefined,
-          },
-          expiresAt: now + TOKEN_TTL_MS,
-        },
-        issuedAt: now,
-        expiresAt: now + TOKEN_TTL_MS,
-        nonce,
-      };
-
-      const encryptedToken = encryptPayload(JSON.stringify(tokenPayload));
-
-      logger.info({ userId: userData.user.id }, 'Desktop auth token generated (Bearer auth)');
-
-      return NextResponse.json({
-        token: encryptedToken,
-        expiresAt: tokenPayload.expiresAt,
-        deepLink: `agiworkforce://auth?token=${encodeURIComponent(encryptedToken)}`,
-      });
-    }
-
-    // Cookie-based auth (for web app dashboard)
-    const cookieStore = await cookies();
-    const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-      auth: { flowType: 'pkce' },
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {
-            // ignore - read-only context
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options });
-          } catch {
-            // ignore
-          }
-        },
-      },
-    });
-
-    // Use getUser() instead of getSession() to force server-side JWT re-verification.
-    // getSession() reads from the cookie without re-validating with Supabase's auth server,
-    // which means a tampered or expired token could pass. getUser() makes a network call
-    // to verify the token is still valid.
-    const { data: userData, error: userError } = await supabase.auth.getUser();
-    if (userError || !userData.user) {
+    if (!userId) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Still need the session to get the refresh token for the desktop token payload
-    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-    if (sessionError || !sessionData.session) {
+    // Retrieve the Clerk session token to embed in the desktop token payload
+    const clerkToken = await getToken();
+
+    if (!clerkToken) {
+      logger.warn({ userId }, 'Could not retrieve Clerk session token for desktop token');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const session = sessionData.session;
-
-    // Guard against race condition: the session may have expired between
-    // the getUser() JWT verification and the getSession() cookie read.
-    // expires_at is a Unix timestamp in seconds.
-    if (session.expires_at && session.expires_at * 1000 <= Date.now()) {
-      logger.warn({ userId: userData.user.id }, 'Session expired between getUser and getSession');
-      return NextResponse.json({ error: 'Session expired' }, { status: 401 });
     }
 
     const now = Date.now();
@@ -253,13 +130,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const tokenPayload = {
       session: {
-        accessToken: session.access_token,
-        refreshToken: session.refresh_token,
+        accessToken: clerkToken,
+        // Clerk handles token rotation internally; no separate refresh token needed.
+        refreshToken: null as null,
         user: {
-          id: userData.user.id,
-          email: userData.user.email || '',
-          name: userData.user.user_metadata?.['full_name'] as string | undefined,
-          avatar: userData.user.user_metadata?.['avatar_url'] as string | undefined,
+          id: userId,
+          // Email and display name are not available server-side from auth()
+          // without a Clerk API call. The desktop app can decode these from
+          // the JWT claims in accessToken if needed.
+          email: '',
+          name: undefined as string | undefined,
+          avatar: undefined as string | undefined,
         },
         expiresAt: now + TOKEN_TTL_MS,
       },
@@ -270,7 +151,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const encryptedToken = encryptPayload(JSON.stringify(tokenPayload));
 
-    logger.info({ userId: userData.user.id }, 'Desktop auth token generated (cookie auth)');
+    logger.info({ userId }, 'Desktop auth token generated (Clerk auth)');
 
     return NextResponse.json({
       token: encryptedToken,

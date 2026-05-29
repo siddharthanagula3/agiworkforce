@@ -15,7 +15,13 @@
  * 3. Integrates with IntentClassifier for automatic routing
  */
 
+import { getModelMetadataById } from '@agiworkforce/types';
 import type { IntentType } from './intentClassifier';
+
+// Sourced from the canonical model catalog (packages/types/src/models.json).
+// Using getModelMetadataById ensures the ID is never stale relative to the catalog.
+const GPT_IMAGE_1_ID = getModelMetadataById('gpt-image-1')?.id ?? 'gpt-image-1';
+const GPT_IMAGE_1_5_ID = getModelMetadataById('gpt-image-1.5')?.id ?? 'gpt-image-1.5';
 
 // ============================================
 // TYPES
@@ -107,7 +113,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: 'gpt-image-1',
+    id: GPT_IMAGE_1_ID,
     name: 'GPT Image 1',
     provider: 'openai',
     tier: 'pro',
@@ -135,7 +141,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: 'gpt-image-1.5',
+    id: GPT_IMAGE_1_5_ID,
     name: 'GPT Image 1.5',
     provider: 'openai',
     tier: 'max',

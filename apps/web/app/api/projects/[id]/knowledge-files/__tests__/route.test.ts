@@ -9,34 +9,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const {
-  mockFrom,
-  mockInsert,
-  mockEq,
-  mockIs,
-  mockSelect,
-  mockSingle,
-  mockOrder,
-  mockGetAuthenticatedUserWithClient,
-} = vi.hoisted(() => {
-  const mockSingle = vi.fn();
-  const mockOrder = vi.fn();
-  const mockSelect = vi.fn();
-  const mockIs = vi.fn();
-  const mockEq = vi.fn();
-  const mockInsert = vi.fn();
-  const mockFrom = vi.fn();
-  const mockGetAuthenticatedUserWithClient = vi.fn();
-  return {
-    mockFrom,
-    mockInsert,
-    mockEq,
-    mockIs,
-    mockSelect,
-    mockSingle,
-    mockOrder,
-    mockGetAuthenticatedUserWithClient,
-  };
+const { mockGetClerkAuthUser, mockNeonQuery } = vi.hoisted(() => {
+  const mockGetClerkAuthUser = vi.fn();
+  const mockNeonQuery = vi.fn();
+  return { mockGetClerkAuthUser, mockNeonQuery };
 });
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -52,13 +28,22 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUserWithClient: mockGetAuthenticatedUserWithClient,
+  getClerkAuthUser: mockGetClerkAuthUser,
+  getAuthenticatedUserWithClient: vi.fn(),
   getAuthenticatedUser: vi.fn(),
 }));
 
-import { GET, POST } from '@/app/api/projects/[id]/knowledge-files/route';
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: (...args: unknown[]) => mockNeonQuery(...args),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
+}));
 
-const PROJECT_ROW = { id: 'proj-1' };
+import { GET, POST } from '@/app/api/projects/[id]/knowledge-files/route';
 
 const KB_FILE_ROW = {
   id: 'file-1',
@@ -76,11 +61,8 @@ const KB_FILE_ROW = {
   storage_uri: 'storage/files/spec.pdf',
 };
 
-function wireAuthAndDb() {
-  mockGetAuthenticatedUserWithClient.mockResolvedValue({
-    user: { id: 'user-abc' },
-    userDb: { from: (...args: unknown[]) => mockFrom(...args) },
-  });
+function wireAuth() {
+  mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
 }
 
 function makeGetRequest(projectId: string): NextRequest {
@@ -103,18 +85,13 @@ const routeContext = (id: string) => ({ params: Promise.resolve({ id }) });
 
 describe('GET /api/projects/[id]/knowledge-files', () => {
   beforeEach(() => {
-    wireAuthAndDb();
+    wireAuth();
   });
 
   it('returns mapped files for a project', async () => {
-    // Project ownership check
-    mockSingle.mockResolvedValueOnce({ data: PROJECT_ROW, error: null });
-    // File list query
-    mockOrder.mockResolvedValueOnce({ data: [KB_FILE_ROW], error: null });
-    mockIs.mockReturnValueOnce({ order: mockOrder });
-    mockEq.mockReturnValue({ eq: mockEq, is: mockIs, single: mockSingle });
-    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockFrom.mockReturnValue({ select: mockSelect });
+    // First call: project ownership check returns [{ id: 'proj-1' }]
+    // Second call: file list query returns [KB_FILE_ROW]
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]).mockResolvedValueOnce([KB_FILE_ROW]);
 
     const res = await GET(makeGetRequest('proj-1'), routeContext('proj-1'));
 
@@ -132,14 +109,10 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
 
   it('returns empty array when table does not exist (42P01)', async () => {
     // Project ownership check succeeds
-    mockSingle.mockResolvedValueOnce({ data: PROJECT_ROW, error: null });
-    // Files query returns 42P01
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    // Files query throws PG 42P01
     const pgError = { code: '42P01', message: 'relation does not exist' };
-    mockOrder.mockResolvedValueOnce({ data: null, error: pgError });
-    mockIs.mockReturnValueOnce({ order: mockOrder });
-    mockEq.mockReturnValue({ eq: mockEq, is: mockIs, single: mockSingle });
-    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockFrom.mockReturnValue({ select: mockSelect });
+    mockNeonQuery.mockRejectedValueOnce(pgError);
 
     const res = await GET(makeGetRequest('proj-1'), routeContext('proj-1'));
 
@@ -151,7 +124,7 @@ describe('GET /api/projects/[id]/knowledge-files', () => {
 
 describe('POST /api/projects/[id]/knowledge-files', () => {
   beforeEach(() => {
-    wireAuthAndDb();
+    wireAuth();
   });
 
   it('returns 400 when required fields are missing', async () => {
@@ -167,16 +140,10 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
 
   it('returns 503 when table does not exist (42P01)', async () => {
     // Project ownership check succeeds
-    mockSingle.mockResolvedValueOnce({ data: PROJECT_ROW, error: null });
-    // Insert returns 42P01
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    // Insert throws PG 42P01
     const pgError = { code: '42P01', message: 'relation does not exist' };
-    mockSingle.mockResolvedValueOnce({ data: null, error: pgError });
-    // select() resolves both the project-check (.eq().eq().single()) and the
-    // insert(.select().single()) chains.
-    mockEq.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockInsert.mockReturnValue({ select: mockSelect });
-    mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
+    mockNeonQuery.mockRejectedValueOnce(pgError);
 
     const res = await POST(
       makePostRequest('proj-1', {
@@ -197,14 +164,10 @@ describe('POST /api/projects/[id]/knowledge-files', () => {
   });
 
   it('returns 201 with mapped file on valid input', async () => {
-    // Project ownership check
-    mockSingle.mockResolvedValueOnce({ data: PROJECT_ROW, error: null });
-    // Insert succeeds
-    mockSingle.mockResolvedValueOnce({ data: KB_FILE_ROW, error: null });
-    mockEq.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockSelect.mockReturnValue({ eq: mockEq, single: mockSingle });
-    mockInsert.mockReturnValue({ select: mockSelect });
-    mockFrom.mockReturnValue({ select: mockSelect, insert: mockInsert });
+    // Project ownership check succeeds
+    mockNeonQuery.mockResolvedValueOnce([{ id: 'proj-1' }]);
+    // Insert returns the new row
+    mockNeonQuery.mockResolvedValueOnce([KB_FILE_ROW]);
 
     const res = await POST(
       makePostRequest('proj-1', {

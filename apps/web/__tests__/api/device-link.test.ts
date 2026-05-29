@@ -2,11 +2,25 @@
  * Device Link API Tests
  *
  * Tests for device linking flow input validation
- * Note: Full integration tests require actual Supabase connection
+ * Note: Full integration tests require actual Neon connection
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+
+vi.mock('server-only', () => ({}));
+
+// Clerk auth mock — hoisted so it survives clearAllMocks
+const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockClerkAuth(),
+}));
+
+// CSRF mock — bypass validation so tests focus on route logic
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: vi.fn(() => null),
+}));
 
 // Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
@@ -29,9 +43,9 @@ vi.mock('@/lib/cors', () => ({
 // Mock environment variables
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
+    if (key === 'NEON_DATABASE_URL') return 'https://localhost';
+    if (key === 'CLERK_SECRET_KEY') return 'test-anon-key';
+    if (key === 'NEON_DATABASE_URL') return 'test-service-role-key';
     return 'test-value';
   }),
   getEnv: vi.fn((key: string, defaultValue?: string) => {
@@ -40,26 +54,10 @@ vi.mock('@/utils/env', () => ({
   }),
 }));
 
-// Mock user for auth
-const mockAuthUser = {
-  id: 'auth-user-123',
-  email: 'auth@example.com',
-};
-
-// Mock Supabase — the route creates TWO clients:
-// 1. An auth client (via createClient with anon key) to verify the Bearer token
-// 2. A service client (via createClient with service role key) for DB operations
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: mockAuthUser },
-        error: null,
-      }),
-    },
-    from: vi.fn(() => ({
-      upsert: vi.fn().mockResolvedValue({ error: null }),
-    })),
+// Mock Neon DB — the route calls db.execute() to insert/upsert device codes
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    execute: vi.fn().mockResolvedValue({}),
   })),
 }));
 
@@ -77,6 +75,9 @@ describe('Device Link API', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Re-establish auth mock default after clearAllMocks
+    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
   });
 
   describe('POST /api/device/link', () => {

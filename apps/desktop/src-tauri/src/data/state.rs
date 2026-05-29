@@ -1,3 +1,6 @@
+#[path = "state/draft_manager.rs"]
+pub mod draft_manager;
+
 use serde::{Deserialize, Serialize};
 use std::{
     fs,

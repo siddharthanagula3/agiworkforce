@@ -19,7 +19,7 @@ const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-ap
  * 4. Rate limiting is applied at 30 requests/minute per IP to prevent abuse
  *
  * If download access needs to be restricted in the future (e.g., for beta builds),
- * add authentication by importing createSupabaseServerClient and checking user session.
+ * add authentication by calling getClerkAuthUser(request) from lib/api-auth.
  */
 async function handleDownload(request: NextRequest) {
   // Rate limiting: 30 requests per minute per IP to prevent abuse
@@ -77,9 +77,10 @@ async function handleDownload(request: NextRequest) {
   }
 
   const release = await githubResponse.json();
-  const assets = release.assets || [];
+  type ReleaseAsset = { name: string; browser_download_url: string };
+  const assets = (release.assets || []) as ReleaseAsset[];
 
-  let asset;
+  let asset: ReleaseAsset | undefined;
   // Match assets to platform
   if (platform === 'mac') {
     // Prioritize .dmg, fallback to .app.tar.gz
@@ -120,12 +121,11 @@ async function handleDownload(request: NextRequest) {
     // containing `"` or CR/LF would land in the Content-Disposition header
     // verbatim — header injection / response-splitting risk. Encode per
     // RFC 5987: strip control chars + quotes from the ASCII fallback and use
-    // `filename*=UTF-8''<percent-encoded>` for the canonical name. The
-    // control-char range `\x00-\x1f` is intentional — RFC 7230 forbids CTLs
-    // in header values; this is the only way to express the strip in a regex
-    // literal without a programmatic builder.
-    // eslint-disable-next-line no-control-regex
-    const safeAsciiFilename = filename.replace(/[\r\n"\\\x00-\x1f\x7f]/g, '_');
+    // `filename*=UTF-8''<percent-encoded>` for the canonical name.
+    const safeAsciiFilename = Array.from(filename, (char) => {
+      const code = char.charCodeAt(0);
+      return code <= 31 || code === 127 || char === '"' || char === '\\' ? '_' : char;
+    }).join('');
     const utf8Filename = encodeURIComponent(filename);
     const contentDisposition = `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${utf8Filename}`;
 
@@ -149,7 +149,7 @@ function fallbackToStatic(platform: string, request: Request) {
   // WEB-DOWNLOAD-PLACEHOLDERS fix (2026-05-05): Windows and Linux placeholder files
   // must be removed via git rm commit (they are git-tracked). The route no longer
   // falls back to the placeholder paths when env vars are unset. Windows/Linux
-  // real binaries will be added in Q3 2026.
+  // real binaries are tied to the July 12, 2026 public launch plan.
   const downloadUrls: Record<string, string | undefined> = {
     mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || '/downloads/agiworkforce.dmg',
     windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || undefined,

@@ -282,9 +282,9 @@ or founder-held credentials.
    submitting (edit `LISTING-METADATA-IOS.json` and
    `LISTING-METADATA-ANDROID.json` → `full_description`).
 
-10. **Cloud waitlist URL**: The app's "Join cloud waitlist" button links
-    to a Supabase `cloud_waitlist` table insert. Confirm this endpoint
-    is live and the form flow works end-to-end before launch.
+10. **Cloud waitlist URL**: The app's "Join cloud waitlist" button posts
+    through the AGI Web/API waitlist endpoint. Confirm this endpoint is
+    live and the form flow works end-to-end before launch.
 
 ---
 

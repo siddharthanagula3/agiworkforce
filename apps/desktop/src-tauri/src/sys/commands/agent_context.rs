@@ -8,8 +8,8 @@
 /// passed as explicit fields in the Tauri command's request payload.
 ///
 /// Usage in a Tauri command:
-/// ```rust
-/// use crate::sys::commands::agent_context::{CommandContext, COMMAND_CTX};
+/// ```rust,ignore
+/// use agiworkforce_desktop::sys::commands::agent_context::{CommandContext, COMMAND_CTX};
 ///
 /// #[tauri::command]
 /// pub async fn my_command(conversation_id: Option<String>) -> Result<String, String> {
@@ -67,7 +67,10 @@ pub fn try_get_request_id() -> Option<String> {
 
 /// Attempt to read the conversation_id from the current task-local context.
 pub fn try_get_conversation_id() -> Option<String> {
-    COMMAND_CTX.try_with(|ctx| ctx.conversation_id.clone()).ok().flatten()
+    COMMAND_CTX
+        .try_with(|ctx| ctx.conversation_id.clone())
+        .ok()
+        .flatten()
 }
 
 /// Attempt to read the command_name from the current task-local context.

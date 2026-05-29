@@ -12,13 +12,13 @@ import { AccountMenu } from './AccountMenu';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
-export type V3Mode = 'chat' | 'cowork' | 'code';
+export type V3Mode = 'chat';
 
 // ─── local hook ───────────────────────────────────────────────────────────────
 
 function useV3Mode() {
-  const [mode, setMode] = useState<V3Mode>('chat');
-  return { mode, setMode };
+  const [mode] = useState<V3Mode>('chat');
+  return { mode };
 }
 
 // ─── shell props ───────────────────────────────────────────────────────────────
@@ -37,8 +37,8 @@ export interface DesktopShellV3Props {
  * v3 desktop shell.
  *
  * Layout: Sidebar (240/64px collapsible) left + main view area right.
- * Mode routing: chat → ChatInterface, cowork/code → placeholder until
- * peer engineers (desktop-modes) wire their components.
+ * Chat and cowork live in one shell. The old separate Code/Cowork mode tabs
+ * are intentionally not exposed in the active v1 desktop surface.
  *
  * emptyStateSlot, CapModal, and all ChatInterface props from the legacy
  * mount point in App.tsx are preserved unchanged.
@@ -52,7 +52,7 @@ export function DesktopShellV3({
   onNavigateView,
   onBuyTopUp,
 }: DesktopShellV3Props) {
-  const { mode, setMode } = useV3Mode();
+  const { mode } = useV3Mode();
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   const handleSwitchModel = useCallback(() => {
@@ -81,7 +81,6 @@ export function DesktopShellV3({
     >
       <Sidebar
         mode={mode}
-        onModeChange={setMode}
         onNewChat={handleNewChat}
         onOpenSearch={() => {
           // Trigger ⌘K via keyboard event so ChatInterface's shortcut handler picks it up
@@ -96,53 +95,19 @@ export function DesktopShellV3({
       {accountMenuOpen && <AccountMenu onClose={() => setAccountMenuOpen(false)} />}
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-        {mode === 'chat' && (
-          <>
-            <ChatInterface
-              runtime={runtime}
-              className="h-full w-full"
-              manageTheme={false}
-              enableShortcuts={true}
-              hostBridge={hostBridge}
-              onModelSelectorClick={onModelSelectorClick}
-              onVoiceClick={onVoiceClick}
-              onNavigateView={onNavigateView}
-              emptyStateSlot={<EmptyChat />}
-              showProvenanceFooter={true}
-            />
-            <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
-          </>
-        )}
-
-        {mode === 'cowork' && (
-          <div
-            style={{
-              display: 'flex',
-              height: '100%',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--chat-text-muted)',
-              fontSize: 14,
-            }}
-          >
-            Cowork mode coming
-          </div>
-        )}
-
-        {mode === 'code' && (
-          <div
-            style={{
-              display: 'flex',
-              height: '100%',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--chat-text-muted)',
-              fontSize: 14,
-            }}
-          >
-            Code mode coming
-          </div>
-        )}
+        <ChatInterface
+          runtime={runtime}
+          className="h-full w-full"
+          manageTheme={false}
+          enableShortcuts={true}
+          hostBridge={hostBridge}
+          onModelSelectorClick={onModelSelectorClick}
+          onVoiceClick={onVoiceClick}
+          onNavigateView={onNavigateView}
+          emptyStateSlot={<EmptyChat />}
+          showProvenanceFooter={true}
+        />
+        <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
       </div>
     </div>
   );

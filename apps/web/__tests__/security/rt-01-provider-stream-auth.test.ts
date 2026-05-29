@@ -13,15 +13,18 @@ vi.mock('server-only', () => ({}));
 // ─── Auth mock ────────────────────────────────────────────────────────────────
 const mockGetAuthenticatedUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
-  getAuthenticatedUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
+  getClerkAuthUser: (...args: unknown[]) => mockGetAuthenticatedUser(...args),
 }));
 
-// ─── Supabase server mock ────────────────────────────────────────────────────
-// The route calls `getUserClient(jwt)` to build an RLS-bound client. We don't
-// need a real Supabase client in tests — return an opaque sentinel that
-// CreditService mocks ignore.
-vi.mock('@/lib/supabase-server', () => ({
-  getUserClient: () => ({ __mockUserClient: true }),
+// ─── Neon DB mock ─────────────────────────────────────────────────────────────
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: vi.fn().mockResolvedValue([]),
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
 }));
 
 // ─── Rate limit mock ──────────────────────────────────────────────────────────
@@ -64,8 +67,8 @@ vi.mock('@/utils/env', () => ({
   },
   requireEnv: (key: string) => {
     const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
+      NEON_DATABASE_URL: 'https://localhost',
+      CLERK_SECRET_KEY: 'test-service-key',
     };
     return map[key] ?? '';
   },
@@ -105,7 +108,7 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     // NODE_ENV is read-only in TypeScript but we can mutate via index access
     (process.env as Record<string, string>)['NODE_ENV'] = 'test';
     // Default: authenticated user with credits
-    mockGetAuthenticatedUser.mockResolvedValue({ id: 'user-123', email: 'user@example.com' });
+    mockGetAuthenticatedUser.mockResolvedValue({ userId: 'user-123', email: 'user@example.com' });
     mockCheckAvailable.mockResolvedValue(true);
     mockDeductCredits.mockResolvedValue({ success: true, remaining_cents: 900 });
     mockFetch.mockResolvedValue({
@@ -236,7 +239,7 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
     ];
     for (const providerId of validProviders) {
       vi.clearAllMocks();
-      mockGetAuthenticatedUser.mockResolvedValue({ id: 'user-123' });
+      mockGetAuthenticatedUser.mockResolvedValue({ userId: 'user-123' });
       mockCheckAvailable.mockResolvedValue(true);
       mockDeductCredits.mockResolvedValue({ success: true });
       mockFetch.mockResolvedValue({ ok: true, body: new ReadableStream(), status: 200 });

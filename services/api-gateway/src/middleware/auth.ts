@@ -1,13 +1,14 @@
 import type { NextFunction, Request, Response } from 'express';
+import { verifyToken } from '@clerk/backend';
 import jwt from 'jsonwebtoken';
 import { authenticatedUserSchema, type AuthenticatedUser } from '../authenticated-user';
 import { requireEnv } from '../env';
-import { getServiceClient } from '../lib/supabaseClients';
+import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
-// In-memory cache for account_status to prevent fail-open when Supabase is unavailable.
+// In-memory cache for account_status to prevent fail-open when Neon is unavailable.
 // TTL is intentionally short (60s) so suspensions take effect quickly.
 // On DB error with no cached entry: fail closed (503). With a cached entry: use it.
 const ACCOUNT_STATUS_CACHE_TTL_MS = 60_000;
@@ -27,6 +28,37 @@ interface AccountStatusEntry {
   cachedAt: number;
 }
 const accountStatusCache = new Map<string, AccountStatusEntry>();
+
+async function verifyGatewayOrClerkToken(token: string): Promise<jwt.JwtPayload> {
+  const decoded = jwt.decode(token);
+  const issuer =
+    decoded && typeof decoded === 'object' && typeof decoded.iss === 'string' ? decoded.iss : null;
+
+  if (issuer && issuer !== 'agiworkforce-api-gateway') {
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (!secretKey) {
+      throw new jwt.JsonWebTokenError('Invalid token issuer');
+    }
+
+    const claims = await verifyToken(token, { secretKey });
+    const emailClaim =
+      typeof (claims as Record<string, unknown>)['email'] === 'string'
+        ? ((claims as Record<string, unknown>)['email'] as string)
+        : '';
+
+    return {
+      userId: claims.sub,
+      email: emailClaim,
+      sub: claims.sub,
+    };
+  }
+
+  return jwt.verify(token, JWT_SECRET, {
+    algorithms: ['HS256'],
+    issuer: 'agiworkforce-api-gateway',
+    audience: 'agiworkforce',
+  }) as jwt.JwtPayload;
+}
 
 function getCachedAccountStatus(userId: string): string | null {
   const entry = accountStatusCache.get(userId);
@@ -83,11 +115,7 @@ export async function authenticateToken(
       return;
     }
 
-    const payload = jwt.verify(token, JWT_SECRET, {
-      algorithms: ['HS256'],
-      issuer: 'agiworkforce-api-gateway',
-      audience: 'agiworkforce',
-    }) as jwt.JwtPayload;
+    const payload = await verifyGatewayOrClerkToken(token);
     req.user = authenticatedUserSchema.parse(payload);
 
     // SECURITY (H7, redteam-services 2026-05-04): per-jti revocation check.
@@ -100,11 +128,8 @@ export async function authenticateToken(
 
       if (cacheStale) {
         try {
-          // Wave 1.5+ singleton sweep: revocation lookup happens DURING JWT
-          // verification, so we don't yet have a verified user JWT to bind
-          // to the client. Service-role is the correct client here — it's
-          // bypassing RLS for a security-critical lookup that must
-          // succeed-or-fail-closed, not a user-data read.
+          // Revocation lookup happens during token verification and must
+          // succeed-or-fail-closed.
           const { data: revokedRow, error: revokedError } = await getServiceClient()
             .from('revoked_jwts')
             .select('jti')
@@ -150,9 +175,7 @@ export async function authenticateToken(
 
     if (accountStatus === null) {
       try {
-        // Wave 1.5+ singleton sweep: kill-switch check during auth
-        // verification — service-role is correct here for the same reason
-        // as the revocation lookup above.
+        // Kill-switch check during auth verification. It must fail closed.
         const { data: profile, error: profileError } = await getServiceClient()
           .from('profiles')
           .select('account_status')

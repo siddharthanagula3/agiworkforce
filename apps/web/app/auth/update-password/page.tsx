@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { getSupabaseClient } from '../../../services/supabase';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
@@ -32,9 +31,15 @@ export default function UpdatePasswordPage() {
     setLoading(true);
     setMessage(null);
     try {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      const res = await fetch('/api/auth/update-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? 'Update failed');
+      }
       setMessage({ text: 'Password updated. Sign in with the new password.', type: 'info' });
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : 'Update failed', type: 'error' });
@@ -58,7 +63,7 @@ export default function UpdatePasswordPage() {
           <p className="agi-page-lede" style={{ marginBottom: 24 }}>
             Set a new account password.{' '}
             <strong>
-              This does not change your local key-vault master password — that one is unrecoverable
+              This does not change your local key-vault master password - that one is unrecoverable
               by design.
             </strong>
           </p>
@@ -108,7 +113,7 @@ export default function UpdatePasswordPage() {
             {message && (
               <p
                 style={{
-                  color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+                  color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-amber)',
                   fontSize: 13,
                   margin: 0,
                 }}

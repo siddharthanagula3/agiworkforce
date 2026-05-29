@@ -1,4 +1,4 @@
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
 
 interface DBUsageRow {
@@ -58,40 +58,42 @@ export class UsageTracker {
     cost: number;
   }): Promise<void> {
     try {
-      await (
-        supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>
-      ).insert({
-        user_id: params.userId,
-        agent_type: params.agentType,
-        provider: params.provider,
-        tokens_used: params.tokensUsed,
-        input_tokens: params.inputTokens,
-        output_tokens: params.outputTokens,
-        task_id: params.taskId,
-        timestamp: params.timestamp.toISOString(),
-        cost: params.cost,
-      } as never);
+      const token = await getAuthToken();
+      await fetch('/api/usage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          agentType: params.agentType,
+          provider: params.provider,
+          tokensUsed: params.tokensUsed,
+          inputTokens: params.inputTokens,
+          outputTokens: params.outputTokens,
+          taskId: params.taskId,
+          timestamp: params.timestamp.toISOString(),
+          cost: params.cost,
+        }),
+      });
     } catch (error) {
       logger.error('[UsageTracker] Failed to track API call', error);
     }
   }
 
-  async getUsageSummary(userId: string, period: DateRange): Promise<UsageSummary> {
+  async getUsageSummary(_userId: string, period: DateRange): Promise<UsageSummary> {
     try {
-      const { data, error } = await (
-        supabase.from('api_usage' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('*')
-        .eq('user_id', userId)
-        .gte('timestamp', period.start.toISOString())
-        .lte('timestamp', period.end.toISOString())
-        .order('timestamp', { ascending: true });
-
-      if (error) {
-        throw error;
-      }
-
-      const usage = (data || []) as DBUsageRow[];
+      const token = await getAuthToken();
+      const params = new URLSearchParams({
+        start: period.start.toISOString(),
+        end: period.end.toISOString(),
+      });
+      const res = await fetch(`/api/usage?${params}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Usage API returned ${res.status}`);
+      const json = await res.json();
+      const usage = (json.usage || []) as DBUsageRow[];
 
       const summary: UsageSummary = {
         totalCalls: usage.length,

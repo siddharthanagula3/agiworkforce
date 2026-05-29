@@ -9,7 +9,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_PLATFORMS = ['whatsapp', 'telegram', 'slack'] as const;
 
@@ -66,7 +66,7 @@ async function handleTestConnection(request: NextRequest, context: RouteContext)
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  await getAuthenticatedUser(request);
+  await getClerkAuthUser(request);
   const { platform } = await context.params;
 
   if (!VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {

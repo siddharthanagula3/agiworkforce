@@ -543,8 +543,7 @@ mod tests {
     #[test]
     fn format_api_error_includes_retry_after_for_rate_limits() {
         let body = r#"{"error":{"message":"Rate limit exceeded"}}"#;
-        let message =
-            DirectApiProvider::format_api_error(Provider::OpenAI, 429, Some("60"), body);
+        let message = DirectApiProvider::format_api_error(Provider::OpenAI, 429, Some("60"), body);
 
         assert_eq!(
             message,

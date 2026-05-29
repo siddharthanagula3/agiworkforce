@@ -140,7 +140,10 @@ impl LlmExecutor {
 
         // Log the reasoning request (truncate long prompts for readability)
         let truncated_prompt = if prompt.len() > 100 {
-            format!("{}...", &prompt[..100])
+            format!(
+                "{}...",
+                &prompt[..crate::core::agi::floor_char_boundary(prompt, 100)]
+            )
         } else {
             prompt.to_string()
         };

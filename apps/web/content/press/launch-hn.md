@@ -1,6 +1,6 @@
 # AGI Mobile — Hacker News Show HN Draft
 
-**Target date:** 2026-08-16  
+**Target date:** 2026-07-12
 **Per GTM playbook:** HN is the first channel, before Reddit, Discord, and YouTube.  
 **Format:** Show HN (submit to https://news.ycombinator.com/submit)
 
@@ -28,11 +28,11 @@ https://agiworkforce.com/mobile
 
 ---
 
-Hi HN. I am the founder of AGI Automation LLC and today we are launching AGI Mobile — a free, on-device AI assistant for iOS and Android.
+Hi HN. I am the founder of AGI Automation LLC and today we are launching AGI Mobile — a free Local + BYOK AI assistant for iOS and Android, with Cloud by invite.
 
 **What it does**
 
-It is a chat assistant (text, image Q&A, voice, OCR, translate, memory, projects) that runs inference entirely on-device. No server call during a conversation. Works in airplane mode. Conversations stay on your handset.
+It is a chat assistant (text, image Q&A, voice, OCR, translate, memory, projects) with three explicit routes: Local mode, BYOK mode, and Cloud by invite. Local mode works in airplane mode and is not silently routed to BYOK or Cloud.
 
 **On-device AI stack**
 
@@ -43,7 +43,7 @@ The Qwen3-4B fallback is what makes this work on mid-range Android — Redmi Not
 
 **Why we built it this way**
 
-Every AI assistant I used sent conversations to a server. I found that annoying for personal use and untenable for professional use in regulated contexts. The hardware to run a capable small model already ships in most phones sold in the last two years. We just had to write the software.
+Every AI assistant I used forced one default cloud path. I wanted users to choose: local hardware when privacy or cost matters, their own provider keys when frontier models matter, and AGI Cloud only when they ask for managed compute.
 
 **Tech stack**
 
@@ -56,7 +56,7 @@ Every AI assistant I used sent conversations to a server. I found that annoying 
 
 **What is not in v1**
 
-Cloud models, cross-device sync, and team features are waitlist-gated. The App Store listing says "cloud coming soon." The local experience is complete and is what we are launching.
+Cloud models, cross-device sync, and team features are invite-gated. The Local and BYOK experiences are the free launch wedge.
 
 **What I would like feedback on**
 

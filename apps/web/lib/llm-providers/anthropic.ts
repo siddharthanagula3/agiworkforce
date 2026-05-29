@@ -192,7 +192,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(anthropicTools && { tools: anthropicTools }),
       ...(request.thinking && { thinking: request.thinking }),
-      ...(request.effort && { effort: request.effort }),
+      ...(request.effort && { output_config: { effort: request.effort } }),
     };
 
     if (systemContent) {
@@ -358,7 +358,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       ...(request.temperature !== undefined && { temperature: request.temperature }),
       ...(anthropicTools && { tools: anthropicTools }),
       ...(request.thinking && { thinking: request.thinking }),
-      ...(request.effort && { effort: request.effort }),
+      ...(request.effort && { output_config: { effort: request.effort } }),
     };
 
     // Apply prompt cache on system message (matching sendRequest behavior)

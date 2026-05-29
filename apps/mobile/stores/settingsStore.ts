@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { AutoApproveMode } from '@/types/chat';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -158,9 +158,4 @@ export const useSettingsStore = create<SettingsState>()(
   ),
 );
 
-// TODO(audit 2026-05-20, §17): migrate to rehydrateWhenMmkvReady() from
-// @/lib/mmkv — see notificationPrefsStore / desktopStatusStore / projectStore
-// for the canonical pattern. Tracked as part of the MMKV-RACE cleanup.
-whenMmkvReady(() => {
-  useSettingsStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useSettingsStore, 'settings-store');

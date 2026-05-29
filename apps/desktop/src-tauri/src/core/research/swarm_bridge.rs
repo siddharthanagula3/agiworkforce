@@ -122,11 +122,7 @@ pub fn research_query_to_goal(query: &str, mode: &ResearchMode) -> String {
         ResearchMode::Deep => "deep",
         ResearchMode::Exhaustive => "exhaustive",
     };
-    format!(
-        "[research] mode={} query={}",
-        mode_label,
-        query,
-    )
+    format!("[research] mode={} query={}", mode_label, query,)
 }
 
 // ---------------------------------------------------------------------------

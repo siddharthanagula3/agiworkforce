@@ -81,25 +81,10 @@ function badgeClass(type: ArtifactData['type']): string {
   }
 }
 
-/**
- * Returns a short code preview (first 3 non-empty lines) for non-renderable types.
- * For HTML/React/SVG we show the iframe below, so no text preview needed.
- */
-function codePreview(artifact: ArtifactData): string | null {
-  if (['html', 'react', 'svg'].includes(artifact.type)) return null;
-  const lines = artifact.content
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .slice(0, 3);
-  return lines.join('\n');
-}
+// ─── Single Full-Width Card (Fix 44) ─────────────────────────────────────────
 
-// ─── Single Card ─────────────────────────────────────────────────────────────
-
-function ArtifactThumbCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
+function ArtifactFullCard({ artifact, onClick }: { artifact: ArtifactData; onClick: () => void }) {
   const canRender = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
-  const preview = codePreview(artifact);
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
     generatedFile: artifact.generatedFile,
@@ -119,37 +104,34 @@ function ArtifactThumbCard({ artifact, onClick }: { artifact: ArtifactData; onCl
       type="button"
       onClick={onClick}
       className={cn(
-        'group flex flex-col overflow-hidden rounded-lg border border-border/40',
-        'bg-muted/30 hover:bg-muted/60 transition-colors text-left',
-        'w-[80px] shrink-0',
+        'group w-full flex items-stretch overflow-hidden rounded-xl border border-border/40',
+        'bg-muted/30 hover:bg-muted/50 transition-colors text-left',
       )}
       aria-label={`Open artifact: ${artifact.title || 'Untitled'}`}
     >
-      {/* Thumbnail area — 80x60 */}
-      <div className="relative h-[60px] w-full overflow-hidden bg-muted/50">
+      {/* Preview area — 80px wide on the left */}
+      <div className="relative w-20 shrink-0 overflow-hidden bg-muted/60 border-r border-border/30">
         {canRender ? (
-          /* Tiny iframe preview — sandboxed, pointer-events off */
           <iframe
             title={artifact.title || 'Artifact preview'}
             sandbox="allow-scripts"
             srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:4px;font-size:7px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${artifact.content.slice(0, 800)}</body></html>`}
-            className="pointer-events-none h-full w-full scale-[0.4] origin-top-left"
-            style={{ width: '250%', height: '250%' }}
+            className="pointer-events-none h-full w-full"
+            style={{
+              width: '250%',
+              height: '250%',
+              transform: 'scale(0.4)',
+              transformOrigin: 'top left',
+            }}
             aria-hidden="true"
           />
-        ) : preview ? (
-          /* Code preview */
-          <pre className="pointer-events-none h-full w-full overflow-hidden px-1.5 py-1 text-[7px] leading-tight font-mono text-muted-foreground/80 whitespace-pre-wrap">
-            {preview}
-          </pre>
         ) : (
-          /* Fallback icon */
-          <div className="flex h-full w-full items-center justify-center">
+          <div className="flex h-full w-full min-h-[64px] items-center justify-center">
             <TypeIcon type={artifact.type} className="h-6 w-6 text-muted-foreground/40" />
           </div>
         )}
-        {/* Hover overlay with open indicator */}
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/30 transition-colors">
+        {/* Hover open indicator */}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/25 transition-colors">
           <ChevronRight
             className="h-4 w-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"
             aria-hidden="true"
@@ -157,46 +139,51 @@ function ArtifactThumbCard({ artifact, onClick }: { artifact: ArtifactData; onCl
         </div>
       </div>
 
-      {/* Label area */}
-      <div className="flex flex-col gap-0.5 px-1.5 py-1">
-        <span className="block max-w-full truncate text-[9px] font-medium text-foreground leading-tight">
-          {artifact.title || 'Untitled'}
-        </span>
-        <span
-          className={cn(
-            'inline-block w-fit rounded px-1 py-0.5 text-[8px] font-semibold uppercase leading-tight tracking-wide',
-            badgeClass(artifact.type),
-          )}
-        >
-          {typeBadge(artifact.type)}
-        </span>
+      {/* Text area — fills remaining width */}
+      <div className="flex flex-1 min-w-0 flex-col justify-center gap-1 px-3 py-2.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="flex-1 truncate text-sm font-medium text-foreground leading-tight">
+            {artifact.title || 'Untitled'}
+          </span>
+          <span
+            className={cn(
+              'shrink-0 inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight tracking-wide',
+              badgeClass(artifact.type),
+            )}
+          >
+            {typeBadge(artifact.type)}
+          </span>
+        </div>
+
         {hasGeneratedFileManifest && generatedFileSummary.privacyShortLabel && (
-          <span className="inline-flex w-fit items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[8px] font-semibold uppercase leading-tight text-muted-foreground">
+          <span className="inline-flex w-fit items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-tight text-muted-foreground">
             <Shield className="h-2.5 w-2.5" aria-hidden="true" />
             {generatedFileSummary.privacyShortLabel}
           </span>
+        )}
+
+        {artifact.language && artifact.language !== artifact.type && (
+          <span className="text-[11px] text-muted-foreground/70 truncate">{artifact.language}</span>
         )}
       </div>
     </button>
   );
 }
 
-// ─── Overflow Card ────────────────────────────────────────────────────────────
+// ─── Overflow Row ─────────────────────────────────────────────────────────────
 
-function OverflowCard({ count, onClick }: { count: number; onClick: () => void }) {
+function OverflowRow({ count, onClick }: { count: number; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'flex flex-col items-center justify-center rounded-lg border border-border/40',
-        'bg-muted/30 hover:bg-muted/60 transition-colors',
-        'w-[80px] h-[100px] shrink-0 gap-1',
+        'w-full flex items-center justify-center gap-2 rounded-xl border border-border/40',
+        'bg-muted/20 hover:bg-muted/40 transition-colors py-2',
       )}
       aria-label={`View ${count} more artifacts`}
     >
-      <span className="text-sm font-semibold text-muted-foreground">+{count}</span>
-      <span className="text-[9px] text-muted-foreground/70">more</span>
+      <span className="text-xs font-semibold text-muted-foreground">+{count} more</span>
     </button>
   );
 }
@@ -228,15 +215,15 @@ export function InlineArtifactCards({ artifacts, onOpen, className }: InlineArti
   const overflow = artifacts.length - MAX_VISIBLE;
 
   return (
-    <div className={cn('flex flex-wrap gap-2 mt-3', className)} role="list" aria-label="Artifacts">
+    <div className={cn('flex flex-col gap-2 mt-3', className)} role="list" aria-label="Artifacts">
       {visible.map((artifact) => (
         <div key={artifact.id} role="listitem">
-          <ArtifactThumbCard artifact={artifact} onClick={() => openArtifact(artifact.id)} />
+          <ArtifactFullCard artifact={artifact} onClick={() => openArtifact(artifact.id)} />
         </div>
       ))}
       {overflow > 0 && (
         <div role="listitem">
-          <OverflowCard count={overflow} onClick={openFirst} />
+          <OverflowRow count={overflow} onClick={openFirst} />
         </div>
       )}
     </div>

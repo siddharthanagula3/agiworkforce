@@ -39,7 +39,6 @@
     "@agiworkforce/runtime": "workspace:*",
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "@supabase/supabase-js": "^2.105.1",
     "dompurify": "^3.3.3"
   },
   "devDependencies": {

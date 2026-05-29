@@ -26,7 +26,7 @@ jest.mock('expo-router', () => ({
     getParent: () => ({ dispatch: mockDispatch }),
     dispatch: mockDispatch,
   }),
-  useLocalSearchParams: () => ({ id: 'recent-commits-plan' }),
+  useLocalSearchParams: () => ({ id: 'nonexistent-session' }),
 }));
 
 jest.mock('@react-navigation/native', () => ({
@@ -106,13 +106,13 @@ describe('Artifacts gallery', () => {
     jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
   });
 
-  it('renders the loaded Claude-style artifact grid', () => {
+  it('renders the artifact grid with empty state when store is empty', () => {
     const { getByText, getByTestId } = render(<ArtifactsGalleryScreen />);
 
     expect(getByText('Artifacts')).toBeTruthy();
-    expect(getByText('Get inspired')).toBeTruthy();
     expect(getByTestId('artifacts-grid')).toBeTruthy();
-    expect(getByText('STEM OPT Salary Rules for Startup Founders')).toBeTruthy();
+    expect(getByTestId('artifacts-empty-state')).toBeTruthy();
+    expect(getByText('No artifacts yet')).toBeTruthy();
   });
 
   it('renders the gallery skeleton when loading', () => {
@@ -120,15 +120,6 @@ describe('Artifacts gallery', () => {
 
     expect(getByTestId('artifacts-skeleton-grid')).toBeTruthy();
     expect(queryByTestId('artifacts-grid')).toBeNull();
-  });
-
-  it('opens a preview modal for received artifacts', () => {
-    const { getByTestId, getByText } = render(<ArtifactsGalleryScreen />);
-
-    fireEvent.press(getByTestId('artifact-card-stem-opt-salary-rules'));
-
-    expect(getByText('Received artifact')).toBeTruthy();
-    expect(getByTestId('artifact-preview-content')).toBeTruthy();
   });
 });
 
@@ -138,23 +129,18 @@ describe('Code Sessions screens', () => {
     jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
   });
 
-  it('renders idle and archived code sessions and navigates to detail', () => {
+  it('renders the empty state when there are no code sessions', () => {
     const { getByText, getByTestId } = render(<CodeSessionsScreen />);
 
     expect(getByText('Code')).toBeTruthy();
-    expect(getByText('Idle')).toBeTruthy();
-    expect(getByText('Archived')).toBeTruthy();
-
-    fireEvent.press(getByTestId('code-session-row-recent-commits-plan'));
-
-    expect(mockPush).toHaveBeenCalledWith('/(app)/code/recent-commits-plan');
+    expect(getByTestId('code-sessions-empty-state')).toBeTruthy();
+    expect(getByText('No code sessions yet')).toBeTruthy();
   });
 
-  it('renders archived sessions without the idle section', () => {
-    const { getByText, queryByText } = render(<ArchivedCodeSessionsScreen />);
+  it('renders archived screen with empty state', () => {
+    const { getByTestId } = render(<ArchivedCodeSessionsScreen />);
 
-    expect(getByText('Archived')).toBeTruthy();
-    expect(queryByText('Idle')).toBeNull();
+    expect(getByTestId('code-sessions-empty-state')).toBeTruthy();
   });
 
   it('opens the remote environment options from the new-session button', () => {
@@ -167,26 +153,10 @@ describe('Code Sessions screens', () => {
     expect(getByText('Cloud Managed waitlist')).toBeTruthy();
   });
 
-  it('opens the code session mode selector', () => {
-    const { getAllByText, getByTestId, getByText } = render(<CodeSessionDetailScreen />);
-
-    expect(getByText('Implement plan from recent commits')).toBeTruthy();
-    expect(getByText('Connecting')).toBeTruthy();
-
-    fireEvent.press(getByTestId('code-mode-button'));
-    expect(getByTestId('code-mode-sheet')).toBeTruthy();
-    expect(getByText('Plan')).toBeTruthy();
-    expect(getAllByText('Code').length).toBeGreaterThan(0);
-  });
-
-  it('opens the code session more menu', () => {
+  it('renders session-unavailable state for an unknown session id', () => {
     const { getByTestId, getByText } = render(<CodeSessionDetailScreen />);
 
-    fireEvent.press(getByTestId('code-more-button'));
-    expect(getByTestId('code-more-menu')).toBeTruthy();
-    expect(getByText('Copy branch')).toBeTruthy();
-    expect(getByText('Share')).toBeTruthy();
-    expect(getByText('Rename')).toBeTruthy();
-    expect(getByText('Archive')).toBeTruthy();
+    expect(getByTestId('code-session-not-found')).toBeTruthy();
+    expect(getByText('Session unavailable')).toBeTruthy();
   });
 });

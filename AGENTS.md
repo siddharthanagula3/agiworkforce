@@ -2,36 +2,63 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-21
+Last updated: 2026-05-28
 
 Canonical tool-neutral agent entry point for AGI Workforce.
 
-This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth.
+This file is for Codex, Claude Code, Cursor, VS Code agents, opencode, Antigravity-style agents, and future coding agents. Tool-specific files must point back here instead of duplicating repo truth. They may mirror the critical rules below so agents do not miss safety/product invariants.
 
 Path-scoped `AGENTS.md` files under high-risk surfaces add local rules; read the nearest one before editing.
 
 ## After This File
 
-1. `docs/agent-context/README.md` - agent context map and rules.
-2. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
-3. `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
-4. `docs/agent-context/shared-files.md` - shared-file and collision policy.
-5. `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+Core read order:
+
+1. `docs/current/source-of-truth.md` - product definition, v1 target, current repo position, parity baseline, P0 gaps, docs rule, and verification rule.
+2. `docs/current/agi-product-requirements.md` - long-form PRD, serial surface order, Mobile v1 release bar, and decision-complete feature requirements.
+3. `docs/current/parity-implementation-matrix.md` - feature, option, component, contract, surface, source, and current-status matrix for implementation agents.
+4. `docs/current/byok-open-model-provider-strategy.md` when touching model/provider/BYOK work.
+5. `docs/agent-context/repo-map.json` - surfaces, owner roles, and checks.
 6. `docs/agent-context/known-flaws.md` - open bugs, stale claims, and cleanup debt.
 7. `docs/agent-context/commands.json` - canonical commands by surface.
-8. `docs/decisions/CURRENT_DECISIONS.md` - latest locked product decisions.
-9. `PLAN.md` and `TODO.md` - active strategy and work queue.
-10. `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
-11. `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
-12. `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
-13. `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
-14. `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
+8. Nearest path-scoped `AGENTS.md` before editing a high-risk surface.
+9. `docs/decisions/CURRENT_DECISIONS.md` when a decision conflict appears.
+10. `PLAN.md` and `TODO.md` when planning or queueing work.
+
+On-demand context:
+
+- `docs/agent-context/README.md` - full agent context map and rules.
+- `docs/agent-context/lanes.json` - write lanes for 15+ parallel agents.
+- `docs/agent-context/shared-files.md` - shared-file and collision policy.
+- `docs/agent-context/risk-map.json` - high-risk paths and required review focus.
+- `docs/engineering/agent-native-development.md` - parallel agent/worktree and verification workflow.
+- `docs/engineering/naming-conventions.md` - naming, root docs, CLI command, package, branch, commit, version, and hook policy.
+- `docs/engineering/agent-harness-rollout.md` - context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
+- `docs/engineering/service-layer-architecture.md` - action/route orchestration vs reusable service mechanics.
+- `docs/engineering/parallel-agent-playbook.md` - concrete 15+ agent operating procedure.
 
 When these files conflict with older plans, prefer the list above.
+
+## Critical Rules
+
+These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-context`.
+
+- Verify current facts from repo files, official docs, web search, or configured plugins/MCP before changing fast-moving APIs, model IDs, pricing, App Store rules, provider terms, framework behavior, or release claims.
+- Read model IDs from `packages/types/src/models.json` and provider capability metadata. Never invent, guess, or hardcode a model ID from training data.
+- Next.js 16 uses `proxy.ts` and an exported `proxy` function. Do not rename it back to `middleware.ts`.
+- Local, BYOK, and Managed Cloud are separate trust boundaries.
+- Never silently route Local chats, files, or developer sessions to BYOK or managed cloud.
+- Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
+- Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
+- Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
+- Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
+- Use the nearest path-scoped `AGENTS.md` before editing high-risk areas.
 
 ## Product Lock
 
 AGI Workforce is an OpenAI/Anthropic-style application suite, not just a chat app or CLI.
+
+The compact product source of truth is `docs/current/source-of-truth.md`.
 
 Locked differentiation:
 
@@ -56,7 +83,7 @@ Managed cloud/credits remain waitlist or private beta until metering, fraud, ref
 | Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                         |
 | Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.           |
 | Services      | `services`                     | API gateway, signaling, future managed compute.                   |
-| Database      | `supabase`                     | Canonical migrations.                                             |
+| Database      | `apps/web/db/neon`             | Canonical Neon migrations.                                        |
 | Evidence      | `audit`                        | Source-backed parity and audit ledgers.                           |
 | Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.       |
 | Working notes | `tasks`                        | Execution notes and temporary research.                           |

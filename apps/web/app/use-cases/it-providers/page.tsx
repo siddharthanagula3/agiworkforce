@@ -48,8 +48,8 @@ export default function ItProvidersPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">CI-style operations</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce exec</code> in headless mode for scripted incident workflows.
-                Pipe in a ticket, get a structured response back.
+                <code>agi exec</code> in headless mode for scripted incident workflows. Pipe in a
+                ticket, get a structured response back.
               </p>
             </li>
           </ul>

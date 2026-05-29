@@ -220,6 +220,13 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
 /// (e.g. skip cost tracking, surface an error) instead of silently
 /// using an inaccurate placeholder.
 pub fn get_pricing(provider: &Provider, model_id: &str) -> Option<PricingEntry> {
+    if let Some(model) = CONFIG.models.get(model_id) {
+        return Some(PricingEntry {
+            input_per_million: model.input_cost,
+            output_per_million: model.output_cost,
+        });
+    }
+
     let canonical_model_id = get_canonicalized_id(model_id);
     if let Some(model) = CONFIG.models.get(&canonical_model_id) {
         return Some(PricingEntry {

@@ -60,7 +60,7 @@ export const accountApi = {
 
   fetchUserProfile: async (accessToken: string): Promise<UserProfile> => {
     if (!isTauri) {
-      // In web mode, return empty profile - subscription data comes from Supabase
+      // In web mode, return an empty profile. Subscription data is owned by the web API.
       return {
         id: '',
         email: '',

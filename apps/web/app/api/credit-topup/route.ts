@@ -2,7 +2,9 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ProfileRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -24,8 +26,11 @@ function getStripeClient(): Stripe {
 
 /**
  * POST /api/credit-topup
- * Create a Stripe Checkout session for purchasing additional credits
- * This is primarily for Max plan users who need more credits
+ * Create a Stripe Checkout session for private-beta managed credits.
+ *
+ * Public managed credits/top-ups stay waitlisted until metering, fraud,
+ * refunds, chargebacks, abuse controls, provider terms, retention, and
+ * deletion controls are proven.
  */
 async function handleCreditTopup(request: NextRequest) {
   // CSRF protection for state-changing endpoint
@@ -40,16 +45,8 @@ async function handleCreditTopup(request: NextRequest) {
     return rateLimitResponse;
   }
 
-  const stripe = getStripeClient();
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
-    throw createError.unauthorized('Please sign in to continue');
-  }
+  const { userId, email } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: unknown;
   try {
@@ -76,47 +73,52 @@ async function handleCreditTopup(request: NextRequest) {
     throw createError.validation('Invalid top-up amount. Must be between $10 and $1,000.');
   }
 
-  // Get user's profile to check for existing Stripe customer
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('stripe_customer_id')
-    .eq('id', user.id)
-    .maybeSingle();
-
-  if (profileError) {
-    logger.warn({ error: profileError, userId: user.id }, 'Failed to fetch profile for top-up');
+  if (!isManagedCreditPrivateBetaEnabled()) {
+    throw createError.forbidden(
+      'Managed credit top-ups are private beta only. Join the Cloud Managed waitlist.',
+    );
   }
 
-  let customerId = profile?.stripe_customer_id;
+  const stripe = getStripeClient();
+
+  // Get user's profile to check for existing Stripe customer
+  const [profileRow] = await db
+    .query<
+      Pick<ProfileRow, 'stripe_customer_id'>
+    >('select stripe_customer_id from profiles where id = $1 limit 1', [userId])
+    .catch((profileError: unknown) => {
+      logger.warn({ error: profileError, userId: userId }, 'Failed to fetch profile for top-up');
+      return [];
+    });
+
+  let customerId = profileRow?.stripe_customer_id;
 
   // Create or retrieve Stripe customer
   if (!customerId) {
-    // user.email may be undefined for phone/SSO/anonymous auth users
-    if (!user.email) {
+    // email may be undefined for phone/SSO/anonymous auth users
+    if (!email) {
       throw createError.validation(
         'An email address is required for billing. Please add an email to your account.',
       );
     }
     const customer = await stripe.customers.create({
-      email: user.email,
+      email: email,
       metadata: {
-        supabase_user_id: user.id,
+        user_id: userId,
       },
     });
     customerId = customer.id;
 
     // Update profile with customer ID
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ stripe_customer_id: customerId })
-      .eq('id', user.id);
-    if (updateError) {
-      // Non-fatal: proceed with checkout even if we fail to persist mapping
-      logger.warn(
-        { error: updateError, userId: user.id, customerId },
-        'Failed to store stripe_customer_id on profile',
-      );
-    }
+    await db
+      .execute('update profiles set stripe_customer_id = $1 where id = $2', [customerId, userId])
+      .catch((updateError: unknown) => {
+        // Non-fatal: proceed with checkout even if we fail to persist mapping
+        logger.warn(
+          { error: updateError, userId: userId, customerId },
+          'Failed to store stripe_customer_id on profile',
+        );
+      });
   }
 
   // AUDIT-008-005: Validate origin against allowed list to prevent open redirect
@@ -174,13 +176,13 @@ async function handleCreditTopup(request: NextRequest) {
     success_url: successUrl,
     cancel_url: cancelUrl,
     metadata: {
-      user_id: user.id,
+      user_id: userId,
       type: 'credit_topup',
       credit_amount_cents: creditAmount.toString(),
     },
     payment_intent_data: {
       metadata: {
-        user_id: user.id,
+        user_id: userId,
         type: 'credit_topup',
         credit_amount_cents: creditAmount.toString(),
       },
@@ -189,7 +191,7 @@ async function handleCreditTopup(request: NextRequest) {
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       sessionId: checkoutSession.id,
       amount: creditAmount,
     },
@@ -208,4 +210,8 @@ export const POST = withErrorHandler(handleCreditTopup);
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
   return preflightResponse || new NextResponse(null, { status: 204 });
+}
+
+function isManagedCreditPrivateBetaEnabled(): boolean {
+  return process.env['AGI_MANAGED_CREDITS_PRIVATE_BETA'] === 'true';
 }

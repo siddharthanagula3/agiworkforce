@@ -28,9 +28,9 @@ const TIER_CONFIGS: TierDisplayConfig[] = [
     tier: 'free',
     tagline: 'Get started for free',
     features: [
-      'Access to basic models',
+      'Access to local models',
       `${formatPrivacyModeLabel('local')} mode (your device)`,
-      `Bring Your Own Key (${formatPrivacyModeLabel('byok')})`,
+      'Cloud Managed invite/waitlist access',
       'Community support',
     ],
     cta: 'Current plan',

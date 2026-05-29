@@ -29,8 +29,22 @@ const GOOGLE_JSON_SCHEMA_ONLY_KEYS = new Set([
 
 type JsonObject = Record<string, unknown>;
 
+const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>> = {
+  low: 1024,
+  medium: 8192,
+  high: 24576,
+};
+
 function isPlainObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getGoogleThinkingBudget(effort: string | undefined): number | undefined {
+  const normalized = effort?.toLowerCase();
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return GOOGLE_THINKING_BUDGET[normalized];
+  }
+  return undefined;
 }
 
 function hasSchemaShape(value: unknown): value is JsonObject {
@@ -314,6 +328,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // Lower values cause looping or degraded performance
     const isGemini3 = request.model.includes('gemini-3');
     const temperature = isGemini3 && request.temperature === undefined ? 1.0 : request.temperature;
+    const thinkingBudget = getGoogleThinkingBudget(request.effort);
 
     const body: Record<string, unknown> = {
       contents,
@@ -321,6 +336,7 @@ export class GoogleProvider extends BaseLLMProvider {
       generationConfig: {
         ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
+        ...(thinkingBudget !== undefined && { thinkingConfig: { thinkingBudget } }),
       },
       // Disable safety filters to prevent blank responses for code/terminal prompts
       safetySettings: [
@@ -497,6 +513,7 @@ export class GoogleProvider extends BaseLLMProvider {
     // Lower values cause looping or degraded performance
     const isGemini3 = request.model.includes('gemini-3');
     const temperature = isGemini3 && request.temperature === undefined ? 1.0 : request.temperature;
+    const thinkingBudget = getGoogleThinkingBudget(request.effort);
 
     const body: Record<string, unknown> = {
       contents,
@@ -504,6 +521,7 @@ export class GoogleProvider extends BaseLLMProvider {
       generationConfig: {
         ...(temperature !== undefined && { temperature }),
         ...(request.max_tokens !== undefined && { maxOutputTokens: request.max_tokens }),
+        ...(thinkingBudget !== undefined && { thinkingConfig: { thinkingBudget } }),
       },
       // Disable safety filters to prevent blank responses for code/terminal prompts
       safetySettings: [

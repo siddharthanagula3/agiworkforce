@@ -1,6 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
-import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js';
-import { createClient as createSupabaseServerClient } from '@/utils/supabase/server';
+import { auth } from '@clerk/nextjs/server';
 
 // Lazily get CSRF_SECRET to avoid errors during build/static generation.
 //
@@ -167,10 +166,9 @@ function constantTimeSignatureMatch(
 /**
  * Extract session ID from request.
  *
- * M3 FIX: For authenticated users, uses the Supabase server client to get the
- * verified user ID - this is more secure than parsing raw cookie bytes since
- * the user ID is verified through Supabase Auth, not derived from untrusted
- * cookie values.
+ * For authenticated users, uses Clerk server auth to get the verified user ID.
+ * This is more secure than parsing raw cookie bytes since the user ID is
+ * verified through Clerk, not derived from untrusted cookie values.
  *
  * Falls back to cookie-based session binding for anonymous users.
  *
@@ -181,22 +179,17 @@ function constantTimeSignatureMatch(
  * cookie when one does not already exist.
  */
 export async function getSessionIdFromRequest(_request: Request): Promise<string> {
-  // Option 1 (preferred): Use Supabase server client to get verified user ID
-  // This avoids parsing raw cookie bytes and ensures the session ID is
-  // cryptographically verified through Supabase Auth.
+  // Option 0 (preferred): Use Clerk auth to get verified user ID
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.id) {
-      return user.id;
+    const { userId } = await auth();
+    if (userId) {
+      return userId;
     }
   } catch {
-    // Supabase client may fail in non-route-handler contexts; fall through
+    // Clerk may fail in non-route-handler contexts; fall through
   }
 
-  // Option 2: Cookie-based fallback for anonymous users.
+  // Option 1: Cookie-based fallback for anonymous users.
   // All cookie reads below go through readCookie() which anchors to the
   // cookie-name boundary — see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
@@ -214,7 +207,7 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     return hostPrefixed;
   }
 
-  // Option 3: Generate unique anonymous session ID
+  // Option 2: Generate unique anonymous session ID
   // NOTE: Each request without any session gets a new ID.
   // Use getOrCreateAnonSession() in route handlers to persist this via cookie.
   return `anon-${crypto.randomUUID()}`;
@@ -234,29 +227,26 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
 export async function getOrCreateAnonSession(
   request: Request,
 ): Promise<{ id: string; newCookie?: string }> {
-  // Option 1 (preferred): Use Supabase server client for verified user ID
+  // Option 0 (preferred): Use Clerk auth for verified user ID
   try {
-    const supabase = await createSupabaseServerClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user?.id) {
-      return { id: user.id };
+    const { userId } = await auth();
+    if (userId) {
+      return { id: userId };
     }
   } catch {
-    // Fall through to cookie-based fallback
+    // Clerk may fail in non-route-handler contexts; fall through
   }
 
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 2: Prefer authenticated session cookies (no new cookie needed).
+  // Option 1: Prefer authenticated session cookies (no new cookie needed).
   // All cookie reads use the anchored readCookie helper — see web-HIGH-1.
   const sessionId = readCookie(cookies, 'session-id');
   if (sessionId) {
     return { id: sessionId };
   }
 
-  // Option 3: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
+  // Option 2: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
   // The `__Host-` prefix forces Path=/ + Secure + no Domain; browser refuses
   // to set it from JS or sibling subdomains. Legacy `anon-session-id` fallback
   // removed 2026-05-05 per the deadline. Only the __Host- path is accepted.
@@ -265,7 +255,7 @@ export async function getOrCreateAnonSession(
     return { id: hostPrefixed };
   }
 
-  // Option 4: Generate a new anonymous session ID and request it be stored in a cookie
+  // Option 3: Generate a new anonymous session ID and request it be stored in a cookie
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
@@ -282,7 +272,7 @@ export async function getOrCreateAnonSession(
  * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
  * auth fail later — leaving any endpoint that checked CSRF before auth vulnerable.
  *
- * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Supabase
+ * Fix: Only bypass CSRF when the Bearer JWT is verified as belonging to a real Clerk
  * user. If verification fails, fall through to the CSRF token check as normal.
  *
  * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
@@ -291,7 +281,7 @@ export async function getOrCreateAnonSession(
  * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) — Bearer-bypass invariant         │
  * │                                                                          │
  * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
- * │ cannot forge a valid Supabase JWT (same-origin policy blocks reading     │
+ * │ cannot forge a valid Clerk JWT (same-origin policy blocks reading        │
  * │ another origin's localStorage / injecting Authorization on third-party   │
  * │ requests). It is NOT a generic "skip CSRF if any Bearer header is        │
  * │ present" — that pattern was the RT-04 vulnerability.                     │
@@ -299,7 +289,7 @@ export async function getOrCreateAnonSession(
  * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
  * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
  * │ <forged-but-shaped-correctly>`, the bypass attempts a verify call but    │
- * │ that call's network failure mode (Supabase auth-server reachable?)       │
+ * │ that call's network failure mode (Clerk auth reachable?)                 │
  * │ becomes part of the CSRF surface. The required order on any new route is:│
  * │     1. validate the Bearer JWT (or cookie session)                       │
  * │     2. THEN call requireCsrfToken / validateCsrfFromRequest              │
@@ -311,23 +301,23 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return false;
   }
   const token = authHeader.slice(7);
-  // Validate token length to avoid excessive work on garbage inputs
   if (token.length < 20 || token.length > 4096) {
     return false;
   }
-  try {
-    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-    const serviceKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-    if (!supabaseUrl || !serviceKey) return false;
 
-    const admin = createSupabaseAdminClient(supabaseUrl, serviceKey, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
-    const { data, error } = await admin.auth.getUser(token);
-    return !error && !!data?.user;
+  // Verify using Clerk token verification
+  try {
+    const { verifyToken } = await import('@clerk/backend');
+    const secretKey = process.env['CLERK_SECRET_KEY'];
+    if (secretKey) {
+      const claims = await verifyToken(token, { secretKey });
+      if (claims.sub) return true;
+    }
   } catch {
-    return false;
+    // Not a valid Clerk token
   }
+
+  return false;
 }
 
 /**

@@ -12,7 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { ChatMessageList, groupMessages } from './ChatMessageList';
-import type { ChatMessage } from '../../stores/chat-store';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
 
 // ---------------------------------------------------------------------------
 // Global setup
@@ -80,10 +80,10 @@ function makeMessage(
 ): ChatMessage {
   return {
     id: overrides.id,
-    sessionId: 'session-1',
+    conversationId: 'conv-1',
     role: overrides.role,
     content: overrides.content,
-    createdAt: new Date('2026-01-01T12:00:00Z'),
+    createdAt: '2026-01-01T12:00:00.000Z',
     isStreaming: overrides.isStreaming ?? false,
     metadata: overrides.metadata,
   };

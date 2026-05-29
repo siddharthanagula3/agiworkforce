@@ -7,7 +7,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * Agent Delegation Response API
@@ -31,9 +32,8 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: agent_delegations.user_id RLS policy enforces tenant
-  // isolation; the .eq('user_id', ...) filter remains as defense-in-depth.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id } = await context.params;
 
   let body: unknown;
@@ -49,39 +49,39 @@ async function handleRespondToDelegation(request: NextRequest, context: RouteCon
   }
 
   const { response, accepted } = validationResult.data;
-
   const newStatus = accepted ? 'accepted' : 'rejected';
 
-  const { data, error } = await supabase
-    .from('agent_delegations')
-    .update({
-      status: newStatus,
-      response,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('user_id', user.id)
-    .select()
-    .single();
-
-  if (error) {
-    if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await db.query<Record<string, unknown>>(
+      `update agent_delegations
+       set status = $1,
+           response = $2,
+           updated_at = $3
+       where id = $4 and user_id = $5
+       returning *`,
+      [newStatus, response, new Date().toISOString(), id, userId],
+    );
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string; message?: string };
+    if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
       // Table doesn't exist yet - return graceful success
       return NextResponse.json({ success: true, delegation: null });
     }
-    if (error.code === 'PGRST116') {
-      throw createError.notFound('Delegation not found');
-    }
-    logger.error({ error, userId: user.id, delegationId: id }, 'Failed to respond to delegation');
+    logger.error({ err, userId, delegationId: id }, 'Failed to respond to delegation');
     throw createError.internal('Failed to respond to delegation');
   }
 
+  if (rows.length === 0) {
+    throw createError.notFound('Delegation not found');
+  }
+
   logger.info(
-    { userId: user.id, delegationId: id, status: newStatus },
+    { userId, delegationId: id, status: newStatus },
     'Agent delegation response recorded',
   );
 
-  return NextResponse.json({ success: true, delegation: data });
+  return NextResponse.json({ success: true, delegation: rows[0] });
 }
 
 export const PUT = withErrorHandler(handleRespondToDelegation);

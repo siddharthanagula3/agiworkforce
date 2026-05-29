@@ -11,14 +11,16 @@
  *   Query: ?memberId=<uuid>
  */
 
-import { type SupabaseClient } from '@supabase/supabase-js';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { TeamRow, TeamMemberRow } from '@/lib/server/neon-types';
 
 const VALID_ROLES = ['admin', 'editor', 'viewer'] as const;
 type TeamRole = (typeof VALID_ROLES)[number];
@@ -28,34 +30,29 @@ type TeamRole = (typeof VALID_ROLES)[number];
  * Returns 'owner' | 'admin' or throws a forbidden error.
  */
 async function requireAdminAccess(
-  supabase: SupabaseClient,
+  db: DatabaseAdapter,
   teamId: string,
   userId: string,
 ): Promise<'owner' | 'admin'> {
-  const { data: team, error: teamError } = await supabase
-    .from('teams')
-    .select('id, owner_id')
-    .eq('id', teamId)
-    .single();
+  const [team] = await db.query<Pick<TeamRow, 'id' | 'owner_id'>>(
+    `select id, owner_id from teams where id = $1 limit 1`,
+    [teamId],
+  );
 
-  if (teamError || !team) {
+  if (!team) {
     throw createError.notFound('Team not found');
   }
 
-  const teamRow = team as Record<string, unknown>;
-  if (teamRow['owner_id'] === userId) {
+  if (team.owner_id === userId) {
     return 'owner';
   }
 
-  const { data: membership } = await supabase
-    .from('team_members')
-    .select('role')
-    .eq('team_id', teamId)
-    .eq('user_id', userId)
-    .maybeSingle();
+  const [membership] = await db.query<Pick<TeamMemberRow, 'role'>>(
+    `select role from team_members where team_id = $1 and user_id = $2 limit 1`,
+    [teamId, userId],
+  );
 
-  const memberRole = (membership as Record<string, unknown> | null)?.['role'];
-  if (memberRole !== 'admin') {
+  if (membership?.role !== 'admin') {
     throw createError.forbidden('Only team owners and admins can manage members');
   }
 
@@ -88,8 +85,8 @@ async function handleInviteMember(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -121,24 +118,25 @@ async function handleInviteMember(
 
   const name = typeof body.name === 'string' && body.name.trim().length > 0 ? body.name.trim() : '';
 
-  await requireAdminAccess(supabase, teamId, user.id);
+  await requireAdminAccess(db, teamId, userId);
 
   // Look up the invitee by email using a targeted profiles query (O(1) index
   // lookup) instead of loading all users via listUsers() which is O(n) and
   // degrades as the user base grows.
   const normalizedEmail = body.email.trim().toLowerCase();
-  const { data: inviteeProfile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, email')
-    .eq('email', normalizedEmail)
-    .maybeSingle();
-
-  if (profileError) {
-    logger.error({ error: profileError, teamId }, 'Failed to look up user profile for invite');
+  let inviteeProfile: { id: string; email: string | null } | undefined;
+  try {
+    const [row] = await db.query<{ id: string; email: string | null }>(
+      `select id, email from profiles where email = $1 limit 1`,
+      [normalizedEmail],
+    );
+    inviteeProfile = row;
+  } catch (error) {
+    logger.error({ error, teamId }, 'Failed to look up user profile for invite');
     throw createError.internal('Failed to invite member');
   }
 
-  // If no matching Supabase user exists we still create the record, leaving
+  // If no matching user exists we still create the record, leaving
   // user_id as a placeholder UUID (same email used as lookup key). In a full
   // production flow you would send an invitation email; here we gracefully
   // allow the invite even if the account is not yet created - the RLS policy
@@ -148,36 +146,32 @@ async function handleInviteMember(
   const inviteeName = name || normalizedEmail.split('@')[0] || '';
 
   // Check for duplicate membership
-  const { data: existing } = await supabase
-    .from('team_members')
-    .select('id, role')
-    .eq('team_id', teamId)
-    .eq('email', body.email.trim().toLowerCase())
-    .maybeSingle();
+  const [existing] = await db.query<{ id: string; role: string }>(
+    `select id, role from team_members where team_id = $1 and email = $2 limit 1`,
+    [teamId, body.email.trim().toLowerCase()],
+  );
 
   if (existing) {
     throw createError.validation('This user is already a member of the team');
   }
 
-  const { data: member, error: insertError } = await supabase
-    .from('team_members')
-    .insert({
-      team_id: teamId,
-      user_id: inviteeUserId,
-      email: body.email.trim().toLowerCase(),
-      name: inviteeName,
-      role,
-    })
-    .select()
-    .single();
-
-  if (insertError) {
-    logger.error({ error: insertError, userId: user.id, teamId }, 'Failed to invite member');
+  let member: TeamMemberRow;
+  try {
+    const [inserted] = await db.query<TeamMemberRow>(
+      `insert into team_members (team_id, user_id, email, name, role)
+       values ($1, $2, $3, $4, $5)
+       returning *`,
+      [teamId, inviteeUserId, body.email.trim().toLowerCase(), inviteeName, role],
+    );
+    if (!inserted) throw new Error('No row returned');
+    member = inserted;
+  } catch (error) {
+    logger.error({ error, userId, teamId }, 'Failed to invite member');
     throw createError.internal('Failed to invite member');
   }
 
   return NextResponse.json(
-    { member: mapRowToMember(member as Record<string, unknown>) },
+    { member: mapRowToMember(member as unknown as Record<string, unknown>) },
     { status: 201 },
   );
 }
@@ -196,8 +190,8 @@ async function handleUpdateMemberRole(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -218,21 +212,17 @@ async function handleUpdateMemberRole(
     throw createError.validation('role must be one of: admin, editor, viewer');
   }
 
-  const callerAccess = await requireAdminAccess(supabase, teamId, user.id);
+  const callerAccess = await requireAdminAccess(db, teamId, userId);
 
   // Fetch the target member record
-  const { data: targetMember, error: memberError } = await supabase
-    .from('team_members')
-    .select('id, team_id, user_id, role')
-    .eq('id', body.memberId)
-    .eq('team_id', teamId)
-    .single();
+  const [targetMember] = await db.query<Pick<TeamMemberRow, 'id' | 'team_id' | 'user_id' | 'role'>>(
+    `select id, team_id, user_id, role from team_members where id = $1 and team_id = $2 limit 1`,
+    [body.memberId, teamId],
+  );
 
-  if (memberError || !targetMember) {
+  if (!targetMember) {
     throw createError.notFound('Member not found in this team');
   }
-
-  const targetRow = targetMember as Record<string, unknown>;
 
   // An admin cannot promote another member to admin - only the owner can do that.
   if (callerAccess === 'admin' && body.role === 'admin') {
@@ -240,26 +230,29 @@ async function handleUpdateMemberRole(
   }
 
   // Prevent an admin from demoting another admin (only owner can do that).
-  if (callerAccess === 'admin' && targetRow['role'] === 'admin') {
+  if (callerAccess === 'admin' && targetMember.role === 'admin') {
     throw createError.forbidden("Only the team owner can change another admin's role");
   }
 
-  const { data: updated, error: updateError } = await supabase
-    .from('team_members')
-    .update({ role: body.role })
-    .eq('id', body.memberId)
-    .select()
-    .single();
-
-  if (updateError) {
+  let updated: TeamMemberRow;
+  try {
+    const [row] = await db.query<TeamMemberRow>(
+      `update team_members set role = $1 where id = $2 returning *`,
+      [body.role, body.memberId],
+    );
+    if (!row) throw new Error('No row returned');
+    updated = row;
+  } catch (error) {
     logger.error(
-      { error: updateError, userId: user.id, teamId, memberId: body.memberId },
+      { error, userId, teamId, memberId: body.memberId },
       'Failed to update member role',
     );
     throw createError.internal('Failed to update member role');
   }
 
-  return NextResponse.json({ member: mapRowToMember(updated as Record<string, unknown>) });
+  return NextResponse.json({
+    member: mapRowToMember(updated as unknown as Record<string, unknown>),
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -276,8 +269,8 @@ async function handleRemoveMember(
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id: teamId } = await context.params;
 
   if (!teamId || typeof teamId !== 'string') {
@@ -291,38 +284,27 @@ async function handleRemoveMember(
     throw createError.validation('memberId query parameter is required');
   }
 
-  const callerAccess = await requireAdminAccess(supabase, teamId, user.id);
+  const callerAccess = await requireAdminAccess(db, teamId, userId);
 
   // Fetch the target member record
-  const { data: targetMember, error: memberError } = await supabase
-    .from('team_members')
-    .select('id, team_id, user_id, role')
-    .eq('id', memberId)
-    .eq('team_id', teamId)
-    .single();
+  const [targetMember] = await db.query<Pick<TeamMemberRow, 'id' | 'team_id' | 'user_id' | 'role'>>(
+    `select id, team_id, user_id, role from team_members where id = $1 and team_id = $2 limit 1`,
+    [memberId, teamId],
+  );
 
-  if (memberError || !targetMember) {
+  if (!targetMember) {
     throw createError.notFound('Member not found in this team');
   }
 
-  const targetRow = targetMember as Record<string, unknown>;
-
   // An admin cannot remove another admin - only the owner can do that.
-  if (callerAccess === 'admin' && targetRow['role'] === 'admin') {
+  if (callerAccess === 'admin' && targetMember.role === 'admin') {
     throw createError.forbidden('Only the team owner can remove an admin');
   }
 
-  const { error: deleteError } = await supabase
-    .from('team_members')
-    .delete()
-    .eq('id', memberId)
-    .eq('team_id', teamId);
-
-  if (deleteError) {
-    logger.error(
-      { error: deleteError, userId: user.id, teamId, memberId },
-      'Failed to remove member',
-    );
+  try {
+    await db.execute(`delete from team_members where id = $1 and team_id = $2`, [memberId, teamId]);
+  } catch (error) {
+    logger.error({ error, userId, teamId, memberId }, 'Failed to remove member');
     throw createError.internal('Failed to remove member');
   }
 

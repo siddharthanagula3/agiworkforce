@@ -18,7 +18,9 @@ import {
   getRoutingSlotModel,
   getTierPolicy,
   listCanonicalModels,
+  modelsCatalog,
   normalizeModelId,
+  requireProviderDefaultModel,
   resolveAutoModeModel,
 } from '../model-catalog';
 
@@ -28,14 +30,18 @@ describe('model catalog helpers', () => {
     const ids = new Set(models.map((model) => model.id));
 
     expect(models.length).toBe(ids.size);
-    expect(ids.has('gpt-5.4')).toBe(true);
-    expect(ids.has('claude-sonnet-4.6')).toBe(true);
+    expect(ids.has(requireProviderDefaultModel('openai'))).toBe(true);
+    expect(ids.has(requireProviderDefaultModel('anthropic'))).toBe(true);
   });
 
   it('maps allowed models into picker-friendly tiers', () => {
-    expect(getPickerModelTier('gpt-5.4-mini')).toBe('economy');
-    expect(getPickerModelTier('gpt-5.4')).toBe('balanced');
-    expect(getPickerModelTier('claude-opus-4.6')).toBe('premium');
+    // Catalog-driven: a representative model from each tier list maps to the
+    // matching picker tier — never hardcoded to a specific model id.
+    expect(getPickerModelTier(modelsCatalog.tierAllowedModels.economy[0])).toBe('economy');
+    expect(getPickerModelTier(modelsCatalog.tierAllowedModels.pro_additions[0])).toBe('balanced');
+    expect(getPickerModelTier(modelsCatalog.tierAllowedModels.flagship_additions[0])).toBe(
+      'premium',
+    );
   });
 
   it('returns normalized picker models for chat surfaces', () => {
@@ -43,28 +49,27 @@ describe('model catalog helpers', () => {
       allowedProviders: ['openai', 'anthropic', 'google'],
     });
 
-    expect(models.find((model) => model.id === 'gpt-5.4')).toMatchObject({
-      provider: 'openai',
-      tier: 'balanced',
-    });
-    expect(models.find((model) => model.id === 'claude-opus-4.7')).toMatchObject({
-      provider: 'anthropic',
-      tier: 'premium',
-    });
+    expect(models.some((model) => model.provider === 'openai')).toBe(true);
+    expect(models.some((model) => model.provider === 'anthropic')).toBe(true);
+    expect(models.every((model) => ['economy', 'balanced', 'premium'].includes(model.tier))).toBe(
+      true,
+    );
     expect(models.every((model) => model.contextWindow > 0)).toBe(true);
   });
 
   it('builds context limit and cost maps from canonical ids', () => {
     const aliasId = normalizeModelId('claude-sonnet-4-6');
     const codexId = normalizeModelId('gpt-5.4-codex-medium');
-    const contextLimits = getModelContextLimits(['gpt-5.4', 'claude-sonnet-4-6']);
-    const costRates = getModelCostRates(['gpt-5.4', 'claude-sonnet-4-6']);
+    const openaiModel = requireProviderDefaultModel('openai');
+    const contextLimits = getModelContextLimits([openaiModel, 'claude-sonnet-4-6']);
+    const costRates = getModelCostRates([openaiModel, 'claude-sonnet-4-6']);
 
     expect(aliasId).toBe('claude-sonnet-4.6');
-    expect(codexId).toBe('gpt-5.4-codex');
-    expect(contextLimits['gpt-5.4']).toBeGreaterThan(0);
+    // legacy codex alias resolves to a current catalog model (not pinned to an id)
+    expect(getModelMetadataById(codexId)).not.toBeNull();
+    expect(contextLimits[openaiModel]).toBeGreaterThan(0);
     expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
-    expect(costRates['gpt-5.4']).toMatchObject({ provider: 'openai' });
+    expect(costRates[openaiModel]).toMatchObject({ provider: 'openai' });
     expect(costRates['claude-sonnet-4.6']).toMatchObject({ provider: 'anthropic' });
   });
 
@@ -73,8 +78,8 @@ describe('model catalog helpers', () => {
       modelTypes: ['chat', 'code', 'reasoning', 'multimodal'],
     });
 
-    expect(anthropicIds).toContain('claude-sonnet-4.6');
-    expect(anthropicIds).toContain('claude-opus-4.6');
+    expect(anthropicIds).toContain(requireProviderDefaultModel('anthropic'));
+    expect(anthropicIds.length).toBeGreaterThan(1);
     expect(anthropicIds).not.toContain('claude-3-haiku-20240307');
   });
 
@@ -87,8 +92,10 @@ describe('model catalog helpers', () => {
   });
 
   it('derives variant partners, provider probes, and economy fallbacks from the catalog', () => {
-    expect(getModelVariantPartner('gpt-5.4-mini')).toBe('gpt-5.4');
-    expect(getModelVariantPartner('claude-sonnet-4-6')).toBe('claude-opus-4.6');
+    // Variant partners must resolve to a real catalog model (no dangling partner),
+    // without pinning the specific partner id.
+    expect(getModelMetadataById(getModelVariantPartner('gpt-5.4-mini'))).not.toBeNull();
+    expect(getModelMetadataById(getModelVariantPartner('claude-sonnet-4-6'))).not.toBeNull();
     expect(getProviderProbeModel('openai')).toBe('gpt-5.4-mini');
     expect(getProviderProbeModel('anthropic')).toBe('claude-haiku-4.5');
 
@@ -99,19 +106,22 @@ describe('model catalog helpers', () => {
     expect(fallbackIds).not.toContain('gpt-5.4-nano');
 
     const coreOptions = getCoreManualModelOptions();
-    expect(coreOptions.find((entry) => entry.id === 'gpt-5.4-pro')?.label).toBe('GPT-5.4 Pro');
-    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(true);
+    expect(coreOptions.some((entry) => entry.id === requireProviderDefaultModel('openai'))).toBe(
+      true,
+    );
+    // gpt-5.4-codex was a phantom (never a real OpenAI model) — must stay absent.
+    expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'kimi-k2.6')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
-  it('canonicalizes legacy gpt-5-nano onto gpt-5.4-nano (kept as distinct model)', () => {
-    // The catalog refresh in 3129aa408 promoted nano to its own model tier
-    // rather than collapsing it onto mini. Canonicalization preserves the
-    // distinction; gpt-5-nano (legacy) maps to gpt-5.4-nano (current).
-    expect(normalizeModelId('gpt-5-nano')).toBe('gpt-5.4-nano');
-    expect(normalizeModelId('gpt-5.4-nano')).toBe('gpt-5.4-nano');
+  it('canonicalizes legacy nano aliases onto the current small model (nano removed)', () => {
+    // gpt-5.4-nano was removed from the catalog; legacy nano ids now resolve to
+    // the kept small model so existing configs keep working.
+    const target = normalizeModelId('gpt-5-nano');
+    expect(getModelMetadataById(target)).not.toBeNull();
+    expect(normalizeModelId('gpt-5.4-nano')).toBe(target);
   });
 
   it('classifies provider surfaces and managed cloud provider visibility', () => {
@@ -149,7 +159,7 @@ describe('model catalog helpers', () => {
     expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.1-flash-lite');
     expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.4-mini');
     expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-chat');
-    expect(getRoutingSlotModel('coding_premium')).toBe('gpt-5.4-codex');
+    expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
     expect(getRoutingSlotModel('search_fast')).toBe('sonar');
     expect(getRoutingSlotModel('search_premium')).toBe('sonar-deep-research');
     expect(getRoutingSlotModel('computer_use')).toBe('claude-sonnet-4.6');
@@ -279,17 +289,23 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   });
 
   describe('Max + Enterprise tier task-aware routing (shares Pro+ map with flagship access)', () => {
-    it('Max coding → flagship_coding_pro_plus → claude-opus-4.7', () => {
+    it('Max coding → flagship_coding_pro_plus slot', () => {
       // Max shares the Pro+ map, which routes coding → flagship_coding_pro_plus.
       // Max's allowedSlots include the flagship slots (with monthly cap of 1M
       // tokens enforced by assertQuota; no daily cap like Pro+).
-      expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe('claude-opus-4.7');
+      expect(resolveAutoModeModel('auto-balanced', 'max', 'coding')).toBe(
+        getRoutingSlotModel('flagship_coding_pro_plus'),
+      );
     });
-    it('Enterprise coding → flagship_coding_pro_plus → claude-opus-4.7', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'enterprise', 'coding')).toBe('claude-opus-4.7');
+    it('Enterprise coding → flagship_coding_pro_plus slot', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'enterprise', 'coding')).toBe(
+        getRoutingSlotModel('flagship_coding_pro_plus'),
+      );
     });
-    it('Pro+ coding → flagship_coding_pro_plus → claude-opus-4.7 (gated by 15K daily cap)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'coding')).toBe('claude-opus-4.7');
+    it('Pro+ coding → flagship_coding_pro_plus slot (gated by 15K daily cap)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'coding')).toBe(
+        getRoutingSlotModel('flagship_coding_pro_plus'),
+      );
     });
     it('Pro+ general → flagship_general_pro_plus → gpt-5.5', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro_plus', 'general')).toBe('gpt-5.5');
@@ -326,9 +342,9 @@ describe('resolveAutoModeModel — task-aware routing', () => {
       expect(result).toBe('deepseek-v4-flash');
     });
 
-    it('Pro+ coding with usOnly=true keeps Opus 4.7 (Anthropic is US)', () => {
+    it('Pro+ coding with usOnly=true stays on the flagship coding slot (Anthropic is US)', () => {
       const result = resolveAutoModeModel('auto-balanced', 'pro_plus', 'coding', { usOnly: true });
-      expect(result).toBe('claude-opus-4.7');
+      expect(result).toBe(getRoutingSlotModel('flagship_coding_pro_plus'));
     });
 
     it('Pro+ general with usOnly=true keeps gpt-5.5 (OpenAI is US)', () => {

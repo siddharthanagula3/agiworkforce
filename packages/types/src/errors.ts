@@ -17,7 +17,7 @@
  * - Resources: NOT_FOUND, CONFLICT
  * - Server: INTERNAL_ERROR, SERVICE_UNAVAILABLE, TIMEOUT
  * - Rate Limiting: RATE_LIMIT_EXCEEDED
- * - External Services: STRIPE_ERROR, SUPABASE_ERROR
+ * - External Services: STRIPE_ERROR, CLOUD_DB_ERROR
  * - Network: NETWORK_ERROR, PAYLOAD_TOO_LARGE
  *
  * Using const object pattern for isolatedModules compatibility.
@@ -56,9 +56,9 @@ export const ErrorCode = {
   // External Services
   /** Stripe API error */
   STRIPE_ERROR: 'STRIPE_ERROR',
-  /** Supabase API error */
-  SUPABASE_ERROR: 'SUPABASE_ERROR',
-  /** Supabase "no rows" error */
+  /** Cloud database/API error */
+  CLOUD_DB_ERROR: 'CLOUD_DB_ERROR',
+  /** Postgres "no rows" sentinel */
   PGRST116: 'PGRST116',
 
   // Network
@@ -163,7 +163,7 @@ export const ERROR_CODE_TO_HTTP_STATUS: Record<ErrorCodeValue, number> = {
   [ErrorCode.TIMEOUT]: 504,
   [ErrorCode.RATE_LIMIT_EXCEEDED]: 429,
   [ErrorCode.STRIPE_ERROR]: 502,
-  [ErrorCode.SUPABASE_ERROR]: 502,
+  [ErrorCode.CLOUD_DB_ERROR]: 502,
   [ErrorCode.PGRST116]: 404,
   [ErrorCode.NETWORK_ERROR]: 503,
   [ErrorCode.PAYLOAD_TOO_LARGE]: 413,
@@ -255,7 +255,7 @@ export const FRIENDLY_ERROR_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
     suggestion: 'Please check your payment details and try again.',
     icon: 'payment',
   },
-  [ErrorCode.SUPABASE_ERROR]: {
+  [ErrorCode.CLOUD_DB_ERROR]: {
     title: 'Database Error',
     message: 'There was an issue with the database.',
     suggestion: 'Please try again in a few minutes.',

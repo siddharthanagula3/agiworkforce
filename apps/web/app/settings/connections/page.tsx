@@ -1,6 +1,8 @@
 'use client';
 
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 /**
  * /settings/connections — OAuth-backed connectors (Google Drive, GitHub, Slack...)
@@ -82,12 +84,69 @@ function formatRelativeTime(isoString: string | null | undefined): string {
 
 const managedLabel = formatPrivacyModeLabel('managed');
 
+type ConnectorConnection = {
+  connectorId: string;
+  connectedAt: string;
+};
+
 export default function ConnectionsSettingsPage() {
-  // In v1 LOCAL ONLY, no connectors are active. This map is intentionally empty;
-  // it will be populated from the /api/connectors response once the Cloud Managed
-  // waitlist opens. The Disconnect button and "Connected Xd ago" branches are
-  // wired but inert until activation.
-  const connectedAtMap: Record<string, string | null> = {};
+  const [connections, setConnections] = useState<ConnectorConnection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const connectedAtMap = useMemo(
+    () =>
+      Object.fromEntries(
+        connections.map((connection) => [connection.connectorId, connection.connectedAt]),
+      ) as Record<string, string | null>,
+    [connections],
+  );
+
+  const loadConnections = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/connectors', { credentials: 'include' });
+      if (!response.ok) throw new Error('Could not load connectors');
+      const data = (await response.json()) as {
+        connectors?: Array<{ connectorId: string; connectedAt: string }>;
+      };
+      setConnections(data.connectors ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load connectors');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadConnections();
+  }, [loadConnections]);
+
+  async function disconnect(connectorId: string) {
+    setDisconnectingId(connectorId);
+    setError(null);
+    try {
+      const headers = await addCsrfHeaders({});
+      const response = await fetch(
+        `/api/connectors?connectorId=${encodeURIComponent(connectorId)}`,
+        {
+          method: 'DELETE',
+          headers,
+          credentials: 'include',
+        },
+      );
+      if (!response.ok) throw new Error('Could not disconnect connector');
+      setConnections((current) =>
+        current.filter((connection) => connection.connectorId !== connectorId),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not disconnect connector');
+    } finally {
+      setDisconnectingId(null);
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -107,12 +166,15 @@ export default function ConnectionsSettingsPage() {
           External services the assistant can read on your behalf. Cloud Managed only; local-mode
           and BYOK installs use MCP connectors instead (see Capabilities).
         </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          {loading ? 'Loading connectors...' : error ? `Error: ${error}` : 'Connector state loaded'}
+        </p>
       </div>
 
       <div
         role="status"
         style={{
-          border: '1px dashed var(--border)',
+          border: '1px dashed var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           padding: '14px 18px',
@@ -129,7 +191,7 @@ export default function ConnectionsSettingsPage() {
             width: 18,
             height: 18,
             borderRadius: '50%',
-            background: 'var(--border)',
+            background: 'var(--settings-border)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -139,14 +201,14 @@ export default function ConnectionsSettingsPage() {
         >
           !
         </span>
-        OAuth connectors are part of the {managedLabel} waitlist. Listed here so you can see what
-        arrives when private beta opens.
+        OAuth connect flows are part of the {managedLabel} waitlist. Existing connected connectors
+        can be reviewed and disconnected here.
       </div>
 
       <section
         aria-label="Available connectors"
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -161,7 +223,7 @@ export default function ConnectionsSettingsPage() {
               key={connector.id}
               style={{
                 padding: '14px 18px',
-                borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+                borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
@@ -177,7 +239,7 @@ export default function ConnectionsSettingsPage() {
                     height: 36,
                     borderRadius: 8,
                     background: 'var(--bg-base)',
-                    border: '1px solid var(--border)',
+                    border: '1px solid var(--settings-border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -210,7 +272,8 @@ export default function ConnectionsSettingsPage() {
                 {isConnected ? (
                   <button
                     type="button"
-                    disabled
+                    disabled={disconnectingId === connector.id}
+                    onClick={() => void disconnect(connector.id)}
                     aria-label={`Disconnect ${connector.label}`}
                     style={{
                       padding: '5px 12px',
@@ -218,13 +281,13 @@ export default function ConnectionsSettingsPage() {
                       fontWeight: 600,
                       color: 'var(--text-3)',
                       background: 'transparent',
-                      border: '1px solid var(--border)',
+                      border: '1px solid var(--settings-border)',
                       borderRadius: 'var(--radius-md)',
-                      cursor: 'not-allowed',
-                      opacity: 0.7,
+                      cursor: disconnectingId === connector.id ? 'default' : 'pointer',
+                      opacity: disconnectingId === connector.id ? 0.7 : 1,
                     }}
                   >
-                    Disconnect
+                    {disconnectingId === connector.id ? 'Disconnecting...' : 'Disconnect'}
                   </button>
                 ) : (
                   <button
@@ -237,7 +300,7 @@ export default function ConnectionsSettingsPage() {
                       fontWeight: 600,
                       color: 'var(--text-3)',
                       background: 'transparent',
-                      border: '1px solid var(--border)',
+                      border: '1px solid var(--settings-border)',
                       borderRadius: 'var(--radius-md)',
                       cursor: 'not-allowed',
                       opacity: 0.7,

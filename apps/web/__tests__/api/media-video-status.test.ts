@@ -56,14 +56,12 @@ vi.mock('@/lib/error-handler', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Mock: Supabase client
+// Mock: Clerk auth
 // ---------------------------------------------------------------------------
-const mockGetUser = vi.fn();
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
-  })),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -82,7 +80,7 @@ import { GET, OPTIONS } from '@/app/api/media/video/status/route';
 // ---------------------------------------------------------------------------
 const BASE_URL = 'http://localhost/api/media/video/status';
 
-const TEST_USER = { id: 'user-test-id', email: 'test@example.com' };
+const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 
 function makeRequest(
   taskId: string | null,
@@ -111,12 +109,10 @@ describe('GET /api/media/video/status', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Happy-path defaults
-    mockGetUser.mockResolvedValue({ data: { user: TEST_USER }, error: null });
+    // Happy-path defaults — Clerk auth succeeds
+    mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
 
     // Set env vars
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
   });
@@ -147,6 +143,9 @@ describe('GET /api/media/video/status', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
       const response = await GET(makeUnauthRequest('runway_task-abc'));
       const data = await response.json();
 
@@ -155,6 +154,9 @@ describe('GET /api/media/video/status', () => {
     });
 
     it('should return 401 when authorization does not start with Bearer', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
       const request = new NextRequest(`${BASE_URL}?task_id=runway_abc`, {
         method: 'GET',
         headers: { Authorization: 'Token abc123' },
@@ -167,11 +169,9 @@ describe('GET /api/media/video/status', () => {
       expect(data.error.code).toBe('UNAUTHORIZED');
     });
 
-    it('should return 401 when Supabase token is invalid', async () => {
-      mockGetUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid JWT' },
-      });
+    it('should return 401 when Clerk token is invalid', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const response = await GET(makeRequest('runway_task-abc'));
       const data = await response.json();
@@ -180,8 +180,9 @@ describe('GET /api/media/video/status', () => {
       expect(data.error.code).toBe('UNAUTHORIZED');
     });
 
-    it('should return 401 when Supabase returns null user without error', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    it('should return 401 when Clerk returns no userId', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await GET(makeRequest('runway_task-abc'));
       await response.json();

@@ -34,7 +34,10 @@
 //! }).await?;
 //! ```
 
+mod action_executor;
+pub mod anthropic_agent;
 mod app_permissions;
+pub mod consent;
 mod observe_plan_act;
 mod safety;
 mod session;
@@ -46,11 +49,13 @@ mod zoom;
 #[cfg(test)]
 mod tests;
 
+pub use anthropic_agent::{AnthropicComputerUseAgent, AnthropicComputerUseConfig};
 pub use app_permissions::{
     is_always_blocked_bundle, is_always_blocked_host, AppPermission, AppPermissionManager,
     AppPermissionRequest, PermissionDecision, PermissionStatus, ALWAYS_BLOCKED_BUNDLE_IDS,
     ALWAYS_BLOCKED_URL_HOSTS,
 };
+pub use consent::{ComputerUseConsent, CONSENT_SETTINGS_KEY, CONSENT_VERSION};
 pub use observe_plan_act::{ComputerUseAgent, ComputerUseConfig, ExecutionState, OpaLoopResult};
 pub use safety::{
     ComputerUseSafetyLayer, PromptInjectionDetector, SafetyConfig, SafetyDecision, SafetyReason,

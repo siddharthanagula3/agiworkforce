@@ -14,12 +14,10 @@
 
 import { describe, it, expect, vi } from 'vitest';
 
-// Block server-only / supabase imports so the module can load in jsdom.
+// Block server-only imports so the module can load in jsdom.
 vi.mock('server-only', () => ({}));
-vi.mock('@/utils/supabase/server', () => ({
-  createClient: vi.fn(async () => ({
-    auth: { getUser: vi.fn(async () => ({ data: { user: null } })) },
-  })),
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: vi.fn().mockResolvedValue({ userId: null }),
 }));
 
 import { readCookie, getSessionIdFromRequest, getOrCreateAnonSession } from '@/lib/csrf';

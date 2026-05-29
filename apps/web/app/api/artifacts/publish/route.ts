@@ -16,7 +16,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { publishArtifact, TrustBoundaryViolationError } from '@/lib/artifact-publisher';
 import {
   PRIVACY_MODES,
@@ -91,7 +91,7 @@ async function handlePublishArtifact(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
 
   let body: Record<string, unknown>;
   try {
@@ -122,7 +122,7 @@ async function handlePublishArtifact(request: NextRequest) {
     : undefined;
 
   const computeSession = body['computeSession'] as ComputeSession;
-  if (computeSession.ownerUserId !== user.id) {
+  if (computeSession.ownerUserId !== userId) {
     throw createError.forbidden('Cannot publish artifacts owned by another user');
   }
 

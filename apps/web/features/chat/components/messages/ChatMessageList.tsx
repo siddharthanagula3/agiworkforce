@@ -14,13 +14,16 @@
  * can be migrated by swapping import + component name.
  */
 
-import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { ChatMessage } from '../../stores/chat-store';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { WebChatMessageMetadata } from '../../types/message-metadata';
+import type { PaywallFeature, RequiredTier } from '../InlinePaywallCard';
 import { MessageBubble } from './MessageBubble';
 import { InlinePaywallCard } from '../InlinePaywallCard';
 import { TypingIndicator } from './TypingIndicator';
 import { FollowUpSuggestions } from '../FollowUpSuggestions';
+import { GreetingBanner } from '../GreetingBanner/GreetingBanner';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
@@ -37,6 +40,7 @@ export interface ChatMessageListProps {
   messages: ChatMessage[];
   isLoading?: boolean;
   onRegenerate?: (messageId: string) => void;
+  onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
   /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
@@ -91,6 +95,51 @@ export function groupMessages(messages: ChatMessage[]): MessageGroup[] {
   return groups;
 }
 
+/**
+ * Formats a date as a human-readable divider label.
+ * - "Today" for today's date
+ * - "Yesterday" for yesterday's date
+ * - "Mar 18" for older dates
+ */
+export function formatDateDivider(date: Date, now: Date = new Date()): string {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (startOfDay.getTime() === startOfToday.getTime()) return 'Today';
+  if (startOfDay.getTime() === startOfYesterday.getTime()) return 'Yesterday';
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Returns the ISO date string (YYYY-MM-DD) for a Date, used as a grouping key.
+ */
+function toDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+// ---------------------------------------------------------------------------
+// Date divider component
+// ---------------------------------------------------------------------------
+
+const DateDivider = memo(({ label }: { label: string }) => (
+  <div
+    className="flex items-center gap-3 px-4 py-3 md:px-12 lg:px-20"
+    role="separator"
+    aria-label={label}
+  >
+    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
+    <span className="shrink-0 text-xs font-medium" style={{ color: 'var(--chat-text-secondary)' }}>
+      {label}
+    </span>
+    <div className="h-px flex-1" style={{ backgroundColor: 'var(--chat-border-subtle)' }} />
+  </div>
+));
+DateDivider.displayName = 'DateDivider';
+
 // ---------------------------------------------------------------------------
 // Scroll-to-bottom button
 // ---------------------------------------------------------------------------
@@ -118,6 +167,7 @@ interface MessageGroupRowProps {
   group: MessageGroup;
   isLastGroup: boolean;
   onRegenerate?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (messageId: string) => void;
@@ -127,9 +177,8 @@ interface MessageGroupRowProps {
 
 interface MessageRowProps {
   message: ChatMessage;
-  isFirst: boolean;
-  isLast: boolean;
   onRegenerate?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
@@ -138,22 +187,28 @@ interface MessageRowProps {
 // Per-message row component. Stable callbacks bound via useCallback below so
 // React.memo on MessageBubble actually short-circuits when sibling messages
 // stream or update.
+/** Casts the generic metadata bag to the typed web-surface shape. */
+function getMeta(msg: ChatMessage | undefined): WebChatMessageMetadata | undefined {
+  return msg?.metadata as WebChatMessageMetadata | undefined;
+}
+
 const MessageRow = ({
   message,
-  isFirst,
-  isLast,
   onRegenerate,
+  onEdit,
   onDelete,
   onPaywallUpgrade,
   onPaywallDismiss,
 }: MessageRowProps) => {
-  const paywall = message.metadata?.paywall;
+  const meta = getMeta(message);
+  const paywall = meta?.paywall;
 
   const handleRegenerate = useCallback(
     () => onRegenerate?.(message.id),
     [onRegenerate, message.id],
   );
   const handleDelete = useCallback(() => onDelete?.(message.id), [onDelete, message.id]);
+  const handleEdit = useCallback(() => onEdit?.(message.id), [onEdit, message.id]);
   const handlePaywallUpgrade = useCallback(
     () => onPaywallUpgrade?.(message.id),
     [onPaywallUpgrade, message.id],
@@ -166,9 +221,9 @@ const MessageRow = ({
   if (paywall) {
     return (
       <InlinePaywallCard
-        feature={paywall.feature}
+        feature={paywall.feature as PaywallFeature}
         currentTier="free"
-        requiredTier={paywall.requiredTier}
+        requiredTier={paywall.requiredTier as RequiredTier}
         reason={paywall.reason}
         onUpgrade={handlePaywallUpgrade}
         onDismiss={handlePaywallDismiss}
@@ -176,20 +231,20 @@ const MessageRow = ({
     );
   }
 
+  const displayRole = message.role === 'system' ? 'assistant' : message.role;
+
   return (
     <MessageBubble
       message={{
         id: message.id,
-        role: message.role,
+        role: displayRole,
         content: message.content,
-        timestamp: message.createdAt,
+        timestamp: message.createdAt ? new Date(message.createdAt) : new Date(),
         isStreaming: message.isStreaming,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
-      showAvatar={isFirst}
-      showTimestamp={isFirst}
-      enableActions={isLast && !message.isStreaming}
-      onRegenerate={onRegenerate && message.role === 'assistant' ? handleRegenerate : undefined}
+      onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
+      onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
     />
   );
@@ -200,6 +255,7 @@ const MessageGroupRow = memo(
     group,
     isLastGroup: _isLastGroup,
     onRegenerate,
+    onEdit,
     onDelete,
     onPaywallUpgrade,
     onPaywallDismiss,
@@ -208,13 +264,12 @@ const MessageGroupRow = memo(
       <div
         className={cn('message-group', group.role === 'user' ? 'user-group' : 'assistant-group')}
       >
-        {group.messages.map((message, idx) => (
+        {group.messages.map((message) => (
           <MessageRow
             key={message.id}
             message={message}
-            isFirst={idx === 0}
-            isLast={idx === group.messages.length - 1}
             onRegenerate={onRegenerate}
+            onEdit={onEdit}
             onDelete={onDelete}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
@@ -233,11 +288,12 @@ const MessageGroupRow = memo(
       prevLast?.content === nextLast?.content &&
       prevLast?.isStreaming === nextLast?.isStreaming &&
       // Re-render when thinking content or its streaming state changes
-      prevLast?.metadata?.thinkingContent === nextLast?.metadata?.thinkingContent &&
-      prevLast?.metadata?.isThinkingStreaming === nextLast?.metadata?.isThinkingStreaming &&
+      getMeta(prevLast)?.thinkingContent === getMeta(nextLast)?.thinkingContent &&
+      getMeta(prevLast)?.isThinkingStreaming === getMeta(nextLast)?.isThinkingStreaming &&
       // Re-render when paywall state changes
-      prevLast?.metadata?.paywall === nextLast?.metadata?.paywall &&
+      getMeta(prevLast)?.paywall === getMeta(nextLast)?.paywall &&
       prev.onRegenerate === next.onRegenerate &&
+      prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss
@@ -256,6 +312,7 @@ const ChatMessageListComponent = ({
   messages,
   isLoading,
   onRegenerate,
+  onEdit,
   onDelete,
   onSendMessage,
   isUserTyping = false,
@@ -325,6 +382,8 @@ const ChatMessageListComponent = ({
 
   const handleRegenerate = useCallback((id: string) => onRegenerate?.(id), [onRegenerate]);
 
+  const handleEdit = useCallback((id: string) => onEdit?.(id, ''), [onEdit]);
+
   const handleDelete = useCallback((id: string) => onDelete?.(id), [onDelete]);
 
   const handlePaywallUpgrade = useCallback(
@@ -347,28 +406,7 @@ const ChatMessageListComponent = ({
         className={cn('relative flex h-full flex-col items-center justify-center', className)}
         data-testid="chat-message-list"
       >
-        <div className="flex w-full max-w-[760px] flex-col items-center px-4">
-          <h1 className="mb-6 text-[28px] font-normal leading-9 text-foreground/80">
-            What can I help with?
-          </h1>
-          {onSendMessage && (
-            <div className="flex flex-wrap justify-center gap-2">
-              {[
-                { label: 'Code', text: 'Help me write code' },
-                { label: 'Write', text: 'Help me write something' },
-                { label: 'Learn', text: 'Explain a concept to me' },
-              ].map((chip) => (
-                <button
-                  key={chip.label}
-                  onClick={() => onSendMessage(chip.text)}
-                  className="inline-flex h-[34px] items-center rounded-full border border-border/60 bg-background px-3 text-[13px] text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05]"
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <GreetingBanner onSendMessage={onSendMessage} />
       </div>
     );
   }
@@ -388,17 +426,33 @@ const ChatMessageListComponent = ({
 
         {/* Message groups */}
         <div className="space-y-0.5 pb-2">
-          {groups.map((group, groupIdx) => (
-            <MessageGroupRow
-              key={group.firstId}
-              group={group}
-              isLastGroup={groupIdx === groups.length - 1}
-              onRegenerate={handleRegenerate}
-              onDelete={handleDelete}
-              onPaywallUpgrade={handlePaywallUpgrade}
-              onPaywallDismiss={handlePaywallDismiss}
-            />
-          ))}
+          {groups.map((group, groupIdx) => {
+            const firstMsg = group.messages[0];
+            const firstMsgDate = firstMsg?.createdAt ? new Date(firstMsg.createdAt) : undefined;
+            const groupDateKey = firstMsgDate ? toDateKey(firstMsgDate) : '';
+            const prevGroup = groupIdx > 0 ? groups[groupIdx - 1] : null;
+            const prevFirstMsg = prevGroup?.messages[0];
+            const prevFirstMsgDate = prevFirstMsg?.createdAt
+              ? new Date(prevFirstMsg.createdAt)
+              : undefined;
+            const prevDateKey = prevFirstMsgDate ? toDateKey(prevFirstMsgDate) : '';
+            const showDivider = firstMsgDate && groupDateKey !== prevDateKey;
+
+            return (
+              <React.Fragment key={group.firstId}>
+                {showDivider && <DateDivider label={formatDateDivider(firstMsgDate)} />}
+                <MessageGroupRow
+                  group={group}
+                  isLastGroup={groupIdx === groups.length - 1}
+                  onRegenerate={handleRegenerate}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onPaywallUpgrade={handlePaywallUpgrade}
+                  onPaywallDismiss={handlePaywallDismiss}
+                />
+              </React.Fragment>
+            );
+          })}
 
           {/* Typing indicator while waiting for the first streaming chunk */}
           <AnimatePresence>
@@ -471,8 +525,8 @@ export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
     lastPrev?.content === lastNext?.content &&
     lastPrev?.isStreaming === lastNext?.isStreaming &&
     // Detect thinking content changes
-    lastPrev?.metadata?.thinkingContent === lastNext?.metadata?.thinkingContent &&
-    lastPrev?.metadata?.isThinkingStreaming === lastNext?.metadata?.isThinkingStreaming
+    getMeta(lastPrev)?.thinkingContent === getMeta(lastNext)?.thinkingContent &&
+    getMeta(lastPrev)?.isThinkingStreaming === getMeta(lastNext)?.isThinkingStreaming
   );
 });
 

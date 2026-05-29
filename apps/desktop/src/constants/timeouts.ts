@@ -14,7 +14,7 @@ export const DEFAULT_API_TIMEOUT_MS = 30_000;
 /** Timeout for device linking poll operations - longer due to user interaction (60 seconds) */
 export const DEVICE_LINK_POLL_TIMEOUT_MS = 60_000;
 
-/** Timeout for Supabase auth session check (5 seconds) */
+/** Timeout for cloud auth session check (5 seconds) */
 export const SESSION_CHECK_TIMEOUT_MS = 5_000;
 
 /** Timeout for auth sign-in operations (30 seconds) */

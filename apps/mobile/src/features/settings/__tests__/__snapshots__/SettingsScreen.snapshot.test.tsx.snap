@@ -74,10 +74,10 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
             {
               "badge": "Locked",
               "badgeTone": "locked",
-              "description": "Disabled until secure device key storage ships.",
+              "description": "Not available on Mobile. Use Desktop or developer surfaces for BYOK.",
               "icon": [Function],
               "key": "mobile-byok",
-              "label": "Mobile BYOK",
+              "label": "BYOK",
               "type": "status",
             },
           ],
@@ -682,7 +682,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
           }
         >
           <View
-            accessibilityLabel="Mobile BYOK. Disabled until secure device key storage ships.. Locked"
+            accessibilityLabel="BYOK. Not available on Mobile. Use Desktop or developer surfaces for BYOK.. Locked"
             accessibilityRole="text"
             accessibilityState={
               {
@@ -712,7 +712,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                     }
                   }
                 >
-                  Mobile BYOK
+                  BYOK
                 </Text>
                 <Text
                   className="text-[11px] mt-0.5"
@@ -724,7 +724,7 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
                     }
                   }
                 >
-                  Disabled until secure device key storage ships.
+                  Not available on Mobile. Use Desktop or developer surfaces for BYOK.
                 </Text>
               </View>
             </View>

@@ -1,5 +1,27 @@
 import 'server-only';
 
+/**
+ * Web-internal OpenAI adapter (fetch-based, BaseLLMProvider contract).
+ *
+ * WHY TWO ADAPTERS EXIST:
+ * This file implements the web app's internal LLM routing layer
+ * (BaseLLMProvider, used by /api/llm/v1 and /api/llm/v2). It speaks the
+ * web-internal LLMProviderRequest/LLMProviderResponse contract.
+ *
+ * The separate `packages/providers/openai/` adapter implements the
+ * cross-surface ProviderAdapter contract (used by CLI, desktop, and the
+ * /api/v1/providers/* routes via @agiworkforce/llm-normalize). It uses the
+ * official openai npm SDK and supports the Responses API path.
+ *
+ * CONSOLIDATION STATUS:
+ * Full consolidation would require migrating the web's internal LLM layer
+ * to the ProviderAdapter contract, which is a larger refactor tracked
+ * separately. In the interim, both adapters share model ID resolution via
+ * getModelMetadataById / normalizeModelId from @agiworkforce/types, so
+ * model IDs remain a single source of truth (packages/types/src/models.json).
+ * See packages/providers/openai/src/index.ts for the SDK-based adapter.
+ */
+
 import {
   BaseLLMProvider,
   LLMProviderRequest,
@@ -8,6 +30,7 @@ import {
 } from './base';
 import { logger } from '@/lib/logger';
 import { getModelMetadataById, normalizeModelId } from '@agiworkforce/types';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
 /**
  * Check if a model requires max_completion_tokens instead of max_tokens
@@ -26,6 +49,22 @@ function requiresMaxCompletionTokens(model: string): boolean {
     normalized.startsWith('o3-') ||
     normalized.startsWith('o4-')
   );
+}
+
+function openAIModelSupportsXHigh(model: string): boolean {
+  return supportsOpenAIReasoningEffort(
+    { provider: 'openai', id: normalizeModelId(model) ?? model },
+    'xhigh',
+  );
+}
+
+function normalizeReasoningEffort(effort: string | undefined, model: string): string | undefined {
+  const normalized = effort?.toLowerCase();
+  if (normalized === 'low' || normalized === 'medium' || normalized === 'high') {
+    return normalized;
+  }
+  if (normalized === 'xhigh' && openAIModelSupportsXHigh(model)) return normalized;
+  return undefined;
 }
 
 export class OpenAIProvider extends BaseLLMProvider {
@@ -69,6 +108,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       } else {
         body['max_tokens'] = request.max_tokens;
       }
+    }
+    const reasoningEffort = normalizeReasoningEffort(request.effort, request.model);
+    if (reasoningEffort) {
+      body['reasoning_effort'] = reasoningEffort;
     }
     if (request.stream !== undefined) {
       body['stream'] = request.stream;
@@ -247,6 +290,10 @@ export class OpenAIProvider extends BaseLLMProvider {
       } else {
         body['max_tokens'] = request.max_tokens;
       }
+    }
+    const reasoningEffort = normalizeReasoningEffort(request.effort, request.model);
+    if (reasoningEffort) {
+      body['reasoning_effort'] = reasoningEffort;
     }
     if (request.tools) {
       // Transform tools to OpenAI format and ensure 'type' field

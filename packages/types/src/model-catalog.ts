@@ -114,6 +114,28 @@ export interface ModelMetadata {
   deprecated?: boolean;
   /** Lifecycle status. Defaults to 'active' if omitted. */
   status?: ModelStatus;
+  /** Cost per million cached input tokens (USD), when the provider supports prompt caching. */
+  cached_input?: number;
+  /** Per-image cost (USD) for image-generation models (non-token pricing). */
+  imagePerImageCost?: number;
+  /** Per-second cost (USD) for video-generation models (non-token pricing). */
+  videoPerSecondCost?: number;
+  /** Human-readable note for non-standard pricing (per-image, tiered, etc.). */
+  pricingNote?: string;
+  /** ISO date after which the model is deprecated; null/absent = not scheduled. */
+  deprecation_date?: string | null;
+  /** ISO timestamp after which promotional pricing reverts to post_promo_prices. */
+  promo_expires_at?: string | null;
+  /** Standard prices that take effect once promo_expires_at has passed. */
+  post_promo_prices?: { input: number; output: number; cached_input?: number };
+  /** Tokenizer drift multiplier vs the catalog baseline (cost/latency estimation safety). */
+  tokenizer_drift_factor?: number;
+  tokenizer_drift_range?: { min: number; max: number; unit: string };
+  tokenizer_drift_warning?: string;
+  /** Legacy/EOL model ids this model supersedes (deprecation-forward redirect aid). */
+  supersedes?: string[];
+  supersedes_effective_date?: string;
+  supersedes_note?: string;
 }
 
 /**
@@ -551,8 +573,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'coding_premium',
     label: 'Coding Premium',
     description:
-      'Premium coding lane. GPT-5.4-codex: ~85% SWE-bench, $0.40/$1.60 — specialized coding model with best price/benchmark at frontier.',
-    modelId: 'gpt-5.4-codex',
+      'Premium coding lane. GPT-5.5 — strongest OpenAI model for complex coding and agentic workflows.',
+    modelId: 'gpt-5.5',
     provider: 'openai',
   },
 
@@ -585,8 +607,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'creative_writing_premium',
     label: 'Creative Writing Premium',
     description:
-      'Premium creative lane. Claude Opus 4.7: EQ-Bench 2216 Elo — 192 Elo points ahead of GPT-5.5 (2024), unambiguous leader.',
-    modelId: 'claude-opus-4.7',
+      'Premium creative lane. Claude Opus 4.8 — frontier creative writing and knowledge work.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
 
@@ -654,8 +676,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'computer_use_premium',
     label: 'Computer Use Premium',
     description:
-      'Premium desktop automation. Claude Opus 4.7: 78% OSWorld-Verified (#1 public model), 77.3% MCP-Atlas tool use.',
-    modelId: 'claude-opus-4.7',
+      'Premium desktop automation. Claude Opus 4.8 — frontier computer-use and tool-use.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
 
@@ -771,10 +793,10 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
   // to coding_premium_pro / general_balanced_pro respectively.
   flagship_coding_pro_plus: {
     slot: 'flagship_coding_pro_plus',
-    label: 'Pro+ Flagship Coding (Opus 4.7, 15K/day)',
+    label: 'Pro+ Flagship Coding (Opus 4.8, 15K/day)',
     description:
-      'Pro+ flagship coding lane. Claude Opus 4.7: 87.6% SWE-bench Verified, $5/$25 (35% tokenizer inflation vs 4.6). Daily cap 15K tokens; falls through to coding_premium_pro (Sonnet 4.6) above cap.',
-    modelId: 'claude-opus-4.7',
+      'Pro+ flagship coding lane. Claude Opus 4.8: $5/$25, 1M context (inherits the 4.7 tokenizer baseline). Daily cap 15K tokens; falls through to coding_premium_pro (Sonnet 4.6) above cap.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
   flagship_general_pro_plus: {
@@ -1234,6 +1256,14 @@ export function getProviderConfig(provider: Provider | string): ProviderConfig |
 
 export function getProviderDefaultModel(provider: Provider | string): string | null {
   return normalizeModelId(getProviderConfig(provider)?.defaultModel);
+}
+
+export function requireProviderDefaultModel(provider: Provider | string): string {
+  const modelId = getProviderDefaultModel(provider);
+  if (!modelId) {
+    throw new Error(`No default model configured for provider: ${provider}`);
+  }
+  return modelId;
 }
 
 function normalizeProductTier(tier: string | null | undefined): ProductTier {

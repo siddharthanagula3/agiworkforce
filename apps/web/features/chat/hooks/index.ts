@@ -1,5 +1,6 @@
 // Chat Hooks - Public API
 
+export { useShareConversation } from './use-share-conversation';
 export { useSessionTokens } from './use-session-tokens';
 export { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 export { useAIPreferences } from './use-ai-preferences';

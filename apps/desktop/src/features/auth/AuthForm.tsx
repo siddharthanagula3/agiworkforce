@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { cn } from '../../lib/utils';
-import { supabaseAuth } from '../../services/supabaseAuth';
+import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { useAuthStore } from '../../stores/auth';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -121,7 +121,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           if (formPassword.length < 6) {
             return { error: 'Password must be at least 6 characters', success: false };
           }
-          const { error: updateError } = await supabaseAuth.updatePassword(formPassword);
+          const { error: updateError } = await cloudAccountAuth.updatePassword(formPassword);
           if (updateError) {
             return { error: updateError.message, success: false };
           }

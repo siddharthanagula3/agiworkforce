@@ -12,7 +12,7 @@ import Stripe from 'stripe';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-import { getServiceClient } from '@/lib/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { checkRateLimit, verifyStripeSignature } from './lib/verify';
@@ -34,19 +34,6 @@ const stripe = STRIPE_SECRET_KEY
     })
   : null;
 
-function getAdminClient() {
-  try {
-    return getServiceClient();
-  } catch {
-    logger.error(
-      'Supabase service role environment variables are missing. Webhook cannot update subscriptions.',
-    );
-    return null;
-  }
-}
-
-const supabaseAdmin = getAdminClient();
-
 export async function POST(request: NextRequest) {
   // H5: Rate limit webhook endpoint to prevent abuse (generous limit for legitimate Stripe traffic)
   const rateLimitResponse = await checkRateLimit(request);
@@ -59,10 +46,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
-  if (!supabaseAdmin) {
-    logger.error('Supabase admin not configured');
-    return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 });
-  }
+  const db = getNeonDb();
 
   const verifyResult = await verifyStripeSignature(request, stripe, STRIPE_WEBHOOK_SECRET);
   if ('error' in verifyResult) {
@@ -70,7 +54,7 @@ export async function POST(request: NextRequest) {
   }
   const { event } = verifyResult;
 
-  const idempotencyResult = await checkIdempotency(supabaseAdmin, event.id);
+  const idempotencyResult = await checkIdempotency(db, event.id);
   if ('error' in idempotencyResult) {
     return idempotencyResult.error;
   }
@@ -79,7 +63,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await dispatchStripeEvent(supabaseAdmin, stripe, event);
+    await dispatchStripeEvent(db, stripe, event);
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error';
     logger.error(
@@ -92,20 +76,19 @@ export async function POST(request: NextRequest) {
       'Error handling Stripe webhook event',
     );
 
-    await markEventFailed(supabaseAdmin, event.id, errorMessage);
+    await markEventFailed(db, event.id, errorMessage);
 
     // WEB-7 (audit 2026-05-03): return a generic body. The previous
-    // `errorMessage` interpolation leaked internal details (Supabase
-    // column names, SQL constraint names, stack traces) to anyone able
-    // to forge a webhook signature, AND surfaced the same string in
-    // Stripe's dashboard on retries. Server-side `logger.error` above
-    // already captured the full error.
+    // `errorMessage` interpolation leaked internal details (column names,
+    // SQL constraint names, stack traces) to anyone able to forge a webhook
+    // signature, AND surfaced the same string in Stripe's dashboard on
+    // retries. Server-side `logger.error` above already captured the full error.
     return new NextResponse(JSON.stringify({ error: 'Internal server error' }), {
       status: 500,
     });
   }
 
-  await markEventSucceeded(supabaseAdmin, event.id);
+  await markEventSucceeded(db, event.id);
 
   logger.info({ eventType: event.type, eventId: event.id }, 'Webhook processed successfully');
   return NextResponse.json({ received: true, eventType: event.type }, { status: 200 });

@@ -27,7 +27,7 @@ import { useThemeColors } from '@/src/ui/theme';
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
-  byok: formatPrivacyModeLabel('byok'),
+  byok: `${formatPrivacyModeLabel('local')} (legacy BYOK tier)`,
   'local-only': formatPrivacyModeLabel('local'),
   hobby: 'Hobby',
   pro: 'Pro',

@@ -56,14 +56,19 @@ vi.mock('@/lib/error-handler', async () => {
 });
 
 // ---------------------------------------------------------------------------
-// Mock: Supabase client
+// Mock: Clerk auth
 // ---------------------------------------------------------------------------
-const mockGetUser = vi.fn();
+const mockGetClerkAuthUser = vi.fn();
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: { getUser: mockGetUser },
-  })),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+// ---------------------------------------------------------------------------
+// Mock: cloud database service client (used by CreditService/SubscriptionService)
+// ---------------------------------------------------------------------------
+vi.mock('@/lib/neon-db', () => ({
+  getServiceClient: vi.fn(() => ({})),
 }));
 
 // ---------------------------------------------------------------------------
@@ -143,7 +148,7 @@ const PRO_SUBSCRIPTION = {
   stripe_subscription_id: 'stripe_sub_test',
 };
 
-const TEST_USER = { id: 'user-test-id', email: 'test@example.com' };
+const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -152,8 +157,8 @@ describe('POST /api/media/video/generate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Happy-path defaults
-    mockGetUser.mockResolvedValue({ data: { user: TEST_USER }, error: null });
+    // Happy-path defaults — Clerk auth
+    mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
 
     // Re-establish CreditService mock defaults after clearAllMocks
@@ -163,8 +168,6 @@ describe('POST /api/media/video/generate', () => {
     mockGenerateIdempotencyKey.mockReturnValue('test-idempotency-key');
 
     // Set env vars
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] = 'test-anon-key';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     delete process.env['GOOGLE_API_KEY'];
   });
@@ -195,6 +198,9 @@ describe('POST /api/media/video/generate', () => {
   // =========================================================================
   describe('Authentication', () => {
     it('should return 401 when authorization header is missing', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
       const request = new NextRequest(BASE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,6 +215,9 @@ describe('POST /api/media/video/generate', () => {
     });
 
     it('should return 401 when authorization does not start with Bearer', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
+
       const request = new NextRequest(BASE_URL, {
         method: 'POST',
         headers: {
@@ -225,11 +234,9 @@ describe('POST /api/media/video/generate', () => {
       expect(data.error.code).toBe('UNAUTHORIZED');
     });
 
-    it('should return 401 when Supabase token is invalid', async () => {
-      mockGetUser.mockResolvedValue({
-        data: { user: null },
-        error: { message: 'Invalid JWT' },
-      });
+    it('should return 401 when Clerk token is invalid', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized('Invalid token'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -238,11 +245,11 @@ describe('POST /api/media/video/generate', () => {
       expect(data.error.code).toBe('UNAUTHORIZED');
     });
 
-    it('should return 401 when Supabase returns null user without error', async () => {
-      mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+    it('should return 401 when Clerk returns no userId', async () => {
+      const { createError } = await import('@/lib/errors');
+      mockGetClerkAuthUser.mockRejectedValueOnce(createError.unauthorized());
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
-      await response.json();
 
       expect(response.status).toBe(401);
     });

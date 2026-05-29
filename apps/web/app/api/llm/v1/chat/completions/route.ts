@@ -14,7 +14,7 @@ import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/respon
  * OpenAI-compatible Chat Completions API
  * Endpoint: POST /v1/chat/completions (via api.agiworkforce.com)
  *
- * Routes to 10+ LLM providers based on model. Auth: Supabase JWT. Billing: cloud credits.
+ * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  */
 async function handleChatCompletions(request: NextRequest) {
@@ -22,7 +22,7 @@ async function handleChatCompletions(request: NextRequest) {
   const authResult = await runAuthGate(request);
   if (!authResult.ok) return authResult.response;
 
-  const { user, token, userClient } = authResult;
+  const { userId, token } = authResult;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await processRequest(request, authResult);
@@ -37,14 +37,9 @@ async function handleChatCompletions(request: NextRequest) {
       stream = await LLMProviderFactory.streamRequest(processed.provider, processed.llmRequest);
     } catch (error) {
       // Refund reservation on upstream failure
-      const refundKey = CreditService.generateIdempotencyKey(
-        user.id,
-        'refund',
-        processed.requestId,
-      );
+      const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
       await CreditService.deductCredits(
-        userClient,
-        user.id,
+        userId,
         -processed.estimatedCostCents,
         `Refund for failed streaming request: ${processed.provider}/${processed.chatRequest.model}`,
         { type: 'refund', reason: 'streaming_failure', requestId: processed.requestId },
@@ -55,13 +50,13 @@ async function handleChatCompletions(request: NextRequest) {
         processed.provider,
         processed.chatRequest.model,
         processed.requestedModel,
-        user.id,
+        userId,
         processed.requestId,
         'streaming',
       );
     }
 
-    return buildStreamResponse(request, stream, processed, userClient, user.id, token);
+    return buildStreamResponse(request, stream, processed, userId, token);
   }
 
   // Non-streaming path
@@ -69,10 +64,9 @@ async function handleChatCompletions(request: NextRequest) {
   try {
     llmResponse = await LLMProviderFactory.sendRequest(processed.provider, processed.llmRequest);
   } catch (error) {
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', processed.requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
     await CreditService.deductCredits(
-      userClient,
-      user.id,
+      userId,
       -processed.estimatedCostCents,
       `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
       { type: 'refund', reason: 'request_failure', requestId: processed.requestId },
@@ -83,13 +77,13 @@ async function handleChatCompletions(request: NextRequest) {
       processed.provider,
       processed.chatRequest.model,
       processed.requestedModel,
-      user.id,
+      userId,
       processed.requestId,
       'non-streaming',
     );
   }
 
-  return buildNonStreamResponse(request, llmResponse, processed, userClient, user.id, token);
+  return buildNonStreamResponse(request, llmResponse, processed, userId, token);
 }
 
 export const POST = withErrorHandler(handleChatCompletions);

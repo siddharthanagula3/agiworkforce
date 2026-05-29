@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ChatHeader - Clean, minimal header
  *
@@ -44,6 +46,7 @@ import type { ChatSession } from '../../types';
 import { ThemeToggle } from '@shared/ui/theme-toggle';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { PLAN_LABEL, isFreePlan, type UIPlanTier } from '@agiworkforce/types';
+import { useShareConversation } from '../../hooks/use-share-conversation';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -157,7 +160,7 @@ function ProfilePopover() {
           )}
 
           <Link
-            href="/downloads"
+            href="/download"
             className="flex items-center gap-2 px-4 py-2 text-sm hover:bg-muted/60 transition-colors"
           >
             <Download className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -193,7 +196,8 @@ function cn(...classes: (string | false | undefined | null)[]): string {
 interface ChatHeaderProps {
   session: ChatSession | null;
   onRename: (title: string) => void;
-  onShare: () => void;
+  /** @deprecated Share is handled internally. This prop is ignored. */
+  onShare?: () => void;
   onExport: () => void;
   onSettings: () => void;
   onToggleSidebar: () => void;
@@ -206,7 +210,6 @@ interface ChatHeaderProps {
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
   session,
   onRename,
-  onShare,
   onExport,
   onSettings,
   onToggleSidebar,
@@ -217,6 +220,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 }) => {
   const [isEditing, setIsEditing] = React.useState(false);
   const [editTitle, setEditTitle] = React.useState(session?.title || '');
+  const { share, isSharing, hasMessages } = useShareConversation(session?.title);
 
   React.useEffect(() => {
     setEditTitle(session?.title || '');
@@ -311,6 +315,21 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           </Button>
         )}
 
+        {/* Share button - only shown when conversation has messages */}
+        {hasMessages && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void share()}
+            disabled={isSharing}
+            className="hidden gap-1.5 sm:flex"
+            aria-label="Share conversation"
+          >
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden text-xs lg:inline">Share</span>
+          </Button>
+        )}
+
         {/* Theme Toggle */}
         <ThemeToggle />
 
@@ -348,10 +367,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem onClick={onShare}>
-              <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
-              Share
-            </DropdownMenuItem>
+            {hasMessages && (
+              <DropdownMenuItem onClick={() => void share()} disabled={isSharing}>
+                <Share2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                Share
+              </DropdownMenuItem>
+            )}
 
             <DropdownMenuItem onClick={onExport}>
               <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />

@@ -500,7 +500,7 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
 
     let mut spans = vec![
         Span::styled(
-            " AGI Workforce ",
+            " AGI ",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -565,7 +565,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     if app.chat_messages.is_empty() && !app.is_loading {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Welcome to AGI Workforce TUI",
+            "  Welcome to AGI",
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -625,7 +625,10 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                         ChatRole::User => Style::default().fg(Color::White),
                         ChatRole::System => Style::default().fg(Color::Yellow),
                         ChatRole::Tool => Style::default().fg(Color::DarkGray),
-                        _ => Style::default().fg(Color::White),
+                        // Assistant is handled by the outer if-branch; reaching
+                        // here would be a logic error but we render it as plain
+                        // white rather than panicking so the TUI stays responsive.
+                        ChatRole::Assistant => Style::default().fg(Color::White),
                     };
                     let content = format!("    {text_line}");
                     lines.push(Line::from(parse_inline_md(&content, style)));
@@ -1746,26 +1749,35 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         // ── Tools & plugins ──
         "/mcp" => {
-            if let Some(tools) = app.session.mcp_info() {
-                // Group by server
-                let mut servers: Vec<String> = tools.iter().map(|t| t.server_name.clone()).collect();
-                servers.sort();
-                servers.dedup();
-                let mut msg = format!("MCP Servers ({}):\n", servers.len());
-                for server in &servers {
-                    let server_tools: Vec<_> = tools.iter().filter(|t| &t.server_name == server).collect();
-                    msg.push_str(&format!("  ● {} ({} tools)\n", server, server_tools.len()));
-                    for t in server_tools.iter().take(5) {
-                        msg.push_str(&format!("    {:<25} {}\n", t.original_name, t.description));
-                    }
-                    if server_tools.len() > 5 {
-                        msg.push_str(&format!("    ... +{} more\n", server_tools.len() - 5));
-                    }
-                }
-                SlashResult::SystemMessage(msg)
+            use crate::tui::widgets::screen_renderers::{
+                McpScope, McpServerSummary, McpStatus, render_mcp_list,
+            };
+            let scopes = if let Some(tools) = app.session.mcp_info() {
+                // Group tools by server name into a single scope.
+                let mut server_names: Vec<String> =
+                    tools.iter().map(|t| t.server_name.clone()).collect();
+                server_names.sort();
+                server_names.dedup();
+                let servers: Vec<McpServerSummary> = server_names
+                    .iter()
+                    .map(|name| {
+                        let tool_count =
+                            tools.iter().filter(|t| &t.server_name == name).count();
+                        McpServerSummary {
+                            name: name.clone(),
+                            status: McpStatus::Connected,
+                            tool_count: Some(tool_count),
+                        }
+                    })
+                    .collect();
+                vec![McpScope {
+                    label: "Connected servers".to_string(),
+                    servers,
+                }]
             } else {
-                SlashResult::SystemMessage("No MCP servers connected.".to_string())
-            }
+                vec![]
+            };
+            SlashResult::SystemMessage(render_mcp_list(&scopes))
         }
 
         "/permissions" | "/perms" | "/approvals" => {
@@ -1826,7 +1838,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/skills" => {
             let skills = crate::skills::discover_skills();
             if skills.is_empty() {
-                SlashResult::SystemMessage("No skills found. Add .md files to .claude/skills/ or ~/.claude/skills/".to_string())
+                SlashResult::SystemMessage("No skills found. Add .md files to .agiworkforce/skills/ or ~/.agiworkforce/skills/".to_string())
             } else {
                 let mut msg = format!("Skills ({}):\n", skills.len());
                 for s in &skills {
@@ -1843,9 +1855,32 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/plugin" | "/plugins" | "/marketplace" | "/market" => {
-            SlashResult::SystemMessage(
-                "Plugin management:\n  Use `agi plugin list` to see installed plugins.\n  Use `agi plugin install <name>` to install.".to_string()
-            )
+            use crate::tui::widgets::screen_renderers::{
+                PluginGroup, PluginSummary, PluginTab, render_plugin,
+            };
+            // Discover installed plugins from global and project plugin directories.
+            let mut manager = crate::features::plugins::plugins::PluginsManager::new();
+            let cwd = std::env::current_dir().ok();
+            let _ = manager.load_all(cwd.as_deref());
+            let installed: Vec<PluginSummary> = manager
+                .plugins()
+                .iter()
+                .map(|p| PluginSummary {
+                    name: p.config_name.clone(),
+                    status_glyph: if p.enabled { "✔" } else { "◯" },
+                    source_group: if p.from_project_dir {
+                        PluginGroup::Project
+                    } else {
+                        PluginGroup::User
+                    },
+                })
+                .collect();
+            let errors: Vec<String> = manager
+                .plugins()
+                .iter()
+                .filter_map(|p| p.error.clone())
+                .collect();
+            SlashResult::SystemMessage(render_plugin(PluginTab::Installed, &installed, &errors))
         }
 
         // ── Memory ──
@@ -2139,12 +2174,14 @@ fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
                 .config
                 .persist_output_style_project(&app.session.output_style);
         }
-        "/privacy-mode" | "/trust-boundary"
-            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
-        {
-            let _ = app
-                .config
-                .persist_privacy_mode_project(app.session.privacy_mode.label());
+        "/privacy-mode" | "/trust-boundary" => {
+            if crate::agent::PrivacyMode::from_arg(arg)
+                .is_some_and(|mode| mode == app.session.privacy_mode)
+            {
+                let _ = app
+                    .config
+                    .persist_privacy_mode_project(app.session.privacy_mode.label());
+            }
         }
         _ => {}
     }

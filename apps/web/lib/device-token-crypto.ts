@@ -2,7 +2,7 @@ import 'server-only';
 
 import crypto from 'node:crypto';
 
-const { createCipheriv, createDecipheriv, randomBytes, hkdfSync } = crypto;
+const { createCipheriv, createDecipheriv, randomBytes } = crypto;
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV for GCM
@@ -11,14 +11,11 @@ const AUTH_TAG_LENGTH = 16; // 128-bit auth tag
 /**
  * Derives a 32-byte AES-256 key for device token encryption.
  *
- * Prefers `DEVICE_TOKEN_ENCRYPTION_KEY` (hex-encoded 32-byte key).
- * In production, DEVICE_TOKEN_ENCRYPTION_KEY is REQUIRED.
- * In development, falls back to HKDF derivation from SUPABASE_SERVICE_ROLE_KEY.
+ * Requires `DEVICE_TOKEN_ENCRYPTION_KEY` (hex-encoded 32-byte key).
+ * In development without the key set, throws an error with instructions.
  *
- * BREAKING CHANGE (2026-02-24): The development fallback was changed from
- * SHA-256(SUPABASE_SERVICE_ROLE_KEY) to HKDF-SHA256. Any device tokens
- * encrypted with the old SHA-256 fallback will fail to decrypt. This only
- * affects development environments; production must use DEVICE_TOKEN_ENCRYPTION_KEY.
+ * Generate a key with:
+ *   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  */
 function getEncryptionKey(): Buffer {
   const keyEnv = process.env['DEVICE_TOKEN_ENCRYPTION_KEY'];
@@ -32,21 +29,9 @@ function getEncryptionKey(): Buffer {
     return Buffer.from(keyEnv, 'hex');
   }
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'DEVICE_TOKEN_ENCRYPTION_KEY must be set in production. ' +
-        "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
-    );
-  }
-
-  // Development fallback: HKDF from SUPABASE_SERVICE_ROLE_KEY
-  const serviceRole = process.env['SUPABASE_SERVICE_ROLE_KEY'];
-  if (!serviceRole) {
-    throw new Error('Neither DEVICE_TOKEN_ENCRYPTION_KEY nor SUPABASE_SERVICE_ROLE_KEY is set');
-  }
-  const salt = Buffer.from('device-token-salt-v1');
-  return Buffer.from(
-    hkdfSync('sha256', Buffer.from(serviceRole), salt, 'device-token-encryption', 32),
+  throw new Error(
+    'DEVICE_TOKEN_ENCRYPTION_KEY must be set. ' +
+      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"",
   );
 }
 

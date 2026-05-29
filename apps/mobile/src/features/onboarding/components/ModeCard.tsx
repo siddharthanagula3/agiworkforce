@@ -31,7 +31,7 @@ const MODE_META: Record<
     title: `${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
     body: 'Hosted compute, sync, generated files, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
     privacy:
-      'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent. Mobile BYOK keys stay disabled until secure device key storage ships.',
+      'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent. Mobile has no BYOK mode.',
     testIdPrefix: 'mode-cloud',
   },
   decide_later: {

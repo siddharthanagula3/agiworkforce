@@ -8,7 +8,7 @@ const SECRET_PATTERNS: RegExp[] = [
   /sk_live_[A-Za-z0-9]{24,}/, // Stripe live keys
   /sk_test_[A-Za-z0-9]{24,}/, // Stripe test keys
   /eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/, // JWTs
-  /SUPABASE_SERVICE_ROLE[=:][^\s]{8,}/, // Supabase service role
+  /NEON_DATABASE_URL[=:][^\s]{8,}/, // Neon connection string
   /Bearer\s+[A-Za-z0-9_-]{20,}/, // Bearer tokens
 ];
 

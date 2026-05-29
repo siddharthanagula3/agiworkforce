@@ -13,7 +13,11 @@ import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
 import { validateEgressUrl, validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import {
+  ANTHROPIC_THINKING_BUDGET,
+  OPENAI_REASONING_EFFORT,
   getEconomyFallbackModels,
+  getModelMetadataById,
+  type Effort,
   getSlotForModel,
   normalizeModelId,
   resolveAutoModeModel,
@@ -156,6 +160,58 @@ type ProcessFailure = { ok: false; response: NextResponse };
 type ProcessSuccess = { ok: true } & ProcessedRequest;
 export type ProcessResult = ProcessSuccess | ProcessFailure;
 
+const EFFORT_VALUES: ReadonlySet<string> = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
+
+function normalizeEffort(value: string | undefined): Effort | undefined {
+  const normalized = value?.toLowerCase();
+  return normalized && EFFORT_VALUES.has(normalized) ? (normalized as Effort) : undefined;
+}
+
+function modelSupportsEffort(provider: string, model: string): boolean {
+  const metadata = getModelMetadataById(model);
+  if (metadata) return metadata.capabilities.thinking;
+  return provider === 'anthropic' || provider === 'openai' || provider === 'google';
+}
+
+function anthropicUsesAdaptiveThinking(model: string): boolean {
+  const metadata = getModelMetadataById(model);
+  return metadata?.provider === 'anthropic' && metadata.capabilities.thinking;
+}
+
+function buildThinkingConfig({
+  provider,
+  model,
+  explicitThinking,
+  thinkingMode,
+  effort,
+}: {
+  provider: string;
+  model: string;
+  explicitThinking: ChatCompletionRequest['thinking'];
+  thinkingMode: boolean | undefined;
+  effort: Effort | undefined;
+}): { type: string; budget_tokens?: number } | undefined {
+  if (provider !== 'anthropic') return undefined;
+
+  const usesAdaptive = anthropicUsesAdaptiveThinking(model);
+
+  if (explicitThinking) {
+    if (usesAdaptive && explicitThinking.type !== 'adaptive') {
+      return { type: 'adaptive' };
+    }
+    return explicitThinking;
+  }
+
+  if (!thinkingMode) return undefined;
+
+  if (usesAdaptive) return { type: 'adaptive' };
+
+  return {
+    type: 'enabled',
+    budget_tokens: ANTHROPIC_THINKING_BUDGET[effort ?? 'medium'],
+  };
+}
+
 export function extractTextContent(
   content: string | Array<{ type: string; text?: string; image_url?: unknown }>,
 ): string {
@@ -245,7 +301,7 @@ export async function processRequest(
   request: NextRequest,
   auth: AuthGateSuccess,
 ): Promise<ProcessResult> {
-  const { user, token, subscription, userClient } = auth;
+  const { userId, token, subscription } = auth;
 
   const requestId = randomUUID();
 
@@ -335,7 +391,7 @@ export async function processRequest(
       } catch (err) {
         if (err instanceof EgressPolicyError) {
           logger.warn(
-            { userId: user.id, messageIndex: mi, partIndex: pi },
+            { userId: userId, messageIndex: mi, partIndex: pi },
             'Blocked user-supplied image URL (egress policy)',
           );
           return {
@@ -401,7 +457,7 @@ export async function processRequest(
   if (indicResult.isIndic && indicResult.dominantScript) {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         requestId,
         indicRatio: indicResult.indicRatio,
         dominantScript: indicResult.dominantScript,
@@ -417,7 +473,7 @@ export async function processRequest(
   if (requestedModel !== chatRequest.model) {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         requestedModel,
         resolvedModel: chatRequest.model,
         taskType: resolvedTaskType,
@@ -479,7 +535,7 @@ export async function processRequest(
   let quotaWarningHeader: string | null = null;
   try {
     quotaOutcome = await assertQuota({
-      userId: user.id,
+      userId: userId,
       token,
       tier: subscription.plan_tier,
       requestedTokens: quotaEstimateTokens,
@@ -489,7 +545,7 @@ export async function processRequest(
   } catch (gateError) {
     // Fail-open: gate error falls back to legacy CreditService flow
     logger.warn(
-      { userId: user.id, error: gateError instanceof Error ? gateError.message : gateError },
+      { userId: userId, error: gateError instanceof Error ? gateError.message : gateError },
       '[assertQuota] gate errored, falling back to credit-only flow',
     );
   }
@@ -518,7 +574,7 @@ export async function processRequest(
   if (quotaOutcome.kind === 'downgrade') {
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         from: chatRequest.model,
         to: quotaOutcome.modelOverride,
         reason: quotaOutcome.reason,
@@ -622,7 +678,29 @@ export async function processRequest(
     return sum + baseTokens + overheadTokens;
   }, 0);
 
-  const maxTokens = chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000;
+  const providerLower = provider.toLowerCase();
+  const normalizedEffort = normalizeEffort(chatRequest.effort);
+  const effectiveEffort = modelSupportsEffort(providerLower, chatRequest.model)
+    ? normalizedEffort
+    : undefined;
+  const thinkingConfig = buildThinkingConfig({
+    provider: providerLower,
+    model: chatRequest.model,
+    explicitThinking: chatRequest.thinking,
+    thinkingMode: chatRequest.thinking_mode,
+    effort: effectiveEffort,
+  });
+
+  let maxTokens = chatRequest.max_tokens || chatRequest.max_completion_tokens || 1000;
+  if (
+    providerLower === 'anthropic' &&
+    thinkingConfig?.type === 'enabled' &&
+    typeof thinkingConfig.budget_tokens === 'number' &&
+    thinkingConfig.budget_tokens >= maxTokens
+  ) {
+    maxTokens = Math.min(64000, thinkingConfig.budget_tokens + 1024);
+  }
+
   let estimatedCostCents = LLMCostCalculator.estimateCost(
     provider,
     chatRequest.model,
@@ -631,11 +709,11 @@ export async function processRequest(
   );
 
   // Credit allocation + availability check
-  let existingBalance = await CreditService.getBalance(userClient, user.id);
+  let existingBalance = await CreditService.getBalance(userId);
 
   logger.debug(
     {
-      userId: user.id,
+      userId: userId,
       hasBalance: !!existingBalance,
       accountId: existingBalance?.account_id,
       remaining: existingBalance?.credits_remaining_cents,
@@ -646,13 +724,13 @@ export async function processRequest(
 
   if (!existingBalance || !existingBalance.account_id) {
     logger.info(
-      { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+      { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
       'No credit account found, allocating credits for subscription period',
     );
 
     try {
       const accountId = await SubscriptionService.allocateCreditsForPeriod(
-        user.id,
+        userId,
         subscription.id,
         subscription.plan_tier,
         subscription.current_period_start,
@@ -661,11 +739,11 @@ export async function processRequest(
       );
 
       if (accountId) {
-        logger.info({ userId: user.id, accountId }, 'Credits allocated successfully');
-        existingBalance = await CreditService.getBalance(userClient, user.id);
+        logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
+        existingBalance = await CreditService.getBalance(userId);
         logger.debug(
           {
-            userId: user.id,
+            userId: userId,
             newBalance: existingBalance?.credits_remaining_cents,
             accountId: existingBalance?.account_id,
           },
@@ -673,23 +751,23 @@ export async function processRequest(
         );
       } else {
         logger.warn(
-          { userId: user.id, planTier: subscription.plan_tier },
+          { userId: userId, planTier: subscription.plan_tier },
           'Credit allocation returned no account ID - plan may not include credits',
         );
       }
     } catch (allocError) {
       logger.error(
-        { error: allocError, userId: user.id, planTier: subscription.plan_tier },
+        { error: allocError, userId: userId, planTier: subscription.plan_tier },
         'Failed to allocate credits - continuing with credit check',
       );
     }
   }
 
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
 
   logger.debug(
     {
-      userId: user.id,
+      userId: userId,
       estimatedCostCents,
       hasCredits,
       balanceRemaining: existingBalance?.credits_remaining_cents,
@@ -714,11 +792,7 @@ export async function processRequest(
         maxTokens,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(
-        userClient,
-        user.id,
-        fallbackCostCents,
-      );
+      const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
 
       if (hasFallbackCredits) {
         usedFallback = true;
@@ -735,10 +809,9 @@ export async function processRequest(
   }
 
   // Reserve credits with idempotency key
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
-    userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation: ${provider}/${chatRequest.model}`,
     {
@@ -767,8 +840,6 @@ export async function processRequest(
 
   // Inject provider-specific built-in tools
   let resolvedTools = chatRequest.tools;
-  const providerLower = provider.toLowerCase();
-
   if (chatRequest.web_search) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -802,10 +873,6 @@ export async function processRequest(
     }
   }
 
-  const thinkingConfig =
-    chatRequest.thinking ??
-    (chatRequest.thinking_mode ? { type: 'enabled', budget_tokens: 10000 } : undefined);
-
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -816,7 +883,10 @@ export async function processRequest(
     tool_choice: chatRequest.tool_choice,
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
-    effort: chatRequest.effort,
+    effort:
+      providerLower === 'openai' && effectiveEffort
+        ? OPENAI_REASONING_EFFORT[effectiveEffort]
+        : effectiveEffort,
     usePromptCache: chatRequest.use_prompt_cache,
   };
 

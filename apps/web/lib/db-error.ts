@@ -2,7 +2,7 @@
  * Utility for detecting database / network unavailability errors.
  *
  * Covers the full set of Node.js network error codes that indicate a downstream
- * service (Supabase, PostgreSQL, etc.) is temporarily unreachable, rather than
+ * service (Neon, PostgreSQL, etc.) is temporarily unreachable, rather than
  * only checking for the "fetch failed" message string.
  */
 export function isDbUnavailableError(error: unknown): boolean {
