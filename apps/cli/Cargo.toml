@@ -39,10 +39,6 @@ await_holding_lock = "warn"
 agiworkforce-protocol = { path = "../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../crates/sandbox-policy" }
 agiworkforce-command-registry = { path = "../../crates/agiworkforce-command-registry" }
-agiworkforce-app-server = { path = "../../crates/agiworkforce-app-server" }
-agiworkforce-plugin-runtime = { path = "../../crates/agiworkforce-plugin-runtime" }
-agiworkforce-apply-patch = { path = "../../crates/agiworkforce-apply-patch" }
-agiworkforce-task-runtime = { path = "../../crates/agiworkforce-task-runtime" }
 agiworkforce-utils-image = { path = "../../crates/agiworkforce-utils-image" }
 async-trait = "0.1.89"
 clap = { version = "4", features = ["derive"] }
@@ -72,8 +68,6 @@ ratatui = "0.29"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 cron = "0.13"
 axum = { version = "0.8", features = ["tokio", "ws"] }
-tower = "0.5"
-tower-http = { version = "0.6", features = ["cors"] }
 uuid = { version = "1", features = ["v4"] }
 base64 = "0.22"
 rand = "0.9"

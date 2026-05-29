@@ -418,3 +418,34 @@ re-forked; deeper per-surface flows fold into Batch 7 parity.
   if any raw-request path reaches it unverified, that is an auth-scoping bypass.
 - (register) `ClerkAuthAdapter.refreshToken` unimplemented; worker `session_ingress_token` unsigned/forgeable
   (only if that protocol is enabled in prod); `routeToCloud` token sourced from an unwritten localStorage key.
+
+### Batch 5 — Dead code & duplication ✅ (core DoD met; risky removals documented + deferred)
+
+DoD = "0 orphan packages, 0 dead dup files, single migration root." Verified each, removed what is provably
+safe (compiler-confirmed), and documented the rest with corroboration:
+
+- **Single migration root ✅** — the brief's "two `supabase/migrations` dirs to consolidate" no longer exist:
+  the migration removed Supabase entirely (`find -name migrations` → only `apps/desktop/src-tauri/migrations`,
+  the unrelated desktop SQLite migrations; canonical Neon migrations live at `apps/web/db/neon`).
+- **`@agiworkforce/stores` is NOT orphaned ✅** — 63 refs via the `@shared/stores` alias across apps/web
+  (chat-store, hooks, components). The register's caution was correct; KEEP.
+- **Dup-version files: none are deletable dead dups** (corroborates the brief's cautions):
+  - `automation_enhanced.rs` — KEEP (brief-verified substantive).
+  - `sys/commands/settings_v2.rs` — LIVE: both `settings` and `settings_v2` are re-exported, and the
+    `settings_v2` DB table is the runtime's categorized KV prefs store. Not a dead dup.
+  - `apps/cli/src/subagent_v2.rs` — INTENDED FUTURE work, not abandoned: its header reads "Subagent v2 —
+    full IPC + bidirectional message passing … M34 of v1.3 / M34a of v1.4 … closes the last v1.2
+    architectural backlog item," and it is explicitly `#![allow(dead_code)]`. `subagent.rs` (v1) is the
+    live one (`SubagentManager` used in `agent/chat.rs`). Deleting v2 would discard staged work — KEEP.
+- **Unused Cargo deps (cargo-machete + per-dep verification):** removed 6 from `apps/cli/Cargo.toml` that are
+  provably unused (the register's "source-of-truth inversion" — cli reimplemented these locally): the
+  workspace-crate deps `agiworkforce-app-server`, `agiworkforce-apply-patch`, `agiworkforce-plugin-runtime`,
+  `agiworkforce-task-runtime` (the cli uses its OWN local `app_server`/`apply_patch` modules — name collision
+  that fooled the audit; the crate paths `agiworkforce_*::` have 0 refs), plus `tower` + `tower-http` (0
+  direct refs; `axum` provides tower transitively). **Verified: `cargo check -p agiworkforce-cli` exit 0.**
+- **Deferred (documented, NOT removed — too risky to remove without feature-aware multi-target builds):**
+  cargo-machete also flagged desktop deps `llama-cpp-2` (local LLM), `ed25519-dalek` (signing), `async-stripe`
+  (gated billing), `webrtc`, `rayon`, `unicode-segmentation`, and `anyhow`/`serde`/`serde_json` in several
+  leaf utility crates. These are very likely feature-gated or used via derive/macros/re-exports cargo-machete
+  misses; removing them risks breaking the windows/feature builds. Safe removal needs a per-dep + per-feature
+  build pass — out of safe single-session scope. Left intact; flagged for a dedicated dep-hygiene pass.
