@@ -39,6 +39,7 @@ export * from './components/StyleSelector';
 export * from './components/TaskChips';
 export * from './components/TemporaryChatToggle';
 export * from './components/ThinkingBottomSheet';
+export * from './components/ThinkingChip';
 export * from './components/ThinkingLine';
 export * from './components/ToolAccessSelector';
 export * from './components/ToolCallCard';

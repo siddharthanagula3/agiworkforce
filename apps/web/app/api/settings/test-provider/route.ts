@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getAuthenticatedUser } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { getProviderProbeModel, normalizeModelId, type Provider } from '@agiworkforce/types';
 
 /**
@@ -33,9 +33,7 @@ async function handleTestProvider(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth — getAuthenticatedUser handles Bearer + cookie flows and uses the
-  // service-role client only for JWT verification (never for DB ops).
-  const user = await getAuthenticatedUser(request);
+  const { userId } = await getClerkAuthUser(request);
 
   // Parse body
   const body = (await request.json()) as { provider?: string };
@@ -78,7 +76,7 @@ async function handleTestProvider(request: NextRequest) {
     });
 
     logger.info(
-      { provider: providerKey, model: probeModel, userId: user.id },
+      { provider: providerKey, model: probeModel, userId: userId },
       'Provider test succeeded',
     );
 
@@ -124,7 +122,7 @@ async function handleTestProvider(request: NextRequest) {
       clientError = 'Provider test failed — see server logs for details';
     }
     logger.warn(
-      { provider: providerKey, model: probeModel, userId: user.id, error: message },
+      { provider: providerKey, model: probeModel, userId: userId, error: message },
       'Provider test failed',
     );
 

@@ -19,12 +19,12 @@ const JWT_SIGN_OPTIONS = {
   audience: 'agiworkforce',
 };
 
-// Mock Supabase client for kill-switch + revocation checks. Wave 1.5+
-// task #17 (2026-05-08): the legacy `lib/supabase` singleton was deleted;
+// Mock Neon client for kill-switch + revocation checks. Wave 1.5+
+// task #17 (2026-05-08): the legacy `lib/db` singleton was deleted;
 // middleware/auth.ts now goes through `getServiceClient()` from
-// supabaseClients. Mock returns `account_status: 'active'` for the
+// neonClients. Mock returns `account_status: 'active'` for the
 // kill-switch and `null` for revoked_jwts so the happy path passes.
-vi.mock('../../src/lib/supabaseClients', () => {
+vi.mock('../../src/lib/neonClients', () => {
   const mockClient = {
     from: vi.fn((table: string) => ({
       select: vi.fn(() => ({
@@ -42,8 +42,6 @@ vi.mock('../../src/lib/supabaseClients', () => {
     getServiceClient: vi.fn(() => mockClient),
     getUserClient: vi.fn(() => mockClient),
     getUserScopedClient: vi.fn(() => mockClient),
-    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
-    _resetSupabaseJwtCacheForTests: vi.fn(),
   };
 });
 
@@ -142,7 +140,7 @@ describe('authenticateToken Middleware', () => {
     // Wave 1.5+ task #17: kill-switch lookup now goes through
     // `getServiceClient()`. We override its return so this test sees a
     // suspended account.
-    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+    const { getServiceClient } = await import('../../src/lib/neonClients');
     vi.mocked(getServiceClient).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
@@ -176,7 +174,7 @@ describe('authenticateToken Middleware', () => {
   });
 
   it('should return 403 when account is banned', async () => {
-    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+    const { getServiceClient } = await import('../../src/lib/neonClients');
     vi.mocked(getServiceClient).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
@@ -209,11 +207,11 @@ describe('authenticateToken Middleware', () => {
     expect(mockNext).not.toHaveBeenCalled();
   });
 
-  it('should return 503 when Supabase is unavailable and account has no cached status (fail closed)', async () => {
-    const { getServiceClient } = await import('../../src/lib/supabaseClients');
+  it('should return 503 when Neon is unavailable and account has no cached status (fail closed)', async () => {
+    const { getServiceClient } = await import('../../src/lib/neonClients');
     vi.mocked(getServiceClient).mockReturnValue({
       from: vi.fn(() => {
-        throw new Error('Supabase connection failed');
+        throw new Error('Neon connection failed');
       }),
     } as never);
 

@@ -1,61 +1,41 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { GitHubInstallationRow } from '@/lib/server/neon-types';
 import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withRateLimit } from '@/lib/rate-limit';
-
-async function getAuthenticatedSupabase() {
-  const cookieStore = await cookies();
-  return createServerClient(
-    process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          cookieStore.set({ name, value: '', ...options });
-        },
-      },
-    },
-  );
-}
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const supabase = await getAuthenticatedSupabase();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from('github_installations')
-    .select(
-      'id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at',
-    )
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false });
+  const db = getNeonDb();
 
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch GitHub installations');
+  let installations: GitHubInstallationRow[];
+  try {
+    installations = await db.query<GitHubInstallationRow>(
+      `select id, installation_id, account_login, account_type, pr_review_enabled, review_model, created_at
+       from github_installations
+       where user_id = $1
+       order by created_at desc`,
+      [userId],
+    );
+  } catch (err) {
+    logger.error({ err, userId }, 'Failed to fetch GitHub installations');
     return NextResponse.json({ error: 'Failed to fetch installations' }, { status: 500 });
   }
 
-  return NextResponse.json({ installations: data ?? [] });
+  return NextResponse.json({ installations });
 }
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
@@ -66,15 +46,14 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const supabase = await getAuthenticatedSupabase();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-
-  if (authError || !user) {
+  let userId: string;
+  try {
+    ({ userId } = await getClerkAuthUser(request));
+  } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  const db = getNeonDb();
 
   let installationId: number;
   try {
@@ -87,17 +66,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from('github_installations')
-    .delete()
-    .eq('installation_id', installationId)
-    .eq('user_id', user.id);
-
-  if (error) {
-    logger.error(
-      { error, userId: user.id, installationId },
-      'Failed to delete GitHub installation',
+  try {
+    await db.execute(
+      'delete from github_installations where installation_id = $1 and user_id = $2',
+      [installationId, userId],
     );
+  } catch (err) {
+    logger.error({ err, userId, installationId }, 'Failed to delete GitHub installation');
     return NextResponse.json({ error: 'Failed to disconnect' }, { status: 500 });
   }
 

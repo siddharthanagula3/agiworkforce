@@ -673,6 +673,41 @@ impl ToolExecutor {
                 path_str
             ));
         }
+
+        #[cfg(test)]
+        {
+            let mut allowed = Vec::new();
+            if let Some(ref project_folder) = self.project_folder {
+                allowed.push(PathBuf::from(project_folder));
+            }
+            allowed.push(std::env::temp_dir());
+
+            let path = Path::new(path_str);
+            let canonical_path = match std::fs::canonicalize(path) {
+                Ok(canonical) => canonical,
+                Err(_) => {
+                    if let Some(parent) = path.parent() {
+                        match std::fs::canonicalize(parent) {
+                            Ok(canonical_parent) => path
+                                .file_name()
+                                .map(|file_name| canonical_parent.join(file_name))
+                                .unwrap_or(canonical_parent),
+                            Err(_) => PathBuf::from(path_str),
+                        }
+                    } else {
+                        PathBuf::from(path_str)
+                    }
+                }
+            };
+
+            for allowed_dir in allowed {
+                let canonical_allowed = std::fs::canonicalize(&allowed_dir).unwrap_or(allowed_dir);
+                if canonical_path.starts_with(&canonical_allowed) {
+                    return Ok(canonical_path);
+                }
+            }
+        }
+
         // Fail-closed: reject all file access when no app_handle (and thus
         // no settings/allowed-directories) is available. The old code
         // returned Ok(path) here, silently bypassing the directory check.

@@ -6,14 +6,10 @@ import crypto from 'crypto';
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'test_service_key',
 };
 
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', mockEnv.NEXT_PUBLIC_SUPABASE_URL);
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', mockEnv.SUPABASE_SERVICE_ROLE_KEY);
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -30,35 +26,40 @@ vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Supabase — use module-level mock fns so they survive mockReset between tests
-const mockWebhookFrom = vi.fn();
-const mockWebhookRpc = vi.fn();
+// Neon DB mock — use module-level objects so they survive resetModules
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+const mockDb = {
+  query: mockQuery,
+  execute: mockExecute,
+  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  withUser: vi.fn(() => mockDb),
+  dispose: vi.fn(),
+};
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockWebhookFrom,
-    rpc: mockWebhookRpc,
-    auth: {
-      admin: {
-        listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-      },
-    },
-  })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => mockDb),
 }));
 
 // Mock subscription service
+const mockAllocateCredits = vi.fn();
+const mockResetCredits = vi.fn();
+
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
-    allocateCreditsForPeriod: vi.fn().mockResolvedValue(undefined),
-    resetCreditsForNewPeriod: vi.fn().mockResolvedValue(undefined),
+    allocateCreditsForPeriod: (...args: unknown[]) => mockAllocateCredits(...args),
+    resetCreditsForNewPeriod: (...args: unknown[]) => mockResetCredits(...args),
   },
 }));
 
 // Mock credit service
+const mockGetBalance = vi.fn();
+const mockDeductCredits = vi.fn();
+
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
-    getBalance: vi.fn().mockResolvedValue({ credits_remaining_cents: 0 }),
-    deductCredits: vi.fn().mockResolvedValue(undefined),
+    getBalance: (...args: unknown[]) => mockGetBalance(...args),
+    deductCredits: (...args: unknown[]) => mockDeductCredits(...args),
   },
 }));
 
@@ -169,57 +170,33 @@ describe('Stripe Webhook Security Tests', () => {
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Re-establish module-level mock implementations after clearAllMocks
-    mockWebhookRpc.mockResolvedValue({ data: true, error: null });
-    // Build a fully chainable Supabase from() mock.
-    // Supports chains like: from().select().eq().limit().maybeSingle()
-    //                    and: from().select().eq().single()
-    //                    and: from().upsert().select().single()
-    //                    and: from().update().eq()
-    const buildChainable = () => {
-      const terminal = {
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      };
-      const chainable: Record<string, ReturnType<typeof vi.fn>> = {
-        ...terminal,
-        limit: vi.fn().mockReturnValue(terminal),
-        eq: vi.fn().mockReturnValue({ ...terminal, limit: vi.fn().mockReturnValue(terminal) }),
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({ ...terminal, limit: vi.fn().mockReturnValue(terminal) }),
-          limit: vi.fn().mockReturnValue(terminal),
-        }),
-        upsert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'test-sub-id', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi
-          .fn()
-          .mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-        delete: vi
-          .fn()
-          .mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) }),
-      };
-      return chainable;
-    };
-    mockWebhookFrom.mockReturnValue(buildChainable());
+    // Re-establish getNeonDb mock after resetModules
+    const neonModule = await import('@/lib/server/neon-db');
+    (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
 
-    // Re-establish createClient mock implementation after clearAllMocks
-    const supabaseModule = await import('@supabase/supabase-js');
-    (supabaseModule.createClient as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: mockWebhookFrom,
-      rpc: mockWebhookRpc,
-      auth: {
-        admin: {
-          listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-        },
-      },
+    // Default: idempotency returns true (should process event)
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('process_stripe_event_idempotent')) {
+        return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+      }
+      // Subscription lookup
+      if (sql.includes('subscriptions')) {
+        return Promise.resolve([{ id: 'sub_db_123', user_id: 'user_123' }]);
+      }
+      // Profile lookup
+      if (sql.includes('profiles')) {
+        return Promise.resolve([{ id: 'user_123' }]);
+      }
+      return Promise.resolve([]);
     });
+
+    mockExecute.mockResolvedValue(1);
+
+    // Restore subscription service mocks
+    mockAllocateCredits.mockResolvedValue(undefined);
+    mockResetCredits.mockResolvedValue(undefined);
+    mockGetBalance.mockResolvedValue({ credits_remaining_cents: 0 });
+    mockDeductCredits.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -238,7 +215,7 @@ describe('Stripe Webhook Security Tests', () => {
             id: 'cs_test_123',
             customer: 'cus_test_123',
             subscription: 'sub_test_123',
-            metadata: { supabase_user_id: 'user_123', plan_tier: 'pro' },
+            metadata: { user_id: 'user_123', plan_tier: 'pro' },
           },
         },
       });
@@ -303,7 +280,7 @@ describe('Stripe Webhook Security Tests', () => {
             id: 'cs_test_123',
             customer: 'cus_test_123',
             subscription: 'sub_test_123',
-            metadata: { supabase_user_id: 'user_123', plan_tier: 'pro' },
+            metadata: { user_id: 'user_123', plan_tier: 'pro' },
             line_items: { data: [{ price: { id: 'price_test' } }] },
           },
         },
@@ -392,7 +369,12 @@ describe('Stripe Webhook Security Tests', () => {
   describe('Idempotency', () => {
     it('should skip already processed events', async () => {
       // Mock idempotency check to return false (already processed)
-      mockWebhookRpc.mockResolvedValue({ data: false, error: null });
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -434,7 +416,7 @@ describe('Stripe Webhook Security Tests', () => {
             id: 'cs_test_checkout',
             customer: 'cus_test_123',
             subscription: 'sub_test_123',
-            metadata: { supabase_user_id: 'user_123', plan_tier: 'pro' },
+            metadata: { user_id: 'user_123', plan_tier: 'pro' },
             line_items: { data: [{ price: { id: 'price_pro' } }] },
           },
         },

@@ -27,9 +27,9 @@ export function validateRequiredEnvVars(): ValidationResult {
   // Critical environment variables (app won't work without these)
   // Missing these will cause server startup to fail in production
   const criticalVars = [
-    'NEXT_PUBLIC_SUPABASE_URL',
-    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-    'SUPABASE_SERVICE_ROLE_KEY',
+    'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    'CLERK_SECRET_KEY',
+    'DATABASE_URL',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
     'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
@@ -185,41 +185,6 @@ export function validatePriceIdConsistency(): ValidationResult {
 }
 
 /**
- * Validate Supabase URL format
- */
-export function validateSupabaseUrl(): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-
-  if (supabaseUrl) {
-    // Check if it's a valid URL
-    try {
-      const url = new URL(supabaseUrl);
-
-      // Should be HTTPS in production
-      if (process.env.NODE_ENV === 'production' && url.protocol !== 'https:') {
-        warnings.push('Supabase URL should use HTTPS in production');
-      }
-
-      // Should end with .supabase.co or .supabase.in (custom domains)
-      if (!url.hostname.includes('supabase')) {
-        warnings.push('Supabase URL hostname looks unusual - verify it is correct');
-      }
-    } catch {
-      errors.push(`Invalid Supabase URL format: ${supabaseUrl}`);
-    }
-  }
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
-}
-
-/**
  * Validate APP_URL format
  */
 export function validateAppUrl(): ValidationResult {
@@ -258,12 +223,7 @@ export function validateAppUrl(): ValidationResult {
  * Run all validations and return combined results
  */
 export function validateEnvironment(): ValidationResult {
-  const results = [
-    validateRequiredEnvVars(),
-    validatePriceIdConsistency(),
-    validateSupabaseUrl(),
-    validateAppUrl(),
-  ];
+  const results = [validateRequiredEnvVars(), validatePriceIdConsistency(), validateAppUrl()];
 
   const allErrors = results.flatMap((r) => r.errors);
   const allWarnings = results.flatMap((r) => r.warnings);

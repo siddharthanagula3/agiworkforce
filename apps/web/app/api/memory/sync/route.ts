@@ -11,33 +11,36 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 async function handleGetSyncStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   // Get total count and last updated timestamp
-  const { data: allMemories, error } = await supabase
-    .from('user_memories')
-    .select('source, updated_at')
-    .eq('is_deleted', false)
-    .order('updated_at', { ascending: false });
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to get sync status');
+  let allMemories: { source: string | null; updated_at: string }[];
+  try {
+    allMemories = await db.query<{ source: string | null; updated_at: string }>(
+      `select source, updated_at
+       from user_memories
+       where user_id = $1 and is_deleted = false
+       order by updated_at desc`,
+      [userId],
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to get sync status');
     throw createError.internal('Failed to get sync status');
   }
 
-  const memories = allMemories || [];
-  const lastSync = memories.length > 0 ? (memories[0]?.updated_at ?? null) : null;
+  const lastSync = allMemories.length > 0 ? (allMemories[0]?.updated_at ?? null) : null;
 
   // Count by source
   const sources: Record<string, number> = { mobile: 0, desktop: 0, web: 0, auto: 0 };
-  for (const m of memories) {
+  for (const m of allMemories) {
     const src = m.source ?? 'web';
     if (src in sources && sources[src] !== undefined) {
       sources[src]++;
@@ -46,7 +49,7 @@ async function handleGetSyncStatus(request: NextRequest) {
 
   return NextResponse.json({
     lastSync,
-    entriesCount: memories.length,
+    entriesCount: allMemories.length,
     sources,
   });
 }
@@ -59,23 +62,25 @@ async function handleTriggerSync(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: no .eq('user_id') filter needed — DB enforces it.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   // For now, sync is a simple count + last-update query.
   // In the future this can trigger cross-device reconciliation.
-  const { count, error } = await supabase
-    .from('user_memories')
-    .select('id', { count: 'exact', head: true })
-    .eq('is_deleted', false);
-
-  if (error) {
+  let count: number;
+  try {
+    const [row] = await db.query<{ count: number }>(
+      `select count(*)::int as count from user_memories where user_id = $1 and is_deleted = false`,
+      [userId],
+    );
+    count = row?.count ?? 0;
+  } catch (error) {
     logger.error({ error }, 'Failed to trigger sync');
     throw createError.internal('Failed to trigger sync');
   }
 
   return NextResponse.json({
-    synced: count ?? 0,
+    synced: count,
     conflicts: 0,
   });
 }

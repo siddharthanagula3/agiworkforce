@@ -134,13 +134,10 @@ dependencies = [
 name = "agiworkforce-cli"
 version = "1.7.1"
 dependencies = [
- "agiworkforce-app-server",
- "agiworkforce-apply-patch",
  "agiworkforce-command-registry",
- "agiworkforce-plugin-runtime",
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",
- "agiworkforce-task-runtime",
+ "agiworkforce-utils-image",
  "anyhow",
  "arboard",
  "async-trait",
@@ -182,8 +179,6 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.24.0",
  "toml 0.8.2",
- "tower",
- "tower-http",
  "tracing",
  "two-face",
  "urlencoding",

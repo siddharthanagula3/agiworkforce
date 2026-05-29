@@ -12,12 +12,13 @@
 // Mocks — declared before imports
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('../services/api', () => {

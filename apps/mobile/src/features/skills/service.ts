@@ -19,7 +19,7 @@ import type { Skill } from '@agiworkforce/skills';
 
 import { API_URL } from '@/lib/constants';
 import { secureFetch } from '@/services/secureFetch';
-import { supabase } from '@/services/supabase';
+import { getAuthHeaders } from '@/services/authSession';
 
 export type SkillSummary = Pick<Skill, 'name' | 'description' | 'filePath' | 'source'>;
 
@@ -54,9 +54,7 @@ export interface InstalledSkill extends SkillCatalogEntry {
 }
 
 async function authHeader(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  return getAuthHeaders();
 }
 
 export async function listSkills(): Promise<SkillSummary[]> {

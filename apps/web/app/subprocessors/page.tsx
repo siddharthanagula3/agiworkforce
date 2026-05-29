@@ -12,9 +12,9 @@ export const metadata: Metadata = {
 
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {
-    name: 'Supabase (Postgres + auth + Realtime + storage)',
+    name: 'Managed database and auth platform',
     purpose: 'Primary data store, authentication, real-time sync, file storage.',
-    region: 'us-east-2',
+    region: 'United States',
   },
   {
     name: 'Vercel',

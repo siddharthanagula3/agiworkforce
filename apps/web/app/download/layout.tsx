@@ -59,13 +59,6 @@ const downloadJsonLd = {
 };
 
 export default function DownloadLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(downloadJsonLd) }}
-      />
-      {children}
-    </>
-  );
+  void downloadJsonLd;
+  return <>{children}</>;
 }

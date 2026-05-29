@@ -62,6 +62,7 @@ pub mod voice;
 // Extended CLI modules — used by subcommand handlers
 pub mod app_server;
 pub mod apply_patch;
+pub mod approval_audit;
 pub mod cloud;
 pub mod ecosystem;
 pub mod exec_policy;
@@ -75,6 +76,7 @@ pub mod onboarding;
 pub use features::plugins::plugins;
 pub mod project_registry;
 pub mod project_scope;
+pub mod provenance;
 pub mod review;
 pub mod routing;
 // runtime lives at platform::runtime; re-exported here so all 27 call-sites
@@ -128,7 +130,7 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 use std::io::{self, IsTerminal, Read};
 
-/// AGI Workforce CLI — multi-model AI agent in your terminal
+/// AGI CLI — multi-model AI agent in your terminal
 #[derive(Parser, Debug)]
 #[command(
     name = "agi",
@@ -146,7 +148,7 @@ pub struct Cli {
     #[arg(value_name = "PROMPT")]
     prompt: Option<String>,
 
-    /// Model to use (e.g. claude-opus-4-6, gpt-5.5, gemini-3.1-flash-lite, llama3.1:8b)
+    /// Model to use (must match the shared model catalog/provider metadata)
     #[arg(short, long, value_name = "MODEL")]
     model: Option<String>,
 
@@ -277,7 +279,7 @@ pub struct Cli {
     #[arg(long, value_name = "MODEL")]
     fallback_model: Option<String>,
 
-    /// Initialize project with CLAUDE.md
+    /// Initialize project with AGENTS.md
     #[arg(long)]
     init: bool,
 
@@ -392,7 +394,7 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// Sends `model: "auto-economy"` to the AGI Workforce managed-cloud API,
+    /// Sends `model: "auto-economy"` to the AGI managed-cloud API,
     /// which delegates routing to the server-side classifier.  The CLI never
     /// discloses which model was actually used (silent routing).
     ///
@@ -541,6 +543,8 @@ enum Command {
     AppServer {
         #[arg(long, default_value = "stdio")]
         listen: String,
+        #[arg(long)]
+        allow_public_listen: bool,
     },
     /// Continue previous session.
     Resume { session_id: Option<String> },
@@ -590,12 +594,12 @@ enum Command {
         #[command(subcommand)]
         action: SyncSubcommand,
     },
-    /// Login to AGI Workforce cloud (or an LLM provider via OAuth).
+    /// Login to AGI cloud (or an LLM provider via OAuth).
     Login {
         /// Provider to login with (agiworkforce, anthropic, openai). Omit for interactive menu.
         provider: Option<String>,
     },
-    /// Logout from AGI Workforce cloud.
+    /// Logout from AGI cloud.
     Logout,
     /// Show authentication status for all configured providers.
     AuthStatus,
@@ -872,6 +876,48 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
             Ok(())
         }
     }
+}
+
+/// Fetch the user's remaining credit percentage from the AGI cloud API.
+/// Returns `None` on any network/parse failure so callers can fall back gracefully.
+/// The response shape is `{ credits: { monthly_remaining_cents, monthly_allocated_cents } }`.
+async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
+    #[derive(serde::Deserialize)]
+    struct Credits {
+        monthly_remaining_cents: Option<u64>,
+        monthly_allocated_cents: Option<u64>,
+    }
+    #[derive(serde::Deserialize)]
+    struct BalanceResp {
+        credits: Option<Credits>,
+    }
+
+    let url = format!("{}/api/llm/v1/credits/balance", api_base);
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(3))
+        .build()
+        .ok()?;
+
+    let resp = client
+        .get(&url)
+        .bearer_auth(bearer)
+        .send()
+        .await
+        .ok()?;
+
+    if !resp.status().is_success() {
+        return None;
+    }
+
+    let body: BalanceResp = resp.json().await.ok()?;
+    let credits = body.credits?;
+    let allocated = credits.monthly_allocated_cents.unwrap_or(0);
+    if allocated == 0 {
+        return None;
+    }
+    let remaining = credits.monthly_remaining_cents.unwrap_or(0);
+    let pct = ((remaining as f64 / allocated as f64) * 100.0).round() as u8;
+    Some(pct.min(100))
 }
 
 /// Main async entry point — called from `main.rs`.
@@ -1220,23 +1266,30 @@ pub async fn run_main() -> Result<()> {
                 std::process::exit(out.status.code().unwrap_or(1));
             }
             Command::McpServer => app_server::run_mcp_server().await,
-            Command::AppServer { listen } => {
+            Command::AppServer {
+                listen,
+                allow_public_listen,
+            } => {
                 const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
                 let cfg = if listen == "stdio" {
                     app_server::AppServerConfig::default()
                 } else {
-                    app_server::AppServerConfig {
-                        transport: app_server::AppServerTransport::WebSocket {
-                            addr: listen
-                                .trim_start_matches("ws://")
+                    let addr: std::net::SocketAddr = listen
+                        .trim_start_matches("ws://")
+                        .parse()
+                        // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
+                        .unwrap_or_else(|_| {
+                            DEFAULT_APP_SERVER_ADDR
                                 .parse()
-                                // SAFETY: DEFAULT_APP_SERVER_ADDR is a valid const SocketAddr
-                                .unwrap_or_else(|_| {
-                                    DEFAULT_APP_SERVER_ADDR.parse().expect(
-                                        "const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr",
-                                    )
-                                }),
-                        },
+                                .expect("const DEFAULT_APP_SERVER_ADDR must be a valid SocketAddr")
+                        });
+                    if !allow_public_listen && !addr.ip().is_loopback() {
+                        anyhow::bail!(
+                            "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
+                        );
+                    }
+                    app_server::AppServerConfig {
+                        transport: app_server::AppServerTransport::WebSocket { addr },
                         ..Default::default()
                     }
                 };
@@ -1797,11 +1850,11 @@ pub async fn run_main() -> Result<()> {
         return daemon::run_daemon(&app_config).await;
     }
 
-    // --init: create CLAUDE.md in current directory
+    // --init: create AGENTS.md in current directory
     if cli.init {
-        let claude_md = std::path::Path::new("CLAUDE.md");
-        if claude_md.exists() {
-            eprintln!("CLAUDE.md already exists in current directory.");
+        let agents_md = std::path::Path::new("AGENTS.md");
+        if agents_md.exists() {
+            eprintln!("AGENTS.md already exists in current directory.");
         } else {
             let template = "# Project Instructions\n\n\
                            ## Overview\n\n\
@@ -1814,8 +1867,8 @@ pub async fn run_main() -> Result<()> {
                            Describe your project structure.\n\n\
                            ## Development Rules\n\n\
                            - Add your coding conventions here\n";
-            std::fs::write(claude_md, template)?;
-            eprintln!("Created CLAUDE.md in current directory.");
+            std::fs::write(agents_md, template)?;
+            eprintln!("Created AGENTS.md in current directory.");
         }
         return Ok(());
     }
@@ -1882,7 +1935,9 @@ pub async fn run_main() -> Result<()> {
     // Resolve model.
     //
     // Priority (highest first):
-    //   1. `--auto` flag → use "auto-economy" sentinel (server-side routing).
+    //   1. `--auto` flag → use an explicit auto-routing sentinel. Downstream
+    //      responses must disclose the selected provider/model; this must never
+    //      become silent managed routing.
     //   2. Explicit `--model` CLI flag.
     //   3. Tier-aware default: if no model specified AND user has a managed-cloud
     //      JWT, resolve the tier (cache-first, 1 h TTL) and use the economy-tier
@@ -1890,7 +1945,7 @@ pub async fn run_main() -> Result<()> {
     //      error so startup is never blocked.
     //   4. `config.toml` default.model.
     let model: String = if cli.auto {
-        // --auto: delegate routing entirely to the managed-cloud API classifier.
+        // --auto: request explainable routing via the auto sentinel.
         "auto-economy".to_string()
     } else if let Some(ref explicit_model) = cli.model {
         explicit_model.clone()
@@ -1922,17 +1977,17 @@ pub async fn run_main() -> Result<()> {
         }
     };
 
-    // Read file contents for -f flag
-    let file_context = read_file_contexts(&cli.files)?;
+    // Read file contents for -f flag — text files and images are handled separately
+    let file_context_result = read_file_contexts(&cli.files)?;
 
     // Gather system context
     let sys_context = context::gather_system_context();
 
-    // Build the final prompt from components
+    // Build the final prompt from components (text files only; images attach as blocks)
     let final_prompt = build_final_prompt(
         cli.prompt.as_deref(),
         stdin_content.as_deref(),
-        &file_context,
+        &file_context_result.text,
     );
 
     // Build effective system prompt (base + append)
@@ -1969,8 +2024,20 @@ pub async fn run_main() -> Result<()> {
     // Resolve effective max_turns: explicit --max-turns wins, then --effort preset
     let effective_max_turns = cli.max_turns.or(effort_max_turns);
 
-    // Determine mode: one-shot if we have a prompt (from arg or stdin) or --print, REPL otherwise
-    if let Some(ref prompt) = final_prompt {
+    // Determine mode: one-shot if we have a prompt (from arg or stdin), image
+    // attachments, or --print. REPL otherwise.
+    //
+    // Images alone (with no text prompt) are valid: the user may want the model
+    // to describe the image without an explicit question, so we treat the empty
+    // string as the user turn and let the model respond to the image content.
+    let effective_prompt = final_prompt.clone().or_else(|| {
+        if !file_context_result.images.is_empty() {
+            Some(String::new())
+        } else {
+            None
+        }
+    });
+    if let Some(ref prompt) = effective_prompt {
         return run_oneshot(
             &app_config,
             &model,
@@ -1987,6 +2054,7 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.allowed_tools.clone(),
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
+            file_context_result.images,
         )
         .await;
     }
@@ -2057,22 +2125,51 @@ pub async fn run_main() -> Result<()> {
 
     // Quota warning: only for Hobby-tier managed accounts with < 10% credits left.
     // BYOK and Local users never see this banner — they have no managed quota.
-    // TODO(phase-5): wire to real /quota endpoint once cloud auth exposes remaining_pct.
     {
-        let remaining: u8 = std::env::var("AGI_QUOTA_REMAINING_PCT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(100);
+        // Guard first — skip the auth load and network call entirely for non-Hobby plans.
         let is_hobby = std::env::var("AGI_PLAN")
             .map(|v| v.eq_ignore_ascii_case("hobby"))
             .unwrap_or(false);
-        if is_hobby && remaining < 10 {
-            eprintln!(
-                "{}",
-                colored::Colorize::yellow(
-                    "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
-                )
-            );
+
+        if is_hobby {
+            // Attempt to fetch live remaining credits from the cloud API.
+            // Falls back to the AGI_QUOTA_REMAINING_PCT env var (or 100) on any
+            // failure so offline / unauthenticated runs are unaffected.
+            let token = auth::AuthStore::load()
+                .ok()
+                .and_then(|s| s.entries.get("agiworkforce").cloned())
+                .and_then(|e| match e {
+                    auth::AuthEntry::OAuth { access, .. } => Some(access),
+                    auth::AuthEntry::ApiKey { key } => Some(key),
+                });
+
+            let remaining: u8 = if let Some(bearer) = token {
+                let api_base = std::env::var("AGI_API_URL")
+                    .unwrap_or_else(|_| "https://api.agiworkforce.com".to_string());
+                fetch_remaining_pct(&bearer, &api_base)
+                    .await
+                    .or_else(|| {
+                        std::env::var("AGI_QUOTA_REMAINING_PCT")
+                            .ok()
+                            .and_then(|s| s.parse().ok())
+                    })
+                    .unwrap_or(100)
+            } else {
+                // Not authenticated — fall back to env var (decorative / CI override).
+                std::env::var("AGI_QUOTA_REMAINING_PCT")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(100)
+            };
+
+            if remaining < 10 {
+                eprintln!(
+                    "{}",
+                    colored::Colorize::yellow(
+                        "Warning: you have less than 10% of your weekly limit left. Run /status for a breakdown."
+                    )
+                );
+            }
         }
     }
 
@@ -2126,24 +2223,97 @@ pub async fn run_main() -> Result<()> {
     }
 }
 
-/// Read file contents for the -f flag, returning formatted file context.
-pub fn read_file_contexts(files: &[String]) -> Result<String> {
+/// An image file attached via the `--file / -f` flag, ready to be included in a
+/// multipart message as a `ContentBlock::Image`.
+pub struct ImageAttachment {
+    /// Original file path (for display/error messages).
+    pub path: String,
+    /// MIME type (e.g. "image/png").
+    pub mime: String,
+    /// Raw base64-encoded image bytes (no `data:` prefix).
+    pub data_b64: String,
+}
+
+/// Return value from [`read_file_contexts`]: text file context and detected image
+/// attachments are separated so callers can handle them differently.
+pub struct FileContextResult {
+    /// Formatted text from non-image files (XML-wrapped, as before).
+    pub text: String,
+    /// Image files encoded and ready for multipart message injection.
+    pub images: Vec<ImageAttachment>,
+}
+
+/// Image file extensions recognised for vision attachment.
+fn is_image_extension(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    matches!(
+        std::path::Path::new(&lower)
+            .extension()
+            .and_then(|e| e.to_str()),
+        Some("png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" | "ico" | "tiff" | "tif")
+    )
+}
+
+/// Read file contents for the -f flag, returning formatted text context and any
+/// image attachments separately.
+pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
     let mut context = String::new();
+    let mut images = Vec::new();
+
     for path in files {
-        match std::fs::read_to_string(path) {
-            Ok(contents) => {
-                context.push_str(&format!(
-                    "<file path=\"{}\">\n{}\n</file>\n\n",
-                    path, contents
-                ));
+        if is_image_extension(path) {
+            // Read raw bytes and encode for vision
+            match std::fs::read(path) {
+                Ok(bytes) => {
+                    use agiworkforce_utils_image::{PromptImageMode, load_for_prompt_bytes};
+                    match load_for_prompt_bytes(
+                        std::path::Path::new(path),
+                        bytes,
+                        PromptImageMode::ResizeToFit,
+                    ) {
+                        Ok(encoded) => {
+                            use base64::Engine as _;
+                            let data_b64 = base64::engine::general_purpose::STANDARD
+                                .encode(&encoded.bytes);
+                            images.push(ImageAttachment {
+                                path: path.clone(),
+                                mime: encoded.mime,
+                                data_b64,
+                            });
+                        }
+                        Err(e) => {
+                            output::print_error(&format!(
+                                "Failed to process image '{}': {}",
+                                path, e
+                            ));
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(e) => {
+                    output::print_error(&format!("Failed to read image '{}': {}", path, e));
+                    std::process::exit(1);
+                }
             }
-            Err(e) => {
-                output::print_error(&format!("Failed to read file '{}': {}", path, e));
-                std::process::exit(1);
+        } else {
+            match std::fs::read_to_string(path) {
+                Ok(contents) => {
+                    context.push_str(&format!(
+                        "<file path=\"{}\">\n{}\n</file>\n\n",
+                        path, contents
+                    ));
+                }
+                Err(e) => {
+                    output::print_error(&format!("Failed to read file '{}': {}", path, e));
+                    std::process::exit(1);
+                }
             }
-        }
-    }
-    Ok(context)
+        } // end else (non-image file)
+    } // end for path in files
+    Ok(FileContextResult {
+        text: context,
+        images,
+    })
 }
 
 /// Combine positional prompt, stdin content, and file context into the final prompt.
@@ -2256,6 +2426,7 @@ pub async fn run_oneshot(
     allowed_tools: Vec<String>,
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
+    image_attachments: Vec<ImageAttachment>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2277,6 +2448,20 @@ pub async fn run_oneshot(
     }
     session.enable_managed_session()?;
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
+
+    // If the user attached image files via --file, queue them as pending image
+    // blocks on the session.  The next `session.send()` call will prepend them
+    // to the user message so text + images arrive in a single multipart turn.
+    if !image_attachments.is_empty() {
+        use models::ContentBlock;
+        session.pending_image_blocks = image_attachments
+            .into_iter()
+            .map(|img| ContentBlock::Image {
+                mime: img.mime,
+                data_b64: img.data_b64,
+            })
+            .collect();
+    }
 
     if output_mode == OneShotOutputMode::JsonLine {
         // Stream-JSON: NDJSON events on stdout, one per line. The full

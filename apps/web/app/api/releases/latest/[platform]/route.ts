@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ReleaseRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -76,37 +77,24 @@ async function getReleaseFromDatabase(
   platform: Platform,
   channel: string = 'stable',
 ): Promise<ReleaseRecord | null> {
-  const supabaseUrl = getOptionalEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseKey = getOptionalEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const neonUrl = getOptionalEnv('DATABASE_URL') ?? getOptionalEnv('AGI_DATABASE_URL');
 
-  if (!supabaseUrl || !supabaseKey) {
+  if (!neonUrl) {
     return null;
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false },
-    });
+    const db = getNeonDb();
+    const rows = await db.query<ReleaseRow>(
+      'select * from releases where platform = $1 and channel = $2 and is_prerelease = false order by pub_date desc limit 1',
+      [platform, channel],
+    );
 
-    const { data, error } = await supabase
-      .from('releases')
-      .select('*')
-      .eq('platform', platform)
-      .eq('channel', channel)
-      .eq('is_prerelease', false)
-      .order('pub_date', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      // PGRST116 = no rows found, not an error
-      if (error.code !== 'PGRST116') {
-        logger.warn({ error, platform }, 'Database query error for release');
-      }
+    if (rows.length === 0) {
       return null;
     }
 
-    return data as ReleaseRecord;
+    return rows[0] as unknown as ReleaseRecord;
   } catch (error) {
     logger.error({ error, platform }, 'Failed to fetch release from database');
     return null;
@@ -200,15 +188,11 @@ async function getReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord |
 async function recordDownload(releaseId: string, request: NextRequest): Promise<void> {
   if (!releaseId) return;
 
-  const supabaseUrl = getOptionalEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseKey = getOptionalEnv('SUPABASE_SERVICE_ROLE_KEY');
-
-  if (!supabaseUrl || !supabaseKey) return;
+  const neonUrl = getOptionalEnv('DATABASE_URL') ?? getOptionalEnv('AGI_DATABASE_URL');
+  if (!neonUrl) return;
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false },
-    });
+    const db = getNeonDb();
 
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0] ||
@@ -219,13 +203,13 @@ async function recordDownload(releaseId: string, request: NextRequest): Promise<
     const country = request.headers.get('cf-ipcountry') || null;
     const referrer = request.headers.get('referer') || null;
 
-    await supabase.rpc('record_release_download', {
-      p_release_id: releaseId,
-      p_ip_address: ip,
-      p_user_agent: userAgent,
-      p_country_code: country,
-      p_referrer: referrer,
-    });
+    await db.execute('select record_release_download($1, $2, $3, $4, $5)', [
+      releaseId,
+      ip,
+      userAgent,
+      country,
+      referrer,
+    ]);
   } catch (error) {
     // Non-blocking - log and continue
     logger.warn({ error, releaseId }, 'Failed to record download analytics');

@@ -15,10 +15,10 @@ import {
 } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { queryKeys } from '@shared/stores/query-client';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { logger } from '@shared/lib/logger';
-import { PaymentAPI } from '@shared/lib/stripe';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 
 // ============================================================================
@@ -28,7 +28,8 @@ import { getPlanPriceUsd, getPlanUsageBudgetCents } from '@agiworkforce/types';
 /**
  * Billing plan types
  */
-export type BillingPlan = 'free' | 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise';
+// pro_plus removed: locked tiers are free, hobby, pro, max, team, enterprise.
+export type BillingPlan = 'free' | 'hobby' | 'pro' | 'max' | 'enterprise';
 
 /**
  * Subscription status types
@@ -84,17 +85,6 @@ export interface TokenBalance {
   currentBalance: number;
   totalGranted: number;
   totalUsed: number;
-}
-
-/**
- * Raw token usage record from database
- */
-interface TokenUsageRecord {
-  provider: string;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
-  total_cost: number;
 }
 
 /**
@@ -190,19 +180,6 @@ const TIER_CONFIG: Record<
       'Email support',
     ],
   },
-  pro_plus: {
-    creditLimitCents: getPlanUsageBudgetCents('pro_plus'),
-    price: getPlanPriceUsd('pro_plus'),
-    name: 'Pro+',
-    features: [
-      `${getPlanUsageBudgetCents('pro_plus').toLocaleString()} credits per billing cycle`,
-      'Flagship models (Opus 4.7, GPT-5.5) — 15K tokens/day',
-      '60s/month video generation (Runway Gen-4 720p)',
-      'US-only routing toggle',
-      'Advanced computer use & deep research preview',
-      'Priority email support',
-    ],
-  },
   max: {
     creditLimitCents: getPlanUsageBudgetCents('max'),
     price: getPlanPriceUsd('max'),
@@ -229,129 +206,70 @@ const TIER_CONFIG: Record<
   },
 };
 
+interface UsageApiResponse {
+  plan_tier: string;
+  credits_allocated_cents: number;
+  credits_used_cents: number;
+  credits_remaining_cents: number;
+  usage_percentage: number;
+  period_start: string | null;
+  period_end: string | null;
+  subscription_status: string;
+}
+
 /**
- * Fetch credit balance for a user from the shared Supabase (token_credits table).
+ * Fetch credit balance via /api/usage.
  * Balance is returned in cents (e.g., 2900 = $29.00).
- * NOTE: currentBalance/totalGranted/totalUsed are now in CENTS, not token counts.
+ * NOTE: currentBalance/totalGranted/totalUsed are in CENTS, not token counts.
  */
-async function fetchTokenBalance(userId: string): Promise<TokenBalance> {
-  // Try get_credit_balance RPC first (shared Supabase billing)
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    'get_credit_balance' as never,
-    {
-      p_user_id: userId,
-    } as never,
-  );
+async function fetchTokenBalance(_userId: string): Promise<TokenBalance> {
+  const token = await getAuthToken();
+  if (!token) {
+    return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
+  }
 
-  if (!rpcError && rpcData !== null && rpcData !== undefined) {
-    const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-    const creditsCents = Math.max(
-      Number(
-        balanceRow && typeof balanceRow === 'object'
-          ? ((balanceRow as { credits_remaining_cents?: number }).credits_remaining_cents ?? 0)
-          : 0,
-      ),
-      0,
-    );
-    const allocatedCents = Math.max(
-      Number(
-        balanceRow && typeof balanceRow === 'object'
-          ? ((balanceRow as { credits_allocated_cents?: number }).credits_allocated_cents ?? 0)
-          : 0,
-      ),
-      0,
-    );
+  try {
+    const res = await fetch('/api/usage', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      logger.warn('[BillingQuery] /api/usage returned', res.status);
+      return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
+    }
+    const data = (await res.json()) as UsageApiResponse;
+    const remaining = Math.max(data.credits_remaining_cents ?? 0, 0);
+    const allocated = Math.max(data.credits_allocated_cents ?? 0, 0);
     return {
-      currentBalance: creditsCents,
-      totalGranted: allocatedCents,
-      totalUsed: Math.max(allocatedCents - creditsCents, 0),
+      currentBalance: remaining,
+      totalGranted: allocated,
+      totalUsed: Math.max(allocated - remaining, 0),
     };
-  }
-
-  if (rpcError) {
-    logger.warn('[BillingQuery] get_credit_balance RPC failed, falling back:', rpcError.message);
-  }
-
-  // Fallback: direct query to token_credits table
-  const { data, error } = await supabase
-    .from('token_credits')
-    .select('credits_remaining_cents, credits_allocated_cents')
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error) {
-    logger.error('[BillingQuery] Credit balance error:', error);
+  } catch (err) {
+    logger.error('[BillingQuery] fetchTokenBalance error:', err);
     return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
   }
-
-  if (!data) {
-    return { currentBalance: 0, totalGranted: 0, totalUsed: 0 };
-  }
-
-  const row = data as Record<string, unknown>;
-  const remaining = Math.max(Number(row['credits_remaining_cents'] ?? 0), 0);
-  const allocated = Number(row['credits_allocated_cents'] ?? 0);
-  return {
-    currentBalance: remaining,
-    totalGranted: allocated,
-    totalUsed: Math.max(allocated - remaining, 0),
-  };
 }
 
 /**
  * Fetch token usage by provider
+ * TODO: Add /api/usage/providers endpoint for per-provider breakdown.
+ * Returns default zero values until a dedicated route is available.
  */
-async function fetchTokenUsage(userId: string): Promise<LLMUsage[]> {
-  const { data, error } = await supabase
-    .from('token_usage' as never)
-    .select('provider, input_tokens, output_tokens, total_tokens, total_cost')
-    .eq('user_id', userId);
-
-  const defaultUsage: LLMUsage[] = [
+async function fetchTokenUsage(_userId: string): Promise<LLMUsage[]> {
+  return [
     { provider: 'OpenAI', tokens: 0, cost: 0, limit: 0 },
     { provider: 'Anthropic', tokens: 0, cost: 0, limit: 0 },
     { provider: 'Google', tokens: 0, cost: 0, limit: 0 },
     { provider: 'Perplexity', tokens: 0, cost: 0, limit: 0 },
   ];
-
-  if (error || !data || (data as unknown[]).length === 0) {
-    return defaultUsage;
-  }
-
-  // Aggregate by provider
-  const providerMap = new Map<string, { tokens: number; cost: number }>();
-  (data as TokenUsageRecord[]).forEach((row) => {
-    const provider = row.provider.toLowerCase();
-    const current = providerMap.get(provider) || { tokens: 0, cost: 0 };
-    current.tokens += row.total_tokens || 0;
-    current.cost += row.total_cost || 0;
-    providerMap.set(provider, current);
-  });
-
-  return defaultUsage.map((llm) => {
-    const providerKey = llm.provider.toLowerCase();
-    const usage = providerMap.get(providerKey) || { tokens: 0, cost: 0 };
-    return {
-      ...llm,
-      tokens: usage.tokens,
-      cost: usage.cost,
-    };
-  });
 }
 
 /**
- * Fetch user plan from database
+ * Fetch user plan via /api/usage
  */
-async function fetchUserPlan(userId: string): Promise<UserPlanData> {
-  const { data, error } = await supabase
-    .from('subscriptions')
-    .select(
-      'plan_tier, plan_name, status, current_period_end, stripe_customer_id, stripe_subscription_id',
-    )
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  if (error || !data) {
+async function fetchUserPlan(_userId: string): Promise<UserPlanData> {
+  const token = await getAuthToken();
+  if (!token) {
     return {
       plan: 'free',
       subscriptionEndDate: null,
@@ -360,32 +278,45 @@ async function fetchUserPlan(userId: string): Promise<UserPlanData> {
     };
   }
 
-  const row = data as {
-    plan_tier?: string;
-    plan_name?: string;
-    status?: string;
-    current_period_end?: string | null;
-    stripe_customer_id?: string | null;
-    stripe_subscription_id?: string | null;
-  };
-
-  // Map plan_tier to BillingPlan — hobby is a valid paid tier
-  const planTier = (row.plan_tier ?? row.plan_name ?? 'free').toLowerCase();
-  const plan: BillingPlan =
-    planTier === 'hobby' ||
-    planTier === 'pro' ||
-    planTier === 'pro_plus' ||
-    planTier === 'max' ||
-    planTier === 'enterprise'
-      ? (planTier as BillingPlan)
-      : 'free';
-
-  return {
-    plan,
-    subscriptionEndDate: row.current_period_end ?? null,
-    stripeCustomerId: row.stripe_customer_id ?? null,
-    stripeSubscriptionId: row.stripe_subscription_id ?? null,
-  };
+  try {
+    const res = await fetch('/api/usage', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      return {
+        plan: 'free',
+        subscriptionEndDate: null,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+      };
+    }
+    const data = (await res.json()) as UsageApiResponse;
+    // Map plan_tier to BillingPlan — hobby is a valid paid tier
+    const planTier = (data.plan_tier ?? 'free').toLowerCase();
+    // pro_plus is a legacy value; map it to max as the closest valid tier.
+    const normalizedTier = planTier === 'pro_plus' ? 'max' : planTier;
+    const plan: BillingPlan =
+      normalizedTier === 'hobby' ||
+      normalizedTier === 'pro' ||
+      normalizedTier === 'max' ||
+      normalizedTier === 'enterprise'
+        ? (normalizedTier as BillingPlan)
+        : 'free';
+    return {
+      plan,
+      subscriptionEndDate: data.period_end ?? null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+    };
+  } catch (err) {
+    logger.error('[BillingQuery] fetchUserPlan error:', err);
+    return {
+      plan: 'free',
+      subscriptionEndDate: null,
+      stripeCustomerId: null,
+      stripeSubscriptionId: null,
+    };
+  }
 }
 
 /**
@@ -513,143 +444,26 @@ export function useTokenAnalytics(
 
   return useQuery<TokenAnalyticsData | null, Error>({
     queryKey: queryKeys.billing.analytics(user?.id ?? '', timeRange),
+    // TODO: Add /api/usage/analytics endpoint for per-session token analytics with time range.
     queryFn: async (): Promise<TokenAnalyticsData | null> => {
       if (!user?.id) return null;
-
-      const now = new Date();
-      const startDate =
-        timeRange === 'all'
-          ? new Date('2020-01-01')
-          : timeRange === '90d'
-            ? new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
-            : timeRange === '30d'
-              ? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
-              : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-
-      const { data: sessions, error } = await supabase
-        .from('web_conversations' as never)
-        .select(
-          `
-          id,
-          title,
-          created_at,
-          provider,
-          chat_session_tokens (
-            total_input_tokens,
-            total_output_tokens,
-            total_tokens,
-            total_cost
-          )
-        `,
-        )
-        .eq('user_id', user.id)
-        .gte('created_at', startDate.toISOString())
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        logger.error(
-          '[TokenAnalytics] Failed to load data:',
-          error.message ?? JSON.stringify(error),
-        );
-        return {
-          sessions: [],
-          stats: {
-            totalTokens: 0,
-            totalCost: 0,
-            avgTokensPerSession: 0,
-            sessionsCount: 0,
-            todayTokens: 0,
-            todayCost: 0,
-            weekTokens: 0,
-            weekCost: 0,
-            monthTokens: 0,
-            monthCost: 0,
-          },
-          dailyUsage: [],
-        };
-      }
-
-      interface SessionWithTokens {
-        id: string;
-        title: string | null;
-        created_at: string;
-        provider: string | null;
-        chat_session_tokens: {
-          total_input_tokens: number;
-          total_output_tokens: number;
-          total_tokens: number;
-          total_cost: number;
-        } | null;
-      }
-
-      const processedData: AnalyticsSession[] = ((sessions || []) as SessionWithTokens[])
-        .filter(
-          (
-            s,
-          ): s is SessionWithTokens & {
-            chat_session_tokens: NonNullable<SessionWithTokens['chat_session_tokens']>;
-          } => s.chat_session_tokens !== null && s.chat_session_tokens.total_tokens > 0,
-        )
-        .map(
-          (s): AnalyticsSession => ({
-            sessionId: s.id,
-            sessionTitle: s.title || 'Untitled',
-            totalTokens: s.chat_session_tokens.total_tokens || 0,
-            inputTokens: s.chat_session_tokens.total_input_tokens || 0,
-            outputTokens: s.chat_session_tokens.total_output_tokens || 0,
-            totalCost: s.chat_session_tokens.total_cost || 0,
-            provider: s.provider || 'openai',
-            createdAt: new Date(s.created_at),
-          }),
-        );
-
-      // Calculate stats
-      const totalTokens = processedData.reduce((sum, d) => sum + d.totalTokens, 0);
-      const totalCost = processedData.reduce((sum, d) => sum + d.totalCost, 0);
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const todayData = processedData.filter((d) => d.createdAt >= today);
-      const weekData = processedData.filter((d) => d.createdAt >= weekAgo);
-      const monthData = processedData.filter((d) => d.createdAt >= monthAgo);
-
-      // Calculate daily usage for chart
-      const dailyMap = new Map<string, DailyUsage>();
-      processedData.forEach((d) => {
-        const dateKey = d.createdAt.toISOString().split('T')[0];
-        const existing = dailyMap.get(dateKey!) || {
-          date: dateKey,
-          tokens: 0,
-          cost: 0,
-        };
-        dailyMap.set(dateKey!, {
-          date: dateKey ?? '',
-          tokens: existing.tokens + d.totalTokens,
-          cost: existing.cost + d.totalCost,
-        });
-      });
-
-      const analyticsResult: TokenAnalyticsData = {
-        sessions: processedData,
+      // No analytics API route available yet — return empty structure.
+      return {
+        sessions: [],
         stats: {
-          totalTokens,
-          totalCost,
-          avgTokensPerSession: processedData.length > 0 ? totalTokens / processedData.length : 0,
-          sessionsCount: processedData.length,
-          todayTokens: todayData.reduce((sum, d) => sum + d.totalTokens, 0),
-          todayCost: todayData.reduce((sum, d) => sum + d.totalCost, 0),
-          weekTokens: weekData.reduce((sum, d) => sum + d.totalTokens, 0),
-          weekCost: weekData.reduce((sum, d) => sum + d.totalCost, 0),
-          monthTokens: monthData.reduce((sum, d) => sum + d.totalTokens, 0),
-          monthCost: monthData.reduce((sum, d) => sum + d.totalCost, 0),
+          totalTokens: 0,
+          totalCost: 0,
+          avgTokensPerSession: 0,
+          sessionsCount: 0,
+          todayTokens: 0,
+          todayCost: 0,
+          weekTokens: 0,
+          weekCost: 0,
+          monthTokens: 0,
+          monthCost: 0,
         },
-        dailyUsage: Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date)),
+        dailyUsage: [],
       };
-
-      return analyticsResult;
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -715,61 +529,54 @@ export function useSubscription(): UseQueryResult<Subscription | null, Error> {
     queryFn: async (): Promise<Subscription | null> => {
       if (!user?.id) return null;
 
-      const { data, error } = await supabase
-        .from('users' as never)
-        .select(
-          `
-          id,
-          plan,
-          plan_status,
-          subscription_end_date,
-          stripe_subscription_id,
-          stripe_customer_id,
-          trial_end_date
-        `,
-        )
-        .eq('id', user.id)
-        .maybeSingle();
+      const token = await getAuthToken();
+      if (!token) return null;
 
-      if (error || !data) {
-        logger.warn('[useSubscription] No subscription data found');
+      try {
+        const res = await fetch('/api/usage', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          logger.warn('[useSubscription] /api/usage returned', res.status);
+          return null;
+        }
+        const data = (await res.json()) as UsageApiResponse;
+        const now = new Date();
+        const periodEnd = data.period_end
+          ? new Date(data.period_end)
+          : new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const periodStart = new Date(periodEnd);
+        periodStart.setMonth(periodStart.getMonth() - 1);
+        const planTier = (data.plan_tier ?? 'free').toLowerCase();
+        const normalizedTier = planTier === 'pro_plus' ? 'max' : planTier;
+        const plan: BillingPlan =
+          normalizedTier === 'hobby' ||
+          normalizedTier === 'pro' ||
+          normalizedTier === 'max' ||
+          normalizedTier === 'enterprise'
+            ? (normalizedTier as BillingPlan)
+            : 'free';
+        return {
+          id: user.id,
+          userId: user.id,
+          plan,
+          status: (data.subscription_status as SubscriptionStatus) || 'active',
+          currentPeriodStart: periodStart.toISOString(),
+          currentPeriodEnd: periodEnd.toISOString(),
+          cancelAtPeriodEnd: false,
+          canceledAt: null,
+          trialStart: null,
+          trialEnd: null,
+          stripeSubscriptionId: null,
+          stripeCustomerId: null,
+          priceId: null,
+          quantity: 1,
+          metadata: {},
+        };
+      } catch (err) {
+        logger.error('[useSubscription] error:', err);
         return null;
       }
-
-      const row = data as {
-        id: string;
-        plan?: string;
-        plan_status?: string;
-        subscription_end_date?: string | null;
-        stripe_subscription_id?: string | null;
-        stripe_customer_id?: string | null;
-        trial_end_date?: string | null;
-      };
-      const now = new Date();
-      const periodEnd = row.subscription_end_date
-        ? new Date(row.subscription_end_date)
-        : new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-      const periodStart = new Date(periodEnd);
-      periodStart.setMonth(periodStart.getMonth() - 1);
-
-      return {
-        id: row.id,
-        userId: user.id,
-        plan: (row.plan as BillingPlan) || 'free',
-        status: (row.plan_status as SubscriptionStatus) || 'active',
-        currentPeriodStart: periodStart.toISOString(),
-        currentPeriodEnd: periodEnd.toISOString(),
-        cancelAtPeriodEnd: false,
-        canceledAt: null,
-        trialStart: null,
-        trialEnd: row.trial_end_date ?? null,
-        stripeSubscriptionId: row.stripe_subscription_id ?? null,
-        stripeCustomerId: row.stripe_customer_id ?? null,
-        priceId: null,
-        quantity: 1,
-        metadata: {},
-      };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -826,50 +633,10 @@ export function useInvoices(): UseQueryResult<Invoice[], Error> {
 
   return useQuery<Invoice[], Error>({
     queryKey: queryKeys.billing.invoices(),
+    // TODO: Add /api/billing/invoices endpoint for invoice history.
     queryFn: async (): Promise<Invoice[]> => {
       if (!user?.id) return [];
-
-      // Try to fetch from invoices table
-      const { data, error } = await supabase
-        .from('invoices' as never)
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        // Table might not exist or user may not have access — degrade gracefully
-        logger.warn('[useInvoices] Failed to load invoices:', error.message);
-        return [];
-      }
-
-      interface InvoiceRow {
-        id: string;
-        invoice_number?: string;
-        status?: string;
-        amount?: number;
-        currency?: string;
-        description?: string;
-        created_at: string;
-        due_date?: string | null;
-        paid_at?: string | null;
-        invoice_pdf?: string | null;
-        hosted_invoice_url?: string | null;
-        line_items?: InvoiceLineItem[];
-      }
-      return ((data || []) as InvoiceRow[]).map((inv) => ({
-        id: inv.id,
-        number: inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`,
-        status: (inv.status || 'paid') as Invoice['status'],
-        amount: inv.amount || 0,
-        currency: inv.currency || 'USD',
-        description: inv.description || 'Subscription charge',
-        createdAt: inv.created_at,
-        dueDate: inv.due_date ?? null,
-        paidAt: inv.paid_at ?? null,
-        invoicePdf: inv.invoice_pdf ?? null,
-        hostedInvoiceUrl: inv.hosted_invoice_url ?? null,
-        lineItems: inv.line_items || [],
-      }));
+      return [];
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -922,66 +689,10 @@ export function usePaymentMethods(): UseQueryResult<PaymentMethod[], Error> {
 
   return useQuery<PaymentMethod[], Error>({
     queryKey: queryKeys.billing.paymentMethods(),
+    // TODO: Add /api/billing/payment-methods endpoint for payment method management.
     queryFn: async (): Promise<PaymentMethod[]> => {
       if (!user?.id) return [];
-
-      // Try to fetch from payment_methods table
-      const { data, error } = await supabase
-        .from('payment_methods' as never)
-        .select('*')
-        .eq('user_id', user.id)
-        .order('is_default', { ascending: false });
-
-      if (error) {
-        // Table might not exist or user may not have access — degrade gracefully
-        logger.warn('[usePaymentMethods] Failed to load payment methods:', error.message);
-        return [];
-      }
-
-      interface PaymentMethodRow {
-        id: string;
-        type?: string;
-        is_default?: boolean;
-        card_brand?: string;
-        card_last4?: string;
-        card_exp_month?: number;
-        card_exp_year?: number;
-        billing_name?: string | null;
-        billing_email?: string | null;
-        billing_city?: string | null;
-        billing_country?: string | null;
-        billing_line1?: string | null;
-        billing_line2?: string | null;
-        billing_postal_code?: string | null;
-        billing_state?: string | null;
-        created_at: string;
-      }
-      return ((data || []) as PaymentMethodRow[]).map((pm) => ({
-        id: pm.id,
-        type: (pm.type || 'card') as PaymentMethod['type'],
-        isDefault: pm.is_default || false,
-        card: pm.card_brand
-          ? {
-              brand: pm.card_brand,
-              last4: pm.card_last4 || '****',
-              expMonth: pm.card_exp_month || 1,
-              expYear: pm.card_exp_year || 2030,
-            }
-          : undefined,
-        billingDetails: {
-          name: pm.billing_name ?? null,
-          email: pm.billing_email ?? null,
-          address: {
-            city: pm.billing_city ?? null,
-            country: pm.billing_country ?? null,
-            line1: pm.billing_line1 ?? null,
-            line2: pm.billing_line2 ?? null,
-            postalCode: pm.billing_postal_code ?? null,
-            state: pm.billing_state ?? null,
-          },
-        },
-        createdAt: pm.created_at,
-      }));
+      return [];
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -1039,6 +750,12 @@ export function useTokenUsageHistory(
 ): UseQueryResult<TokenUsageHistoryRecord[], Error> {
   const { user } = useAuthStore();
   const { limit = 50, offset = 0, provider, startDate, endDate } = options || {};
+  // Query key includes filter params so React Query re-fetches when filters change.
+  void limit;
+  void offset;
+  void provider;
+  void startDate;
+  void endDate;
 
   return useQuery<TokenUsageHistoryRecord[], Error>({
     queryKey: [
@@ -1052,64 +769,10 @@ export function useTokenUsageHistory(
         endDate: endDate?.toISOString(),
       },
     ],
+    // TODO: Add /api/usage/history endpoint for paginated token usage history.
     queryFn: async (): Promise<TokenUsageHistoryRecord[]> => {
       if (!user?.id) return [];
-
-      let query = supabase
-        .from('token_usage' as never)
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
-
-      if (provider) {
-        query = query.eq('provider', provider);
-      }
-
-      if (startDate) {
-        query = query.gte('created_at', startDate.toISOString());
-      }
-
-      if (endDate) {
-        query = query.lte('created_at', endDate.toISOString());
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        if (error.code === '42P01' || error.message?.includes('does not exist')) {
-          logger.warn('[useTokenUsageHistory] Token usage table does not exist');
-          return [];
-        }
-        throw error;
-      }
-
-      interface UsageHistoryRow {
-        id: string;
-        user_id: string;
-        session_id?: string | null;
-        provider: string;
-        model?: string;
-        input_tokens?: number;
-        output_tokens?: number;
-        total_tokens?: number;
-        total_cost?: number;
-        created_at: string;
-        metadata?: Record<string, unknown>;
-      }
-      return ((data || []) as UsageHistoryRow[]).map((record) => ({
-        id: record.id,
-        userId: record.user_id,
-        sessionId: record.session_id ?? null,
-        provider: record.provider,
-        model: record.model || 'unknown',
-        inputTokens: record.input_tokens || 0,
-        outputTokens: record.output_tokens || 0,
-        totalTokens: record.total_tokens || 0,
-        cost: record.total_cost || 0,
-        createdAt: record.created_at,
-        metadata: record.metadata || {},
-      }));
+      return [];
     },
     enabled: !!user?.id,
     staleTime: 2 * 60 * 1000, // 2 minutes
@@ -1189,136 +852,10 @@ export function useBillingAnalytics(
 
   return useQuery<BillingAnalyticsData | null, Error>({
     queryKey: [...queryKeys.billing.analytics(user?.id ?? '', timeRange), 'enhanced'],
+    // TODO: Add /api/usage/analytics endpoint for enhanced billing analytics.
     queryFn: async (): Promise<BillingAnalyticsData | null> => {
       if (!user?.id) return null;
-
-      const now = new Date();
-      const daysMap: Record<AnalyticsTimeRange, number> = {
-        '7d': 7,
-        '30d': 30,
-        '90d': 90,
-        all: 365,
-      };
-      const days = daysMap[timeRange];
-      const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-      const previousStartDate = new Date(startDate.getTime() - days * 24 * 60 * 60 * 1000);
-
-      // Fetch token usage data
-      const { data: usageData, error: usageError } = await supabase
-        .from('token_usage' as never)
-        .select('*')
-        .eq('user_id', user.id)
-        .gte('created_at', previousStartDate.toISOString())
-        .order('created_at', { ascending: true });
-
-      if (usageError) {
-        if (usageError.code === '42P01' || usageError.message?.includes('does not exist')) {
-          logger.warn('[useBillingAnalytics] Token usage table does not exist');
-          return null;
-        }
-        throw usageError;
-      }
-
-      interface UsageRecord {
-        created_at: string;
-        total_cost?: number;
-        total_tokens?: number;
-        provider?: string;
-        [key: string]: unknown;
-      }
-      const records = (usageData || []) as UsageRecord[];
-      const currentRecords = records.filter((r) => new Date(r.created_at) >= startDate);
-      const previousRecords = records.filter(
-        (r) => new Date(r.created_at) >= previousStartDate && new Date(r.created_at) < startDate,
-      );
-
-      // Calculate overview
-      const totalSpent = currentRecords.reduce((sum: number, r) => sum + (r.total_cost || 0), 0);
-      const totalTokensUsed = currentRecords.reduce(
-        (sum: number, r) => sum + (r.total_tokens || 0),
-        0,
-      );
-      const avgCostPerDay = totalSpent / days;
-      const avgTokensPerDay = totalTokensUsed / days;
-      const projectedMonthlySpend = avgCostPerDay * 30;
-
-      // Calculate trends
-      const trendsMap = new Map<string, { tokens: number; cost: number; sessions: number }>();
-      currentRecords.forEach((r) => {
-        const date = r.created_at.split('T')[0];
-        const existing = trendsMap.get(date!) || { tokens: 0, cost: 0, sessions: 0 };
-        trendsMap.set(date!, {
-          tokens: existing.tokens + (r.total_tokens || 0),
-          cost: existing.cost + (r.total_cost || 0),
-          sessions: existing.sessions + 1,
-        });
-      });
-      const trends = Array.from(trendsMap.entries()).map(([date, data]) => ({
-        date,
-        ...data,
-      }));
-
-      // Calculate provider breakdown
-      const providerMap = new Map<string, { tokens: number; cost: number; sessions: number }>();
-      currentRecords.forEach((r) => {
-        const provider = r.provider || 'unknown';
-        const existing = providerMap.get(provider) || { tokens: 0, cost: 0, sessions: 0 };
-        providerMap.set(provider, {
-          tokens: existing.tokens + (r.total_tokens || 0),
-          cost: existing.cost + (r.total_cost || 0),
-          sessions: existing.sessions + 1,
-        });
-      });
-      const providerBreakdown = Array.from(providerMap.entries()).map(([provider, data]) => ({
-        provider,
-        ...data,
-        percentage: totalTokensUsed > 0 ? (data.tokens / totalTokensUsed) * 100 : 0,
-      }));
-
-      // Period comparison
-      const currentPeriod = {
-        tokens: totalTokensUsed,
-        cost: totalSpent,
-        sessions: currentRecords.length,
-      };
-      const previousPeriod = {
-        tokens: previousRecords.reduce((sum: number, r) => sum + (r.total_tokens || 0), 0),
-        cost: previousRecords.reduce((sum: number, r) => sum + (r.total_cost || 0), 0),
-        sessions: previousRecords.length,
-      };
-      const percentChange = {
-        tokens:
-          previousPeriod.tokens > 0
-            ? ((currentPeriod.tokens - previousPeriod.tokens) / previousPeriod.tokens) * 100
-            : 0,
-        cost:
-          previousPeriod.cost > 0
-            ? ((currentPeriod.cost - previousPeriod.cost) / previousPeriod.cost) * 100
-            : 0,
-        sessions:
-          previousPeriod.sessions > 0
-            ? ((currentPeriod.sessions - previousPeriod.sessions) / previousPeriod.sessions) * 100
-            : 0,
-      };
-
-      return {
-        overview: {
-          totalSpent,
-          totalTokensUsed,
-          avgCostPerDay,
-          avgTokensPerDay,
-          projectedMonthlySpend,
-          savingsFromPlan: 0, // Would need plan limits to calculate
-        },
-        trends,
-        providerBreakdown,
-        topSessions: [], // Would need session join to populate
-        periodComparison: {
-          currentPeriod,
-          previousPeriod,
-          percentChange,
-        },
-      };
+      return null;
     },
     enabled: !!user?.id,
     staleTime: 10 * 60 * 1000, // 10 minutes
@@ -1334,38 +871,60 @@ export function useBillingAnalytics(
 // ============================================================================
 
 /**
- * Cancel subscription mutation
+ * Cancel subscription mutation.
+ *
+ * Redirects the user to the Stripe Customer Portal where they can cancel
+ * their subscription. This replaces a direct API call to a non-existent
+ * /payments/cancel-subscription route; all subscription self-service
+ * (cancel, resume, download invoices) is handled by the portal.
  *
  * @returns UseMutationResult for cancelling subscription
  */
 export function useCancelSubscription(): UseMutationResult<void, Error, { atPeriodEnd?: boolean }> {
-  const queryClient: QueryClient = useQueryClient();
   const { user } = useAuthStore();
 
   return useMutation<void, Error, { atPeriodEnd?: boolean }>({
-    mutationFn: async ({ atPeriodEnd = true }) => {
+    mutationFn: async () => {
       if (!user?.id) {
         throw new Error('You must be logged in');
       }
 
-      await PaymentAPI.cancelSubscription({
-        cancel_at_period_end: atPeriodEnd,
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/portal', {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        body: JSON.stringify({}),
       });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.subscription() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.all() });
-      toast.success('Subscription cancelled successfully');
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to open billing portal');
+      }
+
+      const { url } = (await response.json()) as { url: string };
+      window.location.href = url;
     },
     onError: (error: Error) => {
-      logger.error('Failed to cancel subscription:', error);
-      toast.error(error.message || 'Failed to cancel subscription');
+      logger.error('Failed to open billing portal for cancellation:', error);
+      toast.error(error.message || 'Failed to open billing portal');
     },
   });
 }
 
 /**
- * Update payment method mutation
+ * Update payment method mutation.
+ *
+ * Redirects the user to the Stripe Customer Portal where they can update
+ * their default payment method. This replaces a direct API call to a
+ * non-existent /payments/set-default-payment-method route; all payment
+ * method management is handled by the portal.
  *
  * @returns UseMutationResult for updating payment method
  */
@@ -1374,24 +933,39 @@ export function useUpdatePaymentMethod(): UseMutationResult<
   Error,
   { paymentMethodId: string }
 > {
-  const queryClient: QueryClient = useQueryClient();
   const { user } = useAuthStore();
 
   return useMutation<void, Error, { paymentMethodId: string }>({
-    mutationFn: async ({ paymentMethodId }) => {
+    mutationFn: async () => {
       if (!user?.id) {
         throw new Error('You must be logged in');
       }
 
-      await PaymentAPI.setDefaultPaymentMethod(paymentMethodId);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.billing.paymentMethods() });
-      toast.success('Payment method updated successfully');
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/portal', {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'Failed to open billing portal');
+      }
+
+      const { url } = (await response.json()) as { url: string };
+      window.location.href = url;
     },
     onError: (error: Error) => {
-      logger.error('Failed to update payment method:', error);
-      toast.error(error.message || 'Failed to update payment method');
+      logger.error('Failed to open billing portal for payment method update:', error);
+      toast.error(error.message || 'Failed to open billing portal');
     },
   });
 }

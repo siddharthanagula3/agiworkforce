@@ -27,9 +27,9 @@ use std::sync::Mutex;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
+use crate::sys::commands::master_password::MasterPasswordState;
 use crate::sys::security::machine_key::{self, KeyPurpose};
 use crate::sys::security::master_password_encryption::MasterPasswordEncryption;
-use crate::sys::commands::master_password::MasterPasswordState;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -121,8 +121,8 @@ fn machine_key_encrypt(plaintext: &str) -> Result<String, String> {
     use base64::Engine as _;
 
     let key_bytes = machine_key::derive_key(KeyPurpose::ConnectorPermissions);
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
-        .map_err(|e| format!("machine-key AES init: {e}"))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("machine-key AES init: {e}"))?;
 
     let mut nonce_bytes = [0u8; 12];
     OsRng.fill_bytes(&mut nonce_bytes);
@@ -153,8 +153,8 @@ fn machine_key_decrypt(ciphertext_b64: &str) -> Result<String, String> {
     }
     let (nonce_bytes, ct) = combined.split_at(12);
     let nonce = Nonce::from_slice(nonce_bytes);
-    let cipher = Aes256Gcm::new_from_slice(&key_bytes)
-        .map_err(|e| format!("machine-key AES init: {e}"))?;
+    let cipher =
+        Aes256Gcm::new_from_slice(&key_bytes).map_err(|e| format!("machine-key AES init: {e}"))?;
     let plain = cipher
         .decrypt(nonce, ct)
         .map_err(|e| format!("machine-key decrypt: {e}"))?;
@@ -185,14 +185,11 @@ fn load_file(enc: &MasterPasswordEncryption) -> PermissionsFile {
 fn save_file(data: &PermissionsFile, enc: &MasterPasswordEncryption) -> Result<(), String> {
     let path = permissions_file_path()?;
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|e| format!("create dirs: {e}"))?;
+        std::fs::create_dir_all(parent).map_err(|e| format!("create dirs: {e}"))?;
     }
-    let json = serde_json::to_string(data)
-        .map_err(|e| format!("serialize: {e}"))?;
+    let json = serde_json::to_string(data).map_err(|e| format!("serialize: {e}"))?;
     let ciphertext = encrypt_json(&json, enc)?;
-    std::fs::write(&path, ciphertext)
-        .map_err(|e| format!("write file: {e}"))
+    std::fs::write(&path, ciphertext).map_err(|e| format!("write file: {e}"))
 }
 
 // ── Tauri commands ────────────────────────────────────────────────────────────
@@ -233,9 +230,13 @@ pub async fn connector_permission_set(
     let enc = encryption_from_state(&mp_state);
     let _guard = FILE_LOCK.lock().map_err(|e| format!("file lock: {e}"))?;
     let mut data = load_file(&enc);
-    data.entry(connector_id)
-        .or_default()
-        .insert(tool_name, ToolPermission { level: perm_level, destructive });
+    data.entry(connector_id).or_default().insert(
+        tool_name,
+        ToolPermission {
+            level: perm_level,
+            destructive,
+        },
+    );
     save_file(&data, &enc)
 }
 

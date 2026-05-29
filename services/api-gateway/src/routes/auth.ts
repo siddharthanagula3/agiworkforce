@@ -5,7 +5,7 @@ import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
 import { authenticateToken } from '../middleware/auth';
-import { getServiceClient } from '../lib/supabaseClients';
+import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 const router: Router = Router();
@@ -28,7 +28,7 @@ const authRateLimiter = rateLimit({
 //
 // The legacy handlers targeted a `public.users` table that does not exist
 // in production. The canonical user table is `public.profiles`, password
-// hashing lives in `auth.users` via Supabase Auth, and `password_hash`
+// hashing lives in `auth.users` via Neon Auth, and `password_hash`
 // + `desktop_id` columns don't exist on either — so a column rename
 // would only have masked the bug.
 //

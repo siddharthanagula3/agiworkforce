@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import {
   View,
   Pressable,
@@ -17,8 +17,6 @@ import { DrawerActions } from '@react-navigation/native';
 import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { formatPrivacyModeLabel } from '@agiworkforce/types';
-import type { LocalToByokHandoffPreview } from '@agiworkforce/utils/privacy-handoff';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
@@ -26,7 +24,6 @@ import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
-import { ThinkingBottomSheet } from '@/src/features/chat/components/ThinkingBottomSheet';
 import { PaywallBottomSheet } from '@/src/features/chat/components/PaywallBottomSheet';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
@@ -72,8 +69,6 @@ export default function ChatScreen() {
     ) => void;
   } | null>(null);
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
-  const [thinkingSheetIndex, setThinkingSheetIndex] = useState(-1);
-  const [thinkingContent, setThinkingContent] = useState('');
   const [modeSwitchState, setModeSwitchState] = useState<{
     visible: boolean;
     fromMode: AppMode;
@@ -84,21 +79,10 @@ export default function ChatScreen() {
   const { isOnline, queueSize } = useNetworkStatus();
 
   const conversationMessages = useChatStore((s) => (id ? (s.messages[id] ?? []) : []));
-  const handoffContextItems = useMemo(
-    () =>
-      conversationMessages.slice(-20).map((message, index) => ({
-        id: message.id,
-        kind: 'message' as const,
-        label: `${message.role} message ${index + 1}`,
-        content: message.content,
-      })),
-    [conversationMessages],
-  );
   const isStreaming = useChatStore((s) => s.isStreaming);
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
   const loadMessages = useChatStore((s) => s.loadMessages);
-  const forkConversation = useChatStore((s) => s.forkConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
@@ -258,6 +242,12 @@ export default function ChatScreen() {
       const currentMode = resolveAppMode(selectedModel);
       const nextMode = resolveAppMode(newModelId);
 
+      if (nextMode === 'cloud' && !FEATURES.cloudChat) {
+        modelPickerRef.current?.close();
+        setWaitlistSheetVisible(true);
+        return;
+      }
+
       if (currentMode !== nextMode) {
         modelPickerRef.current?.close();
         setModeSwitchState({
@@ -275,47 +265,19 @@ export default function ChatScreen() {
     [conversationMessages.length, selectedModel, resolveAppMode],
   );
 
-  const handleModeSwitchConfirm = useCallback(
-    async (preview?: LocalToByokHandoffPreview | null) => {
-      const nextModelId = modeSwitchState.pendingModelId;
-      if (!nextModelId) return;
+  const handleModeSwitchConfirm = useCallback(async () => {
+    const nextModelId = modeSwitchState.pendingModelId;
+    if (!nextModelId) return;
 
-      if (modeSwitchState.fromMode === 'local' && modeSwitchState.toMode === 'cloud' && id) {
-        if (!preview) {
-          Alert.alert('Preview required', 'Review the redacted handoff preview before switching.');
-          return;
-        }
-
-        try {
-          const forkId = await forkConversation(id, {
-            title: `${title} (${formatPrivacyModeLabel('byok')} fork)`,
-            model: nextModelId,
-            handoffPreview: preview,
-            handoffAcceptedAt: new Date().toISOString(),
-          });
-          useModelStore.getState().setModel(nextModelId);
-          setModeSwitchState((s) => ({ ...s, visible: false }));
-          router.replace({ pathname: '/(app)/chat/[id]' as const, params: { id: forkId } });
-          return;
-        } catch {
-          Alert.alert('Could not create fork', 'Try again before switching this conversation.');
-          return;
-        }
-      }
-
-      useModelStore.getState().setModel(nextModelId);
+    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat) {
       setModeSwitchState((s) => ({ ...s, visible: false }));
-    },
-    [
-      forkConversation,
-      id,
-      modeSwitchState.fromMode,
-      modeSwitchState.pendingModelId,
-      modeSwitchState.toMode,
-      router,
-      title,
-    ],
-  );
+      setWaitlistSheetVisible(true);
+      return;
+    }
+
+    useModelStore.getState().setModel(nextModelId);
+    setModeSwitchState((s) => ({ ...s, visible: false }));
+  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchState((s) => ({ ...s, visible: false }));
@@ -462,15 +424,6 @@ export default function ChatScreen() {
     await loadMessages(id);
     setRefreshing(false);
   }, [id, loadMessages]);
-
-  const handleOpenThinking = useCallback((content: string) => {
-    setThinkingContent(content);
-    setThinkingSheetIndex(0);
-  }, []);
-
-  const handleCloseThinking = useCallback(() => {
-    setThinkingSheetIndex(-1);
-  }, []);
 
   const handleOpenVoiceMode = useCallback(() => {
     setVoiceModeVisible(true);
@@ -760,7 +713,6 @@ export default function ChatScreen() {
             onRefresh={handleRefresh}
             refreshing={refreshing}
             onQuoteReply={handleQuoteReply}
-            onOpenThinking={handleOpenThinking}
           />
         )}
 
@@ -811,13 +763,6 @@ export default function ChatScreen() {
           title={title}
         />
 
-        {/* Shared thinking bottom sheet — one instance for all messages */}
-        <ThinkingBottomSheet
-          thinkingText={thinkingContent}
-          sheetIndex={thinkingSheetIndex}
-          onClose={handleCloseThinking}
-        />
-
         {/* Paywall bottom sheet — shown when the API returns a tier-cap 429. */}
         <PaywallBottomSheet
           ref={paywallSheetRef}
@@ -840,8 +785,6 @@ export default function ChatScreen() {
           visible={modeSwitchState.visible}
           fromMode={modeSwitchState.fromMode}
           toMode={modeSwitchState.toMode}
-          sourceSessionId={id}
-          contextItems={handoffContextItems}
           onConfirm={handleModeSwitchConfirm}
           onCancel={handleModeSwitchCancel}
         />

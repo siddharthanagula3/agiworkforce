@@ -192,7 +192,7 @@ fn append_repl_shortcuts(help: &mut String) {
     );
     let _ = writeln!(
         help,
-        "  {:<22} Append text to project CLAUDE.md",
+        "  {:<22} Append text to project AGENTS.md",
         "# <text>"
     );
     let _ = writeln!(help, "  {:<22} Multi-line input", "\\");

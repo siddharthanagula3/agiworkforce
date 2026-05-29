@@ -535,7 +535,7 @@ impl CodeExecutor {
                 "execution_time_ms": exec_result.execution_time_ms,
                 "timed_out": exec_result.timed_out,
                 "working_directory": exec_result.working_directory,
-                "code_preview": &code[..code.len().min(100)]
+                "code_preview": &code[..crate::core::agi::floor_char_boundary(code, 100)]
             }))
         } else {
             Ok(json!({
@@ -784,7 +784,10 @@ impl CodeExecutor {
 
         // Limit code length for LLM analysis
         let code_preview = if code.len() > 4000 {
-            format!("{}... [truncated]", &code[..4000])
+            format!(
+                "{}... [truncated]",
+                &code[..crate::core::agi::floor_char_boundary(code, 4000)]
+            )
         } else {
             code.to_string()
         };
@@ -799,9 +802,11 @@ impl CodeExecutor {
             language, analysis_type, language, code_preview
         );
 
-        let fast_model =
-            crate::core::llm::models_config::get_task_model(&crate::core::llm::Provider::Anthropic, "fast_completion")
-                .to_string();
+        let fast_model = crate::core::llm::models_config::get_task_model(
+            &crate::core::llm::Provider::Anthropic,
+            "fast_completion",
+        )
+        .to_string();
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
             model: Some(fast_model.clone()),

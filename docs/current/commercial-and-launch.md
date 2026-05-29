@@ -10,14 +10,15 @@ AGI should not burn founder money on unmanaged cloud usage. Local and BYOK can l
 
 ## Launch Posture
 
-| Area               | Current posture                                                                    |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| Local              | Core differentiation. Free to use where technically available.                     |
-| BYOK               | Explicit provider trust boundary. User pays provider directly.                     |
-| Managed cloud      | Waitlist/private beta only.                                                        |
-| Mobile v1          | Local + explicit BYOK. Managed credits waitlisted/private beta.                    |
-| Web/Desktop        | Can support synced app chats and account flows, but managed compute remains gated. |
-| CLI/VS Code/Chrome | Developer/workspace scoped; no silent global chat sync.                            |
+| Area               | Current posture                                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| Local              | Core differentiation. Free to use where technically available.                                                |
+| BYOK               | Explicit provider trust boundary. User pays provider directly.                                                |
+| Managed cloud      | Waitlist/private beta only.                                                                                   |
+| Mobile v1          | Small on-device Local LLMs + Cloud invite/waitlist. No Mobile BYOK in v1.                                     |
+| Web                | Subscription-backed account/chat state through Neon. No Web BYOK. Cloud is invite/waitlist only.              |
+| Desktop            | Local and BYOK-local store locally. Desktop Cloud requires invite/subscription and Neon-backed account state. |
+| CLI/VS Code/Chrome | Developer/workspace scoped; no silent global chat sync.                                                       |
 
 ## Managed Credit Requirements
 

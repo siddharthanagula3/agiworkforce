@@ -13,14 +13,10 @@
  * - Billing-period budget tracking
  */
 
-import { supabase } from '@shared/lib/supabase-client';
 import { logger } from '@shared/lib/logger';
 import { getModelMetadataById, getProviderConfig, normalizeModelId } from '@agiworkforce/types';
-
-// RPC/tables not yet in generated Database type
-
-const db = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
 import { captureError } from '@shared/lib/sentry';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 export interface TokenCheckResult {
   allowed: boolean;
@@ -70,34 +66,6 @@ function normalizeProviderId(provider: string): string {
   return normalized;
 }
 
-function extractCreditsRemainingCents(value: unknown): {
-  remaining: number;
-  allocated?: number;
-  periodEnd?: Date | null;
-} {
-  if (typeof value === 'number') {
-    return { remaining: Math.max(value, 0) };
-  }
-
-  if (value && typeof value === 'object') {
-    const row = value as {
-      credits_remaining_cents?: number;
-      credits_allocated_cents?: number;
-      period_end?: string | null;
-    };
-    return {
-      remaining: Math.max(Number(row.credits_remaining_cents ?? 0), 0),
-      allocated:
-        row.credits_allocated_cents !== undefined
-          ? Math.max(Number(row.credits_allocated_cents), 0)
-          : undefined,
-      periodEnd: row.period_end ? new Date(row.period_end) : null,
-    };
-  }
-
-  return { remaining: 0 };
-}
-
 export function estimateUsageCostCents({
   provider,
   model,
@@ -124,49 +92,24 @@ export function estimateUsageCostCents({
 
 async function getUserUsageBudgetSnapshot(userId: string): Promise<UsageBudgetSnapshot | null> {
   try {
-    const { data: rpcData, error: rpcError } = await db.rpc('get_credit_balance', {
-      p_user_id: userId,
+    const token = await getAuthToken();
+    if (!token) return null;
+
+    const res = await fetch('/api/usage', {
+      headers: { Authorization: `Bearer ${token}` },
     });
-
-    if (!rpcError && rpcData !== null && rpcData !== undefined) {
-      const balanceRow = Array.isArray(rpcData) ? rpcData[0] : rpcData;
-      const extracted = extractCreditsRemainingCents(balanceRow);
-      return {
-        remaining: extracted.remaining,
-        allocated: extracted.allocated ?? 0,
-        periodEnd: extracted.periodEnd ?? null,
-      };
-    }
-
-    if (rpcError) {
-      logger.warn('[Usage Budget] get_credit_balance RPC failed, falling back:', rpcError.message);
-    }
-
-    const { data: creditsData, error: creditsError } = await db
-      .from('token_credits')
-      .select('credits_remaining_cents, credits_allocated_cents, period_end')
-      .eq('user_id', userId)
-      .gt('period_end', new Date().toISOString())
-      .order('period_end', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (creditsError) {
-      logger.error('[Usage Budget] Error fetching credit balance:', creditsError.message);
+    if (!res.ok) {
+      logger.warn('[Usage Budget] /api/usage returned', res.status);
       return null;
     }
 
-    if (!creditsData) {
-      logger.warn('[Usage Budget] No active credit account found for user:', userId);
-      return null;
-    }
-
-    const extracted = extractCreditsRemainingCents(creditsData);
-    return {
-      remaining: extracted.remaining,
-      allocated: extracted.allocated ?? 0,
-      periodEnd: extracted.periodEnd ?? null,
-    };
+    const body = (await res.json()) as Record<string, unknown>;
+    const remaining =
+      typeof body['credits_remaining_cents'] === 'number' ? body['credits_remaining_cents'] : 0;
+    const allocated =
+      typeof body['credits_allocated_cents'] === 'number' ? body['credits_allocated_cents'] : 0;
+    const periodEnd = typeof body['period_end'] === 'string' ? new Date(body['period_end']) : null;
+    return { remaining, allocated, periodEnd };
   } catch (error) {
     logger.error('[Usage Budget] Error loading balance snapshot:', error);
     captureError(error as Error, {
@@ -245,44 +188,50 @@ export async function deductTokens(
       outputTokens: metadata.outputTokens,
     });
 
-    const { data, error: creditError } = await db.rpc('deduct_credits', {
-      p_user_id: userId,
-      p_amount_cents: usageCostCents,
-      p_description: `${provider}/${model} usage`,
-      p_metadata: {
-        provider,
-        model,
-        usage_cost_cents: usageCostCents,
-        input_tokens: metadata.inputTokens,
-        output_tokens: metadata.outputTokens,
-        total_tokens: metadata.totalTokens,
-        session_id: metadata.sessionId ?? null,
-        feature: metadata.feature ?? 'chat',
-      },
-      p_idempotency_key: `${userId}:${metadata.sessionId ?? 'sessionless'}:${provider}:${model}:${metadata.inputTokens}:${metadata.outputTokens}`,
+    // Route credit deduction through server-side API (Neon SQL removed; Neon is server-only).
+    const token = await getAuthToken();
+    if (!token) {
+      return { success: false, newBalance: 0, error: 'Not authenticated' };
+    }
+
+    const res = await fetch('/api/usage/deduct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        amount_cents: usageCostCents,
+        description: `${provider}/${model} usage`,
+        metadata: {
+          provider,
+          model,
+          usage_cost_cents: usageCostCents,
+          input_tokens: metadata.inputTokens,
+          output_tokens: metadata.outputTokens,
+          total_tokens: metadata.totalTokens,
+          session_id: metadata.sessionId ?? null,
+          feature: metadata.feature ?? 'chat',
+        },
+        idempotency_key: `${userId}:${metadata.sessionId ?? 'sessionless'}:${provider}:${model}:${metadata.inputTokens}:${metadata.outputTokens}`,
+      }),
     });
 
-    if (!creditError) {
-      const deductionRow = Array.isArray(data) ? data[0] : data;
+    if (res.ok) {
+      const body = (await res.json()) as { remaining_cents?: number };
       const newBalance =
-        typeof deductionRow?.remaining_cents === 'number'
-          ? Math.max(deductionRow.remaining_cents, 0)
+        typeof body.remaining_cents === 'number'
+          ? Math.max(body.remaining_cents, 0)
           : ((await getUserTokenBalance(userId)) ?? 0);
       logger.info(
         `[Usage Budget] Deducted ${usageCostCents} credits from user ${userId}. New balance: ${newBalance}`,
       );
-
-      return {
-        success: true,
-        newBalance,
-      };
+      return { success: true, newBalance };
     }
 
-    logger.error('[Usage Budget] Error deducting credits:', creditError);
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    logger.error('[Usage Budget] Error deducting credits:', errBody);
     return {
       success: false,
       newBalance: 0,
-      error: `Credit deduction failed: ${creditError.message}`,
+      error: `Credit deduction failed: ${errBody.error ?? res.statusText}`,
     };
   } catch (error) {
     logger.error('[Usage Budget] Error:', error);

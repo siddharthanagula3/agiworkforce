@@ -28,10 +28,7 @@ static INJECTION_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         r"(?i)</?instructions?>",
         r"(?i)</?prompt>",
     ];
-    patterns
-        .iter()
-        .filter_map(|p| Regex::new(p).ok())
-        .collect()
+    patterns.iter().filter_map(|p| Regex::new(p).ok()).collect()
 });
 
 /// RT-03 fix: Sanitise a raw MCP tool description before it is inserted into
@@ -83,9 +80,7 @@ fn sanitize_mcp_description(raw: &str, server_name: &str) -> String {
         .replace('"', "&quot;")
         .replace('<', "&lt;")
         .replace('>', "&gt;");
-    format!(
-        r#"<mcp_tool_description server="{escaped_server}">{sanitised}</mcp_tool_description>"#
-    )
+    format!(r#"<mcp_tool_description server="{escaped_server}">{sanitised}</mcp_tool_description>"#)
 }
 
 /// Delimiter used to separate components in tool IDs.

@@ -166,7 +166,7 @@ const BillingPage: React.FC = () => {
   }, [searchParams, user, invalidateBillingQueries]);
 
   const handleUpgrade = async (
-    plan: 'hobby' | 'pro' | 'pro_plus' | 'max' | 'enterprise',
+    plan: 'hobby' | 'pro' | 'max' | 'enterprise',
     period: 'monthly' | 'yearly' = 'monthly',
   ) => {
     if (!user) {
@@ -352,14 +352,7 @@ const BillingPage: React.FC = () => {
                 <Button
                   onClick={() => {
                     const current = normalizePlan(billing?.plan);
-                    const next =
-                      current === 'free'
-                        ? 'hobby'
-                        : current === 'hobby'
-                          ? 'pro'
-                          : current === 'pro'
-                            ? 'pro_plus'
-                            : 'max';
+                    const next = current === 'free' ? 'hobby' : current === 'hobby' ? 'pro' : 'max';
                     handleUpgrade(next);
                   }}
                   size="sm"

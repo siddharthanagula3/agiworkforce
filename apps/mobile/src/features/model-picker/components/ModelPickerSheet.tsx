@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, TextInput, Pressable } from 'react-native';
+import { View, TextInput, Pressable, Switch } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { Search, X as XIcon } from 'lucide-react-native';
+import { Brain, Search, X as XIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { AutoModeCards } from './AutoModeCard';
 import { ModelRow } from './ModelRow';
@@ -69,7 +69,9 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const favorites = useModelStore((s) => s.favorites);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
+  const thinkingModeEnabled = useModelStore((s) => s.thinkingModeEnabled);
   const setModel = useModelStore((s) => s.setModel);
+  const setThinkingMode = useModelStore((s) => s.setThinkingMode);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
   const installJobs = useModelInstallStore((s) => s.jobs);
@@ -179,6 +181,10 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
     },
     [toggleThinkingForModel],
   );
+
+  const handleToggleExtendedThinking = useCallback(() => {
+    setThinkingMode(!thinkingModeEnabled);
+  }, [setThinkingMode, thinkingModeEnabled]);
 
   const clearSearch = useCallback(() => {
     setSearch('');
@@ -346,6 +352,55 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
               {models.map((model) => renderModelRow(model, `grp-${sectionId}`))}
             </View>
           ))
+        )}
+
+        {/* Extended thinking toggle — shown when not searching */}
+        {!query && (
+          <>
+            <View className="mx-4 mt-3 mb-1 border-b border-white/8" />
+            <Pressable
+              onPress={handleToggleExtendedThinking}
+              className="flex-row items-center px-4 py-3 gap-3 active:bg-white/5"
+              accessibilityLabel="Extended thinking"
+              accessibilityRole="switch"
+              accessibilityState={{ checked: thinkingModeEnabled }}
+              accessibilityHint="Think longer for complex tasks"
+            >
+              <View
+                className="w-6 h-6 rounded-md items-center justify-center"
+                style={{
+                  backgroundColor: thinkingModeEnabled ? colors.surfaceHover : colors.borderLight,
+                }}
+              >
+                <Brain
+                  size={16}
+                  color={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
+                />
+              </View>
+
+              <View className="flex-1">
+                <Text
+                  className={`text-sm font-medium ${
+                    thinkingModeEnabled ? 'text-purple-400' : 'text-white'
+                  }`}
+                >
+                  Extended thinking
+                </Text>
+                <Text className="text-[11px] text-white/40 mt-0.5">
+                  Think longer for complex tasks
+                </Text>
+              </View>
+
+              <Switch
+                value={thinkingModeEnabled}
+                onValueChange={handleToggleExtendedThinking}
+                trackColor={{ false: colors.border, true: colors.surfaceHover }}
+                thumbColor={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
+                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                accessibilityLabel="Enable extended thinking"
+              />
+            </Pressable>
+          </>
         )}
 
         {/* Empty state */}

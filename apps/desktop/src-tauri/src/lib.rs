@@ -146,9 +146,6 @@ pub fn run() {
         }
     }
 
-    // Seed Supabase credentials from env vars (no-op in production; frontend overwrites via set_supabase_credentials).
-    crate::sys::account::init_supabase_from_env();
-
     let _telemetry_guard = match telemetry::init() {
         Ok(guard) => Some(guard),
         Err(e) => {
@@ -1188,7 +1185,7 @@ pub fn run() {
             crate::sys::commands::window_close_floating,
             crate::sys::commands::tray_set_unread_badge,
 
-            // Cloud CRUD commands (Supabase REST API)
+            // Cloud CRUD commands (explicit cloud boundary; fails closed when unavailable)
             crate::sys::commands::cloud_get_conversations,
             crate::sys::commands::cloud_create_conversation,
             crate::sys::commands::cloud_delete_conversation,
@@ -1543,7 +1540,6 @@ pub fn run() {
             crate::sys::account::oauth_refresh,
             crate::sys::account::fetch_credit_balance,
             crate::sys::account::report_llm_usage,
-            crate::sys::account::set_supabase_credentials,
             crate::sys::account::account_store_api_base_url,
             crate::sys::account::account_store_access_token,
             crate::sys::account::account_store_refresh_token,
@@ -2181,9 +2177,6 @@ pub fn run() {
             crate::sys::commands::master_password::master_password_start_migration,
             crate::sys::commands::master_password::master_password_complete_migration,
             crate::sys::commands::master_password::master_password_migrate_credentials,
-            crate::sys::commands::supabase_token::supabase_token_set,
-            crate::sys::commands::supabase_token::supabase_token_get,
-            crate::sys::commands::supabase_token::supabase_token_remove,
             crate::sys::commands::daily_budget::budget_get_status,
             crate::sys::commands::daily_budget::budget_set_cap_usd,
             crate::sys::commands::daily_budget::budget_record_actual,

@@ -14,13 +14,11 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { queryKeys } from '@shared/stores/query-client';
-import { supabase } from '@shared/lib/supabase-client';
 import { chatPersistenceService } from '../services/conversation-storage';
 import type { ChatSession, ChatMessage } from '../types';
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { secureToken } from '@/lib/secure-random';
-import type { User } from '@supabase/supabase-js';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -116,11 +114,16 @@ interface DuplicateSessionResult {
 /**
  * Hook to get current authenticated user
  */
-async function getCurrentUser(): Promise<User | null> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
+async function getCurrentUser(): Promise<{ id: string } | null> {
+  try {
+    const clerk = (window as unknown as Record<string, unknown>)['Clerk'] as
+      | { user?: { id: string } | null }
+      | undefined;
+    if (clerk?.user?.id) return { id: clerk.user.id };
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -137,7 +140,7 @@ export function useChatSessions(userId: string | undefined): UseQueryResult<Chat
       if (!userId) return [];
 
       // getUserSessions now returns sessions with message counts included
-      // via Supabase nested select (single query, no N+1 pattern)
+      // via Neon nested select (single query, no N+1 pattern)
       const sessions = await chatPersistenceService.getUserSessions(userId);
 
       // Sort by updatedAt (most recent first)

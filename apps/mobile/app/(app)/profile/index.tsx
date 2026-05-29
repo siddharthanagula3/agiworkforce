@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -23,7 +23,6 @@ import { fetchPortalSessionUrl, UpsellCard } from '@/src/features/billing';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentStore } from '@/stores/agentStore';
-import { api } from '@/services/api';
 import { isAllowedExternalUrl, openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { normalizeBillingPlanTier } from '@agiworkforce/types';
@@ -47,73 +46,17 @@ export default function ProfileScreen() {
   const conversations = useChatStore((s) => s.conversations);
   const agents = useAgentStore((s) => s.agents);
 
-  const [stats, setStats] = useState<UsageStats>({
+  // v1 local-only: derive all stats from local store data. No API call needed.
+  // totalMessages sums per-conversation messageCount from ConversationSummary.
+  // subscriptionPlan / subscriptionStatus remain null until cloud is wired up.
+  const totalMessages = conversations.reduce((sum, c) => sum + (c.messageCount ?? 0), 0);
+  const stats: UsageStats = {
     totalConversations: conversations.length,
-    totalMessages: 0,
+    totalMessages,
     totalAgentRuns: agents.length,
     subscriptionPlan: null,
     subscriptionStatus: null,
-  });
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-
-  // Attempt to load usage stats from the API.
-  // Audit fix F8 (2026-05-05): /api/user/stats does not exist in apps/web.
-  // Gate behind EXPO_PUBLIC_FEATURE_USER_STATS (default false) until the
-  // endpoint is implemented. When the flag is off we use local-only data.
-  // TODO: implement GET /api/user/stats in apps/web returning
-  //   { conversationCount, messageCount, agentRunCount, plan, status }
-  const userStatsEnabled = process.env.EXPO_PUBLIC_FEATURE_USER_STATS === '1';
-  // Audit fix F2 (2026-05-05): deps changed from [conversations.length,
-  // agents.length] to [] — stats are best-effort informational; re-fetching
-  // on every conversation/agent change hammers the server unnecessarily.
-  useEffect(() => {
-    let cancelled = false;
-    async function loadStats() {
-      if (!userStatsEnabled) {
-        setStats((prev) => ({
-          ...prev,
-          totalConversations: conversations.length,
-          totalAgentRuns: agents.length,
-        }));
-        return;
-      }
-      setIsLoadingStats(true);
-      try {
-        const data = await api.get<{
-          conversationCount?: number;
-          messageCount?: number;
-          agentRunCount?: number;
-          plan?: string;
-          status?: string;
-        }>('/api/user/stats');
-
-        if (cancelled) return;
-        setStats({
-          totalConversations: data.conversationCount ?? conversations.length,
-          totalMessages: data.messageCount ?? 0,
-          totalAgentRuns: data.agentRunCount ?? agents.length,
-          subscriptionPlan: data.plan ?? null,
-          subscriptionStatus: data.status ?? null,
-        });
-      } catch {
-        // Use local data as fallback
-        if (cancelled) return;
-        setStats((prev) => ({
-          ...prev,
-          totalConversations: conversations.length,
-          totalAgentRuns: agents.length,
-        }));
-      } finally {
-        if (!cancelled) setIsLoadingStats(false);
-      }
-    }
-    loadStats();
-    return () => {
-      cancelled = true;
-    };
-    // Mount-only: stats are best-effort informational (audit fix F2).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();

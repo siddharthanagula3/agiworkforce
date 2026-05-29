@@ -32,6 +32,8 @@ export interface ModelDef {
   availability: ModelAvailability;
   runtimeLabel: string;
   detailLabel: string;
+  /** Short marketing description shown in the model picker below the name. */
+  description?: string;
   lockReason?: string;
   fileSizeBytes?: number;
   license?: string;
@@ -54,7 +56,47 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-const CLOUD_LOCK_REASON = 'Cloud Managed and BYOK are disabled in Mobile v1';
+const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only. Mobile BYOK is not available.';
+
+/**
+ * Static model descriptions shown as a subtitle in the picker.
+ * Keyed by model id (exact) — purely marketing copy, never used for routing.
+ * models.json does not carry per-model description strings today,
+ * so we maintain them here as a static lookup.
+ *
+ * The string keys below are display/marketing identifiers, not routing literals.
+ * eslint-disable-next-line is intentional: these are picker labels, not model
+ * resolution calls.
+ */
+
+const MODEL_DESCRIPTIONS: Record<string, string> = {
+  // Local / on-device
+
+  'qwen3-4b-instruct-2507': 'Efficient on-device model for everyday tasks',
+
+  'llama-3.2-1b-instruct-spinquant': 'Lightweight model for quick responses',
+  // Apple on-device
+
+  'apple-afm-on-device': 'Built-in Apple Intelligence model',
+  // Cloud providers (shown as locked in v1 — informational only)
+  // Anthropic
+  // eslint-disable-next-line no-restricted-syntax
+  'claude-opus-4.6': 'Most capable for ambitious work',
+  // eslint-disable-next-line no-restricted-syntax
+  'claude-sonnet-4.6': 'Most efficient for everyday tasks',
+  // eslint-disable-next-line no-restricted-syntax
+  'claude-haiku-4.5': 'Fastest for quick answers',
+  // OpenAI
+  // eslint-disable-next-line no-restricted-syntax
+  'gpt-5.5': 'Most capable OpenAI model',
+  // eslint-disable-next-line no-restricted-syntax
+  'gpt-5.4-mini': 'Fast and affordable responses',
+  // Google
+  // eslint-disable-next-line no-restricted-syntax
+  'gemini-3.1-pro-preview': "Google's most capable model",
+  // eslint-disable-next-line no-restricted-syntax
+  'gemini-3.1-flash-lite': 'Fast and efficient Google model',
+};
 
 const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
   id: 'qwen3-4b-instruct-2507',
@@ -214,6 +256,7 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
     availability: model.fileSizeBytes === 0 ? 'ready' : 'download_required',
     runtimeLabel: runtimeLabel(model),
     detailLabel: detailForLocalModel(model),
+    description: MODEL_DESCRIPTIONS[model.id],
     fileSizeBytes: model.fileSizeBytes,
     license: model.license,
   };
@@ -233,7 +276,8 @@ function toLockedCloudModelDef(model: CloudModelDef): ModelDef {
     surface: 'cloud_managed',
     availability: 'locked',
     runtimeLabel: 'Cloud Managed',
-    detailLabel: 'Cloud Managed - BYOK disabled',
+    detailLabel: 'Cloud Managed - invite required',
+    description: MODEL_DESCRIPTIONS[model.id],
     lockReason: CLOUD_LOCK_REASON,
   };
 }

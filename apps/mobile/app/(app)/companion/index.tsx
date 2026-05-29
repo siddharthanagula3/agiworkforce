@@ -33,7 +33,7 @@ import {
 } from '@/services/companion';
 import { setupCompanionNotifications } from '@/services/companionNotifications';
 import { startMobileHeartbeat, logApprovalDecision } from '@/services/heartbeat';
-import { supabase } from '@/services/supabase';
+import { getCurrentUserId } from '@/services/authSession';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -149,8 +149,7 @@ export default function CompanionScreen() {
     async (id: string) => {
       approvalModalApprove(id);
       const toolName = currentApproval?.toolName ?? id;
-      const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id;
+      const userId = await getCurrentUserId();
       if (userId) void logApprovalDecision(userId, toolName, true);
     },
     [approvalModalApprove, currentApproval],
@@ -160,8 +159,7 @@ export default function CompanionScreen() {
     async (id: string, reason?: string) => {
       approvalModalReject(id, reason);
       const toolName = currentApproval?.toolName ?? id;
-      const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user?.id;
+      const userId = await getCurrentUserId();
       if (userId) void logApprovalDecision(userId, toolName, false, reason);
     },
     [approvalModalReject, currentApproval],

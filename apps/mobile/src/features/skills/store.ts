@@ -8,7 +8,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { mmkvStorage, whenMmkvReady } from '@/lib/mmkv';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { InstalledSkill, SkillCatalogEntry } from '@/src/features/skills/service';
 
 interface SkillsState {
@@ -94,6 +94,4 @@ export const useSkillsStore = create<SkillsState>()(
   ),
 );
 
-whenMmkvReady(() => {
-  void useSkillsStore.persist.rehydrate();
-});
+rehydrateWhenMmkvReady(useSkillsStore, 'skills-store');

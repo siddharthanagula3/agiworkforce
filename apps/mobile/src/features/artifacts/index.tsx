@@ -1,36 +1,93 @@
 import { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, View, useWindowDimensions } from 'react-native';
+import {
+  FlatList,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  Share,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { DrawerActions } from '@react-navigation/native';
 import { useNavigation } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Check, Copy, FileText, Lightbulb, Menu, Share2, X } from 'lucide-react-native';
+import {
+  BarChart3,
+  BookOpen,
+  Check,
+  Code2,
+  Copy,
+  FileText,
+  Menu,
+  Share2,
+  Sparkles,
+  X,
+} from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
-import { RECEIVED_ARTIFACTS } from './data';
-import type { MobileArtifact } from './types';
+import { useArtifactStore, accentColorForKind } from './store';
+import type { MobileArtifact, MobileArtifactKind } from './types';
 
 interface ArtifactsGalleryScreenProps {
-  artifacts?: MobileArtifact[];
   initialLoading?: boolean;
 }
 
+const NUM_COLUMNS = 2;
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 
-function truncatePreview(line: string): string {
-  return line.length > 92 ? `${line.slice(0, 92).trim()}...` : line;
+// ---------------------------------------------------------------------------
+// Kind → badge config
+// ---------------------------------------------------------------------------
+
+type BadgeTone = 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
+
+const KIND_BADGE: Record<MobileArtifactKind, BadgeTone> = {
+  code: 'teal',
+  chart: 'yellow',
+  research: 'purple',
+  document: 'gray',
+};
+
+const KIND_ICON: Record<MobileArtifactKind, typeof FileText> = {
+  code: Code2,
+  chart: BarChart3,
+  research: BookOpen,
+  document: FileText,
+};
+
+function badgeLabel(artifact: MobileArtifact): string {
+  if (artifact.language) return artifact.language;
+  return artifact.kind.charAt(0).toUpperCase() + artifact.kind.slice(1);
 }
 
-export function ArtifactsGalleryScreen({
-  artifacts = RECEIVED_ARTIFACTS,
-  initialLoading = false,
-}: ArtifactsGalleryScreenProps) {
+// ---------------------------------------------------------------------------
+// Main screen
+// ---------------------------------------------------------------------------
+
+export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGalleryScreenProps) {
   const c = useThemeColors();
   const navigation = useNavigation();
   const { width } = useWindowDimensions();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
   const [isLoading] = useState(initialLoading);
+
+  // Live artifact list from the persistent store — user-created artifacts, newest first.
+  const storedArtifacts = useArtifactStore((s) => s.artifacts);
+
+  // Re-derive accentColor from the current theme so cards respect light/dark mode,
+  // even if the color was stored under the opposite palette.
+  const userArtifacts = useMemo(
+    () =>
+      storedArtifacts.map((a) => ({
+        ...a,
+        accentColor: accentColorForKind(a.kind, c),
+      })),
+    [storedArtifacts, c],
+  );
 
   const openDrawer = useCallback(() => {
     const parent = navigation.getParent?.();
@@ -41,12 +98,38 @@ export function ArtifactsGalleryScreen({
     navigation.dispatch(DrawerActions.openDrawer());
   }, [navigation]);
 
-  const columns = width >= 760 ? 3 : 2;
   const gridWidth = Math.min(width, 920) - HORIZONTAL_PADDING * 2;
-  const cardWidth = Math.floor((gridWidth - CARD_GAP * (columns - 1)) / columns);
+  const cardWidth = Math.floor((gridWidth - CARD_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS);
+
+  const listContentStyle = useMemo(
+    () => ({
+      paddingHorizontal: HORIZONTAL_PADDING,
+      paddingTop: 18,
+      paddingBottom: 56,
+      alignSelf: 'center' as const,
+      width: Math.min(width, 920),
+    }),
+    [width],
+  );
+
+  const keyExtractor = useCallback((item: MobileArtifact) => item.id, []);
+
+  const renderItem = useCallback(
+    ({ item, index }: { item: MobileArtifact; index: number }) => (
+      <ArtifactCard
+        artifact={item}
+        width={cardWidth}
+        onPress={setSelectedArtifact}
+        // Right-column cards get left margin to match the gap
+        style={index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined}
+      />
+    ),
+    [cardWidth],
+  );
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+      {/* Header bar */}
       <View className="h-16 justify-center px-4">
         <Pressable
           testID="artifacts-open-drawer"
@@ -68,164 +151,143 @@ export function ArtifactsGalleryScreen({
         </Text>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{
-          paddingHorizontal: HORIZONTAL_PADDING,
-          paddingTop: 18,
-          paddingBottom: 56,
-          alignSelf: 'center',
-          width: Math.min(width, 920),
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <GetInspiredCard />
-
-        {isLoading ? (
-          <ArtifactsSkeletonGrid columns={columns} cardWidth={cardWidth} />
-        ) : (
-          <View testID="artifacts-grid" className="flex-row flex-wrap" style={{ gap: CARD_GAP }}>
-            {artifacts.map((artifact) => (
-              <ArtifactCard
-                key={artifact.id}
-                artifact={artifact}
-                width={cardWidth}
-                onPress={setSelectedArtifact}
-              />
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      {isLoading ? (
+        <ScrollView contentContainerStyle={listContentStyle} showsVerticalScrollIndicator={false}>
+          <ArtifactsSkeletonGrid cardWidth={cardWidth} />
+        </ScrollView>
+      ) : (
+        <FlatList
+          data={userArtifacts}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          numColumns={NUM_COLUMNS}
+          testID="artifacts-grid"
+          contentContainerStyle={listContentStyle}
+          ListEmptyComponent={<ArtifactsEmptyState />}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
 
       <ArtifactPreviewModal artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
     </SafeAreaView>
   );
 }
 
-function GetInspiredCard() {
+// ---------------------------------------------------------------------------
+// Empty state
+// ---------------------------------------------------------------------------
+
+function ArtifactsEmptyState() {
   const c = useThemeColors();
-
   return (
-    <Pressable
-      className="h-[72px] rounded-2xl border flex-row items-center justify-between px-6 mb-7 active:opacity-85"
-      style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
-      accessibilityLabel="Get inspired"
-      accessibilityRole="button"
-    >
-      <View className="flex-row items-center gap-4">
-        <Lightbulb size={27} color={c.textPrimary} />
-        <Text className="text-[20px] font-semibold" style={{ color: c.textPrimary }}>
-          Get inspired
-        </Text>
+    <View testID="artifacts-empty-state" className="flex-1 items-center justify-center py-20 px-8">
+      <View
+        className="w-16 h-16 rounded-full items-center justify-center mb-5"
+        style={{ backgroundColor: c.surfaceElevated }}
+      >
+        <Sparkles size={28} color={c.textSecondary} />
       </View>
-
-      <View className="w-[132px] h-[42px] items-center justify-center">
-        <View
-          className="absolute w-16 h-9 rounded-md -rotate-6"
-          style={{ backgroundColor: '#8eb8e8', left: 8 }}
-        >
-          <Text className="text-[7px] mt-2 ml-2" style={{ color: c.black }}>
-            Hi
-          </Text>
-        </View>
-        <View
-          className="absolute w-16 h-9 rounded-md border"
-          style={{ backgroundColor: '#f8f8f3', borderColor: '#e2ded4', left: 42 }}
-        >
-          <View className="flex-row gap-0.5 mt-4 ml-3">
-            {[4, 8, 12, 7, 10].map((height, index) => (
-              <View
-                key={index}
-                className="w-1 rounded-sm"
-                style={{ height, backgroundColor: c.terraCotta }}
-              />
-            ))}
-          </View>
-        </View>
-        <View
-          className="absolute w-16 h-9 rounded-md rotate-6 items-center justify-center"
-          style={{ backgroundColor: '#ffc979', right: 4 }}
-        >
-          <Text className="text-[6px] font-semibold" style={{ color: c.black }}>
-            How petty are you?
-          </Text>
-          <Text className="text-[9px] font-bold mt-0.5" style={{ color: c.black }}>
-            53%
-          </Text>
-        </View>
-      </View>
-    </Pressable>
+      <Text className="text-[18px] font-semibold text-center mb-2" style={{ color: c.textPrimary }}>
+        No artifacts yet
+      </Text>
+      <Text className="text-[14px] text-center leading-[20px]" style={{ color: c.textMuted }}>
+        Artifacts you create in conversations will appear here
+      </Text>
+    </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ArtifactCard — enhanced with code preview, type badge, timestamp
+// ---------------------------------------------------------------------------
 
 interface ArtifactCardProps {
   artifact: MobileArtifact;
   width: number;
   onPress: (artifact: MobileArtifact) => void;
+  style?: object;
 }
 
-function ArtifactCard({ artifact, width, onPress }: ArtifactCardProps) {
+function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
+  const isCode = artifact.kind === 'code';
+  const KindIcon = KIND_ICON[artifact.kind];
 
   return (
     <Pressable
       testID={`artifact-card-${artifact.id}`}
       onPress={() => onPress(artifact)}
       className="active:opacity-80"
-      style={{ width, marginBottom: 20 }}
+      style={[{ width, marginBottom: 20 }, style]}
       accessibilityLabel={`Open artifact ${artifact.title}`}
       accessibilityRole="button"
     >
+      {/* Preview thumbnail */}
       <View
-        className="rounded-2xl border overflow-hidden justify-center"
+        className="rounded-2xl border overflow-hidden"
         style={{
           height: previewHeight,
           backgroundColor: c.surfaceElevated,
           borderColor: c.border,
         }}
       >
+        {/* Type badge — top-left overlay */}
+        <View className="absolute top-3 left-3 z-10 flex-row items-center gap-1.5">
+          <KindIcon size={12} color={artifact.accentColor} />
+          <Badge label={badgeLabel(artifact)} color={KIND_BADGE[artifact.kind]} />
+        </View>
+
+        {/* Code / text preview area */}
         <View
-          className="self-center rounded-2xl border px-4 py-4"
-          style={{
-            width: width * 0.79,
-            height: previewHeight * 0.78,
-            backgroundColor: c.surfaceHover,
-            borderColor: c.borderLight,
-          }}
+          className="absolute inset-0 justify-end px-3 pb-3 pt-10"
+          style={{ backgroundColor: c.surfaceHover }}
         >
-          {artifact.previewLines.slice(0, 4).map((line, index) => (
+          {artifact.previewLines.slice(0, 5).map((line, index) => (
             <Text
               key={`${artifact.id}-${index}`}
-              className="text-[11px] leading-[14px]"
-              style={{ color: index === 0 ? artifact.accentColor : c.textSecondary }}
-              numberOfLines={index === 0 ? 2 : 3}
+              className="text-[10px] leading-[14px]"
+              numberOfLines={1}
+              style={{
+                color: index === 0 ? artifact.accentColor : c.textSecondary,
+                fontFamily: isCode
+                  ? Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+                  : undefined,
+                opacity: index === 0 ? 1 : Math.max(0.35, 1 - index * 0.18),
+              }}
             >
-              {truncatePreview(line)}
+              {line}
             </Text>
           ))}
         </View>
       </View>
 
+      {/* Title */}
       <Text
-        className="text-[17px] leading-[21px] mt-3 font-medium"
+        className="text-[15px] leading-[20px] mt-2.5 font-semibold"
         style={{ color: c.textPrimary }}
-        numberOfLines={1}
+        numberOfLines={2}
       >
         {artifact.title}
       </Text>
-      <Text className="text-[16px] mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
+
+      {/* Timestamp */}
+      <Text className="text-[12px] mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
     </Pressable>
   );
 }
 
-function ArtifactsSkeletonGrid({ columns, cardWidth }: { columns: number; cardWidth: number }) {
+// ---------------------------------------------------------------------------
+// Skeleton (2-column, fixed)
+// ---------------------------------------------------------------------------
+
+function ArtifactsSkeletonGrid({ cardWidth }: { cardWidth: number }) {
   const c = useThemeColors();
   const placeholders = useMemo(
-    () => Array.from({ length: columns * 3 }, (_, index) => index),
-    [columns],
+    () => Array.from({ length: NUM_COLUMNS * 3 }, (_, index) => index),
+    [],
   );
 
   return (
@@ -236,24 +298,28 @@ function ArtifactsSkeletonGrid({ columns, cardWidth }: { columns: number; cardWi
             className="rounded-2xl border"
             style={{
               height: Math.max(120, Math.round(cardWidth * 0.72)),
-              backgroundColor: c.black,
+              backgroundColor: c.surfaceElevated,
               borderColor: c.border,
               opacity: 0.64,
             }}
           />
           <View
             className="h-4 rounded-md mt-3"
-            style={{ width: cardWidth * 0.66, backgroundColor: c.black, opacity: 0.8 }}
+            style={{ width: cardWidth * 0.66, backgroundColor: c.surfaceElevated, opacity: 0.8 }}
           />
           <View
             className="h-3.5 rounded-md mt-2"
-            style={{ width: cardWidth * 0.43, backgroundColor: c.black, opacity: 0.8 }}
+            style={{ width: cardWidth * 0.43, backgroundColor: c.surfaceElevated, opacity: 0.8 }}
           />
         </View>
       ))}
     </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ArtifactPreviewModal (unchanged)
+// ---------------------------------------------------------------------------
 
 function ArtifactPreviewModal({
   artifact,
@@ -360,12 +426,12 @@ function ArtifactPreviewModal({
             <View className="flex-row items-center gap-2 mb-2">
               <FileText size={16} color={artifact.accentColor} />
               <Text className="text-[12px] font-semibold" style={{ color: artifact.accentColor }}>
-                Received artifact
+                Artifact preview
               </Text>
             </View>
             <Text className="text-[12px] leading-[18px]" style={{ color: c.textMuted }}>
-              Mobile only previews, copies, and shares this artifact. Regeneration and execution
-              stay on Desktop or Cloud Managed environments.
+              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on
+              Desktop or Cloud Managed environments.
             </Text>
           </View>
 

@@ -2,10 +2,10 @@
  * Tests for lib/pricing.ts
  *
  * Covers:
- *   - STRIPE_PRICE_IDS includes a pro_plus key with monthly/yearly slots
- *   - getPlanFromPriceId returns 'pro_plus' when a matching price ID is set
- *   - Missing pro_plus env vars don't crash; validatePriceId returns undefined gracefully
- *   - arePriceIdsConfigured includes pro_plus in its scan
+ *   - STRIPE_PRICE_IDS includes hobby, pro, max keys (pro_plus removed)
+ *   - getPlanFromPriceId returns the correct plan when a matching price ID is set
+ *   - Missing env vars don't crash; validatePriceId returns undefined gracefully
+ *   - arePriceIdsConfigured works with the current 3-plan structure
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -62,124 +62,120 @@ async function importPricingWithEnv(
 // ---------------------------------------------------------------------------
 
 describe('STRIPE_PRICE_IDS structure', () => {
-  it('includes a pro_plus key at the top level', async () => {
+  it('includes hobby, pro, and max keys at the top level', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
-    expect(STRIPE_PRICE_IDS).toHaveProperty('pro_plus');
+    expect(STRIPE_PRICE_IDS).toHaveProperty('hobby');
+    expect(STRIPE_PRICE_IDS).toHaveProperty('pro');
+    expect(STRIPE_PRICE_IDS).toHaveProperty('max');
   });
 
-  it('pro_plus has monthly and yearly slots', async () => {
+  it('does not include pro_plus key (removed in Fix 7)', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
-    expect(STRIPE_PRICE_IDS.pro_plus).toHaveProperty('monthly');
-    expect(STRIPE_PRICE_IDS.pro_plus).toHaveProperty('yearly');
+    expect(STRIPE_PRICE_IDS).not.toHaveProperty('pro_plus');
   });
 
-  it('pro_plus.monthly is undefined when env var is not set', async () => {
-    const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: undefined,
-      STRIPE_PRICE_PRO_PLUS_YEARLY: undefined,
-    });
-    expect(STRIPE_PRICE_IDS.pro_plus.monthly).toBeUndefined();
-    expect(STRIPE_PRICE_IDS.pro_plus.yearly).toBeUndefined();
+  it('hobby has monthly and yearly slots', async () => {
+    const { STRIPE_PRICE_IDS } = await importPricingWithEnv();
+    expect(STRIPE_PRICE_IDS.hobby).toHaveProperty('monthly');
+    expect(STRIPE_PRICE_IDS.hobby).toHaveProperty('yearly');
   });
 
-  it('pro_plus.monthly resolves to the env var value when it starts with price_', async () => {
+  it('hobby.monthly is undefined when env var is not set', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'price_pro_plus_monthly_test',
-      STRIPE_PRICE_PRO_PLUS_YEARLY: 'price_pro_plus_yearly_test',
+      STRIPE_PRICE_HOBBY_MONTHLY: undefined,
+      STRIPE_PRICE_HOBBY_YEARLY: undefined,
     });
-    expect(STRIPE_PRICE_IDS.pro_plus.monthly).toBe('price_pro_plus_monthly_test');
-    expect(STRIPE_PRICE_IDS.pro_plus.yearly).toBe('price_pro_plus_yearly_test');
+    expect(STRIPE_PRICE_IDS.hobby.monthly).toBeUndefined();
+    expect(STRIPE_PRICE_IDS.hobby.yearly).toBeUndefined();
   });
 
-  it('pro_plus slots are undefined when env value does not start with price_', async () => {
+  it('hobby.monthly resolves to the env var value when it starts with price_', async () => {
     const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'invalid_id',
-      STRIPE_PRICE_PRO_PLUS_YEARLY: 'also_invalid',
+      STRIPE_PRICE_HOBBY_MONTHLY: 'price_hobby_monthly_test',
+      STRIPE_PRICE_HOBBY_YEARLY: 'price_hobby_yearly_test',
     });
-    expect(STRIPE_PRICE_IDS.pro_plus.monthly).toBeUndefined();
-    expect(STRIPE_PRICE_IDS.pro_plus.yearly).toBeUndefined();
+    expect(STRIPE_PRICE_IDS.hobby.monthly).toBe('price_hobby_monthly_test');
+    expect(STRIPE_PRICE_IDS.hobby.yearly).toBe('price_hobby_yearly_test');
+  });
+
+  it('hobby slots are undefined when env value does not start with price_', async () => {
+    const { STRIPE_PRICE_IDS } = await importPricingWithEnv({
+      STRIPE_PRICE_HOBBY_MONTHLY: 'invalid_id',
+      STRIPE_PRICE_HOBBY_YEARLY: 'also_invalid',
+    });
+    expect(STRIPE_PRICE_IDS.hobby.monthly).toBeUndefined();
+    expect(STRIPE_PRICE_IDS.hobby.yearly).toBeUndefined();
   });
 });
 
-describe('getPlanFromPriceId — pro_plus', () => {
-  it('returns "pro_plus" for a matching monthly price ID', async () => {
+describe('getPlanFromPriceId', () => {
+  it('returns "hobby" for a matching monthly price ID', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'price_pro_plus_monthly_abc',
-      STRIPE_PRICE_PRO_PLUS_YEARLY: 'price_pro_plus_yearly_abc',
+      STRIPE_PRICE_HOBBY_MONTHLY: 'price_hobby_monthly_abc',
+      STRIPE_PRICE_HOBBY_YEARLY: 'price_hobby_yearly_abc',
     });
-    expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_plus_monthly_abc')).toBe('pro_plus');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_hobby_monthly_abc')).toBe('hobby');
   });
 
-  it('returns "pro_plus" for a matching yearly price ID', async () => {
+  it('returns "pro" for a matching yearly price ID', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'price_pro_plus_monthly_abc',
-      STRIPE_PRICE_PRO_PLUS_YEARLY: 'price_pro_plus_yearly_abc',
+      STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_abc',
+      STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly_abc',
     });
-    expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_plus_yearly_abc')).toBe('pro_plus');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_yearly_abc')).toBe('pro');
   });
 
-  it('returns null for an unknown price ID (pro_plus not configured)', async () => {
+  it('returns null for an unknown price ID', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: undefined,
-      STRIPE_PRICE_PRO_PLUS_YEARLY: undefined,
+      STRIPE_PRICE_HOBBY_MONTHLY: undefined,
+      STRIPE_PRICE_HOBBY_YEARLY: undefined,
     });
     expect(PRICING_CONFIG.getPlanFromPriceId('price_unknown_xyz')).toBeNull();
   });
 
-  it('does not return pro_plus when price ID matches a different plan', async () => {
+  it('does not confuse pro and max price IDs', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_abc',
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'price_pro_plus_monthly_abc',
+      STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly_abc',
     });
     expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_monthly_abc')).toBe('pro');
+    expect(PRICING_CONFIG.getPlanFromPriceId('price_max_monthly_abc')).toBe('max');
   });
 });
 
-describe('PRICING_CONFIG.plans includes pro_plus', () => {
-  it('has a plan entry with id "pro_plus"', async () => {
-    const { PRICING_CONFIG } = await importPricingWithEnv();
-    const plan = PRICING_CONFIG.plans.find((p) => p.id === 'pro_plus');
-    expect(plan).toBeDefined();
-  });
-
-  it('pro_plus plan is ordered between pro and max', async () => {
+describe('PRICING_CONFIG.plans', () => {
+  it('has plan entries for hobby, pro, and max', async () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
     const ids = PRICING_CONFIG.plans.map((p) => p.id);
+    expect(ids).toContain('hobby');
+    expect(ids).toContain('pro');
+    expect(ids).toContain('max');
+  });
+
+  it('does not have a pro_plus plan entry (removed in Fix 7)', async () => {
+    const { PRICING_CONFIG } = await importPricingWithEnv();
+    const ids = PRICING_CONFIG.plans.map((p) => p.id);
+    expect(ids).not.toContain('pro_plus');
+  });
+
+  it('plans are ordered hobby, pro, max', async () => {
+    const { PRICING_CONFIG } = await importPricingWithEnv();
+    const ids = PRICING_CONFIG.plans.map((p) => p.id);
+    const hobbyIdx = ids.indexOf('hobby');
     const proIdx = ids.indexOf('pro');
-    const proPlusIdx = ids.indexOf('pro_plus');
     const maxIdx = ids.indexOf('max');
-    expect(proPlusIdx).toBeGreaterThan(proIdx);
-    expect(proPlusIdx).toBeLessThan(maxIdx);
-  });
-
-  it('pro_plus plan has name "Pro+"', async () => {
-    const { PRICING_CONFIG } = await importPricingWithEnv();
-    const plan = PRICING_CONFIG.plans.find((p) => p.id === 'pro_plus');
-    expect(plan?.name).toBe('Pro+');
-  });
-
-  it('pro_plus price.monthly is 49.99', async () => {
-    const { PRICING_CONFIG } = await importPricingWithEnv();
-    const plan = PRICING_CONFIG.plans.find((p) => p.id === 'pro_plus');
-    expect(plan?.price.monthly).toBe(49.99);
-  });
-
-  it('pro_plus price.yearly is 499.88', async () => {
-    const { PRICING_CONFIG } = await importPricingWithEnv();
-    const plan = PRICING_CONFIG.plans.find((p) => p.id === 'pro_plus');
-    expect(plan?.price.yearly).toBe(499.88);
+    expect(hobbyIdx).toBeLessThan(proIdx);
+    expect(proIdx).toBeLessThan(maxIdx);
   });
 });
 
-describe('arePriceIdsConfigured includes pro_plus', () => {
-  it('returns true when only pro_plus monthly is configured', async () => {
+describe('arePriceIdsConfigured', () => {
+  it('returns true when hobby monthly is configured', async () => {
     const { arePriceIdsConfigured } = await importPricingWithEnv({
-      STRIPE_PRICE_HOBBY_MONTHLY: undefined,
+      STRIPE_PRICE_HOBBY_MONTHLY: 'price_hobby_monthly_only',
       STRIPE_PRICE_HOBBY_YEARLY: undefined,
       STRIPE_PRICE_PRO_MONTHLY: undefined,
       STRIPE_PRICE_PRO_YEARLY: undefined,
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: 'price_pro_plus_monthly_only',
-      STRIPE_PRICE_PRO_PLUS_YEARLY: undefined,
       STRIPE_PRICE_MAX_MONTHLY: undefined,
       STRIPE_PRICE_MAX_YEARLY: undefined,
     });
@@ -192,8 +188,6 @@ describe('arePriceIdsConfigured includes pro_plus', () => {
       STRIPE_PRICE_HOBBY_YEARLY: undefined,
       STRIPE_PRICE_PRO_MONTHLY: undefined,
       STRIPE_PRICE_PRO_YEARLY: undefined,
-      STRIPE_PRICE_PRO_PLUS_MONTHLY: undefined,
-      STRIPE_PRICE_PRO_PLUS_YEARLY: undefined,
       STRIPE_PRICE_MAX_MONTHLY: undefined,
       STRIPE_PRICE_MAX_YEARLY: undefined,
     });

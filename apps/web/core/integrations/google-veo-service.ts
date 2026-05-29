@@ -16,7 +16,7 @@
  * - Frame-specific generation
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
 import { getModelMetadataById } from '@agiworkforce/types';
@@ -104,22 +104,6 @@ const VEO_PRICING = {
   '720p': 0.05,
   '1080p': 0.08,
 };
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    logger.error('[GoogleVeoService] Failed to get auth token:', error);
-    return null;
-  }
-}
 
 export class GoogleVeoService {
   private static instance: GoogleVeoService;

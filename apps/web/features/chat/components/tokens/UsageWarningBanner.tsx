@@ -1,13 +1,11 @@
 /**
  * Usage Warning Banner
- * Alerts users when approaching credit limits (ChatGPT/Claude.ai style)
+ * Full-width dismissible alert shown when credit usage hits a threshold.
+ * Alerts users when approaching credit limits (ChatGPT/Claude.ai style).
  */
 
 import { useEffect, useState } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@shared/ui/alert';
-import { Button } from '@shared/ui/button';
-import { Progress } from '@shared/ui/progress';
-import { AlertTriangle, AlertCircle, TrendingUp, X, ExternalLink } from 'lucide-react';
+import { AlertTriangle, AlertCircle, X, TrendingUp } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -52,128 +50,76 @@ export function UsageWarningBanner({ usageData, className }: UsageWarningBannerP
 
   const isOverLimit = percentage >= 100;
   const isCritical = percentage >= 90;
-  const isWarning = percentage >= 80 && percentage < 90;
 
   const getMessage = () => {
     if (isOverLimit) {
       return {
-        title: 'Credit Limit Exceeded',
-        description: `You've used $${(used / 100).toFixed(2)} of your $${(limit / 100).toFixed(2)} credit allowance (${percentage.toFixed(0)}%). Please upgrade your plan to continue.`,
+        text: `Daily credit limit reached ($${(used / 100).toFixed(2)} of $${(limit / 100).toFixed(2)}). Upgrade to continue.`,
         action: 'Upgrade Now',
       };
     }
     if (isCritical) {
       return {
-        title: 'Approaching Credit Limit',
-        description: `You've used $${(used / 100).toFixed(2)} of your $${(limit / 100).toFixed(2)} credit allowance (${percentage.toFixed(0)}%). Consider upgrading to avoid interruptions.`,
+        text: `${percentage.toFixed(0)}% of daily credits used. Upgrade to avoid interruptions.`,
         action: 'View Plans',
       };
     }
     return {
-      title: 'High Credit Usage',
-      description: `You've used $${(used / 100).toFixed(2)} of your $${(limit / 100).toFixed(2)} credit allowance (${percentage.toFixed(0)}%).`,
-      action: 'Monitor Usage',
+      text: `${percentage.toFixed(0)}% of daily credits used.`,
+      action: 'Monitor',
     };
   };
 
-  const { title, description, action } = getMessage();
+  const { text, action } = getMessage();
 
   return (
-    <Alert
-      variant={isOverLimit ? 'destructive' : 'default'}
+    <div
+      role="alert"
       className={cn(
-        'relative',
-        isCritical && 'border-orange-500 bg-orange-50 dark:bg-orange-950/20',
-        isWarning && 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20',
+        'flex w-full items-center gap-3 px-4 py-2.5 text-sm',
+        isOverLimit
+          ? 'bg-red-950/60 border-b border-red-800/50 text-red-200'
+          : isCritical
+            ? 'bg-orange-950/60 border-b border-orange-800/50 text-orange-200'
+            : 'bg-yellow-950/60 border-b border-yellow-800/50 text-yellow-200',
         className,
       )}
     >
-      <div className="flex items-start gap-3">
-        {isOverLimit ? (
-          <AlertCircle className="h-5 w-5 text-destructive" />
-        ) : (
-          <AlertTriangle
-            className={cn(
-              'h-5 w-5',
-              isCritical && 'text-orange-600 dark:text-orange-400',
-              isWarning && 'text-yellow-600 dark:text-yellow-400',
-            )}
-          />
+      {/* Icon */}
+      {isOverLimit ? (
+        <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      ) : (
+        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+      )}
+
+      {/* Message */}
+      <span className="flex-1 text-xs">{text}</span>
+
+      {/* CTA */}
+      <button
+        type="button"
+        onClick={() => router.push('/pricing')}
+        className={cn(
+          'flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors',
+          isOverLimit
+            ? 'bg-red-600 text-white hover:bg-red-500'
+            : 'bg-amber-600/80 text-white hover:bg-amber-500',
         )}
+      >
+        <TrendingUp className="h-3 w-3" aria-hidden="true" />
+        {action}
+      </button>
 
-        <div className="flex-1 space-y-2">
-          <AlertTitle className="text-sm font-semibold">{title}</AlertTitle>
-          <AlertDescription className="text-xs">{description}</AlertDescription>
-
-          {/* Progress Bar */}
-          <div className="space-y-1">
-            <Progress
-              value={Math.min(percentage, 100)}
-              className={cn(
-                'h-2',
-                isOverLimit && 'bg-red-200 dark:bg-red-900/20',
-                isCritical && 'bg-orange-200 dark:bg-orange-900/20',
-                isWarning && 'bg-yellow-200 dark:bg-yellow-900/20',
-              )}
-              indicatorClassName={cn(
-                isOverLimit && 'bg-red-600',
-                isCritical && 'bg-orange-600',
-                isWarning && 'bg-yellow-600',
-              )}
-            />
-            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-              <span>${(used / 100).toFixed(2)} used</span>
-              <span>${(limit / 100).toFixed(2)} limit</span>
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              size="sm"
-              variant={isOverLimit ? 'default' : 'outline'}
-              onClick={() => router.push('/pricing')}
-              className="h-7 text-xs"
-            >
-              {isOverLimit ? (
-                <>
-                  <TrendingUp className="mr-1 h-3 w-3" />
-                  {action}
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="mr-1 h-3 w-3" />
-                  {action}
-                </>
-              )}
-            </Button>
-
-            {!isOverLimit && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setDismissed({ ...dismissed, [provider]: true })}
-                className="h-7 text-xs"
-              >
-                Dismiss
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Close Button */}
-        {!isOverLimit && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDismissed({ ...dismissed, [provider]: true })}
-            className="h-6 w-6 p-0"
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        )}
-      </div>
-    </Alert>
+      {/* Dismiss — always available */}
+      <button
+        type="button"
+        aria-label="Dismiss usage warning"
+        onClick={() => setDismissed((prev) => ({ ...prev, [provider]: true }))}
+        className="shrink-0 rounded p-1 opacity-60 transition-opacity hover:opacity-100"
+      >
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

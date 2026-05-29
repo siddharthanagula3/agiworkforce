@@ -129,6 +129,9 @@ pub fn message_tokens(msg: &Message) -> usize {
 fn block_tokens(block: &ContentBlock) -> usize {
     match block {
         ContentBlock::Text { text } => estimate_tokens(text),
+        // Image blocks carry base64 data; approximate by reporting a fixed
+        // overhead (85 base tokens per Anthropic's published vision pricing).
+        ContentBlock::Image { data_b64, .. } => 85 + data_b64.len() / 4,
         ContentBlock::ToolUse { name, input, .. } => {
             estimate_tokens(name) + estimate_tokens(&input.to_string())
         }
@@ -406,10 +409,12 @@ fn tool_output_tokens(msg: &Message) -> usize {
             .iter()
             .filter_map(|b| match b {
                 ContentBlock::ToolResult { content, .. } => Some(estimate_tokens(content)),
-                _ => None,
+                ContentBlock::Text { .. }
+                | ContentBlock::Image { .. }
+                | ContentBlock::ToolUse { .. } => None,
             })
             .sum(),
-        _ => 0,
+        MessageContent::Text(_) => 0,
     }
 }
 
@@ -573,7 +578,7 @@ fn remove_tool_results(messages: Vec<Message>) -> Vec<Message> {
                     Some(Message::blocks(&msg.role, filtered))
                 }
             }
-            _ => Some(msg),
+            MessageContent::Text(_) => Some(msg),
         })
         .collect()
 }

@@ -7,7 +7,7 @@
  * the onboarding disclosure screen.
  *
  * Mobile has three product modes: Local Mode + Local LLMs, future lightweight
- * Local Mode + BYOK after secure device key storage ships, and Cloud Managed.
+ * Local Mode on Mobile and Cloud Managed after explicit invite unlock.
  * This wrapper is only for outbound provider/API requests after a
  * mode-specific gate allows them. Local-LLM requests and heavy
  * generated-file/browser/code environments should never reach this path.

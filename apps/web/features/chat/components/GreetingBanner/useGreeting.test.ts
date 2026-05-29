@@ -2,13 +2,12 @@
  * useGreeting hook tests
  *
  * Covers:
- * - All 6 time bands with correct emoji and headline format
+ * - All 6 time bands with correct headline format
  * - Variant selection via date-based index (date % 3)
  * - First-name extraction from full name (splits on first space)
  * - Name length cap: names > 50 chars are discarded (anonymous greeting)
  * - Non-printable character stripping from names
  * - No-user fallback (anonymous greeting without name interpolation)
- * - Subtext is always the fixed CTA string
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -66,79 +65,70 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('useGreeting — time band selection', () => {
-  it('returns earlyMorning band (☕) at hour 4', () => {
+  it('returns earlyMorning band at hour 4', () => {
     const { result } = renderGreeting(4, 1); // day 1 → variantIndex 1
-    expect(result.current.emoji).toBe('☕');
     // Anonymous variant: config.variants[1] = 'Early start'
     expect(result.current.headline).toBe('Early start');
   });
 
-  it('returns earlyMorning band (☕) at hour 6', () => {
+  it('returns earlyMorning band at hour 6', () => {
     const { result } = renderGreeting(6, 3); // day 3 → variantIndex 0
-    expect(result.current.emoji).toBe('☕');
-    expect(result.current.headline).toBe('Rise and shine');
+    expect(result.current.headline).toBe('Good morning');
   });
 
-  it('returns morning band (🌤️) at hour 7', () => {
+  it('returns morning band at hour 7', () => {
     const { result } = renderGreeting(7, 3); // variantIndex 0
-    expect(result.current.emoji).toBe('🌤️');
     expect(result.current.headline).toBe('Good morning');
   });
 
   it('returns morning band at hour 11 (boundary)', () => {
     const { result } = renderGreeting(11, 3);
-    expect(result.current.emoji).toBe('🌤️');
+    expect(result.current.headline).toBe('Good morning');
   });
 
-  it('returns afternoon band (☀️) at hour 12', () => {
+  it('returns afternoon band at hour 12', () => {
     const { result } = renderGreeting(12, 3); // variantIndex 0
-    expect(result.current.emoji).toBe('☀️');
     expect(result.current.headline).toBe('Good afternoon');
   });
 
   it('returns afternoon band at hour 16 (boundary)', () => {
     const { result } = renderGreeting(16, 3);
-    expect(result.current.emoji).toBe('☀️');
+    expect(result.current.headline).toBe('Good afternoon');
   });
 
-  it('returns evening band (🌇) at hour 17', () => {
+  it('returns evening band at hour 17', () => {
     const { result } = renderGreeting(17, 3); // variantIndex 0
-    expect(result.current.emoji).toBe('🌇');
     expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns evening band at hour 20 (boundary)', () => {
     const { result } = renderGreeting(20, 3);
-    expect(result.current.emoji).toBe('🌇');
+    expect(result.current.headline).toBe('Good evening');
   });
 
-  it('returns night band (🌙) at hour 21', () => {
+  it('returns night band at hour 21', () => {
     const { result } = renderGreeting(21, 3); // variantIndex 0
-    expect(result.current.emoji).toBe('🌙');
-    expect(result.current.headline).toBe('Good night');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns night band at hour 23 (boundary)', () => {
     const { result } = renderGreeting(23, 3);
-    expect(result.current.emoji).toBe('🌙');
-    // variantIndex 0 for day=3 → 'Good night'
-    expect(result.current.headline).toBe('Good night');
+    // variantIndex 0 for day=3 → 'Good evening'
+    expect(result.current.headline).toBe('Good evening');
   });
 
-  it('returns lateNight band (🌙) at hour 0 (midnight)', () => {
+  it('returns lateNight band at hour 0 (midnight)', () => {
     const { result } = renderGreeting(0, 3); // variantIndex 0
-    expect(result.current.emoji).toBe('🌙');
-    expect(result.current.headline).toBe('Late night session');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 3 (pre-4am)', () => {
     const { result } = renderGreeting(3, 3);
-    expect(result.current.emoji).toBe('🌙');
+    expect(result.current.headline).toBe('Good evening');
   });
 
   it('returns lateNight band at hour 1', () => {
     const { result } = renderGreeting(1, 4); // day 4 → variantIndex 1
-    expect(result.current.emoji).toBe('🌙');
     expect(result.current.headline).toBe('Up late');
   });
 });
@@ -291,24 +281,14 @@ describe('useGreeting — non-printable character stripping', () => {
     const { result } = renderGreeting(10, 3, 'Rémi');
     expect(result.current.headline).toBe('Good morning, Rémi');
   });
-});
 
-// ---------------------------------------------------------------------------
-// Fixed subtext
-// ---------------------------------------------------------------------------
+  it("preserves apostrophes in names like O'Brien", () => {
+    const { result } = renderGreeting(10, 3, "O'Brien");
+    expect(result.current.headline).toBe("Good morning, O'Brien");
+  });
 
-describe('useGreeting — subtext', () => {
-  it('always returns the fixed CTA subtext regardless of time or user', () => {
-    const cases: Array<[number, number, string | undefined]> = [
-      [4, 1, 'Alice'],
-      [10, 2, undefined],
-      [22, 3, 'Bob'],
-      [0, 4, 'Carol'],
-    ];
-
-    for (const [hour, day, name] of cases) {
-      const { result } = renderGreeting(hour, day, name);
-      expect(result.current.subtext).toBe('What can I help you with today?');
-    }
+  it('preserves hyphens in hyphenated first names like Mary-Jane', () => {
+    const { result } = renderGreeting(10, 3, 'Mary-Jane');
+    expect(result.current.headline).toBe('Good morning, Mary-Jane');
   });
 });

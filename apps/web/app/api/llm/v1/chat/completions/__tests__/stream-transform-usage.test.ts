@@ -91,12 +91,6 @@ function makeRequest(): Request {
   });
 }
 
-/** Minimal Supabase client stub. */
-const mockUserClient = {
-  from: vi.fn(),
-  auth: { getUser: vi.fn() },
-} as any;
-
 /**
  * Consume all chunks from a ReadableStream to trigger the flush handler.
  * buildStreamResponse returns a NextResponse whose body is a streaming SSE;
@@ -131,7 +125,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-001',
       'token-001',
     );
@@ -167,7 +160,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-002',
       'token-002',
     );
@@ -202,7 +194,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-003',
       'token-003',
     );
@@ -241,7 +232,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed({ provider: 'openrouter', requestedModel: 'anthropic/claude-sonnet-4-6' }),
-      mockUserClient,
       'user-004',
       'token-004',
     );
@@ -277,7 +267,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-005',
       'token-005',
     );
@@ -312,7 +301,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-006',
       'token-006',
     );
@@ -342,7 +330,6 @@ describe('buildStreamResponse — final OpenAI usage event capture', () => {
       makeRequest() as any,
       makeStream(events),
       makeProcessed(),
-      mockUserClient,
       'user-007',
       'token-007',
     );

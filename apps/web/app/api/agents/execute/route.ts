@@ -10,7 +10,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getTaskModelForProvider } from '@agiworkforce/types';
@@ -104,11 +104,9 @@ async function handler(request: NextRequest) {
   // Authenticate user. The userClient is RLS-bound so all CreditService ops
   // happen under the user's identity — no service-role escalation.
   let userId: string;
-  let userClient;
   try {
-    const auth = await getAuthenticatedUserWithClient(request);
-    userId = auth.user.id;
-    userClient = auth.userDb;
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
   } catch {
     throw createError.unauthorized('Authentication required');
   }
@@ -188,10 +186,10 @@ async function handler(request: NextRequest) {
 
   // --- BILLING: Pre-flight credit check ---
   const estimatedCents = estimateCostCents(messages);
-  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCents);
+  const hasCredits = await CreditService.checkAvailable(userId, estimatedCents);
 
   if (!hasCredits) {
-    const balance = await CreditService.getBalance(userClient, userId);
+    const balance = await CreditService.getBalance(userId);
     const remainingCents = balance?.credits_remaining_cents ?? 0;
     throw createError.forbidden(
       `Insufficient credits. You need approximately ${estimatedCents} credits but have ${remainingCents} remaining. Please upgrade your plan at /pricing.`,
@@ -246,7 +244,6 @@ async function handler(request: NextRequest) {
           );
 
           const result = await CreditService.deductCredits(
-            userClient,
             userId,
             estimatedCents,
             `${selectedProvider}/${selectedModel} agent execution`,

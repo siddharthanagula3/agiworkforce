@@ -2,7 +2,7 @@
  * agentLoopStore — surface-agnostic state for the agentic execution loop.
  *
  * Hosts push snapshots via setAgentLoop / setActiveGoal. Components read
- * these reactively. No Tauri, no Supabase, no auth token.
+ * these reactively. No Tauri, no cloud DB auth token.
  *
  * Covers:
  *   - AgenticLoopStatusBar: active / iteration / maxIterations

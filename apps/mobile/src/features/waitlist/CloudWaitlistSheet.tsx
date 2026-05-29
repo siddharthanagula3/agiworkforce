@@ -7,9 +7,8 @@
  *   2. `submitting`— loading state during onSubmit()
  *   3. `confirmed` — success state with rank
  *
- * The caller wires `onSubmit({email, country})` to the persistence layer
- * (Supabase `cloud_waitlist` insert). The component is unopinionated about
- * how the row is stored — it just renders.
+ * The caller wires `onSubmit({email, country})` to the Web/API persistence
+ * layer. The component is unopinionated about how the row is stored.
  */
 import { useState } from 'react';
 import {

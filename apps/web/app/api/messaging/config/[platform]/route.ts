@@ -6,12 +6,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { MessagingConnectionRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 
 const VALID_PLATFORMS = ['whatsapp', 'telegram', 'slack'] as const;
 
@@ -21,22 +23,24 @@ async function handleGetPlatformConfig(request: NextRequest, context: RouteConte
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
   const { platform } = await context.params;
 
   if (!VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {
     throw createError.validation('Invalid platform. Must be one of: whatsapp, telegram, slack');
   }
 
-  const { data, error } = await supabase
-    .from('messaging_connections')
-    .select('id, platform, config, is_active, connected_at, updated_at')
-    .eq('user_id', user.id)
-    .eq('platform', platform)
-    .single();
+  const db = getNeonDb();
 
-  if (error || !data) {
+  const [data] = await db.query<MessagingConnectionRow>(
+    `select id, platform, config, is_active, connected_at, updated_at
+     from messaging_connections
+     where user_id = $1 and platform = $2
+     limit 1`,
+    [userId, platform],
+  );
+
+  if (!data) {
     throw createError.notFound('Messaging connection not found');
   }
 
@@ -51,22 +55,22 @@ async function handleDeletePlatformConfig(request: NextRequest, context: RouteCo
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
   const { platform } = await context.params;
 
   if (!VALID_PLATFORMS.includes(platform as (typeof VALID_PLATFORMS)[number])) {
     throw createError.validation('Invalid platform. Must be one of: whatsapp, telegram, slack');
   }
 
-  const { error } = await supabase
-    .from('messaging_connections')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('platform', platform);
+  const db = getNeonDb();
 
-  if (error) {
-    logger.error({ error, userId: user.id, platform }, 'Failed to delete messaging connection');
+  try {
+    await db.execute('delete from messaging_connections where user_id = $1 and platform = $2', [
+      userId,
+      platform,
+    ]);
+  } catch (err) {
+    logger.error({ err, userId, platform }, 'Failed to delete messaging connection');
     throw createError.internal('Failed to delete messaging connection');
   }
 

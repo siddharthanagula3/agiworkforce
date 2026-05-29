@@ -185,6 +185,11 @@ ms-playwright/
 .sentryclirc
 .env*.local
 
+# --- Neon local secrets ---
+.neon
+.neon.env*
+.neon.local*
+
 # --- Build outputs ---
 *.dmg
 *.exe
@@ -210,6 +215,7 @@ leads/
 **/.temp/
 .worktrees/
 .code-review-graph/
+.firecrawl/
 dist-web
 # Build artifacts (Vite SPA output)
 apps/web/public/chat

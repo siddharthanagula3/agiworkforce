@@ -11,7 +11,7 @@
 - [ ] Desktop/Tauri release.
 - [ ] CLI release.
 - [ ] Mobile store/build pipeline.
-- [ ] Supabase/database.
+- [ ] Neon database.
 - [ ] API gateway/signaling/managed compute.
 
 ## Operational Impact

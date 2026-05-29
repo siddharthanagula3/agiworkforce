@@ -1137,7 +1137,7 @@ ${task.description}
 </task>
 
 <context>
-You are working within a React + TypeScript + Vite + Supabase project.
+You are working within a React + TypeScript + Vite + Neon project.
 - Existing code patterns: Functional components, hooks, Zustand for state
 - Styling: Tailwind CSS + Shadcn UI components
 - Always follow existing linting and formatting rules

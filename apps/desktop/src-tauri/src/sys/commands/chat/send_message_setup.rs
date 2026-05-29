@@ -450,7 +450,7 @@ fn load_or_create_conversation(
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
             .map_err(|e| format!("Failed to get new conversation: {e}"))?;
         if cloud_sync_enabled {
-            supabase_sync::spawn_sync_conversation(conversation.clone());
+            cloud_sync::spawn_sync_conversation(conversation.clone());
         }
         Ok(conversation)
     }
@@ -513,7 +513,7 @@ fn create_user_message_record(
         let saved_message = repository::get_message(&conn, id)
             .map_err(|e| format!("Failed to retrieve user message: {e}"))?;
         if cloud_sync_enabled {
-            supabase_sync::spawn_sync_message(saved_message.clone());
+            cloud_sync::spawn_sync_message(saved_message.clone());
         }
         saved_message
     };
@@ -816,13 +816,8 @@ mod tests {
         // Uses "o3" (canonical catalog entry with capabilities.thinking=true) rather
         // than "o3-mini" which is no longer in models.json (deprecated by era 2026-05).
         // The "think about" trigger phrase produces ThinkingBudget::Low = 10K tokens.
-        let thinking = resolve_thinking_parameter(
-            "o3",
-            None,
-            None,
-            false,
-            "Think about how to solve this",
-        );
+        let thinking =
+            resolve_thinking_parameter("o3", None, None, false, "Think about how to solve this");
         match thinking {
             Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
                 assert_eq!(budget_tokens, 10_000);

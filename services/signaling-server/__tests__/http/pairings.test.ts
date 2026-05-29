@@ -11,13 +11,11 @@ import request from 'supertest';
 import express from 'express';
 import cors from 'cors';
 
-// Mock the supabase module
-const mockSupabase = {
-  from: vi.fn(),
-};
-
 vi.mock('../../src/db.js', () => ({
-  supabase: mockSupabase,
+  getSessionByCode: vi.fn(),
+  deleteSessionByCode: vi.fn(),
+  getSessionExpiresAtByCode: vi.fn(),
+  insertSession: vi.fn(),
 }));
 
 // Create test app that mimics the signaling server HTTP endpoints

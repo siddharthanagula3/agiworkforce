@@ -111,10 +111,9 @@ describe('ComposerFooter — model selector integration', () => {
     expect(screen.queryByRole('button', { name: /change model/i })).not.toBeInTheDocument();
   });
 
-  it('renders model options grouped by provider', () => {
+  it('renders model options grouped as Recommended and More models sections', () => {
     render(<ComposerFooter />);
-    expect(screen.getByText('OpenAI')).toBeInTheDocument();
-    expect(screen.getByText('Anthropic')).toBeInTheDocument();
+    expect(screen.getByText('Recommended')).toBeInTheDocument();
   });
 });
 

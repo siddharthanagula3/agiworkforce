@@ -33,22 +33,5 @@ export const metadata: Metadata = {
 };
 
 export default function BlogLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
-            '@context': 'https://schema.org',
-            '@type': 'CollectionPage',
-            name: 'Blog',
-            description:
-              'News, tutorials, and updates from the AGI team. Learn about AI automation, desktop agents, and the latest features.',
-            url: 'https://agiworkforce.com/blog',
-          }),
-        }}
-      />
-      {children}
-    </>
-  );
+  return <>{children}</>;
 }

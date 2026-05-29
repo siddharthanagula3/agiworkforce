@@ -1,8 +1,16 @@
+use crate::core::llm::Provider;
 use crate::data::db::repository;
 use crate::sys::commands::chat::state::AppDatabase;
 use chrono::{Datelike, Utc};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+
+pub(super) fn request_uses_managed_cloud(
+    provider: Option<Provider>,
+    prefer_cloud_credits: bool,
+) -> bool {
+    prefer_cloud_credits || matches!(provider, Some(Provider::ManagedCloud))
+}
 
 /// Check billing subscription access and monthly budget limits.
 /// Returns `Ok(())` if the request is allowed, `Err(String)` if blocked.
@@ -90,5 +98,26 @@ pub(super) async fn ensure_managed_cloud_provider(
                 debug!("[Chat] User not authenticated, ManagedCloud provider not available");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn managed_cloud_requests_use_subscription_gate() {
+        assert!(request_uses_managed_cloud(
+            Some(Provider::ManagedCloud),
+            false
+        ));
+        assert!(request_uses_managed_cloud(Some(Provider::Ollama), true));
+    }
+
+    #[test]
+    fn local_and_byok_requests_skip_subscription_gate() {
+        assert!(!request_uses_managed_cloud(Some(Provider::Ollama), false));
+        assert!(!request_uses_managed_cloud(Some(Provider::OpenAI), false));
+        assert!(!request_uses_managed_cloud(None, false));
     }
 }

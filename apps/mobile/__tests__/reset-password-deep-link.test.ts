@@ -35,25 +35,13 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
-const mockResetPasswordForEmail = jest.fn();
-const mockOnAuthStateChange = jest.fn(() => ({
-  data: { subscription: { unsubscribe: jest.fn() } },
-}));
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      resetPasswordForEmail: mockResetPasswordForEmail,
-      onAuthStateChange: mockOnAuthStateChange,
-      getSession: jest.fn(),
-      signOut: jest.fn(),
-      refreshSession: jest.fn(),
-      signInWithPassword: jest.fn(),
-      signUp: jest.fn(),
-      signInWithIdToken: jest.fn(),
-      exchangeCodeForSession: jest.fn(),
-      setSession: jest.fn(),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('../lib/mmkv', () => ({
@@ -71,32 +59,10 @@ jest.mock('../lib/mmkv', () => ({
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { useAuthStore } = require('../src/features/auth/store');
 
-beforeEach(() => {
-  mockResetPasswordForEmail.mockReset().mockResolvedValue({ error: null });
-});
-
 describe('authStore.resetPassword — redirect URL contract', () => {
-  it('uses https://agiworkforce.com/auth/reset-password (NOT custom scheme)', async () => {
-    await useAuthStore.getState().resetPassword('user@example.com');
-    expect(mockResetPasswordForEmail).toHaveBeenCalledTimes(1);
-    const [email, options] = mockResetPasswordForEmail.mock.calls[0]!;
-    expect(email).toBe('user@example.com');
-    expect(options).toBeDefined();
-    expect(options.redirectTo).toBe('https://agiworkforce.com/auth/reset-password');
-  });
-
-  it('does NOT use the agiworkforce:// custom scheme (the pre-fix vulnerability)', async () => {
-    await useAuthStore.getState().resetPassword('user@example.com');
-    const [, options] = mockResetPasswordForEmail.mock.calls[0]!;
-    expect(options.redirectTo).not.toMatch(/^agiworkforce:\/\//i);
-    expect(options.redirectTo).not.toContain('agiworkforce://reset-password');
-  });
-
-  it('propagates Supabase errors instead of swallowing them', async () => {
-    const supaError = new Error('Email rate limit exceeded');
-    mockResetPasswordForEmail.mockResolvedValueOnce({ error: supaError });
+  it('is disabled while Clerk mobile auth is not enabled in v1', async () => {
     await expect(useAuthStore.getState().resetPassword('user@example.com')).rejects.toThrow(
-      'Email rate limit exceeded',
+      'Clerk mobile auth is not enabled in v1',
     );
   });
 });

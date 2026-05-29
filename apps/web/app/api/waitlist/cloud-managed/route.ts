@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -12,11 +13,16 @@ import { requireCsrfToken } from '@/lib/csrf';
  * POST /api/waitlist/cloud-managed
  *
  * Unauthenticated waitlist signup for the Cloud Managed private beta.
- * Persists to the `cloud_managed_waitlist` table (see supabase/migrations/).
- * If the table does not yet exist, stubs a console log and returns 200 OK —
- * idempotent, no error surface to the user.
+ * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
+ * Fails closed if persistence is unavailable; waitlist signups must never be
+ * acknowledged without durable storage.
  *
  * Body: { email: string, source: 'byok' | 'sync' | 'billing' | 'other' }
+ *
+ * PII handling: this table stores normalized email addresses because launch
+ * operations must be able to notify waitlisted visitors. The table is
+ * insert-only for public callers and read-restricted to service/admin access
+ * by the database policy.
  */
 
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
@@ -37,7 +43,9 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  const rateLimitResponse = await withRateLimit(request, 'default');
+  // Use the dedicated 'waitlist' rate limit key: 5/hour per IP, fail-closed.
+  // The unauthenticated PII intake warrants a tighter limit than 'default'.
+  const rateLimitResponse = await withRateLimit(request, 'waitlist');
   if (rateLimitResponse) return rateLimitResponse;
 
   let body: unknown;
@@ -54,38 +62,28 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   const source: WaitlistSource = isValidSource(payload.source) ? payload.source : 'other';
-  const email = payload.email.toLowerCase().trim();
-
-  const supabase = await createSupabaseServerClient();
+  const email = normalizeWaitlistEmail(payload.email as string);
+  const db = getNeonDb();
+  const now = new Date().toISOString();
 
   try {
-    const { error } = await supabase.from('cloud_managed_waitlist').upsert(
-      {
-        email,
-        source,
-        joined_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'email,source' },
+    await db.execute(
+      `insert into cloud_managed_waitlist (email, source, joined_at, updated_at)
+       values ($1, $2, $3, $4)
+       on conflict (email, source)
+       do update set updated_at = excluded.updated_at`,
+      [email, source, now, now],
     );
-
-    if (error) {
-      // Table may not exist yet (migration pending) — stub to console and succeed
-      if (error.code === '42P01') {
-        console.warn('[waitlist/cloud-managed] Table not yet migrated; queuing entry stub.', {
-          source,
-        });
-        return NextResponse.json({ ok: true, queued: true });
-      }
-      throw createError.internal('Failed to join waitlist');
-    }
   } catch (err) {
-    // Non-Supabase error (e.g. network) — re-throw
+    const pgErr = err as { code?: string };
+    if (pgErr?.code === '42P01') {
+      console.warn('[waitlist/cloud-managed] Table not yet migrated; refusing signup.', { source });
+      throw createError.internal('Cloud waitlist storage is not migrated');
+    }
+    // Re-throw AppErrors (rate limit, CSRF, etc.) as-is
     if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.warn('[waitlist/cloud-managed] Supabase unreachable; returning queued stub.', {
-      source,
-    });
-    return NextResponse.json({ ok: true, queued: true });
+    console.warn('[waitlist/cloud-managed] DB unreachable; refusing signup.', { source });
+    throw createError.internal('Cloud waitlist storage is unavailable');
   }
 
   return NextResponse.json({ ok: true, joined: true });

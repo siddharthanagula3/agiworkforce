@@ -4,7 +4,7 @@
  * Maps task_id → { userId, expiresAt } with a 6-hour TTL.
  * This is sufficient for the serverless function lifetime in which tasks complete.
  *
- * In a horizontally-scaled deployment, replace with Redis or Supabase storage.
+ * In a horizontally-scaled deployment, replace with Redis or Neon storage.
  */
 
 interface TaskEntry {

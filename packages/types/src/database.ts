@@ -1,12 +1,12 @@
 /**
- * Database entity types — Supabase schema mirrors.
+ * Database entity types — cloud schema mirrors.
  *
- * These interfaces exactly match the column layouts in supabase/migrations/.
+ * These interfaces exactly match the column layouts in cloud migration folders.
  * They are used by the web app, mobile app, and VS Code extension to type
- * responses from the Supabase REST and Realtime APIs.
+ * responses from shared database APIs.
  *
- * The desktop app uses SQLite as source of truth; the Rust sync client
- * (supabase_sync.rs) writes deterministic-UUID copies of local rows here.
+ * The desktop app uses SQLite as source of truth; a sync client writes
+ * deterministic-UUID copies of local rows into cloud persistence.
  *
  * @module database
  * @packageDocumentation
@@ -74,99 +74,6 @@ export interface MessageRow {
 export type MessageInsert = Omit<MessageRow, 'id' | 'created_at'> & {
   id?: string;
 };
-
-// ============================================================================
-// vibe_sessions (20260305000001)
-// ============================================================================
-
-export type VibeSessionStatus = 'active' | 'paused' | 'completed' | 'archived';
-
-/** Row shape for public.vibe_sessions. */
-export interface VibeSessionRow {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string | null;
-  status: VibeSessionStatus;
-  model_id: string | null;
-  provider: string | null;
-  goal: string | null;
-  project_path: string | null;
-  tags: string[];
-  metadata: Record<string, unknown>;
-  total_messages: number;
-  total_tokens_used: number;
-  started_at: string;
-  completed_at: string | null;
-  last_activity_at: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// ============================================================================
-// vibe_messages (20260305000002)
-// ============================================================================
-
-/** Row shape for public.vibe_messages. */
-export interface VibeMessageRow {
-  id: string;
-  session_id: string;
-  user_id: string;
-  agent_id?: string;
-  role: MessageRole;
-  content: string | null;
-  content_blocks: unknown[];
-  model_id: string | null;
-  provider: string | null;
-  tokens_input: number;
-  tokens_output: number;
-  cost_cents: number;
-  tool_calls: unknown[];
-  tool_results: unknown[];
-  attachments: unknown[];
-  metadata: Record<string, unknown>;
-  parent_message_id: string | null;
-  sequence_number: number;
-  duration_ms: number | null;
-  error: string | null;
-  created_at: string;
-}
-
-// ============================================================================
-// vibe_agent_actions (20260308100001)
-// ============================================================================
-
-export type AgentActionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-/** Row shape for public.vibe_agent_actions. */
-export interface VibeAgentActionRow {
-  id: string;
-  session_id: string;
-  user_id: string;
-  agent_id: string;
-  action_type: string;
-  action_data: Record<string, unknown>;
-  status: AgentActionStatus;
-  created_at: string;
-  completed_at: string | null;
-  error: string | null;
-}
-
-// ============================================================================
-// vibe_agent_messages (20260308100002)
-// ============================================================================
-
-/** Row shape for public.vibe_agent_messages. */
-export interface VibeAgentMessageRow {
-  id: string;
-  session_id: string;
-  user_id: string;
-  agent_id: string;
-  role: MessageRole;
-  content: string;
-  metadata: Record<string, unknown>;
-  created_at: string;
-}
 
 // ============================================================================
 // workforce_tasks (20260308100003)

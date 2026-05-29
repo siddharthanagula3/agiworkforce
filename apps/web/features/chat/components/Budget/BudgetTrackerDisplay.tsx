@@ -3,7 +3,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBillingUsageStore } from '@/stores/unified/billingUsage';
-import { useChatStore } from '@features/chat/stores/chat-store';
+import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
 
 interface BudgetTrackerDisplayProps {
   className?: string;
@@ -23,6 +23,7 @@ interface CreditsResponse {
 }
 
 const CENTS_TO_DOLLARS = 0.01;
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 async function fetchCreditBalance(): Promise<CreditBalance | null> {
   try {
@@ -44,9 +45,11 @@ export function BudgetTrackerDisplay({
   const sessionCost_cents = useBillingUsageStore((s) => s.sessionCost_cents);
   const dailyBudget_cents = useBillingUsageStore((s) => s.dailyBudget_cents);
 
-  const activeSessionId = useChatStore((s) => s.activeSessionId);
+  const activeConversationId = useChatStore((s) => s.activeConversationId);
   const messages = useChatStore((s) =>
-    activeSessionId ? (s.messages[activeSessionId] ?? []) : [],
+    activeConversationId
+      ? (s.messagesByConversation[activeConversationId] ?? EMPTY_MESSAGES)
+      : EMPTY_MESSAGES,
   );
 
   const [creditBalance, setCreditBalance] = useState<CreditBalance | null>(null);
@@ -71,7 +74,11 @@ export function BudgetTrackerDisplay({
   }, [showCreditBalance]);
 
   const tokensUsed = useMemo(
-    () => messages.reduce((sum, msg) => sum + (msg.metadata?.tokensUsed ?? 0), 0),
+    () =>
+      messages.reduce(
+        (sum, msg) => sum + ((msg.metadata?.['tokensUsed'] as number | undefined) ?? 0),
+        0,
+      ),
     [messages],
   );
 

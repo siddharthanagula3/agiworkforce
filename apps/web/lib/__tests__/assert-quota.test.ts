@@ -4,7 +4,6 @@
  * Covers:
  *   - Each threshold per tier (Free 80%/100%/150%, Hobby 80%/100%/150%)
  *   - Image/video/CU/MCP sub-quota independence
- *   - Role-correctness: getUserClient is used, never service_role for user reads
  *   - Concurrent assertQuota calls don't double-charge (atomicity via RPC)
  *   - Edge: cap exactly at boundary
  *   - Edge: cumulative usage exceeds 150% (already past hard cap)
@@ -170,59 +169,22 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Supabase client mock
+// Neon DB mock
 // ---------------------------------------------------------------------------
 
-// We need to capture what getUserClient receives and what it calls
-const mockSelect = vi.fn();
-const mockEq = vi.fn();
-const mockGt = vi.fn();
-const mockGte = vi.fn();
-const mockOrder = vi.fn();
-const mockLimit = vi.fn();
-const mockMaybeSingle = vi.fn();
-const mockRpc = vi.fn();
-const mockFrom = vi.fn();
+// query returns an array of rows; execute returns a row count.
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
 
-// Build a fluent chain that always returns the last mock
-function buildFluentChain() {
-  mockMaybeSingle.mockResolvedValue({ data: null, error: null });
-  mockLimit.mockReturnValue({ maybeSingle: mockMaybeSingle });
-  mockOrder.mockReturnValue({ limit: mockLimit, maybeSingle: mockMaybeSingle });
-  mockGt.mockReturnValue({ order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
-  mockGte.mockReturnValue({ order: mockOrder, limit: mockLimit, maybeSingle: mockMaybeSingle });
-  mockEq.mockReturnValue({
-    eq: mockEq,
-    gt: mockGt,
-    gte: mockGte,
-    order: mockOrder,
-    limit: mockLimit,
-    maybeSingle: mockMaybeSingle,
-  });
-  mockSelect.mockReturnValue({
-    eq: mockEq,
-    gt: mockGt,
-    gte: mockGte,
-    order: mockOrder,
-    limit: mockLimit,
-    maybeSingle: mockMaybeSingle,
-  });
-  mockFrom.mockReturnValue({ select: mockSelect, eq: mockEq });
-  mockRpc.mockResolvedValue({ data: null, error: null });
-}
-
-vi.mock('@/lib/supabase-server', () => {
-  return {
-    getUserClient: vi.fn(() => ({
-      from: mockFrom,
-      rpc: mockRpc,
-    })),
-    getServiceClient: vi.fn(() => ({
-      from: mockFrom,
-      rpc: mockRpc,
-    })),
-  };
-});
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: mockExecute,
+    transaction: vi.fn(),
+    withUser: vi.fn(),
+    dispose: vi.fn(),
+  })),
+}));
 
 // Import after mocks
 import { assertQuota, reconcileUsage } from '../assert-quota';
@@ -231,9 +193,18 @@ import { assertQuota, reconcileUsage } from '../assert-quota';
 // Test utilities
 // ---------------------------------------------------------------------------
 
+type UsageRow = {
+  credits_used_cents: number;
+  credits_allocated_cents: number;
+  daily_used_cents: number | null;
+  flagship_daily_tokens: number | null;
+  flagship_daily_reset_at: string | null;
+};
+
 /**
  * Seed the mock to return a usage row with given used/allocated cents.
  * pctUsed = usedCents / allocatedCents (surrogate for token usage fraction).
+ * Also seeds image count query to return 0 (pass-through for image tests).
  */
 function seedUsageRow(opts: {
   credits_used_cents: number;
@@ -242,34 +213,27 @@ function seedUsageRow(opts: {
   flagship_daily_tokens?: number | null;
   flagship_daily_reset_at?: string | null;
 }) {
-  buildFluentChain();
-  // Use mockResolvedValue (not Once) because assertQuota fans out parallel
-  // _fetchUsageRow calls — one for the monthly check, one for the daily
-  // flagship check. Both must see the same row. In production, react cache()
-  // dedups them; in tests cache() is a pass-through so we need the mock to
-  // return the same data on every read.
-  mockMaybeSingle.mockResolvedValue({
-    data: {
-      credits_used_cents: opts.credits_used_cents,
-      credits_allocated_cents: opts.credits_allocated_cents,
-      daily_used_cents: opts.daily_used_cents ?? null,
-      flagship_daily_tokens: opts.flagship_daily_tokens ?? null,
-      flagship_daily_reset_at: opts.flagship_daily_reset_at ?? null,
-    },
-    error: null,
-  });
+  const row: UsageRow = {
+    credits_used_cents: opts.credits_used_cents,
+    credits_allocated_cents: opts.credits_allocated_cents,
+    daily_used_cents: opts.daily_used_cents ?? null,
+    flagship_daily_tokens: opts.flagship_daily_tokens ?? null,
+    flagship_daily_reset_at: opts.flagship_daily_reset_at ?? null,
+  };
+  // Use mockResolvedValue (not Once) so parallel _fetchUsageRow calls all
+  // see the same row. react cache() dedups in production; in tests it's a
+  // pass-through, so any fan-out must still see consistent data.
+  mockQuery.mockResolvedValue([row]);
 }
 
-/** Seed the mock to return no usage row (null data). */
+/** Seed the mock to return no usage row (new user). */
 function seedNoUsageRow() {
-  buildFluentChain();
-  mockMaybeSingle.mockResolvedValueOnce({ data: null, error: null });
+  mockQuery.mockResolvedValue([]);
 }
 
-/** Seed the mock to return a DB error for the usage row fetch. */
+/** Seed the mock to simulate a DB error on the usage row fetch. */
 function seedUsageRowError(message = 'DB error') {
-  buildFluentChain();
-  mockMaybeSingle.mockResolvedValueOnce({ data: null, error: { message } });
+  mockQuery.mockRejectedValue(new Error(message));
 }
 
 const BASE_OPTS = {
@@ -284,13 +248,14 @@ const BASE_OPTS = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  buildFluentChain();
+  // Default: empty usage (no row)
+  mockQuery.mockResolvedValue([]);
+  mockExecute.mockResolvedValue(0);
 });
 
 describe('assertQuota — Free tier (tokenCapPerMonth = 100_000)', () => {
   it('returns ok when well below 80% threshold', async () => {
     // 50k used of 100k cap = 50%, plus 1k requested = still ~50%
-    // credits surrogate: 50_000 used of 100_000 allocated
     seedUsageRow({ credits_used_cents: 50_000, credits_allocated_cents: 100_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'free', requestedTokens: 1_000 });
     expect(result.kind).toBe('ok');
@@ -443,10 +408,9 @@ describe('assertQuota — image sub-quota (Hobby: 10/mo)', () => {
   });
 
   it('returns ok for image on hobby tier when no images used yet', async () => {
-    // Token usage: 0 used
-    seedNoUsageRow();
-    // image usage: 0 images (media_generations returns 0)
-    mockMaybeSingle.mockResolvedValue({ data: 0, error: null });
+    // Token usage: 0 used (no row)
+    // image usage: 0 images (media_generations returns count 0)
+    mockQuery.mockResolvedValue([]);
 
     const result = await assertQuota({
       ...BASE_OPTS,
@@ -454,8 +418,7 @@ describe('assertQuota — image sub-quota (Hobby: 10/mo)', () => {
       requestedTokens: 0,
       feature: 'image',
     });
-    // Token check: ok (no usage). Image check depends on media_generations.
-    // Since media_generations returns 0 for count, image pct = 0/10 = 0% < 80%.
+    // Token check: ok (no usage). Image check: 0 images used of 10 quota = 0% < 80%.
     expect(result.kind).toBe('ok');
   });
 });
@@ -572,37 +535,6 @@ describe('assertQuota — sub-quota independence', () => {
   });
 });
 
-describe('assertQuota — role-correctness', () => {
-  it('uses getUserClient (not getServiceClient) for usage reads', async () => {
-    seedNoUsageRow();
-    await assertQuota({ ...BASE_OPTS, tier: 'free', requestedTokens: 100 });
-
-    const { getUserClient: mockGetUserClient } = await import('@/lib/supabase-server');
-    expect(mockGetUserClient).toHaveBeenCalledWith(BASE_OPTS.token);
-  });
-
-  it('never calls getServiceClient for user data reads', async () => {
-    seedNoUsageRow();
-    await assertQuota({ ...BASE_OPTS, tier: 'hobby', requestedTokens: 100 });
-
-    const { getServiceClient: mockGetServiceClient } = await import('@/lib/supabase-server');
-    expect(mockGetServiceClient).not.toHaveBeenCalled();
-  });
-
-  it('cannot read another user row — RLS enforced by getUserClient', async () => {
-    // This test verifies that getUserClient is called with the correct token,
-    // which ensures the RLS policy on token_credits applies. The actual
-    // enforcement is in Supabase RLS; here we verify the client is scoped.
-    seedNoUsageRow();
-    const otherToken = 'other-user-jwt';
-    await assertQuota({ ...BASE_OPTS, token: otherToken, tier: 'free', requestedTokens: 100 });
-
-    const { getUserClient: mockGetUserClient } = await import('@/lib/supabase-server');
-    expect(mockGetUserClient).toHaveBeenCalledWith(otherToken);
-    // getUserClient is never called with a service key, so RLS holds
-  });
-});
-
 describe('assertQuota — tiers without token cap', () => {
   it('returns ok for pro tier with low usage (has tokenCapPerMonth = 10M)', async () => {
     // Pro tier has a 10M monthly token cap. With 0 prior usage and 1k requested, well under 80%.
@@ -630,18 +562,15 @@ describe('assertQuota — concurrent calls do not double-charge', () => {
     // In production, cache() deduplicates. In tests, cache() is a pass-through,
     // so both calls will hit the mock. Both calls see the same seeded data.
     // The key property is that neither call WRITES to the DB — that is
-    // exclusively done via reconcileUsage -> SECURITY DEFINER RPC.
-    buildFluentChain();
-    mockMaybeSingle.mockResolvedValue({
-      data: {
-        credits_used_cents: 50_000,
-        credits_allocated_cents: 100_000,
-        daily_used_cents: null,
-        flagship_daily_tokens: null,
-        flagship_daily_reset_at: null,
-      },
-      error: null,
-    });
+    // exclusively done via reconcileUsage -> db.execute('select increment_usage(...)').
+    const row: UsageRow = {
+      credits_used_cents: 50_000,
+      credits_allocated_cents: 100_000,
+      daily_used_cents: null,
+      flagship_daily_tokens: null,
+      flagship_daily_reset_at: null,
+    };
+    mockQuery.mockResolvedValue([row]);
 
     const [r1, r2] = await Promise.all([
       assertQuota({ ...BASE_OPTS, tier: 'free', requestedTokens: 1_000 }),
@@ -652,14 +581,13 @@ describe('assertQuota — concurrent calls do not double-charge', () => {
     expect(r1.kind).toBe('ok');
     expect(r2.kind).toBe('ok');
     // No writes happened — only reads
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 });
 
 describe('reconcileUsage', () => {
-  it('calls increment_usage RPC with correct params', async () => {
-    buildFluentChain();
-    mockRpc.mockResolvedValueOnce({ error: null });
+  it('calls increment_usage with correct positional params', async () => {
+    mockExecute.mockResolvedValueOnce(1);
 
     await reconcileUsage({
       userId: 'user-123',
@@ -667,17 +595,16 @@ describe('reconcileUsage', () => {
       actualTokens: 5_000,
     });
 
-    expect(mockRpc).toHaveBeenCalledWith('increment_usage', {
-      p_user_id: 'user-123',
-      p_tokens: 5_000,
-      p_feature: 'chat',
-      p_is_flagship: false,
-    });
+    expect(mockExecute).toHaveBeenCalledWith('select increment_usage($1, $2, $3, $4)', [
+      'user-123',
+      5_000,
+      'chat',
+      false,
+    ]);
   });
 
   it('calls increment_usage with feature param when provided', async () => {
-    buildFluentChain();
-    mockRpc.mockResolvedValueOnce({ error: null });
+    mockExecute.mockResolvedValueOnce(1);
 
     await reconcileUsage({
       userId: 'user-123',
@@ -686,17 +613,16 @@ describe('reconcileUsage', () => {
       feature: 'image',
     });
 
-    expect(mockRpc).toHaveBeenCalledWith('increment_usage', {
-      p_user_id: 'user-123',
-      p_tokens: 1_000,
-      p_feature: 'image',
-      p_is_flagship: false,
-    });
+    expect(mockExecute).toHaveBeenCalledWith('select increment_usage($1, $2, $3, $4)', [
+      'user-123',
+      1_000,
+      'image',
+      false,
+    ]);
   });
 
-  it('forwards isFlagship=true to RPC for Pro+ flagship daily tracking', async () => {
-    buildFluentChain();
-    mockRpc.mockResolvedValueOnce({ error: null });
+  it('forwards isFlagship=true for Pro+ flagship daily tracking', async () => {
+    mockExecute.mockResolvedValueOnce(1);
 
     await reconcileUsage({
       userId: 'user-123',
@@ -706,26 +632,25 @@ describe('reconcileUsage', () => {
       isFlagship: true,
     });
 
-    expect(mockRpc).toHaveBeenCalledWith('increment_usage', {
-      p_user_id: 'user-123',
-      p_tokens: 2_500,
-      p_feature: 'chat',
-      p_is_flagship: true,
-    });
+    expect(mockExecute).toHaveBeenCalledWith('select increment_usage($1, $2, $3, $4)', [
+      'user-123',
+      2_500,
+      'chat',
+      true,
+    ]);
   });
 
-  it('skips RPC call when actualTokens is 0', async () => {
+  it('skips execute call when actualTokens is 0', async () => {
     await reconcileUsage({
       userId: 'user-123',
       token: 'jwt-abc',
       actualTokens: 0,
     });
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
-  it('does not throw when RPC fails (fire-and-forget semantics)', async () => {
-    buildFluentChain();
-    mockRpc.mockResolvedValueOnce({ error: { message: 'RPC unavailable' } });
+  it('does not throw when execute fails (fire-and-forget semantics)', async () => {
+    mockExecute.mockRejectedValueOnce(new Error('RPC unavailable'));
 
     // Should not throw
     await expect(
@@ -735,22 +660,6 @@ describe('reconcileUsage', () => {
         actualTokens: 500,
       }),
     ).resolves.toBeUndefined();
-  });
-
-  it('uses getUserClient (not getServiceClient) for RPC call', async () => {
-    buildFluentChain();
-    mockRpc.mockResolvedValueOnce({ error: null });
-
-    await reconcileUsage({
-      userId: 'user-123',
-      token: 'jwt-xyz',
-      actualTokens: 100,
-    });
-
-    const { getUserClient: mockGetUserClient, getServiceClient: mockGetServiceClient } =
-      await import('@/lib/supabase-server');
-    expect(mockGetUserClient).toHaveBeenCalledWith('jwt-xyz');
-    expect(mockGetServiceClient).not.toHaveBeenCalled();
   });
 });
 
@@ -810,7 +719,8 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
       expect(result.feature).toBe('token_cap');
-      expect(result.requiredTier).toBe('pro_plus');
+      // nextTierUp('pro') now returns 'max' (pro_plus removed from locked tiers)
+      expect(result.requiredTier).toBe('max');
     }
   });
 
@@ -825,19 +735,14 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     // Pro has imageQuotaPerMonth = null, meaning unlimited image gen within the token bucket.
     // A token usage row at 50% should still return 'ok' regardless of image count.
     // The image count mock (media_generations) has no effect because imageQuotaPerMonth is null.
-    seedUsageRow({ credits_used_cents: 5_000_000, credits_allocated_cents: 10_000_000 });
-    // Seed media_generations to return 100 images — should be ignored since quota is null.
-    buildFluentChain();
-    mockMaybeSingle.mockResolvedValue({
-      data: {
-        credits_used_cents: 5_000_000,
-        credits_allocated_cents: 10_000_000,
-        daily_used_cents: null,
-        flagship_daily_tokens: null,
-        flagship_daily_reset_at: null,
-      },
-      error: null,
-    });
+    const row: UsageRow = {
+      credits_used_cents: 5_000_000,
+      credits_allocated_cents: 10_000_000,
+      daily_used_cents: null,
+      flagship_daily_tokens: null,
+      flagship_daily_reset_at: null,
+    };
+    mockQuery.mockResolvedValue([row]);
 
     const result = await assertQuota({
       ...BASE_OPTS,
@@ -849,13 +754,13 @@ describe('assertQuota — Pro tier (tokenCapPerMonth = 10_000_000)', () => {
     expect(result.kind).toBe('ok');
   });
 
-  it('nextTierUp for pro resolves to pro_plus (verified via paywall.requiredTier)', async () => {
+  it('nextTierUp for pro resolves to max (pro_plus removed from locked tiers)', async () => {
     // Drive paywall outcome and check the requiredTier field which is set by nextTierUp('pro').
     seedUsageRow({ credits_used_cents: 20_000_000, credits_allocated_cents: 10_000_000 });
     const result = await assertQuota({ ...BASE_OPTS, tier: 'pro', requestedTokens: 100 });
     expect(result.kind).toBe('paywall');
     if (result.kind === 'paywall') {
-      expect(result.requiredTier).toBe('pro_plus');
+      expect(result.requiredTier).toBe('max');
     }
   });
 });

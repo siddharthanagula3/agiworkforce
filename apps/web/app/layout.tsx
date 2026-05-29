@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next';
+import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
 import './globals.css';
@@ -26,7 +27,7 @@ const newsreader = Newsreader({
   display: 'swap',
 });
 
-// JetBrains Mono: UI chrome — slugs, datelines, marginalia, CTAs.
+// JetBrains Mono: UI chrome for slugs, datelines, marginalia, and CTAs.
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
@@ -49,7 +50,7 @@ export const metadata: Metadata = {
     template: '%s | AGI',
   },
   description:
-    'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
+    'AGI is a multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code with Local, BYOK, and invite-only managed cloud modes.',
   keywords: [
     'AI agents',
     'automation',
@@ -78,7 +79,7 @@ export const metadata: Metadata = {
     siteName: 'AGI',
     title: 'AGI | Beyond one model. Beyond one surface.',
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Full undo support.',
+      'A multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code.',
     images: [
       {
         url: '/app-preview.png',
@@ -92,7 +93,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'AGI | Beyond one model. Beyond one surface.',
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support. Powered by OpenAI, Anthropic, Google, and more.',
+      'A multi-provider AI application suite with Local, BYOK, and invite-only managed cloud modes.',
     creator: '@agiworkforce',
     images: ['/app-preview.png'],
   },
@@ -122,7 +123,7 @@ export default async function RootLayout({
     url: APP_URL,
     logo: `${APP_URL}/logo.png`,
     description:
-      'Just tell the AI what you want done. No setup, no coding required. Desktop and web automation with full undo support.',
+      'Multi-provider AI application suite across web, mobile, desktop, CLI, Chrome, and VS Code.',
     sameAs: ['https://twitter.com/agiworkforce', 'https://github.com/agiworkforce'],
     contactPoint: {
       '@type': 'ContactPoint',
@@ -136,7 +137,8 @@ export default async function RootLayout({
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'AGI',
-    description: 'Autonomous AI agents for desktop and web automation with multi-LLM support',
+    description:
+      'Multi-provider AI applications with Local, BYOK, and invite-only managed cloud modes',
     applicationCategory: 'Business Application',
     operatingSystem: 'macOS, Windows, Linux, Web',
     offers: {
@@ -147,20 +149,12 @@ export default async function RootLayout({
     url: APP_URL,
   };
 
-  // JSON-LD Schema for WebSite with SearchAction
+  // JSON-LD Schema for WebSite
   const webSiteSchema = {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: 'AGI',
     url: APP_URL,
-    potentialAction: {
-      '@type': 'SearchAction',
-      target: {
-        '@type': 'EntryPoint',
-        urlTemplate: `${APP_URL}/search?q={search_term_string}`,
-      },
-      'query-input': 'required name=search_term_string',
-    },
   };
 
   return (
@@ -169,18 +163,21 @@ export default async function RootLayout({
         {/* Organization Schema */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
         />
         {/* SoftwareApplication Schema */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
         />
-        {/* WebSite Schema with SearchAction */}
+        {/* WebSite Schema */}
         <script
           nonce={nonce}
+          suppressHydrationWarning
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
         />
@@ -188,10 +185,12 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <SkipLinks />
-        <Providers>{children}</Providers>
-        {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
-        {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
+        <ClerkProvider>
+          <SkipLinks />
+          <Providers nonce={nonce}>{children}</Providers>
+          {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
+          {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
+        </ClerkProvider>
       </body>
     </html>
   );

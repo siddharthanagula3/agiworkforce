@@ -501,11 +501,14 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
                 output::print_warn(&format!("Failed to persist output style: {err}"));
             }
         }
-        "/privacy-mode" | "/trust-boundary"
-            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
-        {
-            if let Err(err) = config.persist_privacy_mode_project(session.privacy_mode.label()) {
-                output::print_warn(&format!("Failed to persist privacy mode: {err}"));
+        "/privacy-mode" | "/trust-boundary" => {
+            if crate::agent::PrivacyMode::from_arg(arg)
+                .is_some_and(|mode| mode == session.privacy_mode)
+            {
+                if let Err(err) = config.persist_privacy_mode_project(session.privacy_mode.label())
+                {
+                    output::print_warn(&format!("Failed to persist privacy mode: {err}"));
+                }
             }
         }
         _ => {}

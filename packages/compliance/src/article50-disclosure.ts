@@ -45,13 +45,13 @@ import {
   type ChineseHqProviderId,
 } from './provider-jurisdiction';
 
-/** Storage key used by both mobile (MMKV) and web (localStorage / Supabase). */
+/** Storage key used by both mobile (MMKV) and web (localStorage / cloud DB). */
 export const DISCLOSURE_LEDGER_KEY = 'agi:article50:first-run:v1' as const;
 
 /**
  * Record persisted to the consent ledger once the user dismisses the
  * combined disclosure + 5.1.2(i) modal. The shape is consumed by:
- *   - Supabase `consent_ledger` table writer (web)
+ *   - managed-cloud `consent_ledger` table writer (web)
  *   - `apps/mobile/lib/mmkv.ts` (mobile)
  *   - Desktop SQLite store (later)
  */
@@ -184,7 +184,7 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
 }
 
 /**
- * Minimal ledger interface — abstracts MMKV / localStorage / Supabase / SQLite.
+ * Minimal ledger interface — abstracts MMKV / localStorage / cloud DB / SQLite.
  * Host app provides the concrete implementation.
  */
 export interface DisclosureLedger {

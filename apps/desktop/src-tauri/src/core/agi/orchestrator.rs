@@ -620,15 +620,17 @@ impl AgentOrchestrator {
                         match pdf_handler.extract_text(path).await {
                             Ok(text) => {
                                 let truncated_text = if text.len() > 10000 {
-                                    format!("{}... (truncated)", &text[..10000])
+                                    format!(
+                                        "{}... (truncated)",
+                                        &text[..crate::core::agi::floor_char_boundary(&text, 10000)]
+                                    )
                                 } else {
                                     text
                                 };
                                 // Strip any literal occurrences of the
                                 // nonce from the extracted text so the
                                 // boundary stays cryptographically distinct.
-                                let safe_text =
-                                    truncated_text.replace(&attachment_nonce, "");
+                                let safe_text = truncated_text.replace(&attachment_nonce, "");
                                 enriched_instruction.push_str(&format!(
                                     "\n\n<attachment name=\"{}\" nonce=\"{}\">\n{}\n</attachment nonce=\"{}\">\n",
                                     attachment.name, attachment_nonce, safe_text, attachment_nonce

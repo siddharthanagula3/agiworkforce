@@ -12,7 +12,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { UserMemoryRow } from '@/lib/server/neon-types';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -20,18 +22,19 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id } = await context.params;
 
-  const { data, error } = await supabase
-    .from('user_memories')
-    .select('id, content, category, source, created_at, updated_at')
-    .eq('id', id)
-    .eq('is_deleted', false)
-    .single();
+  const [data] = await db.query<UserMemoryRow>(
+    `select id, content, category, source, created_at, updated_at
+     from user_memories
+     where id = $1 and user_id = $2 and is_deleted = false
+     limit 1`,
+    [id, userId],
+  );
 
-  if (error || !data) {
+  if (!data) {
     throw createError.notFound('Memory not found');
   }
 
@@ -55,8 +58,8 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id } = await context.params;
 
   let body: { content?: string };
@@ -74,18 +77,15 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
     throw createError.validation('Content must be 10,000 characters or less');
   }
 
-  const { data, error } = await supabase
-    .from('user_memories')
-    .update({
-      content: body.content.trim(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('is_deleted', false)
-    .select()
-    .single();
+  const [data] = await db.query<UserMemoryRow>(
+    `update user_memories
+     set content = $1, updated_at = now()
+     where id = $2 and user_id = $3 and is_deleted = false
+     returning *`,
+    [body.content.trim(), id, userId],
+  );
 
-  if (error || !data) {
+  if (!data) {
     throw createError.notFound('Memory not found');
   }
 
@@ -109,20 +109,18 @@ async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: .eq('user_id') not needed — DB enforces via RLS.
-  const { userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id } = await context.params;
 
-  const { error } = await supabase
-    .from('user_memories')
-    .update({
-      is_deleted: true,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .eq('is_deleted', false);
-
-  if (error) {
+  try {
+    await db.execute(
+      `update user_memories
+       set is_deleted = true, updated_at = now()
+       where id = $1 and user_id = $2 and is_deleted = false`,
+      [id, userId],
+    );
+  } catch (error) {
     logger.error({ error, memoryId: id }, 'Failed to delete memory');
     throw createError.internal('Failed to delete memory');
   }

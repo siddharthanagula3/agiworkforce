@@ -6,7 +6,7 @@ import {
   type ProviderStreamProvider,
   type StreamChunk as ProviderStreamChunk,
 } from '@/lib/providerStreamClient';
-import { supabase } from './supabase';
+import { getAuthToken } from './authSession';
 import { secureFetch } from './secureFetch';
 import { ApiPaywallError } from './api';
 import { ensureLlmGateOpen } from './llmGate';
@@ -79,8 +79,7 @@ async function attemptStream(
   callbacks: StreamCallbacks,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await getAuthToken();
 
   const response = await secureFetch(`${API_URL}/api/llm/v1/chat/completions`, {
     method: 'POST',
@@ -249,10 +248,9 @@ async function attemptProviderStream(
   callbacks: StreamCallbacks,
   signal: AbortSignal,
 ): Promise<boolean> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await getAuthToken();
   if (!token) {
-    throw new Error('No Supabase session for provider-stream path');
+    throw new Error('No cloud auth session for provider-stream path');
   }
 
   const override = getProviderOverride();

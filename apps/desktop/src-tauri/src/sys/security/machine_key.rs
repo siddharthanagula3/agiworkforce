@@ -61,9 +61,6 @@ pub enum KeyPurpose {
     /// same master-password-derived key; per-platform separation is theatre
     /// when one master key controls every purpose anyway.
     Messaging,
-    /// For encrypting Supabase auth tokens stored in the Tauri vault
-    /// instead of localStorage (FIX-004).
-    SupabaseAuth,
     /// For encrypting per-tool connector permission records stored at
     /// `~/.agiworkforce/connector-permissions.json` (Desktop P0, audit C-rank 1).
     ConnectorPermissions,
@@ -82,7 +79,6 @@ impl KeyPurpose {
             KeyPurpose::CalendarCredentials => "calendar_credentials",
             KeyPurpose::CloudEncryption => "cloud_encryption",
             KeyPurpose::Messaging => "messaging",
-            KeyPurpose::SupabaseAuth => "supabase_auth",
             KeyPurpose::ConnectorPermissions => "connector_permissions",
         }
     }

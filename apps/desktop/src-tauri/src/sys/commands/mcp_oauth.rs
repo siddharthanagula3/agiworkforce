@@ -67,21 +67,33 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "github" => Some(ConnectorMcpMapping {
             server_name: "connector-github",
             command: "npx",
-            args: &["-y", "--ignore-scripts", "@modelcontextprotocol/server-github"],
+            args: &[
+                "-y",
+                "--ignore-scripts",
+                "@modelcontextprotocol/server-github",
+            ],
             env_keys: &[("GITHUB_PERSONAL_ACCESS_TOKEN", "GitHub token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "github" },
         }),
         "slack" => Some(ConnectorMcpMapping {
             server_name: "connector-slack",
             command: "npx",
-            args: &["-y", "--ignore-scripts", "@modelcontextprotocol/server-slack"],
+            args: &[
+                "-y",
+                "--ignore-scripts",
+                "@modelcontextprotocol/server-slack",
+            ],
             env_keys: &[("SLACK_BOT_TOKEN", "Slack bot token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "slack" },
         }),
         "google_drive" => Some(ConnectorMcpMapping {
             server_name: "connector-google-drive",
             command: "npx",
-            args: &["-y", "--ignore-scripts", "@modelcontextprotocol/server-gdrive"],
+            args: &[
+                "-y",
+                "--ignore-scripts",
+                "@modelcontextprotocol/server-gdrive",
+            ],
             env_keys: &[("GDRIVE_OAUTH_TOKEN", "Google Drive OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
         }),
@@ -104,13 +116,6 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
             command: "npx",
             args: &["-y", "--ignore-scripts", "mcp-vercel"],
             env_keys: &[("VERCEL_TOKEN", "Vercel token")],
-            credential_source: ConnectorCredentialSource::ApiKey,
-        }),
-        "supabase" => Some(ConnectorMcpMapping {
-            server_name: "connector-supabase",
-            command: "npx",
-            args: &["-y", "--ignore-scripts", "@supabase/mcp-server-supabase"],
-            env_keys: &[("SUPABASE_ACCESS_TOKEN", "Supabase access token")],
             credential_source: ConnectorCredentialSource::ApiKey,
         }),
         "sentry" => Some(ConnectorMcpMapping {
@@ -137,14 +142,22 @@ fn get_connector_mcp_mapping(connector_id: &str) -> Option<ConnectorMcpMapping> 
         "cloudflare" => Some(ConnectorMcpMapping {
             server_name: "connector-cloudflare",
             command: "npx",
-            args: &["-y", "--ignore-scripts", "@cloudflare/mcp-server-cloudflare"],
+            args: &[
+                "-y",
+                "--ignore-scripts",
+                "@cloudflare/mcp-server-cloudflare",
+            ],
             env_keys: &[("CLOUDFLARE_API_TOKEN", "Cloudflare API token")],
             credential_source: ConnectorCredentialSource::ApiKey,
         }),
         "gmail" => Some(ConnectorMcpMapping {
             server_name: "connector-gmail",
             command: "npx",
-            args: &["-y", "--ignore-scripts", "@gongrzhe/server-gmail-autoauth-mcp"],
+            args: &[
+                "-y",
+                "--ignore-scripts",
+                "@gongrzhe/server-gmail-autoauth-mcp",
+            ],
             env_keys: &[("GMAIL_OAUTH_TOKEN", "Gmail OAuth token")],
             credential_source: ConnectorCredentialSource::OAuth { provider: "google" },
         }),
@@ -1456,7 +1469,6 @@ pub async fn mcp_list_connected_providers() -> Result<Vec<String>, String> {
         "github",
         "vercel",
         "stripe",
-        "supabase",
         "context7",
         "outlook",
         "intercom",

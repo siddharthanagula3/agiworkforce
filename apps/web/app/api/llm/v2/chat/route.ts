@@ -18,19 +18,18 @@ import 'server-only';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
 // AUDIT-FIX: C-3
 import { validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
-import { requireEnv } from '@/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getUserClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
@@ -44,6 +43,7 @@ import {
   type AnthropicProviderOptions,
   type OpenAIProviderOptions,
 } from '@/lib/ai-sdk/providers';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 import { createAiSdkStream, toCoreMessages, toAiSdkTools } from '@/lib/ai-sdk/stream-handler';
 import {
   MANAGED_AI_GATEWAY_PROVIDER_MODE_HEADER,
@@ -60,7 +60,6 @@ import {
 } from '@/lib/llm-providers/context-management';
 import { apiCache } from '@/shared/lib/cache';
 import { modelRouter } from '@core/ai/orchestration/model-router';
-import type { User } from '@supabase/supabase-js';
 
 // ---------------------------------------------------------------------------
 // Request schema (same shape as v1)
@@ -124,7 +123,7 @@ const V2ChatRequestSchema = z.object({
     .optional(),
   effort: z.string().optional(),
   // OpenAI reasoning-specific
-  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
+  reasoning_effort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   reasoning_summary: z.enum(['auto', 'concise', 'detailed', 'none']).optional(),
   service_tier: z.enum(['auto', 'default', 'flex']).optional(),
   providerMode: ProviderModeSchema.optional(),
@@ -161,7 +160,13 @@ function buildAnthropicOptions(req: V2ChatRequest): AnthropicProviderOptions | u
 
   if (req.effort) {
     const effort = req.effort.toLowerCase();
-    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+    if (
+      effort === 'low' ||
+      effort === 'medium' ||
+      effort === 'high' ||
+      effort === 'xhigh' ||
+      effort === 'max'
+    ) {
       opts.effort = effort;
     }
   }
@@ -169,11 +174,20 @@ function buildAnthropicOptions(req: V2ChatRequest): AnthropicProviderOptions | u
   return Object.keys(opts).length > 0 ? opts : undefined;
 }
 
+function openAIModelSupportsXHigh(model: string): boolean {
+  return supportsOpenAIReasoningEffort({ provider: 'openai', id: model }, 'xhigh');
+}
+
 /** Build OpenAI provider options from request body. */
 function buildOpenAIOptions(req: V2ChatRequest): OpenAIProviderOptions | undefined {
   const opts: OpenAIProviderOptions = {};
 
-  if (req.reasoning_effort) opts.reasoningEffort = req.reasoning_effort;
+  if (
+    req.reasoning_effort &&
+    (req.reasoning_effort !== 'xhigh' || openAIModelSupportsXHigh(req.model))
+  ) {
+    opts.reasoningEffort = req.reasoning_effort;
+  }
   if (req.reasoning_summary) opts.reasoningSummary = req.reasoning_summary;
   if (req.service_tier) opts.serviceTier = req.service_tier;
 
@@ -187,12 +201,12 @@ function buildOpenAIOptions(req: V2ChatRequest): OpenAIProviderOptions | undefin
 async function handleViaV1Fallback(
   request: NextRequest,
   chatRequest: V2ChatRequest,
-  user: User,
+  userId: string,
   subscription: SubscriptionInfo,
-  userClient: import('@supabase/supabase-js').SupabaseClient,
+  userClient: import('@agiworkforce/data-layer').DatabaseAdapter,
 ): Promise<NextResponse> {
   logger.info(
-    { model: chatRequest.model, userId: user.id },
+    { model: chatRequest.model, userId },
     'v2: model not in AI SDK providers - proxying to v1 factory',
   );
 
@@ -225,15 +239,15 @@ async function handleViaV1Fallback(
   );
 
   // Ensure credits are allocated for the user's subscription period
-  const existingBalance = await CreditService.getBalance(userClient, user.id);
+  const existingBalance = await CreditService.getBalance(userClient, userId);
   if (!existingBalance || !existingBalance.account_id) {
     logger.info(
-      { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+      { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
       'v2 fallback: no credit account found, allocating credits for subscription period',
     );
     try {
       await SubscriptionService.allocateCreditsForPeriod(
-        user.id,
+        userId,
         subscription.id,
         subscription.plan_tier,
         subscription.current_period_start,
@@ -242,16 +256,16 @@ async function handleViaV1Fallback(
       );
     } catch (allocError) {
       logger.error(
-        { error: allocError, userId: user.id, planTier: subscription.plan_tier },
+        { error: allocError, userId: userId, planTier: subscription.plan_tier },
         'v2 fallback: failed to allocate credits',
       );
     }
   }
 
-  const hasCredits = await CreditService.checkAvailable(userClient, user.id, estimatedCostCents);
+  const hasCredits = await CreditService.checkAvailable(userClient, userId, estimatedCostCents);
   if (!hasCredits) {
     logger.warn(
-      { userId: user.id, estimatedCostCents, model: chatRequest.model },
+      { userId: userId, estimatedCostCents, model: chatRequest.model },
       'v2 fallback: insufficient credits',
     );
     return NextResponse.json(
@@ -270,10 +284,10 @@ async function handleViaV1Fallback(
   }
 
   // Reserve credits with idempotency key
-  const reservationKey = CreditService.generateIdempotencyKey(user.id, 'reservation', requestId);
+  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
   const reserveResult = await CreditService.deductCredits(
     userClient,
-    user.id,
+    userId,
     estimatedCostCents,
     `Credit reservation (v2 fallback): ${provider}/${chatRequest.model}`,
     {
@@ -289,7 +303,7 @@ async function handleViaV1Fallback(
 
   if (!reserveResult.success) {
     logger.warn(
-      { userId: user.id, deductResult: reserveResult },
+      { userId: userId, deductResult: reserveResult },
       'v2 fallback: credit reservation failed',
     );
     return NextResponse.json(
@@ -340,17 +354,17 @@ async function handleViaV1Fallback(
       });
     } catch (error) {
       // Refund credits on streaming failure
-      const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+      const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
       await CreditService.deductCredits(
         userClient,
-        user.id,
+        userId,
         -estimatedCostCents,
         `Refund for failed v2 fallback streaming: ${provider}/${chatRequest.model}`,
         { type: 'refund', reason: 'streaming_failure', requestId },
         refundKey,
       ).catch((refundErr) => {
         logger.error(
-          { error: refundErr, userId: user.id, requestId },
+          { error: refundErr, userId: userId, requestId },
           'v2 fallback: credit refund failed after streaming error',
         );
       });
@@ -358,29 +372,29 @@ async function handleViaV1Fallback(
     }
   }
 
-  // SECURITY: Prefix cache keys with user.id to prevent cross-user cache contamination
-  const cacheKey = `v2:${user.id}:${chatRequest.model}:${JSON.stringify(internalMessages)}:${maxTokens}`;
+  // SECURITY: Prefix cache keys with userId to prevent cross-user cache contamination
+  const cacheKey = `v2:${userId}:${chatRequest.model}:${JSON.stringify(internalMessages)}:${maxTokens}`;
   const isDeterministic = chatRequest.temperature === 0;
 
   if (isDeterministic) {
     const cached = await apiCache.get<Record<string, unknown>>(cacheKey);
     if (cached) {
       logger.debug(
-        { model: chatRequest.model, userId: user.id },
+        { model: chatRequest.model, userId: userId },
         'v2: serving cached non-streaming response',
       );
       // Refund reserved credits for cached response (no LLM call made)
-      const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+      const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
       await CreditService.deductCredits(
         userClient,
-        user.id,
+        userId,
         -estimatedCostCents,
         `Refund for cached response (v2 fallback): ${provider}/${chatRequest.model}`,
         { type: 'refund', reason: 'cache_hit', requestId },
         refundKey,
       ).catch((refundErr) => {
         logger.error(
-          { error: refundErr, userId: user.id, requestId },
+          { error: refundErr, userId: userId, requestId },
           'v2 fallback: credit refund failed for cache hit',
         );
       });
@@ -401,17 +415,17 @@ async function handleViaV1Fallback(
     llmResponse = await LLMProviderFactory.sendRequest(provider, llmRequest);
   } catch (error) {
     // Refund credits on LLM failure
-    const refundKey = CreditService.generateIdempotencyKey(user.id, 'refund', requestId);
+    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', requestId);
     await CreditService.deductCredits(
       userClient,
-      user.id,
+      userId,
       -estimatedCostCents,
       `Refund for failed v2 fallback request: ${provider}/${chatRequest.model}`,
       { type: 'refund', reason: 'request_failure', requestId },
       refundKey,
     ).catch((refundErr) => {
       logger.error(
-        { error: refundErr, userId: user.id, requestId },
+        { error: refundErr, userId: userId, requestId },
         'v2 fallback: credit refund failed after request error',
       );
     });
@@ -429,13 +443,13 @@ async function handleViaV1Fallback(
 
     if (costDifference !== 0) {
       const reconciliationKey = CreditService.generateIdempotencyKey(
-        user.id,
+        userId,
         'reconciliation',
         requestId,
       );
       await CreditService.deductCredits(
         userClient,
-        user.id,
+        userId,
         costDifference,
         `Credit adjustment (v2 fallback): ${provider}/${chatRequest.model}`,
         {
@@ -456,7 +470,7 @@ async function handleViaV1Fallback(
     logger.error(
       {
         error: reconciliationError,
-        userId: user.id,
+        userId: userId,
         requestId,
         provider,
         model: chatRequest.model,
@@ -521,61 +535,13 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError;
 
-  // Authentication
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader?.startsWith('Bearer ')) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Missing or invalid authorization header',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
-  }
-
-  const token = authHeader.substring(7);
-
-  // Verify with Supabase
-  const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseAnonKey = requireEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY');
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, flowType: 'pkce' },
-  });
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser(token);
-
-  if (authError || !user) {
-    return NextResponse.json(
-      {
-        error: {
-          message: 'Invalid authentication token',
-          type: 'invalid_request_error',
-          code: 'invalid_api_key',
-        },
-      },
-      {
-        status: 401,
-        headers: { ...getCorsHeaders(request), ...getSecurityHeaders() },
-      },
-    );
-  }
-
-  // RLS-bound client for all downstream DB ops on behalf of this user.
-  const userClient = getUserClient(token);
+  const { userId } = await getClerkAuthUser(request);
+  const userClient = getNeonDb();
 
   // ---------------------------------------------------------------------------
   // SECURITY: Subscription validation (prevents credit & subscription bypass)
   // ---------------------------------------------------------------------------
-  const subscription = await SubscriptionService.getSubscription(userClient, user.id);
+  const subscription = await SubscriptionService.getSubscription(userClient, userId);
 
   if (!subscription) {
     return NextResponse.json(
@@ -662,7 +628,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   if (!providerModeDecision.allowed) {
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         model: chatRequest.model,
         code: providerModeDecision.code,
         receivedProviderMode: providerModeDecision.receivedProviderMode,
@@ -693,7 +659,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     chatRequest.model = recommendation.model;
     logger.info(
       {
-        userId: user.id,
+        userId: userId,
         previousModel,
         recommendedModel: recommendation.model,
         recommendedProvider: recommendation.provider,
@@ -717,7 +683,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
         : 'PRO';
     logger.warn(
       {
-        userId: user.id,
+        userId: userId,
         model: chatRequest.model,
         planTier: subscription.plan_tier,
         requiredTier,
@@ -743,7 +709,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   const aiSdkProvider = detectAiSdkProvider(chatRequest.model);
 
   if (!aiSdkProvider || !useAiSdk) {
-    return handleViaV1Fallback(request, chatRequest, user, subscription, userClient);
+    return handleViaV1Fallback(request, chatRequest, userId, subscription, userClient);
   }
 
   // Map model id (same mapping as v1)
@@ -807,7 +773,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
       contextCompacted = true;
       logger.info(
         {
-          userId: user.id,
+          userId: userId,
           model: chatRequest.model,
           estimatedTokens,
           contextWindow,
@@ -868,7 +834,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
 
   logger.info(
     {
-      userId: user.id,
+      userId: userId,
       model: apiModelId,
       provider: aiSdkProvider,
       sdkPath: 'v2-ai-sdk',
@@ -898,15 +864,15 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
   );
 
   // Ensure credits are allocated for the user's subscription period
-  const aiSdkExistingBalance = await CreditService.getBalance(userClient, user.id);
+  const aiSdkExistingBalance = await CreditService.getBalance(userClient, userId);
   if (!aiSdkExistingBalance || !aiSdkExistingBalance.account_id) {
     logger.info(
-      { userId: user.id, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+      { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
       'v2 ai-sdk: no credit account found, allocating credits for subscription period',
     );
     try {
       await SubscriptionService.allocateCreditsForPeriod(
-        user.id,
+        userId,
         subscription.id,
         subscription.plan_tier,
         subscription.current_period_start,
@@ -915,7 +881,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
       );
     } catch (allocError) {
       logger.error(
-        { error: allocError, userId: user.id, planTier: subscription.plan_tier },
+        { error: allocError, userId: userId, planTier: subscription.plan_tier },
         'v2 ai-sdk: failed to allocate credits',
       );
     }
@@ -923,12 +889,12 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
 
   const aiSdkHasCredits = await CreditService.checkAvailable(
     userClient,
-    user.id,
+    userId,
     aiSdkEstimatedCostCents,
   );
   if (!aiSdkHasCredits) {
     logger.warn(
-      { userId: user.id, estimatedCostCents: aiSdkEstimatedCostCents, model: chatRequest.model },
+      { userId: userId, estimatedCostCents: aiSdkEstimatedCostCents, model: chatRequest.model },
       'v2 ai-sdk: insufficient credits',
     );
     return NextResponse.json(
@@ -948,13 +914,13 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
 
   // Reserve credits with idempotency key
   const aiSdkReservationKey = CreditService.generateIdempotencyKey(
-    user.id,
+    userId,
     'reservation',
     aiSdkRequestId,
   );
   const aiSdkReserveResult = await CreditService.deductCredits(
     userClient,
-    user.id,
+    userId,
     aiSdkEstimatedCostCents,
     `Credit reservation (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
     {
@@ -970,7 +936,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
 
   if (!aiSdkReserveResult.success) {
     logger.warn(
-      { userId: user.id, deductResult: aiSdkReserveResult },
+      { userId: userId, deductResult: aiSdkReserveResult },
       'v2 ai-sdk: credit reservation failed',
     );
     return NextResponse.json(
@@ -1002,7 +968,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
       onFinish: ({ text, usage, finishReason, reasoning }) => {
         logger.info(
           {
-            userId: user.id,
+            userId: userId,
             model: apiModelId,
             provider: aiSdkProvider,
             promptTokens: usage?.promptTokens,
@@ -1030,13 +996,13 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
           if (costDifference < 0) {
             // Actual cost was less than estimated - refund the difference
             const refundKey = CreditService.generateIdempotencyKey(
-              user.id,
+              userId,
               'reconciliation',
               aiSdkRequestId,
             );
             CreditService.deductCredits(
               userClient,
-              user.id,
+              userId,
               costDifference,
               `Credit reconciliation refund (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
               {
@@ -1054,7 +1020,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               logger.error(
                 {
                   error: reconcileErr,
-                  userId: user.id,
+                  userId: userId,
                   requestId: aiSdkRequestId,
                   estimatedCostCents: aiSdkEstimatedCostCents,
                   actualCostCents,
@@ -1065,13 +1031,13 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
           } else if (costDifference > 0) {
             // Actual cost exceeded estimate - charge the additional amount
             const chargeKey = CreditService.generateIdempotencyKey(
-              user.id,
+              userId,
               'reconciliation',
               aiSdkRequestId,
             );
             CreditService.deductCredits(
               userClient,
-              user.id,
+              userId,
               costDifference,
               `Credit reconciliation charge (v2 ai-sdk): ${aiSdkProvider}/${chatRequest.model}`,
               {
@@ -1089,7 +1055,7 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
               logger.error(
                 {
                   error: reconcileErr,
-                  userId: user.id,
+                  userId: userId,
                   requestId: aiSdkRequestId,
                   estimatedCostCents: aiSdkEstimatedCostCents,
                   actualCostCents,
@@ -1124,24 +1090,24 @@ async function handleV2Chat(request: NextRequest): Promise<Response> {
     });
   } catch (err) {
     // Refund full reservation on stream error
-    const aiSdkRefundKey = CreditService.generateIdempotencyKey(user.id, 'refund', aiSdkRequestId);
+    const aiSdkRefundKey = CreditService.generateIdempotencyKey(userId, 'refund', aiSdkRequestId);
     await CreditService.deductCredits(
       userClient,
-      user.id,
+      userId,
       -aiSdkEstimatedCostCents,
       `Refund for failed v2 ai-sdk stream: ${aiSdkProvider}/${chatRequest.model}`,
       { type: 'refund', reason: 'stream_error', requestId: aiSdkRequestId },
       aiSdkRefundKey,
     ).catch((refundErr) => {
       logger.error(
-        { error: refundErr, userId: user.id, requestId: aiSdkRequestId },
+        { error: refundErr, userId: userId, requestId: aiSdkRequestId },
         'v2 ai-sdk: credit refund failed after stream error',
       );
     });
 
     const message = err instanceof Error ? err.message : String(err);
     logger.error(
-      { err, userId: user.id, model: apiModelId, provider: aiSdkProvider },
+      { err, userId: userId, model: apiModelId, provider: aiSdkProvider },
       'v2: AI SDK stream error',
     );
 

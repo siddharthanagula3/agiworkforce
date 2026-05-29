@@ -32,6 +32,12 @@ const allowedRootFiles = new Set([
   'README.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
+  // Hardening-mission root instruments (root-level by design — REMEDIATION_BRIEF.md
+  // is the operating contract and references audit.sh/audit-report.md "at the repo root").
+  'REMEDIATION_BRIEF.md',
+  'REMEDIATION_LOG.md',
+  'audit-report.md',
+  'audit.sh',
   'commitlint.config.cjs',
   'docker-compose.yml',
   'eslint.config.mjs',
@@ -75,6 +81,7 @@ const allowedRootDirs = new Set([
   'crates',
   'dev-scripts',
   'docs',
+  'docs-hardening',
   'examples',
   'ios',
   'node_modules',
@@ -83,7 +90,6 @@ const allowedRootDirs = new Set([
   'reports',
   'scripts',
   'services',
-  'supabase',
   'tasks',
 ]);
 
@@ -128,7 +134,6 @@ const requiredDirs = [
   'packages',
   'crates',
   'services',
-  'supabase',
   'docs',
   'audit',
   'tasks',
@@ -144,8 +149,8 @@ for (const dir of requiredDirs) {
   }
 }
 
-if (!fs.existsSync(path.join(root, 'audit/audit-log.md'))) {
-  errors.push('Missing required audit fire log: audit/audit-log.md');
+if (!fs.existsSync(path.join(root, 'audit/INDEX.md'))) {
+  errors.push('Missing required audit index: audit/INDEX.md');
 }
 
 for (const staleConfig of ['app.json', 'apps/mobile/app.json']) {

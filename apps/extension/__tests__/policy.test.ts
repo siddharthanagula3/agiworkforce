@@ -32,6 +32,7 @@ describe('policy — EXTENSION_PAGE_ONLY_MESSAGE_TYPES', () => {
       'DELETE_SCHEDULED_TASK',
       'SAVE_SHORTCUT',
       'DELETE_SHORTCUT',
+      'CANCEL_STREAM',
     ]) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(t)).toBe(true);
     }

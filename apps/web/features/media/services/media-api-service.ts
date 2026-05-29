@@ -3,7 +3,7 @@
  * Handles real API calls to /api/media/image/generate and /api/media/video/generate.
  */
 
-import { createClient } from '@/utils/supabase/client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,15 +63,12 @@ export interface VideoStatusResponse {
 // Auth helper
 // ---------------------------------------------------------------------------
 
-async function getAuthToken(): Promise<string> {
-  const supabase = createClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+async function requireAuthToken(): Promise<string> {
+  const token = await getAuthToken();
+  if (!token) {
     throw new Error('Not authenticated. Please sign in to continue.');
   }
-  return session.access_token;
+  return token;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,7 +81,7 @@ async function getAuthToken(): Promise<string> {
 export async function generateImages(
   request: ImageGenerationRequest,
 ): Promise<ImageGenerationResponse> {
-  const token = await getAuthToken();
+  const token = await requireAuthToken();
 
   const response = await fetch('/api/media/image/generate', {
     method: 'POST',
@@ -121,7 +118,7 @@ export async function generateImages(
 export async function generateVideo(
   request: VideoGenerationRequest,
 ): Promise<VideoGenerationResponse> {
-  const token = await getAuthToken();
+  const token = await requireAuthToken();
 
   const response = await fetch('/api/media/video/generate', {
     method: 'POST',
@@ -144,7 +141,7 @@ export async function generateVideo(
  * Poll video generation status via /api/media/video/status
  */
 export async function getVideoStatus(taskId: string): Promise<VideoStatusResponse> {
-  const token = await getAuthToken();
+  const token = await requireAuthToken();
 
   const response = await fetch(`/api/media/video/status?task_id=${encodeURIComponent(taskId)}`, {
     method: 'GET',

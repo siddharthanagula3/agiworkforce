@@ -7,7 +7,7 @@
  *   - Destructive badge (red dot) when tool.destructive === true
  *   - Permission dropdown: Always allow / Needs approval / Blocked
  *
- * Persistence: Hybrid (local vault in Tauri, Supabase in cloud).
+ * Persistence: Hybrid (local vault in Tauri, Neon-backed managed cloud).
  * Storage adapter: packages/unified-chat/src/lib/connectorPermissionStore.ts
  */
 

@@ -177,7 +177,7 @@ mod tests {
     fn card() -> AgentCard {
         AgentCard {
             id: "agi-1".into(),
-            name: "AGI Workforce".into(),
+            name: "AGI".into(),
             model: "claude-opus-4-7".into(),
             capabilities: vec!["code".into(), "search".into()],
             tools: vec!["read_file".into(), "edit_file".into()],

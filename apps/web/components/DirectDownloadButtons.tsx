@@ -16,11 +16,11 @@ export function DirectDownloadButtons() {
       <button
         type="button"
         disabled
-        title="Windows installer coming Q3 2026. Use the web app or CLI in the meantime."
+        title="Windows installer public launch is July 12, 2026."
         className="flex items-center gap-2 px-6 py-3 bg-zinc-900 rounded-lg font-medium text-zinc-500 cursor-not-allowed"
       >
         <Clock className="h-5 w-5" />
-        Windows: Coming Q3 2026
+        Windows: Public launch July 12
       </button>
       <button
         onClick={() => triggerDownload('linux')}

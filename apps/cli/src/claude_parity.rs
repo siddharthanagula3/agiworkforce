@@ -178,7 +178,7 @@ pub fn handle_shared_command(
             "Heap diagnostics are not enabled in this build. Use /stats for session counters and AGIWORKFORCE_DEBUG=1 for logs.".into(),
         ),
         "/stickers" => ParityCommandResult::SystemMessage(
-            "Stickers are a Claude UI affordance. AGI Workforce keeps this command for migration compatibility; no local sticker pack is installed.".into(),
+            "Stickers are a Claude UI affordance. AGI keeps this command for migration compatibility; no local sticker pack is installed.".into(),
         ),
         "/thinkback-play" => ParityCommandResult::SystemMessage(
             "Think Back playback is not installed. Use /think-back to generate a recap prompt for this session.".into(),
@@ -318,6 +318,24 @@ pub fn handle_privacy_mode(session: &mut AgentSession, arg: &str) -> String {
         return "Usage: /privacy-mode local | byok | managed".to_string();
     };
 
+    if mode == PrivacyMode::Managed {
+        return [
+            "Managed cloud mode is private beta and is not wired in this CLI build.",
+            "Privacy mode was not changed.",
+            "Use local mode, or use /continue-with-byok to create a reviewable BYOK handoff draft.",
+        ]
+        .join("\n");
+    }
+
+    if session.privacy_mode == PrivacyMode::Local && mode == PrivacyMode::Byok {
+        return [
+            "Privacy mode was not changed.",
+            "Local -> BYOK requires an explicit reviewable handoff.",
+            "Run /continue-with-byok to draft a fork with selected context, secret-scan redaction, payload preview, and consent before sending.",
+        ]
+        .join("\n");
+    }
+
     session.set_privacy_mode(mode);
     let mut lines = vec![
         format!("Privacy mode set: {}", mode.label()),
@@ -352,7 +370,7 @@ pub fn continue_with_byok_draft(session: &AgentSession, arg: &str) -> String {
     };
 
     let mut lines = vec![
-        "You are continuing an AGI Workforce Local chat in BYOK mode.".to_string(),
+        "You are continuing an AGI Local chat in BYOK mode.".to_string(),
         String::new(),
         "Privacy boundary: the user explicitly selected this handoff. Do not assume attached files, local-only tool outputs, or unlisted context are available.".to_string(),
         format!("Source privacy mode: {}", session.privacy_mode.label()),
@@ -549,7 +567,7 @@ pub fn render_install_app(app_name: &str) -> String {
 
 pub fn render_companion(surface: &str) -> String {
     format!(
-        "{surface} companion\n  AGI Workforce CLI is the source of truth for tools, sessions, MCP, skills, and permissions.\n  Companion surfaces should reuse the CLI engine contracts exposed by this crate."
+        "{surface} companion\n  AGI CLI is the source of truth for tools, sessions, MCP, skills, and permissions.\n  Companion surfaces should reuse the CLI engine contracts exposed by this crate."
     )
 }
 
@@ -766,7 +784,7 @@ pub fn render_agents(arg: &str) -> String {
 pub fn render_chrome() -> String {
     [
         "Chrome integration",
-        "  Use the AGI Workforce Chrome extension for browser context and page actions.",
+        "  Use the AGI Chrome extension for browser context and page actions.",
         "  Install or inspect the extension from apps/extension-vscode or the Chrome listing when packaged.",
         "  CLI engine compatibility: MCP, tools, permissions, and session context remain owned by the Rust CLI.",
     ]
@@ -974,13 +992,13 @@ pub fn handle_tui(_session: &mut AgentSession, arg: &str) -> String {
 pub fn powerup_prompt(arg: &str) -> String {
     let topic = arg.trim();
     if topic.is_empty() {
-        "Walk me through the top 5 AGI Workforce CLI features I should know about. For each \
+        "Walk me through the top 5 AGI CLI features I should know about. For each \
          feature: state its name, show a one-line example command, and explain what problem it \
          solves. Keep each lesson concise and interactive — ask me to try one before moving on."
             .to_string()
     } else {
         format!(
-            "Teach me how to use the '{topic}' feature of the AGI Workforce CLI. Show a \
+            "Teach me how to use the '{topic}' feature of the AGI CLI. Show a \
              concrete example, explain when to use it, and end with a quick exercise I can try."
         )
     }
@@ -1180,11 +1198,49 @@ mod tests {
     #[test]
     fn privacy_mode_command_sets_boundary() {
         let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Byok);
+
+        let result = handle_shared_command("/privacy-mode", "local", &mut session);
+
+        assert!(matches!(result, ParityCommandResult::SystemMessage(_)));
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn privacy_mode_byok_blocks_direct_local_handoff() {
+        let mut session = test_session();
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
         let result = handle_shared_command("/privacy-mode", "byok", &mut session);
 
-        assert!(matches!(result, ParityCommandResult::SystemMessage(_)));
-        assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+        match result {
+            ParityCommandResult::SystemMessage(message) => {
+                assert!(
+                    message.contains("Privacy mode was not changed"),
+                    "{message}"
+                );
+                assert!(message.contains("/continue-with-byok"), "{message}");
+                assert!(message.contains("secret-scan"), "{message}");
+            }
+            other => panic!("expected system message, got {other:?}"),
+        }
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+    }
+
+    #[test]
+    fn privacy_mode_managed_is_private_beta_not_wired() {
+        let mut session = test_session();
+
+        let result = handle_shared_command("/privacy-mode", "managed", &mut session);
+
+        match result {
+            ParityCommandResult::SystemMessage(message) => {
+                assert!(message.contains("private beta"), "{message}");
+                assert!(message.contains("not wired"), "{message}");
+            }
+            other => panic!("expected system message, got {other:?}"),
+        }
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
     }
 
     #[test]

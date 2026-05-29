@@ -1,7 +1,7 @@
 {
   "name": "agi-workforce",
   "displayName": "AGI Workforce",
-  "description": "Multi-provider AI coding assistant — 10+ providers (GPT, Claude, Gemini, and more) in VS Code",
+  "description": "Multi-provider AI coding assistant — 10+ providers",
   "version": "0.3.0",
   "publisher": "agiworkforce",
   "license": "PROPRIETARY",
@@ -10,7 +10,7 @@
     "url": "https://github.com/siddharthanagula3/agiworkforce"
   },
   "engines": {
-    "vscode": "^1.95.0"
+    "vscode": "^1.110.0"
   },
   "preview": true,
   "pricing": "Free",
@@ -106,16 +106,6 @@
       {
         "command": "agi-workforce.clearApiKey",
         "title": "AGI Workforce: Clear API Key",
-        "icon": "$(trash)"
-      },
-      {
-        "command": "agi-workforce.setSupabaseJwt",
-        "title": "AGI Workforce: Set Supabase JWT",
-        "icon": "$(key)"
-      },
-      {
-        "command": "agi-workforce.clearSupabaseJwt",
-        "title": "AGI Workforce: Clear Supabase JWT",
         "icon": "$(trash)"
       },
       {
@@ -424,7 +414,7 @@
         "id": "agiworkforce.agi",
         "name": "agi",
         "fullName": "AGI Workforce",
-        "description": "Multi-provider AI coding assistant — 10+ providers (GPT, Claude, Gemini, and more)",
+        "description": "Multi-provider AI coding assistant — 10+ providers",
         "isSticky": true,
         "commands": [
           {
@@ -747,7 +737,7 @@
         "agiWorkforce.agent.thinking": {
           "type": "boolean",
           "default": false,
-          "description": "Enable extended thinking for providers that support it (e.g. Claude claude-opus-4-6 and above). When enabled, the model will show its reasoning before responding."
+          "description": "Enable extended thinking for providers that support it. When enabled, the model will show its reasoning before responding."
         },
         "agiWorkforce.agent.maxIterations": {
           "type": "number",
@@ -781,7 +771,7 @@
         "agiWorkforce.useProviderStream": {
           "type": "boolean",
           "default": false,
-          "description": "Route chat through the new /api/v1/providers/:id/stream pipeline instead of the legacy AGI Workforce LLM proxy. Requires a Supabase JWT (run \"AGI Workforce: Set Supabase JWT\")."
+          "description": "Route chat through the /api/v1/providers/:id/stream pipeline instead of the legacy AGI Workforce LLM proxy. Requires AGI account web auth, which is not wired in the VS Code extension yet."
         },
         "agiWorkforce.gatewayUrl": {
           "type": "string",
@@ -835,16 +825,6 @@
           ],
           "default": "byok",
           "markdownDescription": "Subscription tier override for the VS Code extension. When set to any value other than `byok`, this overrides the live tier fetched from the desktop bridge or API (useful for testing). Leave at `byok` to use the real resolved tier."
-        },
-        "agiWorkforce.supabaseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Supabase project URL used for waitlist sign-up and invite-code redemption. Leave empty to disable cloud-bridge features (v1 default)."
-        },
-        "agiWorkforce.supabaseAnonKey": {
-          "type": "string",
-          "default": "",
-          "description": "Supabase anonymous (public) API key. Paired with agiWorkforce.supabaseUrl. Stored in VS Code settings (not SecretStorage) — this is the public anon key, not a service role key."
         }
       }
     },
@@ -958,8 +938,9 @@
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
     "@types/markdown-it": "^14.1.2",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.15",
-    "@types/vscode": "^1.95.0",
+    "@types/vscode": "^1.110.0",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
@@ -969,7 +950,9 @@
     "@vscode/vsce": "^3.7.1",
     "esbuild": "^0.27.4",
     "eslint": "^9.39.4",
+    "glob": "^10.5.0",
     "jsdom": "^25.0.1",
+    "mocha": "^11.7.5",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

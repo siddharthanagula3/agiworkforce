@@ -1,7 +1,7 @@
-import { supabase } from '@shared/lib/supabase-client';
 import { captureError } from '@shared/lib/sentry';
 import { logger } from '@shared/lib/logger';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 
 interface BuyTokenPackParams {
   userId: string;
@@ -9,16 +9,6 @@ interface BuyTokenPackParams {
   packId: string;
   tokens: number;
   price: number;
-}
-
-/**
- * Get authorization token for API calls
- */
-async function getAuthToken(): Promise<string | null> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token ?? null;
 }
 
 /**
@@ -111,138 +101,25 @@ export async function addTokensToUserBalance(
       });
     }
 
-    // Use the add_user_tokens RPC function which handles everything atomically
-    // This ensures the user_token_balances record exists (via get_or_create_token_balance)
-    // and properly logs the transaction
-    const { data: newBalance, error: rpcError } = await supabase.rpc(
-      'add_user_tokens' as never,
-      {
-        p_user_id: userId,
-        p_token_count: tokens,
-        p_transaction_type: 'purchase',
-        p_description: `Token pack purchase: ${transactionId}`,
-      } as never,
-    );
+    // Route through the server-side API (Neon SQL removed; Neon is server-only).
+    const authToken = await getAuthToken();
+    if (!authToken) {
+      throw new Error('Not authenticated');
+    }
 
-    if (rpcError) {
-      logger.error('[Add Tokens] RPC error:', rpcError);
-      captureError(rpcError as Error, {
-        tags: { feature: 'billing', operation: 'add_tokens_rpc' },
-        extra: { userId, tokens, transactionId },
-      });
+    const res = await fetch('/api/usage/add-tokens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${authToken}` },
+      body: JSON.stringify({ tokens, transaction_id: transactionId }),
+    });
 
-      // Fallback: direct update to user_token_balances table
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('[Add Tokens] Attempting fallback direct update...');
-      }
-
-      // Get current balance from user_token_balances
-
-      const { data: balanceData, error: fetchError } = await (
-        supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .select('current_balance')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      if (fetchError) {
-        logger.error('[Add Tokens] Error fetching balance:', fetchError);
-        captureError(fetchError as Error, {
-          tags: { feature: 'billing', operation: 'fetch_balance' },
-          extra: { userId, tokens, transactionId },
-        });
-        throw fetchError;
-      }
-
-      const currentBalance = balanceData?.current_balance || 0;
-      const updatedBalance = currentBalance + tokens;
-
-      if (balanceData) {
-        // Update existing record
-
-        const { error: updateError } = await (
-          supabase.from('user_token_balances' as never) as unknown as ReturnType<
-            typeof supabase.from
-          >
-        )
-          .update({
-            current_balance: updatedBalance,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('user_id', userId);
-
-        if (updateError) {
-          logger.error('[Add Tokens] Error updating balance:', updateError);
-          captureError(updateError as Error, {
-            tags: { feature: 'billing', operation: 'update_balance' },
-            extra: { userId, tokens, transactionId },
-          });
-          throw updateError;
-        }
-      } else {
-        // Create new record with default monthly allowance
-
-        const { error: insertError } = await (
-          supabase.from('user_token_balances' as never) as unknown as ReturnType<
-            typeof supabase.from
-          >
-        ).insert({
-          user_id: userId,
-          current_balance: tokens,
-          monthly_allowance: 0, // Free tier: 0 credits (local LLMs only)
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-
-        if (insertError) {
-          logger.error('[Add Tokens] Error inserting balance:', insertError);
-          captureError(insertError as Error, {
-            tags: { feature: 'billing', operation: 'insert_balance' },
-            extra: { userId, tokens, transactionId },
-          });
-          throw insertError;
-        }
-      }
-
-      // Log transaction
-
-      const { error: logError } = await (
-        supabase.from('token_transactions' as never) as unknown as ReturnType<typeof supabase.from>
-      ).insert({
-        user_id: userId,
-        tokens,
-        transaction_type: 'purchase',
-        transaction_id: transactionId,
-        previous_balance: currentBalance,
-        new_balance: updatedBalance,
-        created_at: new Date().toISOString(),
-      });
-
-      if (logError) {
-        logger.error('[Add Tokens] Error logging transaction:', logError);
-        captureError(logError as Error, {
-          tags: { feature: 'billing', operation: 'log_transaction' },
-          extra: { userId, tokens, transactionId },
-          level: 'warning',
-        });
-        // Don't throw - balance update was successful even if log fails
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('[Add Tokens] Fallback balance updated:', {
-          previousBalance: currentBalance.toLocaleString(),
-          tokensAdded: tokens.toLocaleString(),
-          newBalance: updatedBalance.toLocaleString(),
-        });
-      }
-      return;
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(err.error ?? `add-tokens failed: ${res.status}`);
     }
 
     if (process.env.NODE_ENV === 'development') {
-      logger.info('[Add Tokens] Token balance updated via RPC:', {
-        tokensAdded: tokens.toLocaleString(),
-        newBalance: (newBalance as unknown as number).toLocaleString(),
-      });
+      logger.info('[Add Tokens] Token balance updated via API:', { tokensAdded: tokens });
     }
   } catch (error) {
     logger.error('[Add Tokens] Error:', error);
@@ -260,45 +137,25 @@ export async function addTokensToUserBalance(
  * NOTE: Uses user_token_balances table (authoritative source) instead of
  * the deprecated users.token_balance column (dropped in migration 20260113000002).
  */
-export async function getUserTokenBalance(userId: string): Promise<number> {
+export async function getUserTokenBalance(_userId: string): Promise<number> {
   try {
-    // Try using the get_or_create_token_balance RPC function first
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
-      'get_or_create_token_balance' as never,
-      {
-        p_user_id: userId,
-      } as never,
-    );
+    const authToken = await getAuthToken();
+    if (!authToken) return 0;
 
-    if (!rpcError && rpcData && (rpcData as Array<Record<string, unknown>>).length > 0) {
-      return ((rpcData as Array<Record<string, unknown>>)[0]!['current_balance'] as number) || 0;
-    }
+    const res = await fetch('/api/usage', {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    if (!res.ok) return 0;
 
-    // Fallback: Query user_token_balances table directly
-
-    const { data, error } = await (
-      supabase.from('user_token_balances' as never) as unknown as ReturnType<typeof supabase.from>
-    )
-      .select('current_balance')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (error) {
-      logger.error('[Get Token Balance] Error:', error);
-      captureError(error as Error, {
-        tags: { feature: 'billing', operation: 'get_token_balance' },
-        extra: { userId },
-        level: 'warning',
-      });
-      return 0;
-    }
-
-    return ((data as Record<string, unknown> | null)?.['current_balance'] as number) || 0;
+    const body = (await res.json()) as Record<string, unknown>;
+    return typeof body['credits_remaining_cents'] === 'number'
+      ? body['credits_remaining_cents']
+      : 0;
   } catch (error) {
     logger.error('[Get Token Balance] Error:', error);
     captureError(error as Error, {
       tags: { feature: 'billing', operation: 'get_token_balance' },
-      extra: { userId },
+      extra: { _userId },
       level: 'warning',
     });
     return 0;

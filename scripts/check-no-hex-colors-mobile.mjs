@@ -122,7 +122,16 @@ function loadBaseline() {
   const p = absolute(BASELINE_PATH);
   if (!fs.existsSync(p)) return new Set();
   const data = JSON.parse(fs.readFileSync(p, 'utf8'));
-  return new Set(data.violations.map((v) => `${v.file}:${v.line}`));
+  const counts = new Map();
+  for (const v of data.violations) {
+    const key = baselineKey(v);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
+}
+
+function baselineKey(v) {
+  return `${v.file}:${v.rule}:${v.literal}`;
 }
 
 // Read raw source line for a given violation to detect scrim-shaped rgba(0,0,0,...) patterns.
@@ -174,7 +183,18 @@ if (WRITE_BASELINE) {
 }
 
 const baseline = loadBaseline();
-const newViolations = allViolations.filter((v) => !baseline.has(`${v.file}:${v.line}`));
+const remainingBaseline = new Map(baseline);
+const newViolations = [];
+
+for (const violation of allViolations) {
+  const key = baselineKey(violation);
+  const remaining = remainingBaseline.get(key) || 0;
+  if (remaining > 0) {
+    remainingBaseline.set(key, remaining - 1);
+  } else {
+    newViolations.push(violation);
+  }
+}
 
 if (newViolations.length === 0) {
   console.log('check:no-hex-mobile PASS — no new hardcoded color literals.');

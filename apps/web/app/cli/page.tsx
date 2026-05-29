@@ -2,11 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'CLI — The operator’s command line | AGI',
-  description:
-    'Pure Rust. Ratatui TUI. Same engine that powers every other surface. The CLI is the product; the apps are surfaces over it.',
+  title: 'CLI: agi, the operator command line',
+  description: `Pure Rust CLI for AGI developer workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/cli' },
 };
 
@@ -22,11 +22,146 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
   { cmd: 'session', desc: 'Inspect or branch sessions' },
   { cmd: 'plugin', desc: 'Manage plugins' },
   { cmd: 'history', desc: 'Browse session history' },
-  { cmd: 'login', desc: 'Sign in to a provider or our managed cloud' },
+  { cmd: 'login', desc: 'Sign in to a provider or configure BYOK' },
   { cmd: 'auth-status', desc: 'Show auth status for every provider' },
   { cmd: 'init', desc: 'Initialize ~/.agiworkforce/' },
   { cmd: 'onboarding', desc: 'Re-run the first-run onboarding' },
 ];
+
+const FEATURES = [
+  {
+    label: 'Non-interactive exec',
+    body: 'agi exec is the headless mode. Pipe a task in, get an answer out. Ships to CI without a TUI.',
+  },
+  {
+    label: 'Ratatui TUI',
+    body: 'Full interactive terminal UI in 256-color. Model switcher, tool call trace, and diff viewer built in.',
+  },
+  {
+    label: 'Session replay',
+    body: 'Every tool call is journaled. Resume, fork, and branch any past session. Full reproducibility.',
+  },
+  {
+    label: 'Sandboxed by default',
+    body: 'macOS Seatbelt + Linux bwrap on by default for dangerous tools: file writes, shell exec, network.',
+  },
+  {
+    label: 'MCP server mode',
+    body: 'Run as an MCP server over stdio. Connects AGI to Claude Code, Cursor, and any MCP client.',
+  },
+  {
+    label: 'Plugin system',
+    body: `${MARKETING.skills.display} built-in skills. Extend with your own plugins via the plugin manifest format.`,
+  },
+  {
+    label: 'BYOK across providers',
+    body: '10+ providers. Keys stored in system keychain. Switch provider per session with --provider flag.',
+  },
+  {
+    label: 'Multi-platform',
+    body: 'macOS, Linux, WSL. Install via Homebrew, cargo, or the one-line curl installer.',
+  },
+];
+
+/** Terminal-style screenshot placeholder. */
+function TerminalScreenshot({ title, description }: { title: string; description: string }) {
+  return (
+    <div
+      style={{
+        background: 'var(--agi-card)',
+        border: '1px solid var(--agi-rule-strong)',
+        borderRadius: 10,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          background: 'var(--agi-bg-3)',
+          borderBottom: '1px solid var(--agi-rule)',
+          padding: '8px 14px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: 'var(--agi-rule-strong)',
+            display: 'inline-block',
+          }}
+        />
+        <span
+          style={{
+            marginLeft: 8,
+            fontSize: 11,
+            color: 'var(--agi-ink-quiet)',
+            fontFamily: 'var(--mono)',
+          }}
+        >
+          zsh - {title}
+        </span>
+      </div>
+      <div
+        style={{
+          padding: '28px 20px',
+          minHeight: 140,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          background: 'linear-gradient(135deg, var(--agi-card) 0%, var(--agi-amber-soft) 100%)',
+        }}
+      >
+        <p
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase',
+            color: 'var(--agi-amber)',
+            margin: 0,
+          }}
+        >
+          Screenshot
+        </p>
+        <p
+          style={{
+            fontSize: 13,
+            color: 'var(--agi-ink-2)',
+            textAlign: 'center',
+            maxWidth: 300,
+            lineHeight: 1.5,
+            margin: 0,
+          }}
+        >
+          {description}
+        </p>
+      </div>
+    </div>
+  );
+}
 
 export default function CliPage() {
   return (
@@ -34,10 +169,15 @@ export default function CliPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">agiworkforce — the operator&rsquo;s CLI.</h1>
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
+          <h1 className="agi-page-h1">agi: the operator&rsquo;s CLI.</h1>
           <p className="agi-page-lede">
-            Pure Rust. Ratatui TUI. Same engine that powers every other surface.{' '}
-            <strong>The CLI is the product. The apps are surfaces over it.</strong>
+            Pure Rust. Ratatui TUI. Same engine that powers the rest of AGI.{' '}
+            <strong>
+              Local developer sessions stay local unless the user explicitly selects BYOK or Cloud.
+            </strong>
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
@@ -49,14 +189,40 @@ export default function CliPage() {
               rel="noopener noreferrer"
               className="agi-cta-ghost"
             >
-              Source on GitHub →
+              Source on GitHub &rarr;
             </a>
           </div>
         </section>
+
+        {/* ---- SCREENSHOTS ---- */}
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Install — pick one</p>
+          <p className="agi-section-eyebrow">How it looks</p>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 16,
+            }}
+          >
+            <TerminalScreenshot
+              title="interactive TUI"
+              description="Ratatui interactive mode with model switcher, streaming output, and tool call trace visible in the sidebar."
+            />
+            <TerminalScreenshot
+              title="agi exec"
+              description="Headless exec mode running a code review task in CI. stdin task, stdout structured diff, exit 0."
+            />
+            <TerminalScreenshot
+              title="agi session"
+              description="Session browser showing past runs with fork and resume options. Every tool call is journaled and replayable."
+            />
+          </div>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Install: pick one</p>
           <div className="agi-terminal">
-            <div className="agi-terminal-bar">~/agi-workforce — install</div>
+            <div className="agi-terminal-bar">~/agi-workforce: install</div>
             <pre className="agi-terminal-pre">
               <span className="agi-terminal-comment"># Homebrew (macOS, Linux)</span>
               {'\n'}
@@ -77,21 +243,34 @@ export default function CliPage() {
               {'\n'}
               <span className="agi-terminal-comment"># first run</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce login
+              <span className="agi-terminal-prompt">$</span>agi login
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce exec &quot;your first
-              task&quot;
+              <span className="agi-terminal-prompt">$</span>agi exec &quot;your first task&quot;
             </pre>
           </div>
         </section>
+
+        {/* ---- FEATURES GRID ---- */}
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">Features</p>
+          <ul className="agi-perks-grid" style={{ marginTop: 24 }} aria-label="CLI features">
+            {FEATURES.map((f) => (
+              <li key={f.label} className="agi-perk-card">
+                <p className="agi-perk-title">{f.label}</p>
+                <p className="agi-perk-description">{f.body}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <section className="agi-section">
           <p className="agi-section-eyebrow">What it does</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
               <h3 className="agi-reason-h">Non-interactive runs</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce exec</code> is the headless mode — pipe a task, get an answer,
-                ship to CI. No TUI, no editor, just stdin/stdout.
+                <code>agi exec</code> is the headless mode. Pipe a task, get an answer, ship to CI.
+                No TUI, no editor, just stdin/stdout.
               </p>
             </li>
             <li className="agi-reason">
@@ -104,8 +283,8 @@ export default function CliPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Sandboxed by default</h3>
               <p className="agi-reason-p">
-                macOS Seatbelt and Linux bwrap on by default for dangerous tools — file writes,
-                shell execution, network access.
+                macOS Seatbelt and Linux bwrap on by default for dangerous tools: file writes, shell
+                execution, network access.
               </p>
             </li>
           </ul>

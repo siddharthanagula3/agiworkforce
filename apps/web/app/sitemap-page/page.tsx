@@ -14,6 +14,12 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     title: 'Product',
     links: [
       { href: '/', label: 'Home' },
+      { href: '/business', label: 'Business' },
+      { href: '/teams', label: 'Teams' },
+      { href: '/solutions', label: 'Solutions' },
+      { href: '/apps', label: 'Apps and connectors' },
+      { href: '/agi-code', label: 'AGI Code' },
+      { href: '/cowork', label: 'Cowork' },
       { href: '/providers', label: 'Providers' },
       { href: '/pricing', label: 'Pricing' },
       { href: '/byok', label: 'BYOK' },
@@ -26,6 +32,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     links: [
       { href: '/desktop', label: 'Desktop' },
       { href: '/mobile', label: 'Mobile' },
+      { href: '/mobile/legal', label: 'Mobile legal' },
       { href: '/cli', label: 'CLI' },
       { href: '/chrome-extension', label: 'Chrome extension' },
       { href: '/vscode-extension', label: 'VS Code extension' },
@@ -36,7 +43,9 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     title: 'Compare',
     links: [
       { href: '/compare/claude', label: 'vs Claude' },
+      { href: '/compare/claude-code', label: 'vs Claude Code' },
       { href: '/compare/chatgpt', label: 'vs ChatGPT' },
+      { href: '/compare/codex', label: 'vs Codex' },
       { href: '/compare/gemini', label: 'vs Gemini' },
       { href: '/compare/perplexity', label: 'vs Perplexity' },
     ],
@@ -44,6 +53,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
   {
     title: 'Use cases',
     links: [
+      { href: '/use-cases', label: 'Use cases' },
       { href: '/use-cases/consulting', label: 'Consulting firms' },
       { href: '/use-cases/it-providers', label: 'IT service providers' },
       { href: '/use-cases/sales-teams', label: 'Sales teams' },
@@ -67,8 +77,13 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     title: 'Resources',
     links: [
       { href: '/docs', label: 'Documentation' },
+      { href: '/docs/byok-env', label: 'BYOK env docs' },
       { href: '/api-docs', label: 'API docs' },
       { href: '/integrations', label: 'Integrations' },
+      { href: '/features/artifacts', label: 'Artifacts' },
+      { href: '/features/deep-research', label: 'Deep research' },
+      { href: '/features/projects', label: 'Projects' },
+      { href: '/features/memory', label: 'Memory' },
       { href: '/help', label: 'Help' },
       { href: '/support', label: 'Support' },
       { href: '/faq', label: 'FAQ' },
@@ -80,6 +95,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
     title: 'Legal & trust',
     links: [
       { href: '/legal', label: 'Legal index' },
+      { href: '/legal/eu-representative', label: 'EU representative' },
       { href: '/terms', label: 'Terms' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/cookies', label: 'Cookies' },

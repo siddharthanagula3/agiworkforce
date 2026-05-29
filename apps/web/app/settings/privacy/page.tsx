@@ -1,22 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Switch } from '@shared/ui/switch';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
- * /settings/privacy — local-first privacy controls. Round-2 audit P0 #7 (web
- * settings depth). Toggles persist in localStorage in v1; Cloud Managed
- * replaces persistence with a Supabase row. Round-20 adds delete account and
- * data export with confirmation flow.
+ * /settings/privacy -- local-first privacy controls. Round-2 audit P0 #7 (web
+ * settings depth). Account privacy controls are persisted through
+ * /api/settings/preferences backed by Neon. Missing persistence is shown as an
+ * error instead of silently using client-only fallback data.
  */
 
-const PRIVACY_KEYS = {
-  improveModelTraining: 'agi.privacy.improveModelTraining',
-  shareTelemetry: 'agi.privacy.shareTelemetry',
-  rememberChats: 'agi.privacy.rememberChats',
-} as const;
+const NAMESPACE = 'privacy';
 
-type ToggleKey = keyof typeof PRIVACY_KEYS;
+type ToggleKey = 'locationMetadata' | 'improveModelTraining' | 'shareTelemetry' | 'rememberChats';
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -27,6 +26,13 @@ interface ToggleSpec {
 }
 
 const TOGGLES: ReadonlyArray<ToggleSpec> = [
+  {
+    id: 'locationMetadata',
+    label: 'Location metadata',
+    description:
+      'Allow AGI to use coarse location metadata (city/region) to improve product experiences.',
+    defaultValue: false,
+  },
   {
     id: 'rememberChats',
     label: 'Remember chats',
@@ -51,46 +57,125 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
   },
 ];
 
-function readToggle(key: ToggleKey, defaultValue: boolean): boolean {
-  if (typeof window === 'undefined') return defaultValue;
-  const stored = window.localStorage.getItem(PRIVACY_KEYS[key]);
-  if (stored === '1') return true;
-  if (stored === '0') return false;
-  return defaultValue;
+function defaultPrivacyState(): Record<ToggleKey, boolean> {
+  return TOGGLES.reduce(
+    (acc, t) => ({ ...acc, [t.id]: t.defaultValue }),
+    {} as Record<ToggleKey, boolean>,
+  );
 }
 
-function writeToggle(key: ToggleKey, value: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(PRIVACY_KEYS[key], value ? '1' : '0');
-  } catch {
-    // Private-window / quota errors are non-fatal.
-  }
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      style={{ transition: 'transform 0.15s', transform: open ? 'rotate(180deg)' : 'none' }}
+    >
+      <path
+        d="M2 4l4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ExpandableSection({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderBottom: '1px solid var(--settings-border)' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 20px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          color: 'var(--text-1)',
+          fontSize: 14,
+          fontWeight: 500,
+          textAlign: 'left',
+        }}
+      >
+        {title}
+        <Chevron open={open} />
+      </button>
+      {open && (
+        <div
+          style={{
+            padding: '0 20px 14px',
+            fontSize: 13,
+            color: 'var(--text-3)',
+            lineHeight: 1.6,
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function PrivacySettingsPage() {
-  const [state, setState] = useState<Record<ToggleKey, boolean>>(() =>
-    TOGGLES.reduce(
-      (acc, t) => ({ ...acc, [t.id]: readToggle(t.id, t.defaultValue) }),
-      {} as Record<ToggleKey, boolean>,
-    ),
-  );
+  const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [preferenceError, setPreferenceError] = useState<string | null>(null);
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
 
-  // Export state
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  // Delete account state
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteInput, setDeleteInput] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchPreferenceNamespace<Record<ToggleKey, boolean>>(NAMESPACE, defaultPrivacyState())
+      .then((value) => {
+        if (!cancelled) {
+          setState(value);
+          setPreferenceError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPreferenceError(
+            error instanceof Error ? error.message : 'Failed to load privacy settings',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreferences(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function toggle(key: ToggleKey) {
     setState((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      writeToggle(key, next[key]);
+      setSavingPreferences(true);
+      setPreferenceError(null);
+      savePreferenceNamespace(NAMESPACE, next)
+        .catch((error) => {
+          setPreferenceError(
+            error instanceof Error ? error.message : 'Failed to save privacy settings',
+          );
+        })
+        .finally(() => setSavingPreferences(false));
       return next;
     });
   }
@@ -152,42 +237,105 @@ export default function PrivacySettingsPage() {
             margin: '0 0 4px',
           }}
         >
-          Privacy & data controls
+          Privacy
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          AGI is local-first. These toggles override defaults for this device.
+          AGI is local-first. Web privacy controls are loaded from and saved to your account
+          settings.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          {loadingPreferences
+            ? 'Loading account settings...'
+            : savingPreferences
+              ? 'Saving...'
+              : preferenceError
+                ? `Save failed: ${preferenceError}`
+                : 'Synced to your account'}
         </p>
       </div>
 
-      {/* Toggles */}
+      {/* Informational banner */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
         }}
       >
+        <div
+          style={{
+            padding: '14px 20px',
+            fontSize: 13,
+            color: 'var(--text-2)',
+            lineHeight: 1.6,
+            borderBottom: '1px solid var(--settings-border)',
+          }}
+        >
+          AGI believes in transparent data practices. Learn how your information is protected when
+          using AGI products and visit our{' '}
+          <Link href="/privacy" style={{ color: 'var(--text-1)', textDecoration: 'underline' }}>
+            Privacy Policy
+          </Link>{' '}
+          for more details.
+        </div>
+
+        <ExpandableSection title="How we protect your data">
+          <p style={{ margin: '0 0 8px' }}>
+            All Local Mode conversations stay on your device and are never transmitted to AGI
+            servers. BYOK conversations go directly to your chosen provider using your own API key.
+          </p>
+          <p style={{ margin: 0 }}>
+            Managed Cloud conversations are encrypted in transit and at rest. We do not sell your
+            data or use it to train third-party models without your explicit opt-in.
+          </p>
+        </ExpandableSection>
+
+        <ExpandableSection title="How we use your data">
+          <p style={{ margin: '0 0 8px' }}>
+            Crash reports and anonymized usage counts (no message content) help us fix bugs faster.
+            These are disabled by default and can be turned off at any time below.
+          </p>
+          <p style={{ margin: 0 }}>
+            If you opt into model-improvement sharing (Cloud Managed only), your anonymized
+            conversations may be reviewed by our team to improve future models.
+          </p>
+        </ExpandableSection>
+      </section>
+
+      {/* Preferences (toggles) */}
+      <section
+        style={{
+          border: '1px solid var(--settings-border)',
+          borderRadius: 'var(--radius-lg)',
+          background: 'var(--bg-elev)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+          }}
+        >
+          Preferences
+        </div>
         {TOGGLES.map((spec, idx) => (
-          <label
+          <div
             key={spec.id}
             style={{
               padding: '16px 20px',
-              borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+              borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'flex-start',
+              justifyContent: 'space-between',
               gap: 16,
-              cursor: spec.managedOnly ? 'not-allowed' : 'pointer',
               opacity: spec.managedOnly ? 0.65 : 1,
             }}
           >
-            <input
-              type="checkbox"
-              checked={state[spec.id]}
-              disabled={spec.managedOnly}
-              onChange={() => toggle(spec.id)}
-              style={{ marginTop: 3 }}
-            />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
                 {spec.label}
@@ -210,50 +358,134 @@ export default function PrivacySettingsPage() {
                 {spec.description}
               </span>
             </div>
-          </label>
+            <Switch
+              checked={state[spec.id]}
+              disabled={spec.managedOnly}
+              onCheckedChange={() => toggle(spec.id)}
+              aria-label={spec.label}
+            />
+          </div>
         ))}
       </section>
 
-      {/* Export data */}
+      {/* Your data section */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
-          padding: '18px 20px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 8,
+          overflow: 'hidden',
         }}
       >
-        <h2 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: 'var(--text-1)' }}>
-          Export your data
-        </h2>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
-          Download all your conversations as JSON. Cloud Managed adds server-side archive export.
-        </p>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={exporting}
+        <div
+          style={{
+            padding: '14px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'var(--text-2)',
+          }}
+        >
+          Your data
+        </div>
+
+        {/* Export data row */}
+        <div
+          id="shared-chats"
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Export data</div>
+            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
+              Download all your conversations as JSON.
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting}
+              style={{
+                padding: '6px 14px',
+                fontSize: 12,
+                fontWeight: 600,
+                color: exporting ? 'var(--text-3)' : 'var(--text-1)',
+                background: 'transparent',
+                border: '1px solid var(--settings-border)',
+                borderRadius: 'var(--radius-md)',
+                cursor: exporting ? 'not-allowed' : 'pointer',
+                opacity: exporting ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {exporting ? 'Preparing...' : 'Export data'}
+            </button>
+            {exportError && (
+              <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
+                {exportError}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Shared chats row */}
+        <div
+          style={{
+            padding: '16px 20px',
+            borderBottom: '1px solid var(--settings-border)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Shared chats</div>
+          <Link
+            href="#shared-chats"
             style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
               padding: '6px 14px',
-              fontSize: 12,
-              fontWeight: 600,
-              color: exporting ? 'var(--text-3)' : 'var(--text-1)',
-              background: 'transparent',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
-              cursor: exporting ? 'not-allowed' : 'pointer',
-              opacity: exporting ? 0.6 : 1,
             }}
           >
-            {exporting ? 'Preparing...' : 'Export all data'}
-          </button>
-          {exportError && (
-            <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{exportError}</span>
-          )}
+            Manage
+          </Link>
+        </div>
+
+        {/* Memory preferences row */}
+        <div
+          style={{
+            padding: '16px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
+            Memory preferences
+          </div>
+          <Link
+            href="/settings/memory"
+            style={{
+              fontSize: 13,
+              color: 'var(--text-2)',
+              textDecoration: 'none',
+              padding: '6px 14px',
+              border: '1px solid var(--settings-border)',
+              borderRadius: 'var(--radius-md)',
+            }}
+          >
+            Manage
+          </Link>
         </div>
       </section>
 
@@ -272,19 +504,12 @@ export default function PrivacySettingsPage() {
             borderBottom: '1px solid rgba(218,119,86,0.25)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--terracotta, #da7756)',
+            color: 'var(--chat-accent-primary, #c8892a)',
           }}
         >
           Danger zone
         </div>
-        <div
-          style={{
-            padding: '16px 20px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-          }}
-        >
+        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {deleteSuccess ? (
             <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
               Account deletion scheduled. You will receive a confirmation email with a 24-hour
@@ -304,7 +529,7 @@ export default function PrivacySettingsPage() {
                     padding: '7px 14px',
                     fontSize: 12,
                     fontWeight: 600,
-                    color: 'var(--terracotta, #da7756)',
+                    color: 'var(--chat-accent-primary, #c8892a)',
                     background: 'transparent',
                     border: '1px solid rgba(218,119,86,0.5)',
                     borderRadius: 'var(--radius-md)',
@@ -356,7 +581,7 @@ export default function PrivacySettingsPage() {
                         background:
                           deleteInput !== 'DELETE' || deleting
                             ? 'rgba(218,119,86,0.4)'
-                            : 'var(--terracotta, #da7756)',
+                            : 'var(--chat-accent-primary, #c8892a)',
                         border: 'none',
                         borderRadius: 'var(--radius-md)',
                         cursor: deleteInput !== 'DELETE' || deleting ? 'not-allowed' : 'pointer',
@@ -376,7 +601,7 @@ export default function PrivacySettingsPage() {
                         fontSize: 12,
                         color: 'var(--text-2)',
                         background: 'transparent',
-                        border: '1px solid var(--border)',
+                        border: '1px solid var(--settings-border)',
                         borderRadius: 'var(--radius-md)',
                         cursor: 'pointer',
                       }}
@@ -385,7 +610,7 @@ export default function PrivacySettingsPage() {
                     </button>
                   </div>
                   {deleteError && (
-                    <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>
+                    <span style={{ fontSize: 12, color: 'var(--chat-accent-primary, #c8892a)' }}>
                       {deleteError}
                     </span>
                   )}

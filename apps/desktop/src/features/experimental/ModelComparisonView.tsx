@@ -9,6 +9,7 @@
 import React, { useCallback, useState } from 'react';
 import { GitCompareArrows } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import { invoke } from '../../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { useModelStore } from '../../stores/modelStore';
@@ -44,7 +45,7 @@ export const ModelComparisonView: React.FC<{ className?: string }> = ({ classNam
   const defaultModels = React.useMemo(() => {
     const candidates = availableModels.slice(0, 2).map((m) => m.id);
     if (candidates.length >= 2) return candidates;
-    return ['claude-opus-4-6', 'gpt-5.4'];
+    return [requireProviderDefaultModel('anthropic'), requireProviderDefaultModel('openai')];
   }, [availableModels]);
 
   const [selectedModels, setSelectedModels] = useState<string[]>(defaultModels);

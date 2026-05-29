@@ -8,7 +8,8 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { handleCorsPreflightRequest } from '@/lib/cors';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * Agent Communication API
@@ -41,9 +42,8 @@ async function handleGetCommunication(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: agent_messages + agent_delegations are user-scoped tables.
-  // The .eq('user_id', ...) filters remain as defense-in-depth; RLS is the boundary.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   const url = new URL(request.url);
   const agentId = url.searchParams.get('agentId');
@@ -54,25 +54,26 @@ async function handleGetCommunication(request: NextRequest) {
   }
 
   if (type === 'delegations') {
-    // Fetch delegations where this agent is the delegate
-    const { data, error } = await supabase
-      .from('agent_delegations')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('delegate_agent_id', agentId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      // Table may not exist in all environments - return empty list gracefully
-      if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
+    let rows: Record<string, unknown>[];
+    try {
+      rows = await db.query<Record<string, unknown>>(
+        `select *
+         from agent_delegations
+         where user_id = $1 and delegate_agent_id = $2
+         order by created_at desc
+         limit 50`,
+        [userId, agentId],
+      );
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string; message?: string };
+      if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
         return NextResponse.json({ delegations: [] });
       }
-      logger.error({ error, userId: user.id, agentId }, 'Failed to fetch agent delegations');
+      logger.error({ err, userId, agentId }, 'Failed to fetch agent delegations');
       throw createError.internal('Failed to fetch agent delegations');
     }
 
-    const delegations = (data ?? []).map((row) => ({
+    const delegations = rows.map((row) => ({
       id: row['id'] as string,
       from: (row['delegator_agent_id'] as string) ?? '',
       to: (row['delegate_agent_id'] as string) ?? '',
@@ -95,24 +96,26 @@ async function handleGetCommunication(request: NextRequest) {
   }
 
   // Default: fetch messages
-  const { data, error } = await supabase
-    .from('agent_messages')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('to_agent_id', agentId)
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (error) {
-    // Table may not exist in all environments - return empty list gracefully
-    if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await db.query<Record<string, unknown>>(
+      `select *
+       from agent_messages
+       where user_id = $1 and to_agent_id = $2
+       order by created_at desc
+       limit 100`,
+      [userId, agentId],
+    );
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string; message?: string };
+    if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
       return NextResponse.json({ messages: [] });
     }
-    logger.error({ error, userId: user.id, agentId }, 'Failed to fetch agent messages');
+    logger.error({ err, userId, agentId }, 'Failed to fetch agent messages');
     throw createError.internal('Failed to fetch agent messages');
   }
 
-  const messages = (data ?? []).map((row) => ({
+  const messages = rows.map((row) => ({
     id: row['id'] as string,
     from: (row['from_agent_id'] as string) ?? '',
     to: (row['to_agent_id'] as string) ?? '',
@@ -141,9 +144,8 @@ async function handleSendMessage(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-bound client: agent_messages.user_id RLS policy ensures only the owner
-  // can insert/read their own rows.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: unknown;
   try {
@@ -159,35 +161,27 @@ async function handleSendMessage(request: NextRequest) {
 
   const { from, to, content, priority, taskId, messageType } = validationResult.data;
 
-  const { data, error } = await supabase
-    .from('agent_messages')
-    .insert({
-      user_id: user.id,
-      from_agent_id: from,
-      to_agent_id: to,
-      content,
-      priority,
-      task_id: taskId ?? null,
-      message_type: messageType,
-      status: 'delivered',
-    })
-    .select()
-    .single();
-
-  if (error) {
-    // Table may not exist in all environments
-    if (error.code === '42P01' || (error.message && error.message.includes('does not exist'))) {
-      logger.warn(
-        { userId: user.id, from, to },
-        'agent_messages table does not exist; message dropped',
-      );
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await db.query<Record<string, unknown>>(
+      `insert into agent_messages
+         (user_id, from_agent_id, to_agent_id, content, priority, task_id, message_type, status)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       returning *`,
+      [userId, from, to, content, priority, taskId ?? null, messageType, 'delivered'],
+    );
+  } catch (err: unknown) {
+    const pgErr = err as { code?: string; message?: string };
+    if (pgErr.code === '42P01' || pgErr.message?.includes('does not exist')) {
+      logger.warn({ userId, from, to }, 'agent_messages table does not exist; message dropped');
       return NextResponse.json({ success: true, message: null });
     }
-    logger.error({ error, userId: user.id, from, to }, 'Failed to send agent message');
+    logger.error({ err, userId, from, to }, 'Failed to send agent message');
     throw createError.internal('Failed to send message');
   }
 
-  logger.info({ userId: user.id, messageId: data?.['id'], from, to }, 'Agent message sent');
+  const data = rows[0] ?? null;
+  logger.info({ userId, messageId: data?.['id'], from, to }, 'Agent message sent');
 
   return NextResponse.json({ success: true, message: data }, { status: 201 });
 }

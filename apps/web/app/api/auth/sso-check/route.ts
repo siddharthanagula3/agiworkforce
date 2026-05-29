@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { withRateLimit } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
-
-const SUPABASE_URL = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * SSO Domain Check API
@@ -41,30 +38,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ ssoEnabled: false });
   }
 
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    logger.error({}, 'Supabase service role not configured for SSO check');
-    return NextResponse.json({ ssoEnabled: false });
-  }
-
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      auth: { persistSession: false },
-    });
+    const db = getNeonDb();
+    const rows = await db.query<{ id: string }>(
+      'SELECT id FROM sso_connections WHERE domain = $1 AND is_active = true LIMIT 1',
+      [domain.toLowerCase()],
+    );
 
-    const { data, error } = await supabase
-      .from('sso_connections')
-      .select('id')
-      .eq('domain', domain.toLowerCase())
-      .eq('is_active', true)
-      .limit(1);
-
-    if (error) {
-      // Log internally but do not expose error details to the client
-      logger.error({ error, domain }, 'SSO domain check query failed');
-      return NextResponse.json({ ssoEnabled: false });
-    }
-
-    return NextResponse.json({ ssoEnabled: data !== null && data.length > 0 });
+    return NextResponse.json({ ssoEnabled: rows.length > 0 });
   } catch (error) {
     logger.error({ error, domain }, 'Unexpected error during SSO domain check');
     return NextResponse.json({ ssoEnabled: false });

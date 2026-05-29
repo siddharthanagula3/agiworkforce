@@ -17,7 +17,7 @@
  * How this surface complies:
  *   • Completed conversations are written ONLY to vscode.ExtensionContext.globalState
  *     via ConversationStore (apps/extension-vscode/src/data/conversationStore.ts).
- *   • No Supabase/postgres client is imported or instantiated here or anywhere in
+ *   • No platform database client is imported or instantiated here or anywhere in
  *     this surface. No writes to chat_messages / conversations / user_projects.
  *   • ConversationSyncService and MobileConversationSyncService are never referenced.
  *   • platform/surface.ts throws at extension activation if SOURCE_SURFACE ("vscode")
@@ -379,10 +379,8 @@ export function createChatHandler(
       );
     }
 
-    // Wave 3 follow-up: feature flag to route through the new
-    // /api/v1/providers/:id/stream pipeline. Default off — existing path
-    // is the safe default. Falls back to legacy on missing JWT or any
-    // runtime error so users don't get stuck with a broken chat.
+    // Optional provider stream route. AGI account web auth is not wired in the
+    // extension yet, so this path fails closed instead of using platform tokens.
     const useProviderStream = Config.useProviderStream();
 
     const streamFn = useProviderStream ? streamChatCompletionViaProvider : streamChatCompletion;
@@ -414,31 +412,11 @@ export function createChatHandler(
     };
 
     try {
-      try {
-        await streamFn(secrets, messages, streamCallbacks, token);
-      } catch (err) {
-        // Fall back to the legacy path on provider-stream errors that
-        // indicate a config gap (no JWT, no provider key on the gateway).
-        // Existing code paths already handle NO_API_KEY below; everything
-        // else propagates.
-        if (
-          useProviderStream &&
-          err instanceof AgiWorkforceApiError &&
-          (err.code === 'NO_SUPABASE_JWT' || err.code === 'STREAM_ERROR')
-        ) {
-          stream.markdown(
-            `\n\n_Provider-stream path unavailable (${err.code}); falling back to legacy._\n\n`,
-          );
-          // Clear any partial tokens captured by the failed first attempt so the
-          // saved conversation contains only the fallback path's complete output.
-          responseTokens.length = 0;
-          await streamChatCompletion(secrets, messages, streamCallbacks, token);
-        } else {
-          throw err;
-        }
-      }
+      await streamFn(secrets, messages, streamCallbacks, token);
     } catch (err) {
       const isNoKey = err instanceof AgiWorkforceApiError && err.code === 'NO_API_KEY';
+      const isWebAuthNotWired =
+        err instanceof AgiWorkforceApiError && err.code === 'AGI_ACCOUNT_WEB_AUTH_NOT_WIRED';
       const isCancelled = err instanceof AgiWorkforceApiError && err.code === 'CANCELLED';
       const isPaywall = err instanceof AgiWorkforcePaywallError;
 
@@ -491,7 +469,7 @@ export function createChatHandler(
         );
         usedFallback = true;
         await streamVscodeLmFallback(messages, stream, token);
-      } else if (fallbackEnabled && !isNoKey) {
+      } else if (fallbackEnabled && !isNoKey && !isWebAuthNotWired) {
         // Network or server error — try fallback
         stream.markdown(
           `\n\n> **AGI Workforce API error** (${
@@ -500,6 +478,9 @@ export function createChatHandler(
         );
         usedFallback = true;
         await streamVscodeLmFallback(messages, stream, token);
+      } else if (isWebAuthNotWired) {
+        const message = err instanceof Error ? err.message : 'AGI account web auth is not wired.';
+        stream.markdown(`\n\n> **Error**: ${message}\n\n`);
       } else {
         // No fallback — surface the error
         const message = err instanceof Error ? err.message : 'An unexpected error occurred.';

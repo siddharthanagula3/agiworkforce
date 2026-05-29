@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Cloud,
   Code2,
+  GitBranch,
   Menu,
   Monitor,
   MoreHorizontal,
@@ -50,6 +51,7 @@ export function CodeSessionsScreen({ archivedOnly = false }: CodeSessionsScreenP
     () => CODE_SESSIONS.filter((session) => session.status === 'archived'),
     [],
   );
+  const hasAnySessions = idleSessions.length > 0 || archivedSessions.length > 0;
 
   const openSession = useCallback(
     (id: string) => {
@@ -85,10 +87,20 @@ export function CodeSessionsScreen({ archivedOnly = false }: CodeSessionsScreenP
         contentContainerStyle={{ paddingHorizontal: 18, paddingTop: 34, paddingBottom: 120 }}
         showsVerticalScrollIndicator={archivedOnly}
       >
-        {!archivedOnly ? (
-          <CodeSessionSection title="Idle" sessions={idleSessions} onPress={openSession} />
-        ) : null}
-        <CodeSessionSection title="Archived" sessions={archivedSessions} onPress={openSession} />
+        {hasAnySessions ? (
+          <>
+            {!archivedOnly ? (
+              <CodeSessionSection title="Idle" sessions={idleSessions} onPress={openSession} />
+            ) : null}
+            <CodeSessionSection
+              title="Archived"
+              sessions={archivedSessions}
+              onPress={openSession}
+            />
+          </>
+        ) : (
+          <CodeSessionsEmptyState />
+        )}
       </ScrollView>
 
       <Pressable
@@ -200,7 +212,7 @@ export function CodeSessionDetailScreen() {
   const sessionId = Array.isArray(params.id) ? params.id[0] : params.id;
   const session = getCodeSessionById(sessionId);
   const insets = useSafeAreaInsets();
-  const [selectedMode, setSelectedMode] = useState<CodeSessionMode>(session.mode);
+  const [selectedMode, setSelectedMode] = useState<CodeSessionMode>(session?.mode ?? 'code');
   const [modeSheetVisible, setModeSheetVisible] = useState(false);
   const [moreMenuVisible, setMoreMenuVisible] = useState(false);
   const [environmentSheetVisible, setEnvironmentSheetVisible] = useState(false);
@@ -215,11 +227,13 @@ export function CodeSessionDetailScreen() {
   }, [router]);
 
   const copyBranch = useCallback(async () => {
+    if (!session) return;
     await copyToClipboard(session.branch);
     setMoreMenuVisible(false);
-  }, [session.branch]);
+  }, [session]);
 
   const shareSession = useCallback(async () => {
+    if (!session) return;
     setMoreMenuVisible(false);
     await Share.share({
       title: session.title,
@@ -239,6 +253,42 @@ export function CodeSessionDetailScreen() {
     setMoreMenuVisible(false);
     router.push('/(app)/code/archived' as Parameters<typeof router.push>[0]);
   }, [router]);
+
+  if (!session) {
+    return (
+      <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+        <View className="h-[74px] justify-center px-4">
+          <Pressable
+            onPress={goBack}
+            className="absolute left-4 w-12 h-12 rounded-full items-center justify-center border active:opacity-80"
+            style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ChevronLeft size={31} color={c.textPrimary} />
+          </Pressable>
+        </View>
+        <View testID="code-session-not-found" className="flex-1 items-center justify-center px-8">
+          <View
+            className="w-16 h-16 rounded-full items-center justify-center mb-5"
+            style={{ backgroundColor: c.surfaceElevated }}
+          >
+            <GitBranch size={28} color={c.textSecondary} />
+          </View>
+          <Text
+            className="text-[18px] font-semibold text-center mb-2"
+            style={{ color: c.textPrimary }}
+          >
+            Session unavailable
+          </Text>
+          <Text className="text-[14px] text-center leading-[20px]" style={{ color: c.textMuted }}>
+            This code session could not be found. It may have been removed or is no longer
+            accessible.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
@@ -384,6 +434,29 @@ export function CodeSessionDetailScreen() {
         onOpenDesktop={openDesktop}
       />
     </SafeAreaView>
+  );
+}
+
+function CodeSessionsEmptyState() {
+  const c = useThemeColors();
+  return (
+    <View
+      testID="code-sessions-empty-state"
+      className="flex-1 items-center justify-center py-20 px-8"
+    >
+      <View
+        className="w-16 h-16 rounded-full items-center justify-center mb-5"
+        style={{ backgroundColor: c.surfaceElevated }}
+      >
+        <GitBranch size={28} color={c.textSecondary} />
+      </View>
+      <Text className="text-[18px] font-semibold text-center mb-2" style={{ color: c.textPrimary }}>
+        No code sessions yet
+      </Text>
+      <Text className="text-[14px] text-center leading-[20px]" style={{ color: c.textMuted }}>
+        Start a new session to run code on Desktop or Cloud Managed environments
+      </Text>
+    </View>
   );
 }
 

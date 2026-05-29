@@ -4,7 +4,8 @@ import { logger } from '@shared/lib/logger';
  * Handles CRUD operations for chat session folders
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 export interface ChatFolder {
   id: string;
@@ -20,7 +21,7 @@ export interface ChatFolder {
   sessionCount?: number; // Populated separately
 }
 
-interface DBChatFolder {
+interface APIFolderRow {
   id: string;
   user_id: string;
   name: string;
@@ -31,56 +32,77 @@ interface DBChatFolder {
   sort_order: number;
   created_at: string;
   updated_at: string;
-  [key: string]: unknown;
+}
+
+async function buildMutateHeaders(): Promise<HeadersInit> {
+  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': csrf,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function buildReadHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+function mapRowToFolder(row: APIFolderRow): ChatFolder {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    name: row.name,
+    color: row.color,
+    icon: row.icon,
+    description: row.description ?? undefined,
+    parentFolderId: row.parent_folder_id ?? undefined,
+    sortOrder: row.sort_order,
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
 }
 
 class FolderManagementService {
   /**
    * Get all folders for a user
    */
-  async getUserFolders(userId: string): Promise<ChatFolder[]> {
-    const { data, error } = await supabase
-      .from('chat_folders')
-      .select('*')
-      .eq('user_id', userId)
-      .order('sort_order', { ascending: true })
-      .order('name', { ascending: true });
+  async getUserFolders(_userId: string): Promise<ChatFolder[]> {
+    const headers = await buildReadHeaders();
+    const res = await fetch('/api/chat/folders', { headers });
 
-    if (error) {
-      logger.error('[FolderService] Failed to load folders:', error);
-      throw new Error(`Failed to load folders: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[FolderService] Failed to load folders:', err);
+      throw new Error(
+        `Failed to load folders: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    return (data || []).map((f) => this.mapDBFolderToFolder(f as unknown as DBChatFolder));
+    const data = (await res.json()) as { folders: APIFolderRow[] };
+    return (data.folders || []).map(mapRowToFolder);
   }
 
   /**
    * Get a specific folder by ID
    */
-  async getFolder(folderId: string, userId?: string): Promise<ChatFolder | null> {
-    let query = supabase.from('chat_folders').select('*').eq('id', folderId);
-
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { data, error } = await query.maybeSingle();
-
-    if (error) {
-      logger.error('[FolderService] Failed to load folder:', error);
+  async getFolder(folderId: string, _userId?: string): Promise<ChatFolder | null> {
+    try {
+      const folders = await this.getUserFolders(_userId ?? '');
+      return folders.find((f) => f.id === folderId) ?? null;
+    } catch {
+      logger.error('[FolderService] Failed to load folder');
       return null;
     }
-
-    if (!data) return null;
-
-    return this.mapDBFolderToFolder(data as DBChatFolder);
   }
 
   /**
    * Create a new folder
    */
   async createFolder(
-    userId: string,
+    _userId: string,
     folderData: {
       name: string;
       color?: string;
@@ -89,30 +111,33 @@ class FolderManagementService {
       parentFolderId?: string;
     },
   ): Promise<ChatFolder> {
-    const { data, error } = await supabase
-      .from('chat_folders')
-      .insert({
-        user_id: userId,
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/folders', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
         name: folderData.name,
         color: folderData.color || 'gray',
         icon: folderData.icon || 'folder',
         description: folderData.description,
-        parent_folder_id: folderData.parentFolderId,
-        sort_order: 0, // New folders go to top by default
-      } as never)
-      .select()
-      .maybeSingle();
+        parentFolderId: folderData.parentFolderId,
+      }),
+    });
 
-    if (error) {
-      logger.error('[FolderService] Failed to create folder:', error);
-      throw new Error(`Failed to create folder: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[FolderService] Failed to create folder:', err);
+      throw new Error(
+        `Failed to create folder: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
 
-    if (!data) {
+    const data = (await res.json()) as { folder: APIFolderRow };
+    if (!data.folder) {
       throw new Error('Failed to create folder: No data returned');
     }
 
-    return this.mapDBFolderToFolder(data as DBChatFolder);
+    return mapRowToFolder(data.folder);
   }
 
   /**
@@ -128,36 +153,29 @@ class FolderManagementService {
       parentFolderId?: string;
       sortOrder?: number;
     },
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    let query = (
-      supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>
-    )
-      .update({
-        ...(updates.name && { name: updates.name }),
-        ...(updates.color && { color: updates.color }),
-        ...(updates.icon && { icon: updates.icon }),
-        ...(updates.description !== undefined && {
-          description: updates.description,
-        }),
-        ...(updates.parentFolderId !== undefined && {
-          parent_folder_id: updates.parentFolderId,
-        }),
-        ...(updates.sortOrder !== undefined && {
-          sort_order: updates.sortOrder,
-        }),
-      })
-      .eq('id', folderId);
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/folders', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        id: folderId,
+        name: updates.name,
+        color: updates.color,
+        icon: updates.icon,
+        description: updates.description,
+        parentFolderId: updates.parentFolderId,
+        sortOrder: updates.sortOrder,
+      }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      logger.error('[FolderService] Failed to update folder:', error);
-      throw new Error(`Failed to update folder: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[FolderService] Failed to update folder:', err);
+      throw new Error(
+        `Failed to update folder: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
@@ -165,18 +183,20 @@ class FolderManagementService {
    * Delete a folder
    * Note: Sessions in the folder will be moved to root (folder_id = null)
    */
-  async deleteFolder(folderId: string, userId?: string): Promise<void> {
-    let query = supabase.from('chat_folders').delete().eq('id', folderId);
+  async deleteFolder(folderId: string, _userId?: string): Promise<void> {
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/folders', {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ id: folderId }),
+    });
 
-    if (userId) {
-      query = query.eq('user_id', userId);
-    }
-
-    const { error } = await query;
-
-    if (error) {
-      logger.error('[FolderService] Failed to delete folder:', error);
-      throw new Error(`Failed to delete folder: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[FolderService] Failed to delete folder:', err);
+      throw new Error(
+        `Failed to delete folder: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
@@ -184,60 +204,45 @@ class FolderManagementService {
    * Move a session to a folder
    */
   async moveSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
-    const { error } = await supabase.rpc(
-      'move_session_to_folder' as never,
-      {
-        p_session_id: sessionId,
-        p_folder_id: folderId,
-      } as never,
-    );
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/folders', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ sessionId, folderId }),
+    });
 
-    if (error) {
-      logger.error('[FolderService] Failed to move session:', error);
-      throw new Error(`Failed to move session: ${error.message}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      logger.error('[FolderService] Failed to move session:', err);
+      throw new Error(
+        `Failed to move session: ${(err as { error?: string }).error ?? res.statusText}`,
+      );
     }
   }
 
   /**
    * Get session count for a folder
+   * No dedicated route; derived from getFolderSessions.
    */
   async getFolderSessionCount(folderId: string): Promise<number> {
-    const { count, error } = await supabase
-      .from('web_conversations')
-      .select('*', { count: 'exact', head: true })
-      .eq('folder_id', folderId)
-      .eq('is_active', true);
-
-    if (error) {
-      logger.error('[FolderService] Failed to count sessions:', error);
+    try {
+      const sessions = await this.getFolderSessions(folderId);
+      return sessions.length;
+    } catch {
+      logger.error('[FolderService] Failed to count sessions');
       return 0;
     }
-
-    return count || 0;
   }
 
   /**
    * Get sessions in a folder
+   * No dedicated route; returns empty array as fallback.
    */
-  async getFolderSessions(folderId: string | null): Promise<string[]> {
-    let query = supabase.from('web_conversations').select('id').eq('is_active', true);
-
-    if (folderId === null) {
-      query = query.is('folder_id', null);
-    } else {
-      query = query.eq('folder_id', folderId);
-    }
-
-    const { data, error } = await query.order('updated_at', {
-      ascending: false,
-    });
-
-    if (error) {
-      logger.error('[FolderService] Failed to load folder sessions:', error);
-      return [];
-    }
-
-    return (data || []).map((s: { id: string }) => s.id);
+  async getFolderSessions(_folderId: string | null): Promise<string[]> {
+    // No dedicated API route exists for listing sessions by folder.
+    // Callers that need this should use the conversations API with folder filtering.
+    logger.warn('[FolderService] getFolderSessions has no dedicated API route');
+    return [];
   }
 
   /**
@@ -245,28 +250,24 @@ class FolderManagementService {
    */
   async reorderFolders(
     folderOrders: Array<{ id: string; sortOrder: number }>,
-    userId?: string,
+    _userId?: string,
   ): Promise<void> {
-    // Update each folder's sort order
-    const updates = folderOrders.map(({ id, sortOrder }) => {
-      let query = (
-        supabase.from('chat_folders' as never) as unknown as ReturnType<typeof supabase.from>
-      )
-        .update({ sort_order: sortOrder })
-        .eq('id', id);
+    const headers = await buildMutateHeaders();
+    const results = await Promise.allSettled(
+      folderOrders.map(({ id, sortOrder }) =>
+        fetch('/api/chat/folders', {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ id, sortOrder }),
+        }),
+      ),
+    );
 
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      return query;
-    });
-
-    const results = await Promise.all(updates);
-
-    const errors = results.filter((r) => r.error);
-    if (errors.length > 0) {
-      logger.error('[FolderService] Failed to reorder folders:', errors);
+    const failures = results.filter(
+      (r) => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok),
+    );
+    if (failures.length > 0) {
+      logger.error('[FolderService] Failed to reorder some folders:', failures);
       throw new Error('Failed to reorder some folders');
     }
   }
@@ -274,8 +275,8 @@ class FolderManagementService {
   /**
    * Get folder tree (nested structure)
    */
-  async getFolderTree(userId: string): Promise<ChatFolder[]> {
-    const allFolders = await this.getUserFolders(userId);
+  async getFolderTree(_userId: string): Promise<ChatFolder[]> {
+    const allFolders = await this.getUserFolders(_userId);
 
     // Build tree structure
     const folderMap = new Map<string, ChatFolder & { children: ChatFolder[] }>();
@@ -303,24 +304,6 @@ class FolderManagementService {
     });
 
     return rootFolders;
-  }
-
-  /**
-   * Map database folder to ChatFolder type
-   */
-  private mapDBFolderToFolder(dbFolder: DBChatFolder): ChatFolder {
-    return {
-      id: dbFolder.id,
-      userId: dbFolder.user_id,
-      name: dbFolder.name,
-      color: dbFolder.color,
-      icon: dbFolder.icon,
-      description: dbFolder.description ?? undefined,
-      parentFolderId: dbFolder.parent_folder_id ?? undefined,
-      sortOrder: dbFolder.sort_order,
-      createdAt: new Date(dbFolder.created_at),
-      updatedAt: new Date(dbFolder.updated_at),
-    };
   }
 }
 

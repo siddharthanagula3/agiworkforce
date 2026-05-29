@@ -4,22 +4,22 @@ import request from 'supertest';
 import { deviceAuthRouter } from '../../src/routes/deviceAuth';
 import { errorHandler } from '../../src/middleware/errorHandler';
 
-// Wave 1.5+ task #17 (2026-05-08): legacy `lib/supabase` singleton deleted;
-// routes/deviceAuth.ts now uses `getServiceClient()` from supabaseClients
-// (every Supabase call in the device-code flow runs without a verified
-// user JWT — service-role is correct).
-vi.mock('../../src/lib/supabaseClients', () => {
+const neonMock = vi.hoisted(() => {
+  const insert = vi.fn().mockResolvedValue({ error: null });
+  const from = vi.fn(() => ({ insert }));
+  return { from, insert };
+});
+
+// routes/deviceAuth.ts uses getServiceClient() because the device-code
+// bootstrap flow starts before the CLI has a cloud account token.
+vi.mock('../../src/lib/neonClients', () => {
   const mockClient = {
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
+    from: neonMock.from,
   };
   return {
     getServiceClient: vi.fn(() => mockClient),
     getUserClient: vi.fn(() => mockClient),
     getUserScopedClient: vi.fn(() => mockClient),
-    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
-    _resetSupabaseJwtCacheForTests: vi.fn(),
   };
 });
 
@@ -35,6 +35,7 @@ function createTestApp() {
 describe('Device auth route mounts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    neonMock.insert.mockResolvedValue({ error: null });
   });
 
   it('serves device code flow on the CLI-compatible /auth/device path', async () => {
@@ -47,6 +48,15 @@ describe('Device auth route mounts', () => {
       expires_in: 900,
     });
     expect(response.body.user_code).toMatch(/^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+    expect(neonMock.from).toHaveBeenCalledWith('device_authorization_codes');
+    expect(neonMock.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        device_id: response.body.device_code,
+        device_type: 'cli',
+        status: 'pending',
+        user_code: response.body.user_code,
+      }),
+    );
   });
 
   it('also serves device code flow on the /api/auth/device compatibility path', async () => {

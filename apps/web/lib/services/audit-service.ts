@@ -5,26 +5,44 @@
  *
  * `log()` - SERVICE-CONTEXT. System/admin writes that must succeed even when
  *   the triggering request is unauthenticated (failed-auth logging). Uses
- *   `getServiceClient()` internally.
+ *   `getNeonDb()` internally.
  *
- * `getOrganizationLogs()` - USER-CONTEXT. Caller passes `getUserClient(jwt)`.
+ * `getOrganizationLogs()` - USER-CONTEXT. Caller passes a DatabaseAdapter.
  *   RT-09 fix: membership verified before any log rows are returned.
  *
- * Never add a private `getSupabaseClient()` here. See lib/services/README.md.
+ * Never add a private `getDatabase()` here. See lib/services/README.md.
  */
 import 'server-only';
 
-import { type SupabaseClient } from '@supabase/supabase-js';
-import { getServiceClient } from '@/lib/supabase-server';
+import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { AuditLog } from '@/types/saas';
+
+interface AuditLogRow {
+  id: string;
+  action: string;
+  resource: string;
+  resource_id: string | null;
+  metadata: Record<string, unknown> | null;
+  user_id: string | null;
+  organization_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+  actor_email: string | null;
+}
+
+interface OrgMembershipRow {
+  user_id: string;
+}
 
 export class AuditService {
   /**
    * Log an action.
    * SERVICE-CONTEXT: audit log writes are inherently admin/system operations.
    * The write must succeed even when the triggering request is unauthenticated
-   * (e.g., logging a failed auth attempt). Service-role is appropriate here.
+   * (e.g., logging a failed auth attempt). Service-context is appropriate here.
    */
   static async log(
     action: string,
@@ -38,22 +56,25 @@ export class AuditService {
       userAgent?: string;
     },
   ): Promise<void> {
-    // SECURITY: service-role required because audit log writes run in system/admin context
-    // and must succeed regardless of whether a user JWT is available.
-    const supabase = getServiceClient();
+    const db = getNeonDb();
 
-    const { error } = await supabase.from('audit_logs').insert({
-      action,
-      resource,
-      resource_id: resourceId,
-      metadata,
-      user_id: context.userId,
-      organization_id: context.orgId,
-      ip_address: context.ipAddress,
-      user_agent: context.userAgent,
-    });
-
-    if (error) {
+    try {
+      await db.execute(
+        `insert into audit_logs
+           (action, resource, resource_id, metadata, user_id, organization_id, ip_address, user_agent)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          action,
+          resource,
+          resourceId,
+          JSON.stringify(metadata),
+          context.userId ?? null,
+          context.orgId ?? null,
+          context.ipAddress ?? null,
+          context.userAgent ?? null,
+        ],
+      );
+    } catch (error) {
       // Don't throw to avoid breaking main flow, just log error
       logger.error({ error, action, resource }, 'Failed to write audit log');
     }
@@ -61,37 +82,36 @@ export class AuditService {
 
   /**
    * Fetch logs for an organization.
-   * USER-CONTEXT: caller passes an RLS-bound SupabaseClient so only rows
-   * visible to the authenticated user are returned.
+   * USER-CONTEXT: caller passes a DatabaseAdapter.
    *
    * RT-09 fix: callerUserId is now required. Membership is verified against
    * organization_members before any log rows are returned. Without this guard,
    * any authenticated user could read any org's audit log by guessing org UUIDs.
    *
-   * @param client - RLS-bound SupabaseClient from getUserClient(jwt)
+   * @param db - DatabaseAdapter (user-scoped via withUser(jwt))
    * @param orgId - Organization UUID
    * @param callerUserId - Authenticated user ID from JWT (required)
    * @param limit - Max rows (default 50)
    * @throws 403-shaped Error if callerUserId is not a member of orgId
    */
   static async getOrganizationLogs(
-    client: SupabaseClient,
+    db: DatabaseAdapter,
     orgId: string,
     callerUserId: string,
     limit = 50,
   ): Promise<AuditLog[]> {
     // RT-09: Verify caller is a member of the org before returning any logs.
-    const { data: membership, error: memberError } = await client
-      .from('organization_members')
-      .select('user_id')
-      .eq('organization_id', orgId)
-      .eq('user_id', callerUserId)
-      .maybeSingle();
-
-    if (memberError) {
-      logger.error({ memberError, orgId, callerUserId }, 'Failed to verify org membership');
-      throw memberError;
-    }
+    const [membership] = await db
+      .query<OrgMembershipRow>(
+        `select user_id from organization_members
+       where organization_id = $1 and user_id = $2
+       limit 1`,
+        [orgId, callerUserId],
+      )
+      .catch((memberError: unknown) => {
+        logger.error({ memberError, orgId, callerUserId }, 'Failed to verify org membership');
+        throw memberError;
+      });
 
     if (!membership) {
       logger.warn({ orgId, callerUserId }, 'RT-09: Unauthorized org log access attempt');
@@ -100,40 +120,44 @@ export class AuditService {
       throw err;
     }
 
-    const { data, error } = await client
-      .from('audit_logs')
-      .select(
-        `
-        *,
-        actor:profiles(email)
-      `,
+    const rows = await db
+      .query<AuditLogRow>(
+        `select
+         al.id,
+         al.action,
+         al.resource,
+         al.resource_id,
+         al.metadata,
+         al.user_id,
+         al.organization_id,
+         al.ip_address,
+         al.user_agent,
+         al.created_at,
+         p.email as actor_email
+       from audit_logs al
+       left join profiles p on p.id = al.user_id
+       where al.organization_id = $1
+       order by al.created_at desc
+       limit $2`,
+        [orgId, limit],
       )
-      .eq('organization_id', orgId)
-      .order('created_at', { ascending: false })
-      .limit(limit);
+      .catch((error: unknown) => {
+        logger.error({ error, orgId }, 'Failed to fetch audit logs');
+        throw error;
+      });
 
-    if (error) {
-      logger.error({ error, orgId }, 'Failed to fetch audit logs');
-      throw error;
-    }
-
-    // Type for the Supabase query result with joined actor
-    interface AuditLogWithActor {
-      id: string;
-      action: string;
-      resource: string;
-      resource_id: string;
-      metadata: Record<string, unknown>;
-      user_id: string | null;
-      organization_id: string | null;
-      ip_address: string | null;
-      user_agent: string | null;
-      created_at: string;
-      actor: { email: string } | null;
-    }
-    return (data as AuditLogWithActor[]).map((log) => ({
-      ...log,
-      actor_email: log.actor?.email,
+    return rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      resource: row.resource,
+      resource_id: row.resource_id ?? undefined,
+      metadata: row.metadata ?? {},
+      user_id: row.user_id ?? undefined,
+      organization_id: row.organization_id ?? undefined,
+      ip_address: row.ip_address ?? undefined,
+      user_agent: row.user_agent ?? undefined,
+      created_at: row.created_at,
+      actor_email: row.actor_email ?? undefined,
     })) as AuditLog[];
   }
 }

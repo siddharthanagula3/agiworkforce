@@ -5,7 +5,6 @@
 
 use super::agents::WebSearchAgent;
 use super::types::ResearchError;
-use crate::core::agi::executors::search_executor::SearchExecutor;
 use serde::{Deserialize, Serialize};
 
 /// Web search provider options
@@ -52,7 +51,7 @@ impl Default for WebSearchConfig {
 ///
 /// This uses the existing SearchExecutor which has DuckDuckGo integration
 /// and Perplexity fallback already implemented.
-pub fn create_web_search_agent(config: WebSearchConfig) -> Result<WebSearchAgent, ResearchError> {
+pub fn create_web_search_agent(_config: WebSearchConfig) -> Result<WebSearchAgent, ResearchError> {
     // The WebSearchAgent will use the SearchExecutor internally
     // We don't need to pass API keys here because SearchExecutor
     // handles the web search logic directly
@@ -76,7 +75,9 @@ pub fn configure_web_search_agent(
                 // Configure with Perplexity endpoint
                 Ok(agent.configure("https://api.perplexity.ai/search", &api_key))
             } else {
-                tracing::warn!("Perplexity selected but no API key provided, falling back to DuckDuckGo");
+                tracing::warn!(
+                    "Perplexity selected but no API key provided, falling back to DuckDuckGo"
+                );
                 Ok(agent)
             }
         }

@@ -13,7 +13,7 @@
  * Mocks:
  *   The waitlist submit is mocked at the network layer using Detox's
  *   mockServer feature. We intercept POST /api/waitlist and return
- *   { rank: 42 }. This avoids any real Supabase call.
+ *   { rank: 42 }. This avoids any real cloud auth call.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20

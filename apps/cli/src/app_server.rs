@@ -222,7 +222,7 @@ pub async fn run_mcp_server() -> Result<()> {
             }
             "tools/list" if initialized => JsonRpcResponse::ok(
                 id,
-                serde_json::json!({"tools": [{"name": "agiworkforce_exec", "description": "Execute prompt via AGI Workforce", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}]}),
+                serde_json::json!({"tools": [{"name": "agiworkforce_exec", "description": "Execute prompt via AGI", "inputSchema": {"type": "object", "properties": {"prompt": {"type": "string"}}, "required": ["prompt"]}}]}),
             ),
             "notifications/initialized" => continue,
             _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {}", method)),

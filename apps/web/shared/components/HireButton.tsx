@@ -11,7 +11,7 @@ import { CheckCircle, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@shared/stores/authentication-store';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { cn } from '@shared/lib/utils';
 
 interface HireButtonProps {
@@ -54,7 +54,7 @@ export const HireButton: React.FC<HireButtonProps> = ({
         description: 'You need to be signed in to hire AI employees',
         duration: 4000,
       });
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
 
@@ -63,42 +63,22 @@ export const HireButton: React.FC<HireButtonProps> = ({
 
     startTransition(async () => {
       try {
-        // Check if already hired
-        const { data: existingHire } = await supabase
-          .from('hired_employees')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('employee_id', employeeId)
-          .maybeSingle();
-
-        if (existingHire) {
-          setIsProcessing(false);
-          toast.info('You have already hired this employee', {
-            description: 'Check your workforce page to start chatting',
-          });
-          return;
-        }
-
-        // Insert hire record
-
-        const { error } = await (
-          supabase.from('hired_employees') as unknown as {
-            insert: (
-              data: Record<string, string>,
-            ) => Promise<{ error: { code: string; message: string } | null }>;
-          }
-        ).insert({
-          user_id: user.id,
-          employee_id: employeeId,
-          employee_name: employeeName,
+        // Insert hire record — server returns 409 on duplicate
+        const token = await getAuthToken();
+        const res = await fetch('/api/workforce', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ employeeId, employeeName }),
         });
 
-        if (error) {
-          // Revert optimistic update on error
+        if (!res.ok) {
           setHired(false);
+          const body = await res.json().catch(() => ({}));
 
-          if (error.code === '23505') {
-            // Unique constraint violation - already hired
+          if (res.status === 409 || body?.code === '23505') {
             setIsProcessing(false);
             toast.info('You have already hired this employee', {
               description: 'Check your workforce page to start chatting',
@@ -106,7 +86,7 @@ export const HireButton: React.FC<HireButtonProps> = ({
             return;
           }
 
-          console.error('[HireButton] Insert failed:', error);
+          console.error('[HireButton] Insert failed:', body?.error);
           setIsProcessing(false);
           toast.error('Failed to hire employee', {
             description: 'Please try again or contact support',

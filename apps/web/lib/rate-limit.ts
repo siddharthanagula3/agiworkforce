@@ -92,6 +92,11 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 requests per minute (same as /me endpoint)
     failClosed: false,
   },
+  'usage-deduct': {
+    limit: 120,
+    window: '1 m', // 120 deductions per minute per user (high-frequency post-LLM calls)
+    failClosed: false, // Allow deduction even if Redis fails - billing not blocked by rate limiter
+  },
   'sync-subscription': {
     limit: 10,
     window: '1 m', // 10 requests per minute (increased for payment success polling)
@@ -127,6 +132,17 @@ export const rateLimitConfigs = {
     limit: 60,
     window: '1 m', // 60 manifest fetches per minute per IP
     failClosed: false,
+  },
+  // 2FA / TOTP endpoints - strict limits to prevent brute force on 6-digit codes
+  '2fa-verify': {
+    limit: 5,
+    window: '15 m', // 5 verify/validate attempts per 15 minutes per user
+    failClosed: true, // Security-sensitive: block if Redis fails
+  },
+  '2fa-setup': {
+    limit: 10,
+    window: '1 h', // 10 setup attempts per hour (re-enroll scenarios)
+    failClosed: true, // Security-sensitive: block if Redis fails
   },
   // Authentication endpoints - stricter limits to prevent brute force
   'auth-login': {
@@ -252,6 +268,107 @@ export const rateLimitConfigs = {
     limit: 100,
     window: '1 m', // 100 webhook events per minute per IP (generous for real Stripe traffic)
     failClosed: false, // Allow webhooks through if Redis fails - business critical
+  },
+  // Settings: organization
+  'settings-org': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-org-patch': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: team management
+  'settings-team-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-team-invite': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-team-delete': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  'settings-team-patch': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: activity and audit logs
+  'settings-activity': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-audit-logs': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'settings-audit-actions': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Settings: API key management
+  'api-keys-list': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'api-keys-create': {
+    limit: 5,
+    window: '1 h',
+    failClosed: true,
+  },
+  'api-keys-delete': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true,
+  },
+  // Usage and billing analytics
+  'usage-providers': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'usage-analytics': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'usage-history': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-invoices': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-payment-methods': {
+    limit: 30,
+    window: '1 m',
+    failClosed: false,
+  },
+  'billing-analytics': {
+    limit: 60,
+    window: '1 m',
+    failClosed: false,
+  },
+  // Waitlist signup endpoints — unauthenticated PII intake, tight limit
+  waitlist: {
+    limit: 5,
+    window: '1 h', // 5 signups per hour per IP to prevent enumeration and spam
+    failClosed: true, // Block if Redis unavailable: this endpoint stores PII
   },
   default: {
     limit: 100,

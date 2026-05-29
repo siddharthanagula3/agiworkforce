@@ -434,8 +434,8 @@ export function DataSection() {
             <h4 className="font-semibold text-red-500 dark:text-red-400">Delete my account</h4>
             <p className="mt-1 text-sm text-muted-foreground">
               Permanently delete your conversations, settings, and subscription. We hold the request
-              for 7 days so you can change your mind; after that, the data is purged from Supabase,
-              your Stripe subscription is cancelled, and your authentication record is removed.
+              for 7 days so you can change your mind; after that, the data is purged from Neon, your
+              Stripe subscription is cancelled, and your authentication record is removed.
             </p>
             <Button
               variant="destructive"

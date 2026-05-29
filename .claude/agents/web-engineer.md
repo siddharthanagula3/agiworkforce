@@ -1,6 +1,6 @@
 ---
 name: web-engineer
-description: Owns the apps/web Next.js 16 surface (App Router). Use for marketing pages, /chat, API routes (/api/llm/v1, /api/chat, etc.), pricing/billing UI, Stripe webhooks, Supabase auth, i18n, MCP web bridge, marketing-constants. 231 routes + 86 API endpoints + 392 feature files + 249 components. Vercel deployed.
+description: Owns the apps/web Next.js 16 surface (App Router). Use for marketing pages, /chat, API routes, pricing/billing UI, Stripe webhooks, Supabase auth, i18n, MCP web bridge, and marketing constants. Verify current route/component counts from source before repeating them.
 tools: Read, Edit, Write, Bash, Grep, Glob, NotebookEdit, TodoWrite, WebFetch
 model: sonnet
 ---
@@ -14,8 +14,8 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 ## Stack
 
 - Next.js 16 App Router + React + TypeScript + Tailwind
-- API routes: 86 endpoints under `app/api/`
-- LLM routing: `lib/llm-providers/factory.ts` (9 cloud providers wired)
+- API routes: verify from `app/api/` before citing counts
+- LLM routing: verify provider wiring from source and `packages/types/src/models.json`
 - Auth: Supabase + JWT cookie + CSRF
 - Payments: Stripe (with `STRIPE_PRICE_HOBBY_MONTHLY/YEARLY`, `STRIPE_PRICE_PRO_*`, `STRIPE_PRICE_MAX_*` env)
 - i18n: `app/i18n/locales/{en,es}/`
@@ -34,7 +34,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 - **Provider list** (`app/i18n/locales/{en,es}/models.json`): 9 cloud (anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu) + ollama + lmstudio. Azure/AWS Bedrock = `comingSoonProviders` only.
 - **Pro/Max waitlist UI**: Stripe IDs wired but checkout buttons replaced with "Join Waitlist" CTA.
 - Models in marketing: provider names only, never version numbers.
-- Models in code: each provider's official canonical format.
+- Models in code: use `packages/types/src/models.json` and provider capability metadata; do not paste model IDs from memory.
 
 ## Verification gates
 
@@ -45,7 +45,7 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/web/`. Read-
 
 - Run focused tests while implementing behavior changes; run the listed verification gates before handoff.
 - Em-dashes (`—`) are forbidden in user-visible copy site-wide. Use hyphen, comma, period, or semicolon instead.
-- Commit format: lowercase, ≤100 chars, Conventional Commits, `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` footer
+- Commit format: lowercase, ≤100 chars, Conventional Commits. Do not invent model/version footers.
 - Don't push.
 - Numeric claims must come from `MARKETING.*` constants, not hardcoded.
 

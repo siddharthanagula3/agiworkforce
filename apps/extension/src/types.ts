@@ -25,6 +25,7 @@ export type NativeMessageType =
   | 'AUTO_FILL_JOB_APPLICATION'
   | 'QUEUE_MESSAGE'
   | 'CHAT_MESSAGE'
+  | 'CANCEL_STREAM'
   | 'OPEN_SIDE_PANEL'
   | 'OPEN_IN_DESKTOP'
   | 'GET_COOKIES'
@@ -469,8 +470,11 @@ export interface ChatMessageMessage extends BaseMessage {
    * Extended Thinking toggle.
    */
   extendedThinking?: boolean;
-  /** API key forwarded from the side panel's chrome.storage.session agi_api_key. */
-  apiKey?: string;
+}
+
+export interface CancelStreamMessage extends BaseMessage {
+  type: 'CANCEL_STREAM';
+  id: string;
 }
 
 // Chat chunk — sent from background to side panel as streaming response arrives
@@ -956,6 +960,7 @@ export type ExtensionMessage =
   | AutoFillJobApplicationMessage
   | QueueMessageMessage
   | ChatMessageMessage
+  | CancelStreamMessage
   | OpenSidePanelMessage
   | OpenInDesktopMessage
   | GetCookiesMessage

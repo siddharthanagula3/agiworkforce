@@ -2,14 +2,20 @@ import type { Metadata } from 'next';
 import { Header } from '../components/layout/Header';
 import { MarketingFooter } from '../components/marketing/MarketingFooter';
 import { AgiChatDemo } from '../components/agi/AgiChatDemo';
-import { MARKETING } from '../lib/marketing-constants';
+import { LAUNCH, MARKETING, POSITIONING } from '../lib/marketing-constants';
+import {
+  CampaignHero,
+  FeatureGrid,
+  ProofStrip,
+  RouteMap,
+} from '../components/marketing/LandingSections';
 
 export const metadata: Metadata = {
-  title: 'AGI: Beyond one model. Beyond one surface.',
+  title: 'AGI: Every model. Every surface. Your choice.',
   description:
-    'Beyond one model. Beyond one surface. AGI in your hands. ' +
+    `${POSITIONING.wedge} ` +
     `${MARKETING.providers.display} AI providers in one thread, ` +
-    'across desktop, web, mobile, CLI, VS Code, and Chrome. BYOK or run fully offline with Ollama and LM Studio.',
+    `across desktop, web, mobile, CLI, VS Code, and Chrome. ${LAUNCH.publicLabel}.`,
   keywords: [
     'AI agent',
     'AI automation',
@@ -28,116 +34,201 @@ export const metadata: Metadata = {
     'data privacy',
   ],
   openGraph: {
-    title: 'AGI: Beyond one model. Beyond one surface.',
-    description:
-      'Beyond one model. Beyond one surface. AGI in your hands. ' +
-      `${MARKETING.providers.display} AI providers in one thread.`,
+    title: 'AGI: Every model. Every surface. Your choice.',
+    description: `${POSITIONING.wedge} ${MARKETING.providers.display} AI providers in one thread.`,
     type: 'website',
     url: 'https://agiworkforce.com',
     images: [{ url: '/app-preview.png', width: 1200, height: 630, alt: 'AGI' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'AGI: Beyond one model. Beyond one surface.',
-    description:
-      'Beyond one model. Beyond one surface. AGI in your hands. ' +
-      `${MARKETING.providers.display} providers, ${MARKETING.surfaces.display} surfaces, one workforce.`,
+    title: 'AGI: Every model. Every surface. Your choice.',
+    description: `${MARKETING.providers.display} providers, ${MARKETING.surfaces.display} surfaces, one workforce. ${LAUNCH.publicLabel}.`,
     images: ['/app-preview.png'],
   },
-};
-
-const jsonLd = {
-  '@context': 'https://schema.org',
-  '@type': 'SoftwareApplication',
-  name: 'AGI',
-  applicationCategory: 'BusinessApplication',
-  operatingSystem: 'macOS, Windows, Linux',
-  featureList: [
-    `${MARKETING.providers.display} AI providers in one chat thread`,
-    `${MARKETING.surfaces.display} surfaces: Desktop, Web, Mobile, CLI, VS Code, Chrome`,
-    'BYOK: bring your own API keys',
-    'Run fully offline with Ollama or LM Studio',
-    'Cross-provider session continuity: switch models mid-conversation',
-    'AES-256-GCM encrypted key storage',
-    'No training on your data',
-  ],
 };
 
 export default function Home() {
   return (
     <div data-design="agi">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
       <main className="agi-shell">
         <Header />
 
-        <section className="agi-hero">
-          <h1 className="agi-h1">
-            <span className="agi-h1-line">Beyond one model.</span>
-            <span className="agi-h1-line agi-h1-line--quiet">Beyond one surface.</span>
-            <span className="agi-h1-line">AGI in your hands.</span>
-          </h1>
+        <CampaignHero
+          eyebrow={`${LAUNCH.publicLabel} · ${POSITIONING.wedge}`}
+          title="Every model. Every surface. Your choice."
+          lede={`${MARKETING.providers.display} providers in one thread. Local sessions stay local. BYOK uses the provider the user selects. Managed Cloud opens by invite code while controls mature.`}
+          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
+          secondaryCta={{ href: '/solutions', label: 'Map the suite' }}
+          chips={['Web', 'Mobile', 'Desktop', 'CLI', 'Chrome', 'VS Code']}
+          panelTitle="AGI suite"
+          panelRows={[
+            { k: 'Modes', v: 'Local, BYOK, and invite-only managed cloud' },
+            { k: 'Surface order', v: 'Mobile, Website, Desktop, CLI, Chrome, VS Code' },
+            { k: 'Boundary', v: POSITIONING.trustBoundary },
+            { k: 'Launch', v: LAUNCH.date },
+          ]}
+        />
 
-          <p className="agi-lede">
-            {MARKETING.providers.display} providers in one thread. Switch mid-conversation; the
-            history follows. Bring your own keys, run fully offline, or use our managed cloud.{' '}
-            <strong>One platform. Every model. Your choice.</strong>
-          </p>
-
-          <div className="agi-cta-row">
-            <a href="/download" className="agi-cta-primary">
-              Install
-            </a>
-            <a href="/providers" className="agi-cta-ghost">
-              Try the demo →
-            </a>
-          </div>
-        </section>
+        <ProofStrip
+          items={[
+            {
+              value: MARKETING.providers.display,
+              label: 'Provider routes',
+              note: 'Cloud, local, and OpenAI-compatible endpoints where available',
+            },
+            {
+              value: MARKETING.surfaces.display,
+              label: 'Product surfaces',
+              note: 'Web, Mobile, Desktop, CLI, Chrome, VS Code',
+            },
+            {
+              value: '3',
+              label: 'Trust modes',
+              note: 'Local, BYOK, Cloud invite',
+            },
+            {
+              value: LAUNCH.shortDate,
+              label: 'Public launch date',
+              note: 'Campaign date locked for the launch plan',
+            },
+          ]}
+        />
 
         <section className="agi-demo">
           <AgiChatDemo />
         </section>
 
-        {/* Mobile launch announcement banner */}
-        <section className="agi-section" style={{ paddingTop: 0 }}>
+        <FeatureGrid
+          eyebrow="The wedge"
+          title="Start free where AGI does not pay the compute bill."
+          items={[
+            {
+              meta: 'Local',
+              title: 'Free Local',
+              body: 'Users start with supported Ollama, LM Studio, Apple, Gemini Nano, Gemma, and other on-device routes where available.',
+              href: '/local',
+            },
+            {
+              meta: 'BYOK',
+              title: 'Free BYOK',
+              body: 'Users bring supported provider keys and route work explicitly to the selected provider. Provider billing and retention are route-specific.',
+              href: '/byok',
+            },
+            {
+              meta: 'Cloud invite',
+              title: 'Managed Cloud later',
+              body: 'Invite codes capture high-intent demand for hosted sync, managed compute, and higher-capacity workflows after controls are proven.',
+              href: '/pricing',
+            },
+          ]}
+        />
+
+        <RouteMap
+          eyebrow="Six products, one account"
+          title="Route each visitor to the surface they care about."
+          routes={[
+            {
+              meta: 'Mobile',
+              title: 'AGI Mobile',
+              body: 'Local chat, BYOK providers, approvals, dispatch, and cloud invite capture.',
+              href: '/mobile',
+            },
+            {
+              meta: 'Website',
+              title: 'AGI Web',
+              body: 'Account, projects, artifacts, billing, waitlist, docs, and shared web chats.',
+              href: '/business',
+            },
+            {
+              meta: 'Desktop',
+              title: 'AGI Desktop',
+              body: 'Local compute host, BYOK vault, computer use, files, browser, MCP, and sync bridge.',
+              href: '/desktop',
+            },
+            {
+              meta: 'CLI',
+              title: 'AGI CLI',
+              body: 'Agentic developer engine with sessions, tools, permissions, hooks, and MCP server mode.',
+              href: '/cli',
+            },
+            {
+              meta: 'Chrome',
+              title: 'AGI in Chrome',
+              body: 'Page-aware side panel routed through desktop, Local, BYOK, or invited Cloud.',
+              href: '/chrome-extension',
+            },
+            {
+              meta: 'VS Code',
+              title: 'AGI in VS Code',
+              body: 'Editor-native chat, model picker, diffs, slash commands, and desktop bridge.',
+              href: '/vscode-extension',
+            },
+          ]}
+        />
+
+        <RouteMap
+          eyebrow="Capability pages"
+          title="The pages ads were missing."
+          routes={[
+            {
+              meta: 'Workspace',
+              title: 'Business',
+              body: 'Projects, governance, apps, artifacts, research, and AGI Code.',
+              href: '/business',
+            },
+            {
+              meta: 'Developer',
+              title: 'AGI Code',
+              body: 'CLI, VS Code, desktop code, tests, diffs, permissions, and provider routing.',
+              href: '/agi-code',
+            },
+            {
+              meta: 'Tools',
+              title: 'Apps and connectors',
+              body: 'MCP, OAuth apps, local extensions, and explicit tool permissions.',
+              href: '/apps',
+            },
+            {
+              meta: 'Desktop agent',
+              title: 'Cowork',
+              body: 'Browser, files, apps, scheduled tasks, live artifacts, and dispatch.',
+              href: '/cowork',
+            },
+            {
+              meta: 'Creation',
+              title: 'Artifacts',
+              body: 'Canvas-style apps, documents, reports, code, and versions.',
+              href: '/features/artifacts',
+            },
+            {
+              meta: 'Research',
+              title: 'Deep Research',
+              body: 'Cited reports across web, files, projects, and connected tools.',
+              href: '/features/deep-research',
+            },
+          ]}
+        />
+
+        <section className="agi-section">
           <div
             className="agi-callout"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 20,
-              flexWrap: 'wrap',
-            }}
+            style={{ display: 'flex', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}
           >
             <div>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--agi-amber)',
-                  margin: '0 0 8px',
-                }}
-              >
-                Launching 2026-08-16
+              <p className="agi-section-eyebrow" style={{ marginBottom: 8 }}>
+                Launch campaign
               </p>
               <h2 className="agi-callout-h" style={{ marginBottom: 6 }}>
-                AGI Mobile is coming.
+                {LAUNCH.allProductsLabel}.
               </h2>
               <p className="agi-callout-p">
-                Free. On-device AI for iOS and Android. Works in airplane mode. No subscription.
+                One message for ads: AGI gives users OpenAI and Claude-style applications without
+                locking them to one company&apos;s models.
               </p>
             </div>
-            <a
-              href="/mobile"
-              className="agi-cta-primary"
-              style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-            >
-              Learn more &rarr;
+            <a href="/mobile" className="agi-cta-primary" style={{ alignSelf: 'center' }}>
+              Start with mobile &rarr;
             </a>
           </div>
         </section>

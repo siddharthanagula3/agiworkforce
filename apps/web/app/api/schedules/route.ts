@@ -11,7 +11,8 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 function mapRowToSchedule(row: Record<string, unknown>) {
   return {
@@ -43,23 +44,22 @@ async function handleGetSchedules(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
-  const { data, error } = await supabase
-    .from('scheduled_tasks')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-    .limit(100);
-
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to fetch schedules');
+  let data: Record<string, unknown>[];
+  try {
+    data = await db.query<Record<string, unknown>>(
+      `select * from scheduled_tasks where user_id = $1 order by created_at desc limit 100`,
+      [userId],
+    );
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to fetch schedules');
     throw createError.internal('Failed to fetch schedules');
   }
 
   return NextResponse.json({
-    schedules: (data || []).map(mapRowToSchedule),
+    schedules: data.map(mapRowToSchedule),
   });
 }
 
@@ -77,8 +77,8 @@ async function handleCreateSchedule(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // RLS-AUDIT-FIX: replaced service-role client with user-scoped client.
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
   let body: Record<string, unknown>;
   try {
@@ -126,31 +126,43 @@ async function handleCreateSchedule(request: NextRequest) {
       ? body['timezone']
       : 'UTC';
 
-  const insertData: Record<string, unknown> = {
-    user_id: user.id,
-    name: (body['name'] as string).trim(),
-    prompt: (body['prompt'] as string).trim(),
+  // Build parameterized insert dynamically to handle optional columns
+  const columns = [
+    'user_id',
+    'name',
+    'prompt',
+    'model',
+    'recurrence',
+    'time_of_day',
+    'timezone',
+    'is_active',
+  ];
+  const values: unknown[] = [
+    userId,
+    (body['name'] as string).trim(),
+    (body['prompt'] as string).trim(),
     model,
     recurrence,
-    time_of_day: timeOfDay,
+    timeOfDay,
     timezone,
-    is_active: body['isActive'] !== false,
-  };
+    body['isActive'] !== false,
+  ];
 
-  // Conditional fields
   if (body['cronExpression'] && typeof body['cronExpression'] === 'string') {
-    insertData['cron_expression'] = body['cronExpression'];
+    columns.push('cron_expression');
+    values.push(body['cronExpression']);
   }
   if (body['scheduledAt'] && typeof body['scheduledAt'] === 'string') {
-    insertData['scheduled_at'] = body['scheduledAt'];
+    columns.push('scheduled_at');
+    values.push(body['scheduledAt']);
   }
   if (Array.isArray(body['daysOfWeek'])) {
-    // Validate each element is an integer 0-6
     const validDays = (body['daysOfWeek'] as unknown[]).filter(
       (d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 0 && d <= 6,
     );
     if (validDays.length > 0) {
-      insertData['days_of_week'] = validDays;
+      columns.push('days_of_week');
+      values.push(validDays);
     }
   }
   if (
@@ -159,17 +171,20 @@ async function handleCreateSchedule(request: NextRequest) {
     body['dayOfMonth'] >= 1 &&
     body['dayOfMonth'] <= 31
   ) {
-    insertData['day_of_month'] = body['dayOfMonth'];
+    columns.push('day_of_month');
+    values.push(body['dayOfMonth']);
   }
 
-  const { data, error } = await supabase
-    .from('scheduled_tasks')
-    .insert(insertData)
-    .select()
-    .single();
+  const placeholders = values.map((_, i) => `$${i + 1}`).join(', ');
+  const sql = `insert into scheduled_tasks (${columns.join(', ')}) values (${placeholders}) returning *`;
 
-  if (error) {
-    logger.error({ error, userId: user.id }, 'Failed to create schedule');
+  let data: Record<string, unknown>;
+  try {
+    const [inserted] = await db.query<Record<string, unknown>>(sql, values);
+    if (!inserted) throw new Error('No row returned');
+    data = inserted;
+  } catch (error) {
+    logger.error({ error, userId }, 'Failed to create schedule');
     throw createError.internal('Failed to create schedule');
   }
 

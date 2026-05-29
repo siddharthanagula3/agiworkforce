@@ -12,7 +12,7 @@
  * - imagen-4.0-fast-generate-001 (Fast generation)
  */
 
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
 
 export interface ImagenGenerationRequest {
@@ -69,22 +69,6 @@ const IMAGEN_PRICING = {
   'imagen-4.0-ultra-generate-001': 0.004,
   'imagen-4.0-fast-generate-001': 0.001,
 };
-
-/**
- * Helper function to get the current Supabase session token
- * Required for authenticated API proxy calls
- */
-async function getAuthToken(): Promise<string | null> {
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    return session?.access_token || null;
-  } catch (error) {
-    console.error('[GoogleImagenService] Failed to get auth token:', error);
-    return null;
-  }
-}
 
 export class GoogleImagenService {
   private static instance: GoogleImagenService;

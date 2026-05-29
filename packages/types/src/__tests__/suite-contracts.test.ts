@@ -107,7 +107,7 @@ describe('suite contracts — trust boundaries', () => {
     // CLI / VS Code / Chrome surface is wired into the synced-app chat
     // pipeline. Type-only enforcement isn't enough at boundaries that
     // take a raw SourceSurface from external input (gateway query param,
-    // supabase channel id, deserialized telemetry).
+    // sync channel id, deserialized telemetry).
     const { assertSurfaceCanSyncChats } = await import('../suite-contracts');
 
     expect(() => assertSurfaceCanSyncChats('web')).not.toThrow();

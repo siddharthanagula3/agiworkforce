@@ -4,12 +4,8 @@ import { useCallback } from 'react';
 import { useMediaStore } from '@/stores/mediaStore';
 
 async function getAuthToken(): Promise<string> {
-  const { getSupabaseClient } = await import('@/services/supabase');
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  return session?.access_token || '';
+  const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
+  return (await getClerkToken()) || '';
 }
 
 export interface GenerateImageOptions {

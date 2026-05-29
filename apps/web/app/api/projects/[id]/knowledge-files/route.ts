@@ -15,8 +15,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { mapKnowledgeFileRow } from '@/lib/projects';
+import { getNeonDb } from '@/lib/server/neon-db';
 import {
   SYNCED_APP_SURFACES,
   DEVELOPER_SESSION_SURFACES,
@@ -45,29 +46,29 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id: projectId } = await context.params;
 
   // Verify project ownership before listing files
-  const { data: project, error: projectError } = await supabase
-    .from('user_projects')
-    .select('id')
-    .eq('id', projectId)
-    .eq('user_id', user.id)
-    .single();
+  const [project] = await db.query<{ id: string }>(
+    `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+    [projectId, userId],
+  );
 
-  if (projectError || !project) {
+  if (!project) {
     throw createError.notFound('Project not found');
   }
 
-  const { data, error } = await supabase
-    .from('project_knowledge_files')
-    .select('*')
-    .eq('project_id', projectId)
-    .is('deleted_at', null)
-    .order('added_at', { ascending: false });
-
-  if (error) {
+  let data: Record<string, unknown>[];
+  try {
+    data = await db.query<Record<string, unknown>>(
+      `select * from project_knowledge_files
+       where project_id = $1 and deleted_at is null
+       order by added_at desc`,
+      [projectId],
+    );
+  } catch (error) {
     if (isUndefinedTable(error)) {
       return NextResponse.json({ files: [] });
     }
@@ -76,7 +77,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   }
 
   return NextResponse.json({
-    files: (data || []).map((row) => mapKnowledgeFileRow(row as Record<string, unknown>)),
+    files: data.map((row) => mapKnowledgeFileRow(row)),
   });
 }
 
@@ -87,7 +88,8 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  const { user, userDb: supabase } = await getAuthenticatedUserWithClient(request);
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
   const { id: projectId } = await context.params;
 
   let body: {
@@ -137,34 +139,37 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   }
 
   // Verify project ownership
-  const { data: project, error: projectError } = await supabase
-    .from('user_projects')
-    .select('id')
-    .eq('id', projectId)
-    .eq('user_id', user.id)
-    .single();
+  const [project] = await db.query<{ id: string }>(
+    `select id from user_projects where id = $1 and user_id = $2 limit 1`,
+    [projectId, userId],
+  );
 
-  if (projectError || !project) {
+  if (!project) {
     throw createError.notFound('Project not found');
   }
 
-  const { data, error } = await supabase
-    .from('project_knowledge_files')
-    .insert({
-      project_id: projectId,
-      file_name: body.fileName.trim(),
-      mime_type: body.mimeType.trim(),
-      byte_count: body.byteCount,
-      checksum_sha256: body.checksumSha256.trim(),
-      summary: body.summary?.trim() ?? null,
-      source_surface: body.sourceSurface,
-      added_by_user_id: user.id,
-      storage_uri: body.storageUri.trim(),
-    })
-    .select('*')
-    .single();
-
-  if (error) {
+  let data: Record<string, unknown>;
+  try {
+    const [inserted] = await db.query<Record<string, unknown>>(
+      `insert into project_knowledge_files
+         (project_id, file_name, mime_type, byte_count, checksum_sha256, summary, source_surface, added_by_user_id, storage_uri)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       returning *`,
+      [
+        projectId,
+        body.fileName.trim(),
+        body.mimeType.trim(),
+        body.byteCount,
+        body.checksumSha256.trim(),
+        body.summary?.trim() ?? null,
+        body.sourceSurface,
+        userId,
+        body.storageUri.trim(),
+      ],
+    );
+    if (!inserted) throw new Error('No row returned');
+    data = inserted;
+  } catch (error) {
     if (isUndefinedTable(error)) {
       return NextResponse.json(
         {
@@ -178,10 +183,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.internal('Failed to create knowledge file');
   }
 
-  return NextResponse.json(
-    { file: mapKnowledgeFileRow(data as Record<string, unknown>) },
-    { status: 201 },
-  );
+  return NextResponse.json({ file: mapKnowledgeFileRow(data) }, { status: 201 });
 }
 
 export const GET = withErrorHandler(handleListKnowledgeFiles);

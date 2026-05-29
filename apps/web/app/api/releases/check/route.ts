@@ -1,7 +1,8 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { ReleaseRow } from '@/lib/server/neon-types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -98,37 +99,29 @@ async function getLatestRelease(
   platform: Platform,
   channel: string = 'stable',
 ): Promise<ReleaseRecord | null> {
-  const supabaseUrl = getOptionalEnv('NEXT_PUBLIC_SUPABASE_URL');
-  const supabaseKey = getOptionalEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const neonUrl = getOptionalEnv('DATABASE_URL') ?? getOptionalEnv('AGI_DATABASE_URL');
 
-  if (!supabaseUrl || !supabaseKey) {
-    logger.warn('Supabase not configured for release checks');
+  if (!neonUrl) {
+    logger.warn('Neon database not configured for release checks');
     return null;
   }
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false },
-    });
+    const db = getNeonDb();
+    type ReleaseQueryRow = Pick<
+      ReleaseRow,
+      'version' | 'download_url' | 'notes' | 'pub_date' | 'file_size_bytes' | 'is_critical'
+    >;
+    const rows = await db.query<ReleaseQueryRow>(
+      'select version, download_url, notes, pub_date, file_size_bytes, is_critical from releases where platform = $1 and channel = $2 and is_prerelease = false order by pub_date desc limit 1',
+      [platform, channel],
+    );
 
-    const { data, error } = await supabase
-      .from('releases')
-      .select('version, download_url, notes, pub_date, file_size_bytes, is_critical')
-      .eq('platform', platform)
-      .eq('channel', channel)
-      .eq('is_prerelease', false)
-      .order('pub_date', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      if (error.code !== 'PGRST116') {
-        logger.warn({ error, platform, channel }, 'Database query error');
-      }
+    if (rows.length === 0) {
       return null;
     }
 
-    return data as ReleaseRecord;
+    return rows[0] as ReleaseRecord;
   } catch (error) {
     logger.error({ error, platform }, 'Failed to fetch latest release');
     return null;

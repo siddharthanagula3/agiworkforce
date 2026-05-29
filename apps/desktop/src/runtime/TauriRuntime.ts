@@ -113,6 +113,8 @@ interface RawFileUploadResult {
   size?: number;
 }
 
+const LOCAL_DESKTOP_USER_ID = 'local-desktop-user';
+
 // ---------------------------------------------------------------------------
 // Mapping helpers
 // ---------------------------------------------------------------------------
@@ -165,7 +167,9 @@ export class TauriRuntime implements ChatRuntime {
   // ---------------------------------------------------------------------------
 
   private getCurrentUserId(): string {
-    return useUnifiedAuthStore.getState().user?.id ?? '';
+    const authenticatedUserId = useUnifiedAuthStore.getState().user?.id;
+    if (authenticatedUserId) return authenticatedUserId;
+    return useAppModeStore.getState().mode === 'local' ? LOCAL_DESKTOP_USER_ID : '';
   }
 
   private async ensureBackendConversation(

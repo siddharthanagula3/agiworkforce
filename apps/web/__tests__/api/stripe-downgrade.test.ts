@@ -17,14 +17,10 @@ import crypto from 'crypto';
 const mockEnv = {
   STRIPE_SECRET_KEY: 'sk_test_mock_key',
   STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-  NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-  SUPABASE_SERVICE_ROLE_KEY: 'test_service_key',
 };
 
 vi.stubEnv('STRIPE_SECRET_KEY', mockEnv.STRIPE_SECRET_KEY);
 vi.stubEnv('STRIPE_WEBHOOK_SECRET', mockEnv.STRIPE_WEBHOOK_SECRET);
-vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', mockEnv.NEXT_PUBLIC_SUPABASE_URL);
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', mockEnv.SUPABASE_SERVICE_ROLE_KEY);
 
 // Mock logger
 const mockLoggerInfo = vi.fn();
@@ -46,20 +42,19 @@ vi.mock('@/lib/security-audit', () => ({
   logInvalidSignature: vi.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Supabase client factory
-const mockFrom = vi.fn();
-const mockRpc = vi.fn();
+// Neon DB mock
+const mockQuery = vi.fn();
+const mockExecute = vi.fn();
+const mockDb = {
+  query: mockQuery,
+  execute: mockExecute,
+  transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+  withUser: vi.fn(() => mockDb),
+  dispose: vi.fn(),
+};
 
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    from: mockFrom,
-    rpc: mockRpc,
-    auth: {
-      admin: {
-        listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-      },
-    },
-  })),
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => mockDb),
 }));
 
 // Mock subscription service
@@ -185,23 +180,39 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
     vi.clearAllMocks();
     vi.resetModules();
 
-    // Re-establish createClient factory after clearAllMocks resets vi.fn() implementations
-    const supabaseModule = await import('@supabase/supabase-js');
-    (supabaseModule.createClient as ReturnType<typeof vi.fn>).mockReturnValue({
-      from: mockFrom,
-      rpc: mockRpc,
-      auth: {
-        admin: {
-          listUsers: vi.fn().mockResolvedValue({ data: { users: [] }, error: null }),
-        },
-      },
+    // Re-establish getNeonDb mock after resetModules
+    const neonModule = await import('@/lib/server/neon-db');
+    (neonModule.getNeonDb as ReturnType<typeof vi.fn>).mockReturnValue(mockDb);
+
+    // Default idempotency: should process (true)
+    // Default subscription lookup: returns existing Pro subscription with matching period start
+    // so that isNewPeriod = false (same period) for most tests.
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('process_stripe_event_idempotent')) {
+        return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+      }
+      // Subscription upsert/select returning sub with user_id and matching period start
+      if (sql.includes('subscriptions')) {
+        return Promise.resolve([
+          {
+            id: 'sub_db_123',
+            user_id: 'user_123',
+            plan_tier: 'pro',
+            current_period_start: new Date(periodStart * 1000).toISOString(),
+          },
+        ]);
+      }
+      // Profile lookup
+      if (sql.includes('profiles')) {
+        return Promise.resolve([{ id: 'user_123' }]);
+      }
+      return Promise.resolve([]);
     });
 
-    // Default mock setup for idempotency
-    mockRpc.mockResolvedValue({ data: true, error: null });
+    mockExecute.mockResolvedValue(1);
 
-    // Default plan tier resolution - returns the tier based on price ID
-    mockResolvePlanTier.mockImplementation((_metadata, priceId) => {
+    // Default plan tier resolution
+    mockResolvePlanTier.mockImplementation((_metadata: unknown, priceId: string) => {
       if (priceId?.includes('hobby')) return 'hobby';
       if (priceId?.includes('pro')) return 'pro';
       if (priceId?.includes('max')) return 'max';
@@ -227,62 +238,21 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       deleted: false,
     });
 
-    // Default subscription lookup - existing subscription
-    mockFrom.mockReturnValue({
-      select: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          maybeSingle: vi.fn().mockResolvedValue({
-            data: {
-              id: 'sub_db_123',
-              user_id: 'user_123',
-              plan_tier: 'pro', // Currently on Pro plan
-              current_period_start: new Date(periodStart * 1000).toISOString(),
-            },
-            error: null,
-          }),
-          single: vi.fn().mockResolvedValue({
-            data: {
-              id: 'sub_db_123',
-              user_id: 'user_123',
-              plan_tier: 'pro',
-              current_period_start: new Date(periodStart * 1000).toISOString(),
-            },
-            error: null,
-          }),
-        }),
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-      }),
-      upsert: vi.fn().mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          single: vi.fn().mockResolvedValue({
-            data: { id: 'sub_db_123', user_id: 'user_123' },
-            error: null,
-          }),
-        }),
-      }),
-      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-    });
+    // Restore subscription service mocks after clearAllMocks
+    mockAllocateCredits.mockResolvedValue(undefined);
+    mockResetCredits.mockResolvedValue(undefined);
 
     // Default credit balance
     mockGetBalance.mockResolvedValue({
-      credits_remaining_cents: 800, // User has 800 cents remaining
-      credits_allocated_cents: 1200, // Pro plan allocation
+      credits_remaining_cents: 800,
+      credits_allocated_cents: 1200,
       account_id: 'acc_123',
     });
 
     // Default successful deduction
     mockDeductCredits.mockResolvedValue({
       success: true,
-      remaining_cents: 350, // After downgrade to hobby (350 cents)
+      remaining_cents: 350,
     });
   });
 
@@ -411,59 +381,17 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // Should update subscription with new plan_tier
-      expect(mockFrom).toHaveBeenCalledWith('subscriptions');
+      // Should query subscriptions table
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('subscriptions'),
+        expect.anything(),
+      );
     });
 
     it('should handle Max to Pro downgrade mid-cycle', async () => {
-      // Set up existing subscription as Max
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: 'sub_db_123',
-                user_id: 'user_123',
-                plan_tier: 'max',
-                current_period_start: new Date(periodStart * 1000).toISOString(),
-              },
-              error: null,
-            }),
-            single: vi.fn().mockResolvedValue({
-              data: {
-                id: 'sub_db_123',
-                user_id: 'user_123',
-                plan_tier: 'max',
-                current_period_start: new Date(periodStart * 1000).toISOString(),
-              },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: 'sub_db_123', user_id: 'user_123' },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-        upsert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
-
       mockResolvePlanTier.mockReturnValue('pro');
       mockGetBalance.mockResolvedValue({
-        credits_remaining_cents: 10000, // Max plan has lots of credits
+        credits_remaining_cents: 10000,
         credits_allocated_cents: 15000,
         account_id: 'acc_123',
       });
@@ -516,7 +444,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
           object: {
             id: 'sub_to_free',
             customer: 'cus_test_123',
-            status: 'canceled', // Free tier usually means canceled
+            status: 'canceled',
             items: { data: [{ price: { id: 'price_free' } }] },
             current_period_start: periodStart,
             current_period_end: periodEnd,
@@ -546,54 +474,9 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Upgrade Scenarios (for comparison)', () => {
     it('should handle Hobby to Pro upgrade', async () => {
-      // Set up existing subscription as Hobby
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: {
-                id: 'sub_db_123',
-                user_id: 'user_123',
-                plan_tier: 'hobby',
-                current_period_start: new Date(periodStart * 1000).toISOString(),
-              },
-              error: null,
-            }),
-            single: vi.fn().mockResolvedValue({
-              data: {
-                id: 'sub_db_123',
-                user_id: 'user_123',
-                plan_tier: 'hobby',
-                current_period_start: new Date(periodStart * 1000).toISOString(),
-              },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { id: 'sub_db_123', user_id: 'user_123' },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-        upsert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
-      });
-
       mockResolvePlanTier.mockReturnValue('pro');
       mockGetBalance.mockResolvedValue({
-        credits_remaining_cents: 200, // Hobby has less credits
+        credits_remaining_cents: 200,
         credits_allocated_cents: 350,
         account_id: 'acc_123',
       });
@@ -639,11 +522,28 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Period Boundary Handling', () => {
     it('should handle subscription update at new period boundary', async () => {
-      // New period start (different from existing)
       const newPeriodStart = Math.floor(Date.now() / 1000);
       const newPeriodEnd = newPeriodStart + 30 * 24 * 60 * 60;
 
       mockResolvePlanTier.mockReturnValue('hobby');
+
+      // DB returns subscription with the OLD period start
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('subscriptions')) {
+          return Promise.resolve([
+            {
+              id: 'sub_db_123',
+              user_id: 'user_123',
+              plan_tier: 'pro',
+              current_period_start: new Date(periodStart * 1000).toISOString(), // OLD period
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 
@@ -656,7 +556,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
             customer: 'cus_test_123',
             status: 'active',
             items: { data: [{ price: { id: 'price_hobby' } }] },
-            current_period_start: newPeriodStart,
+            current_period_start: newPeriodStart, // NEW period
             current_period_end: newPeriodEnd,
             cancel_at_period_end: false,
             canceled_at: null,
@@ -727,39 +627,22 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Edge Cases', () => {
     it('should handle subscription update for non-existent local subscription', async () => {
-      // No local subscription found
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: null,
-              error: null,
-            }),
-            single: vi.fn().mockResolvedValue({
-              data: null,
-              error: { code: 'PGRST116' },
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: null,
-              }),
-            }),
-          }),
-        }),
-        upsert: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'sub_new_db', user_id: 'user_123' },
-              error: null,
-            }),
-          }),
-        }),
-        insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+      // No local subscription found — upsert creates one
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        // Upsert returning new row
+        if (sql.includes('subscriptions') && sql.includes('insert into')) {
+          return Promise.resolve([{ id: 'sub_new_db', user_id: 'user_123' }]);
+        }
+        if (sql.includes('subscriptions')) {
+          return Promise.resolve([{ id: 'sub_new_db', user_id: 'user_123' }]);
+        }
+        if (sql.includes('profiles')) {
+          return Promise.resolve([{ id: 'user_123' }]);
+        }
+        return Promise.resolve([]);
       });
 
       mockResolvePlanTier.mockReturnValue('hobby');
@@ -779,7 +662,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
             current_period_end: periodEnd,
             cancel_at_period_end: false,
             canceled_at: null,
-            metadata: { supabase_user_id: 'user_123' },
+            metadata: { user_id: 'user_123' },
           },
         },
       });
@@ -797,7 +680,6 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Should create new subscription record
       expect(response.status).toBe(200);
     });
 
@@ -838,7 +720,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Should handle gracefully (logged warning, existing data preserved)
+      // Should handle gracefully
       expect(response.status).toBe(200);
       expect(mockLoggerError).toHaveBeenCalled();
     });
@@ -925,29 +807,15 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Error Handling', () => {
     it('should handle database error during subscription update', async () => {
-      mockFrom.mockReturnValue({
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123', plan_tier: 'pro' },
-              error: null,
-            }),
-            single: vi.fn().mockResolvedValue({
-              data: { id: 'sub_db_123', user_id: 'user_123', plan_tier: 'pro' },
-              error: null,
-            }),
-          }),
-        }),
-        update: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: { message: 'Database error', code: 'PGRST500' },
-              }),
-            }),
-          }),
-        }),
+      // DB throws on the upsert
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: true }]);
+        }
+        if (sql.includes('subscriptions')) {
+          throw new Error('Database error');
+        }
+        return Promise.resolve([]);
       });
 
       mockResolvePlanTier.mockReturnValue('hobby');
@@ -985,7 +853,7 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
       const response = await POST(request);
 
-      // Should return 500 for database errors (allows Stripe retry)
+      // Should return 500 for unhandled database errors (allows Stripe retry)
       expect(response.status).toBe(500);
       expect(mockLoggerError).toHaveBeenCalled();
     });
@@ -1035,7 +903,12 @@ describe('Stripe Subscription Downgrade Webhook Tests (customer.subscription.upd
 
   describe('Idempotency', () => {
     it('should skip already processed downgrade events', async () => {
-      mockRpc.mockResolvedValue({ data: false, error: null });
+      mockQuery.mockImplementation((sql: string) => {
+        if (sql.includes('process_stripe_event_idempotent')) {
+          return Promise.resolve([{ process_stripe_event_idempotent: false }]);
+        }
+        return Promise.resolve([]);
+      });
 
       const { POST } = await import('@/app/api/stripe-webhook/route');
 

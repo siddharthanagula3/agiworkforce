@@ -203,10 +203,12 @@ impl AutonomousAgent {
 
             // Emit a one-time warning when approaching the budget threshold.
             if !budget_warning_emitted
-                && cumulative_cost > self.config.effective_session_cap_usd() * BUDGET_WARNING_THRESHOLD
+                && cumulative_cost
+                    > self.config.effective_session_cap_usd() * BUDGET_WARNING_THRESHOLD
             {
                 budget_warning_emitted = true;
-                let pct = (cumulative_cost / self.config.effective_session_cap_usd() * 100.0) as u32;
+                let pct =
+                    (cumulative_cost / self.config.effective_session_cap_usd() * 100.0) as u32;
                 tracing::warn!(
                     "[Agent] Budget warning: ${:.2} spent ({}% of ${:.2} limit)",
                     cumulative_cost,
@@ -767,7 +769,9 @@ impl AutonomousAgent {
             if pre_step_cost > self.config.effective_session_cap_usd() {
                 task.status = TaskStatus::Failed(format!(
                     "Session cost cap exceeded before step {}: ${:.2} > ${:.2} limit",
-                    step_index, pre_step_cost, self.config.effective_session_cap_usd()
+                    step_index,
+                    pre_step_cost,
+                    self.config.effective_session_cap_usd()
                 ));
                 tracing::warn!(
                     "[Agent] Task {} budget gate: session cost ${:.2} exceeds cap ${:.2} before step {}",
@@ -1051,7 +1055,8 @@ impl AutonomousAgent {
                 if current_cost > self.config.effective_session_cap_usd() {
                     task.status = TaskStatus::Failed(format!(
                         "Session cost cap exceeded: ${:.2} > ${:.2} limit",
-                        current_cost, self.config.effective_session_cap_usd()
+                        current_cost,
+                        self.config.effective_session_cap_usd()
                     ));
                     tracing::warn!(
                         "[Agent] Task {} aborted: session cost ${:.2} exceeds cap ${:.2}",

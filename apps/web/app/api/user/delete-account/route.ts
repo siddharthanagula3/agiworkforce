@@ -5,8 +5,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest, getCorsHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
-import { getAuthenticatedUserWithClient } from '@/lib/api-auth';
-import { getServiceClient } from '@/lib/supabase-server';
+import { getClerkAuthUser } from '@/lib/api-auth';
+import { clerkClient } from '@clerk/nextjs/server';
+import { getNeonDb } from '@/lib/server/neon-db';
 
 /**
  * DELETE /api/user/delete-account
@@ -14,8 +15,8 @@ import { getServiceClient } from '@/lib/supabase-server';
  * Permanently deletes a user's account and all associated data.
  * Requires authenticated session (Bearer token or cookie).
  *
- * Deletion is handled via Supabase admin client, which cascades via
- * foreign key constraints. The auth user record is removed last.
+ * The profiles soft-delete is written via Neon parameterized SQL.
+ * The auth user removal uses clerkClient().users.deleteUser.
  *
  * This endpoint schedules deletion rather than doing it immediately,
  * giving the user a 24-hour grace window before permanent erasure.
@@ -42,39 +43,43 @@ export async function DELETE(request: NextRequest) {
 
   let userId: string;
   try {
-    const { user } = await getAuthenticatedUserWithClient(request);
-    userId = user.id;
+    const authResult = await getClerkAuthUser(request);
+    userId = authResult.userId;
   } catch {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: SECURITY_HEADERS });
   }
 
-  // Service-role client required: auth.admin.deleteUser and profile updates that
-  // bypass RLS are intentional — this is a privileged account-lifecycle operation.
-  const adminClient = getServiceClient();
-  const untypedClient = adminClient as unknown as import('@supabase/supabase-js').SupabaseClient;
+  const db = getNeonDb();
 
   try {
-    // Schedule deletion: set deletion_requested_at. A background job (cron or
-    // Supabase Edge Function) will perform the actual erasure after 24 hours.
+    // Schedule deletion: set deletion_requested_at. A background job will
+    // perform the actual erasure after 24 hours.
     // This gives the user a grace window to cancel (coming soon).
-    const { error } = await untypedClient
-      .from('profiles')
-      .update({
-        deletion_requested_at: new Date().toISOString(),
-        deletion_scheduled_for: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      })
-      .eq('id', userId);
-
-    if (error) {
+    try {
+      await db.execute(
+        `update profiles
+         set deletion_requested_at = $1,
+             deletion_scheduled_for = $2
+         where id = $3`,
+        [
+          new Date().toISOString(),
+          new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          userId,
+        ],
+      );
+    } catch (updateErr: unknown) {
       // Profiles table may not have deletion columns yet; fall back to immediate delete
       logger.warn(
-        { userId, error: error.message },
+        { userId, error: updateErr instanceof Error ? updateErr.message : String(updateErr) },
         'Soft deletion failed; attempting immediate delete',
       );
 
-      const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
-      if (deleteError) {
-        logger.error({ userId, error: deleteError.message }, 'Account deletion failed');
+      try {
+        const client = await clerkClient();
+        await client.users.deleteUser(userId);
+      } catch (clerkErr: unknown) {
+        const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
+        logger.error({ userId, error: errMsg }, 'Account deletion failed');
         return NextResponse.json(
           { error: 'Account deletion failed. Please contact support@agiworkforce.com.' },
           { status: 500, headers: SECURITY_HEADERS },

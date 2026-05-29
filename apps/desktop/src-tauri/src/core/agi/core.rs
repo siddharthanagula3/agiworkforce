@@ -1246,8 +1246,7 @@ impl AGICore {
         // FIX-031: drop the JoinHandle so the registry doesn't grow without
         // bound. We don't .abort() here — by the time cleanup_goal runs the
         // worker has already returned (achieve_goal exited on its own).
-        if let Ok(mut handles) =
-            lock_with_recovery(&self.goal_handles, "cleanup_goal:goal_handles")
+        if let Ok(mut handles) = lock_with_recovery(&self.goal_handles, "cleanup_goal:goal_handles")
         {
             if handles.remove(goal_id).is_some() {
                 tracing::debug!("[AGI] Removed goal {} JoinHandle from registry", goal_id);

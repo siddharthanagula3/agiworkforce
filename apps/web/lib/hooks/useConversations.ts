@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { useChatStore, type Conversation, type Message } from '@/stores/chatStore';
-import { getSupabaseClient } from '@/services/supabase';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // API response types
 interface ApiConversation {
@@ -30,7 +31,7 @@ interface UseConversationsReturn {
   // Actions
   fetchConversations: () => Promise<void>;
   createConversation: (title?: string, model?: string) => Promise<Conversation | null>;
-  loadConversation: (id: string) => Promise<void>;
+  loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (id: string, updates: { title?: string; model?: string }) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
   setActiveConversation: (id: string | null) => void;
@@ -40,6 +41,7 @@ interface UseConversationsReturn {
  * Hook for managing chat conversations
  */
 export function useConversations(): UseConversationsReturn {
+  const { getToken, isLoaded, isSignedIn } = useAuth();
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore((state) => state.activeConversationId);
   const isLoading = useChatStore((state) => state.isLoading);
@@ -59,18 +61,21 @@ export function useConversations(): UseConversationsReturn {
 
   // Helper to get auth token
   const getAuthHeaders = useCallback(async () => {
-    const supabase = getSupabaseClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session?.access_token) {
+    if (!isLoaded) {
+      throw new Error('Authentication is still loading');
+    }
+    if (!isSignedIn) {
+      throw new Error('Not authenticated');
+    }
+    const token = await getToken();
+    if (!token) {
       throw new Error('Not authenticated');
     }
     return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${token}`,
     };
-  }, []);
+  }, [getToken, isLoaded, isSignedIn]);
 
   // Fetch all conversations
   const fetchConversations = useCallback(async () => {
@@ -78,6 +83,7 @@ export function useConversations(): UseConversationsReturn {
     setError(null);
 
     try {
+      if (!isLoaded || !isSignedIn) return;
       const headers = await getAuthHeaders();
       const response = await fetch('/api/chat/conversations', { headers });
 
@@ -103,7 +109,7 @@ export function useConversations(): UseConversationsReturn {
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders, setConversations, setLoading, setError]);
+  }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setLoading, setError]);
 
   // Create a new conversation
   const createConversation = useCallback(
@@ -112,7 +118,7 @@ export function useConversations(): UseConversationsReturn {
       setError(null);
 
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch('/api/chat/conversations', {
           method: 'POST',
           headers,
@@ -150,7 +156,7 @@ export function useConversations(): UseConversationsReturn {
 
   // Load a conversation with its messages
   const loadConversation = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       setLoading(true);
       setError(null);
 
@@ -185,8 +191,10 @@ export function useConversations(): UseConversationsReturn {
 
         // Atomically set active conversation and messages to avoid race conditions
         setActiveConversationWithMessages(id, messages);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load conversation');
+        return false;
       } finally {
         setLoading(false);
       }
@@ -204,7 +212,7 @@ export function useConversations(): UseConversationsReturn {
   const updateConversation = useCallback(
     async (id: string, updates: { title?: string; model?: string }): Promise<boolean> => {
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(`/api/chat/conversations/${id}`, {
           method: 'PUT',
           headers,
@@ -235,7 +243,7 @@ export function useConversations(): UseConversationsReturn {
   const deleteConversation = useCallback(
     async (id: string): Promise<boolean> => {
       try {
-        const headers = await getAuthHeaders();
+        const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(`/api/chat/conversations/${id}`, {
           method: 'DELETE',
           headers,
@@ -258,8 +266,9 @@ export function useConversations(): UseConversationsReturn {
 
   // Fetch conversations on mount
   useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
     fetchConversations();
-  }, [fetchConversations]);
+  }, [fetchConversations, isLoaded, isSignedIn]);
 
   return {
     conversations,

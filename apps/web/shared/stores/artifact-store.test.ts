@@ -1,16 +1,19 @@
 /**
  * Artifact Store Tests
  *
- * Tests for artifact version control, sharing, and management.
+ * Tests for the consolidated artifact store via the compatibility re-export.
+ * The canonical implementation lives in
+ * `features/chat/stores/artifacts-store.ts`; this file tests it through the
+ * `shared/stores/artifact-store` shim to ensure the re-export contract holds.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useArtifactStore } from './artifact-store';
 import type { ArtifactData } from '@features/chat/components/artifacts/ArtifactPreview';
 
-// AUDIT-FIX: mock supabase so shareArtifact/getSharedArtifact DB calls don't hang
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
+// Mock cloudDb so shareArtifact DB calls do not hang in tests
+vi.mock('@shared/lib/cloud-db-client', () => ({
+  cloudDb: {
     auth: {
       getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null }),
     },
@@ -27,19 +30,31 @@ vi.mock('@shared/lib/supabase-client', () => ({
   },
 }));
 
-// Mock artifact data factory
-const createMockArtifact = (overrides: Partial<ArtifactData> = {}): ArtifactData => ({
-  id: `artifact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-  type: 'code',
-  title: 'Test Artifact',
-  content: 'console.log("hello");',
-  language: 'javascript',
-  ...overrides,
-});
+vi.mock('@shared/lib/logger', () => ({
+  logger: { warn: vi.fn(), auth: vi.fn() },
+}));
 
-describe('Artifact Store', () => {
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function makeArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
+  return {
+    id: `artifact-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    type: 'code',
+    title: 'Test Artifact',
+    content: 'console.log("hello");',
+    language: 'javascript',
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+describe('Artifact Store (consolidated)', () => {
   beforeEach(() => {
-    // Reset store before each test
     useArtifactStore.getState().reset();
     vi.useFakeTimers();
   });
@@ -49,401 +64,320 @@ describe('Artifact Store', () => {
     vi.clearAllMocks();
   });
 
-  describe('Initial State', () => {
-    it('should have correct initial state', () => {
-      const state = useArtifactStore.getState();
+  // -------------------------------------------------------------------------
+  // Initial state
+  // -------------------------------------------------------------------------
 
-      expect(state.artifacts).toEqual({});
-      expect(state.sharedArtifacts).toEqual({});
-      expect(state.activeArtifact).toBeNull();
+  describe('Initial State', () => {
+    it('should start with no artifacts', () => {
+      const { artifacts, selectedArtifactId, panelOpen } = useArtifactStore.getState();
+      expect(artifacts).toHaveLength(0);
+      expect(selectedArtifactId).toBeNull();
+      expect(panelOpen).toBe(false);
     });
   });
 
-  describe('addArtifact', () => {
-    it('should add artifact to a message', () => {
-      const { addArtifact, getMessageArtifacts } = useArtifactStore.getState();
+  // -------------------------------------------------------------------------
+  // addArtifactForMessage — message-keyed add
+  // -------------------------------------------------------------------------
+
+  describe('addArtifactForMessage', () => {
+    it('should add artifact associated with a message', () => {
+      const { addArtifactForMessage, getMessageArtifacts } = useArtifactStore.getState();
       const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+      const artifact = makeArtifact();
 
-      addArtifact(messageId, artifact);
+      addArtifactForMessage(messageId, artifact);
 
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts).toHaveLength(1);
-      expect(artifacts[0]).toEqual(artifact);
+      const found = getMessageArtifacts(messageId);
+      expect(found).toHaveLength(1);
+      expect(found[0]!.id).toBe(artifact.id);
     });
 
-    it('should add multiple artifacts to same message', () => {
-      const { addArtifact, getMessageArtifacts } = useArtifactStore.getState();
+    it('should add multiple artifacts to the same message', () => {
+      const { addArtifactForMessage, getMessageArtifacts } = useArtifactStore.getState();
       const messageId = 'msg-123';
 
-      addArtifact(messageId, createMockArtifact({ title: 'First' }));
-      addArtifact(messageId, createMockArtifact({ title: 'Second' }));
-      addArtifact(messageId, createMockArtifact({ title: 'Third' }));
+      addArtifactForMessage(messageId, makeArtifact({ id: 'a1', title: 'First' }));
+      addArtifactForMessage(messageId, makeArtifact({ id: 'a2', title: 'Second' }));
+      addArtifactForMessage(messageId, makeArtifact({ id: 'a3', title: 'Third' }));
 
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts).toHaveLength(3);
-      expect(artifacts[0]!.title).toBe('First');
-      expect(artifacts[1]!.title).toBe('Second');
-      expect(artifacts[2]!.title).toBe('Third');
+      expect(getMessageArtifacts(messageId)).toHaveLength(3);
     });
 
-    it('should add artifacts to different messages', () => {
-      const { addArtifact, getMessageArtifacts } = useArtifactStore.getState();
+    it('should isolate artifacts across different messages', () => {
+      const { addArtifactForMessage, getMessageArtifacts } = useArtifactStore.getState();
 
-      addArtifact('msg-1', createMockArtifact({ title: 'Msg1 Artifact' }));
-      addArtifact('msg-2', createMockArtifact({ title: 'Msg2 Artifact' }));
+      addArtifactForMessage('msg-1', makeArtifact({ id: 'x1', title: 'Msg1' }));
+      addArtifactForMessage('msg-2', makeArtifact({ id: 'x2', title: 'Msg2' }));
 
       expect(getMessageArtifacts('msg-1')).toHaveLength(1);
       expect(getMessageArtifacts('msg-2')).toHaveLength(1);
-      expect(getMessageArtifacts('msg-1')[0]!.title).toBe('Msg1 Artifact');
-      expect(getMessageArtifacts('msg-2')[0]!.title).toBe('Msg2 Artifact');
+    });
+
+    it('should be idempotent for the same artifact id', () => {
+      const { addArtifactForMessage, getMessageArtifacts } = useArtifactStore.getState();
+      const artifact = makeArtifact({ id: 'dedup' });
+
+      addArtifactForMessage('msg-1', artifact);
+      addArtifactForMessage('msg-1', artifact); // duplicate
+
+      expect(getMessageArtifacts('msg-1')).toHaveLength(1);
+    });
+
+    it('should auto-select the first artifact added', () => {
+      const { addArtifactForMessage } = useArtifactStore.getState();
+      const artifact = makeArtifact({ id: 'first' });
+
+      addArtifactForMessage('msg-1', artifact);
+
+      expect(useArtifactStore.getState().selectedArtifactId).toBe('first');
     });
   });
 
-  describe('updateArtifact', () => {
-    it('should update artifact properties', () => {
-      const { addArtifact, updateArtifact, getMessageArtifacts } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+  // -------------------------------------------------------------------------
+  // getMessageArtifacts
+  // -------------------------------------------------------------------------
 
-      addArtifact(messageId, artifact);
-      updateArtifact(messageId, artifact.id, {
-        title: 'Updated Title',
-        content: 'Updated content',
-      });
-
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.title).toBe('Updated Title');
-      expect(artifacts[0]!.content).toBe('Updated content');
-    });
-
-    it('should handle updating non-existent artifact', () => {
-      const { updateArtifact, getMessageArtifacts } = useArtifactStore.getState();
-
-      // Should not throw
-      expect(() => {
-        updateArtifact('msg-123', 'non-existent', { title: 'Test' });
-      }).not.toThrow();
-
-      // Should remain empty
-      expect(getMessageArtifacts('msg-123')).toEqual([]);
-    });
-
-    it('should handle updating artifact in non-existent message', () => {
-      const { updateArtifact } = useArtifactStore.getState();
-
-      // Should not throw
-      expect(() => {
-        updateArtifact('non-existent-msg', 'artifact-id', { title: 'Test' });
-      }).not.toThrow();
+  describe('getMessageArtifacts', () => {
+    it('should return empty array for unknown messageId', () => {
+      expect(useArtifactStore.getState().getMessageArtifacts('nope')).toEqual([]);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // upsertArtifact — update-or-insert
+  // -------------------------------------------------------------------------
+
+  describe('upsertArtifact', () => {
+    it('should update title/content of an existing artifact', () => {
+      const { addArtifactForMessage, upsertArtifact, getMessageArtifacts } =
+        useArtifactStore.getState();
+      const messageId = 'msg-u';
+      const artifact = makeArtifact({ id: 'upd' });
+
+      addArtifactForMessage(messageId, artifact);
+      upsertArtifact({ ...artifact, messageId, title: 'Updated', language: 'typescript' });
+
+      const found = getMessageArtifacts(messageId);
+      expect(found[0]!.title).toBe('Updated');
+      expect(found[0]!.language).toBe('typescript');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Version control
+  // -------------------------------------------------------------------------
 
   describe('Version Control', () => {
-    it('should add version to artifact', () => {
-      const { addArtifact, addVersion, getMessageArtifacts } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+    it('should add a version to an artifact', () => {
+      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
+        useArtifactStore.getState();
+      const messageId = 'msg-v';
+      const artifact = makeArtifact({ id: 'art-v1' });
 
-      addArtifact(messageId, artifact);
-      addVersion(messageId, artifact.id, {
-        id: 'v-1',
+      addArtifactForMessage(messageId, artifact);
+      addVersion(artifact.id, {
+        id: 'v1',
         content: 'Version 1 content',
         timestamp: new Date(),
         description: 'Initial version',
       });
 
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.versions).toHaveLength(1);
-      expect(artifacts[0]!.versions![0]!.content).toBe('Version 1 content');
+      const found = getMessageArtifacts(messageId);
+      expect(found[0]!.versions).toHaveLength(1);
+      expect(found[0]!.versions![0]!.content).toBe('Version 1 content');
+      expect(found[0]!.currentVersion).toBe(0);
     });
 
-    it('should add multiple versions', () => {
-      const { addArtifact, addVersion, getMessageArtifacts } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
-
-      addArtifact(messageId, artifact);
-
-      addVersion(messageId, artifact.id, {
-        id: 'v-a1',
-        content: 'Version 1',
-        timestamp: new Date(),
-      });
-      addVersion(messageId, artifact.id, {
-        id: 'v-a2',
-        content: 'Version 2',
-        timestamp: new Date(),
-      });
-      addVersion(messageId, artifact.id, {
-        id: 'v-a3',
-        content: 'Version 3',
-        timestamp: new Date(),
-      });
-
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.versions).toHaveLength(3);
-      expect(artifacts[0]!.currentVersion).toBe(2); // Latest version
-    });
-
-    it('should set current version', () => {
-      const { addArtifact, addVersion, setCurrentVersion, getMessageArtifacts } =
+    it('should track the latest version index after multiple adds', () => {
+      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
         useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+      const messageId = 'msg-vm';
+      const artifact = makeArtifact({ id: 'art-vm' });
 
-      addArtifact(messageId, artifact);
+      addArtifactForMessage(messageId, artifact);
+      addVersion(artifact.id, { id: 'va1', content: 'V1', timestamp: new Date() });
+      addVersion(artifact.id, { id: 'va2', content: 'V2', timestamp: new Date() });
+      addVersion(artifact.id, { id: 'va3', content: 'V3', timestamp: new Date() });
 
-      addVersion(messageId, artifact.id, {
-        id: 'v-b0',
-        content: 'Version 0',
-        timestamp: new Date(),
-      });
-      addVersion(messageId, artifact.id, {
-        id: 'v-b1',
-        content: 'Version 1',
-        timestamp: new Date(),
-      });
-      addVersion(messageId, artifact.id, {
-        id: 'v-b2',
-        content: 'Version 2',
-        timestamp: new Date(),
-      });
-
-      setCurrentVersion(messageId, artifact.id, 1);
-
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.currentVersion).toBe(1);
-      expect(artifacts[0]!.content).toBe('Version 1');
+      const found = getMessageArtifacts(messageId);
+      expect(found[0]!.versions).toHaveLength(3);
+      expect(found[0]!.currentVersion).toBe(2);
     });
 
-    it('should handle invalid version index', () => {
-      const { addArtifact, addVersion, setCurrentVersion, getMessageArtifacts } =
+    it('should switch current version and update content', () => {
+      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
         useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+      const messageId = 'msg-vc';
+      const artifact = makeArtifact({ id: 'art-vc' });
 
-      addArtifact(messageId, artifact);
-      addVersion(messageId, artifact.id, {
-        id: 'v-c0',
-        content: 'Version 0',
-        timestamp: new Date(),
-      });
+      addArtifactForMessage(messageId, artifact);
+      addVersion(artifact.id, { id: 'vb0', content: 'Version 0', timestamp: new Date() });
+      addVersion(artifact.id, { id: 'vb1', content: 'Version 1', timestamp: new Date() });
+      addVersion(artifact.id, { id: 'vb2', content: 'Version 2', timestamp: new Date() });
 
-      // Try to set invalid version
-      setCurrentVersion(messageId, artifact.id, 999);
+      setCurrentVersion(artifact.id, 1);
 
-      // Should not change
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.currentVersion).toBe(0);
+      const found = getMessageArtifacts(messageId);
+      expect(found[0]!.currentVersion).toBe(1);
+      expect(found[0]!.content).toBe('Version 1');
     });
 
-    it('should handle negative version index', () => {
-      const { addArtifact, addVersion, setCurrentVersion, getMessageArtifacts } =
+    it('should not change version for an out-of-range index', () => {
+      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
         useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+      const messageId = 'msg-voor';
+      const artifact = makeArtifact({ id: 'art-voor' });
 
-      addArtifact(messageId, artifact);
-      addVersion(messageId, artifact.id, {
-        id: 'v-d0',
-        content: 'Version 0',
-        timestamp: new Date(),
-      });
+      addArtifactForMessage(messageId, artifact);
+      addVersion(artifact.id, { id: 'vc0', content: 'Version 0', timestamp: new Date() });
 
-      setCurrentVersion(messageId, artifact.id, -1);
+      setCurrentVersion(artifact.id, 999);
 
-      // Should not change
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.currentVersion).toBe(0);
+      expect(getMessageArtifacts(messageId)[0]!.currentVersion).toBe(0);
+    });
+
+    it('should not change version for a negative index', () => {
+      const { addArtifactForMessage, addVersion, setCurrentVersion, getMessageArtifacts } =
+        useArtifactStore.getState();
+      const messageId = 'msg-vneg';
+      const artifact = makeArtifact({ id: 'art-vneg' });
+
+      addArtifactForMessage(messageId, artifact);
+      addVersion(artifact.id, { id: 'vd0', content: 'Version 0', timestamp: new Date() });
+
+      setCurrentVersion(artifact.id, -1);
+
+      expect(getMessageArtifacts(messageId)[0]!.currentVersion).toBe(0);
     });
   });
 
-  describe('Sharing', () => {
-    it('should share artifact and return share ID', async () => {
-      const { addArtifact, shareArtifact } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+  // -------------------------------------------------------------------------
+  // Sharing
+  // -------------------------------------------------------------------------
 
-      addArtifact(messageId, artifact);
+  describe('shareArtifact', () => {
+    it('should return a share ID string', async () => {
+      const { addArtifactForMessage, shareArtifact } = useArtifactStore.getState();
+      const artifact = makeArtifact({ id: 'share1' });
 
+      addArtifactForMessage('msg-s1', artifact);
       vi.setSystemTime(new Date('2024-01-01'));
-      const shareId = await shareArtifact(messageId, artifact.id);
+
+      const shareId = await shareArtifact(artifact.id);
 
       expect(shareId).toMatch(/^share-/);
     });
 
-    it('should store shared artifact', async () => {
-      const { addArtifact, shareArtifact, getSharedArtifact } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
+    it('should store shareId on the artifact', async () => {
+      const { addArtifactForMessage, shareArtifact, getMessageArtifacts } =
+        useArtifactStore.getState();
+      const artifact = makeArtifact({ id: 'share2' });
 
-      addArtifact(messageId, artifact);
-      const shareId = await shareArtifact(messageId, artifact.id);
+      addArtifactForMessage('msg-s2', artifact);
+      const shareId = await shareArtifact(artifact.id);
 
-      const sharedArtifact = await getSharedArtifact(shareId);
-      expect(sharedArtifact).toEqual(artifact);
+      const found = getMessageArtifacts('msg-s2');
+      expect(found[0]!.shareId).toBe(shareId);
     });
 
-    it('should throw when sharing non-existent artifact', async () => {
+    it('should throw when artifact does not exist', async () => {
       const { shareArtifact } = useArtifactStore.getState();
 
-      await expect(shareArtifact('msg-123', 'non-existent')).rejects.toThrow(
-        new Error('Message artifacts not found'), // AUDIT-FIX: vitest 4.x
-      );
-    });
-
-    it('should throw when artifact not found in message', async () => {
-      const { addArtifact, shareArtifact } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-
-      addArtifact(messageId, createMockArtifact());
-
-      await expect(shareArtifact(messageId, 'non-existent-artifact')).rejects.toThrow(
-        new Error('Artifact not found'), // AUDIT-FIX: vitest 4.x
-      );
-    });
-
-    it('should unshare artifact', async () => {
-      const { addArtifact, shareArtifact, unshareArtifact, getSharedArtifact } =
-        useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
-
-      addArtifact(messageId, artifact);
-      const shareId = await shareArtifact(messageId, artifact.id);
-
-      expect(await getSharedArtifact(shareId)).toBeDefined();
-
-      unshareArtifact(shareId);
-
-      expect(await getSharedArtifact(shareId)).toBeUndefined();
-    });
-
-    it('should handle unsharing non-existent share', async () => {
-      const { unshareArtifact, getSharedArtifact } = useArtifactStore.getState();
-
-      // Should not throw
-      expect(() => unshareArtifact('non-existent-share')).not.toThrow();
-      expect(await getSharedArtifact('non-existent-share')).toBeUndefined();
+      let error: Error | undefined;
+      try {
+        await shareArtifact('non-existent');
+      } catch (e) {
+        error = e as Error;
+      }
+      expect(error).toBeDefined();
+      expect(error!.message).toBe('Artifact not found');
     });
   });
 
-  describe('Active Artifact', () => {
-    it('should set active artifact', () => {
-      const { setActiveArtifact } = useArtifactStore.getState();
+  // -------------------------------------------------------------------------
+  // Panel selection
+  // -------------------------------------------------------------------------
 
-      setActiveArtifact('artifact-123');
-      expect(useArtifactStore.getState().activeArtifact).toBe('artifact-123');
+  describe('selectArtifact / panelOpen', () => {
+    it('should update selectedArtifactId', () => {
+      const { addArtifactForMessage, selectArtifact } = useArtifactStore.getState();
+      const a = makeArtifact({ id: 'sel1' });
+      const b = makeArtifact({ id: 'sel2' });
+
+      addArtifactForMessage('m', a);
+      addArtifactForMessage('m', b);
+      selectArtifact('sel2');
+
+      expect(useArtifactStore.getState().selectedArtifactId).toBe('sel2');
     });
 
-    it('should clear active artifact', () => {
-      const { setActiveArtifact } = useArtifactStore.getState();
-
-      setActiveArtifact('artifact-123');
-      setActiveArtifact(null);
-
-      expect(useArtifactStore.getState().activeArtifact).toBeNull();
+    it('should toggle panelOpen', () => {
+      const { togglePanel } = useArtifactStore.getState();
+      expect(useArtifactStore.getState().panelOpen).toBe(false);
+      togglePanel();
+      expect(useArtifactStore.getState().panelOpen).toBe(true);
+      togglePanel();
+      expect(useArtifactStore.getState().panelOpen).toBe(false);
     });
   });
 
-  describe('Clear Operations', () => {
-    it('should clear artifacts for specific message', () => {
-      const { addArtifact, clearArtifacts, getMessageArtifacts } = useArtifactStore.getState();
+  // -------------------------------------------------------------------------
+  // Clear operations
+  // -------------------------------------------------------------------------
 
-      addArtifact('msg-1', createMockArtifact());
-      addArtifact('msg-2', createMockArtifact());
-
-      clearArtifacts('msg-1');
-
-      expect(getMessageArtifacts('msg-1')).toEqual([]);
-      expect(getMessageArtifacts('msg-2')).toHaveLength(1);
-    });
-
-    it('should clear all artifacts', async () => {
-      const { addArtifact, shareArtifact, setActiveArtifact, clearAllArtifacts } =
+  describe('clearArtifactsForMessage', () => {
+    it('should remove only artifacts for the given messageId', () => {
+      const { addArtifactForMessage, clearArtifactsForMessage, getMessageArtifacts } =
         useArtifactStore.getState();
 
-      const artifact = createMockArtifact();
-      addArtifact('msg-1', artifact);
-      addArtifact('msg-2', createMockArtifact());
-      await shareArtifact('msg-1', artifact.id);
-      setActiveArtifact('artifact-123');
+      addArtifactForMessage('msg-c1', makeArtifact({ id: 'c1' }));
+      addArtifactForMessage('msg-c2', makeArtifact({ id: 'c2' }));
 
-      clearAllArtifacts();
+      clearArtifactsForMessage('msg-c1');
 
-      const state = useArtifactStore.getState();
-      expect(state.artifacts).toEqual({});
-      expect(state.sharedArtifacts).toEqual({});
-      expect(state.activeArtifact).toBeNull();
+      expect(getMessageArtifacts('msg-c1')).toHaveLength(0);
+      expect(getMessageArtifacts('msg-c2')).toHaveLength(1);
     });
   });
 
-  describe('Reset', () => {
-    it('should reset to initial state', async () => {
-      const { addArtifact, shareArtifact, setActiveArtifact, reset } = useArtifactStore.getState();
+  describe('reset', () => {
+    it('should clear all artifacts and reset state', async () => {
+      const { addArtifactForMessage, reset } = useArtifactStore.getState();
 
-      const artifact = createMockArtifact();
-      addArtifact('msg-1', artifact);
-      await shareArtifact('msg-1', artifact.id);
-      setActiveArtifact('artifact-123');
+      addArtifactForMessage('msg-r1', makeArtifact({ id: 'r1' }));
+      addArtifactForMessage('msg-r2', makeArtifact({ id: 'r2' }));
 
       reset();
 
       const state = useArtifactStore.getState();
-      expect(state.artifacts).toEqual({});
-      expect(state.sharedArtifacts).toEqual({});
-      expect(state.activeArtifact).toBeNull();
+      expect(state.artifacts).toHaveLength(0);
+      expect(state.selectedArtifactId).toBeNull();
+      expect(state.panelOpen).toBe(false);
     });
   });
 
-  describe('Edge Cases', () => {
-    it('should handle empty message artifacts request', () => {
-      const { getMessageArtifacts } = useArtifactStore.getState();
+  // -------------------------------------------------------------------------
+  // Edge cases
+  // -------------------------------------------------------------------------
 
-      expect(getMessageArtifacts('non-existent')).toEqual([]);
-    });
-
-    it('should handle adding version to artifact without versions array', () => {
-      const { addArtifact, addVersion, getMessageArtifacts } = useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
-      // Ensure no versions array - use type assertion with Partial to allow deletion
+  describe('Edge cases', () => {
+    it('should handle adding a version to an artifact with no versions array', () => {
+      const { addArtifactForMessage, addVersion, getMessageArtifacts } =
+        useArtifactStore.getState();
+      const artifact = makeArtifact({ id: 'edge1' });
       delete (artifact as Partial<ArtifactData>).versions;
 
-      addArtifact(messageId, artifact);
-      addVersion(messageId, artifact.id, {
-        id: 'v-e0',
-        content: 'New version',
-        timestamp: new Date(),
-      });
+      addArtifactForMessage('msg-e', artifact);
+      addVersion(artifact.id, { id: 've0', content: 'New version', timestamp: new Date() });
 
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.versions).toBeDefined();
-      expect(artifacts[0]!.versions).toHaveLength(1);
+      const found = getMessageArtifacts('msg-e');
+      expect(found[0]!.versions).toHaveLength(1);
     });
 
-    it('should handle concurrent operations', async () => {
-      const { addArtifact, updateArtifact, addVersion, getMessageArtifacts } =
-        useArtifactStore.getState();
-      const messageId = 'msg-123';
-      const artifact = createMockArtifact();
-
-      addArtifact(messageId, artifact);
-
-      // Simulate concurrent operations
-      updateArtifact(messageId, artifact.id, { title: 'Updated' });
-      addVersion(messageId, artifact.id, {
-        id: 'v-f0',
-        content: 'V1',
-        timestamp: new Date(),
-      });
-      updateArtifact(messageId, artifact.id, { language: 'typescript' });
-
-      const artifacts = getMessageArtifacts(messageId);
-      expect(artifacts[0]!.title).toBe('Updated');
-      expect(artifacts[0]!.language).toBe('typescript');
-      expect(artifacts[0]!.versions).toHaveLength(1);
+    it('getMessageArtifacts should return empty array for unknown message', () => {
+      expect(useArtifactStore.getState().getMessageArtifacts('unknown')).toEqual([]);
     });
   });
 });

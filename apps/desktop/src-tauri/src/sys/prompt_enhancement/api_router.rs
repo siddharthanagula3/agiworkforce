@@ -15,31 +15,21 @@ fn claude_model_for_task(task: &str) -> String {
     models_config::get_task_model(&Provider::Anthropic, task).to_string()
 }
 
-/// Look up Perplexity's default model.
-/// TODO(rule-models-json): add Perplexity task-routing entries to models.json.
-fn perplexity_default_model() -> String {
-    // Falls back to "pplx-70b-online" if models.json has no Perplexity default_model set.
-    // Replace this constant once Perplexity task_routing is wired in models.json.
-    let from_catalog = models_config::get_default_model(&Provider::Perplexity);
-    if from_catalog.is_empty() || from_catalog == "gpt-5.4-mini" {
-        // Catalog fallback returned the generic default — use the Perplexity-specific pin.
-        "pplx-70b-online".to_string()
-    } else {
-        from_catalog.to_string()
-    }
+/// Look up Perplexity's task-routed model for the given snake_case task.
+/// Source of truth: `packages/types/src/models.json` (providers.perplexity.taskRouting).
+fn perplexity_model_for_task(task: &str) -> String {
+    models_config::get_task_model(&Provider::Perplexity, task).to_string()
 }
 
-/// Image / video generation models are not in the standard chat catalog;
-/// centralize them here so changes require only one edit.
-/// TODO(rule-models-json): add image/video provider entries to models.json.
-mod gen_model_consts {
-    pub const DALLE_3: &str = "dall-e-3";
-    pub const STABLE_DIFFUSION_XL: &str = "stable-diffusion-xl";
-    pub const VEO_3: &str = "veo-3";
+/// Look up an image/video generation model's wire API ID from the catalog.
+/// Falls back to the catalog key itself if no `apiModelId` override is set.
+/// Source of truth: `packages/types/src/models.json` (models section).
+fn gen_model_api_id(catalog_key: &str) -> String {
+    models_config::get_api_model_id(catalog_key)
 }
 
 /// Ollama fallback model for local inference.
-/// TODO(rule-models-json): add Ollama task_routing to models.json.
+/// Source of truth: `packages/types/src/models.json` (providers.ollama.defaultModel).
 fn ollama_default_model() -> String {
     models_config::get_default_model(&Provider::Ollama).to_string()
 }
@@ -192,22 +182,19 @@ impl APIRouter {
             ),
             (UseCase::Search, APIProvider::Perplexity) => (
                 "Perplexity is specifically designed for search queries with up-to-date web information.".to_string(),
-                perplexity_default_model(),
+                perplexity_model_for_task("chat"),
             ),
             (UseCase::ImageGen, APIProvider::DALLE) => (
                 "DALL-E 3 provides high-quality image generation with excellent prompt understanding.".to_string(),
-                // TODO(rule-models-json): wire dall-e entries into models.json image-gen catalog.
-                gen_model_consts::DALLE_3.to_string(),
+                gen_model_api_id("dall-e-3"),
             ),
             (UseCase::ImageGen, APIProvider::StableDiffusion) => (
                 "Stable Diffusion offers flexible, cost-effective image generation.".to_string(),
-                // TODO(rule-models-json): wire StableDiffusion entries into models.json image-gen catalog.
-                gen_model_consts::STABLE_DIFFUSION_XL.to_string(),
+                gen_model_api_id("stable-diffusion-xl"),
             ),
             (UseCase::VideoGen, APIProvider::Veo3) => (
                 "Veo3 is Google's advanced video generation model with high-quality output.".to_string(),
-                // TODO(rule-models-json): wire Veo entries into models.json video-gen catalog.
-                gen_model_consts::VEO_3.to_string(),
+                gen_model_api_id("veo-3"),
             ),
             (UseCase::GeneralQA, APIProvider::GPT) => (
                 "GPT provides versatile, accurate responses for general questions.".to_string(),
@@ -215,7 +202,6 @@ impl APIRouter {
             ),
             (UseCase::GeneralQA, APIProvider::Ollama) => (
                 "Ollama provides free local inference for general questions.".to_string(),
-                // TODO(rule-models-json): wire Ollama task_routing into models.json.
                 ollama_default_model(),
             ),
             _ => (

@@ -52,7 +52,6 @@ const BLOCKED_COOKIE_DOMAINS: RegExp[] = [
   /x\.com$/i,
   /instagram\.com$/i,
   // CHROME-NEW-003: extension's own surfaces
-  /\.supabase\.(co|io)$/i,
   /(^|\.)agiworkforce\.com$/i,
   // CHROME-NEW-006 (2026-05-05): platforms the extension targets for autofill
   /(^|\.)linkedin\.com$/i,

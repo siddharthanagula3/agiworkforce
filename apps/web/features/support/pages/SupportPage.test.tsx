@@ -2,7 +2,7 @@
  * SupportPage Component Tests
  *
  * Tests for the dashboard support page with tabbed layout: FAQs, Documentation, Contact.
- * The component loads FAQs dynamically from Supabase via supportService.
+ * The component loads FAQs dynamically from Neon via supportService.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

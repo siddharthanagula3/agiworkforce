@@ -239,13 +239,13 @@ class SEOService {
         changeFrequency: 'weekly',
       },
       {
-        path: '/marketplace',
-        title: 'AI Employee Marketplace - AGI',
+        path: '/apps',
+        title: 'Apps and Connectors - AGI',
         description:
-          'Browse and hire AI employees for your business. Find the perfect AI assistant for your needs.',
-        keywords: ['AI employees', 'marketplace', 'hire AI', 'AI assistants'],
+          'Connect AGI to apps, MCP servers, desktop extensions, files, and work tools with explicit permissions.',
+        keywords: ['AI apps', 'MCP connectors', 'AI integrations', 'desktop extensions'],
         priority: 0.9,
-        changeFrequency: 'daily',
+        changeFrequency: 'weekly',
       },
       {
         path: '/about',

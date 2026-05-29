@@ -95,8 +95,8 @@
 
     <!--
       AGI does not collect any data by default. Cloud-mode account
-      creation (email, name) is opt-in and is declared by the web /
-      Supabase auth surface; the mobile bundle itself collects
+      creation (email, name) is opt-in and is declared by the
+      Clerk-authenticated Web/API account surface; the mobile bundle itself collects
       nothing until the user explicitly creates a Cloud account.
     -->
     <key>NSPrivacyCollectedDataTypes</key>

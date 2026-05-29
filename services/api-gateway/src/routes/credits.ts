@@ -15,7 +15,7 @@ import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 

@@ -1,14 +1,50 @@
 'use client';
 
-import { useState } from 'react';
-import { ChevronDown, Brain } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
-import { Command, CommandList, CommandItem, CommandGroup, CommandInput } from '@shared/ui/command';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
 import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTrackerDisplay';
 import { StyleSelector } from './StyleSelector';
-import { PROVIDER_DISPLAY, EFFORT_LABEL, type ProviderId, type Effort } from '@agiworkforce/types';
-import { MARKETING } from '@/lib/marketing-constants';
+import { Switch } from '@shared/ui/switch';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
+import { EFFORT_LABEL, PROVIDER_DISPLAY, type Effort, type ProviderId } from '@agiworkforce/types';
+import { useBillingStore } from '@/stores/unified/auth';
+import {
+  getAllowedAutoModesForTier,
+  getBestAutoModeForTier,
+  getModelMetadata,
+  isModelAllowedForTier,
+} from '@/constants/llm';
+import { useThinkingStore } from '@shared/stores/thinking-store';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
+
+/**
+ * Returns a human-readable daily usage label for free-tier users.
+ * null when there is nothing worth showing (paid tier, no limit set, or
+ * usage is comfortably low).
+ */
+function useDailyUsageLabel(): string | null {
+  const tier = useBillingStore((s) => s.subscription?.tier ?? 'free');
+  const dailyUsage_cents = useBillingStore((s) => s.dailyUsage_cents);
+  const dailyLimit_cents = useBillingStore((s) => s.dailyLimit_cents);
+
+  if (tier !== 'free') return null;
+  if (!dailyLimit_cents || dailyLimit_cents <= 0) return null;
+
+  const pct = dailyUsage_cents / dailyLimit_cents;
+  if (pct < 0.8) return null;
+
+  const remainingCents = Math.max(0, dailyLimit_cents - dailyUsage_cents);
+  if (remainingCents <= 0) return 'Daily limit reached';
+
+  // Approximate remaining messages assuming ~$0.01 average cost per message
+  const approxMessages = Math.floor(remainingCents / 1);
+  if (approxMessages <= 5) {
+    return `~${approxMessages} message${approxMessages !== 1 ? 's' : ''} left today`;
+  }
+  return 'Approaching daily limit';
+}
 
 /**
  * Map a model-store providerKey (from models.json) to a ProviderId
@@ -40,12 +76,118 @@ function providerSupportsEffort(providerKey: string): boolean {
   return id ? PROVIDER_DISPLAY[id].supportsEffort : false;
 }
 
-function groupByProvider(models: AIModel[]): Record<string, AIModel[]> {
-  return models.reduce<Record<string, AIModel[]>>((acc, model) => {
-    if (!acc[model.providerKey]) acc[model.providerKey] = [];
-    acc[model.providerKey]!.push(model);
-    return acc;
-  }, {});
+/** Whether this model supports adaptive thinking (checks provider capability). */
+function modelSupportsThinking(model: AIModel): boolean {
+  const metadata = getModelMetadata(model.id);
+  return metadata ? metadata.capabilities.thinking : providerSupportsEffort(model.providerKey);
+}
+
+function openAIModelSupportsXHigh(modelId: string): boolean {
+  return supportsOpenAIReasoningEffort({ provider: 'openai', id: modelId }, 'xhigh');
+}
+
+function isModelSelectableForTier(model: AIModel, tier: string): boolean {
+  if (model.providerKey === 'managed_cloud') {
+    return getAllowedAutoModesForTier(tier).includes(model.id);
+  }
+  if (tier === 'free' || tier === 'hobby') return false;
+  return isModelAllowedForTier(model.id, tier);
+}
+
+/** True when the model name contains "Opus" — used to show usage-rate tooltip. */
+function isOpusModel(model: AIModel): boolean {
+  return model.name.toLowerCase().includes('opus');
+}
+
+const EFFORT_OPTIONS: ReadonlyArray<{ value: Effort; description: string }> = [
+  { value: 'low', description: 'Fastest, lowest token use' },
+  { value: 'medium', description: 'Balanced default for daily work' },
+  { value: 'high', description: 'More thorough for complex work' },
+  { value: 'xhigh', description: 'Extra-high for long-horizon work' },
+  { value: 'max', description: 'Most capable, highest token use' },
+];
+
+function effortDisabledReason(model: AIModel, effort: Effort): string | null {
+  const providerId = toProviderId(model.providerKey);
+  if (!modelSupportsThinking(model)) return 'This model does not support effort control';
+  if (providerId === 'openai' && effort === 'max') return 'OpenAI does not support Max effort';
+  if (providerId === 'openai' && effort === 'xhigh' && !openAIModelSupportsXHigh(model.id)) {
+    return 'This OpenAI model supports Low, Medium, and High effort';
+  }
+  if (providerId === 'google' && (effort === 'xhigh' || effort === 'max')) {
+    return 'Gemini supports Low, Medium, and High effort';
+  }
+  if (providerId === 'agi-cloud' && (effort === 'xhigh' || effort === 'max')) {
+    return 'Auto mode supports Low, Medium, and High effort';
+  }
+  return null;
+}
+
+/**
+ * Partition models into "recommended" (top ~4 for the user's tier) and
+ * "more" (the rest). Flagship (locked) models always appear in recommended
+ * with an isLocked flag so free users see them with an inline Upgrade link.
+ *
+ * When a search query is present we skip partitioning so the user sees all
+ * matching results in a flat list.
+ */
+function partitionModels(
+  models: AIModel[],
+  tier: string,
+  searchQuery: string,
+): { recommended: (AIModel & { isLocked: boolean })[]; more: AIModel[]; isSearching: boolean } {
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase();
+    const matches = models.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.provider.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q),
+    );
+    return {
+      recommended: matches.map((m) => ({
+        ...m,
+        isLocked: !isModelSelectableForTier(m, tier),
+      })),
+      more: [],
+      isSearching: true,
+    };
+  }
+
+  const autoModels = models.filter((m) => m.providerKey === 'managed_cloud');
+  const manualModels = models.filter((m) => m.providerKey !== 'managed_cloud');
+
+  const inTierManual = manualModels.filter((m) => isModelSelectableForTier(m, tier));
+  const lockedManual = manualModels.filter((m) => !isModelSelectableForTier(m, tier));
+
+  // Always surface the Opus model in recommended so free users see the Anthropic flagship upsell.
+  // Show up to 2 locked flagships: the first locked model in provider order, plus the Opus model
+  // if it isn't already included. Fill remaining slots with in-tier models.
+  const opusModel = lockedManual.find((m) => m.name.toLowerCase().includes('opus'));
+  const firstLocked = lockedManual.slice(0, 1);
+  const flagshipLocked =
+    opusModel && !firstLocked.some((m) => m.id === opusModel.id)
+      ? [...firstLocked, opusModel]
+      : firstLocked;
+  const remainingSlots = Math.max(0, 3 - flagshipLocked.length);
+  const inTierSlice = inTierManual.slice(0, remainingSlots);
+  const recommendedManual = [...flagshipLocked, ...inTierSlice];
+
+  const recommendedIds = new Set([
+    ...autoModels.map((m) => m.id),
+    ...recommendedManual.map((m) => m.id),
+  ]);
+  const more = manualModels.filter((m) => !recommendedIds.has(m.id));
+
+  const recommended = [
+    ...autoModels.map((m) => ({ ...m, isLocked: !isModelSelectableForTier(m, tier) })),
+    ...recommendedManual.map((m) => ({
+      ...m,
+      isLocked: !isModelSelectableForTier(m, tier),
+    })),
+  ];
+
+  return { recommended, more, isSearching: false };
 }
 
 /** Provider logo: img when SVG exists, brand-color dot as fallback. */
@@ -80,129 +222,195 @@ function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: 
   );
 }
 
-const EFFORT_ORDER: Effort[] = ['low', 'medium', 'high', 'max'];
+/** Renders a single model row. Locked rows show an inline "Upgrade" text link instead of an amber pill. */
+function ModelRow({
+  model,
+  isSelected,
+  isLocked,
+  onSelect,
+}: {
+  model: AIModel;
+  isSelected: boolean;
+  isLocked: boolean;
+  onSelect?: () => void;
+}) {
+  const rowContent = (
+    <div
+      className={[
+        'flex items-center gap-2 rounded px-3 py-1.5 transition-colors',
+        isLocked ? 'cursor-default' : 'cursor-pointer hover:bg-muted/60',
+        isSelected ? 'bg-muted/40' : '',
+      ].join(' ')}
+      onClick={isLocked ? undefined : onSelect}
+      role={isLocked ? undefined : 'button'}
+      tabIndex={isLocked ? -1 : 0}
+      onKeyDown={
+        isLocked
+          ? undefined
+          : (e) => {
+              if (e.key === 'Enter' || e.key === ' ') onSelect?.();
+            }
+      }
+    >
+      <ProviderLogo providerKey={model.providerKey} size={14} />
+      <span className="min-w-0 flex-1">
+        <span
+          className={[
+            'block truncate text-sm',
+            isSelected ? 'font-medium text-foreground' : 'text-foreground/80',
+          ].join(' ')}
+        >
+          {model.name}
+        </span>
+        {model.description && (
+          <span className="block truncate text-xs text-muted-foreground">{model.description}</span>
+        )}
+      </span>
+      {isLocked && (
+        <a
+          href="/pricing"
+          onClick={(e) => e.stopPropagation()}
+          className="ml-auto shrink-0 text-xs text-primary hover:underline"
+          aria-label="Upgrade to unlock this model"
+        >
+          Upgrade
+        </a>
+      )}
+      {isSelected && !isLocked && (
+        <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+      )}
+    </div>
+  );
+
+  if (isOpusModel(model)) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div>{rowContent}</div>
+          </TooltipTrigger>
+          <TooltipContent side="left" sideOffset={8}>
+            Opus consumes usage limits faster than other models
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  return rowContent;
+}
 
 interface ComposerFooterProps {
   hint?: string;
   showModelSelector?: boolean;
+  /** When true, shows a search input inside the model dropdown (code surface only). */
+  showModelSearch?: boolean;
 }
 
 export function ComposerFooter({
   hint = 'Cmd+Enter to send · Enter for newline',
   showModelSelector = true,
+  showModelSearch = false,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [moreExpanded, setMoreExpanded] = useState(false);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
-  const thinkingEnabled = useModelStore((s) => s.thinkingEnabled);
-  const setThinkingEnabled = useModelStore((s) => s.setThinkingEnabled);
-  const thinkingBudget = useModelStore((s) => s.thinkingBudget);
-  const setThinkingBudget = useModelStore((s) => s.setThinkingBudget);
+  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const thinkingEffort = useThinkingStore((s) => s.effort);
+  const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
+  const setThinkingEffort = useThinkingStore((s) => s.setEffort);
+  const subscription = useBillingStore((s) => s.subscription);
+  const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
+  const dailyUsageLabel = useDailyUsageLabel();
 
-  // Group models by providerKey (raw key from models.json, e.g. "anthropic", "managed_cloud")
-  const grouped = groupByProvider(AVAILABLE_MODELS);
+  // Partition into recommended / more, respecting current tier and search
+  const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
 
-  // Derive display order: managed_cloud (auto modes) first, then remaining providers
-  const providerOrder = Object.keys(grouped).sort((a, b) => {
-    if (a === 'managed_cloud') return -1;
-    if (b === 'managed_cloud') return 1;
-    return 0;
-  });
+  // Auto-expand "More models" section when the selected model lives there
+  const selectedInMore = more.some((m) => m.id === selectedModelId);
+  const showMore = moreExpanded || selectedInMore || isSearching;
 
   const selectedProviderKey = selectedModel.providerKey;
-  const supportsEffort = providerSupportsEffort(selectedProviderKey);
+  const supportsAdaptive = modelSupportsThinking(selectedModel);
+  const currentEffortDisabledReason = effortDisabledReason(selectedModel, thinkingEffort);
 
-  // Current effort derived from thinkingBudget
-  function currentEffort(): Effort {
-    if (thinkingBudget >= 65536) return 'max';
-    if (thinkingBudget >= 32768) return 'high';
-    if (thinkingBudget >= 16384) return 'medium';
-    return 'low';
-  }
+  useEffect(() => {
+    if (!isModelSelectableForTier(selectedModel, tier)) {
+      setSelectedModelId(getBestAutoModeForTier(tier));
+    }
+  }, [selectedModel, setSelectedModelId, tier]);
 
-  function selectEffort(effort: Effort) {
-    const budgetMap: Record<Effort, number> = {
-      low: 4096,
-      medium: 16384,
-      high: 32768,
-      max: 65536,
-    };
-    setThinkingBudget(budgetMap[effort]);
+  useEffect(() => {
+    if (thinkingEnabled && currentEffortDisabledReason) {
+      setThinkingEnabled(false);
+    }
+  }, [currentEffortDisabledReason, setThinkingEnabled, thinkingEnabled]);
+
+  const handleThinkingEnabledChange = (checked: boolean) => {
+    if (!checked) {
+      setThinkingEnabled(false);
+      return;
+    }
+    if (currentEffortDisabledReason) {
+      setThinkingEffort('medium');
+      setThinkingEnabled(true);
+      return;
+    }
     setThinkingEnabled(true);
-  }
+  };
 
   return (
     <div className="mt-2 space-y-2">
       {/* Budget display — renders only when tokens have been used */}
       <BudgetTrackerDisplay className="mx-1" />
 
+      {/* Daily usage label — shown only for free tier when approaching limit */}
+      {dailyUsageLabel && (
+        <div className="flex items-center gap-1.5 px-1">
+          <span
+            className={[
+              'text-xs font-medium',
+              dailyUsageLabel === 'Daily limit reached' ? 'text-rose-400' : 'text-amber-400',
+            ].join(' ')}
+          >
+            {dailyUsageLabel}
+          </span>
+          {dailyUsageLabel === 'Daily limit reached' && (
+            <a
+              href="/pricing"
+              className="text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              Upgrade
+            </a>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2 px-1">
         {/* Left: keyboard hint */}
         <span className="text-xs text-muted-foreground">{hint}</span>
 
         <div className="flex items-center gap-2">
-          {/* Thinking effort selector — only for providers that support it */}
-          {supportsEffort && thinkingEnabled && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-amber-400 transition-colors hover:bg-muted/60"
-                  aria-label="Thinking effort"
-                >
-                  <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
-                  <span>{EFFORT_LABEL[currentEffort()]}</span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="end" sideOffset={6} className="w-40 p-1">
-                <div className="space-y-0.5">
-                  {EFFORT_ORDER.map((effort) => (
-                    <button
-                      key={effort}
-                      onClick={() => selectEffort(effort)}
-                      className={[
-                        'w-full rounded px-2 py-1 text-left text-xs transition-colors hover:bg-muted',
-                        currentEffort() === effort
-                          ? 'font-medium text-foreground'
-                          : 'text-muted-foreground',
-                      ].join(' ')}
-                    >
-                      {EFFORT_LABEL[effort]}
-                    </button>
-                  ))}
-                  <div className="my-1 border-t border-border" />
-                  <button
-                    onClick={() => setThinkingEnabled(false)}
-                    className="w-full rounded px-2 py-1 text-left text-xs text-muted-foreground transition-colors hover:bg-muted"
-                  >
-                    Off
-                  </button>
-                </div>
-              </PopoverContent>
-            </Popover>
-          )}
-
-          {/* Thinking enable button — shown when provider supports effort but it's off */}
-          {supportsEffort && !thinkingEnabled && (
-            <button
-              onClick={() => {
-                selectEffort('medium');
-              }}
-              className="flex items-center gap-1 rounded-md px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-amber-400"
-              aria-label="Enable thinking"
-            >
-              <Brain className="h-3 w-3 shrink-0" aria-hidden="true" />
-            </button>
-          )}
-
           {/* Response style selector */}
           <StyleSelector />
 
           {/* Model selector */}
           {showModelSelector && (
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover
+              open={open}
+              onOpenChange={(o) => {
+                setOpen(o);
+                if (!o) {
+                  setSearchQuery('');
+                  setMoreExpanded(false);
+                }
+              }}
+            >
               <PopoverTrigger asChild>
                 <button
                   id="model-selector"
@@ -211,76 +419,179 @@ export function ComposerFooter({
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
                   <span className="max-w-[140px] truncate">{selectedModel.name}</span>
+                  {supportsAdaptive && thinkingEnabled && (
+                    <span className="text-xs text-muted-foreground/70">
+                      {EFFORT_LABEL[thinkingEffort]}
+                    </span>
+                  )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
-                <Command>
-                  <div className="flex items-center gap-2 border-b border-border/40 px-3 py-2">
-                    <span className="text-xs font-medium text-foreground">Models</span>
-                    <span className="ml-auto text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">
-                      {MARKETING.providers.display} providers
-                    </span>
-                  </div>
-                  <CommandInput placeholder="Search models..." className="h-9" />
-                  <CommandList className="max-h-[320px]">
-                    {providerOrder.map((providerKey) => {
-                      const models = grouped[providerKey];
-                      if (!models || models.length === 0) return null;
-                      const id = toProviderId(providerKey);
-                      const providerLabel = id
-                        ? PROVIDER_DISPLAY[id].label
-                        : (models[0]?.provider ?? providerKey);
-                      const isAuto = providerKey === 'managed_cloud';
+                {/* Header — model count badge removed per Claude reference */}
+                <div className="flex items-center border-b border-border/40 px-3 py-2">
+                  <span className="text-xs font-medium text-foreground">Models</span>
+                </div>
 
-                      return (
-                        <CommandGroup
-                          key={providerKey}
-                          heading={
-                            <span className="flex items-center gap-1.5">
-                              <ProviderLogo providerKey={providerKey} size={12} />
-                              {isAuto ? 'Auto (Best)' : providerLabel}
-                            </span>
-                          }
-                        >
-                          {models.map((model) => {
-                            const isSelected = model.id === selectedModelId;
+                {/* Search input — shown only in code surface */}
+                {showModelSearch && (
+                  <div className="border-b border-border/40 px-3 py-1.5">
+                    <input
+                      className="w-full bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+                      placeholder="Search models..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="Search models"
+                    />
+                  </div>
+                )}
+
+                <div className="max-h-[320px] overflow-y-auto py-1">
+                  {/* Recommended section label */}
+                  {!isSearching && (
+                    <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">
+                      Recommended
+                    </div>
+                  )}
+                  {recommended.map((model) => {
+                    const isSelected = model.id === selectedModelId;
+                    return (
+                      <ModelRow
+                        key={model.id}
+                        model={model}
+                        isSelected={isSelected}
+                        isLocked={model.isLocked}
+                        onSelect={
+                          model.isLocked
+                            ? undefined
+                            : () => {
+                                setSelectedModelId(model.id);
+                                setOpen(false);
+                              }
+                        }
+                      />
+                    );
+                  })}
+
+                  {/* Adaptive thinking toggle row — sits between model list and "More models" */}
+                  {!isSearching && (
+                    <>
+                      <div className="my-1 border-t border-border/40" />
+                      <div className="flex items-center gap-2 px-3 py-1.5">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-foreground/80">
+                            Adaptive thinking
+                          </span>
+                          <span className="block text-xs text-muted-foreground">
+                            Thinks for more complex tasks
+                          </span>
+                        </span>
+                        <Switch
+                          checked={supportsAdaptive && thinkingEnabled}
+                          disabled={!supportsAdaptive}
+                          onCheckedChange={handleThinkingEnabledChange}
+                          aria-label="Toggle adaptive thinking"
+                          className="h-5 w-9"
+                        />
+                      </div>
+                      {supportsAdaptive && thinkingEnabled && (
+                        <div className="px-2 pb-1">
+                          {EFFORT_OPTIONS.map((option) => {
+                            const isActive = thinkingEffort === option.value;
+                            const disabledReason = effortDisabledReason(
+                              selectedModel,
+                              option.value,
+                            );
+                            const isDisabled = Boolean(disabledReason);
                             return (
-                              <CommandItem
-                                key={model.id}
-                                value={`${model.provider} ${model.name} ${model.id}`}
-                                onSelect={() => {
-                                  setSelectedModelId(model.id);
-                                  setOpen(false);
-                                }}
-                                className="flex cursor-pointer items-center gap-2 py-1.5"
+                              <button
+                                key={option.value}
+                                type="button"
+                                disabled={isDisabled}
+                                title={disabledReason ?? option.description}
+                                onClick={() => setThinkingEffort(option.value)}
+                                className={[
+                                  'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
+                                  isDisabled
+                                    ? 'cursor-not-allowed opacity-45'
+                                    : isActive
+                                      ? 'bg-muted/50'
+                                      : 'hover:bg-muted/40',
+                                ].join(' ')}
                               >
-                                <span className="flex-1 min-w-0">
-                                  <span
-                                    className={[
-                                      'block truncate text-sm',
-                                      isSelected ? 'font-medium text-foreground' : '',
-                                    ].join(' ')}
-                                  >
-                                    {model.name}
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm text-foreground/85">
+                                    {EFFORT_LABEL[option.value]}
                                   </span>
-                                  {model.description && (
-                                    <span className="block truncate text-xs text-muted-foreground">
-                                      {model.description}
-                                    </span>
-                                  )}
+                                  <span className="block text-xs text-muted-foreground">
+                                    {disabledReason ?? option.description}
+                                  </span>
                                 </span>
-                                {isSelected && (
-                                  <span className="ml-auto h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                                {isActive && (
+                                  <Check
+                                    className="h-3.5 w-3.5 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                  />
                                 )}
-                              </CommandItem>
+                              </button>
                             );
                           })}
-                        </CommandGroup>
-                      );
-                    })}
-                  </CommandList>
-                </Command>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* More models section — only shown when not searching */}
+                  {!isSearching && more.length > 0 && (
+                    <>
+                      <div className="my-1 border-t border-border/40" />
+                      <button
+                        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                        onClick={() => setMoreExpanded((v) => !v)}
+                        aria-expanded={showMore}
+                      >
+                        <ChevronRight
+                          className={[
+                            'h-3 w-3 shrink-0 transition-transform',
+                            showMore ? 'rotate-90' : '',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        />
+                        More models
+                        <span className="ml-auto rounded bg-muted/50 px-1 text-[10px]">
+                          {more.length}
+                        </span>
+                      </button>
+                      {showMore &&
+                        more.map((model) => {
+                          const locked = !isModelSelectableForTier(model, tier);
+                          const isSelected = model.id === selectedModelId;
+                          return (
+                            <ModelRow
+                              key={model.id}
+                              model={model}
+                              isSelected={isSelected}
+                              isLocked={locked}
+                              onSelect={
+                                locked
+                                  ? undefined
+                                  : () => {
+                                      setSelectedModelId(model.id);
+                                      setOpen(false);
+                                    }
+                              }
+                            />
+                          );
+                        })}
+                    </>
+                  )}
+
+                  {recommended.length === 0 && isSearching && (
+                    <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+                      No models match
+                    </p>
+                  )}
+                </div>
               </PopoverContent>
             </Popover>
           )}

@@ -39,8 +39,8 @@ vi.mock('@/lib/client/csrf', () => ({
   })),
 }));
 
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
+vi.mock('@shared/lib/cloud-db-client', () => ({
+  cloudDb: {
     from: vi.fn(),
     channel: vi.fn(() => ({
       on: vi.fn(() => ({ subscribe: vi.fn() })),

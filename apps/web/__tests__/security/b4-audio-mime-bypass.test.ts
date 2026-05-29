@@ -16,12 +16,8 @@ import { NextRequest } from 'next/server';
 vi.mock('server-only', () => ({}));
 
 // ─── Auth mock — pretend the caller is authenticated.
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'u1' } }, error: null }),
-    },
-  })),
+vi.mock('@/lib/api-auth', () => ({
+  getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'u1', email: 'test@example.com' }),
 }));
 
 // ─── Rate-limit / CORS / error-handler mocks.
@@ -40,8 +36,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-process.env['NEXT_PUBLIC_SUPABASE_URL'] = 'https://test.supabase.co';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-key';
 process.env['OPENAI_API_KEY'] = 'sk-test';
 
 // We intercept fetch so we can confirm the request was NOT forwarded when

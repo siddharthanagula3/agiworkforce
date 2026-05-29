@@ -21,26 +21,24 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// Mock environment variables
-vi.mock('@/utils/env', () => ({
-  requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
-    return 'test-value';
-  }),
+// Clerk auth mock
+const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
+vi.mock('@clerk/nextjs/server', () => ({
+  auth: () => mockClerkAuth(),
 }));
 
-// Mock cookies — implementation re-applied in beforeEach because the vitest
-// config sets `mockReset: true` (clears vi.fn() impls between tests).
-vi.mock('next/headers', () => ({
-  cookies: vi.fn(),
-}));
+// Neon DB mock
+const mockQuery = vi.fn();
 
-const mockUser = {
-  id: 'user-123',
-  email: 'test@example.com',
-};
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({
+    query: mockQuery,
+    execute: vi.fn().mockResolvedValue(1),
+    transaction: vi.fn((fn: (db: unknown) => unknown) => fn({})),
+    withUser: vi.fn(() => ({})),
+    dispose: vi.fn(),
+  })),
+}));
 
 const mockMemoryRow = {
   id: 'mem-42',
@@ -51,89 +49,15 @@ const mockMemoryRow = {
   updated_at: '2024-03-15T12:00:00Z',
 };
 
-// Mock Supabase SSR client (cookie-based auth). vi.fn() factories are reset
-// between tests by `mockReset: true`, so we declare them empty here and
-// configure them in beforeEach.
-vi.mock('@supabase/ssr', () => ({
-  createServerClient: vi.fn(),
-}));
-
-// Build chainable mock query for the search route.
-// Route does (RLS-bound client): .select().eq('is_deleted', false).ilike(...).order(...).limit(...)
-// Single .eq() — RLS enforces the user_id filter.
-const mockLimit = vi.fn();
-const mockOrder = vi.fn();
-const mockIlike = vi.fn();
-const mockEqIsDeleted = vi.fn();
-const mockSelectFn = vi.fn();
-const mockFrom = vi.fn();
-
-vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(),
-}));
-
-// Bypass the module-level _serviceClient cache — see memory.test.ts for the
-// rationale. Both helpers route through the same `mockFrom`.
-const mockServiceGetUser = vi.fn();
-const mockUserClientGetUser = vi.fn();
-vi.mock('@/lib/supabase-server', () => ({
-  getServiceClient: () => ({
-    auth: { getUser: mockServiceGetUser },
-    from: mockFrom,
-  }),
-  getUserClient: () => ({
-    auth: { getUser: mockUserClientGetUser },
-    from: mockFrom,
-  }),
-}));
-
 // Import after all mocks are registered
 import { GET } from '@/app/api/memory/search/route';
 
 describe('Memory Search API', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-
-    // Re-establish next/headers + supabase impls cleared by `mockReset: true`.
-    const { cookies } = await import('next/headers');
-    vi.mocked(cookies).mockResolvedValue({
-      get: vi.fn((name: string) =>
-        name === 'sb-test-auth-token' ? { value: 'mock-cookie-token' } : undefined,
-      ),
-      set: vi.fn(),
-    } as never);
-
-    const { createServerClient } = await import('@supabase/ssr');
-    const { createClient } = await import('@supabase/supabase-js');
-    vi.mocked(createServerClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
-      },
-      from: mockFrom,
-    } as never);
-    vi.mocked(createClient).mockReturnValue({
-      auth: {
-        getUser: vi.fn().mockResolvedValue({ data: { user: mockUser }, error: null }),
-      },
-      from: mockFrom,
-    } as never);
-
-    mockServiceGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
-    mockUserClientGetUser.mockResolvedValue({ data: { user: mockUser }, error: null });
-
-    // Wire up the Supabase query chain (one .eq() because RLS handles user_id).
-    mockLimit.mockResolvedValue({ data: [mockMemoryRow], error: null });
-    mockOrder.mockReturnValue({ limit: mockLimit });
-    mockIlike.mockReturnValue({ order: mockOrder });
-    mockEqIsDeleted.mockReturnValue({ ilike: mockIlike });
-    mockSelectFn.mockReturnValue({ eq: mockEqIsDeleted });
-
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'user_memories') {
-        return { select: mockSelectFn };
-      }
-      return {};
-    });
+    mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
+    // Default: returns a match
+    mockQuery.mockResolvedValue([mockMemoryRow]);
   });
 
   // ---------------------------------------------------------------------------
@@ -141,16 +65,8 @@ describe('Memory Search API', () => {
   // ---------------------------------------------------------------------------
 
   describe('Authentication', () => {
-    it('should return 401 when no session (cookie auth)', async () => {
-      const { createServerClient } = await import('@supabase/ssr');
-      vi.mocked(createServerClient).mockReturnValueOnce({
-        auth: {
-          getUser: vi.fn().mockResolvedValue({
-            data: { user: null },
-            error: { message: 'No session' },
-          }),
-        },
-      } as never);
+    it('should return 401 when no session', async () => {
+      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -160,12 +76,8 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(401);
     });
 
-    it('should return 401 when Bearer token is invalid', async () => {
-      // Override the service-client JWT verifier (Bearer auth path).
-      mockServiceGetUser.mockResolvedValueOnce({
-        data: { user: null },
-        error: { message: 'Invalid token' },
-      });
+    it('should return 401 when userId is null', async () => {
+      mockClerkAuth.mockResolvedValueOnce({ userId: null as unknown as string });
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -176,10 +88,10 @@ describe('Memory Search API', () => {
       expect(response.status).toBe(401);
 
       const data = await response.json();
-      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/);
+      expect(data.error.message).toMatch(/Authentication required|UNAUTHORIZED/i);
     });
 
-    it('should succeed with valid Bearer token', async () => {
+    it('should succeed with valid session', async () => {
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
         headers: { Authorization: 'Bearer valid-jwt-token' },
@@ -296,7 +208,7 @@ describe('Memory Search API', () => {
     });
 
     it('should return 200 with empty array when no memories match', async () => {
-      mockLimit.mockResolvedValue({ data: [], error: null });
+      mockQuery.mockResolvedValueOnce([]);
 
       const request = new NextRequest('http://localhost/api/memory/search?q=no-match', {
         method: 'GET',
@@ -310,20 +222,6 @@ describe('Memory Search API', () => {
       expect(data.query).toBe('no-match');
     });
 
-    it('should return 200 with empty array when data is null', async () => {
-      mockLimit.mockResolvedValue({ data: null, error: null });
-
-      const request = new NextRequest('http://localhost/api/memory/search?q=test', {
-        method: 'GET',
-      });
-
-      const response = await GET(request);
-      expect(response.status).toBe(200);
-
-      const data = await response.json();
-      expect(data.memories).toEqual([]);
-    });
-
     it('should return multiple matching memories', async () => {
       const secondRow = {
         id: 'mem-99',
@@ -333,7 +231,7 @@ describe('Memory Search API', () => {
         created_at: '2024-04-01T00:00:00Z',
         updated_at: '2024-04-05T00:00:00Z',
       };
-      mockLimit.mockResolvedValue({ data: [mockMemoryRow, secondRow], error: null });
+      mockQuery.mockResolvedValueOnce([mockMemoryRow, secondRow]);
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -352,11 +250,8 @@ describe('Memory Search API', () => {
   // ---------------------------------------------------------------------------
 
   describe('Error Handling', () => {
-    it('should return 500 when database query fails', async () => {
-      mockLimit.mockResolvedValue({
-        data: null,
-        error: { message: 'Connection timeout' },
-      });
+    it('should return 500 when database query throws', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('Connection timeout'));
 
       const request = new NextRequest('http://localhost/api/memory/search?q=dark+mode', {
         method: 'GET',
@@ -393,13 +288,12 @@ describe('Memory Search API', () => {
   // ---------------------------------------------------------------------------
 
   describe('LIKE Wildcard Escaping', () => {
-    it('should handle queries containing LIKE wildcard characters (%)  without error', async () => {
+    it('should handle queries containing LIKE wildcard characters (%) without error', async () => {
       const request = new NextRequest('http://localhost/api/memory/search?q=50%25+off', {
         method: 'GET',
       });
 
       const response = await GET(request);
-      // Should not throw — wildcards are escaped server-side
       expect(response.status).toBe(200);
     });
 

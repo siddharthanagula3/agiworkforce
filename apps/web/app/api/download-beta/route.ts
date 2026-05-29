@@ -3,7 +3,9 @@ import 'server-only';
 import { readFile } from 'fs/promises';
 import { NextRequest, NextResponse } from 'next/server';
 import path from 'path';
-import { createSupabaseServerClient } from '../../../services/supabase-server';
+import { getNeonDb } from '@/lib/server/neon-db';
+import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { getClerkAuthUser } from '@/lib/api-auth';
 import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -113,21 +115,13 @@ async function handleDownloadBeta(request: NextRequest) {
     throw createError.notFound(`Download for platform "${platform}" is not configured.`);
   }
 
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+  const { userId } = await getClerkAuthUser(request);
+  const db = getNeonDb();
 
-  if (authError || !user) {
-    throw createError.unauthorized('Authentication required to download.');
-  }
-
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('status')
-    .eq('user_id', user.id)
-    .maybeSingle();
+  const [subscription] = await db.query<Pick<SubscriptionRow, 'status'>>(
+    'select status from subscriptions where user_id = $1 limit 1',
+    [userId],
+  );
 
   const activeStatuses = ['active', 'trialing'];
   const hasActiveSubscription = subscription && activeStatuses.includes(subscription.status);

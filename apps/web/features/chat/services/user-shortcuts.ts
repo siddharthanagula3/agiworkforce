@@ -1,5 +1,6 @@
 import { logger } from '@shared/lib/logger';
-import { supabase } from '@shared/lib/supabase-client';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 import type { PromptShortcut } from '../components/shortcuts/PromptShortcuts';
 
 export interface UserShortcut extends PromptShortcut {
@@ -15,40 +16,54 @@ export interface UserShortcut extends PromptShortcut {
  * Integrated with the PromptShortcuts component.
  */
 
+interface APIShortcutRow {
+  id: string;
+  user_id: string;
+  label: string;
+  prompt: string;
+  category: string;
+  created_at: string;
+  updated_at: string;
+}
+
+async function buildMutateHeaders(): Promise<HeadersInit> {
+  const [token, csrf] = await Promise.all([getAuthToken(), getCsrfToken()]);
+  return {
+    'Content-Type': 'application/json',
+    'x-csrf-token': csrf,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function buildReadHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
+  return {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 /**
  * Get all shortcuts for a user (combines default + custom)
  */
-export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]> {
+export async function getUserShortcuts(_userId: string): Promise<PromptShortcut[]> {
   try {
-    const { data, error } = await supabase
-      .from('user_shortcuts')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const headers = await buildReadHeaders();
+    const res = await fetch('/api/chat/shortcuts', { headers });
 
-    if (error) {
-      logger.error('[User Shortcuts] Error fetching shortcuts:', error);
+    if (!res.ok) {
+      logger.error('[User Shortcuts] Error fetching shortcuts:', res.statusText);
       return [];
     }
 
-    // Convert database format to PromptShortcut format
-    return (
-      data?.map((rawShortcut) => {
-        const shortcut = rawShortcut as Record<string, unknown>;
-        return {
-          id: shortcut['id'] as string,
-          label: shortcut['label'] as string,
-          icon: () => null, // Custom shortcuts don't have icons
-          prompt: shortcut['prompt'] as string,
-          category: shortcut['category'] as
-            | 'coding'
-            | 'writing'
-            | 'business'
-            | 'analysis'
-            | 'creative',
-        };
-      }) || []
-    );
+    const data = (await res.json()) as { shortcuts: APIShortcutRow[] };
+
+    return (data.shortcuts ?? []).map((row) => ({
+      id: row.id,
+      label: row.label,
+      icon: () => null, // Custom shortcuts don't have icons
+      prompt: row.prompt,
+      category: row.category as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
+    }));
   } catch (error) {
     logger.error('[User Shortcuts] Error:', error);
     return [];
@@ -59,7 +74,7 @@ export async function getUserShortcuts(userId: string): Promise<PromptShortcut[]
  * Create a new custom shortcut
  */
 export async function createUserShortcut(
-  userId: string,
+  _userId: string,
   shortcut: {
     label: string;
     prompt: string;
@@ -67,36 +82,39 @@ export async function createUserShortcut(
   },
 ): Promise<PromptShortcut | null> {
   try {
-    const { data, error } = await supabase
-      .from('user_shortcuts')
-      .insert({
-        user_id: userId,
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/shortcuts', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
         label: shortcut.label,
         prompt: shortcut.prompt,
         category: shortcut.category,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as never)
-      .select()
-      .maybeSingle();
+      }),
+    });
 
-    if (error) {
-      logger.error('[User Shortcuts] Error creating shortcut:', error);
+    if (!res.ok) {
+      logger.error('[User Shortcuts] Error creating shortcut:', res.statusText);
       return null;
     }
 
-    if (!data) {
+    const data = (await res.json()) as { shortcut: APIShortcutRow };
+    if (!data.shortcut) {
       logger.error('[User Shortcuts] No data returned after creating shortcut');
       return null;
     }
 
-    const d = data as Record<string, unknown>;
     return {
-      id: d['id'] as string,
-      label: d['label'] as string,
+      id: data.shortcut.id,
+      label: data.shortcut.label,
       icon: () => null,
-      prompt: d['prompt'] as string,
-      category: d['category'] as 'coding' | 'writing' | 'business' | 'analysis' | 'creative',
+      prompt: data.shortcut.prompt,
+      category: data.shortcut.category as
+        | 'coding'
+        | 'writing'
+        | 'business'
+        | 'analysis'
+        | 'creative',
     };
   } catch (error) {
     logger.error('[User Shortcuts] Error:', error);
@@ -109,7 +127,7 @@ export async function createUserShortcut(
  * SECURITY: Must verify user owns the shortcut
  */
 export async function updateUserShortcut(
-  userId: string,
+  _userId: string,
   shortcutId: string,
   updates: {
     label?: string;
@@ -118,20 +136,19 @@ export async function updateUserShortcut(
   },
 ): Promise<boolean> {
   try {
-    // SECURITY: Add user_id check to prevent unauthorized updates
-
-    const { error } = await (
-      supabase.from('user_shortcuts') as unknown as ReturnType<typeof supabase.from>
-    )
-      .update({
+    const headers = await buildMutateHeaders();
+    // POST with id triggers update path in the route
+    const res = await fetch('/api/chat/shortcuts', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        id: shortcutId,
         ...updates,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', shortcutId)
-      .eq('user_id', userId); // Only update if user owns the shortcut
+      }),
+    });
 
-    if (error) {
-      logger.error('[User Shortcuts] Error updating shortcut:', error);
+    if (!res.ok) {
+      logger.error('[User Shortcuts] Error updating shortcut:', res.statusText);
       return false;
     }
 
@@ -146,17 +163,17 @@ export async function updateUserShortcut(
  * Delete a custom shortcut
  * SECURITY: Must verify user owns the shortcut
  */
-export async function deleteUserShortcut(userId: string, shortcutId: string): Promise<boolean> {
+export async function deleteUserShortcut(_userId: string, shortcutId: string): Promise<boolean> {
   try {
-    // SECURITY: Add user_id check to prevent unauthorized deletion
-    const { error } = await supabase
-      .from('user_shortcuts')
-      .delete()
-      .eq('id', shortcutId)
-      .eq('user_id', userId); // Only delete if user owns the shortcut
+    const headers = await buildMutateHeaders();
+    const res = await fetch('/api/chat/shortcuts', {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ id: shortcutId }),
+    });
 
-    if (error) {
-      logger.error('[User Shortcuts] Error deleting shortcut:', error);
+    if (!res.ok) {
+      logger.error('[User Shortcuts] Error deleting shortcut:', res.statusText);
       return false;
     }
 

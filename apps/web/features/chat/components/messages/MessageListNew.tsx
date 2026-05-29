@@ -21,7 +21,8 @@ import {
   ThumbsDown,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
-import type { ChatMessage } from '../../stores/chat-store';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { WebChatMessageMetadata } from '../../types/message-metadata';
 import type { Components } from 'react-markdown';
 import { ReasoningAccordion } from './ReasoningAccordion';
 import { ToolTimeline } from './ToolTimeline';
@@ -268,16 +269,18 @@ const MessageItemComponent = ({
 }) => {
   const [copied, setCopied] = useState(false);
   const [showActions, setShowActions] = useState(false);
-  const storedReaction = message.metadata?.reaction;
+  // Cast the generic metadata bag to the typed web-surface shape once.
+  const meta = message.metadata as WebChatMessageMetadata | undefined;
+  const storedReaction = meta?.reaction;
   const [reaction, setReaction] = useState<'up' | 'down' | null>(
     storedReaction === 'thumbsUp' ? 'up' : storedReaction === 'thumbsDown' ? 'down' : null,
   );
 
   const persistReaction = useCallback(
     async (next: 'up' | 'down' | null) => {
-      if (!message.sessionId) return;
+      if (!message.conversationId) return;
       try {
-        await fetch(`/api/chat/conversations/${message.sessionId}/messages/${message.id}`, {
+        await fetch(`/api/chat/conversations/${message.conversationId}/messages/${message.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -288,13 +291,12 @@ const MessageItemComponent = ({
         // Best-effort — local state is already updated
       }
     },
-    [message.id, message.sessionId],
+    [message.id, message.conversationId],
   );
   const isUser = message.role === 'user';
   const actionsRef = useRef<HTMLDivElement>(null);
 
-  const hasThinkingSteps =
-    message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
+  const hasThinkingSteps = meta?.thinkingSteps && meta.thinkingSteps.length > 0;
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -342,14 +344,14 @@ const MessageItemComponent = ({
           >
             <span className="font-medium text-foreground">{isUser ? 'You' : 'AI'}</span>
             <span className="text-[11px] text-muted-foreground/60">
-              {new Date(message.createdAt).toLocaleTimeString([], {
+              {new Date(message.createdAt ?? Date.now()).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
             </span>
-            {!isUser && message.metadata?.model && (
+            {!isUser && meta?.model && (
               <span className="opacity-0 transition-opacity group-hover:opacity-100 inline-flex items-center rounded-full bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {message.metadata.model}
+                {meta.model}
               </span>
             )}
           </div>
@@ -357,43 +359,43 @@ const MessageItemComponent = ({
           {/* Reasoning accordion — shown before message content */}
           {!isUser && hasThinkingSteps && (
             <div className="mb-3">
-              <ReasoningAccordion
-                steps={message.metadata!.thinkingSteps!}
-                isStreaming={message.isStreaming}
-              />
+              <ReasoningAccordion steps={meta!.thinkingSteps!} isStreaming={message.isStreaming} />
             </div>
           )}
 
           {/* Web search indicator — shown while server-side search is running */}
-          {!isUser && message.metadata?.isSearching && (
+          {!isUser && meta?.isSearching && (
             <div className="mb-3">
               <SearchingIndicator />
             </div>
           )}
 
           {/* Web search results — shown after search completes */}
-          {!isUser &&
-            message.metadata?.searchResults &&
-            message.metadata.searchResults.length > 0 && (
-              <div className="mb-3">
-                <CompactSearchResults
-                  searchResponse={{
-                    query: '',
-                    results: message.metadata.searchResults,
-                    timestamp: new Date(),
-                  }}
-                />
-              </div>
-            )}
+          {!isUser && meta?.searchResults && (meta.searchResults as unknown[]).length > 0 && (
+            <div className="mb-3">
+              <CompactSearchResults
+                searchResponse={{
+                  query: '',
+                  results: meta.searchResults as Parameters<
+                    typeof CompactSearchResults
+                  >[0]['searchResponse']['results'],
+                  timestamp: new Date(),
+                }}
+              />
+            </div>
+          )}
 
           {/* Code execution block — shown while executing or after result arrives */}
-          {!isUser &&
-            (message.metadata?.isExecutingCode || message.metadata?.codeExecutionResult) && (
-              <CodeExecutionBlock
-                isExecuting={message.metadata?.isExecutingCode}
-                result={message.metadata?.codeExecutionResult}
-              />
-            )}
+          {!isUser && (meta?.isExecutingCode || Boolean(meta?.codeExecutionResult)) && (
+            <CodeExecutionBlock
+              isExecuting={meta?.isExecutingCode}
+              result={
+                meta?.codeExecutionResult as
+                  | Parameters<typeof CodeExecutionBlock>[0]['result']
+                  | undefined
+              }
+            />
+          )}
 
           {/* User message bubble or assistant prose */}
           {isUser ? (
@@ -404,8 +406,8 @@ const MessageItemComponent = ({
             <div className="prose prose-sm dark:prose-invert max-w-none text-[15px]">
               {message.isStreaming &&
               !message.content.trim() &&
-              !message.metadata?.isSearching &&
-              !message.metadata?.isExecutingCode ? (
+              !meta?.isSearching &&
+              !meta?.isExecutingCode ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                   <span className="text-sm">Thinking...</span>
@@ -426,14 +428,16 @@ const MessageItemComponent = ({
           {/* Citation footer — shown after content when web search results are available */}
           {!isUser &&
             !message.isStreaming &&
-            message.metadata?.searchResults &&
-            message.metadata.searchResults.length > 0 && (
+            meta?.searchResults &&
+            (meta.searchResults as unknown[]).length > 0 && (
               <CitationFooter
-                citations={message.metadata.searchResults.map(
+                citations={(
+                  meta.searchResults as Array<{ url?: string; title?: string; snippet?: string }>
+                ).map(
                   (r, i): Citation => ({
                     index: i + 1,
-                    url: r.url,
-                    title: r.title,
+                    url: r.url ?? '',
+                    title: r.title ?? '',
                     snippet: r.snippet || undefined,
                   }),
                 )}
@@ -441,23 +445,11 @@ const MessageItemComponent = ({
             )}
 
           {/* Tool timeline — shown after content for assistant messages */}
-          {!isUser &&
-            message.metadata &&
-            'tools' in message.metadata &&
-            Array.isArray((message.metadata as Record<string, unknown>)['tools']) && (
-              <div className="mt-3">
-                <ToolTimeline
-                  tools={
-                    (message.metadata as Record<string, unknown>)['tools'] as Array<{
-                      name: string;
-                      status: 'running' | 'completed' | 'failed';
-                      durationMs?: number;
-                      args?: string;
-                    }>
-                  }
-                />
-              </div>
-            )}
+          {!isUser && meta?.tools && meta.tools.length > 0 && (
+            <div className="mt-3">
+              <ToolTimeline tools={meta.tools} />
+            </div>
+          )}
 
           {/* Actions (hover) */}
           {!message.isStreaming && (

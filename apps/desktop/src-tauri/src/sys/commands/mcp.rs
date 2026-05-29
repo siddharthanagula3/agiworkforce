@@ -5,7 +5,7 @@ use crate::core::mcp::{
 };
 use crate::sys::commands::auth::{get_session_user_id, SessionState};
 use crate::sys::commands::connector_permissions::{
-    resolve_permission, PermissionLevel, encryption_from_state,
+    encryption_from_state, resolve_permission, PermissionLevel,
 };
 use crate::sys::commands::master_password::MasterPasswordState;
 use crate::sys::commands::tool_confirmation::{
@@ -988,7 +988,10 @@ pub async fn mcp_call_tool(
             let confirmation = ToolConfirmationRequest {
                 request_id: correlation_id.clone(),
                 tool_name: tool_id.clone(),
-                tool_description: format!("Execute MCP tool '{}' on server '{}'", tool_id, server_name),
+                tool_description: format!(
+                    "Execute MCP tool '{}' on server '{}'",
+                    tool_id, server_name
+                ),
                 parameters: serde_json::to_value(&arguments).unwrap_or(serde_json::json!({})),
                 risk_level: RiskLevel::High,
                 safety_tier: ToolSafetyTier::RequiresExplicitApproval,

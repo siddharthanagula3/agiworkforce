@@ -647,7 +647,7 @@ function createFileReaderTool(): UnifiedTool {
     },
     parameterSchema: schema,
     execute: async (params, _context): Promise<ToolResult> => {
-      // Stub implementation - actual implementation in vibe-tool-orchestrator
+      // Stub implementation
       return {
         success: true,
         output: `File read simulation for ${(params as { file_path: string }).file_path}`,

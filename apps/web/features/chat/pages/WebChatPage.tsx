@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
-import { getSupabaseClient } from '@/services/supabase';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { SendPreview } from '@agiworkforce/unified-chat';
 import {
@@ -14,11 +15,16 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
-import { hasByokEnvKeys } from '@/lib/byok-access';
+import { Share2, Bell, X as XIcon } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useShareConversation } from '../hooks/use-share-conversation';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
+import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
+import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
+import { DirectoryModal } from '../components/dialogs/DirectoryModal';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -29,9 +35,10 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
-import type { ChatMessage } from '../stores/chat-store';
+import { useChatStore as useUnifiedChatStore } from '@agiworkforce/unified-chat';
+import type { ChatMessage } from '@agiworkforce/unified-chat';
+import type { WebChatMessageMetadata } from '../types/message-metadata';
 import { cn } from '@shared/lib/utils';
-import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
 
 type SendMeta = {
   agentMode?: string;
@@ -39,6 +46,10 @@ type SendMeta = {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
   codeExecutionEnabled?: boolean;
+  /** Output style hint (concise / formal / explanatory / normal). Omitted = normal. */
+  styleMode?: string;
+  /** Skill body to inject as a system message in the LLM request. */
+  skillBody?: string;
 };
 
 type PendingByokHandoff = {
@@ -53,7 +64,7 @@ type PendingByokHandoff = {
 function toChatMessage(m: Message, conversationId: string): ChatMessage {
   const thinkingContent = m.metadata?.thinkingContent;
   const thinkingSteps = thinkingContent ? [thinkingContent] : m.metadata?.thinkingSteps;
-  const metadata =
+  const metadata: Record<string, unknown> | undefined =
     m.metadata || m.model
       ? {
           ...m.metadata,
@@ -70,40 +81,28 @@ function toChatMessage(m: Message, conversationId: string): ChatMessage {
 
   return {
     id: m.id,
-    sessionId: conversationId,
+    conversationId,
     role: m.role === 'system' ? 'assistant' : m.role,
     content: m.content,
-    createdAt: new Date(m.createdAt),
+    createdAt: m.createdAt,
     isStreaming: m.isStreaming,
     metadata,
   };
-}
-
-async function getAuthToken(): Promise<string> {
-  const supabase = getSupabaseClient();
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session?.access_token) {
-    throw new Error('Not authenticated');
-  }
-
-  return session.access_token;
 }
 
 async function saveSystemMessage(params: {
   conversationId: string;
   content: string;
   metadata: MessageMetadata;
+  authToken: string;
 }): Promise<Message> {
-  const authToken = await getAuthToken();
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${params.authToken}`,
+  });
   const response = await fetch(`/api/chat/conversations/${params.conversationId}/messages`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${authToken}`,
-    },
+    headers,
     body: JSON.stringify({
       role: 'system',
       content: params.content,
@@ -130,6 +129,7 @@ async function saveSystemMessage(params: {
 }
 
 export default function WebChatPage() {
+  const { getToken } = useAuth();
   const router = useRouter();
   const params = useParams();
   const urlConversationId = params?.['sessionId'] as string | undefined;
@@ -142,24 +142,16 @@ export default function WebChatPage() {
     s.availableModels.find((m) => m.id === s.selectedModelId),
   );
 
-  // Pre-emptive access gate: redirect to /byok only when the user has neither
-  // an active subscription, a local model selected, nor any BYOK env keys set.
-  // BYOK users (plan_tier='free' with env keys) and local-model users must not
-  // be redirected -- only truly unconfigured visitors should hit /byok.
+  // Web chat is subscription-backed managed gateway only. Local and BYOK are
+  // desktop/developer-surface trust boundaries, not Web chat modes.
   useEffect(() => {
     let cancelled = false;
 
     async function checkAccess() {
-      const selectedProviderKey = selectedModel?.providerKey ?? '';
-      if (LOCAL_PROVIDER_KEYS.has(selectedProviderKey)) return;
+      const sub = await refreshSubscriptionStatus();
 
-      const [sub, byokAvailable] = await Promise.all([
-        refreshSubscriptionStatus(),
-        hasByokEnvKeys(),
-      ]);
-
-      if (!cancelled && !isSubscriptionValid(sub) && !byokAvailable) {
-        router.replace('/byok');
+      if (!cancelled && !isSubscriptionValid(sub)) {
+        router.replace('/pricing?from=web-chat');
       }
     }
 
@@ -167,10 +159,28 @@ export default function WebChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, selectedModel]);
+  }, [router]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
+
+  // Consume any pending message written by the project-detail composer before
+  // navigating here. Reading once on mount prevents the value from surviving
+  // page refreshes.
+  useEffect(() => {
+    try {
+      const pending = sessionStorage.getItem('agi.project.pendingMessage');
+      if (pending) {
+        sessionStorage.removeItem('agi.project.pendingMessage');
+        sessionStorage.removeItem('agi.project.pendingProjectId');
+        setComposerPrefill(pending);
+      }
+    } catch {
+      // sessionStorage unavailable -- ignore
+    }
+  }, []);
+
   const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
   const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
@@ -180,6 +190,52 @@ export default function WebChatPage() {
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
+
+  // Notification banner: appears after 3s of streaming if the user hasn't
+  // already granted/denied the Notification permission in this session.
+  const [showNotifBanner, setShowNotifBanner] = useState(false);
+  const notifBannerDismissedRef = useRef(false);
+  const notifBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined') return;
+    if (notifBannerDismissedRef.current) return;
+    if (Notification.permission !== 'default') return;
+
+    if (isStreaming) {
+      if (!notifBannerTimerRef.current) {
+        notifBannerTimerRef.current = setTimeout(() => {
+          if (!notifBannerDismissedRef.current) {
+            setShowNotifBanner(true);
+          }
+        }, 3000);
+      }
+    } else {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+        notifBannerTimerRef.current = null;
+      }
+      setShowNotifBanner(false);
+    }
+
+    return () => {
+      if (notifBannerTimerRef.current) {
+        clearTimeout(notifBannerTimerRef.current);
+      }
+    };
+  }, [isStreaming]);
+
+  const handleRequestNotifPermission = useCallback(async () => {
+    if (typeof Notification === 'undefined') return;
+    notifBannerDismissedRef.current = true;
+    setShowNotifBanner(false);
+    await Notification.requestPermission();
+  }, []);
+
+  const handleDismissNotifBanner = useCallback(() => {
+    notifBannerDismissedRef.current = true;
+    setShowNotifBanner(false);
+  }, []);
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const addMessage = useChatStore((s) => s.addMessage);
@@ -190,34 +246,12 @@ export default function WebChatPage() {
   // composer so users always see where the next turn is going (local device,
   // BYOK provider host, or AGI managed gateway) before they send.
   const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
-    const providerKey = selectedModel?.providerKey;
-    const providerMode: ProviderMode = !providerKey
-      ? 'Local'
-      : providerKey === 'managed_cloud'
-        ? 'ManagedGateway'
-        : providerKey === 'local' ||
-            providerKey === 'ollama' ||
-            providerKey === 'lmstudio' ||
-            providerKey === 'executorch' ||
-            providerKey === 'llamacpp'
-          ? 'Local'
-          : 'DirectByok';
+    const providerMode: ProviderMode = 'ManagedGateway';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
       modelId: selectedModelId,
-      destinationHost:
-        providerMode === 'Local'
-          ? undefined
-          : providerKey === 'anthropic'
-            ? 'api.anthropic.com'
-            : providerKey === 'openai'
-              ? 'api.openai.com'
-              : providerKey === 'google'
-                ? 'generativelanguage.googleapis.com'
-                : providerKey === 'managed_cloud'
-                  ? 'gateway.agiworkforce.com'
-                  : undefined,
+      destinationHost: 'gateway.agiworkforce.com',
     });
   }, [selectedModel, selectedModelId]);
 
@@ -228,31 +262,50 @@ export default function WebChatPage() {
     loadConversation,
     deleteConversation,
     updateConversation,
+    setActiveConversation,
   } = useConversations();
 
-  // Session creation guard
-  const creationPending = React.useRef(false);
+  const displayedConversationId = urlConversationId ?? bareChatSessionId;
+  const displayedMessages = useMemo(
+    () =>
+      displayedConversationId && activeConversationId === displayedConversationId ? messages : [],
+    [activeConversationId, displayedConversationId, messages],
+  );
+  const displayedConversation = useMemo(
+    () =>
+      displayedConversationId
+        ? (conversations.find((c) => c.id === displayedConversationId) ?? null)
+        : null,
+    [conversations, displayedConversationId],
+  );
 
-  // On mount: if URL has a conversation ID, load it. Otherwise create one.
+  // Share current conversation
+  const activeConversationTitle = displayedConversation?.title;
+  const { share, isSharing } = useShareConversation(activeConversationTitle);
+  const hasMessages = displayedMessages.length > 0;
+
+  // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
+  // the empty new-chat surface and create persistence only when the user sends.
+  const routeInitializedRef = useRef(false);
   useEffect(() => {
+    if (routeInitializedRef.current && !urlConversationId) return;
+    routeInitializedRef.current = true;
+
     if (urlConversationId) {
       if (urlConversationId !== activeConversationId) {
-        loadConversation(urlConversationId);
-      }
-    } else if (!activeConversationId && !creationPending.current) {
-      creationPending.current = true;
-      createConversation('New Chat')
-        .then((conv) => {
-          if (conv) {
-            router.replace(`/chat/${conv.id}`);
+        void loadConversation(urlConversationId).then((ok) => {
+          if (!ok) {
+            setBareChatSessionId(null);
+            setActiveConversation(null);
+            router.replace('/chat');
           }
-        })
-        .finally(() => {
-          creationPending.current = false;
         });
+      }
+    } else if (activeConversationId) {
+      setBareChatSessionId(null);
+      setActiveConversation(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlConversationId]);
+  }, [activeConversationId, loadConversation, router, setActiveConversation, urlConversationId]);
 
   const sendContent = useCallback(
     async (
@@ -266,16 +319,17 @@ export default function WebChatPage() {
       const convId =
         options.conversationId ||
         urlConversationId ||
-        activeConversationId ||
+        bareChatSessionId ||
         (await createConversation('New Chat', selectedModelId).then((c) => {
           if (c) {
-            router.replace(`/chat/${c.id}`);
+            if (!urlConversationId) setBareChatSessionId(c.id);
             return c.id;
           }
           return null;
         }));
 
       if (!convId) return;
+      if (!urlConversationId) setBareChatSessionId(convId);
 
       // Read image files as base64 data URLs so the LLM can process them
       const resolvedAttachments = options.attachments
@@ -309,36 +363,32 @@ export default function WebChatPage() {
         webSearch: options.meta?.webSearchEnabled,
         thinkingEnabled: options.meta?.thinkingEnabled,
         codeExecution: options.meta?.codeExecutionEnabled,
+        styleMode: options.meta?.styleMode,
+        skillBody: options.meta?.skillBody,
       });
     },
-    [
-      urlConversationId,
-      activeConversationId,
-      createConversation,
-      sendMessage,
-      selectedModelId,
-      router,
-    ],
+    [urlConversationId, bareChatSessionId, createConversation, sendMessage, selectedModelId],
   );
 
   const handleSend = useCallback(
-    (content: string, attachments?: File[], _skillId?: string, meta?: SendMeta): false | void => {
-      const sourceConversationId = urlConversationId || activeConversationId;
-      const conversation = sourceConversationId
-        ? (conversations.find((item) => item.id === sourceConversationId) ?? null)
-        : null;
+    (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
+      void skillId; // skill identity resolved; body is carried in meta.skillBody
+      const sourceConversationId = displayedConversationId;
+      const conversation = displayedConversation;
 
+      const webLocalToByokHandoffEnabled = false;
       if (
+        webLocalToByokHandoffEnabled &&
         sourceConversationId &&
         shouldForkLocalToByok({
           conversation,
-          messages,
+          messages: displayedMessages,
           targetModelId: selectedModelId,
         })
       ) {
         const candidates = buildHandoffContextCandidates({
           conversationId: sourceConversationId,
-          messages,
+          messages: displayedMessages,
           outgoingContent: content,
         });
         setPendingByokHandoff({
@@ -358,12 +408,11 @@ export default function WebChatPage() {
       void sendContent(content, { attachments, meta });
     },
     [
-      activeConversationId,
-      conversations,
-      messages,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
       selectedModelId,
       sendContent,
-      urlConversationId,
     ],
   );
 
@@ -443,10 +492,15 @@ export default function WebChatPage() {
         conversationId: fork.id,
         content: buildAcceptedHandoffSystemMessage(handoffPreview),
         metadata,
+        authToken: await getToken().then((token) => {
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        }),
       });
 
       addMessage(systemMessage);
-      router.push(`/chat/${fork.id}`);
+      setBareChatSessionId(fork.id);
+      router.push('/chat');
       setComposerClearSignal((value) => value + 1);
       setPendingByokHandoff(null);
       setSelectedHandoffContextIds([]);
@@ -466,6 +520,7 @@ export default function WebChatPage() {
   }, [
     addMessage,
     createConversation,
+    getToken,
     handoffPreview,
     pendingByokHandoff,
     router,
@@ -474,33 +529,37 @@ export default function WebChatPage() {
   ]);
 
   const handleNewChat = useCallback(() => {
-    creationPending.current = true;
-    createConversation('New Chat')
-      .then((conv) => {
-        if (conv) {
-          router.push(`/chat/${conv.id}`);
-        }
-      })
-      .finally(() => {
-        creationPending.current = false;
-      });
-  }, [createConversation, router]);
+    setActiveConversation(null);
+    setBareChatSessionId(null);
+    setComposerPrefill(undefined);
+    setComposerClearSignal((value) => value + 1);
+    router.push('/chat');
+  }, [router, setActiveConversation]);
 
   const handleSelectSession = useCallback(
     (id: string) => {
-      router.push(`/chat/${id}`);
+      setBareChatSessionId(id);
+      void loadConversation(id).then((ok) => {
+        if (!ok) {
+          setBareChatSessionId(null);
+          setActiveConversation(null);
+        }
+      });
+      router.push('/chat');
     },
-    [router],
+    [loadConversation, router, setActiveConversation],
   );
 
   const handleDeleteSession = useCallback(
     (id: string) => {
       deleteConversation(id);
-      if (id === activeConversationId) {
+      if (id === displayedConversationId) {
+        setBareChatSessionId(null);
+        setActiveConversation(null);
         router.push('/chat');
       }
     },
-    [deleteConversation, activeConversationId, router],
+    [deleteConversation, displayedConversationId, router, setActiveConversation],
   );
 
   const handleRenameSession = useCallback(
@@ -510,20 +569,28 @@ export default function WebChatPage() {
     [updateConversation],
   );
 
+  const updateUnifiedConversation = useUnifiedChatStore((s) => s.updateConversation);
+  const handleMoveToProjectSession = useCallback(
+    (sessionId: string, projectId: string) => {
+      updateUnifiedConversation(sessionId, { projectId });
+    },
+    [updateUnifiedConversation],
+  );
+
   // Auto-title: when the second message arrives (first assistant reply), derive title
   // from the first user message content if the conversation is still named "New Chat".
   // Intentionally only re-runs on messages.length, not the full messages array, to
   // avoid re-running on every streaming chunk.
   useEffect(() => {
-    if (!activeConversationId || messages.length !== 2) return;
-    const convo = conversations.find((c) => c.id === activeConversationId);
+    if (!displayedConversationId || displayedMessages.length !== 2) return;
+    const convo = conversations.find((c) => c.id === displayedConversationId);
     if (!convo || convo.title !== 'New Chat') return;
-    const firstUser = messages[0];
+    const firstUser = displayedMessages[0];
     if (!firstUser || firstUser.role !== 'user') return;
     const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ') || 'New Chat';
-    updateConversation(activeConversationId, { title });
+    updateConversation(displayedConversationId, { title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, activeConversationId, conversations, updateConversation]);
+  }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
 
   const handleDeleteMessage = useCallback(
     (id: string) => {
@@ -532,16 +599,27 @@ export default function WebChatPage() {
     [deleteMessage],
   );
 
+  const handleEditMessage = useCallback(
+    (id: string) => {
+      if (!displayedConversationId || isStreaming) return;
+      const msg = displayedMessages.find((m) => m.id === id);
+      if (!msg || msg.role !== 'user') return;
+      setComposerPrefill(msg.content);
+      deleteMessage(id);
+    },
+    [displayedConversationId, displayedMessages, isStreaming, deleteMessage],
+  );
+
   const handleRegenerateMessage = useCallback(
     (id: string) => {
-      if (!activeConversationId || isStreaming) return;
-      const idx = messages.findIndex((m) => m.id === id);
+      if (!displayedConversationId || isStreaming) return;
+      const idx = displayedMessages.findIndex((m) => m.id === id);
       if (idx <= 0) return;
       // Find the user message just before this one
-      let userMsg: (typeof messages)[0] | undefined;
+      let userMsg: (typeof displayedMessages)[0] | undefined;
       for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i]?.role === 'user') {
-          userMsg = messages[i];
+        if (displayedMessages[i]?.role === 'user') {
+          userMsg = displayedMessages[i];
           break;
         }
       }
@@ -550,73 +628,183 @@ export default function WebChatPage() {
       deleteMessage(id);
       sendMessage(userMsg.content, {
         model: selectedModelId,
-        conversationId: activeConversationId,
+        conversationId: displayedConversationId,
       });
     },
-    [activeConversationId, messages, isStreaming, deleteMessage, sendMessage, selectedModelId],
+    [
+      displayedConversationId,
+      displayedMessages,
+      isStreaming,
+      deleteMessage,
+      sendMessage,
+      selectedModelId,
+    ],
   );
 
   const chatMessages = useMemo(
-    () => messages.map((m) => toChatMessage(m, activeConversationId ?? '')),
-    [messages, activeConversationId],
+    () =>
+      displayedConversationId
+        ? displayedMessages.map((m) => toChatMessage(m, displayedConversationId))
+        : [],
+    [displayedMessages, displayedConversationId],
   );
+  const isEmptyChat = !displayedConversationId || (chatMessages.length === 0 && !isLoading);
+
+  // Count distinct research sources across all messages for the toggle badge.
+  // chatMessages use the unified-chat shape where searchResults is a flat array.
+  const researchSourceCount = useMemo(() => {
+    let count = 0;
+    for (const m of chatMessages) {
+      const meta = m.metadata as WebChatMessageMetadata | undefined;
+      const sr = meta?.searchResults;
+      if (Array.isArray(sr)) {
+        count += (sr as Array<{ url?: string }>).filter((r) => r.url).length;
+      }
+    }
+    return count;
+  }, [chatMessages]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
       {/* Sidebar */}
       <ChatSidebar
         sessions={conversations}
-        activeSessionId={activeConversationId ?? undefined}
+        activeSessionId={displayedConversationId ?? undefined}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         onRenameSession={handleRenameSession}
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         collapsed={sidebarCollapsed}
+        onMoveToProjectSession={handleMoveToProjectSession}
       />
 
       {/* Main area + artifact workbench */}
-      <div className="flex min-w-0 flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <div className="flex h-11 shrink-0 items-center justify-end border-b border-border/30 px-4">
-            <ArtifactsToggleButton />
-          </div>
-
-          {/* Message list */}
-          <div className="flex-1 overflow-hidden">
-            <ChatMessageList
-              messages={chatMessages}
-              isLoading={isLoading && !isStreaming}
-              onRegenerate={handleRegenerateMessage}
-              onDelete={handleDeleteMessage}
-              onSendMessage={(text) => setComposerPrefill(text)}
-            />
-          </div>
-
-          {/* Composer + Send Preview disclosure */}
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div
             className={cn(
-              'mx-auto w-full max-w-3xl px-4 pb-6',
-              sidebarCollapsed ? 'max-w-4xl' : '',
+              'flex h-11 shrink-0 items-center justify-between px-4',
+              isEmptyChat
+                ? 'border-b border-transparent'
+                : 'border-b border-[var(--chat-border-subtle)]',
             )}
           >
-            <div className="mb-2">
-              <SendPreview presentation={sendPreviewPresentation} />
+            <div className="flex items-center gap-1">
+              {hasMessages && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void share()}
+                  disabled={isSharing}
+                  className="gap-1.5"
+                  aria-label="Share conversation"
+                >
+                  <Share2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="hidden text-xs sm:inline">Share</span>
+                </Button>
+              )}
             </div>
-            <ChatComposerNew
-              onSend={handleSend}
-              onStop={stopGeneration}
-              isLoading={isLoading}
-              isGenerating={isStreaming}
-              prefillText={composerPrefill}
-              onPrefillConsumed={() => setComposerPrefill(undefined)}
-              clearSignal={composerClearSignal}
-              attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-            />
+            <div className="flex items-center gap-1.5">
+              <ResearchToggleButton count={researchSourceCount} />
+              <ArtifactsToggleButton />
+            </div>
           </div>
+
+          {/* Notification permission banner — shown during long generations */}
+          {showNotifBanner && (
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 shrink-0 text-amber-500" aria-hidden="true" />
+                <span className="text-[var(--chat-text-secondary)]">
+                  Get notified when the response is ready.
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleRequestNotifPermission()}
+                  className="rounded-md bg-amber-500 px-3 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                >
+                  Enable
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDismissNotifBanner}
+                  className="text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]"
+                  aria-label="Dismiss notification prompt"
+                >
+                  <XIcon className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Message list */}
+          {isEmptyChat ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6 pb-[8vh]">
+                <div className="mb-9">
+                  <GreetingBanner onSendMessage={(prompt) => setComposerPrefill(prompt)} />
+                </div>
+                <div className="w-full max-w-[900px]">
+                  <ChatComposerNew
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    isLoading={isLoading}
+                    isGenerating={isStreaming}
+                    placeholder="How can I help you today?"
+                    prefillText={composerPrefill}
+                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    clearSignal={composerClearSignal}
+                    emptyState
+                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="min-h-0 flex-1 overflow-hidden pb-60">
+                <ChatMessageList
+                  messages={chatMessages}
+                  isLoading={isLoading && !isStreaming}
+                  onRegenerate={handleRegenerateMessage}
+                  onEdit={handleEditMessage}
+                  onDelete={handleDeleteMessage}
+                  onSendMessage={(text) => setComposerPrefill(text)}
+                />
+              </div>
+
+              {/* Composer + Send Preview disclosure */}
+              <div
+                className={cn(
+                  'absolute inset-x-0 bottom-5 z-20 mx-auto w-full max-w-3xl px-4',
+                  sidebarCollapsed ? 'max-w-4xl' : '',
+                )}
+              >
+                <div className="mb-2">
+                  <SendPreview presentation={sendPreviewPresentation} />
+                </div>
+                <ChatComposerNew
+                  onSend={handleSend}
+                  onStop={stopGeneration}
+                  isLoading={isLoading}
+                  isGenerating={isStreaming}
+                  placeholder="How can I help you today?"
+                  prefillText={composerPrefill}
+                  onPrefillConsumed={() => setComposerPrefill(undefined)}
+                  clearSignal={composerClearSignal}
+                  attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                />
+              </div>
+            </>
+          )}
         </div>
+        <ResearchPanel />
         <ArtifactsPanel />
       </div>
+      <DirectoryModal />
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}

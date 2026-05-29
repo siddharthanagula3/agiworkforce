@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { getSupabaseClient } from '../../services/supabase';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
@@ -21,11 +20,15 @@ export default function ForgotPasswordPage() {
     setLoading(true);
     setMessage(null);
     try {
-      const supabase = getSupabaseClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/auth/update-password`,
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, redirectTo: `${appUrl}/auth/update-password` }),
       });
-      if (error) throw error;
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? 'Reset failed');
+      }
       setMessage({ text: 'Reset email sent. Check your inbox.', type: 'info' });
     } catch (err) {
       setMessage({ text: err instanceof Error ? err.message : 'Reset failed', type: 'error' });
@@ -86,7 +89,7 @@ export default function ForgotPasswordPage() {
             {message && (
               <p
                 style={{
-                  color: message.type === 'error' ? '#ff6b6b' : 'var(--agi-amber)',
+                  color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-amber)',
                   fontSize: 13,
                   margin: 0,
                 }}

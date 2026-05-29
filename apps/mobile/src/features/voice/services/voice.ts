@@ -11,7 +11,7 @@ import { Platform } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { secureFetch } from '@/services/secureFetch';
-import { supabase } from '@/services/supabase';
+import { getAuthToken } from '@/services/authSession';
 import {
   startCapture,
   stopCapture,
@@ -147,8 +147,7 @@ export async function getDeepgramEphemeralToken(): Promise<string> {
   if (!FEATURES.cloudChat) {
     throw new CloudVoiceDisabledError('getDeepgramEphemeralToken');
   }
-  const { data } = await supabase.auth.getSession();
-  const authToken = data.session?.access_token;
+  const authToken = await getAuthToken();
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), TIMEOUTS.DEFAULT);
