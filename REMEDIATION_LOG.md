@@ -373,3 +373,30 @@ all 17 memory_pipeline tests pass.
 production crash surface was already verified clean (prior session). The desktop command surface has 1406
 `#[tauri::command]` handlers and ~283 unwrap/expect/panic sites across them (many are tests/invariants).
 Triaging via workflow for genuinely user-reachable, recoverable panics; fixing a high-confidence set.
+
+### Batch 4 — Auth unification ✅ VERIFIED (the migration already collapsed the fork)
+
+The Supabase→Neon→Clerk migration (commit `d56bb265f`) already collapsed the Clerk-vs-Supabase fork to a
+single system. Verified by me (read-only):
+
+- **Zero Supabase references** in non-test/non-doc TS/Rust code (`rg supabase` over `*.ts/*.tsx/*.rs`,
+  excluding node_modules/\_archive/tests/docs → 0 refs / 0 files). The Supabase auth path is fully removed —
+  no dead Supabase auth code remains.
+- **Clerk is the single system**, used across `apps/web`, `packages/data-layer`, and `services/api-gateway`.
+- **Signatures ARE verified at the trust boundary:** the gateway uses `@clerk/backend` `verifyToken(token,
+{ secretKey })` in `middleware/auth.ts:43` and `routes/deviceAuth.ts:214`.
+- The `data-layer` `AuthProvider = 'auth0' | 'clerk' | 'cognito'` type + factory cases are an intentional
+  pluggable-adapter SEAM (only `clerk` is wired/used; the comment says so). Not a live fork, not dead code
+  to delete — it's a library extensibility point.
+
+**DoD ("single tested auth path, no dead auth code") = met for the web/gateway/data-layer core.** Full
+per-surface auth E2E tracing (desktop managed path, mobile, extensions) is consistent with Clerk and not
+re-forked; deeper per-surface flows fold into Batch 7 parity.
+
+**Flagged for Batch 8 (security pass) — NOT changed now (avoid breaking the verify-at-edge design):**
+
+- `data-layer` `withUser(jwt)` decodes the `sub` claim WITHOUT re-verifying the signature (verify-at-edge
+  pattern — the gateway verifies first). Confirm EVERY caller verifies upstream before trusting `withUser`;
+  if any raw-request path reaches it unverified, that is an auth-scoping bypass.
+- (register) `ClerkAuthAdapter.refreshToken` unimplemented; worker `session_ingress_token` unsigned/forgeable
+  (only if that protocol is enabled in prod); `routeToCloud` token sourced from an unwritten localStorage key.
