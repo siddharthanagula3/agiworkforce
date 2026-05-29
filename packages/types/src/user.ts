@@ -54,7 +54,7 @@ export type UserSubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trial
  * ```
  */
 export interface User {
-  /** Unique user identifier (Supabase UUID). */
+  /** Unique user identifier (UUID). */
   id: string;
 
   /** User's email address. */
@@ -103,7 +103,7 @@ export interface User {
  * ```
  */
 export interface ExtendedUserProfile {
-  /** Unique user identifier (Supabase UUID). */
+  /** Unique user identifier (UUID). */
   id: string;
 
   /** User's email address. */

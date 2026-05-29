@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@/stores/unified/auth';
@@ -19,6 +19,7 @@ import {
   AlertDialogAction,
 } from '@/components/ui/AlertDialog';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
+import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -49,14 +50,18 @@ const WORK_DESCRIPTIONS = [
 
 type WorkDescription = (typeof WORK_DESCRIPTIONS)[number] | '';
 
-const PREF_STORAGE_KEY = 'agi.settings.general';
-const LS_PREFERRED_NAME_KEY = 'agi.profile.preferredName';
-const LS_WORK_KEY = 'agi.profile.workDescription';
-const LS_INSTRUCTIONS_KEY = 'agi.profile.instructions';
+const PREF_NAMESPACE = 'general';
 
 interface PreferenceSettings {
   chatFont: string;
   voice: string;
+}
+
+interface GeneralSettings extends PreferenceSettings {
+  displayName: string;
+  preferredName: string;
+  workDescription: WorkDescription;
+  instructions: string;
 }
 
 const DEFAULT_PREFS: PreferenceSettings = {
@@ -64,24 +69,13 @@ const DEFAULT_PREFS: PreferenceSettings = {
   voice: 'nova',
 };
 
-function loadPrefs(): PreferenceSettings {
-  if (typeof window === 'undefined') return DEFAULT_PREFS;
-  try {
-    const raw = localStorage.getItem(PREF_STORAGE_KEY);
-    if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<PreferenceSettings>) };
-  } catch {
-    return DEFAULT_PREFS;
-  }
-}
-
-function savePrefs(prefs: PreferenceSettings): void {
-  try {
-    localStorage.setItem(PREF_STORAGE_KEY, JSON.stringify(prefs));
-  } catch {
-    // localStorage may be unavailable; fail silently.
-  }
-}
+const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  displayName: '',
+  preferredName: '',
+  workDescription: '',
+  instructions: '',
+  ...DEFAULT_PREFS,
+};
 
 // ---------------------------------------------------------------------------
 // Page
@@ -95,42 +89,39 @@ export default function GeneralSettingsPage() {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
   // --- Profile state -------------------------------------------------------
-  const userMeta = (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {};
+  const userMeta = useMemo(
+    () => (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {},
+    [user],
+  );
+  const accountEmail = user?.email ?? clerkUser?.primaryEmailAddress?.emailAddress ?? '';
   const initialFullName =
     (userMeta['full_name'] as string | undefined) ??
     (userMeta['name'] as string | undefined) ??
-    (typeof window !== 'undefined'
-      ? (window.localStorage.getItem('agi.profile.displayName') ?? '')
-      : '') ??
-    user?.email?.split('@')[0] ??
+    clerkUser?.fullName ??
+    accountEmail.split('@')[0] ??
     '';
 
   const [displayName, setDisplayName] = useState(initialFullName);
 
   const [preferredName, setPreferredName] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
     return (
       (userMeta['preferred_name'] as string | undefined) ??
-      window.localStorage.getItem(LS_PREFERRED_NAME_KEY) ??
+      clerkUser?.firstName ??
       initialFullName.split(' ')[0] ??
       ''
     );
   });
 
-  const [workDescription, setWorkDescription] = useState<WorkDescription>(() => {
-    if (typeof window === 'undefined') return '';
-    return (window.localStorage.getItem(LS_WORK_KEY) as WorkDescription) ?? '';
-  });
+  const [workDescription, setWorkDescription] = useState<WorkDescription>('');
 
-  const [instructions, setInstructions] = useState<string>(() => {
-    if (typeof window === 'undefined') return '';
-    return window.localStorage.getItem(LS_INSTRUCTIONS_KEY) ?? '';
-  });
+  const [instructions, setInstructions] = useState<string>('');
 
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   // --- Preferences state ---------------------------------------------------
@@ -143,23 +134,73 @@ export default function GeneralSettingsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
     setMounted(true);
-    setPrefs(loadPrefs());
-  }, []);
+    const defaults: GeneralSettings = {
+      ...DEFAULT_GENERAL_SETTINGS,
+      displayName: initialFullName,
+      preferredName:
+        (userMeta['preferred_name'] as string | undefined) ??
+        clerkUser?.firstName ??
+        initialFullName.split(' ')[0] ??
+        '',
+      workDescription: (userMeta['work_description'] as WorkDescription | undefined) ?? '',
+      instructions: (userMeta['instructions'] as string | undefined) ?? '',
+    };
+
+    let cancelled = false;
+    void fetchPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, defaults)
+      .then((serverSettings) => {
+        if (cancelled) return;
+        setDisplayName(serverSettings.displayName);
+        setPreferredName(serverSettings.preferredName);
+        setWorkDescription(serverSettings.workDescription);
+        setInstructions(serverSettings.instructions);
+        setPrefs({ chatFont: serverSettings.chatFont, voice: serverSettings.voice });
+        setLoadError(null);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreferencesLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clerkUser?.firstName, initialFullName, userMeta]);
 
   // Auto-save preferences with 400ms debounce
   useEffect(() => {
-    if (!mounted) return;
+    if (!mounted || !preferencesLoaded) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      savePrefs(prefs);
+      const next: GeneralSettings = {
+        displayName,
+        preferredName,
+        workDescription,
+        instructions,
+        ...prefs,
+      };
+      void savePreferenceNamespace(PREF_NAMESPACE, next).catch((error) => {
+        setSaveError(error instanceof Error ? error.message : 'Failed to save preferences');
+      });
     }, 400);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [prefs, mounted]);
+  }, [
+    displayName,
+    instructions,
+    mounted,
+    preferencesLoaded,
+    preferredName,
+    prefs,
+    workDescription,
+  ]);
 
   const updatePref = <K extends keyof PreferenceSettings>(key: K, value: PreferenceSettings[K]) => {
     setPrefs((prev) => ({ ...prev, [key]: value }));
@@ -169,7 +210,7 @@ export default function GeneralSettingsPage() {
 
   // Derived: initials for avatar (up to 2 chars)
   const avatarInitials = (() => {
-    const name = preferredName || displayName || user?.email || 'A';
+    const name = preferredName || displayName || accountEmail || 'A';
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {
       return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
@@ -184,10 +225,13 @@ export default function GeneralSettingsPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      window.localStorage.setItem('agi.profile.displayName', trimmedFull);
-      window.localStorage.setItem(LS_PREFERRED_NAME_KEY, trimmedPreferred);
-      window.localStorage.setItem(LS_WORK_KEY, workDescription);
-      window.localStorage.setItem(LS_INSTRUCTIONS_KEY, instructions);
+      await savePreferenceNamespace<GeneralSettings>(PREF_NAMESPACE, {
+        displayName: trimmedFull,
+        preferredName: trimmedPreferred,
+        workDescription,
+        instructions,
+        ...prefs,
+      });
 
       if (clerkUser) {
         await clerkUser.update({
@@ -244,7 +288,7 @@ export default function GeneralSettingsPage() {
 
         <div
           style={{
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
             padding: '24px 28px',
@@ -278,7 +322,7 @@ export default function GeneralSettingsPage() {
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>
-                {user?.email ?? 'Not signed in'}
+                {accountEmail || 'Account email unavailable'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <button
@@ -291,7 +335,7 @@ export default function GeneralSettingsPage() {
                     fontWeight: 600,
                     color: 'var(--text-3)',
                     background: 'transparent',
-                    border: '1px solid var(--border)',
+                    border: '1px solid var(--settings-border)',
                     borderRadius: 'var(--radius-md)',
                     cursor: 'not-allowed',
                     opacity: 0.6,
@@ -318,7 +362,7 @@ export default function GeneralSettingsPage() {
                 padding: '8px 12px',
                 background: 'var(--bg-base, #09090b)',
                 color: 'var(--text-1)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
               }}
             />
@@ -340,7 +384,7 @@ export default function GeneralSettingsPage() {
                 padding: '8px 12px',
                 background: 'var(--bg-base, #09090b)',
                 color: 'var(--text-1)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
               }}
             />
@@ -362,7 +406,7 @@ export default function GeneralSettingsPage() {
                 padding: '8px 12px',
                 background: 'var(--bg-base, #09090b)',
                 color: workDescription ? 'var(--text-1)' : 'var(--text-3)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 appearance: 'none',
                 WebkitAppearance: 'none',
@@ -398,7 +442,7 @@ export default function GeneralSettingsPage() {
                 padding: '10px 12px',
                 background: 'var(--bg-base, #09090b)',
                 color: 'var(--text-1)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 resize: 'vertical',
                 lineHeight: 1.5,
@@ -431,12 +475,13 @@ export default function GeneralSettingsPage() {
               {saving ? 'Saving...' : 'Save profile'}
             </button>
             {savedAt !== null && saveError === null && (
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                {user ? 'Synced to your account.' : 'Saved locally.'}
-              </span>
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Synced to your account.</span>
             )}
             {saveError !== null && (
               <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{saveError}</span>
+            )}
+            {loadError !== null && saveError === null && (
+              <span style={{ fontSize: 12, color: 'var(--terracotta, #da7756)' }}>{loadError}</span>
             )}
           </div>
         </div>
@@ -529,7 +574,7 @@ export default function GeneralSettingsPage() {
       <section
         data-testid="danger-zone"
         style={{
-          border: '1px solid var(--destructive, #ef4444)',
+          border: '1px solid var(--settings-destructive)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -538,10 +583,10 @@ export default function GeneralSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--destructive, #ef4444)',
+            borderBottom: '1px solid var(--settings-destructive)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--destructive, #ef4444)',
+            color: 'var(--settings-destructive)',
           }}
         >
           Danger Zone
@@ -577,8 +622,8 @@ export default function GeneralSettingsPage() {
               padding: '8px 16px',
               fontSize: 13,
               fontWeight: 600,
-              color: 'var(--destructive-foreground, #fff)',
-              background: 'var(--destructive, #ef4444)',
+              color: 'var(--settings-destructive-foreground)',
+              background: 'var(--settings-destructive)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               cursor: 'pointer',
@@ -631,13 +676,13 @@ export default function GeneralSettingsPage() {
                 padding: '8px 12px',
                 background: 'var(--bg-base)',
                 color: 'var(--text-1)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 boxSizing: 'border-box',
               }}
             />
             {deleteError !== null && (
-              <p style={{ fontSize: 12, color: 'var(--destructive, #ef4444)', margin: '8px 0 0' }}>
+              <p style={{ fontSize: 12, color: 'var(--settings-destructive)', margin: '8px 0 0' }}>
                 {deleteError}
               </p>
             )}

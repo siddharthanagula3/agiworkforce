@@ -7,6 +7,7 @@ export {
   DesktopBridge,
   activateDesktopBridge,
   getDesktopBridge,
+  getBridgeAuthHeaders,
   readBridgeToken,
   ALLOWED_OUTBOUND_TYPES,
   ALLOWED_INBOUND_TYPES,

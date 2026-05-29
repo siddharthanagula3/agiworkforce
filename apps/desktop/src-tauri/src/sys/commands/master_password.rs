@@ -119,7 +119,8 @@ fn check_and_enforce_lockout() -> Result<(), String> {
         argon2_dummy_verify();
         if remaining == u64::MAX {
             return Err(
-                "Too many failed attempts. Please restart the application to try again.".to_string(),
+                "Too many failed attempts. Please restart the application to try again."
+                    .to_string(),
             );
         }
         return Err(format!(
@@ -440,9 +441,7 @@ pub async fn master_password_migrate_credentials(
     use crate::sys::security::MasterPasswordEncryption;
 
     if !encryption.is_configured() {
-        return Err(
-            "Master password is not set up yet — nothing to migrate.".to_string(),
-        );
+        return Err("Master password is not set up yet — nothing to migrate.".to_string());
     }
     if !encryption.is_unlocked() {
         return Err(
@@ -473,7 +472,9 @@ pub async fn master_password_migrate_credentials(
                 )
                 .map_err(|e| format!("Failed to query settings_v2: {e}"))?;
             let rows = stmt
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
                 .map_err(|e| format!("Failed to iterate settings_v2 rows: {e}"))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(|e| format!("Failed to collect settings_v2 rows: {e}"))?
@@ -490,16 +491,15 @@ pub async fn master_password_migrate_credentials(
             }
 
             // Try the legacy machine-only path.
-            let plaintext =
-                match crate::sys::commands::mcp_oauth::decrypt_legacy_machine_credential(
-                    &encrypted,
-                ) {
-                    Ok(v) => v,
-                    Err(_) => {
-                        report.rows_skipped_undecryptable += 1;
-                        continue;
-                    }
-                };
+            let plaintext = match crate::sys::commands::mcp_oauth::decrypt_legacy_machine_credential(
+                &encrypted,
+            ) {
+                Ok(v) => v,
+                Err(_) => {
+                    report.rows_skipped_undecryptable += 1;
+                    continue;
+                }
+            };
 
             let new_ciphertext = helper
                 .encrypt(KeyPurpose::McpCredentials, &plaintext)
@@ -530,7 +530,9 @@ pub async fn master_password_migrate_credentials(
                 .prepare("SELECT id, credentials FROM messaging_connections")
                 .map_err(|e| format!("Failed to query messaging_connections: {e}"))?;
             let rows = stmt
-                .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+                .query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                })
                 .map_err(|e| format!("Failed to iterate messaging_connections rows: {e}"))?;
             rows.collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(|e| format!("Failed to collect messaging_connections rows: {e}"))?

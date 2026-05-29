@@ -61,7 +61,10 @@ export default function CompareChatGPTPage() {
               </tr>
               <tr>
                 <td>BYOK against OpenAI</td>
-                <td>Pay OpenAI directly. We add zero markup. ChatGPT charges you their margin.</td>
+                <td>
+                  Use your OpenAI API key directly. Provider billing and retention follow the route
+                  you select.
+                </td>
               </tr>
               <tr>
                 <td>Local LLM</td>

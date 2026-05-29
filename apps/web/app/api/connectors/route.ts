@@ -23,6 +23,17 @@ type UserConnectorRow = {
   updated_at: string;
 };
 
+const PG_UNDEFINED_TABLE = '42P01';
+
+function isUndefinedTable(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    ((error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE ||
+      String((error as Record<string, unknown>)['message'] ?? '').includes('does not exist'))
+  );
+}
+
 // Allowlist of valid connector IDs to prevent arbitrary data injection
 const VALID_CONNECTOR_IDS = new Set([
   'gmail',
@@ -68,13 +79,22 @@ async function handleGetConnectors(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  const rows = await db.query<UserConnectorRow>(
-    `select id, connector_id, auth_type, connected_at, updated_at
-     from user_connectors
-     where user_id = $1 and is_active = true
-     order by connected_at desc`,
-    [userId],
-  );
+  let rows: UserConnectorRow[];
+  try {
+    rows = await db.query<UserConnectorRow>(
+      `select id, connector_id, auth_type, connected_at, updated_at
+       from user_connectors
+       where user_id = $1 and is_active = true
+       order by connected_at desc`,
+      [userId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn({ userId }, 'user_connectors table not migrated; returning empty connectors');
+      return NextResponse.json({ connectors: [] });
+    }
+    throw error;
+  }
 
   return NextResponse.json({
     connectors: rows.map((c) => ({
@@ -131,18 +151,30 @@ async function handleCreateConnector(request: NextRequest) {
   // encrypt + store credentials, then set is_active: true.
   //
   // Upsert: if user reconnects a previously disconnected connector, reactivate it
-  const [data] = await db.query<UserConnectorRow>(
-    `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
-     values ($1, $2, $3, true, $4, $5)
-     on conflict (user_id, connector_id)
-     do update set
-       auth_type = excluded.auth_type,
-       is_active = true,
-       connected_at = excluded.connected_at,
-       updated_at = excluded.updated_at
-     returning id, connector_id, auth_type, connected_at, updated_at`,
-    [userId, body.connectorId, authType, now, now],
-  );
+  let data: UserConnectorRow | undefined;
+  try {
+    [data] = await db.query<UserConnectorRow>(
+      `insert into user_connectors (user_id, connector_id, auth_type, is_active, connected_at, updated_at)
+       values ($1, $2, $3, true, $4, $5)
+       on conflict (user_id, connector_id)
+       do update set
+         auth_type = excluded.auth_type,
+         is_active = true,
+         connected_at = excluded.connected_at,
+         updated_at = excluded.updated_at
+       returning id, connector_id, auth_type, connected_at, updated_at`,
+      [userId, body.connectorId, authType, now, now],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn(
+        { userId, connectorId: body.connectorId },
+        'user_connectors table not migrated; connector save unavailable',
+      );
+      throw createError.serviceUnavailable('Connectors are not available in this environment');
+    }
+    throw error;
+  }
 
   if (!data) {
     logger.error({ userId: userId, connectorId: body.connectorId }, 'Failed to save connector');
@@ -185,12 +217,20 @@ async function handleDeleteConnector(request: NextRequest) {
   const db = getNeonDb();
 
   // Soft-delete: mark as inactive rather than removing the row
-  await db.execute(
-    `update user_connectors
-     set is_active = false, updated_at = $1
-     where user_id = $2 and connector_id = $3`,
-    [new Date().toISOString(), userId, connectorId],
-  );
+  try {
+    await db.execute(
+      `update user_connectors
+       set is_active = false, updated_at = $1
+       where user_id = $2 and connector_id = $3`,
+      [new Date().toISOString(), userId, connectorId],
+    );
+  } catch (error) {
+    if (isUndefinedTable(error)) {
+      logger.warn({ userId, connectorId }, 'user_connectors table not migrated; delete ignored');
+      return NextResponse.json({ success: true });
+    }
+    throw error;
+  }
 
   return NextResponse.json({ success: true });
 }

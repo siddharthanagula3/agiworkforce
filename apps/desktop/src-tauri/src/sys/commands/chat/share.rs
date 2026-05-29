@@ -21,7 +21,7 @@ pub struct ShareResult {
 
 /// Package a conversation's messages so the frontend can upload them to the web API.
 ///
-/// This command is intentionally read-only — it does NOT write to Supabase.
+/// This command is intentionally read-only — it does NOT write to cloud storage.
 /// The frontend receives `messages_json` and `token`, then calls `POST /api/shared`
 /// on the web app with those values.
 ///

@@ -2,23 +2,23 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { MARKETING } from '../../lib/marketing-constants';
+import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
 // All user-visible copy is declared here so a translator can find every string
 // in one place. Future Hindi translation = one object swap.
 const COPY = {
   // Hero
-  heroEyebrow: 'iOS + Android, launching 2026-08-16',
+  heroEyebrow: `iOS + Android, launching ${LAUNCH.isoDate}`,
   heroHeadline: 'AGI on your phone.',
-  heroSubline: 'Free. Works in airplane mode.',
+  heroSubline: 'Free Local. Cloud by invite.',
   heroLede:
-    'Like ChatGPT, Claude, and Gemini. But it runs on your device. Your conversations never leave your phone.',
+    'A ChatGPT and Claude-style mobile assistant where users can run small on-device local models or unlock AGI Cloud with an invite code.',
   heroChip_offline: 'Works offline',
-  heroChip_ondevice: 'On-device',
+  heroChip_ondevice: 'Local mode',
   heroChip_dpdp: 'Designed for DPDP 2023',
-  heroChip_free: 'Free at inference',
-  heroWaitlistCta: 'Join the waitlist',
-  heroWaitlistNote: 'Cloud features coming soon. Local AI is free, always.',
+  heroChip_free: 'Free Local',
+  heroWaitlistCta: LAUNCH.ctaLabel,
+  heroWaitlistNote: POSITIONING.trustBoundary,
 
   // What's different
   diffEyebrow: 'What makes it different',
@@ -26,17 +26,17 @@ const COPY = {
     {
       label: 'Local-only',
       headline: 'Your phone runs the AI.',
-      body: 'No server call during inference. Works on a plane, in a basement, in a country with restricted internet. The model lives on your device.',
+      body: 'In Local mode there is no model-provider call during inference. Works on a plane, in a basement, or anywhere network access is unreliable.',
     },
     {
-      label: 'Multi-model',
-      headline: 'Apple FM. Gemini Nano. Qwen3.',
-      body: `On iOS: Apple Foundation Models on Pro hardware, Qwen3-4B as a fallback. On Android: Gemini Nano on flagships, Gemma + LiteRT everywhere else. ${MARKETING.providers.display} providers coming with cloud.`,
+      label: 'Mobile Cloud',
+      headline: 'Hosted models wait for an invite.',
+      body: 'Mobile Cloud requires invite access and subscription-backed account state. BYOK belongs to Desktop and developer surfaces, not Mobile v1.',
     },
     {
-      label: 'Privacy by architecture',
-      headline: 'Privacy is the design, not the policy.',
-      body: 'Conversations never transit a server. No training on your data. No sale of your data. Telemetry is off by default. We collect the minimum needed to fix bugs.',
+      label: 'Cloud invite',
+      headline: 'Managed power when users ask for it.',
+      body: 'Cloud is invite-only for hosted sync, managed tools, and higher-capacity workflows. Local chats do not silently move to BYOK or Cloud.',
     },
   ],
 
@@ -81,41 +81,41 @@ const COPY = {
 
   // Privacy section
   privacyEyebrow: 'Privacy',
-  privacyHeadline: 'Your data never leaves your device. Period.',
+  privacyHeadline: 'Two mobile modes. Clear trust boundaries.',
   privacyLede:
-    'This is the architecture, not a policy that can change. The AI model runs on your handset. There is no server to send your conversations to.',
+    'AGI Mobile does not blur Local and Cloud. Local stays on-device. Cloud requires an invite, subscription-backed account state, and an explicit provider label.',
   privacyPoints: [
     {
-      label: 'No inference call',
-      body: 'During a conversation, AGI Mobile makes zero network calls for inference. The model runs locally.',
+      label: 'Local mode',
+      body: 'Local conversations run on the device using supported on-device or local model routes. They are not silently sent to AGI Cloud.',
     },
     {
-      label: 'No training',
-      body: 'Your conversations are not used to train any AI model, by AGI Automation LLC or anyone else.',
+      label: 'No Mobile BYOK',
+      body: 'Mobile v1 does not accept provider keys. Use Desktop or developer surfaces for BYOK-local workflows.',
     },
     {
-      label: 'Telemetry off',
-      body: 'Crash reporting strips strings over 40 characters before transmission. Analytics is opt-in. No session replay on AI screens.',
+      label: 'Cloud mode',
+      body: 'Managed Cloud is invite-gated for hosted sync and managed compute. It is separate from Local by design.',
     },
     {
-      label: 'Designed for DPDP 2023 (India)',
-      body: 'Because inference is on-device, conversation data never crosses a border. Designed so that DPDP cross-border transfer requirements do not apply to your conversations. Formal compliance verification planned before launch.',
+      label: 'No silent route changes',
+      body: 'Moving Local context into Cloud requires an explicit continuation, context selection, visible provider label, and user consent.',
     },
     {
-      label: 'Planned compliance: EU AI Act (Art. 50)',
-      body: 'Planned: built-in disclosure that responses are AI-generated. Conversation exports to include machine-readable markers. Not yet certified.',
+      label: 'Telemetry controls',
+      body: 'Crash reports and analytics are separated from conversation content. AI screens avoid session replay, and analytics defaults should remain user-controlled.',
     },
     {
-      label: 'GDPR',
-      body: 'Conversation inference data is never processed by us. Account data (email for waitlist) is stored with your consent and deletable on request.',
+      label: 'Compliance path',
+      body: 'Mobile is designed around DPDP, GDPR, and EU AI Act disclosures. Formal verification remains part of launch readiness before public release.',
     },
   ],
 
   // Waitlist tease
-  waitlistEyebrow: 'Cloud is coming',
-  waitlistHeadline: 'More power on the way.',
-  waitlistLede: `${MARKETING.providers.display} providers (Claude, GPT-5, Gemini cloud, and more) are coming to AGI Mobile. They are waitlist-gated while we get the local experience right. Local AI is free, always.`,
-  waitlistCta: 'Join the cloud waitlist',
+  waitlistEyebrow: 'Cloud by invite',
+  waitlistHeadline: 'Managed compute after demand is proven.',
+  waitlistLede: `${MARKETING.providers.display} providers, synced chats, hosted tools, and managed compute become available with invite codes. Free Local creates the mobile demand signal first.`,
+  waitlistCta: 'Request Cloud invite',
 
   // Footer section
   aboutCompany: 'AGI Automation LLC',
@@ -124,13 +124,11 @@ const COPY = {
 
 export const metadata: Metadata = {
   title: 'AGI Mobile: On-device AI for iOS and Android',
-  description:
-    'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
+  description: `${POSITIONING.wedge} AGI Mobile launches July 12, 2026 for iOS and Android.`,
   alternates: { canonical: 'https://agiworkforce.com/mobile' },
   openGraph: {
     title: 'AGI Mobile: On-device AI for iOS and Android',
-    description:
-      'Mobile-first AI assistant focused on local privacy, offline-capable workflows, and explicit BYOK.',
+    description: `${POSITIONING.wedge} AGI Mobile launches July 12, 2026 for iOS and Android.`,
     type: 'website',
     url: 'https://agiworkforce.com/mobile',
     images: [{ url: '/mobile-preview.png', width: 1200, height: 630, alt: 'AGI Mobile' }],
@@ -138,7 +136,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'AGI Mobile: On-device AI for iOS and Android',
-    description: 'Local privacy first. BYOK explicit. Managed compute waitlisted.',
+    description: `${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
     images: ['/mobile-preview.png'],
   },
 };
@@ -213,7 +211,7 @@ export default function MobilePage() {
                 letterSpacing: '-0.01em',
               }}
             >
-              Coming August 2026: iOS and Android
+              {LAUNCH.publicLabel} · iOS and Android
             </span>
           </div>
 
@@ -244,7 +242,7 @@ export default function MobilePage() {
 
           {/* Waitlist sub-CTA */}
           <div className="agi-cta-row">
-            <Link href="/contact" className="agi-cta-ghost">
+            <Link href="/download" className="agi-cta-ghost">
               {COPY.heroWaitlistCta} →
             </Link>
           </div>
@@ -536,7 +534,7 @@ export default function MobilePage() {
             <p className="agi-callout-p" style={{ marginBottom: 24 }}>
               {COPY.waitlistLede}
             </p>
-            <Link href="/contact" className="agi-cta-primary" style={{ display: 'inline-block' }}>
+            <Link href="/waitlist" className="agi-cta-primary" style={{ display: 'inline-block' }}>
               {COPY.waitlistCta}
             </Link>
           </div>
@@ -567,7 +565,9 @@ export default function MobilePage() {
             </div>
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Launch date</span>
-              <span className="agi-colophon-val">2026-08-16, simultaneously iOS and Android</span>
+              <span className="agi-colophon-val">
+                {LAUNCH.isoDate}, simultaneously iOS and Android
+              </span>
             </div>
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Support</span>

@@ -15,7 +15,8 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     )?;
     let sep_file = PredefinedMenuItem::separator(app)?;
     let close = PredefinedMenuItem::close_window(app, Some("Close Window"))?;
-    let file_menu = Submenu::with_items(app, "File", true, &[&new_conversation, &sep_file, &close])?;
+    let file_menu =
+        Submenu::with_items(app, "File", true, &[&new_conversation, &sep_file, &close])?;
 
     // Edit menu
     let find = MenuItem::with_id(app, "menu_find", "Find", true, Some("CmdOrCtrl+F"))?;
@@ -86,8 +87,7 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
         true,
         None::<&str>,
     )?;
-    let get_support =
-        MenuItem::with_id(app, "menu_support", "Get Support", true, None::<&str>)?;
+    let get_support = MenuItem::with_id(app, "menu_support", "Get Support", true, None::<&str>)?;
     let sep_help_update = PredefinedMenuItem::separator(app)?;
     let restart_to_update = MenuItem::with_id(
         app,

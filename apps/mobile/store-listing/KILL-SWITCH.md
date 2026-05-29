@@ -21,7 +21,7 @@
 >   OTA vector is a full binary update anyway.
 >
 > For v1.1+, when cloud mode is active, migrate these to a remote flag
-> system (e.g. Supabase remote-config table + MMKV cache) so a server-
+> system (e.g. Clerk-authenticated Web/API remote config + MMKV cache) so a server-
 > side flip takes effect on next app foreground without an app update.
 
 ---
@@ -120,17 +120,17 @@ were enabled — OTA is disabled in v1, so binary update required).
 What it controls:
 
 - Conversation rows are written to SQLCipher (local only).
-- No Supabase row is created. No Supabase real-time subscription is
+- No cloud row is created. No realtime subscription is
   opened.
 - The "Sync conversations" toggle in Settings is hidden.
-- The cloud-waitlist button is shown instead (routes to a
-  cloud_waitlist Supabase table, which is the only cloud call in v1).
+- The cloud-waitlist button is shown instead (routes through AGI Web/API,
+  which is the only cloud call in v1).
 
 How to flip on for v1.1:
 
 1. Set `cloudChat: true`.
-2. Ensure auth flow (`FEATURES.auth = true`), Supabase row-level
-   security, and the BYOK provider consent modal are all wired.
+2. Ensure auth flow (`FEATURES.auth = true`), Clerk-authenticated Web/API
+   access control, and the Cloud provider disclosure are all wired.
 3. Re-run the 5.1.2(i) compliance review before submission.
 
 ---
@@ -211,7 +211,7 @@ feature, the response timeline is:
 
 When cloud mode ships in v1.1:
 
-1. Add a `remote_feature_flags` table in Supabase with columns:
+1. Add a Web/API-backed `remote_feature_flags` table with columns:
    `key text primary key, value bool, updated_at timestamptz`.
 2. On app foreground, fetch the table and merge into MMKV with a
    `remote:` key prefix. Fall back to `v1FeatureFlags.ts` defaults
@@ -221,5 +221,5 @@ When cloud mode ships in v1.1:
 4. For safety-critical flags (image gen, computer use), always check
    MMKV + remote. Never trust a compile-time `true` alone.
 
-This architecture means a Supabase row update kills a feature globally
+This architecture means a server-side flag update kills a feature globally
 in < 60 seconds without requiring a binary update or App Store review.

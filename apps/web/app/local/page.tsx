@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Local — Run AI offline, free forever | AGI',
-  description:
-    'No internet. No API keys. No quotas. No per-token cost. Run any open-weight model on your laptop with Ollama or LM Studio.',
+  title: 'Local — Run AI offline, free forever',
+  description: `Free local AI on your device with supported Ollama, LM Studio, Apple, Gemini Nano, Gemma, and open-weight routes. ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/local' },
 };
 
@@ -15,11 +15,15 @@ export default function LocalPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">Run AI offline. Free forever.</h1>
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
+          <h1 className="agi-page-h1">Free local AI. No cloud bill.</h1>
           <p className="agi-page-lede">
-            No internet. No API keys. No quotas. No per-token cost. Run any open-weight model on
-            your laptop with Ollama or LM Studio, and chat to it from the same surface you&rsquo;d
-            chat to Claude or GPT.
+            Local mode is how AGI can acquire users without burning managed-compute dollars. Run
+            supported local models through Ollama, LM Studio, Apple, Gemini Nano, Gemma, and
+            open-weight routes, then upgrade to BYOK or invited Cloud only when you choose.
+            <strong> {POSITIONING.trustBoundary}</strong>
           </p>
         </section>
         <section className="agi-section">
@@ -35,37 +39,37 @@ export default function LocalPage() {
               {'\n'}
               <span className="agi-terminal-prompt">$</span>ollama pull &lt;your-model&gt;
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce --provider ollama
+              <span className="agi-terminal-prompt">$</span>agi --provider ollama
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># or with LM Studio (GUI)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce --provider lmstudio
+              <span className="agi-terminal-prompt">$</span>agi --provider lmstudio
             </pre>
           </div>
         </section>
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Why offline</p>
+          <p className="agi-section-eyebrow">Why Local wins attention</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Privacy</h3>
+              <h3 className="agi-reason-h">Private by boundary</h3>
               <p className="agi-reason-p">
-                Nothing leaves your laptop. Not your prompts, not your files, not the responses. The
-                model loads into memory and stays there.
+                In Local mode, prompts, files, and responses stay on the device unless the user
+                explicitly forks the work into BYOK or invited Cloud with a visible provider label.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Latency</h3>
+              <h3 className="agi-reason-h">No inference subsidy</h3>
               <p className="agi-reason-p">
-                No network round-trip. On Apple Silicon, modern open-weight models stream at
-                interactive speed. No rate limits, no queueing.
+                Local inference uses the user&rsquo;s hardware. AGI can offer a free experience,
+                capture demand, and reserve managed compute for users who request Cloud access.
               </p>
             </li>
             <li className="agi-reason">
-              <h3 className="agi-reason-h">Cost</h3>
+              <h3 className="agi-reason-h">Same product shell</h3>
               <p className="agi-reason-p">
-                Zero per-token cost. Zero rate limits. Zero subscriptions. Once a model is on your
-                disk, you can run it as much as you like, forever.
+                Users get the same AGI composer, projects, artifacts, model selector, and memory
+                controls before they ever pay for tokens or join managed Cloud.
               </p>
             </li>
           </ul>

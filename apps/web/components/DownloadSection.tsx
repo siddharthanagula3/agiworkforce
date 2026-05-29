@@ -61,43 +61,41 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
       {platforms.map((platform) => {
         const isDetected = detectedOS === platform.id;
 
-        // Windows installer deferred to Q3 2026 (no EV code-signing cert yet).
-        // Windows users: use the web app at /chat or install the CLI.
-        const isComingSoon = platform.id === 'windows';
+        const isLaunchAccessOnly = platform.id === 'windows' && !platform.url;
 
-        if (!platform.url && !isComingSoon) return null;
+        if (!platform.url && !isLaunchAccessOnly) return null;
 
         return (
           <button
             key={platform.id}
-            onClick={() => !isComingSoon && triggerDownload(platform.id)}
-            disabled={isComingSoon}
+            onClick={() => !isLaunchAccessOnly && triggerDownload(platform.id)}
+            disabled={isLaunchAccessOnly}
             className={cn(
               'relative flex flex-col items-center rounded-2xl border p-8 transition-all duration-300 text-left w-full',
-              !isComingSoon && 'hover:scale-[1.02]',
-              isDetected && !isComingSoon
+              !isLaunchAccessOnly && 'hover:scale-[1.02]',
+              isDetected && !isLaunchAccessOnly
                 ? 'border-blue-500 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.15)]'
                 : 'border-zinc-800 bg-zinc-950/50',
-              !isComingSoon && 'hover:border-zinc-700',
-              isComingSoon && 'opacity-75 cursor-not-allowed',
+              !isLaunchAccessOnly && 'hover:border-zinc-700',
+              isLaunchAccessOnly && 'opacity-75 cursor-not-allowed',
             )}
           >
-            {isDetected && !isComingSoon && (
+            {isDetected && !isLaunchAccessOnly && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-blue-600 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
                 Detected your OS
               </div>
             )}
 
-            {isComingSoon && (
+            {isLaunchAccessOnly && (
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-zinc-700 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-300">
-                Coming Q3 2026
+                Public launch July 12
               </div>
             )}
 
             <platform.icon
               className={cn(
                 'h-10 w-10 mb-4',
-                isDetected && !isComingSoon ? 'text-blue-400' : 'text-zinc-500',
+                isDetected && !isLaunchAccessOnly ? 'text-blue-400' : 'text-zinc-500',
               )}
             />
 
@@ -109,13 +107,13 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
             <span
               className={cn(
                 'inline-flex h-11 w-full items-center justify-center rounded-xl text-sm font-bold transition-colors',
-                isDetected && !isComingSoon
+                isDetected && !isLaunchAccessOnly
                   ? 'bg-blue-600 text-white hover:bg-blue-500'
                   : 'bg-zinc-800 text-zinc-200',
-                !isComingSoon && !isDetected && 'hover:bg-zinc-700',
+                !isLaunchAccessOnly && !isDetected && 'hover:bg-zinc-700',
               )}
             >
-              {isComingSoon ? 'Coming Q3 2026' : `Download ${platform.extension}`}
+              {isLaunchAccessOnly ? 'Public launch July 12' : `Download ${platform.extension}`}
             </span>
           </button>
         );

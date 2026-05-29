@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { hashEmailForWaitlistStorage } from '@/lib/server/waitlist-email';
+import { normalizeWaitlistEmail } from '@/lib/server/waitlist-email';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -14,17 +14,15 @@ import { requireCsrfToken } from '@/lib/csrf';
  *
  * Unauthenticated waitlist signup for the Cloud Managed private beta.
  * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
- * If the table does not yet exist, stubs a console log and returns 200 OK --
- * idempotent, no error surface to the user.
+ * Fails closed if persistence is unavailable; waitlist signups must never be
+ * acknowledged without durable storage.
  *
  * Body: { email: string, source: 'byok' | 'sync' | 'billing' | 'other' }
  *
- * PII handling: the email is hashed with SHA-256 before storage. The first
- * 3 characters of the address are retained as a display prefix so support
- * staff can loosely identify a row. No plaintext email is persisted.
- * The ON CONFLICT key is (email_hash, source) -- callers must ensure the
- * cloud_managed_waitlist table has been migrated to replace the email column
- * with email_hash TEXT + email_prefix TEXT.
+ * PII handling: this table stores normalized email addresses because launch
+ * operations must be able to notify waitlisted visitors. The table is
+ * insert-only for public callers and read-restricted to service/admin access
+ * by the database policy.
  */
 
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
@@ -64,33 +62,28 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   }
 
   const source: WaitlistSource = isValidSource(payload.source) ? payload.source : 'other';
-  // Hash the email before storage. No plaintext email is persisted; the hash
-  // is the dedup key. email_prefix retains 3 chars for display only.
-  const { emailHash, emailPrefix } = hashEmailForWaitlistStorage(payload.email as string);
+  const email = normalizeWaitlistEmail(payload.email as string);
   const db = getNeonDb();
   const now = new Date().toISOString();
 
   try {
     await db.execute(
-      `insert into cloud_managed_waitlist (email_hash, email_prefix, source, joined_at, updated_at)
-       values ($1, $2, $3, $4, $5)
-       on conflict (email_hash, source)
+      `insert into cloud_managed_waitlist (email, source, joined_at, updated_at)
+       values ($1, $2, $3, $4)
+       on conflict (email, source)
        do update set updated_at = excluded.updated_at`,
-      [emailHash, emailPrefix, source, now, now],
+      [email, source, now, now],
     );
   } catch (err) {
     const pgErr = err as { code?: string };
-    // Table may not exist yet (migration pending) — stub to console and succeed
     if (pgErr?.code === '42P01') {
-      console.warn('[waitlist/cloud-managed] Table not yet migrated; queuing entry stub.', {
-        source,
-      });
-      return NextResponse.json({ ok: true, queued: true });
+      console.warn('[waitlist/cloud-managed] Table not yet migrated; refusing signup.', { source });
+      throw createError.internal('Cloud waitlist storage is not migrated');
     }
     // Re-throw AppErrors (rate limit, CSRF, etc.) as-is
     if (err && typeof err === 'object' && 'status' in err) throw err;
-    console.warn('[waitlist/cloud-managed] DB unreachable; returning queued stub.', { source });
-    return NextResponse.json({ ok: true, queued: true });
+    console.warn('[waitlist/cloud-managed] DB unreachable; refusing signup.', { source });
+    throw createError.internal('Cloud waitlist storage is unavailable');
   }
 
   return NextResponse.json({ ok: true, joined: true });

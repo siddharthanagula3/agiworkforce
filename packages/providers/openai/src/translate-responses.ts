@@ -30,7 +30,10 @@ import type {
   ToolChoice,
 } from '@agiworkforce/types';
 import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/llm-normalize';
-import { normalizeOpenAIStrictToolParameters } from '@agiworkforce/llm-normalize';
+import {
+  normalizeOpenAIStrictToolParameters,
+  resolveOpenAIReasoningEffortForModel,
+} from '@agiworkforce/llm-normalize';
 
 import type {
   ResponsesCreateParams,
@@ -175,8 +178,9 @@ function translateToolChoice(choice: ToolChoice | undefined): ResponsesToolChoic
 
 function thinkingBudgetToEffort(
   budgetTokens: number | undefined,
-): 'minimal' | 'low' | 'medium' | 'high' {
+): 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
   if (budgetTokens === undefined) return 'medium';
+  if (budgetTokens >= 30000) return 'xhigh';
   if (budgetTokens >= 16000) return 'high';
   if (budgetTokens >= 4000) return 'medium';
   if (budgetTokens >= 1000) return 'low';
@@ -216,7 +220,18 @@ export function translateChatRequestToResponses(
 
   const reasoning: ResponsesReasoningConfig | undefined =
     req.thinking?.type === 'enabled' && compat.supportsReasoningEffort
-      ? { effort: thinkingBudgetToEffort(req.thinking.budgetTokens), summary: 'auto' }
+      ? (() => {
+          const resolved = resolveOpenAIReasoningEffortForModel({
+            model: { provider: 'openai', id: req.model },
+            effort: thinkingBudgetToEffort(req.thinking.budgetTokens),
+          });
+          return resolved
+            ? {
+                effort: resolved as NonNullable<ResponsesReasoningConfig['effort']>,
+                summary: 'auto' as const,
+              }
+            : undefined;
+        })()
       : undefined;
 
   const params: ResponsesCreateParams = {

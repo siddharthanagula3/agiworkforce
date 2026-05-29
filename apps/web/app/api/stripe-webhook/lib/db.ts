@@ -221,10 +221,7 @@ export async function upsertSubscriptionFromSession(
   logger.info({ sessionId: session.id }, 'Processing checkout session');
 
   let resolvedUserId =
-    session.metadata?.['user_id'] ||
-    session.metadata?.['supabase_user_id'] ||
-    session.metadata?.['userId'] ||
-    session.client_reference_id;
+    session.metadata?.['user_id'] || session.metadata?.['userId'] || session.client_reference_id;
 
   if (!resolvedUserId && session.customer) {
     try {
@@ -369,7 +366,7 @@ export async function upsertSubscriptionFromSession(
           stripeCustomerEmail: customerEmail,
           sessionId: session.id,
         },
-        'WARNING: Stripe customer email does not match Supabase profile email - subscription will be created for the logged-in user but emails differ',
+        'WARNING: Stripe customer email does not match Neon profile email - subscription will be created for the logged-in user but emails differ',
       );
     }
   }
@@ -851,8 +848,7 @@ export async function updateSubscriptionFromStripeSubscription(
         }
       }
     } else {
-      const metadataUserId =
-        subscription.metadata?.['user_id'] || subscription.metadata?.['supabase_user_id'];
+      const metadataUserId = subscription.metadata?.['user_id'];
       if (metadataUserId) {
         logger.info(
           { stripeSubId, metadataUserId },

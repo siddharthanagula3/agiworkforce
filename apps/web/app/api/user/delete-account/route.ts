@@ -52,8 +52,8 @@ export async function DELETE(request: NextRequest) {
   const db = getNeonDb();
 
   try {
-    // Schedule deletion: set deletion_requested_at. A background job (cron or
-    // Supabase Edge Function) will perform the actual erasure after 24 hours.
+    // Schedule deletion: set deletion_requested_at. A background job will
+    // perform the actual erasure after 24 hours.
     // This gives the user a grace window to cancel (coming soon).
     try {
       await db.execute(

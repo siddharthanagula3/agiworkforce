@@ -2,11 +2,9 @@
  * Waitlist service + store — unit tests
  *
  * Covers:
- *  - joinWaitlist() success path: inserts row, calls RPC, returns rank
+ *  - joinWaitlist() success path: posts through the Web/API waitlist endpoint
  *  - joinWaitlist() validation error (bad email)
- *  - joinWaitlist() duplicate error (Postgres 23505)
- *  - joinWaitlist() network error (Supabase insert failure)
- *  - joinWaitlist() RPC failure path
+ *  - joinWaitlist() network error
  *  - useWaitlistStore defaults, markJoined, clear, MMKV persistence
  */
 
@@ -27,18 +25,11 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// The supabase mock exposes its inner jest.fn()s via __mocks so tests can control them.
-// All mock functions are created inside the factory (not outside) so they are
-// available at factory run time (which is hoisted before module-level const declarations).
-jest.mock('../services/supabase', () => {
-  const mockInsert = jest.fn();
-  const mockRpc = jest.fn();
+jest.mock('../services/api', () => {
+  const post = jest.fn();
   return {
-    supabase: {
-      from: jest.fn(() => ({ insert: mockInsert })),
-      rpc: mockRpc,
-    },
-    __mocks: { mockInsert, mockRpc },
+    api: { post },
+    __mocks: { post },
   };
 });
 
@@ -49,15 +40,14 @@ jest.mock('../services/supabase', () => {
 import {
   joinWaitlist,
   WaitlistValidationError,
-  WaitlistDuplicateError,
   WaitlistNetworkError,
   useWaitlistStore,
 } from '../src/features/waitlist';
 
 // Retrieve the inner mock functions after imports so they are fully initialised.
-const { mockInsert, mockRpc } = (
-  jest.requireMock('../services/supabase') as {
-    __mocks: { mockInsert: jest.Mock; mockRpc: jest.Mock };
+const { post } = (
+  jest.requireMock('../services/api') as {
+    __mocks: { post: jest.Mock };
   }
 ).__mocks;
 
@@ -86,12 +76,6 @@ function resetStore() {
 beforeEach(() => {
   jest.clearAllMocks();
   resetStore();
-
-  // Re-wire `from` after clearAllMocks so it returns { insert: mockInsert } again.
-  const { supabase } = jest.requireMock('../services/supabase') as {
-    supabase: { from: jest.Mock };
-  };
-  supabase.from.mockImplementation(() => ({ insert: mockInsert }));
 });
 
 // ---------------------------------------------------------------------------
@@ -99,22 +83,19 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('joinWaitlist — success', () => {
-  it('inserts a row with the normalised email', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: 42, error: null });
+  it('posts a row with the normalised email', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true });
 
     await joinWaitlist({ email: '  Test@Example.COM  ' });
 
-    const { supabase } = jest.requireMock('../services/supabase') as {
-      supabase: { from: jest.Mock };
-    };
-    expect(supabase.from).toHaveBeenCalledWith('cloud_waitlist');
-    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({ email: 'test@example.com' }));
+    expect(post).toHaveBeenCalledWith(
+      '/api/waitlist/cloud-managed',
+      expect.objectContaining({ email: 'test@example.com' }),
+    );
   });
 
   it('passes optional country and deviceModel fields when provided', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: 10, error: null });
+    post.mockResolvedValueOnce({ ok: true, joined: true });
 
     await joinWaitlist({
       email: 'user@test.io',
@@ -123,37 +104,19 @@ describe('joinWaitlist — success', () => {
       deviceTier: 2,
     });
 
-    expect(mockInsert).toHaveBeenCalledWith(
+    expect(post).toHaveBeenCalledWith(
+      '/api/waitlist/cloud-managed',
       expect.objectContaining({
         email: 'user@test.io',
         country: 'US',
-        device_model: 'iPhone 16',
-        device_tier: 2,
+        deviceModel: 'iPhone 16',
+        deviceTier: 2,
       }),
     );
   });
 
-  it('calls cloud_waitlist_rank RPC with the normalised email', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: 7, error: null });
-
-    await joinWaitlist({ email: 'someone@example.com' });
-
-    expect(mockRpc).toHaveBeenCalledWith('cloud_waitlist_rank', { p_email: 'someone@example.com' });
-  });
-
-  it('returns the rank from the RPC', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: 99, error: null });
-
-    const result = await joinWaitlist({ email: 'a@b.com' });
-
-    expect(result).toEqual({ rank: 99 });
-  });
-
-  it('treats a non-number RPC response as rank 0', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+  it('returns rank 0 because the Web/API route does not expose rank', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true });
 
     const result = await joinWaitlist({ email: 'a@b.com' });
 
@@ -178,33 +141,9 @@ describe('joinWaitlist — validation errors', () => {
     await expect(joinWaitlist({ email: 'user@domain' })).rejects.toThrow(WaitlistValidationError);
   });
 
-  it('does not call supabase.from when validation fails', async () => {
-    const { supabase } = jest.requireMock('../services/supabase') as {
-      supabase: { from: jest.Mock };
-    };
+  it('does not call api.post when validation fails', async () => {
     await joinWaitlist({ email: 'bad' }).catch(() => {});
-    expect(supabase.from).not.toHaveBeenCalled();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// joinWaitlist — duplicate error
-// ---------------------------------------------------------------------------
-
-describe('joinWaitlist — duplicate error', () => {
-  it('throws WaitlistDuplicateError on Postgres 23505', async () => {
-    mockInsert.mockResolvedValueOnce({ error: { code: '23505', message: 'unique violation' } });
-
-    await expect(joinWaitlist({ email: 'dupe@example.com' })).rejects.toThrow(
-      WaitlistDuplicateError,
-    );
-  });
-
-  it('does not call RPC when there is a duplicate error', async () => {
-    mockInsert.mockResolvedValueOnce({ error: { code: '23505', message: 'unique violation' } });
-
-    await joinWaitlist({ email: 'dupe@example.com' }).catch(() => {});
-    expect(mockRpc).not.toHaveBeenCalled();
+    expect(post).not.toHaveBeenCalled();
   });
 });
 
@@ -213,15 +152,8 @@ describe('joinWaitlist — duplicate error', () => {
 // ---------------------------------------------------------------------------
 
 describe('joinWaitlist — network errors', () => {
-  it('throws WaitlistNetworkError on any non-unique Supabase insert error', async () => {
-    mockInsert.mockResolvedValueOnce({ error: { code: '500', message: 'server error' } });
-
-    await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
-  });
-
-  it('throws WaitlistNetworkError when the RPC fails', async () => {
-    mockInsert.mockResolvedValueOnce({ error: null });
-    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'rpc error' } });
+  it('throws WaitlistNetworkError on API failure', async () => {
+    post.mockRejectedValueOnce(new Error('server error'));
 
     await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
   });

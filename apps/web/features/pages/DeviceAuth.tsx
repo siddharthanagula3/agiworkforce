@@ -32,9 +32,7 @@ const DeviceAuthPage: React.FC = () => {
   // Redirect to login if not authenticated (after auth finishes loading)
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      router.replace(
-        `/auth/login?from=${encodeURIComponent(`/device-auth?user_code=${userCode}`)}`,
-      );
+      router.replace(`/login?from=${encodeURIComponent(`/device-auth?user_code=${userCode}`)}`);
     }
   }, [authLoading, isAuthenticated, router, userCode]);
 

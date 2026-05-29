@@ -59,33 +59,17 @@ const mockSetItemAsync = _SecureStoreMock.setItemAsync;
 const mockGetItemAsync = _SecureStoreMock.getItemAsync;
 const mockDeleteItemAsync = _SecureStoreMock.deleteItemAsync;
 
-// Supabase must be mocked before authStore is imported.
+// Cloud session cleanup must be mocked before authStore is imported.
 // Create mock fns inside the factory to avoid TDZ issues from Jest hoisting.
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(),
-      signOut: jest.fn(),
-      onAuthStateChange: jest.fn(),
-      refreshSession: jest.fn(),
-      signInWithPassword: jest.fn(),
-      signUp: jest.fn(),
-      signInWithIdToken: jest.fn(),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  clearAuthSession: jest.fn(),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const _SupabaseMock = require('../services/supabase') as {
-  supabase: { auth: Record<string, jest.Mock> };
+const _cloudAuthMock = require('../services/authSession') as {
+  clearAuthSession: jest.Mock;
 };
-const mockGetSession = _SupabaseMock.supabase.auth.getSession;
-const mockSignOut = _SupabaseMock.supabase.auth.signOut;
-const mockOnAuthStateChange = _SupabaseMock.supabase.auth.onAuthStateChange;
-const mockRefreshSession = _SupabaseMock.supabase.auth.refreshSession;
-const mockSignInWithPassword = _SupabaseMock.supabase.auth.signInWithPassword;
-const mockSignUp = _SupabaseMock.supabase.auth.signUp;
-const mockSignInWithIdToken = _SupabaseMock.supabase.auth.signInWithIdToken;
+const mockClearAuthSession = _cloudAuthMock.clearAuthSession;
 
 // mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({
@@ -129,7 +113,7 @@ function resetAuthStore() {
   });
 }
 
-// Minimal Session shape that satisfies @supabase/supabase-js types
+// Minimal Session shape that satisfies @authSession/authSession-js types
 function makeSession(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     access_token: 'test-access-token',
@@ -324,16 +308,7 @@ describe('authStore — secure storage persistence', () => {
     jest.clearAllMocks();
     resetAuthStore();
 
-    // Default supabase mock — no session
-    mockGetSession.mockResolvedValue({ data: { session: null } });
-    mockOnAuthStateChange.mockReturnValue({
-      data: { subscription: { unsubscribe: jest.fn() } },
-    });
-    mockSignOut.mockResolvedValue({ error: null });
-    mockRefreshSession.mockResolvedValue({ data: { session: null }, error: null });
-    mockSignInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: null });
-    mockSignUp.mockResolvedValue({ data: { session: null, user: null }, error: null });
-    mockSignInWithIdToken.mockResolvedValue({ data: { session: null, user: null }, error: null });
+    mockClearAuthSession.mockResolvedValue(undefined);
 
     // Default secure-store: succeed silently
     mockSetItemAsync.mockResolvedValue(undefined);
@@ -390,8 +365,8 @@ describe('authStore — secure storage persistence', () => {
     );
   });
 
-  it('clears session when sign-out supabase call fails (always-clear guarantee)', async () => {
-    mockSignOut.mockRejectedValue(new Error('Network error'));
+  it('clears session when cloud-session cleanup fails (always-clear guarantee)', async () => {
+    mockClearAuthSession.mockRejectedValue(new Error('Network error'));
 
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
@@ -431,10 +406,8 @@ describe('authStore — secure storage persistence', () => {
     expect(getState().isInitialized).toBe(true);
   });
 
-  it('refreshSession clears state when supabase returns no session', async () => {
+  it('refreshSession clears state when no cloud session is available', async () => {
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
-
-    mockRefreshSession.mockResolvedValue({ data: { session: null }, error: null });
 
     await act(async () => {
       await getState().refreshSession();
@@ -446,11 +419,6 @@ describe('authStore — secure storage persistence', () => {
 
   it('refreshSession clears state on network timeout', async () => {
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
-
-    // Simulate a hanging refresh that eventually rejects
-    mockRefreshSession.mockImplementation(
-      () => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 0)),
-    );
 
     await act(async () => {
       await getState().refreshSession();

@@ -10,8 +10,8 @@ const PublicFooter: React.FC = () => {
 
   const footerLinks = {
     product: [
-      { label: 'AI Marketplace', href: '/marketplace' },
-      { label: 'AI Chat', href: '/features/ai-chat' },
+      { label: 'Apps', href: '/apps' },
+      { label: 'AI Chat', href: '/' },
       { label: 'Pricing', href: '/pricing' },
     ],
     company: [

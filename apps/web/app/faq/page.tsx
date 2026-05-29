@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'FAQ | AGI',
+  title: 'FAQ',
   description: 'Frequently asked questions — providers, BYOK, local mode, pricing, security.',
   alternates: { canonical: 'https://agiworkforce.com/faq' },
 };
@@ -32,7 +33,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Do you train on my data?',
-    a: 'No. We do not train on customer data. Local mode never sends your prompts off your machine.',
+    a: `AGI does not use customer conversation content to train AGI-owned models. ${POSITIONING.trustBoundary}`,
   },
   {
     q: 'What happens to my master password?',

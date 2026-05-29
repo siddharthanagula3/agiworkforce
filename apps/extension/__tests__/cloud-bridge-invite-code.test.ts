@@ -4,7 +4,7 @@
  * Covers:
  *   - types: InviteCodeError, InviteCodeSource, InviteCodeTab, InviteCodeModalProps shapes
  *   - desktopBridge: getCloudUnlockState, setCloudUnlocked
- *   - waitlistService: redeemInviteCode (success + all 6 InviteCodeError variants), joinWaitlist
+ *   - waitlistService: redeemInviteCode (success + all 7 InviteCodeError variants), joinWaitlist
  *   - InviteCodeModal: mount/unmount, tab switching, invite submit flow, waitlist submit flow,
  *     close on backdrop click / Escape, props.open toggling, update()
  *
@@ -51,34 +51,8 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ---------------------------------------------------------------------------
-// Supabase mock — hoisted so waitlistService's module-level getSupabase() sees it
-// ---------------------------------------------------------------------------
-
-const supabaseMock = vi.hoisted(() => {
-  const mock = {
-    auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'anon-123' } } } }),
-      signInAnonymously: vi.fn().mockResolvedValue({
-        data: { session: { user: { id: 'anon-123' } } },
-        error: null,
-      }),
-    },
-    from: vi.fn(() => ({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-    })),
-    rpc: vi.fn().mockResolvedValue({
-      data: [{ valid: true, invite_id: 'invite-abc-123' }],
-      error: null,
-    }),
-  };
-  return mock;
-});
-
-vi.mock('../src/lib/supabase', () => ({
-  getSupabase: () => supabaseMock,
-  __resetSupabaseClientForTests: vi.fn(),
-}));
+const fetchMock = vi.fn();
+vi.stubGlobal('fetch', fetchMock);
 
 // ---------------------------------------------------------------------------
 // Imports — after mocks
@@ -120,16 +94,7 @@ function makeProps(overrides: Partial<InviteCodeModalProps> = {}): InviteCodeMod
 beforeEach(() => {
   // Clear chrome storage
   for (const k of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[k];
-  // Reset supabase mocks
-  supabaseMock.auth.getSession.mockResolvedValue({
-    data: { session: { user: { id: 'anon-123' } } },
-  });
-  supabaseMock.rpc.mockResolvedValue({
-    data: [{ valid: true, invite_id: 'invite-abc-123' }],
-    error: null,
-  });
-  const fromMock = { insert: vi.fn().mockResolvedValue({ error: null }) };
-  supabaseMock.from.mockReturnValue(fromMock);
+  vi.stubEnv('VITE_API_BASE_URL', 'https://agiworkforce.com');
   vi.clearAllMocks();
   // Reinstall chrome global after clearAllMocks
   (globalThis as Record<string, unknown>).chrome = chromeMock;
@@ -137,23 +102,39 @@ beforeEach(() => {
 
 afterEach(() => {
   document.body.innerHTML = '';
+  vi.unstubAllEnvs();
 });
+
+function makeJsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: vi.fn().mockResolvedValue(body),
+  } as unknown as Response;
+}
+
+function mockCsrfAndApiResponse(body: unknown, status = 200): void {
+  fetchMock
+    .mockResolvedValueOnce(makeJsonResponse({ token: 'csrf-test-token' }))
+    .mockResolvedValueOnce(makeJsonResponse(body, status));
+}
 
 // ---------------------------------------------------------------------------
 // types — shape checks
 // ---------------------------------------------------------------------------
 
 describe('types', () => {
-  it('InviteCodeError union covers all 6 codes', () => {
+  it('InviteCodeError union covers all 7 codes', () => {
     const codes: InviteCodeError[] = [
       'invalid_code',
       'expired',
       'fully_redeemed',
       'already_redeemed_by_user',
       'anon_signin_failed',
+      'not_wired',
       'rpc_error',
     ];
-    expect(codes).toHaveLength(6);
+    expect(codes).toHaveLength(7);
   });
 
   it('InviteCodeSource includes chrome-relevant sources', () => {
@@ -202,95 +183,81 @@ describe('setCloudUnlocked', () => {
 
 describe('waitlistService.redeemInviteCode', () => {
   it('returns success + inviteId on valid redemption', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: true, invite_id: 'invite-abc' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: true, inviteId: 'invite-abc' });
     const result = await waitlistService.redeemInviteCode('VALIDCODE', 'connectors');
     expect(result.success).toBe(true);
     expect(result.inviteId).toBe('invite-abc');
   });
 
-  it('passes surface=chrome to RPC', async () => {
+  it('routes invite redemption through the web API boundary', async () => {
+    mockCsrfAndApiResponse({ success: true, inviteId: 'invite-abc' });
     await waitlistService.redeemInviteCode('VALIDCODE', 'connectors');
-    expect(supabaseMock.rpc).toHaveBeenCalledWith(
-      'validate_and_redeem_invite_code',
-      expect.objectContaining({ p_surface: 'chrome' }),
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://agiworkforce.com/api/claim-offer',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'include',
+        headers: expect.objectContaining({
+          'x-csrf-token': 'csrf-test-token',
+          'x-requested-with': 'agiworkforce-chrome-extension',
+        }),
+      }),
     );
   });
 
   it('uppercases code before sending', async () => {
+    mockCsrfAndApiResponse({ success: true, inviteId: 'invite-abc' });
     await waitlistService.redeemInviteCode('lowercase', 'connectors');
-    expect(supabaseMock.rpc).toHaveBeenCalledWith(
-      'validate_and_redeem_invite_code',
-      expect.objectContaining({ p_code: 'LOWERCASE' }),
-    );
+    const body = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.code).toBe('LOWERCASE');
   });
 
   it('returns invalid_code error', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: false, error: 'invalid_code' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: false, error: 'invalid_code' });
     const result = await waitlistService.redeemInviteCode('BADCODE', 'other');
     expect(result.success).toBe(false);
     expect(result.error).toBe('invalid_code');
   });
 
   it('returns expired error', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: false, error: 'expired' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: false, error: 'expired' });
     const result = await waitlistService.redeemInviteCode('EXPIREDCODE', 'other');
     expect(result.error).toBe('expired');
   });
 
   it('returns fully_redeemed error', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: false, error: 'fully_redeemed' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: false, error: 'fully_redeemed' });
     const result = await waitlistService.redeemInviteCode('FULLCODE', 'other');
     expect(result.error).toBe('fully_redeemed');
   });
 
   it('returns already_redeemed_by_user error', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: false, error: 'already_redeemed_by_user' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: false, error: 'already_redeemed_by_user' });
     const result = await waitlistService.redeemInviteCode('DUPCODE', 'other');
     expect(result.error).toBe('already_redeemed_by_user');
   });
 
-  it('returns anon_signin_failed when anonymous sign-in fails and no existing session', async () => {
-    supabaseMock.auth.getSession.mockResolvedValueOnce({ data: { session: null } });
-    supabaseMock.auth.signInAnonymously.mockResolvedValueOnce({
-      data: { session: null },
-      error: new Error('auth failed'),
-    });
-    const result = await waitlistService.redeemInviteCode('ANYCODE', 'other');
+  it('returns anon_signin_failed when API maps auth failure', async () => {
+    mockCsrfAndApiResponse({ success: false, error: 'anon_signin_failed' });
+    const result = await waitlistService.redeemInviteCode('AUTHFAIL', 'other');
     expect(result.success).toBe(false);
     expect(result.error).toBe('anon_signin_failed');
   });
 
-  it('returns rpc_error when RPC transport fails', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: null,
-      error: new Error('network error'),
-    });
+  it('returns rpc_error when web API transport fails', async () => {
+    fetchMock.mockResolvedValueOnce(makeJsonResponse({ token: 'csrf-test-token' }));
+    fetchMock.mockRejectedValueOnce(new Error('network error'));
     const result = await waitlistService.redeemInviteCode('ANYCODE', 'other');
     expect(result.success).toBe(false);
     expect(result.error).toBe('rpc_error');
   });
 
-  it('uses existing session without calling signInAnonymously', async () => {
-    supabaseMock.auth.getSession.mockResolvedValueOnce({
-      data: { session: { user: { id: 'existing-user' } } },
-    });
-    await waitlistService.redeemInviteCode('VALIDCODE', 'other');
-    expect(supabaseMock.auth.signInAnonymously).not.toHaveBeenCalled();
+  it('fails closed without a configured web API base', async () => {
+    vi.unstubAllEnvs();
+    const result = await waitlistService.redeemInviteCode('VALIDCODE', 'other');
+    expect(result).toEqual({ success: false, error: 'not_wired' });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -299,33 +266,38 @@ describe('waitlistService.redeemInviteCode', () => {
 // ---------------------------------------------------------------------------
 
 describe('waitlistService.joinWaitlist', () => {
-  it('inserts record and returns success', async () => {
-    const fromMock = { insert: vi.fn().mockResolvedValue({ error: null }) };
-    supabaseMock.from.mockReturnValueOnce(fromMock);
+  it('posts record to the web API and returns success', async () => {
+    mockCsrfAndApiResponse({ ok: true, joined: true });
     const result = await waitlistService.joinWaitlist({ email: 'Test@Example.COM' });
     expect(result.success).toBe(true);
-    expect(fromMock.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ email: 'test@example.com' }),
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      'https://agiworkforce.com/api/waitlist/cloud-managed',
+      expect.objectContaining({ method: 'POST', credentials: 'include' }),
     );
+    const body = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.email).toBe('test@example.com');
   });
 
-  it('returns duplicate error on 23505 code', async () => {
-    const fromMock = {
-      insert: vi.fn().mockResolvedValue({ error: { code: '23505' } }),
-    };
-    supabaseMock.from.mockReturnValueOnce(fromMock);
-    const result = await waitlistService.joinWaitlist({ email: 'dup@example.com' });
-    expect(result.success).toBe(false);
-    expect(result.error).toMatch(/already on the waitlist/i);
+  it('maps chrome-only referral sources to web waitlist source=other', async () => {
+    mockCsrfAndApiResponse({ ok: true, joined: true });
+    await waitlistService.joinWaitlist({ email: 'dup@example.com', referralSource: 'connectors' });
+    const body = JSON.parse((fetchMock.mock.calls[1]![1] as RequestInit).body as string);
+    expect(body.source).toBe('other');
   });
 
-  it('returns generic error on unexpected DB error', async () => {
-    const fromMock = {
-      insert: vi.fn().mockResolvedValue({ error: { code: '42000', message: 'db error' } }),
-    };
-    supabaseMock.from.mockReturnValueOnce(fromMock);
+  it('returns generic error on web API error', async () => {
+    mockCsrfAndApiResponse({ error: 'db unavailable' }, 500);
     const result = await waitlistService.joinWaitlist({ email: 'foo@example.com' });
     expect(result.success).toBe(false);
+  });
+
+  it('fails closed without a configured web API base', async () => {
+    vi.unstubAllEnvs();
+    const result = await waitlistService.joinWaitlist({ email: 'foo@example.com' });
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/not configured/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 
@@ -414,10 +386,7 @@ describe('InviteCodeModal tab switching', () => {
 
 describe('InviteCodeModal invite submit', () => {
   it('calls redeemInviteCode and onRedeemed on success', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: true, invite_id: 'inv-xyz' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: true, inviteId: 'inv-xyz' });
     const onRedeemed = vi.fn();
     const modal = new InviteCodeModal(makeProps({ open: true, onRedeemed }));
     modal.mount(document.body);
@@ -441,10 +410,7 @@ describe('InviteCodeModal invite submit', () => {
   });
 
   it('shows error text when code is invalid', async () => {
-    supabaseMock.rpc.mockResolvedValueOnce({
-      data: [{ valid: false, error: 'invalid_code' }],
-      error: null,
-    });
+    mockCsrfAndApiResponse({ success: false, error: 'invalid_code' });
     const modal = new InviteCodeModal(makeProps({ open: true }));
     modal.mount(document.body);
 
@@ -483,8 +449,7 @@ describe('InviteCodeModal invite submit', () => {
 
 describe('InviteCodeModal waitlist submit', () => {
   it('calls joinWaitlist and onWaitlisted on success', async () => {
-    const fromMock = { insert: vi.fn().mockResolvedValue({ error: null }) };
-    supabaseMock.from.mockReturnValue(fromMock);
+    mockCsrfAndApiResponse({ ok: true, joined: true });
 
     const onWaitlisted = vi.fn();
     const modal = new InviteCodeModal(

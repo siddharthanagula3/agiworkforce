@@ -4,7 +4,6 @@
  * Phase 6 reorg: moved from services/modelConstants.ts and services/modelMetrics.ts.
  */
 export {
-  MODEL_CAPABILITY,
   MODEL_PICKER_OPTIONS,
   MODEL_CONTEXT_LIMITS,
   MODEL_COST_RATES,

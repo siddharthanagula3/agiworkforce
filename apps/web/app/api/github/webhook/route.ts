@@ -150,7 +150,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
       // web-HIGH-3 spend cap (audit 2026-05-05): debounce + monthly quota.
       // Both checks are best-effort — if the table read fails we proceed
-      // rather than block legitimate reviews on a transient Supabase outage.
+      // rather than block legitimate reviews on a transient Neon outage.
       // The downside (slightly degraded enforcement during outage) is much
       // smaller than the alternative (false-positive 'quota exceeded'
       // comments on legitimate PRs).

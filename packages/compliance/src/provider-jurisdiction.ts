@@ -52,8 +52,9 @@ export function isChineseHqProvider(providerId: string): providerId is ChineseHq
  * Per-provider opt-in ledger entry.
  *
  * One entry per (user, provider) tuple. Persisted by the host app — see
- * `apps/mobile/lib/mmkv.ts` for the mobile binding. Web persists to Supabase
- * `consent_ledger` (PRD Appendix D §D.4 item 5: immutable append-only).
+ * `apps/mobile/lib/mmkv.ts` for the mobile binding. Web persists to the managed
+ * cloud database `consent_ledger` (PRD Appendix D §D.4 item 5: immutable
+ * append-only).
  *
  * We deliberately store BOTH `acceptedAt` and `version`. The version field is
  * the SHA-256 of the consent copy shown at acceptance time, so that if the
@@ -76,7 +77,7 @@ export interface NamedProviderConsent {
 /**
  * Subset of consent ledger the gate needs to make a decision.
  * Decoupled from any specific persistence layer so this package stays
- * dependency-free (no MMKV, no Supabase).
+ * dependency-free (no MMKV, no cloud DB dependency).
  */
 export interface ConsentLedger {
   getNamedProviderConsent(providerId: string): NamedProviderConsent | null;

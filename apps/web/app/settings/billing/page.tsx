@@ -59,7 +59,7 @@ function SectionHeader({ title }: { title: string }) {
     <div
       style={{
         padding: '14px 20px',
-        borderBottom: '1px solid var(--border)',
+        borderBottom: '1px solid var(--settings-border)',
         fontSize: 13,
         fontWeight: 600,
         color: 'var(--text-2)',
@@ -176,7 +176,7 @@ export default function BillingSettingsPage() {
       {/* Current plan card */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -274,7 +274,7 @@ export default function BillingSettingsPage() {
         <div
           style={{
             padding: '12px 20px',
-            borderTop: '1px solid var(--border)',
+            borderTop: '1px solid var(--settings-border)',
             display: 'flex',
             gap: 8,
           }}
@@ -301,7 +301,7 @@ export default function BillingSettingsPage() {
               style={{
                 padding: '7px 14px',
                 background: 'transparent',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius)',
                 color: 'var(--text-2)',
                 fontSize: 13,
@@ -319,7 +319,7 @@ export default function BillingSettingsPage() {
       {isManagedPaid && (
         <section
           style={{
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
             overflow: 'hidden',
@@ -342,7 +342,7 @@ export default function BillingSettingsPage() {
                   height: 24,
                   borderRadius: 4,
                   background: 'var(--bg-hover)',
-                  border: '1px solid var(--border)',
+                  border: '1px solid var(--settings-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -361,7 +361,7 @@ export default function BillingSettingsPage() {
               style={{
                 padding: '6px 14px',
                 background: 'transparent',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--text-2)',
                 fontSize: 13,
@@ -379,7 +379,7 @@ export default function BillingSettingsPage() {
       {balanceDollars !== null && (
         <section
           style={{
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
             overflow: 'hidden',
@@ -407,7 +407,7 @@ export default function BillingSettingsPage() {
       {/* Invoices section */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -435,7 +435,7 @@ export default function BillingSettingsPage() {
                 flexShrink: 0,
                 padding: '7px 14px',
                 background: 'transparent',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius)',
                 color: 'var(--text-2)',
                 fontSize: 13,

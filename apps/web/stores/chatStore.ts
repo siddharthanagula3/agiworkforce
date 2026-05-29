@@ -58,7 +58,7 @@ export interface MessageMetadata {
   generatedFile?: GeneratedFile;
   artifactManifest?: ArtifactManifest;
   documentData?: { title?: string; content?: string; [key: string]: unknown };
-  /** Persisted user reaction (stored in Supabase messages.metadata) */
+  /** Persisted user reaction (stored in cloud messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
 }
 

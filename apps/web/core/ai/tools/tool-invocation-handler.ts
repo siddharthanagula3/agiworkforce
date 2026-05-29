@@ -482,7 +482,7 @@ class ToolInvocationService {
     const isUserScopedTable = userScopedTables.includes(table!);
 
     // Route database operations through the server-side API endpoint to avoid
-    // direct client-side DB access (Supabase removed; Neon is server-only).
+    // direct client-side DB access (Neon removed; Neon is server-only).
     const token = await getAuthToken();
     if (!token) {
       throw new Error('Authentication required for database operations');

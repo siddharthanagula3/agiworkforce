@@ -140,7 +140,7 @@ export function useChatSessions(userId: string | undefined): UseQueryResult<Chat
       if (!userId) return [];
 
       // getUserSessions now returns sessions with message counts included
-      // via Supabase nested select (single query, no N+1 pattern)
+      // via Neon nested select (single query, no N+1 pattern)
       const sessions = await chatPersistenceService.getUserSessions(userId);
 
       // Sort by updatedAt (most recent first)

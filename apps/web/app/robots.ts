@@ -22,6 +22,16 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
       },
       {
+        userAgent: 'OAI-AdsBot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
+        userAgent: 'OAI-SearchBot',
+        allow: '/',
+        disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],
+      },
+      {
         userAgent: 'ClaudeBot',
         allow: '/',
         disallow: ['/api/', '/admin/', '/dashboard/', '/account/', '/auth/'],

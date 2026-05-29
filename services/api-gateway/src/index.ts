@@ -40,7 +40,7 @@ import {
 import { createRateLimiter, warnIfMultiInstanceWithoutRedis } from './middleware/rateLimit';
 import { logger } from './lib/logger';
 import { validateStartupEnv } from './env';
-import { getServiceClient } from './lib/supabaseClients';
+import { getServiceClient } from './lib/neonClients';
 import {
   registrationRouter,
   assignmentRouter,
@@ -149,7 +149,7 @@ app.get('/health', createRateLimiter('health'), (_req: Request, res: Response) =
 // SECURITY: Rate limited to 100/min for status checks
 app.get('/api/v1/status', createRateLimiter('status'), async (_req: Request, res: Response) => {
   try {
-    // Check Supabase connectivity with a simple query against `profiles`
+    // Check Neon connectivity with a simple query against `profiles`
     // (the canonical user table — `users` belongs to `auth.*` schema and is
     // not exposed via REST, so the previous `from('users')` always returned
     // a 404 even when the database was healthy).

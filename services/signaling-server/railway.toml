@@ -42,8 +42,7 @@ SIGNALING_HOST = "0.0.0.0"
 SIGNALING_WS_PATH = "/ws"
 
 # Note: Set these secrets in Railway dashboard:
-# - SUPABASE_URL
-# - SUPABASE_SERVICE_ROLE_KEY
+# - NEON_DATABASE_URL
 # - SIGNALING_HTTP_URL (set to your Railway public URL)
 # - SIGNALING_WS_URL (set to wss://your-domain.railway.app/ws)
 # - ALLOWED_ORIGINS (comma-separated list of allowed origins)

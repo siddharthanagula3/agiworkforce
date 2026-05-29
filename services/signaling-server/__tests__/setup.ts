@@ -8,8 +8,7 @@ import { vi, beforeAll, afterAll, afterEach } from 'vitest';
 process.env['PORT'] = '4001'; // Different port for testing
 process.env['SIGNALING_HOST'] = 'localhost';
 process.env['SIGNALING_PORT'] = '4001';
-process.env['SUPABASE_URL'] = 'http://localhost:54321';
-process.env['SUPABASE_SERVICE_ROLE_KEY'] = 'test-service-role-key';
+process.env['NEON_DATABASE_URL'] = 'postgresql://test:test@localhost:54321/test';
 process.env['ALLOWED_ORIGINS'] = 'http://localhost:3000,http://localhost:3001';
 process.env['ADMIN_API_KEY'] = 'test-admin-api-key';
 process.env['NODE_ENV'] = 'test';
@@ -26,21 +25,12 @@ vi.mock('../src/logger.js', () => ({
   generateCorrelationId: vi.fn(() => 'test-correlation-id'),
 }));
 
-// Mock Supabase
+// Mock DB adapter
 vi.mock('../src/db.js', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        eq: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({ data: null, error: null }),
-        })),
-      })),
-      insert: vi.fn().mockResolvedValue({ error: null }),
-      delete: vi.fn(() => ({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      })),
-    })),
-  },
+  getSessionByCode: vi.fn().mockResolvedValue({ data: null, error: null }),
+  getSessionExpiresAtByCode: vi.fn().mockResolvedValue({ data: null, error: null }),
+  deleteSessionByCode: vi.fn().mockResolvedValue({ error: null }),
+  insertSession: vi.fn().mockResolvedValue({ error: null }),
 }));
 
 beforeAll(() => {

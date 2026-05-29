@@ -3,7 +3,7 @@
 import { useMemo, useEffect, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useBillingUsageStore } from '@/stores/unified/billingUsage';
-import { useChatStore } from '@agiworkforce/unified-chat';
+import { useChatStore, type ChatMessage } from '@agiworkforce/unified-chat';
 
 interface BudgetTrackerDisplayProps {
   className?: string;
@@ -23,6 +23,7 @@ interface CreditsResponse {
 }
 
 const CENTS_TO_DOLLARS = 0.01;
+const EMPTY_MESSAGES: ChatMessage[] = [];
 
 async function fetchCreditBalance(): Promise<CreditBalance | null> {
   try {
@@ -46,7 +47,9 @@ export function BudgetTrackerDisplay({
 
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const messages = useChatStore((s) =>
-    activeConversationId ? (s.messagesByConversation[activeConversationId] ?? []) : [],
+    activeConversationId
+      ? (s.messagesByConversation[activeConversationId] ?? EMPTY_MESSAGES)
+      : EMPTY_MESSAGES,
   );
 
   const [creditBalance, setCreditBalance] = useState<CreditBalance | null>(null);

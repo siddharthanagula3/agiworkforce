@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { Popover, PopoverTrigger, PopoverContent } from '@shared/ui/popover';
 import { useModelStore, AVAILABLE_MODELS, type AIModel } from '@shared/stores/model-store';
@@ -8,9 +8,16 @@ import { BudgetTrackerDisplay } from '@/features/chat/components/Budget/BudgetTr
 import { StyleSelector } from './StyleSelector';
 import { Switch } from '@shared/ui/switch';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@shared/ui/tooltip';
-import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import { EFFORT_LABEL, PROVIDER_DISPLAY, type Effort, type ProviderId } from '@agiworkforce/types';
 import { useBillingStore } from '@/stores/unified/auth';
-import { isModelAllowedForTier } from '@/constants/llm';
+import {
+  getAllowedAutoModesForTier,
+  getBestAutoModeForTier,
+  getModelMetadata,
+  isModelAllowedForTier,
+} from '@/constants/llm';
+import { useThinkingStore } from '@shared/stores/thinking-store';
+import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
 /**
  * Returns a human-readable daily usage label for free-tier users.
@@ -71,12 +78,49 @@ function providerSupportsEffort(providerKey: string): boolean {
 
 /** Whether this model supports adaptive thinking (checks provider capability). */
 function modelSupportsThinking(model: AIModel): boolean {
-  return providerSupportsEffort(model.providerKey);
+  const metadata = getModelMetadata(model.id);
+  return metadata ? metadata.capabilities.thinking : providerSupportsEffort(model.providerKey);
+}
+
+function openAIModelSupportsXHigh(modelId: string): boolean {
+  return supportsOpenAIReasoningEffort({ provider: 'openai', id: modelId }, 'xhigh');
+}
+
+function isModelSelectableForTier(model: AIModel, tier: string): boolean {
+  if (model.providerKey === 'managed_cloud') {
+    return getAllowedAutoModesForTier(tier).includes(model.id);
+  }
+  if (tier === 'free' || tier === 'hobby') return false;
+  return isModelAllowedForTier(model.id, tier);
 }
 
 /** True when the model name contains "Opus" — used to show usage-rate tooltip. */
 function isOpusModel(model: AIModel): boolean {
   return model.name.toLowerCase().includes('opus');
+}
+
+const EFFORT_OPTIONS: ReadonlyArray<{ value: Effort; description: string }> = [
+  { value: 'low', description: 'Fastest, lowest token use' },
+  { value: 'medium', description: 'Balanced default for daily work' },
+  { value: 'high', description: 'More thorough for complex work' },
+  { value: 'xhigh', description: 'Extra-high for long-horizon work' },
+  { value: 'max', description: 'Most capable, highest token use' },
+];
+
+function effortDisabledReason(model: AIModel, effort: Effort): string | null {
+  const providerId = toProviderId(model.providerKey);
+  if (!modelSupportsThinking(model)) return 'This model does not support effort control';
+  if (providerId === 'openai' && effort === 'max') return 'OpenAI does not support Max effort';
+  if (providerId === 'openai' && effort === 'xhigh' && !openAIModelSupportsXHigh(model.id)) {
+    return 'This OpenAI model supports Low, Medium, and High effort';
+  }
+  if (providerId === 'google' && (effort === 'xhigh' || effort === 'max')) {
+    return 'Gemini supports Low, Medium, and High effort';
+  }
+  if (providerId === 'agi-cloud' && (effort === 'xhigh' || effort === 'max')) {
+    return 'Auto mode supports Low, Medium, and High effort';
+  }
+  return null;
 }
 
 /**
@@ -103,7 +147,7 @@ function partitionModels(
     return {
       recommended: matches.map((m) => ({
         ...m,
-        isLocked: m.providerKey !== 'managed_cloud' && !isModelAllowedForTier(m.id, tier),
+        isLocked: !isModelSelectableForTier(m, tier),
       })),
       more: [],
       isSearching: true,
@@ -113,8 +157,8 @@ function partitionModels(
   const autoModels = models.filter((m) => m.providerKey === 'managed_cloud');
   const manualModels = models.filter((m) => m.providerKey !== 'managed_cloud');
 
-  const inTierManual = manualModels.filter((m) => isModelAllowedForTier(m.id, tier));
-  const lockedManual = manualModels.filter((m) => !isModelAllowedForTier(m.id, tier));
+  const inTierManual = manualModels.filter((m) => isModelSelectableForTier(m, tier));
+  const lockedManual = manualModels.filter((m) => !isModelSelectableForTier(m, tier));
 
   // Always surface the Opus model in recommended so free users see the Anthropic flagship upsell.
   // Show up to 2 locked flagships: the first locked model in provider order, plus the Opus model
@@ -136,10 +180,10 @@ function partitionModels(
   const more = manualModels.filter((m) => !recommendedIds.has(m.id));
 
   const recommended = [
-    ...autoModels.map((m) => ({ ...m, isLocked: false })),
+    ...autoModels.map((m) => ({ ...m, isLocked: !isModelSelectableForTier(m, tier) })),
     ...recommendedManual.map((m) => ({
       ...m,
-      isLocked: !isModelAllowedForTier(m.id, tier),
+      isLocked: !isModelSelectableForTier(m, tier),
     })),
   ];
 
@@ -226,7 +270,7 @@ function ModelRow({
         <a
           href="/pricing"
           onClick={(e) => e.stopPropagation()}
-          className="ml-auto shrink-0 text-xs text-amber-400 hover:text-amber-300 hover:underline"
+          className="ml-auto shrink-0 text-xs text-primary hover:underline"
           aria-label="Upgrade to unlock this model"
         >
           Upgrade
@@ -274,8 +318,10 @@ export function ComposerFooter({
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const getSelectedModel = useModelStore((s) => s.getSelectedModel);
-  const thinkingEnabled = useModelStore((s) => s.thinkingEnabled);
-  const setThinkingEnabled = useModelStore((s) => s.setThinkingEnabled);
+  const thinkingEnabled = useThinkingStore((s) => s.enabled);
+  const thinkingEffort = useThinkingStore((s) => s.effort);
+  const setThinkingEnabled = useThinkingStore((s) => s.setEnabled);
+  const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
 
@@ -291,6 +337,32 @@ export function ComposerFooter({
 
   const selectedProviderKey = selectedModel.providerKey;
   const supportsAdaptive = modelSupportsThinking(selectedModel);
+  const currentEffortDisabledReason = effortDisabledReason(selectedModel, thinkingEffort);
+
+  useEffect(() => {
+    if (!isModelSelectableForTier(selectedModel, tier)) {
+      setSelectedModelId(getBestAutoModeForTier(tier));
+    }
+  }, [selectedModel, setSelectedModelId, tier]);
+
+  useEffect(() => {
+    if (thinkingEnabled && currentEffortDisabledReason) {
+      setThinkingEnabled(false);
+    }
+  }, [currentEffortDisabledReason, setThinkingEnabled, thinkingEnabled]);
+
+  const handleThinkingEnabledChange = (checked: boolean) => {
+    if (!checked) {
+      setThinkingEnabled(false);
+      return;
+    }
+    if (currentEffortDisabledReason) {
+      setThinkingEffort('medium');
+      setThinkingEnabled(true);
+      return;
+    }
+    setThinkingEnabled(true);
+  };
 
   return (
     <div className="mt-2 space-y-2">
@@ -347,8 +419,10 @@ export function ComposerFooter({
                 >
                   <ProviderLogo providerKey={selectedProviderKey} size={12} />
                   <span className="max-w-[140px] truncate">{selectedModel.name}</span>
-                  {supportsAdaptive && (
-                    <span className="text-xs text-muted-foreground/70">Adaptive</span>
+                  {supportsAdaptive && thinkingEnabled && (
+                    <span className="text-xs text-muted-foreground/70">
+                      {EFFORT_LABEL[thinkingEffort]}
+                    </span>
                   )}
                   <ChevronDown className="h-3 w-3 shrink-0" />
                 </button>
@@ -413,12 +487,57 @@ export function ComposerFooter({
                           </span>
                         </span>
                         <Switch
-                          checked={thinkingEnabled}
-                          onCheckedChange={(checked) => setThinkingEnabled(checked)}
+                          checked={supportsAdaptive && thinkingEnabled}
+                          disabled={!supportsAdaptive}
+                          onCheckedChange={handleThinkingEnabledChange}
                           aria-label="Toggle adaptive thinking"
                           className="h-5 w-9"
                         />
                       </div>
+                      {supportsAdaptive && thinkingEnabled && (
+                        <div className="px-2 pb-1">
+                          {EFFORT_OPTIONS.map((option) => {
+                            const isActive = thinkingEffort === option.value;
+                            const disabledReason = effortDisabledReason(
+                              selectedModel,
+                              option.value,
+                            );
+                            const isDisabled = Boolean(disabledReason);
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                disabled={isDisabled}
+                                title={disabledReason ?? option.description}
+                                onClick={() => setThinkingEffort(option.value)}
+                                className={[
+                                  'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left transition-colors',
+                                  isDisabled
+                                    ? 'cursor-not-allowed opacity-45'
+                                    : isActive
+                                      ? 'bg-muted/50'
+                                      : 'hover:bg-muted/40',
+                                ].join(' ')}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="block text-sm text-foreground/85">
+                                    {EFFORT_LABEL[option.value]}
+                                  </span>
+                                  <span className="block text-xs text-muted-foreground">
+                                    {disabledReason ?? option.description}
+                                  </span>
+                                </span>
+                                {isActive && (
+                                  <Check
+                                    className="h-3.5 w-3.5 shrink-0 text-primary"
+                                    aria-hidden="true"
+                                  />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -445,7 +564,7 @@ export function ComposerFooter({
                       </button>
                       {showMore &&
                         more.map((model) => {
-                          const locked = !isModelAllowedForTier(model.id, tier);
+                          const locked = !isModelSelectableForTier(model, tier);
                           const isSelected = model.id === selectedModelId;
                           return (
                             <ModelRow

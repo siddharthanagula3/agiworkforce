@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Canonical 6-tier taxonomy (matches Supabase `subscriptions.tier` strings):
+/// Canonical 6-tier taxonomy (matches cloud subscription tier strings):
 /// `local-only`, `byok`, `hobby`, `pro`, `max`, `enterprise`.  `Free` is
 /// retained as a backward-compat alias for legacy rows.  Any other string
 /// would deserialize-fail before the variants below were added.
@@ -18,7 +18,7 @@ pub enum PlanTier {
     Max,
     #[serde(rename = "enterprise")]
     Enterprise,
-    /// Legacy alias retained for backward compatibility with older Supabase rows.
+    /// Legacy alias retained for backward compatibility with older rows.
     #[serde(rename = "free")]
     Free,
 }

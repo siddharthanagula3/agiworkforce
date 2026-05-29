@@ -38,7 +38,7 @@ interface SecurityState {
   // Operation approvals
   pendingApprovalId: string | null;
 
-  // --- Rust auth (local/offline auth, not Supabase) ---
+  // --- Rust auth (local/offline auth) ---
   authLogin: (email: string, password: string) => Promise<AuthToken>;
 
   // --- Secret manager ---

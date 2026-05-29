@@ -34,6 +34,7 @@ import type { ChatMode } from '@features/chat/types';
 import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { Switch } from '@shared/ui/switch';
+import { EFFORT_LABEL } from '@agiworkforce/types';
 
 interface ChatComposerProps {
   onSend: (
@@ -206,15 +207,15 @@ const ChatComposerNewComponent = ({
   // Thinking / effort store
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
   const thinkingEffort = useThinkingStore((s) => s.effort);
-  const thinkingToggle = useThinkingStore((s) => s.toggle);
+  const setThinkingEffort = useThinkingStore((s) => s.setEffort);
   const thinkingCycle = useThinkingStore((s) => s.cycleEffort);
   const handleThinkingClick = useCallback(() => {
     if (!thinkingEnabled) {
-      thinkingToggle();
+      setThinkingEffort('low');
     } else {
       thinkingCycle();
     }
-  }, [thinkingEnabled, thinkingToggle, thinkingCycle]);
+  }, [thinkingEnabled, setThinkingEffort, thinkingCycle]);
 
   // Real connector state from the server
   const connectors = useConnectors();
@@ -880,14 +881,14 @@ const ChatComposerNewComponent = ({
                           Manage connectors
                         </a>
                         <a
-                          href="/connectors/new"
+                          href="/connectors"
                           onClick={closeMenu}
                           className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
                           + Add connector
                         </a>
                         <a
-                          href="/connectors/permissions"
+                          href="/settings/capabilities"
                           onClick={closeMenu}
                           className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
                         >
@@ -1054,25 +1055,25 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                 thinkingEnabled
-                  ? 'bg-purple-500/15 text-purple-400 ring-1 ring-purple-500/30'
+                  ? 'bg-muted/60 text-[var(--chat-accent-primary)] ring-1 ring-border'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
                 (isLoading || disabled) && 'cursor-not-allowed opacity-50',
               )}
               aria-label={
                 thinkingEnabled
-                  ? `Effort: ${thinkingEffort}. Click to cycle.`
+                  ? `Effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle.`
                   : 'Enable thinking effort'
               }
               aria-pressed={thinkingEnabled}
               title={
                 thinkingEnabled
-                  ? `Thinking effort: ${thinkingEffort}. Click to cycle levels.`
+                  ? `Thinking effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle levels.`
                   : 'Enable extended thinking with effort control'
               }
             >
               <Brain className="h-3.5 w-3.5" />
               {thinkingEnabled && (
-                <span className="hidden sm:inline capitalize">{thinkingEffort}</span>
+                <span className="hidden sm:inline">{EFFORT_LABEL[thinkingEffort]}</span>
               )}
             </button>
 

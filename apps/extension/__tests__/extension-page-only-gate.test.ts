@@ -95,6 +95,15 @@ describe('EXTENSION_PAGE_ONLY_MESSAGE_TYPES gate — content-script senders reje
     ).toBe(true);
   });
 
+  it('rejects CANCEL_STREAM from a content script', () => {
+    expect(
+      isRejectedByExtensionPageOnlyGate('CANCEL_STREAM', {
+        id: EXTENSION_ID,
+        tab: { id: 1 },
+      }),
+    ).toBe(true);
+  });
+
   it('rejects when sender.id is from another extension', () => {
     const sender: SenderShape = {
       id: 'different-extension-id',

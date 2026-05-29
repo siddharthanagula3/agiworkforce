@@ -2,12 +2,11 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
-import { MARKETING } from '../../lib/marketing-constants';
+import { LAUNCH, MARKETING, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: "CLI: The operator's command line | AGI",
-  description:
-    'Pure Rust. Ratatui TUI. Same engine that powers every other surface. The CLI is the product; the apps are surfaces over it.',
+  title: 'CLI: agi, the operator command line',
+  description: `Pure Rust CLI for AGI developer workflows. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/cli' },
 };
 
@@ -32,7 +31,7 @@ const SUBCOMMANDS: { cmd: string; desc: string }[] = [
 const FEATURES = [
   {
     label: 'Non-interactive exec',
-    body: 'agiworkforce exec is the headless mode. Pipe a task in, get an answer out. Ships to CI without a TUI.',
+    body: 'agi exec is the headless mode. Pipe a task in, get an answer out. Ships to CI without a TUI.',
   },
   {
     label: 'Ratatui TUI',
@@ -120,7 +119,7 @@ function TerminalScreenshot({ title, description }: { title: string; description
             fontFamily: 'var(--mono)',
           }}
         >
-          zsh &mdash; {title}
+          zsh - {title}
         </span>
       </div>
       <div
@@ -170,10 +169,15 @@ export default function CliPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">agiworkforce: the operator&rsquo;s CLI.</h1>
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
+          <h1 className="agi-page-h1">agi: the operator&rsquo;s CLI.</h1>
           <p className="agi-page-lede">
-            Pure Rust. Ratatui TUI. Same engine that powers every other surface.{' '}
-            <strong>The CLI is the product. The apps are surfaces over it.</strong>
+            Pure Rust. Ratatui TUI. Same engine that powers the rest of AGI.{' '}
+            <strong>
+              Local developer sessions stay local unless the user explicitly selects BYOK or Cloud.
+            </strong>
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
@@ -205,11 +209,11 @@ export default function CliPage() {
               description="Ratatui interactive mode with model switcher, streaming output, and tool call trace visible in the sidebar."
             />
             <TerminalScreenshot
-              title="agiworkforce exec"
+              title="agi exec"
               description="Headless exec mode running a code review task in CI. stdin task, stdout structured diff, exit 0."
             />
             <TerminalScreenshot
-              title="agiworkforce session"
+              title="agi session"
               description="Session browser showing past runs with fork and resume options. Every tool call is journaled and replayable."
             />
           </div>
@@ -239,10 +243,9 @@ export default function CliPage() {
               {'\n'}
               <span className="agi-terminal-comment"># first run</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce login
+              <span className="agi-terminal-prompt">$</span>agi login
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agiworkforce exec &quot;your first
-              task&quot;
+              <span className="agi-terminal-prompt">$</span>agi exec &quot;your first task&quot;
             </pre>
           </div>
         </section>
@@ -266,8 +269,8 @@ export default function CliPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Non-interactive runs</h3>
               <p className="agi-reason-p">
-                <code>agiworkforce exec</code> is the headless mode. Pipe a task, get an answer,
-                ship to CI. No TUI, no editor, just stdin/stdout.
+                <code>agi exec</code> is the headless mode. Pipe a task, get an answer, ship to CI.
+                No TUI, no editor, just stdin/stdout.
               </p>
             </li>
             <li className="agi-reason">

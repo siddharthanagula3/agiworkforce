@@ -237,14 +237,9 @@ impl ImageGenerationClient {
     ) -> Result<ImageGenerationResponse> {
         // Reads catalog's apiModelId for stable-diffusion-xl, falling back to
         // the legacy literal so we never break when models.json is stale.
-        let resolved_default = resolve_image_model(
-            "stable-diffusion-xl",
-            "stable-diffusion-xl-1024-v1-0",
-        );
-        let model = request
-            .model
-            .as_deref()
-            .unwrap_or(&resolved_default);
+        let resolved_default =
+            resolve_image_model("stable-diffusion-xl", "stable-diffusion-xl-1024-v1-0");
+        let model = request.model.as_deref().unwrap_or(&resolved_default);
         let url = format!(
             "https://api.stability.ai/v1/generation/{}/text-to-image",
             model

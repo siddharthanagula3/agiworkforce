@@ -1,7 +1,7 @@
 /**
  * Shared Conversation View
  *
- * Public read-only page that renders a shared conversation fetched from Supabase
+ * Public read-only page that renders a shared conversation fetched from Neon
  * via GET /api/shared?token=<id>.  No authentication is required.
  *
  * Route: /shared/[id]

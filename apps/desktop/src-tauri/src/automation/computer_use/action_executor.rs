@@ -29,9 +29,7 @@ pub struct ActionExecutor {
 impl ActionExecutor {
     /// Creates a new executor with the given window coordinator.
     pub fn new(window_coordinator: WindowCoordinator) -> Self {
-        Self {
-            window_coordinator,
-        }
+        Self { window_coordinator }
     }
 
     /// Executes a single `ComputerUseAction`.
@@ -156,10 +154,7 @@ impl ActionExecutor {
                     } => {
                         let _ = self
                             .window_coordinator
-                            .wait_for_window(
-                                title_contains,
-                                Duration::from_millis(*timeout_ms),
-                            )
+                            .wait_for_window(title_contains, Duration::from_millis(*timeout_ms))
                             .await;
                     }
                     other => {

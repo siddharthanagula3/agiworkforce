@@ -16,8 +16,7 @@ import { isAppError } from '@/lib/errors';
  * This endpoint now requires an admin app-metadata role; the duplicate has been
  * deleted. Cron-style probes should use a service-role JWT.
  *
- * Returns env-presence booleans + a masked Supabase host. Never returns raw
- * secret values.
+ * Returns env-presence booleans. Never returns raw secret values.
  */
 export async function GET(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'admin-security');

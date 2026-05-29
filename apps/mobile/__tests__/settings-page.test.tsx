@@ -141,16 +141,13 @@ jest.mock('react-native-webrtc', () => ({
   mediaDevices: { getUserMedia: jest.fn() },
 }));
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-      onAuthStateChange: jest
-        .fn()
-        .mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } }),
-      signOut: jest.fn(),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('../services/api', () => ({
@@ -227,12 +224,10 @@ describe('Settings page', () => {
     expect(queryAllByText('Local AI').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows Mobile BYOK as locked instead of navigable key entry', () => {
+  it('shows BYOK as unavailable on Mobile instead of navigable key entry', () => {
     const { getByLabelText, getByText, queryByText } = render(<SettingsTabScreen />);
 
-    expect(
-      getByLabelText(/Mobile BYOK.*Disabled until secure device key storage ships.*Locked/),
-    ).toBeTruthy();
+    expect(getByLabelText(/BYOK.*Not available on Mobile.*Locked/)).toBeTruthy();
     expect(getByText('Locked')).toBeTruthy();
     expect(queryByText('Sign Out')).toBeNull();
   });

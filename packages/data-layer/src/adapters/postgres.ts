@@ -28,7 +28,7 @@
  *    pnpm --filter @agiworkforce/data-layer add -D @types/pg
  *    ```
  *
- * 2. **Schema:** Same as Neon — copy `supabase/migrations/`. Standard
+ * 2. **Schema:** Same as Neon — apply `apps/web/db/neon/`. Standard
  *    Postgres so RLS, generated columns, triggers all port without
  *    modification.
  *
@@ -103,7 +103,7 @@ import { type DatabaseAdapter, NotImplementedError, type DatabaseConnectionConfi
 
 const MIGRATION_GUIDE = `
 1. pnpm --filter @agiworkforce/data-layer add pg @types/pg
-2. Copy SQL from supabase/migrations/ to your target Postgres.
+2. Apply SQL from apps/web/db/neon/ to your target Postgres.
 3. Pair with an AuthAdapter that mints JWT-like claims.
 4. Set AGI_DATABASE_URL=postgresql://user:pwd@host:5432/db?sslmode=require.
 5. Replace this skeleton — see the JSDoc reference implementation.

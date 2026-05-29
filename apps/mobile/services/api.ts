@@ -2,7 +2,7 @@ import { Alert } from 'react-native';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { supabase } from './supabase';
+import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
 // FIX-MOB-10: every outbound HTTPS call goes through secureFetch — the
 // chokepoint that the TLS-pinning gate hooks into. Today it's a
 // passthrough; flipping `PINNING_ENFORCED` in lib/pinning.ts (after ops
@@ -39,11 +39,11 @@ export class ApiPaywallError extends Error {
 
 /**
  * Authenticated HTTP client.
- * Injects Supabase Bearer token on every request.
+ * Injects a Clerk/Web API bearer token when the gated Cloud path provides one.
  *
  * Global 401 handling:
- *  - On first 401, attempts a Supabase session refresh and retries once.
- *  - If refresh fails (expired refresh token), clears the session and alerts
+ *  - On first 401, attempts a session refresh and retries once.
+ *  - If refresh fails, clears the local session facade and alerts
  *    the user to sign in again. The companion pairing session is left intact
  *    (the WebRTC/signaling layer is auth-independent) so pairing survives
  *    a token expiry without breaking the data channel.
@@ -67,12 +67,12 @@ async function tryRefreshToken(): Promise<boolean> {
 
   _refreshing = (async () => {
     try {
-      const refreshPromise = supabase.auth.refreshSession();
+      const refreshPromise = refreshAuthSession();
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Token refresh timed out')), REFRESH_TIMEOUT_MS),
       );
-      const { data, error } = await Promise.race([refreshPromise, timeoutPromise]);
-      if (!error && !!data.session) {
+      const refreshed = await Promise.race([refreshPromise, timeoutPromise]);
+      if (refreshed) {
         _refreshFailures = 0;
         _refreshBackoffUntil = 0;
         return true;
@@ -94,7 +94,7 @@ async function tryRefreshToken(): Promise<boolean> {
 
 /**
  * Called when all retry attempts are exhausted after a 401.
- * Clears the local Supabase session and prompts the user to log in again.
+ * Clears the local cloud session and prompts the user to log in again.
  * The companion pairing WebRTC/signaling session is intentionally preserved —
  * clearing auth tokens does not close the data channel.
  */
@@ -104,29 +104,19 @@ function handleUnrecoverableAuth(): void {
   // session and let the local-mode app shell render; cloud-only callers
   // will surface their own errors when the user opts into cloud.
   if (!FEATURES.auth) {
-    supabase.auth.signOut().catch((err) => {
+    clearAuthSession().catch((err) => {
       console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
     });
     return;
   }
 
-  // Clear Supabase session asynchronously — don't block the throw
-  supabase.auth.signOut().catch((err) => {
+  clearAuthSession().catch((err) => {
     console.warn('[API] Sign-out cleanup failed (non-blocking):', err);
   });
 
   Alert.alert('Session Expired', 'Your session has expired. Please sign in again to continue.', [
     { text: 'OK', style: 'default' },
   ]);
-}
-
-async function getAuthHeaders(): Promise<Record<string, string>> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
 }
 
 interface RequestOptions {
@@ -141,7 +131,7 @@ async function request<T>(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<T> {
-  const headers = await getAuthHeaders();
+  const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders()) };
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 
@@ -266,8 +256,7 @@ export const api = {
     file: UploadFileInput,
     options?: RequestOptions,
   ): Promise<UploadFileResult> => {
-    const { data } = await supabase.auth.getSession();
-    const token = data.session?.access_token;
+    const token = await getAuthToken();
 
     const formData = new FormData();
     // React Native FormData accepts { uri, type, name } objects for binary uploads.

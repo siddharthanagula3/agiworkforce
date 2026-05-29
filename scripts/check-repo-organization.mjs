@@ -83,7 +83,6 @@ const allowedRootDirs = new Set([
   'reports',
   'scripts',
   'services',
-  'supabase',
   'tasks',
 ]);
 
@@ -128,7 +127,6 @@ const requiredDirs = [
   'packages',
   'crates',
   'services',
-  'supabase',
   'docs',
   'audit',
   'tasks',

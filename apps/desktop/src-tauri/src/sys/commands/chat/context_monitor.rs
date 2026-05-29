@@ -120,7 +120,12 @@ pub async fn maybe_compact_context(
         .ok()
         .and_then(|map| map.get(&conversation_id).copied());
 
-    if !should_auto_compact(total_tokens, context_window, &auto_config, last_compact_time) {
+    if !should_auto_compact(
+        total_tokens,
+        context_window,
+        &auto_config,
+        last_compact_time,
+    ) {
         let threshold_pct = (auto_config.auto_compact_threshold * 100.0) as u32;
         debug!(
             "[Chat] Auto-compaction not needed: {} tokens / {} window (threshold {}%)",
@@ -188,7 +193,13 @@ pub async fn maybe_compact_context(
     let compacted_db_messages = compactor.get_compacted_messages(&messages, &summary);
 
     // Persist the compacted state
-    persist_auto_compaction(db, conversation_id, user_id, &messages, &compacted_db_messages)?;
+    persist_auto_compaction(
+        db,
+        conversation_id,
+        user_id,
+        &messages,
+        &compacted_db_messages,
+    )?;
 
     // Record compaction time for cooldown tracking
     if let Ok(mut map) = LAST_COMPACT_TIMES.lock() {
@@ -219,10 +230,7 @@ pub async fn maybe_compact_context(
 
     info!(
         "[Chat] Auto-compaction complete: {} messages compacted, {} -> {} tokens ({:.1}% saved)",
-        messages_compacted,
-        tokens_before,
-        tokens_after,
-        savings_percent,
+        messages_compacted, tokens_before, tokens_after, savings_percent,
     );
 
     // Rebuild the LLM message list from the compacted DB messages.
@@ -458,8 +466,7 @@ mod tests {
         // the trigger should be at 121,600 tokens.
         let config = CompactionConfig::default();
         let context_window = 128_000usize;
-        let threshold =
-            (context_window as f64 * config.auto_compact_threshold as f64) as usize;
+        let threshold = (context_window as f64 * config.auto_compact_threshold as f64) as usize;
         assert_eq!(threshold, 121_600);
     }
 
@@ -509,7 +516,12 @@ mod tests {
         let max_tokens = 128_000;
         // Just compacted 1 second ago — cooldown not elapsed
         let recent = Instant::now() - std::time::Duration::from_secs(1);
-        assert!(!should_auto_compact(128_000, max_tokens, &config, Some(recent)));
+        assert!(!should_auto_compact(
+            128_000,
+            max_tokens,
+            &config,
+            Some(recent)
+        ));
         // Compacted 200 seconds ago — cooldown elapsed
         let old = Instant::now() - std::time::Duration::from_secs(200);
         assert!(should_auto_compact(128_000, max_tokens, &config, Some(old)));

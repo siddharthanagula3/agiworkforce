@@ -4,17 +4,18 @@
  * Zustand store for managing effort/thinking control in the web chat composer.
  * State is persisted to localStorage so the user's preference survives refresh.
  *
- * Effort cycle (programmatic): off -> low -> medium -> high -> max -> off
- * UI pill click when disabled: enables at 'medium'
+ * Effort cycle (programmatic): off -> low -> medium -> high -> xhigh -> max -> off
+ * UI pill click when disabled: enables at 'low'
  * UI pill click when enabled: cycles to next level (max -> off)
  */
 import { create } from 'zustand';
 import { devtools, persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import type { Effort } from '@agiworkforce/types';
 
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export type EffortLevel = Effort;
 
-const EFFORT_CYCLE: EffortLevel[] = ['low', 'medium', 'high', 'max'];
+const EFFORT_CYCLE: EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 interface ThinkingState {
   enabled: boolean;
@@ -22,12 +23,14 @@ interface ThinkingState {
 }
 
 interface ThinkingActions {
-  /** Enable at 'medium' if disabled; disable if enabled. */
+  /** Set enabled state without changing the current effort preference. */
+  setEnabled: (enabled: boolean) => void;
+  /** Enable at 'low' if disabled; disable if enabled. */
   toggle: () => void;
   /** Set effort level explicitly; also enables the store if disabled. */
   setEffort: (level: EffortLevel) => void;
   /**
-   * Programmatic cycle: off -> low -> medium -> high -> max -> off.
+   * Programmatic cycle: off -> low -> medium -> high -> xhigh -> max -> off.
    * UI pill uses toggle() and cycleEffort() separately (never cycles from off via pill).
    */
   cycleEffort: () => void;
@@ -43,11 +46,16 @@ export const useThinkingStore = create<ThinkingStore>()(
         enabled: false,
         effort: 'medium',
 
+        setEnabled: (enabled) =>
+          set((state) => {
+            state.enabled = enabled;
+          }),
+
         toggle: () =>
           set((state) => {
             if (!state.enabled) {
               state.enabled = true;
-              state.effort = 'medium';
+              state.effort = 'low';
             } else {
               state.enabled = false;
             }

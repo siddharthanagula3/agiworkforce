@@ -799,9 +799,11 @@ impl CodeExecutor {
             language, analysis_type, language, code_preview
         );
 
-        let fast_model =
-            crate::core::llm::models_config::get_task_model(&crate::core::llm::Provider::Anthropic, "fast_completion")
-                .to_string();
+        let fast_model = crate::core::llm::models_config::get_task_model(
+            &crate::core::llm::Provider::Anthropic,
+            "fast_completion",
+        )
+        .to_string();
         let preferences = RouterPreferences {
             provider: Some(crate::core::llm::Provider::Anthropic),
             model: Some(fast_model.clone()),

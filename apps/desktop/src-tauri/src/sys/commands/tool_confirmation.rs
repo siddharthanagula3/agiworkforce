@@ -559,11 +559,7 @@ impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
         let args: BTreeMap<String, Value> = req
             .parameters
             .as_object()
-            .map(|obj| {
-                obj.iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect()
-            })
+            .map(|obj| obj.iter().map(|(k, v)| (k.clone(), v.clone())).collect())
             .unwrap_or_default();
         let summary_hash = if args.is_empty() {
             String::new()
@@ -2029,20 +2025,10 @@ mod mode_transition_envelope_tests {
 
     #[test]
     fn envelope_hash_is_deterministic() {
-        let p1 = ModeTransitionPayload::new(
-            "set_auto_approve_all",
-            "false",
-            "true",
-            true,
-            "warning",
-        );
-        let p2 = ModeTransitionPayload::new(
-            "set_auto_approve_all",
-            "false",
-            "true",
-            true,
-            "warning",
-        );
+        let p1 =
+            ModeTransitionPayload::new("set_auto_approve_all", "false", "true", true, "warning");
+        let p2 =
+            ModeTransitionPayload::new("set_auto_approve_all", "false", "true", true, "warning");
         assert_eq!(p1.summary_hash, p2.summary_hash);
     }
 

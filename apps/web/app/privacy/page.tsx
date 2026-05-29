@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Privacy policy | AGI',
+  title: 'Privacy policy',
   description: 'How AGI collects, uses, and protects your data.',
   alternates: { canonical: 'https://agiworkforce.com/privacy' },
 };
@@ -19,8 +20,8 @@ export default function PrivacyPage() {
           <p className="agi-page-lede">
             How we collect, use, and protect your data.{' '}
             <strong>
-              We do not train on your data. We do not sell your data. We collect the minimum needed
-              to run the service.
+              AGI does not use customer conversation content to train AGI-owned models. We do not
+              sell your data. {POSITIONING.trustBoundary}
             </strong>{' '}
             Last updated: 2026-05-08.
           </p>
@@ -54,7 +55,7 @@ export default function PrivacyPage() {
               </tr>
               <tr>
                 <td>Conversations (local mode)</td>
-                <td>SQLite on disk. Never leaves your machine.</td>
+                <td>SQLite on disk. Not silently routed to BYOK or Cloud.</td>
                 <td>n/a</td>
               </tr>
               <tr>
@@ -92,7 +93,9 @@ export default function PrivacyPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Training data</h3>
               <p className="agi-reason-p">
-                We do not train models on your prompts, responses, or files. Period.
+                AGI does not train AGI-owned models on customer prompts, responses, or files.
+                Provider-side handling in BYOK mode is governed by the selected provider account and
+                terms.
               </p>
             </li>
             <li className="agi-reason">
@@ -105,8 +108,8 @@ export default function PrivacyPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Local-mode anything</h3>
               <p className="agi-reason-p">
-                Local mode (Ollama / LM Studio on your machine) is fully offline. No telemetry, no
-                sync, no logs leave your laptop.
+                Local mode uses supported on-device or local model routes and does not silently send
+                chats, files, or developer sessions to BYOK providers or managed Cloud.
               </p>
             </li>
           </ul>

@@ -453,7 +453,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
 
   // Store task_id → user_id mapping in-process memory with TTL for ownership verification.
   // This allows the status endpoint to verify the requesting user owns the task.
-  // In a distributed/serverless deployment, replace with Redis or Supabase persistence.
+  // In a distributed/serverless deployment, replace with Redis or Neon persistence.
   storeVideoTask(taskId, userId);
 
   logger.info(

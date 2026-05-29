@@ -21,7 +21,7 @@ import {
 } from '@agiworkforce/types';
 import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';

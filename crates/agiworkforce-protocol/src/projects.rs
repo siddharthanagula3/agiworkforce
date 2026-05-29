@@ -202,7 +202,7 @@ pub struct ProjectKnowledgeFile {
     pub retention_expires_at: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
-    /// Storage URI of the underlying binary in Supabase Storage. The
+    /// Storage URI of the underlying binary in managed cloud storage. The
     /// Postgres column is `storage_uri text NOT NULL`. Consumers should
     /// not assume this is a public URL — most files require a signed-URL
     /// fetch via the storage SDK.
@@ -456,7 +456,7 @@ mod tests {
             added_at: "2026-05-20T00:00:00Z".to_string(),
             retention_expires_at: None,
             deleted_at: None,
-            storage_uri: "supabase-storage://projects/proj_1/kf_1".to_string(),
+            storage_uri: "cloud-storage://projects/proj_1/kf_1".to_string(),
         };
         let json = serde_json::to_string(&file).expect("serialize");
         let back: ProjectKnowledgeFile = serde_json::from_str(&json).expect("deserialize");

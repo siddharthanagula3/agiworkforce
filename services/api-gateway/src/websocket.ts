@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { authenticatedUserSchema } from './authenticated-user';
 import { requireEnv } from './env';
 import { logger } from './lib/logger';
-import { getUserScopedClient } from './lib/supabaseClients';
+import { getUserScopedClient } from './lib/neonClients';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 

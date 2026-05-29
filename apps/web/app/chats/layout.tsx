@@ -8,7 +8,7 @@ export default async function ChatsLayout({ children }: { children: ReactNode })
   const { userId } = await auth();
 
   if (!userId) {
-    redirect('/login?redirectTo=/chats');
+    redirect('/login?redirectTo=/chat');
   }
 
   return <>{children}</>;

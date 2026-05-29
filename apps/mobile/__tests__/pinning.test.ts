@@ -31,7 +31,6 @@ describe('PINS_BY_HOST', () => {
     'agiworkforce.com',
     'signaling.agiworkforce.com',
     'api.agiworkforce.com',
-    'xwmcvbgdyergfnvwbnap.supabase.co',
     'api.openai.com',
     'api.anthropic.com',
   ])('declares entry for %s', (host) => {

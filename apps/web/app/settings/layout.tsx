@@ -30,7 +30,8 @@ export default async function SettingsLayout({ children }: { children: ReactNode
       style={{
         display: 'flex',
         minHeight: '100vh',
-        background: 'var(--bg-base, #09090b)',
+        background: 'var(--bg-base)',
+        color: 'var(--text-1)',
       }}
     >
       {/* Settings sidebar */}
@@ -39,7 +40,7 @@ export default async function SettingsLayout({ children }: { children: ReactNode
         style={{
           width: 220,
           flexShrink: 0,
-          borderRight: '1px solid var(--border)',
+          borderRight: '1px solid var(--settings-border)',
           padding: '48px 0 32px',
           display: 'flex',
           flexDirection: 'column',

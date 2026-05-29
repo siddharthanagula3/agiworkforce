@@ -83,7 +83,7 @@ export interface OpenAIChatCompletionCreateParams {
   stop?: string[];
   max_tokens?: number;
   max_completion_tokens?: number;
-  reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high';
+  reasoning_effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
   metadata?: Record<string, string>;
   store?: boolean;
   prompt_cache_key?: string;

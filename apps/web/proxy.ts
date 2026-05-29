@@ -42,7 +42,7 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
-export default clerkMiddleware((_auth, request: NextRequest) => {
+export const proxy = clerkMiddleware((_auth, request: NextRequest) => {
   // Generate a cryptographically-secure per-request nonce
   const nonce = btoa(crypto.randomUUID());
   const csp = buildCspWithNonce(nonce);
@@ -64,17 +64,17 @@ export const config = {
   matcher: [
     /*
      * Run on all routes except:
-     * - static files and Next.js internals (Supabase recommended pattern)
+     * - static files and Next.js internals
      * - api/stripe-webhook — must read raw request body bytes for HMAC
      *   signature verification via stripe.webhooks.constructEvent. Even
-     *   though Next.js middleware doesn't normally consume the body,
-     *   updateSession() touches request.headers and any future change
+     *   though Next.js proxy doesn't normally consume the body,
+     *   auth/session handling touches request.headers and any future change
      *   that touches the body would silently break signature verification.
      *   Excluding the path is the defense-in-depth fix. (WEB-4 audit fix,
      *   2026-05-03; routes also retain `export const runtime = 'nodejs'`
      *   to ensure Stripe SDK HMAC works.)
      * - api/llm/v1/audio/transcriptions — multipart/form-data; same
-     *   class of risk if middleware ever needs to inspect.
+     *   class of risk if proxy ever needs to inspect.
      */
     '/((?!_next/static|_next/image|favicon.ico|api/stripe-webhook|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     '/(api|trpc)(.*)',

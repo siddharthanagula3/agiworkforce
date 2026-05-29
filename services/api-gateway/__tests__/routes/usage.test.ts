@@ -35,12 +35,12 @@ const { usageRows } = vi.hoisted(() => ({
   ],
 }));
 
-// Wave 1.5+ task #17 (2026-05-08): legacy `lib/supabase` singleton deleted.
+// Wave 1.5+ task #17 (2026-05-08): legacy `lib/db` singleton deleted.
 // middleware/auth.ts kill-switch now uses `getServiceClient()` for the
 // profiles lookup; routes/usage.ts uses `getUserScopedClient(userId)` for
 // usage_events. Mock both helpers separately so each call site sees the
 // right chain (profile mock for kill-switch, usage mock for usage routes).
-vi.mock('../../src/lib/supabaseClients', () => {
+vi.mock('../../src/lib/neonClients', () => {
   const usageQuery = {
     eq: vi.fn(() => usageQuery),
     gte: vi.fn(() => usageQuery),
@@ -75,8 +75,6 @@ vi.mock('../../src/lib/supabaseClients', () => {
     getServiceClient: vi.fn(() => serviceClient),
     getUserClient: vi.fn(() => userClient),
     getUserScopedClient: vi.fn(() => userClient),
-    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
-    _resetSupabaseJwtCacheForTests: vi.fn(),
   };
 });
 

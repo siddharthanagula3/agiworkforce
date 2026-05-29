@@ -83,7 +83,7 @@ type UtilityItem =
       show: boolean;
     };
 
-// Utility strip: Models · disabled Keys/BYOK · Memory · Settings · About.
+// Utility strip: Models · disabled BYOK boundary · Memory · Settings · About.
 const ALL_UTILITY_ITEMS: UtilityItem[] = [
   {
     type: 'navigation',
@@ -96,8 +96,8 @@ const ALL_UTILITY_ITEMS: UtilityItem[] = [
   {
     type: 'disabled',
     key: 'keys-disabled',
-    label: 'Keys / BYOK',
-    description: 'Disabled until secure key storage ships',
+    label: 'BYOK',
+    description: 'Desktop and developer surfaces only',
     icon: Key,
     badge: 'Locked',
     show: true,
@@ -421,7 +421,7 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
         </View>
       )}
 
-      {/* Utility strip: Models · disabled Keys/BYOK · Memory · Settings · About */}
+      {/* Utility strip: Models · disabled BYOK boundary · Memory · Settings · About */}
       <View className="px-2 pt-1.5">
         <View className="mx-1 mb-1.5" style={{ height: 1, backgroundColor: colors.border }} />
         {UTILITY_ITEMS.map((item) => {

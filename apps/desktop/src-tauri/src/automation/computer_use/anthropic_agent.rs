@@ -212,10 +212,7 @@ impl AnthropicComputerUseAgent {
             llm_calls += 1;
             let response = self.call_anthropic(&messages).await?;
 
-            let finish_reason = response
-                .finish_reason
-                .as_deref()
-                .unwrap_or("end_turn");
+            let finish_reason = response.finish_reason.as_deref().unwrap_or("end_turn");
 
             // Build assistant message from response for conversation history
             let assistant_msg = ChatMessage {
@@ -307,9 +304,7 @@ impl AnthropicComputerUseAgent {
                 if !decision.allowed {
                     let reason = decision
                         .reason
-                        .map(|r| {
-                            serde_json::to_string(&r).unwrap_or_else(|_| format!("{r:?}"))
-                        })
+                        .map(|r| serde_json::to_string(&r).unwrap_or_else(|_| format!("{r:?}")))
                         .unwrap_or_else(|| "Action blocked by safety layer".to_string());
 
                     tool_result_parts.push(ContentPart::ToolResult {
@@ -475,10 +470,7 @@ impl AnthropicComputerUseAgent {
     ) -> Result<ComputerUseAction> {
         let coord = |input: &serde_json::Value| -> Option<(i32, i32)> {
             let arr = input.get("coordinate")?.as_array()?;
-            Some((
-                arr.first()?.as_i64()? as i32,
-                arr.get(1)?.as_i64()? as i32,
-            ))
+            Some((arr.first()?.as_i64()? as i32, arr.get(1)?.as_i64()? as i32))
         };
 
         match action_type {
@@ -531,10 +523,7 @@ impl AnthropicComputerUseAgent {
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
-                Ok(ComputerUseAction::Type {
-                    text,
-                    delay_ms: 12,
-                })
+                Ok(ComputerUseAction::Type { text, delay_ms: 12 })
             }
 
             "key" => {
@@ -613,14 +602,9 @@ impl AnthropicComputerUseAgent {
                     .get("end_coordinate")
                     .and_then(|c| c.as_array())
                     .and_then(|arr| {
-                        Some((
-                            arr.first()?.as_i64()? as i32,
-                            arr.get(1)?.as_i64()? as i32,
-                        ))
+                        Some((arr.first()?.as_i64()? as i32, arr.get(1)?.as_i64()? as i32))
                     })
-                    .ok_or_else(|| {
-                        anyhow::anyhow!("Missing end_coordinate for left_click_drag")
-                    })?;
+                    .ok_or_else(|| anyhow::anyhow!("Missing end_coordinate for left_click_drag"))?;
 
                 Ok(ComputerUseAction::Drag {
                     from: Coordinate::new(start_x, start_y),

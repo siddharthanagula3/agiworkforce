@@ -1420,7 +1420,8 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Ollama,
-                        model: super::models_config::get_default_model(&Provider::Ollama).to_string(),
+                        model: super::models_config::get_default_model(&Provider::Ollama)
+                            .to_string(),
                         reason: "strategy-local-first",
                     },
                     RouteCandidate {
@@ -1436,13 +1437,21 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: super::models_config::get_task_model(&Provider::Google, "fast_completion").to_string(),
+                        model: super::models_config::get_task_model(
+                            &Provider::Google,
+                            "fast_completion",
+                        )
+                        .to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: super::models_config::get_task_model(&Provider::OpenAI, "fast_completion").to_string(),
+                        model: super::models_config::get_task_model(
+                            &Provider::OpenAI,
+                            "fast_completion",
+                        )
+                        .to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
@@ -1456,13 +1465,18 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: super::models_config::get_task_model(&Provider::OpenAI, "complex_reasoning").to_string(),
+                        model: super::models_config::get_task_model(
+                            &Provider::OpenAI,
+                            "complex_reasoning",
+                        )
+                        .to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Anthropic,
-                        model: super::models_config::get_task_model(&Provider::Anthropic, "chat").to_string(),
+                        model: super::models_config::get_task_model(&Provider::Anthropic, "chat")
+                            .to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1470,13 +1484,18 @@ impl LLMRouter {
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::Google,
-                        model: super::models_config::get_task_model(&Provider::Google, "chat").to_string(),
+                        model: super::models_config::get_task_model(&Provider::Google, "chat")
+                            .to_string(),
                         reason: "strategy-cost",
                     },
                     RouteCandidate {
                         strategy: None,
                         provider: Provider::OpenAI,
-                        model: super::models_config::get_task_model(&Provider::OpenAI, "fast_completion").to_string(),
+                        model: super::models_config::get_task_model(
+                            &Provider::OpenAI,
+                            "fast_completion",
+                        )
+                        .to_string(),
                         reason: "strategy-cost",
                     },
                 ],
@@ -1485,13 +1504,21 @@ impl LLMRouter {
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::OpenAI,
-                    model: super::models_config::get_task_model(&Provider::OpenAI, "fast_completion").to_string(),
+                    model: super::models_config::get_task_model(
+                        &Provider::OpenAI,
+                        "fast_completion",
+                    )
+                    .to_string(),
                     reason: "strategy-latency",
                 },
                 RouteCandidate {
                     strategy: None,
                     provider: Provider::Google,
-                    model: super::models_config::get_task_model(&Provider::Google, "fast_completion").to_string(),
+                    model: super::models_config::get_task_model(
+                        &Provider::Google,
+                        "fast_completion",
+                    )
+                    .to_string(),
                     reason: "strategy-latency",
                 },
             ],
@@ -1836,7 +1863,9 @@ impl LLMRouter {
                 super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
                     .to_string()
             }
-            Provider::Ollama => super::models_config::get_default_model(&Provider::Ollama).to_string(),
+            Provider::Ollama => {
+                super::models_config::get_default_model(&Provider::Ollama).to_string()
+            }
             Provider::XAI => match task {
                 // grok-4.3 is the current xAI flagship as of May 2026: $1.25/$2.50 per 1M, 1M context,
                 // always-on chain-of-thought. Replaces grok-4-1-fast-reasoning + siblings, all of
@@ -1927,9 +1956,17 @@ impl LLMRouter {
             },
             Provider::Azure => match task {
                 // Azure uses deployment names — fall back to models.json catalog values.
-                TaskCategory::Simple => super::models_config::get_task_model(&Provider::Azure, "fast_completion").to_string(),
-                TaskCategory::Complex => super::models_config::get_task_model(&Provider::Azure, "complex_reasoning").to_string(),
-                TaskCategory::Creative => super::models_config::get_task_model(&Provider::Azure, "chat").to_string(),
+                TaskCategory::Simple => {
+                    super::models_config::get_task_model(&Provider::Azure, "fast_completion")
+                        .to_string()
+                }
+                TaskCategory::Complex => {
+                    super::models_config::get_task_model(&Provider::Azure, "complex_reasoning")
+                        .to_string()
+                }
+                TaskCategory::Creative => {
+                    super::models_config::get_task_model(&Provider::Azure, "chat").to_string()
+                }
             },
             Provider::Bedrock => {
                 super::models_config::get_task_model(&provider, task_category_to_routing_key(task))

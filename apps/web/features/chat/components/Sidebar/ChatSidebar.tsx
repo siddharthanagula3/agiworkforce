@@ -420,7 +420,7 @@ function CollapsedSidebar({
       </button>
 
       <button
-        onClick={() => router.push('/chats')}
+        onClick={() => router.push('/chat')}
         className={RAIL_BTN}
         title="Chats"
         aria-label="Chats"
@@ -715,7 +715,7 @@ function ChatSidebarContent({
           New chat
         </button>
         <button
-          onClick={() => router.push('/chats')}
+          onClick={() => router.push('/chat')}
           className="flex w-full items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-white/[0.05] hover:text-[var(--chat-text-primary)] transition-colors"
           aria-label="Chats"
         >

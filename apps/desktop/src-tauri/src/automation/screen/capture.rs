@@ -8,9 +8,9 @@ use xcap::Monitor;
 #[cfg(not(windows))]
 use xcap::Window;
 
-use super::dxgi::ScreenInfo;
 #[cfg(windows)]
 use super::dxgi::list_displays;
+use super::dxgi::ScreenInfo;
 use super::xcap_lock::lock_xcap;
 
 #[cfg(windows)]

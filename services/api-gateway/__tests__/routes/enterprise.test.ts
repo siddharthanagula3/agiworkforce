@@ -27,7 +27,7 @@ const { state } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('../../src/lib/supabaseClients', () => {
+vi.mock('../../src/lib/neonClients', () => {
   function createQuery(table: string) {
     const query = {
       select: vi.fn(() => query),
@@ -89,8 +89,6 @@ vi.mock('../../src/lib/supabaseClients', () => {
     getServiceClient: vi.fn(() => serviceClient),
     getUserClient: vi.fn(() => userClient),
     getUserScopedClient: vi.fn(() => userClient),
-    mintSupabaseJwt: vi.fn(() => 'mock-supabase-jwt'),
-    _resetSupabaseJwtCacheForTests: vi.fn(),
   };
 });
 

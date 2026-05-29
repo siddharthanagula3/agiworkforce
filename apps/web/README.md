@@ -14,7 +14,7 @@ Criticality: high
 
 - End users in the hosted web product.
 - Desktop web-build embedding through `apps/web/public/chat`.
-- Backend/data owners for Supabase, billing, and API route behavior.
+- Backend/data owners for Neon, Clerk, billing, and API route behavior.
 
 ## Public API / Exports
 
@@ -54,11 +54,11 @@ Runtime API boundaries live under `app/api`, `api`, `lib`, and shared packages. 
 
 ## Environment / Secrets
 
-Use `apps/web/.env.example` as the local template. Never commit `.env.local`, production secrets, Supabase service-role keys, Stripe live keys, provider API keys, or webhook secrets.
+Use `apps/web/.env.example` as the local template. Never commit `.env.local`, production secrets, Clerk secret keys, Neon database URLs, Stripe live keys, provider API keys, or webhook secrets.
 
 ## Security, Privacy, Data Boundaries
 
-Security/privacy review is required for auth, cookies, CSRF, CSP, iframe/artifact rendering, file uploads, generated files, provider routing, service-role Supabase use, billing, rate limits, and any Local/BYOK/Managed privacy-mode flow.
+Security/privacy review is required for auth, cookies, CSRF, CSP, iframe/artifact rendering, file uploads, generated files, provider routing, Neon database access, billing, rate limits, and any Local/BYOK/Managed privacy-mode flow.
 
 Local and BYOK payloads must not route through managed gateways unless the UI explicitly labels Managed mode and the user consents.
 
@@ -71,7 +71,7 @@ Local and BYOK payloads must not route through managed gateways unless the UI ex
 
 ## Release / Deployment Notes
 
-Web deploys through Next.js/Vercel-style hosting. Production releases must verify environment variables, Supabase migrations, Stripe webhook config, and sandbox origin config.
+Web deploys through Next.js/Vercel-style hosting. Production releases must verify environment variables, Neon migrations, Stripe webhook config, and sandbox origin config.
 
 ## Known Caveats
 
@@ -81,4 +81,4 @@ Web deploys through Next.js/Vercel-style hosting. Production releases must verif
 ## CODEOWNERS
 
 Primary: Web lead.
-Secondary: Backend/data for API routes, Supabase, and billing. Security/privacy for auth, CSP, files, provider routing, and service-role behavior.
+Secondary: Backend/data for API routes, Neon, Clerk, and billing. Security/privacy for auth, CSP, files, provider routing, and service-role behavior.

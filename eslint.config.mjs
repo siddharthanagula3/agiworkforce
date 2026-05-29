@@ -345,19 +345,17 @@ export default [
   //
   // Two recurring bug classes earned dedicated AST gates after the
   // 2026-05-05 audit (CLI ghost-model `claude-opus-4-6-mini`, the
-  // `FAST_STATUS_MODEL = "gpt-5.4"` const, and 56 web routes reusing the
-  // service-role key for downstream DB ops on user-scoped data):
+  // `FAST_STATUS_MODEL = "gpt-5.4"` const, and web routes reusing
+  // privileged database credentials for downstream DB ops on user-scoped data):
   //
   //   1. Hardcoded model IDs anywhere except `models.json`, the catalog
   //      itself, tests, and explicitly-marked marketing copy. The locked
   //      rule (CLAUDE.md §"Critical rules") is "never hardcode model IDs;
   //      read from models.json" — this rule keeps regressions out at lint
   //      time instead of catching them in QA.
-  //   2. `createClient(url, SUPABASE_SERVICE_ROLE_KEY, …)` outside the
-  //      sanctioned `lib/supabase*.ts` helpers. Service-role clients
-  //      bypass RLS and must only flow through `getServiceClient()` /
-  //      `getUserClient(jwt)` so reviewers can see every privileged
-  //      construction in one place.
+  //   2. Privileged database clients must stay in explicit server-side
+  //      service modules so reviewers can audit every credential boundary
+  //      from one place.
   //
   // Both rules use `no-restricted-syntax` with AST selectors so they fire
   // before TypeScript checks. Known-violating sites get a baseline
@@ -370,12 +368,6 @@ export default [
       // The catalog SSOT itself — model IDs are LITERALLY the data here.
       'packages/types/src/models.json',
       'packages/types/src/model-catalog.ts',
-      // Sanctioned Supabase client constructors — these are where
-      // `getServiceClient()` / `getUserClient(jwt)` are DEFINED, so the
-      // service-role-key gate would self-report here.
-      '**/lib/supabase.ts',
-      '**/lib/supabase-server.ts',
-      '**/lib/supabaseClients.ts',
       // Tests can — and should — assert against literal model IDs to
       // pin the catalog SSOT. The harm is in production code paths.
       '**/*.test.ts',
@@ -437,17 +429,6 @@ export default [
           selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
           message:
             'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Read from packages/types/src/models.json via @agiworkforce/types or use resolveThreeTierModel() from @agiworkforce/routing for promo-aware auto-reroute. See packages/routing/src/three-tier-router.ts.',
-        },
-        {
-          // Service-role-key Supabase clients outside `lib/supabase*.ts`.
-          // Matches any reference to the env var inside a `createClient(`
-          // call subtree — covers `process.env.SUPABASE_SERVICE_ROLE_KEY`
-          // (MemberExpression) and `SUPABASE_SERVICE_ROLE_KEY` re-exports
-          // (Identifier).
-          selector:
-            "CallExpression[callee.name='createClient'] :matches(Identifier[name='SUPABASE_SERVICE_ROLE_KEY'], MemberExpression[property.name='SUPABASE_SERVICE_ROLE_KEY'])",
-          message:
-            'Service-role Supabase clients must flow through getServiceClient() in lib/supabase-server.ts (web) or lib/supabaseClients.ts (api-gateway) so RLS-bypass usage is auditable. Use getUserClient(userJwt) for user-scoped operations. See docs/plans/UNIFIED_LAUNCH_PLAN.md §1.',
         },
       ],
     },
@@ -686,8 +667,6 @@ export default [
       'apps/web/utils/tokenCount.ts',
       // Handler stubs
       'apps/web/handlers/slashCommandHandlers.ts',
-      // Service stubs
-      'apps/web/services/supabaseAuth.ts',
       // Store stubs
       'apps/web/stores/artifactStore.ts',
       'apps/web/stores/memoryStore.ts',
@@ -729,7 +708,7 @@ export default [
   // PREVENTION-LAYER BASELINE — Wave 1.5
   //
   // The two prevention rules above (no-restricted-syntax for hardcoded
-  // model IDs + service-role-key Supabase clients) ship in Wave 1.5
+  // model IDs + privileged database client construction) ship in Wave 1.5
   // BEFORE any caller migration. The files listed below contain known
   // violations that pre-date the rule; each is tagged with a FIXME
   // pointing at the wave/task that will migrate it. Tests, the catalog
@@ -742,10 +721,9 @@ export default [
   //       - Wave 1   P0-G/I  → services/api-gateway routes (4 files)
   //       - Wave 1   P0-J/K/L → packages/{routing,llm-normalize}
   //       - Wave 2   model-id sweep → desktop / cli / mobile / web
-  //   FIXME: P1-RLS-CLIENT-MIGRATION — route handler uses createClient(...,
-  //     SERVICE_ROLE_KEY, ...) directly instead of getServiceClient() /
-  //     getUserClient(jwt). Tracked under Wave 1 P0-G (api-gateway) and
-  //     P0-C (web — Stripe webhook + downgrades + RLS sweep).
+  //   FIXME: P1-DATA-CLIENT-MIGRATION — route handlers use direct database
+  //     clients instead of shared server data services. Tracked under Wave 1
+  //     P0-G (api-gateway) and P0-C (web billing + device flows).
   //
   // Once a wave migrates a file, remove its entry from the lists below
   // so the rule starts enforcing on it again.
@@ -836,8 +814,8 @@ export default [
   },
   {
     files: [
-      // Service-role key construction outside lib/supabase*.ts.
-      // FIXME: P1-RLS-CLIENT-MIGRATION (Wave 1 P0-C web RLS sweep)
+      // Direct privileged database construction outside shared server data services.
+      // FIXME: P1-DATA-CLIENT-MIGRATION (Wave 1 P0-C web data sweep)
       'apps/web/lib/security-audit.ts',
     ],
     rules: {

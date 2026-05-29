@@ -627,8 +627,7 @@ impl AgentOrchestrator {
                                 // Strip any literal occurrences of the
                                 // nonce from the extracted text so the
                                 // boundary stays cryptographically distinct.
-                                let safe_text =
-                                    truncated_text.replace(&attachment_nonce, "");
+                                let safe_text = truncated_text.replace(&attachment_nonce, "");
                                 enriched_instruction.push_str(&format!(
                                     "\n\n<attachment name=\"{}\" nonce=\"{}\">\n{}\n</attachment nonce=\"{}\">\n",
                                     attachment.name, attachment_nonce, safe_text, attachment_nonce

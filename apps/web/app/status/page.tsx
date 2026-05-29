@@ -33,7 +33,7 @@ const STATUS_COPY: Record<(typeof COMPONENTS)[number]['status'], { label: string
   {
     ok: { label: 'Operational', color: 'var(--agi-ink)' },
     degraded: { label: 'Degraded', color: 'var(--agi-amber)' },
-    down: { label: 'Down', color: '#ff6b6b' },
+    down: { label: 'Down', color: 'var(--agi-error)' },
     maintenance: { label: 'Maintenance', color: 'var(--agi-amber)' },
   };
 

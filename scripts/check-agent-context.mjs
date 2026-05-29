@@ -336,7 +336,7 @@ if (commands) {
     'laneOwnership',
     'generatedArtifacts',
     'reportRetention',
-    'supabaseMigrations',
+    'neonMigrations',
     'ciGuardrails',
     'codeowners',
     'readmeOwnership',

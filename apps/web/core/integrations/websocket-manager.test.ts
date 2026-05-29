@@ -1,7 +1,7 @@
 /**
  * WebSocket Manager Tests
  *
- * The WebSocketManager is currently a no-op stub (Supabase Realtime removed).
+ * The WebSocketManager is currently a no-op stub (Realtime removed).
  * These tests verify the stub contract so callers don't break.
  */
 
@@ -203,7 +203,7 @@ describe('WebSocket Manager', () => {
   describe('native WebSocket mode', () => {
     it('should create manager with native WebSocket config', () => {
       const nativeManager = new WebSocketManager({
-        useSupabaseRealtime: false,
+        useNeonRealtime: false,
         url: 'wss://test.example.com',
       });
 

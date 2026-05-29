@@ -40,7 +40,7 @@ fn parse_json_response<T: DeserializeOwned>(response: &ApiResponse) -> Result<T,
         return Err(format!(
             "Server returned HTML instead of JSON (status {}). \
              This usually means the API server crashed or is misconfigured. \
-             Check that your VITE_AGI_API_URL matches your Supabase project.",
+             Check that your API base URL points at the expected AGI backend.",
             response.status
         ));
     }
@@ -264,7 +264,7 @@ pub async fn device_link_poll(
     }
 
     // Note: We no longer store tokens here. The frontend receives the response
-    // and should update the Supabase session, which triggers auth_store_session.
+    // and should update the app auth session.
     parse_json_response(&response)
 }
 
@@ -295,7 +295,7 @@ pub async fn fetch_user_profile(
     if !response.success {
         // Provide more context for common error codes
         let hint = match response.status {
-            401 => " (Token may be expired or from a different Supabase project)",
+            401 => " (Token may be expired or from a different auth environment)",
             500 => " (Server crashed - check API logs)",
             502 | 503 => " (API server is down or restarting)",
             _ => "",
@@ -352,33 +352,6 @@ use std::sync::RwLock;
 static ACCESS_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static REFRESH_TOKEN: RwLock<Option<String>> = RwLock::new(None);
 static API_BASE_URL_OVERRIDE: RwLock<Option<String>> = RwLock::new(None);
-static SUPABASE_URL: RwLock<Option<String>> = RwLock::new(None);
-static SUPABASE_ANON_KEY: RwLock<Option<String>> = RwLock::new(None);
-
-/// Seed Supabase credentials from environment variables (dev only — called once at process start).
-/// In production the frontend calls `set_supabase_credentials` which overwrites these.
-pub fn init_supabase_from_env() {
-    let url = std::env::var("SUPABASE_URL")
-        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_URL"))
-        .or_else(|_| std::env::var("VITE_SUPABASE_URL"))
-        .unwrap_or_default();
-    let anon_key = std::env::var("SUPABASE_ANON_KEY")
-        .or_else(|_| std::env::var("NEXT_PUBLIC_SUPABASE_ANON_KEY"))
-        .or_else(|_| std::env::var("VITE_SUPABASE_ANON_KEY"))
-        .unwrap_or_default();
-    if !url.is_empty() {
-        *SUPABASE_URL.write().unwrap_or_else(|p| p.into_inner()) = Some(url);
-        *SUPABASE_ANON_KEY.write().unwrap_or_else(|p| p.into_inner()) = Some(anon_key);
-    }
-}
-
-pub fn get_supabase_url() -> Option<String> {
-    SUPABASE_URL.read().unwrap_or_else(|p| p.into_inner()).clone()
-}
-
-pub fn get_supabase_anon_key() -> Option<String> {
-    SUPABASE_ANON_KEY.read().unwrap_or_else(|p| p.into_inner()).clone()
-}
 
 /// Get the API base URL for desktop -> backend calls.
 ///
@@ -526,7 +499,7 @@ fn validate_token_format(token: &str, label: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Store access token from frontend (called when Supabase auth state changes)
+/// Store access token from frontend (called when the app auth state changes).
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
@@ -539,8 +512,8 @@ pub fn account_store_access_token(accessToken: String) -> Result<(), String> {
 }
 
 /// Validate that a refresh token is non-empty and within size bounds.
-/// Supabase refresh tokens are opaque strings (not JWTs), so we only
-/// check for non-empty and reasonable length.
+/// Refresh tokens are opaque strings, so we only check for non-empty and
+/// reasonable length.
 fn validate_refresh_token_format(token: &str) -> Result<(), String> {
     if token.is_empty() {
         return Err("Refresh token cannot be empty".to_string());
@@ -554,7 +527,7 @@ fn validate_refresh_token_format(token: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Store refresh token from frontend (called when Supabase auth state changes)
+/// Store refresh token from frontend (called when the app auth state changes).
 #[tauri::command]
 #[allow(non_snake_case)]
 pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
@@ -563,22 +536,6 @@ pub fn account_store_refresh_token(refreshToken: String) -> Result<(), String> {
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
     *token = Some(refreshToken);
-    Ok(())
-}
-
-/// Store Supabase credentials forwarded from the frontend at startup.
-///
-/// Vite bakes `VITE_SUPABASE_*` into the JS bundle but those vars are never in
-/// the Rust process environment in a bundled app. The frontend calls this once
-/// on startup so all Rust code can reach Supabase without reading env vars.
-#[tauri::command]
-#[allow(non_snake_case)]
-pub fn set_supabase_credentials(url: String, anonKey: String) -> Result<(), String> {
-    if url.is_empty() {
-        return Err("Supabase URL cannot be empty".to_string());
-    }
-    *SUPABASE_URL.write().unwrap_or_else(|p| p.into_inner()) = Some(url);
-    *SUPABASE_ANON_KEY.write().unwrap_or_else(|p| p.into_inner()) = Some(anonKey);
     Ok(())
 }
 
@@ -693,7 +650,7 @@ pub async fn fetch_credit_balance(
     if !response.success {
         // Provide more context for common error codes
         let hint = match response.status {
-            401 => " (Token may be expired or from a different Supabase project)",
+            401 => " (Token may be expired or from a different auth environment)",
             500 => " (Server crashed - check API logs)",
             502 | 503 => " (API server is down or restarting)",
             _ => "",
@@ -794,7 +751,7 @@ pub async fn report_llm_usage(
     if !response.success {
         // Provide more context for common error codes
         let hint = match response.status {
-            401 => " (Token may be expired or from a different Supabase project)",
+            401 => " (Token may be expired or from a different auth environment)",
             500 => " (Server crashed - check API logs)",
             502 | 503 => " (API server is down or restarting)",
             _ => "",
@@ -869,8 +826,7 @@ pub async fn account_list_devices() -> Result<Vec<ConnectedDevice>, String> {
 /// UI even though the device session was still live. Now we surface an
 /// explicit `not_implemented` error so the UI can render "Pending — full
 /// revocation lands with the device-management API". Once the backend
-/// exposes `/api/devices/:id/revoke` and the Supabase admin endpoint
-/// for refresh-token revocation is wired up, this will forward both calls.
+/// exposes `/api/devices/:id/revoke`, this will forward the call.
 #[tauri::command]
 pub async fn account_disconnect_device(device_id: String) -> Result<(), String> {
     // Validate device_id looks like a hex SHA-256 digest (64 hex chars).
@@ -891,5 +847,5 @@ pub async fn account_disconnect_device(device_id: String) -> Result<(), String> 
         return Err("Cannot disconnect the current device. Sign out instead.".to_string());
     }
 
-    Err("[ERR_NOT_IMPLEMENTED] Remote device revocation requires the device-management API + the Supabase refresh-token revocation endpoint. Both are pending — revoke from the Supabase dashboard for now.".to_string())
+    Err("[ERR_NOT_IMPLEMENTED] Remote device revocation requires the device-management API. It is pending; sign out on the target device for now.".to_string())
 }

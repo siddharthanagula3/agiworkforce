@@ -11,10 +11,10 @@ Actions/routes orchestrate domain rules. Service functions own reusable mechanic
 
 This is a two-layer rule:
 
-| Layer         | Owns                                                                                                                                         | Examples                                                                                                                   |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Orchestration | Product meaning, auth, ownership checks, policy, state transitions, user-facing error classification, retry choice                           | API routes, server actions, command handlers, UI workflow submit handlers                                                  |
-| Service layer | Provider calls, SDK interactions, sandbox setup, command execution details, readiness checks, file generation mechanics, transport mechanics | Supabase helpers, provider adapters, managed compute helpers, document generation helpers, browser/computer action runners |
+| Layer         | Owns                                                                                                                                         | Examples                                                                                                               |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Orchestration | Product meaning, auth, ownership checks, policy, state transitions, user-facing error classification, retry choice                           | API routes, server actions, command handlers, UI workflow submit handlers                                              |
+| Service layer | Provider calls, SDK interactions, sandbox setup, command execution details, readiness checks, file generation mechanics, transport mechanics | Neon helpers, provider adapters, managed compute helpers, document generation helpers, browser/computer action runners |
 
 Rule of thumb:
 
@@ -93,7 +93,7 @@ Keep these decisions in orchestration:
 Move these mechanics behind services when reused:
 
 - Provider request construction and streaming normalization.
-- Supabase client creation and typed table access.
+- Neon client creation and typed table access.
 - Managed compute health checks, reservation plumbing, and settlement plumbing.
 - Browser/computer action dispatch and screenshot capture.
 - Generated-file manifest creation, checksum, TTL, preview derivative, and cleanup.

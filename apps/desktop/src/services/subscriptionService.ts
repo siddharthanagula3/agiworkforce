@@ -1,11 +1,11 @@
 import {
-  getSupabase,
   type PricingPlan,
   type Subscription,
   type PlanTier,
   asPlanTier,
-} from '../lib/supabase';
-import { supabaseAuth } from './supabaseAuth';
+} from '../lib/cloudAccountTypes';
+import { cloudAccountAuth } from './cloudAccountAuth';
+import { WEB_APP_URL } from '../api/config';
 
 export interface PlanFeatures {
   automationsPerDay: number | 'unlimited';
@@ -138,8 +138,6 @@ export interface SubscriptionState {
 class SubscriptionService {
   private static instance: SubscriptionService;
   private listeners: Set<(state: SubscriptionState) => void> = new Set();
-  private realtimeChannel: ReturnType<ReturnType<typeof getSupabase>['channel']> | null = null;
-  private realtimeSubscribedUserId: string | null = null;
   private state: SubscriptionState = {
     isLoading: false,
     error: null,
@@ -148,18 +146,13 @@ class SubscriptionService {
   };
 
   private constructor() {
-    supabaseAuth.onAuthStateChange((authState) => {
-      if (authState.subscription) {
-        this.updateState({ subscription: authState.subscription });
-        this.refreshCurrentPlan();
-        this.subscribeToRealtimeForUser(authState.subscription.user_id);
-      } else if (!authState.user) {
-        this.updateState({
-          subscription: null,
-          currentPlan: null,
-        });
-        this.unsubscribeRealtime();
-      }
+    cloudAccountAuth.onAuthStateChange((authState) => {
+      this.updateState({
+        subscription: authState.subscription,
+        currentPlan: authState.subscription
+          ? this.planFromSubscription(authState.subscription)
+          : null,
+      });
     });
   }
 
@@ -170,139 +163,38 @@ class SubscriptionService {
     return SubscriptionService.instance;
   }
 
-  private subscribeToRealtimeForUser(userId: string) {
-    // Avoid noisy unsubscribe/subscribe loops when auth state updates for the same user.
-    if (this.realtimeChannel && this.realtimeSubscribedUserId === userId) {
-      return;
-    }
-
-    // Clean up any existing channel first
-    this.unsubscribeRealtime();
-    this.realtimeSubscribedUserId = userId;
-
-    const supabase = getSupabase();
-    console.debug('[Subscription] Subscribing to realtime updates for user:', userId);
-
-    // Set a timeout to handle connection failures gracefully
-    const connectionTimeout = setTimeout(() => {
-      console.warn(
-        '[Subscription] Realtime connection timeout - will retry on next auth state change',
-      );
-    }, 30000); // 30 second timeout
-
-    this.realtimeChannel = supabase
-      .channel(`subscription-updates-${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'subscriptions',
-          filter: `user_id=eq.${userId}`,
-        },
-        async (payload) => {
-          console.debug('[Subscription] Realtime update received:', payload);
-          // When we get an update, fetch the latest fresh data to be safe
-          // and triggers logic that relies on `getSubscription()`
-          try {
-            await this.getSubscription();
-            await this.refreshCurrentPlan();
-          } catch (error) {
-            console.error('[Subscription] Error handling realtime update:', error);
-          }
-        },
-      )
-      .subscribe((status, err) => {
-        clearTimeout(connectionTimeout);
-        if (status === 'SUBSCRIBED') {
-          console.debug('[Subscription] Realtime subscription established');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('[Subscription] Realtime channel error:', err);
-          // Don't retry immediately - will be retried on next auth state change
-        } else if (status === 'TIMED_OUT') {
-          console.warn('[Subscription] Realtime subscription timed out');
-        } else if (status === 'CLOSED') {
-          console.debug('[Subscription] Realtime channel closed');
-        }
-      });
-  }
-
-  private unsubscribeRealtime() {
-    if (this.realtimeChannel) {
-      console.debug('[Subscription] Unsubscribing from realtime updates');
-      getSupabase().removeChannel(this.realtimeChannel);
-      this.realtimeChannel = null;
-    }
-    this.realtimeSubscribedUserId = null;
-  }
-
-  private async refreshCurrentPlan(): Promise<void> {
-    const subscription = this.state.subscription;
-    if (!subscription) return;
-
-    const supabase = getSupabase();
-
-    try {
-      // First try to match by stripe_price_id for exact plan match (handles monthly vs annual)
-      if (subscription.stripe_price_id) {
-        const { data, error } = await supabase
-          .from('pricing_plans')
-          .select('*')
-          .eq('stripe_price_id', subscription.stripe_price_id)
-          .eq('is_active', true)
-          .single();
-
-        if (!error && data) {
-          this.updateState({ currentPlan: data });
-          return;
-        }
-      }
-
-      // Fallback: match by tier, preferring monthly interval
-      const { data, error } = await supabase
-        .from('pricing_plans')
-        .select('*')
-        .eq('tier', subscription.plan_tier)
-        .eq('is_active', true)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .single();
-
-      if (error) throw error;
-
-      this.updateState({ currentPlan: data });
-    } catch (error) {
-      console.error('[Subscription] Error fetching current plan:', error);
-    }
+  private planFromSubscription(subscription: Subscription): PricingPlan {
+    const tier = asPlanTier(subscription.plan_tier);
+    const now = new Date().toISOString();
+    return {
+      id: `plan-${tier}`,
+      tier,
+      name: tier.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+      price_cents: 0,
+      currency: 'usd',
+      interval: 'month',
+      stripe_product_id: null,
+      stripe_price_id: subscription.stripe_price_id,
+      features: PLAN_FEATURES[tier],
+      is_active: true,
+      created_at: now,
+      updated_at: now,
+    };
   }
 
   async getSubscription(): Promise<Subscription | null> {
-    const userId = supabaseAuth.getUser()?.id;
-    if (!userId) return null;
-
-    const supabase = getSupabase();
-
-    try {
-      const { data, error } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) throw error;
-
-      this.updateState({ subscription: data });
-      return data;
-    } catch (error) {
-      console.error('[Subscription] Error fetching subscription:', error);
-      return null;
-    }
+    await cloudAccountAuth.refreshUserData();
+    const subscription = cloudAccountAuth.getState().subscription;
+    this.updateState({
+      subscription,
+      currentPlan: subscription ? this.planFromSubscription(subscription) : null,
+    });
+    return subscription;
   }
 
   hasFeatureAccess(feature: keyof PlanFeatures): boolean {
     const tier = asPlanTier(this.state.subscription?.plan_tier);
-    const features = PLAN_FEATURES[tier];
-    return !!features[feature];
+    return !!PLAN_FEATURES[tier][feature];
   }
 
   getState(): SubscriptionState {
@@ -312,7 +204,6 @@ class SubscriptionService {
   onStateChange(listener: (state: SubscriptionState) => void): () => void {
     this.listeners.add(listener);
     listener(this.getState());
-
     return () => {
       this.listeners.delete(listener);
     };
@@ -339,21 +230,47 @@ class SubscriptionService {
     quantity: number = 1,
     metadata: Record<string, unknown> = {},
   ): Promise<void> {
-    const userId = supabaseAuth.getUser()?.id;
-    if (!userId) return;
-
-    const supabase = getSupabase();
+    const session = cloudAccountAuth.getSession();
+    if (!session?.access_token) return;
 
     try {
-      await supabase.from('usage_events').insert({
-        user_id: userId,
-        event_type: eventType,
-        quantity,
-        metadata: metadata as Record<string, never>,
+      const headers = await this.csrfHeaders();
+      const amountCents =
+        typeof metadata['amount_cents'] === 'number' ? (metadata['amount_cents'] as number) : 0;
+      await fetch(`${WEB_APP_URL}/api/usage/deduct`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...headers,
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          amount_cents: amountCents,
+          description: eventType,
+          metadata: { ...metadata, quantity },
+        }),
       });
     } catch (error) {
-      console.error('[Subscription] Error tracking usage:', error);
+      console.warn('[Subscription] Usage tracking skipped:', error);
     }
+  }
+
+  private async csrfHeaders(): Promise<Record<string, string>> {
+    const response = await fetch(`${WEB_APP_URL}/api/csrf`, {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+    }
+    const data = (await response.json()) as { token?: string; csrfToken?: string };
+    const token = data.token ?? data.csrfToken;
+    if (!token) throw new Error('Missing CSRF token');
+    return {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': token,
+      'X-Requested-With': 'agiworkforce-desktop',
+    };
   }
 }
 

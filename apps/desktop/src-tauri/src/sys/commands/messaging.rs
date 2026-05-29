@@ -32,7 +32,8 @@ fn encrypt_messaging_credentials(
     if !helper.is_configured() {
         return Err(
             "Set up a master password before connecting messaging platforms — \
-             credentials must be encrypted at rest.".to_string(),
+             credentials must be encrypted at rest."
+                .to_string(),
         );
     }
     helper
@@ -50,10 +51,7 @@ fn encrypt_messaging_credentials(
 /// `serde_json::from_str` in the caller can parse it. New rows written by
 /// `encrypt_messaging_credentials` after master-password setup will go
 /// through the master-key branch.
-fn decrypt_messaging_credentials(
-    helper: &MasterPasswordEncryption,
-    stored: &str,
-) -> String {
+fn decrypt_messaging_credentials(helper: &MasterPasswordEncryption, stored: &str) -> String {
     if helper.is_configured() && helper.is_unlocked() {
         if let Ok(plaintext) = helper.decrypt(KeyPurpose::Messaging, stored) {
             return plaintext;

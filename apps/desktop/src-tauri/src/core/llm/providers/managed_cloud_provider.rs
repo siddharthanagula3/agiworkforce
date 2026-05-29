@@ -30,7 +30,7 @@ fn managed_cloud_llm_url() -> String {
 
 fn auth_failed_message() -> &'static str {
     if cfg!(debug_assertions) {
-        "Authentication failed (401). In local dev, ensure AGI_API_URL points to the same environment as your Supabase project, then sign in again."
+        "Authentication failed (401). In local dev, ensure AGI_API_URL points to the expected AGI backend environment, then sign in again."
     } else {
         "Authentication failed. Please sign in again."
     }

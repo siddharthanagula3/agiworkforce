@@ -128,7 +128,7 @@ export async function sendAIMessageViaProviderStream(
 ): Promise<string> {
   const authToken = await tryGetAuthToken();
   if (!authToken) {
-    throw new Error('Not signed in (provider stream path requires Supabase session)');
+    throw new Error('Not signed in (provider stream path requires Clerk session)');
   }
 
   let text = '';

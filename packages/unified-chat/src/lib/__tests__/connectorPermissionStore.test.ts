@@ -1,13 +1,13 @@
 /**
- * Tests for SupabaseStore.set() — Cloud-mode connector permission upsert.
+ * Tests for CloudStore.set() — Cloud-mode connector permission upsert.
  *
  * The shipping bug (P0-L from cross-surface audit): the upsert payload was
  * missing `user_id`, but the underlying table's UNIQUE constraint is
  * (user_id, connector_id, tool_name). Without user_id in the payload, the
  * second call did not find the existing row by the conflict target and
- * silently inserted a duplicate (or, for callers running through the
- * service-role key, leaked rows under a NULL user). RLS independently
- * required user_id to match auth.uid().
+ * silently inserted a duplicate (or, for elevated sessions, leaked rows under a
+ * NULL user). Access controls independently required user_id to match the
+ * authenticated principal.
  *
  * Fix: resolve the current user's id via `client.auth.getUser()` inside
  * `set()` and include it in the upsert payload.
@@ -42,7 +42,7 @@ beforeEach(() => {
   state.authUserId = 'user-001';
   state.getUserCalls = 0;
 
-  // Install a stub on globalThis.__agi_supabase__ that the SupabaseStore
+  // Install a stub on globalThis.__agi_cloud_db__ that the CloudStore
   // looks up at runtime. The real client is structurally typed and we
   // only need from(), upsert(), and auth.getUser() to drive the test.
   function rowKey(values: Record<string, unknown>): string {
@@ -81,7 +81,7 @@ beforeEach(() => {
   });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).__agi_supabase__ = {
+  (globalThis as any).__agi_cloud_db__ = {
     from,
     auth: { getUser },
   };
@@ -89,11 +89,11 @@ beforeEach(() => {
 
 afterEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delete (globalThis as any).__agi_supabase__;
+  delete (globalThis as any).__agi_cloud_db__;
   vi.clearAllMocks();
 });
 
-describe('SupabaseStore.set — P0-L user_id in upsert payload', () => {
+describe('CloudStore.set — P0-L user_id in upsert payload', () => {
   it('first set() inserts a new row with user_id resolved from auth.getUser()', async () => {
     const store = getConnectorPermissionStore();
     await store.set('github', 'create_issue', 'needs-approval' as ConnectorPermissionLevel, true);

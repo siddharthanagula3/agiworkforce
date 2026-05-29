@@ -19,9 +19,8 @@ import { test, expect, type Page } from '@playwright/test';
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Inject mock Supabase auth so the app skips the login screen. */
+/** Inject mock cloud auth so the app skips the login screen. */
 async function injectMockAuth(page: Page): Promise<void> {
-  const nowSeconds = Math.floor(Date.now() / 1000);
   const mockUser = {
     id: 'e2e-windows-user',
     email: 'windows-e2e@test.local',
@@ -31,20 +30,8 @@ async function injectMockAuth(page: Page): Promise<void> {
     user_metadata: { full_name: 'Windows E2E' },
     created_at: new Date().toISOString(),
   };
-  const mockSession = {
-    access_token: 'mock-windows-access-token',
-    refresh_token: 'mock-windows-refresh-token',
-    expires_in: 3600,
-    expires_at: nowSeconds + 3600,
-    token_type: 'bearer',
-    user: mockUser,
-  };
-
   await page.addInitScript(
-    ({ session, user }) => {
-      // Supabase session key used by the app
-      localStorage.setItem('supabase.auth.token', JSON.stringify(session));
-
+    ({ user }) => {
       // Unified auth store (Zustand persist key)
       localStorage.setItem(
         'unified-auth-storage',
@@ -68,13 +55,13 @@ async function injectMockAuth(page: Page): Promise<void> {
         }),
       );
     },
-    { session: mockSession, user: mockUser },
+    { user: mockUser },
   );
 }
 
-/** Mock Supabase auth HTTP endpoints so network requests don't fail. */
-async function mockSupabaseEndpoints(page: Page): Promise<void> {
-  await page.route('**/auth/v1/**', (route) => {
+/** Mock cloud auth HTTP endpoints so network requests don't fail. */
+async function mockCloudAuthEndpoints(page: Page): Promise<void> {
+  await page.route('**/api/me', (route) => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -86,7 +73,7 @@ async function mockSupabaseEndpoints(page: Page): Promise<void> {
 /** Standard before-each: inject auth, mock network, navigate to app root. */
 async function setupPage(page: Page): Promise<void> {
   await injectMockAuth(page);
-  await mockSupabaseEndpoints(page);
+  await mockCloudAuthEndpoints(page);
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await page.locator('#root').waitFor({ state: 'attached', timeout: 15000 });
   await page.waitForLoadState('networkidle', { timeout: 30000 });
