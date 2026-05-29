@@ -187,3 +187,76 @@ Read-only repo findings:
   GOAL: finish the deferred sweep → widen guardrails → model curation (opus-4.8/sonnet-4.6/haiku-4.5 only;
   gpt-image-2 only; drop sora-2 + old Opus/Sonnet/DALL-E) becomes a single-file edit. Deep-research wmktr8307
   running to confirm models.dev/LiteLLM best practice + polyglot single-source patterns.
+
+---
+
+## 2026-05-29 — EXECUTION RESUMED on merged tree (`hardening/execution-2026-05-28`)
+
+The Supabase→Neon→Clerk migration has LANDED (commit `d56bb265f`) and the model-catalog curation
+landed (`6bb5b0417`). The two-agent coordination constraints above are now resolved: I work the full
+mission on the single merged branch. Resuming the batch loop with two-reviewer discipline per file.
+
+### Batch 0 — Green baseline (serial) ✅
+
+**Instrument provenance:** the original `audit.sh` (the brief's feedback loop) was **deleted by a
+coding agent** and is not recoverable from git (it was untracked) or disk. I **reconstructed** it from
+the signal set documented in this log's baseline table. It is a NEW INSTRUMENT: absolute counts differ
+from the prior documented baseline (different rg patterns/exclusions). **Deltas are tracked only within
+this instrument** — never compared to the old 6559/197/21/17/156/4/158/3/4747 numbers. The script is
+frozen and committed (`audit.sh`); re-run after every batch.
+
+**Reconstructed baseline (`audit-report.md` @ `6bb5b0417`, this instrument):**
+
+| Signal                                      | This instrument |
+| ------------------------------------------- | --------------: |
+| Slop markers (non-test)                     |            2784 |
+| Mock/random/hardcoded-data files (non-test) |             155 |
+| Rust todo!/unimplemented!                   |               0 |
+| `as any`                                    |              59 |
+| @ts-ignore/@ts-expect-error                 |              22 |
+| Skipped/.only/.todo tests                   |             232 |
+| Duplicate-version files                     |               3 |
+| Rust panic!()                               |             220 |
+| Rust unreachable!()                         |               3 |
+| Rust .unwrap()/.expect()                    |            5798 |
+
+**Compile/test green map (verified, not asserted):**
+
+- `cargo check --workspace` (desktop + cli + 16 crates): **exit 0** (1m37s).
+- `cargo check -p agiworkforce-desktop --tests` (lib + all 4141 test fns): **exit 0** (1m42s) — confirms
+  the desktop test target compiles.
+- `pnpm -r --if-present typecheck` (32 TS packages incl. apps/web, apps/desktop): **exit 0**, 32 "Done",
+  0 failures.
+- `cargo test -p agiworkforce-desktop --lib draft_manager`: **2 passed, 0 failed** (runtime, not just compile).
+
+NOT yet run (heavier; tracked, not claimed): full production bundles (`pnpm build:all`, Next.js web build),
+the full vitest/jest/cargo-test execution across all suites, and clippy. Compile-green + typecheck-green
+established as the Batch-0 gate; full suite/bundle execution noted as a CI responsibility and will be run
+where a batch touches the relevant code.
+
+**Fix (CI-red test blocker — legitimate Batch-0 "fix CI first"):**
+`apps/desktop/src-tauri/src/data/state/draft_manager.rs` test module imported
+`crate::data::database::init_database`, a symbol the migration removed — this broke **all** desktop test
+compilation. Replaced with a local `mem_db()` helper (`Arc::new(Mutex::new(Connection::open_in_memory()))`);
+`DraftManager::new` self-creates its table so an empty in-memory connection suffices. Verified the only
+casualty repo-wide (other `data::database::` imports reference still-existing symbols). Verification:
+`cargo check --tests` exit 0 + the two draft tests pass.
+
+**Batch-2 target pre-verification (invariant #2 — read before write):** the brief's 4 named de-fake
+targets are partly stale; each was checked for live-render-path mount status:
+
+- `apps/desktop/src/services/analyticsQueries.ts` — **LIVE** (rendered via `UsageDashboard`, lazy-loaded
+  in settings Account tab). MIXED: 9 fns correctly wire to real Tauri cmds w/ empty fallback, but 5 fns
+  (`queryRetentionRate`, `queryConversionFunnel`, `queryErrorStats`, `queryCategoryData`,
+  `queryPerformanceMetrics`) return hardcoded / `Math.random` fabrications. **REAL OFFENDER → Batch 2.**
+- `apps/desktop/src/features/v3/CodeModeHome.tsx` — **ORPHANED** (only re-exported from a barrel nobody
+  imports; no JSX usage). Fabricates stats + random heatmap + hardcoded model %. Dead-code (Batch 5) OR
+  de-fake-to-empty; not in a live render path so not a DoD violation today.
+- `apps/web/features/analytics/pages/AnalyticsDashboard.tsx` — **ORPHANED** (live billing page mounts
+  `TokenAnalyticsDashboard` instead). Needs dead-confirm + fabrication check.
+- `apps/extension-vscode/src/features/model-picker/modelMetrics.ts` — **ALREADY HONEST** (records REAL
+  per-request metrics from `recordRequest`, persisted, with an explicit empty state). NOT a fabrication;
+  the only nuance is the "Est. Cost" blended-rate estimate (a P2 label concern, not fake data).
+
+This is exactly the audit-is-noisy lesson: a blind fan-out would have "fixed" non-problems and missed
+the real one. Batch 2 will investigate-then-fix.
