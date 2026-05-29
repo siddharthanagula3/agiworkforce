@@ -104,6 +104,23 @@ pub use executors::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+/// Largest index `<= max` that lies on a UTF-8 char boundary of `s`.
+///
+/// `&s[..floor_char_boundary(s, n)]` never panics on multibyte input — unlike a
+/// raw `&s[..n]`, which panics when byte `n` splits a codepoint. Returns
+/// `s.len()` when `max >= s.len()`. Mirrors the (still-unstable) std
+/// `str::floor_char_boundary`.
+pub(crate) fn floor_char_boundary(s: &str, max: usize) -> usize {
+    if max >= s.len() {
+        return s.len();
+    }
+    let mut end = max;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    end
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AGIConfig {
     pub max_concurrent_tools: usize,
@@ -258,5 +275,32 @@ impl Default for AGICapabilities {
             can_plan_complex_tasks: true,
             can_adapt_strategies: true,
         }
+    }
+}
+
+#[cfg(test)]
+mod char_boundary_tests {
+    use super::floor_char_boundary;
+
+    #[test]
+    fn snaps_back_from_a_multibyte_split() {
+        let s = "é"; // U+00E9 = 2 bytes, 1 char
+        assert_eq!(floor_char_boundary(s, 1), 0); // byte 1 splits the codepoint
+        assert_eq!(floor_char_boundary(s, 2), 2);
+        assert_eq!(floor_char_boundary(s, 99), 2); // caps at len
+    }
+
+    #[test]
+    fn never_panics_when_index_lands_inside_a_codepoint() {
+        let s = "a".repeat(99) + "🚀"; // 99 ASCII + 4-byte emoji = 103 bytes
+        let end = floor_char_boundary(&s, 100); // byte 100 is inside the emoji
+        assert_eq!(end, 99);
+        assert!(s.is_char_boundary(end));
+        let _ = &s[..end]; // must not panic
+    }
+
+    #[test]
+    fn ascii_is_identity() {
+        assert_eq!(floor_char_boundary("hello world", 5), 5);
     }
 }

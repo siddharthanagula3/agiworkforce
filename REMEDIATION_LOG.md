@@ -119,13 +119,13 @@ worker session_ingress_token forgery (services), CLI TUI approval prompt broken 
 mine), llm-runtime retry/fallback unwired (packages), release pipeline 404 download URLs + static
 version (CI), web ContactSales→missing /api/contact (web). See REPO_EXPLORATION.md for the full list.
 
-
 ### 2026-05-28 — Gap-fill exploration complete (web/desktop/mobile) + consolidated register
 
 Doc updated: `docs-hardening/REPO_EXPLORATION.md` now 1574 lines (14 + 12 area deep-dives, both
 syntheses). Combined risk tally across both runs: ~4 P0-class, ~31 P1, ~62 P2, ~44 P3.
 
 **VERIFIED-BY-ME findings (read the source myself):**
+
 - **[LATENT P0 · MINE/conflict-free]** CLI memory pipeline trust-boundary (`apps/cli/src/memory_pipeline.rs`):
   routes via default cloud model, no privacy gate; latent because writer is unwired. Fix before wiring.
 - **[P0 · deferred (migration-owned core/agi)]** Desktop UTF-8 byte-slice panics on live paths:
@@ -150,8 +150,40 @@ Gemini Nano or after manual download. Also: TLS pins are PLACEHOLDER (ops gap, f
 release), authSession is a v1 stub, dispatch HMAC cutover (2026-06-05) pending. VERIFIED.
 
 **EXECUTION ORDER (when migration commit lands + user unblocks):**
+
 1. `git rebase` this branch onto the migration commit; re-run `audit.sh` for a clean merged baseline.
 2. Re-verify the two deferred P0s on the merged tree (byte-slice panics; silent egress).
 3. Fix conflict-free first (no rebase pain): CLI memory P0, desktop byte-slice P0 (now unblocked),
    analyticsQueries+UsageDashboard de-fake, CodeModeHome de-fake.
 4. Then work the risk register by severity per surface (Mobile lead), two-reviewer verification per file.
+
+### 2026-05-29 — Batch 3: fixed 4 UTF-8 byte-slice panics on user-reachable desktop paths
+
+Added `pub(crate) floor_char_boundary` to `core/agi/mod.rs` (+3 multibyte regression tests) and routed
+four byte-index string slices through it:
+
+- `core/agi/orchestrator.rs:623` `&text[..10000]` (PDF attachment text on the live chat path)
+- `core/agi/executors/code_executor.rs:538` `&code[..code.len().min(100)]` and `:787` `&code[..4000]`
+- `core/agi/executors/llm_executor.rs:143` `&prompt[..100]` (NOT in the exploration list — found during the fix)
+  Each was length-guarded but NOT codepoint-guarded → panic on multibyte input (PDF smart quotes, non-Latin code).
+  VERIFICATION: lib compiles (cargo test built the lib cleanly). Full test-suite RUN is blocked by a SEPARATE
+  migration regression — `data/state/draft_manager.rs:146` imports `crate::data::database::init_database`,
+  removed during the migration; the migration ran `cargo check` (not `cargo test`) so missed it. This breaks
+  ALL desktop test compilation (CI test job likely red). Tracked as a Batch-6 follow-up.
+
+### 2026-05-29 — Model single-source-of-truth: architecture already ~80% built (research in flight)
+
+Read-only repo findings:
+
+- `models.json` IS canonical. Rust CLI embeds it via `include_str!` (model_catalog.rs:32) with a 3-tier source
+  (models.dev api.json fetch → 5-min cache → bundled embed) — NOT a hardcoded duplicate.
+- TS registry layer exists (model-catalog.ts: modelsById, normalizeModelId, modelIdAliases, SLOT_REGISTRY,
+  getRoutingSlotModel, requireProviderDefaultModel, tierAllowedModels).
+- Guardrails exist but are DELIBERATELY NARROW: ESLint no-restricted-syntax (TS) + check-no-hardcoded-models.sh
+  (Rust, ci.yml:78) catch only the claude-opus-4-6-mini ghost + FAST*\*/DEFAULT*\*\_MODEL const literals. The
+  ~64-file hardcoded backlog was explicitly deferred to "Wave 2 CLI/Desktop sweeps."
+- ~86 non-test files still contain model-ID literals (desktop 40, cli 31, web 4, packages 5, crates 4) — count
+  includes the legit registry/alias/fallback layer; true-violation set needs triage.
+  GOAL: finish the deferred sweep → widen guardrails → model curation (opus-4.8/sonnet-4.6/haiku-4.5 only;
+  gpt-image-2 only; drop sora-2 + old Opus/Sonnet/DALL-E) becomes a single-file edit. Deep-research wmktr8307
+  running to confirm models.dev/LiteLLM best practice + polyglot single-source patterns.
