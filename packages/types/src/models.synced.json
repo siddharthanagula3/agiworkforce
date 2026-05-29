@@ -636,69 +636,6 @@
       "speed": "very-fast",
       "released": "2024"
     },
-    "meta-llama/llama-3.3-70b-instruct:free": {
-      "contextWindow": 131072,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speed": "fast",
-      "released": "2024"
-    },
-    "mistralai/mistral-small-3.1-24b-instruct:free": {
-      "contextWindow": 128000,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speed": "fast",
-      "released": "2025"
-    },
-    "qwen/qwen3-coder:free": {
-      "contextWindow": 262144,
-      "inputCost": 0,
-      "outputCost": 0,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": false,
-        "json": true,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false
-      },
-      "speed": "fast",
-      "released": "2025"
-    },
     "anthropic/claude-opus-4": {
       "contextWindow": 200000,
       "inputCost": 15,

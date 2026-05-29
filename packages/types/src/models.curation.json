@@ -1867,7 +1867,25 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Agentic Tasks", "Free Tier"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "2024"
     },
     "mistralai/mistral-small-3.1-24b-instruct:free": {
       "id": "mistralai/mistral-small-3.1-24b-instruct:free",
@@ -1878,7 +1896,25 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Vision Tasks", "Tool Use", "Free Tier"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "2025"
     },
     "qwen/qwen3-coder:free": {
       "id": "qwen/qwen3-coder:free",
@@ -1889,7 +1925,25 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Free Tier"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 262144,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "2025"
     },
     "nvidia/llama-3.3-nemotron-super-49b-v1:free": {
       "id": "nvidia/llama-3.3-nemotron-super-49b-v1:free",
