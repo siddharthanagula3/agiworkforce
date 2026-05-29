@@ -536,7 +536,25 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["All Tasks", "Automatic Optimization", "Smart Routing"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": true,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "January 2026"
     },
     "auto-economy": {
       "id": "auto-economy",
@@ -804,7 +822,32 @@
       "qualityTier": "balanced",
       "bestFor": ["Real-time Info", "Reasoning", "X/Twitter Data"],
       "deprecated": true,
-      "deprecation_date": "2026-06-30"
+      "deprecation_date": "2026-06-30",
+      "costOverride": { "inputCost": 3, "outputCost": 15 },
+      "contextOverride": 256000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": true,
+        "codeExecution": true
+      },
+      "benchmarkOverride": {
+        "swebench": 55.3,
+        "humaneval": 94.2,
+        "mmlu": 89.8,
+        "gpqa": 74.5,
+        "aime": 70
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "January 2026"
     },
     "grok-4-fast": {
       "id": "grok-4-fast",
@@ -853,7 +896,26 @@
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Simple Queries", "Long Context", "Budget Usage"],
       "deprecated": true,
-      "deprecation_date": "2026-06-30"
+      "deprecation_date": "2026-06-30",
+      "costOverride": { "inputCost": 0.2, "outputCost": 0.5 },
+      "contextOverride": 2000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarkOverride": { "swebench": 35, "humaneval": 75, "mmlu": 78, "gpqa": 42, "aime": 30 },
+      "speedOverride": "very-fast",
+      "releasedOverride": "January 2026"
     },
     "grok-4-fast-reasoning": {
       "id": "grok-4-fast-reasoning",
@@ -865,7 +927,26 @@
       "qualityTier": "balanced",
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context"],
       "deprecated": true,
-      "deprecation_date": "2026-06-30"
+      "deprecation_date": "2026-06-30",
+      "costOverride": { "inputCost": 0.2, "outputCost": 0.5 },
+      "contextOverride": 2000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarkOverride": { "swebench": 48, "humaneval": 85, "mmlu": 85, "gpqa": 60, "aime": 55 },
+      "speedOverride": "fast",
+      "releasedOverride": "January 2026"
     },
     "grok-4-1-fast-reasoning": {
       "id": "grok-4-1-fast-reasoning",
@@ -877,7 +958,25 @@
       "qualityTier": "balanced",
       "bestFor": ["Agentic Tasks", "Reasoning", "Real-time Data", "Long Context", "Vision"],
       "deprecated": true,
-      "deprecation_date": "2026-06-30"
+      "deprecation_date": "2026-06-30",
+      "costOverride": { "inputCost": 0.2, "outputCost": 0.5 },
+      "contextOverride": 2000000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": true
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "March 2026"
     },
     "grok-4-mini": {
       "id": "grok-4-mini",
@@ -938,9 +1037,9 @@
         "Multimodal",
         "Cost-Effective"
       ],
+      "deprecation_date": null,
       "promo_expires_at": "2026-05-31T15:59:00Z",
-      "post_promo_prices": { "input": 1.74, "output": 3.48, "cached_input": 0.0145 },
-      "deprecation_date": null
+      "post_promo_prices": { "input": 1.74, "output": 3.48, "cached_input": 0.0145 }
     },
     "qwen-max": {
       "id": "qwen-max",
@@ -1031,7 +1130,26 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Code Generation", "Agentic Coding", "Technical Tasks"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0.5, "outputCost": 2 },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": true
+      },
+      "benchmarkOverride": { "swebench": 52, "humaneval": 88, "mmlu": 82, "gpqa": 50, "aime": 45 },
+      "speedOverride": "fast",
+      "releasedOverride": "January 2026"
     },
     "kimi-k2.6": {
       "id": "kimi-k2.6",
@@ -1101,7 +1219,26 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Code Generation", "FIM Completion", "Budget Coding"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0.3, "outputCost": 0.9 },
+      "contextOverride": 256000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarkOverride": { "swebench": 48, "humaneval": 90, "mmlu": 72 },
+      "speedOverride": "very-fast",
+      "releasedOverride": "January 2026"
     },
     "pixtral-large": {
       "id": "pixtral-large",
@@ -1165,7 +1302,26 @@
       "qualityTier": "fast",
       "bestFor": ["FREE Model", "Vision Tasks", "Simple Queries", "High Volume", "Budget Usage"],
       "deprecated": true,
-      "deprecation_date": "2026-06-30"
+      "deprecation_date": "2026-06-30",
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": true,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarkOverride": { "swebench": 45, "humaneval": 75, "mmlu": 78, "gpqa": 40, "aime": 45 },
+      "speedOverride": "very-fast",
+      "releasedOverride": "December 2025"
     },
     "sonar": {
       "id": "sonar",
@@ -1187,7 +1343,26 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Search + Reasoning", "Analysis", "Citations"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 1, "outputCost": 5 },
+      "contextOverride": 128000,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": false,
+        "vision": false,
+        "json": true,
+        "thinking": true,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": false,
+        "search": true,
+        "research": false,
+        "codeExecution": false
+      },
+      "benchmarkOverride": { "mmlu": 82, "gpqa": 55 },
+      "speedOverride": "medium",
+      "releasedOverride": "January 2026"
     },
     "sonar-reasoning-pro": {
       "id": "sonar-reasoning-pro",
@@ -1257,12 +1432,12 @@
       "name": "Imagen 4 Fast",
       "provider": "google",
       "modelType": "image",
-      "imagePerImageCost": 0.02,
       "quality": "good",
       "qualityTier": "economy",
       "bestFor": ["Quick Images", "High Volume"],
-      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot.",
       "deprecation_date": null,
+      "imagePerImageCost": 0.02,
+      "pricingNote": "Fast variant of Imagen 4 — $0.02/image at 1024x1024 (vs $0.04 for Imagen 4 standard, $0.06 for Ultra). Per auto-routing-spec.md §4 Pool B image slot.",
       "costOverride": { "inputCost": 0, "outputCost": 20 },
       "contextOverride": 4000,
       "capabilitiesOverride": {
@@ -1288,12 +1463,12 @@
       "name": "Runway Gen-4",
       "provider": "runway",
       "modelType": "video",
-      "videoPerSecondCost": 0.05,
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["AI Video Generation", "Pro+ / Max tiers"],
-      "pricingNote": "Per auto-routing-spec.md §4 Pool B video slot. ~$0.05/second at 720p. Pro+ caps at 60 sec/mo (~$3 COGS); Max caps at 5 min/mo. Sora-2 unavailable as of April 2026 — Runway Gen-4 is the chosen replacement.",
       "deprecation_date": null,
+      "videoPerSecondCost": 0.05,
+      "pricingNote": "Per auto-routing-spec.md §4 Pool B video slot. ~$0.05/second at 720p. Pro+ caps at 60 sec/mo (~$3 COGS); Max caps at 5 min/mo. Sora-2 unavailable as of April 2026 — Runway Gen-4 is the chosen replacement.",
       "costOverride": { "inputCost": 0, "outputCost": 0 },
       "contextOverride": 4000,
       "capabilitiesOverride": {
@@ -1641,7 +1816,25 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["General Chat", "Coding", "Instruction Following"],
-      "deprecation_date": null
+      "deprecation_date": null,
+      "costOverride": { "inputCost": 0, "outputCost": 0 },
+      "contextOverride": 131072,
+      "capabilitiesOverride": {
+        "streaming": true,
+        "tools": true,
+        "vision": false,
+        "json": true,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": true,
+        "imageGen": false,
+        "videoGen": false,
+        "search": false,
+        "research": false,
+        "codeExecution": false
+      },
+      "speedOverride": "fast",
+      "releasedOverride": "2024"
     },
     "groq-llama-3.3-70b": {
       "id": "groq-llama-3.3-70b",
