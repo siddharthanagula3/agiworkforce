@@ -90,3 +90,31 @@ Batch 1 (deps — theirs), Batch 2 de-fake of Web/Desktop/Mobile (they asked me 
 settings/chat/waitlist/billing being rewired), Batch 3 src-tauri crash paths (sys/commands, data/\*),
 Batch 4 (auth — theirs), Batch 5 migration-consolidation (theirs), Batch 6/7/8 on app surfaces.
 Plan: rebase onto their commit when pinged, then execute those batches.
+
+### 2026-05-28 — Read-only deep exploration of the whole monorepo (while migration finishes)
+
+**Deliverable:** `docs-hardening/REPO_EXPLORATION.md` — architecture map + prioritized risk register
+from a 20-agent (14 succeeded + 12-area gap-fill in progress) read-only exploration. Strictly
+read-only; no code touched. Tally from the 14 deep-dives: 0 P0 / 17 P1 / 41 P2 / 27 P3; synthesis
+ranked 23 top risks.
+
+**Verified finding — LATENT P0 (CLI memory pipeline trust-boundary defect):**
+
+- `apps/cli/src/memory_pipeline.rs` `extract_session_summary` + `consolidate` route auxiliary LLM
+  calls through `resolve_fast_model(config)` = `config.default.model` (ships as cloud `claude-opus-4-7`),
+  with NO `validate_privacy_boundary()` and no session `privacy_mode` awareness.
+- The correct guard exists at `apps/cli/src/agent/mod.rs:560` but is not threaded into the pipeline.
+- **Severity downgraded from the subagent's "VERIFIED LIVE" to LATENT** by my own source read:
+  `extract_session_summary` (the only writer of `session_summaries/*.md`) has ZERO callers repo-wide,
+  and `consolidate` (live at `agent/chat.rs:1335`) early-returns on the empty dir — so nothing leaks
+  out-of-box TODAY. But `ARCHITECTURE.md` documents the writer as intended-future wiring; wiring it
+  without a privacy gate would leak Local-session content to Anthropic.
+- **Fix (when unblocked; conflict-free — apps/cli not migration-touched):** thread session
+  privacy_mode/provider into `memory_pipeline`, and skip/redirect cloud for Local sessions BEFORE the
+  writer is ever wired. Batch 3/4.
+
+**Other top risks (subagent-flagged, PENDING my independent verification; mostly migration-owned):**
+computer-use OPA confirmation-skip default (desktop), hosted RLS isolation gap (data-layer/services),
+worker session_ingress_token forgery (services), CLI TUI approval prompt broken under raw mode (cli —
+mine), llm-runtime retry/fallback unwired (packages), release pipeline 404 download URLs + static
+version (CI), web ContactSales→missing /api/contact (web). See REPO_EXPLORATION.md for the full list.
