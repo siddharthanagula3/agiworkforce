@@ -551,8 +551,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'coding_premium',
     label: 'Coding Premium',
     description:
-      'Premium coding lane. GPT-5.4-codex: ~85% SWE-bench, $0.40/$1.60 — specialized coding model with best price/benchmark at frontier.',
-    modelId: 'gpt-5.4-codex',
+      'Premium coding lane. GPT-5.5 — strongest OpenAI model for complex coding and agentic workflows.',
+    modelId: 'gpt-5.5',
     provider: 'openai',
   },
 
@@ -585,8 +585,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'creative_writing_premium',
     label: 'Creative Writing Premium',
     description:
-      'Premium creative lane. Claude Opus 4.7: EQ-Bench 2216 Elo — 192 Elo points ahead of GPT-5.5 (2024), unambiguous leader.',
-    modelId: 'claude-opus-4.7',
+      'Premium creative lane. Claude Opus 4.8 — frontier creative writing and knowledge work.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
 
@@ -654,8 +654,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'computer_use_premium',
     label: 'Computer Use Premium',
     description:
-      'Premium desktop automation. Claude Opus 4.7: 78% OSWorld-Verified (#1 public model), 77.3% MCP-Atlas tool use.',
-    modelId: 'claude-opus-4.7',
+      'Premium desktop automation. Claude Opus 4.8 — frontier computer-use and tool-use.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
 
@@ -771,10 +771,10 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
   // to coding_premium_pro / general_balanced_pro respectively.
   flagship_coding_pro_plus: {
     slot: 'flagship_coding_pro_plus',
-    label: 'Pro+ Flagship Coding (Opus 4.7, 15K/day)',
+    label: 'Pro+ Flagship Coding (Opus 4.8, 15K/day)',
     description:
-      'Pro+ flagship coding lane. Claude Opus 4.7: 87.6% SWE-bench Verified, $5/$25 (35% tokenizer inflation vs 4.6). Daily cap 15K tokens; falls through to coding_premium_pro (Sonnet 4.6) above cap.',
-    modelId: 'claude-opus-4.7',
+      'Pro+ flagship coding lane. Claude Opus 4.8: $5/$25, 1M context (inherits the 4.7 tokenizer baseline). Daily cap 15K tokens; falls through to coding_premium_pro (Sonnet 4.6) above cap.',
+    modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
   flagship_general_pro_plus: {
