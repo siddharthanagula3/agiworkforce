@@ -348,3 +348,28 @@ de-faking (it greps literal `Math.random`/`mockData`; the removed fabrications w
 like `RECEIVED_ARTIFACTS`, and the two desktop files still contain the token `Math.random` only inside
 explanatory comments documenting the removal). Real deltas are verified by the 2-reviewer pass + grep, not
 by this coarse gauge. DoD ("no fabricated data in any non-test render path") met for all surfaces examined.
+
+### Batch 3 — Crash/safety hardening (Rust) 🟡 (in progress)
+
+**Part 1 — CLI memory pipeline trust-boundary gate (the latent P0), DONE + tested.**
+
+`apps/cli/src/memory_pipeline.rs` `extract_session_summary` + `consolidate` routed auxiliary LLM calls
+through `resolve_fast_model(config)` (ships as a cloud model) with NO privacy-boundary check. The main
+chat path has `Agent::validate_privacy_boundary()` (bails if a Local session targets a non-Local provider),
+but that guard was never threaded into the memory pipeline. Latent because `extract_session_summary` has
+zero callers today and `consolidate` early-returns on an empty summaries dir — but `ARCHITECTURE.md`
+documents the writer as intended future wiring, and wiring it without a gate would silently upload
+Local-session content to a cloud provider (violates the locked never-silent-egress invariant).
+
+Fix (defense-in-depth, before the writer is ever wired): added a `local_only: bool` parameter to both
+functions. When true, summarization/consolidation runs entirely on-device via the existing deterministic
+fallbacks (`build_raw_summary` / `deduplicate_lines`) — NO network call. The `chat.rs:1339` call site now
+passes `self.privacy_mode == PrivacyMode::Local`. Header records "on-device fallback (local privacy: no
+network)" so the skipped-cloud path is auditable. Added `#[tokio::test]
+test_extract_session_summary_local_only_stays_on_device`. Verify: `cargo check -p agiworkforce-cli` exit 0;
+all 17 memory_pipeline tests pass.
+
+**Part 2 — desktop `sys/commands` panic triage: IN PROGRESS (focused, non-exhaustive).** The crates/ + cli
+production crash surface was already verified clean (prior session). The desktop command surface has 1406
+`#[tauri::command]` handlers and ~283 unwrap/expect/panic sites across them (many are tests/invariants).
+Triaging via workflow for genuinely user-reachable, recoverable panics; fixing a high-confidence set.

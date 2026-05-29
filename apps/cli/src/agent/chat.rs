@@ -1335,10 +1335,13 @@ message -- revise and call `update_plan` again.\n\n",
             if crate::memory_pipeline::MemoryPipeline::needs_consolidation(&home) {
                 let home_clone = home.clone();
                 let config_clone = config.clone();
+                // Local sessions must consolidate on-device only (no cloud egress).
+                let local_only = self.privacy_mode == super::PrivacyMode::Local;
                 tokio::spawn(async move {
                     if let Err(e) = crate::memory_pipeline::MemoryPipeline::consolidate(
                         &home_clone,
                         &config_clone,
+                        local_only,
                     )
                     .await
                     {
