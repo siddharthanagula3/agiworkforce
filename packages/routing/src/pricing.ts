@@ -7,10 +7,13 @@
  * so these pricing/display utilities have a stable home independent of routing.
  *
  * Promo handling: `effectiveInputPrice`/`effectiveOutputPrice` + `isPromoExpired`
- * switch to `post_promo_prices` automatically once `promo_expires_at` has passed
- * (e.g. DeepSeek V4-Pro promo reverts 2026-05-31T15:59:00Z). Deprecation:
- * `isDeprecated` is true once `deprecation_date` is in the past (e.g. the Kimi
- * K2 family death 2026-05-25).
+ * switch to `post_promo_prices` automatically once `promo_expires_at` has passed.
+ * Deprecation: `isDeprecated` is true once `deprecation_date` is in the past.
+ *
+ * Every helper takes an optional trailing `catalog` argument (defaulting to the
+ * bundled `models.json`) purely for testability: unit tests inject a synthetic
+ * fixture so the pricing *logic* is verified against controlled values rather
+ * than the live catalog's magic numbers (which change on every weekly sync).
  *
  * @module routing/pricing
  * @packageDocumentation
@@ -21,8 +24,9 @@
 import modelsCatalog from '@agiworkforce/types/models.json';
 
 // Narrow read-shape over the catalog — only the pricing-relevant fields. Kept
-// local so changes to the full models.json shape stay isolated here.
-interface CatalogModel {
+// local so changes to the full models.json shape stay isolated here. Exported
+// so tests can build a typed fixture catalog to inject.
+export interface CatalogModel {
   readonly id: string;
   readonly provider: string;
   readonly inputCost?: number;
@@ -38,7 +42,7 @@ interface CatalogModel {
   readonly tokenizer_drift_factor?: number;
 }
 
-interface Catalog {
+export interface Catalog {
   readonly models: Record<string, CatalogModel>;
 }
 
@@ -51,8 +55,8 @@ const CATALOG: Catalog = modelsCatalog as unknown as Catalog;
  *
  * Models without a `tokenizer_drift_factor` field return `1.0` (identity).
  */
-export function tokenizerDriftFactor(modelId: string): number {
-  const entry = CATALOG.models[modelId];
+export function tokenizerDriftFactor(modelId: string, catalog: Catalog = CATALOG): number {
+  const entry = catalog.models[modelId];
   if (!entry) return 1.0;
   const raw = entry.tokenizer_drift_factor;
   if (typeof raw !== 'number') return 1.0;
@@ -65,12 +69,17 @@ export function tokenizerDriftFactor(modelId: string): number {
  * payload-dependent and typically sits BETWEEN 1.0× and this maximum.
  */
 export const ESTIMATE_INFLATION = {
-  conservative: (modelId: string): number => tokenizerDriftFactor(modelId),
+  conservative: (modelId: string, catalog: Catalog = CATALOG): number =>
+    tokenizerDriftFactor(modelId, catalog),
 } as const;
 
 /** True when `modelId` is past its provider-side deprecation date at `now`. */
-export function isDeprecated(modelId: string, now: Date = new Date()): boolean {
-  const entry = CATALOG.models[modelId];
+export function isDeprecated(
+  modelId: string,
+  now: Date = new Date(),
+  catalog: Catalog = CATALOG,
+): boolean {
+  const entry = catalog.models[modelId];
   if (!entry) return true; // Missing entries are treated as deprecated.
   if (entry.deprecation_date == null) return false;
   const cutoff = Date.parse(entry.deprecation_date);
@@ -79,8 +88,12 @@ export function isDeprecated(modelId: string, now: Date = new Date()): boolean {
 }
 
 /** True when `modelId` is past its promotional pricing cutoff at `now`. */
-export function isPromoExpired(modelId: string, now: Date = new Date()): boolean {
-  const entry = CATALOG.models[modelId];
+export function isPromoExpired(
+  modelId: string,
+  now: Date = new Date(),
+  catalog: Catalog = CATALOG,
+): boolean {
+  const entry = catalog.models[modelId];
   if (!entry || !entry.promo_expires_at) return false;
   const cutoff = Date.parse(entry.promo_expires_at);
   if (Number.isNaN(cutoff)) return false;
@@ -91,20 +104,28 @@ export function isPromoExpired(modelId: string, now: Date = new Date()): boolean
  * Effective input price ($/M tokens) for `modelId` at `now`.
  * Post-promo prices automatically apply once `promo_expires_at` has passed.
  */
-export function effectiveInputPrice(modelId: string, now: Date = new Date()): number {
-  const entry = CATALOG.models[modelId];
+export function effectiveInputPrice(
+  modelId: string,
+  now: Date = new Date(),
+  catalog: Catalog = CATALOG,
+): number {
+  const entry = catalog.models[modelId];
   if (!entry) return 0;
-  if (isPromoExpired(modelId, now) && entry.post_promo_prices) {
+  if (isPromoExpired(modelId, now, catalog) && entry.post_promo_prices) {
     return entry.post_promo_prices.input;
   }
   return entry.inputCost ?? 0;
 }
 
 /** Effective output price ($/M tokens) for `modelId` at `now`. */
-export function effectiveOutputPrice(modelId: string, now: Date = new Date()): number {
-  const entry = CATALOG.models[modelId];
+export function effectiveOutputPrice(
+  modelId: string,
+  now: Date = new Date(),
+  catalog: Catalog = CATALOG,
+): number {
+  const entry = catalog.models[modelId];
   if (!entry) return 0;
-  if (isPromoExpired(modelId, now) && entry.post_promo_prices) {
+  if (isPromoExpired(modelId, now, catalog) && entry.post_promo_prices) {
     return entry.post_promo_prices.output;
   }
   return entry.outputCost ?? 0;
