@@ -1437,22 +1437,34 @@ mod tests {
     #[test]
     fn context_window_lookup() {
         let cat = Catalog::bundled();
-        // claude-opus-4-7 ships with 1M context window per models.json
-        assert_eq!(cat.context_window("claude-opus-4-7"), 1_000_000);
-        assert_eq!(cat.context_window("gpt-5.4"), 1_000_000);
-        assert_eq!(cat.context_window("gemini-3.1-pro-preview"), 2_000_000);
-        // grok-4-0709 deprecated in Phase 3; grok-4.3 is the live xAI flagship
-        // and ships with a larger 1M context window per models.json.
-        assert_eq!(cat.context_window("grok-4.3"), 1_000_000);
+        // context_window() resolves every catalog model by the id the catalog
+        // actually uses (its apiModelId) and returns that model's declared
+        // window — no hardcoded ids, so it never goes stale and it catches
+        // id-form regressions across the whole catalog.
+        for m in cat.cloud_models() {
+            assert!(m.context_window > 0, "{} should declare a positive context window", m.id);
+            assert_eq!(cat.context_window(&m.id), m.context_window, "{} window lookup", m.id);
+        }
+        // Unknown model falls back to the provider-prefix default.
+        assert_eq!(cat.context_window("claude-does-not-exist"), 200_000);
     }
 
     #[test]
     fn pricing_lookup() {
         let cat = Catalog::bundled();
-        let (i, o) = cat.pricing("claude-opus-4-7");
-        assert!(i > 0.0 && o > 0.0);
-        let (i, o) = cat.pricing("llama3.1");
-        assert_eq!((i, o), (0.0, 0.0));
+        // pricing() resolves every cloud model by its own id (catches id-form
+        // regressions) and returns its declared prices; cloud models are paid.
+        for m in cat.cloud_models() {
+            assert_eq!(
+                cat.pricing(&m.id),
+                (m.input_price_per_1m, m.output_price_per_1m),
+                "{} pricing lookup",
+                m.id
+            );
+            assert!(m.input_price_per_1m > 0.0, "{} should not be free (input)", m.id);
+        }
+        // Unknown model → no pricing.
+        assert_eq!(cat.pricing("totally-unknown-model"), (0.0, 0.0));
     }
 
     #[test]
@@ -1612,9 +1624,9 @@ mod tests {
     fn quality_tier_for_known_models() {
         // Anthropic: opus → best, sonnet → balanced, haiku → fast
         assert_eq!(
-            quality_tier_for_model("claude-opus-4-7").as_deref(),
+            quality_tier_for_model("claude-opus-4-8").as_deref(),
             Some("best"),
-            "claude-opus-4-7 should be qualityTier=best"
+            "claude-opus-4-8 should be qualityTier=best"
         );
         assert_eq!(
             quality_tier_for_model("claude-sonnet-4-6").as_deref(),
@@ -1656,8 +1668,8 @@ mod tests {
     fn is_known_model_reflects_catalog() {
         // Active models present in models.json must be known.
         assert!(
-            is_known_model("claude-opus-4-7"),
-            "claude-opus-4-7 should be in the bundled catalog"
+            is_known_model("claude-opus-4-8"),
+            "claude-opus-4-8 should be in the bundled catalog"
         );
         assert!(
             is_known_model("gpt-5.5"),
