@@ -449,3 +449,23 @@ safe (compiler-confirmed), and documented the rest with corroboration:
   leaf utility crates. These are very likely feature-gated or used via derive/macros/re-exports cargo-machete
   misses; removing them risks breaking the windows/feature builds. Safe removal needs a per-dep + per-feature
   build pass — out of safe single-session scope. Left intact; flagged for a dedicated dep-hygiene pass.
+
+### Batch 6 — Type safety & tests 🟡 (core type-safety DoD met; skipped-test bar re-scoped honestly)
+
+- **`as any` in CORE = 0 ✅.** Verified: `packages/{routing,llm-runtime,llm-normalize,providers,unified-chat,
+runtime}` contain ZERO non-test `as any`. The brief's "no `as any` in core" DoD is met. The remaining
+  non-test `as any` (~14) live in app surfaces only (web 7, desktop 4, mobile 3) — lower priority; the
+  reconstructed-instrument's count of 59 includes tests + archived code.
+- **Skipped tests — the "0 skipped" bar is NOT honest here.** Triage shows the skips are overwhelmingly
+  INTENTIONAL gating, not theater:
+  - Provider + gateway `*.live.test.ts`: `it.skip('set AGIWORKFORCE_LIVE_TEST=1 + <KEY> to run')` — live-API
+    integration tests, correctly skipped in CI (would need real keys + network).
+  - Mobile: `const itX = FEATURES.x ? it : it.skip` / `DF.companion ? it : it.skip` — FEATURE-FLAG conditional
+    skips; the feature is intentionally off in v1, so the skip is correct, not dead.
+  - Rust `#[ignore]` (85): slow/integration tests intentionally ignored in the default run.
+    Blindly un-skipping these would create false-reds or require credentials. Honest un-skipping is a per-test
+    triage of the small residue of genuinely-disabled tests (a few desktop `it.skip`, e.g.
+    `ResearchPanel.test.tsx`) — deferred to a dedicated test-triage pass, NOT a blanket flip.
+- **Meaningful core-path test ADDED** (Batch 3 Part 1): `test_extract_session_summary_local_only_stays_on_device`
+  covers the CLI memory trust-boundary (a core privacy path). Further core-path tests (LLM proxy, three-tier
+  router, provider adapters, computer-use) remain a Batch-6 follow-up.
