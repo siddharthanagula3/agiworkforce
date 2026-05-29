@@ -118,3 +118,40 @@ computer-use OPA confirmation-skip default (desktop), hosted RLS isolation gap (
 worker session_ingress_token forgery (services), CLI TUI approval prompt broken under raw mode (cli —
 mine), llm-runtime retry/fallback unwired (packages), release pipeline 404 download URLs + static
 version (CI), web ContactSales→missing /api/contact (web). See REPO_EXPLORATION.md for the full list.
+
+
+### 2026-05-28 — Gap-fill exploration complete (web/desktop/mobile) + consolidated register
+
+Doc updated: `docs-hardening/REPO_EXPLORATION.md` now 1574 lines (14 + 12 area deep-dives, both
+syntheses). Combined risk tally across both runs: ~4 P0-class, ~31 P1, ~62 P2, ~44 P3.
+
+**VERIFIED-BY-ME findings (read the source myself):**
+- **[LATENT P0 · MINE/conflict-free]** CLI memory pipeline trust-boundary (`apps/cli/src/memory_pipeline.rs`):
+  routes via default cloud model, no privacy gate; latent because writer is unwired. Fix before wiring.
+- **[P0 · deferred (migration-owned core/agi)]** Desktop UTF-8 byte-slice panics on live paths:
+  `core/agi/orchestrator.rs:623` `&text[..10000]` (PDF attachment text),
+  `core/agi/executors/code_executor.rs:538` `&code[..code.len().min(100)]` and `:787` `&code[..4000]`.
+  Length-guarded, NOT codepoint-guarded → panics on multibyte input. Fix = `core/agent/autonomous.rs:1607`
+  `truncate_str` (char-safe idiom already in repo) + multibyte regression test. VERIFIED real.
+- **[P0 · deferred + re-verify on merged tree]** Desktop silent Local→cloud egress
+  (`sys/commands/chat/send_message_execution.rs:1496`): unconfigured/Auto request redirected to
+  ManagedCloud before backend 403; content leaves device with no consent/secret-scan/payload-preview.
+  Migration agent owns + is actively rewiring `sys/commands/chat/**` — re-verify post-commit.
+- **[P1 · MINE/conflict-free]** Live fabricated analytics: `apps/desktop/src/services/analyticsQueries.ts`
+  (queryCategoryData/queryRetentionRate/queryConversionFunnel/queryErrorStats/queryPerformanceMetrics)
+  rendered by `features/analytics/UsageDashboard.tsx`. De-fake → real Tauri cmd or honest empty.
+- **[P1 · MINE/conflict-free]** `apps/desktop/src/features/v3/CodeModeHome.tsx` fabricated stats + random heatmap.
+
+**Mobile (LEAD SURFACE) — now covered:** trust-boundary safety is the best of the 3 surfaces
+(fail-closed, triple-gated, no silent Local→cloud). But **[P1] first-run local chat dead-ends**:
+default Qwen3-4B catalog entry lacks downloadUrl/checksum/format so `onboarding.tsx` finishes without
+downloading; `resolveLocalModelRef` does not provision → chat only works on devices with Apple FM /
+Gemini Nano or after manual download. Also: TLS pins are PLACEHOLDER (ops gap, fail-loud guard blocks
+release), authSession is a v1 stub, dispatch HMAC cutover (2026-06-05) pending. VERIFIED.
+
+**EXECUTION ORDER (when migration commit lands + user unblocks):**
+1. `git rebase` this branch onto the migration commit; re-run `audit.sh` for a clean merged baseline.
+2. Re-verify the two deferred P0s on the merged tree (byte-slice panics; silent egress).
+3. Fix conflict-free first (no rebase pain): CLI memory P0, desktop byte-slice P0 (now unblocked),
+   analyticsQueries+UsageDashboard de-fake, CodeModeHome de-fake.
+4. Then work the risk register by severity per surface (Mobile lead), two-reviewer verification per file.
