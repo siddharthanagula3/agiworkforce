@@ -213,20 +213,16 @@ const PROVIDER_MAP = {
  * models.dev entry that carries pricing (→ curation-override territory).
  */
 function devLookup(dev, model) {
+  const apiId = model.apiModelId || model.id;
+  // `:free` aggregator models are free by definition. Never strip the suffix
+  // and inherit the paid variant's pricing — treat them as non-upstream so
+  // their 0/0 pricing stays pinned in curation.
+  if (apiId.endsWith(':free')) return null;
   const providerKey = PROVIDER_MAP[model.provider];
   if (!providerKey) return null;
   const upstream = dev[providerKey]?.models;
   if (!upstream) return null;
-  const apiId = model.apiModelId || model.id;
-  const candidates = [
-    apiId,
-    apiId.split('/').pop(),
-    apiId.replace(/:free$/, ''),
-    apiId
-      .split('/')
-      .pop()
-      .replace(/:free$/, ''),
-  ];
+  const candidates = [apiId, apiId.split('/').pop()];
   for (const c of candidates) {
     const entry = upstream[c];
     if (entry && entry.cost && entry.cost.input != null) return entry;
@@ -386,21 +382,23 @@ function mapDevModel(devModel) {
   if (devModel.cost?.input != null) out.inputCost = devModel.cost.input;
   if (devModel.cost?.output != null) out.outputCost = devModel.cost.output;
   if (devModel.cost?.cache_read != null) out.cached_input = devModel.cost.cache_read;
-  if (devModel.release_date) out.released = devModel.release_date;
+  // `released` is intentionally NOT synced: models.dev uses ISO dates while the
+  // catalog uses human strings, and the date is informational — syncing it only
+  // churns formatting. It stays curation-/seed-owned.
   return out;
 }
 
 /**
- * Price-delta sanity gate. On a refresh, if an upstream price moves more than
- * `threshold` away from the committed baseline, we HALT and report rather than
- * silently accept — drift this large is more likely a units bug or a model-id
- * mismatch than a real change, and silently keeping the local value would
- * entrench whichever side is wrong. Promo-aware: compares against the
- * post-promo baseline when a promo is configured.
+ * Sanity gate. On a refresh, if an upstream number moves more than `threshold`
+ * away from the committed baseline, HALT and report rather than silently
+ * accept — drift this large is more likely a units bug or a model-id mismatch
+ * than a real change, and silently keeping the local value would entrench
+ * whichever side is wrong. Gates price AND context window: a flagship's context
+ * silently changing (e.g. 200K→1M) is exactly the kind of drift to surface.
  */
-function priceDeltaTrips(baseline, next, threshold) {
+function deltaTrips(baseline, next, threshold) {
   const trips = [];
-  for (const field of ['inputCost', 'outputCost']) {
+  for (const field of ['inputCost', 'outputCost', 'contextWindow']) {
     const a = baseline[field];
     const b = next[field];
     if (a == null || b == null || a === 0) continue;
@@ -431,7 +429,7 @@ async function refresh(threshold) {
     if (!devModel) continue;
     const next = mapDevModel(devModel);
     const baseline = synced.models[id];
-    const trips = priceDeltaTrips(baseline, next, threshold);
+    const trips = deltaTrips(baseline, next, threshold);
     if (trips.length) {
       tripped.push({ id, trips });
       continue; // halt this model; require adjudication
@@ -442,7 +440,7 @@ async function refresh(threshold) {
 
   if (tripped.length) {
     console.error(
-      `\n[sync] ⚠ price-delta gate tripped for ${tripped.length} model(s) (> ${threshold * 100}%):`,
+      `\n[sync] ⚠ sanity gate tripped for ${tripped.length} model(s) (> ${threshold * 100}%):`,
     );
     for (const { id, trips } of tripped) {
       for (const t of trips) {
