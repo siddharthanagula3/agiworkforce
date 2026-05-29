@@ -2,11 +2,11 @@
 
 > RECONSTRUCTED instrument (original deleted). New-instrument numbers — compare deltas only within this script, NOT to the prior documented baseline.
 >
-> HEAD: `083a8dce9`
+> HEAD: `3fc5596c7`
 
 | Signal                                      | Count |
 | ------------------------------------------- | ----: |
-| Slop markers (non-test)                     |  2783 |
+| Slop markers (non-test)                     |  2785 |
 | Mock/random/hardcoded-data files (non-test) |   155 |
 | Rust todo!/unimplemented!                   |     0 |
 | `as any`                                    |    59 |
@@ -15,4 +15,4 @@
 | Duplicate-version files                     |     3 |
 | Rust panic!()                               |   220 |
 | Rust unreachable!()                         |     3 |
-| Rust .unwrap()/.expect()                    |  5797 |
+| Rust .unwrap()/.expect()                    |  5800 |
