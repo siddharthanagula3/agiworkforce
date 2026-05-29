@@ -183,21 +183,40 @@ function omit(obj, keys) {
 // Upstream loading
 // ---------------------------------------------------------------------------
 
-/** Build { modelId -> providerKey[] } index across all models.dev providers. */
-function indexModelsDev(dev) {
-  const index = new Map();
-  for (const providerKey of Object.keys(dev)) {
-    const models = dev[providerKey]?.models ?? {};
-    for (const mid of Object.keys(models)) {
-      if (!index.has(mid)) index.set(mid, []);
-      index.get(mid).push(providerKey);
-    }
-  }
-  return index;
-}
+/**
+ * Map our catalog provider keys → the canonical models.dev provider key.
+ * The join MUST be provider-scoped: models.dev hosts the same model id under
+ * dozens of aggregator providers (often with missing or re-marked-up pricing),
+ * so matching the first provider that happens to list an id pulls the wrong
+ * data. Providers absent from this map (managed_cloud pseudo-models, nvidia_nim
+ * self-hosted, runway) have no first-party models.dev catalog and are treated
+ * as non-upstream — their cost/context/caps live in curation overrides.
+ */
+const PROVIDER_MAP = {
+  openai: 'openai',
+  anthropic: 'anthropic',
+  google: 'google',
+  xai: 'xai',
+  deepseek: 'deepseek',
+  qwen: 'alibaba',
+  moonshot: 'moonshotai',
+  mistral: 'mistral',
+  zhipu: 'zhipuai',
+  perplexity: 'perplexity',
+  groq: 'groq',
+  open_router: 'openrouter',
+};
 
-/** Resolve a catalog model's join key against the models.dev index. */
-function devLookup(devIndex, dev, model) {
+/**
+ * Resolve a catalog model against its CANONICAL models.dev provider only.
+ * Returns the upstream model object, or null when the model has no first-party
+ * models.dev entry that carries pricing (→ curation-override territory).
+ */
+function devLookup(dev, model) {
+  const providerKey = PROVIDER_MAP[model.provider];
+  if (!providerKey) return null;
+  const upstream = dev[providerKey]?.models;
+  if (!upstream) return null;
   const apiId = model.apiModelId || model.id;
   const candidates = [
     apiId,
@@ -209,10 +228,8 @@ function devLookup(devIndex, dev, model) {
       .replace(/:free$/, ''),
   ];
   for (const c of candidates) {
-    const providers = devIndex.get(c);
-    if (providers && providers.length) {
-      return dev[providers[0]].models[c];
-    }
+    const entry = upstream[c];
+    if (entry && entry.cost && entry.cost.input != null) return entry;
   }
   return null;
 }
@@ -239,7 +256,6 @@ async function loadModelsDev() {
 async function extract() {
   const current = readJson(MODELS_JSON);
   const dev = await loadModelsDev();
-  const devIndex = indexModelsDev(dev);
 
   const curationModels = {};
   const syncedModels = {};
@@ -248,7 +264,7 @@ async function extract() {
   for (const [id, model] of Object.entries(current.models)) {
     const curated = omit(model, SYNCED_FIELDS);
     const syncedPart = pick(model, SYNCED_FIELDS);
-    const isUpstream = devLookup(devIndex, dev, model) != null;
+    const isUpstream = devLookup(dev, model) != null;
 
     if (isUpstream) {
       upstreamCount += 1;
@@ -398,7 +414,6 @@ async function refresh(threshold) {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
   const dev = await loadModelsDev();
-  const devIndex = indexModelsDev(dev);
 
   const aaKey = process.env.ARTIFICIAL_ANALYSIS_API_KEY;
   if (!aaKey) {
@@ -412,7 +427,7 @@ async function refresh(threshold) {
   for (const id of Object.keys(synced.models)) {
     const cur = curation.models[id];
     if (!cur) continue;
-    const devModel = devLookup(devIndex, dev, cur);
+    const devModel = devLookup(dev, cur);
     if (!devModel) continue;
     const next = mapDevModel(devModel);
     const baseline = synced.models[id];
