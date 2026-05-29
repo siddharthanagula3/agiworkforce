@@ -1,32 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
  * /settings/notifications — push + email notification preferences. Round-2
- * audit P0 #7 (web settings depth). Web stores prefs in localStorage in v1;
- * Cloud Managed mirrors them to the server so they propagate to mobile/
- * desktop without a re-toggle. Round-20 parity: reorganized into delivery
- * channel groups (Browser / Email / Mobile) with locked-with-tooltip for
- * channels that require Cloud Managed.
+ * audit P0 #7 (web settings depth). Account settings are persisted through
+ * /api/settings/preferences backed by Neon. Missing or failed persistence is
+ * surfaced to the user instead of falling back to client-only state.
  */
 
-// ─── Storage keys ─────────────────────────────────────────────────────────────
+const NAMESPACE = 'notifications';
 
-const NOTIF_KEYS = {
-  // Browser / desktop
-  browserReplyReady: 'agi.notifications.replyReady',
-  browserAgentDone: 'agi.notifications.agentDone',
-  // Email
-  emailWeeklyDigest: 'agi.notifications.weeklyDigest',
-  emailProductUpdates: 'agi.notifications.productUpdates',
-  emailSecurityAlerts: 'agi.notifications.emailSecurityAlerts',
-  // Mobile push (Cloud Managed)
-  mobilePushReplyReady: 'agi.notifications.mobilePushReplyReady',
-  mobilePushAgentDone: 'agi.notifications.mobilePushAgentDone',
-} as const;
-
-type NotifKey = keyof typeof NOTIF_KEYS;
+type NotifKey =
+  | 'browserReplyReady'
+  | 'browserAgentDone'
+  | 'emailWeeklyDigest'
+  | 'emailProductUpdates'
+  | 'emailSecurityAlerts'
+  | 'mobilePushReplyReady'
+  | 'mobilePushAgentDone';
 
 interface NotifSpec {
   id: NotifKey;
@@ -118,40 +111,54 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
   },
 ];
 
-// ─── Helpers ───────────────────────────────────────────────────────────────────
-
-function readNotif(key: NotifKey, defaultValue: boolean): boolean {
-  if (typeof window === 'undefined') return defaultValue;
-  const stored = window.localStorage.getItem(NOTIF_KEYS[key]);
-  if (stored === '1') return true;
-  if (stored === '0') return false;
-  return defaultValue;
-}
-
-function writeNotif(key: NotifKey, value: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(NOTIF_KEYS[key], value ? '1' : '0');
-  } catch {
-    // Non-fatal in private windows.
-  }
+function defaultNotificationState(): Record<NotifKey, boolean> {
+  return CHANNEL_GROUPS.flatMap((g) => g.items).reduce(
+    (acc, t) => ({ ...acc, [t.id]: t.defaultValue }),
+    {} as Record<NotifKey, boolean>,
+  );
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationsSettingsPage() {
-  const [state, setState] = useState<Record<NotifKey, boolean>>(() =>
-    CHANNEL_GROUPS.flatMap((g) => g.items).reduce(
-      (acc, t) => ({ ...acc, [t.id]: readNotif(t.id, t.defaultValue) }),
-      {} as Record<NotifKey, boolean>,
-    ),
-  );
+  const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchPreferenceNamespace<Record<NotifKey, boolean>>(NAMESPACE, defaultNotificationState())
+      .then((value) => {
+        if (!cancelled) {
+          setState(value);
+          setSaveError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setSaveError(error instanceof Error ? error.message : 'Failed to load notifications');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function toggle(key: NotifKey, disabled?: boolean) {
     if (disabled) return;
     setState((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      writeNotif(key, next[key]);
+      setSaving(true);
+      setSaveError(null);
+      savePreferenceNamespace(NAMESPACE, next)
+        .catch((error) => {
+          setSaveError(error instanceof Error ? error.message : 'Failed to save notifications');
+        })
+        .finally(() => setSaving(false));
       return next;
     });
   }
@@ -171,7 +178,17 @@ export default function NotificationsSettingsPage() {
           Notifications
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          When and how AGI reaches out. Browser prefs apply to this device only.
+          When and how AGI reaches out. These preferences are loaded from and saved to your account
+          settings.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          {loading
+            ? 'Loading account settings...'
+            : saving
+              ? 'Saving...'
+              : saveError
+                ? `Save failed: ${saveError}`
+                : 'Synced to your account'}
         </p>
       </div>
 
@@ -179,7 +196,7 @@ export default function NotificationsSettingsPage() {
         <section
           key={group.heading}
           style={{
-            border: '1px solid var(--border)',
+            border: '1px solid var(--settings-border)',
             borderRadius: 'var(--radius-lg)',
             background: 'var(--bg-elev)',
             overflow: 'hidden',
@@ -189,7 +206,7 @@ export default function NotificationsSettingsPage() {
           <div
             style={{
               padding: '14px 20px',
-              borderBottom: '1px solid var(--border)',
+              borderBottom: '1px solid var(--settings-border)',
               display: 'flex',
               flexDirection: 'column',
               gap: 2,
@@ -208,7 +225,7 @@ export default function NotificationsSettingsPage() {
                     textTransform: 'uppercase',
                     color: 'var(--text-3)',
                     padding: '2px 6px',
-                    border: '1px solid var(--border)',
+                    border: '1px solid var(--settings-border)',
                     borderRadius: 4,
                   }}
                 >
@@ -226,7 +243,7 @@ export default function NotificationsSettingsPage() {
               title={spec.managedOnly ? 'Available with Cloud Managed' : undefined}
               style={{
                 padding: '14px 20px',
-                borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+                borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 14,

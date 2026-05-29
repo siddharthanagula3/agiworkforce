@@ -44,9 +44,9 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock Supabase server client (used for service calls)
-vi.mock('@/services/supabase-server', () => ({
-  createSupabaseServerClient: vi.fn().mockResolvedValue({}),
+// Mock cloud database server client (used for service calls)
+vi.mock('@/services/neon-db', () => ({
+  createNeonServerClient: vi.fn().mockResolvedValue({}),
 }));
 
 // Mock CreditService

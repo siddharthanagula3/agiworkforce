@@ -1,5 +1,5 @@
 -- Chat feature tables missing from original Neon migration
--- Ported from Supabase schema to support reactions, bookmarks, branches, folders, shortcuts
+-- Ported from Neon schema to support reactions, bookmarks, branches, folders, shortcuts
 
 create table if not exists public.message_reactions (
   id uuid primary key default gen_random_uuid(),

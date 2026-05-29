@@ -5,7 +5,7 @@
 //! Model list comes from `model_catalog.rs` (cloud_eligible = true).
 //! Update models there, not here.
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use colored::Colorize;
 use std::collections::HashMap;
 
@@ -120,19 +120,11 @@ pub async fn cloud_exec(
     }
     let cm = model_catalog::find(model_id)
         .ok_or_else(|| anyhow::anyhow!("Model '{}' not found in catalog", model_id))?;
-    if !config.byok.has_key(&cm.provider) {
-        anyhow::bail!(
-            "No API key for '{}'. Set the env var to use cloud BYOK.",
-            cm.provider
-        );
-    }
-    println!(
-        "{} Submitted with {} (BYOK: {})",
-        "cloud:".cyan().bold(),
-        cm.display_name.as_str().bold(),
-        cm.provider.as_str().green()
-    );
-    Ok(uuid::Uuid::new_v4().to_string())
+    bail!(
+        "Cloud execution is private beta and is not wired in this CLI build. No task was submitted for model '{}' via provider '{}'. Use a local/BYOK model path, or join the managed cloud waitlist when the backend contract is available.",
+        cm.display_name,
+        cm.provider
+    )
 }
 
 pub fn print_cloud_status(config: &CloudConfig) {
@@ -147,5 +139,35 @@ pub fn print_cloud_status(config: &CloudConfig) {
             "not set".red()
         };
         println!("  {:<12} {}", p, st);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cloud_exec_fails_closed_without_fake_task_id() {
+        let cloud_models = model_catalog::cloud_models();
+        let model = cloud_models
+            .first()
+            .expect("cloud model catalog should include at least one model");
+        let mut config = CloudConfig {
+            default_model: model.id.clone(),
+            ..CloudConfig::default()
+        };
+        config
+            .byok
+            .api_keys
+            .insert(model.provider.clone(), "test-key".to_string());
+
+        let error = cloud_exec(&config, "test prompt", Some(&model.id))
+            .await
+            .expect_err("cloud exec should fail closed");
+        let message = error.to_string();
+
+        assert!(message.contains("private beta"), "{message}");
+        assert!(message.contains("not wired"), "{message}");
+        assert!(!message.contains("Submitted"), "{message}");
     }
 }

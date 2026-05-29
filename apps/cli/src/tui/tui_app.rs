@@ -2174,12 +2174,14 @@ fn persist_tui_shared_ui_config(cmd: &str, arg: &str, app: &mut TuiApp) {
                 .config
                 .persist_output_style_project(&app.session.output_style);
         }
-        "/privacy-mode" | "/trust-boundary"
-            if crate::agent::PrivacyMode::from_arg(arg).is_some() =>
-        {
-            let _ = app
-                .config
-                .persist_privacy_mode_project(app.session.privacy_mode.label());
+        "/privacy-mode" | "/trust-boundary" => {
+            if crate::agent::PrivacyMode::from_arg(arg)
+                .is_some_and(|mode| mode == app.session.privacy_mode)
+            {
+                let _ = app
+                    .config
+                    .persist_privacy_mode_project(app.session.privacy_mode.label());
+            }
         }
         _ => {}
     }

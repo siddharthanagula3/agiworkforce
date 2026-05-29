@@ -87,7 +87,7 @@ export class APIClient {
     } catch {
       // Check if the stored value looks like plaintext (migration path).
       // JWT tokens start with "ey" (base64-encoded JSON header).
-      // Supabase session data starts with '{' or '"'.
+      // Neon session data starts with '{' or '"'.
       const firstChar = stored.charAt(0);
       if (firstChar === '{' || firstChar === '"' || stored.startsWith('ey')) {
         console.warn(`[APIClient] Plaintext token found in ${key}; using as-is (migration path)`);

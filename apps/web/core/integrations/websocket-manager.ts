@@ -1,9 +1,9 @@
 /**
  * WebSocket Manager (no-op stub)
  *
- * Supabase Realtime channel management has been removed. The class, enums,
+ * Realtime channel management has been removed. The class, enums,
  * and interfaces are retained so that call sites continue to compile. Native
- * WebSocket and Supabase Realtime functionality will be re-implemented with a
+ * WebSocket and Realtime functionality will be re-implemented with a
  * different provider.
  */
 
@@ -52,7 +52,7 @@ export interface ConnectionConfig {
   heartbeatInterval?: number;
   messageQueueSize?: number;
   poolSize?: number;
-  useSupabaseRealtime?: boolean;
+  useNeonRealtime?: boolean;
 }
 
 // Connection metrics
@@ -87,7 +87,7 @@ export interface WebSocketEvent {
 
 export class WebSocketManager {
   constructor(_config: ConnectionConfig = {}) {
-    logger.warn('[WebSocketManager] Supabase Realtime has been removed. Manager is a no-op stub.');
+    logger.warn('[WebSocketManager] Realtime has been removed. Manager is a no-op stub.');
   }
 
   /**

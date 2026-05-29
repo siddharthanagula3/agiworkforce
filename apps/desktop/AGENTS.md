@@ -39,7 +39,7 @@ Read root `AGENTS.md`, then this file, then `apps/desktop/README.md`.
 
 - v1 is LOCAL ONLY by ADR `docs/locks/v1-local-only-cloud-waitlist-2026-05-18.md`.
 - The `ChatPreferences.chatStorageMode` field defaults to `"local"` (Rust: `default_chat_storage_mode()`, TS: `defaultChatPreferences.chatStorageMode`).
-- `send_message.rs` derives `cloud_sync_enabled = chat_storage_mode == "cloud"` and only spawns supabase_sync tasks when true.
-- Test `data/supabase_sync.rs::tests::supabase_sync_never_fires_with_cloud_sync_disabled` asserts sync is silent under default settings.
+- `send_message.rs` derives `cloud_sync_enabled = chat_storage_mode == "cloud"` and only crosses the managed cloud boundary when explicitly enabled.
+- The default local path keeps sync silent under default settings.
 - `settings_load_from_disk` now coerces any persisted `"cloud"` back to `"local"` on app load (migration guard for users who enabled sync before the v1 gate).
 - When cloud sync is ungated: re-add the toggle to `apps/desktop/src/features/settings/tabs/Privacy/index.tsx` (look for the comment), remove the coercion in `settings_load_from_disk`, and delete/replace the negative test with a gated one.

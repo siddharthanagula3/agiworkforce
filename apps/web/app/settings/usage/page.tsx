@@ -1,89 +1,100 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { useBillingStore } from '@/stores/unified/auth';
 import { Progress } from '@shared/ui/progress';
 
-/**
- * /settings/usage — Plan usage limits with progress bars per model tier.
- * UI reference: desktop/claude/2026-05-13/extended/028-settings-usage.png
- *
- * Uses mock data for weekly limits since no real usage API is wired yet.
- * Structure: current-session bar, weekly limits (3 bars), daily routine runs.
- */
+type UsageResponse = {
+  plan_tier: string;
+  credits_allocated_cents: number;
+  credits_used_cents: number;
+  credits_remaining_cents: number;
+  usage_percentage: number;
+  period_end: string | null;
+  daily_used_cents: number;
+  daily_limit_cents: number;
+  subscription_status: string;
+};
 
-// Next Wednesday reset label (computed from current date)
-function getNextResetLabel(): string {
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=Sun, 3=Wed
-  const daysUntilWed = (3 - dayOfWeek + 7) % 7 || 7;
-  const next = new Date(now);
-  next.setDate(now.getDate() + daysUntilWed);
-  return next.toLocaleDateString('en-US', { weekday: 'short' });
+type AnalyticsResponse = {
+  stats?: {
+    sessions_count: number;
+    today_cost: number;
+    week_cost: number;
+    month_cost: number;
+    total_tokens: number;
+  };
+};
+
+function money(cents: number): string {
+  return `$${(Math.max(0, cents) / 100).toFixed(2)}`;
 }
 
-interface UsageLimitBar {
-  label: string;
-  percentUsed: number;
-  resetsLabel: string;
-  tooltip?: string;
+function formatReset(value: string | null): string {
+  if (!value) return 'No reset scheduled';
+  return `Resets ${new Date(value).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })}`;
 }
 
 export default function UsageSettingsPage() {
-  const subscription = useBillingStore((s) => s.subscription);
-  const planName = subscription?.display_name ?? 'Free';
-
-  // "Last updated" refresh state
-  const [lastUpdated, setLastUpdated] = useState<'just now' | string>('just now');
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsResponse | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>('Not loaded');
   const [refreshing, setRefreshing] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadUsage = useCallback(async () => {
+    setRefreshing(true);
+    setError(null);
+    try {
+      const [usageRes, analyticsRes] = await Promise.all([
+        fetch('/api/usage', { credentials: 'include' }),
+        fetch('/api/usage/analytics?timeRange=30d', { credentials: 'include' }),
+      ]);
+
+      if (!usageRes.ok) throw new Error('Could not load usage');
+
+      setUsage((await usageRes.json()) as UsageResponse);
+      if (analyticsRes.ok) {
+        setAnalytics((await analyticsRes.json()) as AnalyticsResponse);
+      } else {
+        setAnalytics(null);
+      }
+      setLastUpdated(
+        new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load usage');
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    void loadUsage();
+  }, [loadUsage]);
 
-  const handleRefresh = useCallback(() => {
-    setRefreshing(true);
-    // Simulate a brief refresh; real implementation would re-fetch /api/usage
-    setTimeout(() => {
-      setLastUpdated('just now');
-      setRefreshing(false);
-    }, 600);
-  }, []);
+  const planName = usage?.plan_tier
+    ? usage.plan_tier[0]!.toUpperCase() + usage.plan_tier.slice(1)
+    : 'Free';
+  const creditPercent = Math.min(100, Math.max(0, usage?.usage_percentage ?? 0));
+  const currentSessionPercent = useMemo(() => {
+    const monthCost = analytics?.stats?.month_cost ?? 0;
+    const todayCost = analytics?.stats?.today_cost ?? 0;
+    return monthCost > 0 ? Math.min(100, Math.round((todayCost / monthCost) * 100)) : 0;
+  }, [analytics]);
 
-  const resetLabel = mounted ? getNextResetLabel() : 'Wed';
-
-  // Mock weekly usage limits. When a real usage API is available, replace these
-  // values with data from /api/usage or the billing usage store.
-  const weeklyLimits: UsageLimitBar[] = [
-    {
-      label: 'All models',
-      percentUsed: 2,
-      resetsLabel: `Resets ${resetLabel} 6:00 PM`,
-    },
-    {
-      label: 'Sonnet only',
-      percentUsed: 0,
-      resetsLabel: `Resets ${resetLabel} 6:00 PM`,
-      tooltip: 'Usage against models in the Sonnet tier',
-    },
-    {
-      label: 'AGI Design',
-      percentUsed: 7,
-      resetsLabel: `Resets ${resetLabel} 6:00 PM`,
-      tooltip: 'Usage against design-focused model routing',
-    },
-  ];
-
-  // Daily routine runs: 0 of 15 used
-  const dailyRunsUsed = 0;
-  const dailyRunsLimit = 15;
-  const dailyRunsPercent = Math.round((dailyRunsUsed / dailyRunsLimit) * 100);
+  const weeklyPercent = useMemo(() => {
+    const allocated = usage?.credits_allocated_cents ?? 0;
+    const weekCost = analytics?.stats?.week_cost ?? 0;
+    return allocated > 0 ? Math.min(100, Math.round((weekCost / allocated) * 100)) : 0;
+  }, [analytics, usage]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
-      {/* Page header */}
       <div>
         <h1
           style={{
@@ -97,14 +108,29 @@ export default function UsageSettingsPage() {
           Usage
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Plan usage limits and included resources.
+          Plan usage, credits, and recent activity from your account ledger.
         </p>
       </div>
 
-      {/* Plan usage limits header */}
+      {error && (
+        <div
+          role="alert"
+          style={{
+            border: '1px solid var(--settings-border)',
+            borderRadius: 'var(--radius-lg)',
+            background: 'var(--bg-elev)',
+            padding: 14,
+            color: 'var(--text-2)',
+            fontSize: 13,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -113,7 +139,7 @@ export default function UsageSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -129,7 +155,7 @@ export default function UsageSettingsPage() {
               fontWeight: 500,
               color: 'var(--text-3)',
               background: 'var(--bg-hover, rgba(255,255,255,0.05))',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 4,
               padding: '2px 8px',
             }}
@@ -139,94 +165,34 @@ export default function UsageSettingsPage() {
         </div>
 
         <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Current session */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
-                Current session
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>0% used</span>
-            </div>
-            <Progress
-              value={0}
-              aria-label="Current session usage"
-              className="h-2"
-              indicatorClassName="bg-amber-500"
-              style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-              Starts when a message is sent
-            </span>
-          </div>
+          <UsageBar
+            label="Current session"
+            percent={currentSessionPercent}
+            value={`${analytics?.stats?.sessions_count ?? 0} sessions in last 30 days`}
+            detail={`${money(analytics?.stats?.today_cost ?? 0)} spent today`}
+          />
 
-          {/* Weekly limits */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
-                Weekly limits
-              </span>
-              <a
-                href="https://agi.app/docs/usage-limits"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ fontSize: 12, color: 'var(--teal, #21808d)', textDecoration: 'none' }}
-              >
-                Learn more
-              </a>
-            </div>
+          <UsageBar
+            label="Weekly usage"
+            percent={weeklyPercent}
+            value={`${money(analytics?.stats?.week_cost ?? 0)} this week`}
+            detail={formatReset(usage?.period_end ?? null)}
+          />
 
-            {weeklyLimits.map((bar) => (
-              <div key={bar.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}
-                    title={bar.tooltip}
-                  >
-                    {bar.label}
-                  </span>
-                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                    {bar.percentUsed}% used
-                  </span>
-                </div>
-                <Progress
-                  value={bar.percentUsed}
-                  aria-label={`${bar.label} weekly usage`}
-                  className="h-2"
-                  indicatorClassName="bg-amber-500"
-                  style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
-                />
-                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{bar.resetsLabel}</span>
-              </div>
-            ))}
-          </div>
+          <UsageBar
+            label="Monthly credits"
+            percent={creditPercent}
+            value={`${money(usage?.credits_used_cents ?? 0)} used of ${money(
+              usage?.credits_allocated_cents ?? 0,
+            )}`}
+            detail={`${money(usage?.credits_remaining_cents ?? 0)} remaining`}
+          />
         </div>
 
-        {/* Last updated footer */}
         <div
           style={{
             padding: '12px 20px',
-            borderTop: '1px solid var(--border)',
+            borderTop: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -236,7 +202,7 @@ export default function UsageSettingsPage() {
           <span style={{ fontSize: 12, color: 'var(--text-3)' }}>Last updated: {lastUpdated}</span>
           <button
             type="button"
-            onClick={handleRefresh}
+            onClick={() => void loadUsage()}
             disabled={refreshing}
             aria-label="Refresh usage data"
             style={{
@@ -245,7 +211,7 @@ export default function UsageSettingsPage() {
               gap: 4,
               padding: '4px 8px',
               background: 'transparent',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
               color: 'var(--text-3)',
               fontSize: 12,
@@ -255,19 +221,16 @@ export default function UsageSettingsPage() {
           >
             <RefreshCw
               size={12}
-              style={{
-                animation: refreshing ? 'spin 0.6s linear infinite' : 'none',
-              }}
+              style={{ animation: refreshing ? 'spin 0.6s linear infinite' : 'none' }}
             />
             Refresh
           </button>
         </div>
       </section>
 
-      {/* Additional features: daily included routine runs */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -276,7 +239,7 @@ export default function UsageSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -284,37 +247,46 @@ export default function UsageSettingsPage() {
         >
           Additional features
         </div>
-
-        <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
-                Daily included routine runs
-              </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                {dailyRunsUsed} / {dailyRunsLimit}
-              </span>
-            </div>
-            <Progress
-              value={dailyRunsPercent}
-              aria-label="Daily routine runs used"
-              className="h-2"
-              indicatorClassName="bg-amber-500"
-              style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
-            />
-            <span style={{ fontSize: 11, color: 'var(--text-3)' }}>
-              You have not run any routines yet
-            </span>
-          </div>
+        <div style={{ padding: 20 }}>
+          <UsageBar
+            label="Daily included routine runs"
+            percent={0}
+            value="0 runs today"
+            detail="Routines are private beta until managed execution controls are proven"
+          />
         </div>
       </section>
+    </div>
+  );
+}
+
+function UsageBar({
+  label,
+  percent,
+  value,
+  detail,
+}: {
+  label: string;
+  percent: number;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
+      >
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-3)' }}>{value}</span>
+      </div>
+      <Progress
+        value={percent}
+        aria-label={`${label} usage`}
+        className="h-2"
+        indicatorClassName="bg-[var(--chat-accent-primary)]"
+        style={{ background: 'var(--bg-hover, rgba(255,255,255,0.08))' }}
+      />
+      <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{detail}</span>
     </div>
   );
 }

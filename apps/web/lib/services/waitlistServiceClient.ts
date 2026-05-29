@@ -2,7 +2,7 @@
  * Client-side waitlist and invite-code service.
  *
  * This file is the browser-safe companion to waitlistService.ts (server-only).
- * Routes through active Next.js API endpoints — Supabase browser access removed.
+ * Routes through active Next.js API endpoints — direct browser database access removed.
  */
 
 import type { InviteCodeError } from '@/components/cloud-bridge/types';

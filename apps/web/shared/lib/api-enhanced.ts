@@ -54,8 +54,8 @@ class DefaultErrorHandler implements ErrorHandler {
 class AuthErrorHandler implements ErrorHandler {
   handle(error: APIException): void {
     if (error.code === 'AUTH_FAILED' || error.code === 'REFRESH_FAILED') {
-      // Auth is managed by Supabase SSR cookies — just redirect to login
-      window.location.href = '/auth/login';
+      // Auth is managed by Clerk session cookies - just redirect to login.
+      window.location.href = '/login';
     } else {
       toast.error('Authentication error. Please log in again.');
     }

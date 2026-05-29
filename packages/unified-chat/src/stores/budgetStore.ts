@@ -5,7 +5,7 @@
  * own token / dollar / message-count snapshot via `setBudget`, and push
  * tool-call activity into the action trail via `pushAction`. The store is
  * a passive consumer — it does not call any backend, hold any auth token,
- * or know about Stripe / Supabase / Tauri.
+ * or know about Stripe / cloud DB / Tauri.
  *
  * Companion components: BudgetTracker (auto-counts last message tokens),
  * BudgetAlertsPanel, TokenCounter, UsageLimitBanner, CurrentActionBadge.

@@ -12,7 +12,7 @@
  *   - No real LLM; the download progress is the built-in stub timer
  *     (1.2 %/80 ms tick, completes in ~6.7 s, then routes to chat).
  *   - All cloud services are gated by FEATURES flags (billing/auth=false),
- *     so no Supabase calls can be made.
+ *     so no cloud auth calls can be made.
  *
  * Runs in < 90 s on a simulator (download stub ~7 s + nav overhead).
  *

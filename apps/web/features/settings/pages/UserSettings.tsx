@@ -1,6 +1,6 @@
 /**
- * Settings Page - Real Functional Implementation with Supabase
- * NO MOCK DATA - All data comes from and saves to Supabase
+ * Settings Page - Real Functional Implementation with Neon
+ * NO MOCK DATA - All data comes from and saves to Neon
  * Uses React Query for server state management
  * Form validation powered by react-hook-form + Zod with XSS sanitization
  */

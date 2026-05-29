@@ -31,7 +31,7 @@ interface UseConversationsReturn {
   // Actions
   fetchConversations: () => Promise<void>;
   createConversation: (title?: string, model?: string) => Promise<Conversation | null>;
-  loadConversation: (id: string) => Promise<void>;
+  loadConversation: (id: string) => Promise<boolean>;
   updateConversation: (id: string, updates: { title?: string; model?: string }) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
   setActiveConversation: (id: string | null) => void;
@@ -156,7 +156,7 @@ export function useConversations(): UseConversationsReturn {
 
   // Load a conversation with its messages
   const loadConversation = useCallback(
-    async (id: string) => {
+    async (id: string): Promise<boolean> => {
       setLoading(true);
       setError(null);
 
@@ -191,8 +191,10 @@ export function useConversations(): UseConversationsReturn {
 
         // Atomically set active conversation and messages to avoid race conditions
         setActiveConversationWithMessages(id, messages);
+        return true;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load conversation');
+        return false;
       } finally {
         setLoading(false);
       }

@@ -28,16 +28,16 @@ const INSPIRATION: InspirationCard[] = [
     type: 'html',
     description: 'A self-contained HTML snippet with CSS keyframe animation.',
     content: `<style>
-  body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #0a0a0a; }
+  body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #171813; }
   .btn {
     padding: 14px 32px;
     font-size: 15px;
     font-weight: 600;
     border: none;
     border-radius: 10px;
-    background: linear-gradient(135deg, #c8892a, #e8b84b, #c8892a);
+    background: linear-gradient(135deg, #a98248, #d1b27a, #a98248);
     background-size: 200% 200%;
-    color: #09090b;
+    color: #24231e;
     cursor: pointer;
     animation: shift 3s ease infinite;
     font-family: system-ui, sans-serif;
@@ -69,9 +69,9 @@ const INSPIRATION: InspirationCard[] = [
     type: 'svg',
     description: 'A clean SVG wordmark built without any assets.',
     content: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" width="200" height="60">
-  <rect width="200" height="60" rx="8" fill="#0d0d0a"/>
-  <text x="20" y="38" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#c8892a">AGI</text>
-  <text x="72" y="38" font-family="Georgia, serif" font-size="26" font-weight="400" fill="#f5f4ee"> Workforce</text>
+  <rect width="200" height="60" rx="8" fill="#1a1b17"/>
+  <text x="20" y="38" font-family="Georgia, serif" font-size="26" font-weight="700" fill="#b9985c">AGI</text>
+  <text x="72" y="38" font-family="Georgia, serif" font-size="26" font-weight="400" fill="#e7e0d2"> Workforce</text>
 </svg>`,
   },
   {
@@ -117,18 +117,18 @@ asyncio.run(main())`,
     type: 'html',
     description: 'Auto-filling card grid with CSS Grid and media queries.',
     content: `<style>
-  body { margin: 0; padding: 24px; background: #09090b; font-family: system-ui, sans-serif; }
+  body { margin: 0; padding: 24px; background: #171813; font-family: system-ui, sans-serif; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; }
   .card {
-    background: #111110;
-    border: 1px solid rgba(245,244,238,0.12);
+    background: #1a1b17;
+    border: 1px solid rgba(226,220,207,0.12);
     border-radius: 12px;
     padding: 20px 16px;
-    color: #f5f4ee;
+    color: #e7e0d2;
     font-size: 13px;
   }
-  .card h3 { margin: 0 0 6px; font-size: 15px; color: #c8892a; }
-  .card p  { margin: 0; color: #b8b5ac; line-height: 1.5; }
+  .card h3 { margin: 0 0 6px; font-size: 15px; color: #b9985c; }
+  .card p  { margin: 0; color: #c8c0b2; line-height: 1.5; }
 </style>
 <div class="grid">
   <div class="card"><h3>Speed</h3><p>Sub-100 ms first token on most models.</p></div>
@@ -390,14 +390,14 @@ function ArtifactCard({ title, language, subtitle, type, content, onClick }: Art
             width: '100%',
             height: 120,
             overflow: 'hidden',
-            background: '#fff',
+            background: 'var(--agi-card)',
             position: 'relative',
           }}
         >
           <iframe
             title={`${title} preview`}
             sandbox="allow-scripts"
-            srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#fff}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
+            srcDoc={`<html><head><meta charset="UTF-8"><style>body{margin:0;padding:6px;font-size:8px;overflow:hidden;background:#f8f5ee;color:#39362e}*{max-width:100%}</style></head><body>${(content ?? '').slice(0, 1200)}</body></html>`}
             style={{
               pointerEvents: 'none',
               width: '300%',

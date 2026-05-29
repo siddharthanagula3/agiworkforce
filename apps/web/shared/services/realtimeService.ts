@@ -1,7 +1,7 @@
 /**
  * Realtime Service (no-op stub)
  *
- * Supabase Realtime subscriptions have been removed. All methods are retained
+ * Realtime subscriptions have been removed. All methods are retained
  * as no-op stubs so that call sites continue to compile. Real-time features
  * will be re-implemented with a different provider or polling approach.
  */
@@ -55,7 +55,7 @@ class RealtimeServiceImpl implements RealtimeService {
    * Connect to the realtime service (no-op stub)
    */
   connect(): void {
-    logger.warn('[RealtimeService] connect() called but Supabase Realtime has been removed.');
+    logger.warn('[RealtimeService] connect() called but Realtime has been removed.');
   }
 
   /**
@@ -64,7 +64,7 @@ class RealtimeServiceImpl implements RealtimeService {
   disconnect(): void {
     this.connectionState.connected = false;
     this.connectionState.channels = [];
-    logger.warn('[RealtimeService] disconnect() called but Supabase Realtime has been removed.');
+    logger.warn('[RealtimeService] disconnect() called but Realtime has been removed.');
   }
 
   /**
@@ -72,7 +72,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   subscribe(channelName: string, _handler: (...args: unknown[]) => void): Unsubscribe {
     logger.warn(
-      `[RealtimeService] subscribe(${channelName}) called but Supabase Realtime has been removed. No subscription created.`,
+      `[RealtimeService] subscribe(${channelName}) called but Realtime has been removed. No subscription created.`,
     );
     return () => {};
   }
@@ -82,7 +82,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   publish(channelName: string, _payload: unknown): void {
     logger.warn(
-      `[RealtimeService] publish(${channelName}) called but Supabase Realtime has been removed. No message sent.`,
+      `[RealtimeService] publish(${channelName}) called but Realtime has been removed. No message sent.`,
     );
   }
 
@@ -91,7 +91,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   async initializeRealtime(userId: string, _callbacks: RealtimeCallbacks): Promise<void> {
     logger.warn(
-      `[RealtimeService] initializeRealtime(${userId}) called but Supabase Realtime has been removed.`,
+      `[RealtimeService] initializeRealtime(${userId}) called but Realtime has been removed.`,
     );
   }
 
@@ -100,7 +100,7 @@ class RealtimeServiceImpl implements RealtimeService {
    */
   async cleanup(): Promise<void> {
     this.connectionState = { connected: false, channels: [] };
-    logger.warn('[RealtimeService] cleanup() called but Supabase Realtime has been removed.');
+    logger.warn('[RealtimeService] cleanup() called but Realtime has been removed.');
   }
 
   /**
@@ -114,9 +114,7 @@ class RealtimeServiceImpl implements RealtimeService {
    * Reconnect all subscriptions for a user (no-op stub)
    */
   async reconnect(userId: string): Promise<void> {
-    logger.warn(
-      `[RealtimeService] reconnect(${userId}) called but Supabase Realtime has been removed.`,
-    );
+    logger.warn(`[RealtimeService] reconnect(${userId}) called but Realtime has been removed.`);
   }
 }
 

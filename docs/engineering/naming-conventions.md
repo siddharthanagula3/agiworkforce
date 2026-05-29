@@ -54,7 +54,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Shared TypeScript packages live in `packages/<domain>`.
 - Shared Rust crates live in `crates/agiworkforce-<domain>`.
 - Deployable services live in `services/<service-name>`.
-- Supabase migrations live in `supabase/migrations`.
+- Neon migrations live in `apps/web/db/neon`.
 - Do not create cross-app imports; move shared code into `packages/` or `crates/`.
 - Mobile root `hooks/` and `lib/` are frozen compatibility roots unless a repo guardrail explicitly allowlists the file. Feature-owned Mobile code belongs under `apps/mobile/src/features/<domain>/`; platform, storage, integration, and UI primitives belong under the matching `apps/mobile/src/*` layer.
 
@@ -78,7 +78,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - TypeScript import aliases should point to packages or same-app domains, not another app's source tree.
 - Public API names should describe the domain, not implementation history. Avoid names that mention reference projects unless they are explicit compatibility adapters.
 - Shared persistent or wire contracts live in `packages/types`. Local duplicate contract shapes need an explicit migration baseline and removal plan.
-- UI files should not call network/auth clients directly. Keep provider, Supabase, browser/computer-use, generated-file, and transport mechanics in feature services, integrations, packages, or service-layer modules.
+- UI files should not call network/auth clients directly. Keep provider, Neon/Clerk, browser/computer-use, generated-file, and transport mechanics in feature services, integrations, packages, or service-layer modules.
 
 ## Branches, Commits, PRs
 

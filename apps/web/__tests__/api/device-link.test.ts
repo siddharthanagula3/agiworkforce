@@ -2,7 +2,7 @@
  * Device Link API Tests
  *
  * Tests for device linking flow input validation
- * Note: Full integration tests require actual Supabase connection
+ * Note: Full integration tests require actual Neon connection
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -43,9 +43,9 @@ vi.mock('@/lib/cors', () => ({
 // Mock environment variables
 vi.mock('@/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
-    if (key === 'NEXT_PUBLIC_SUPABASE_URL') return 'https://test.supabase.co';
-    if (key === 'NEXT_PUBLIC_SUPABASE_ANON_KEY') return 'test-anon-key';
-    if (key === 'SUPABASE_SERVICE_ROLE_KEY') return 'test-service-role-key';
+    if (key === 'NEON_DATABASE_URL') return 'https://localhost';
+    if (key === 'CLERK_SECRET_KEY') return 'test-anon-key';
+    if (key === 'NEON_DATABASE_URL') return 'test-service-role-key';
     return 'test-value';
   }),
   getEnv: vi.fn((key: string, defaultValue?: string) => {

@@ -1,0 +1,3 @@
+-- Migration 0019 is intentionally retained as a no-op sequence marker.
+-- The previous identity bridge table has been retired; Clerk user IDs are
+-- stored directly in Neon text user_id columns.

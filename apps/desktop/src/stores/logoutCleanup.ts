@@ -42,7 +42,7 @@ import { STORAGE_KEYS } from '../constants/storageKeys';
 
 /**
  * Clears all store state on logout.
- * Call this after supabaseAuth.signOut() completes.
+ * Call this after cloudAccountAuth.signOut() completes.
  *
  * Order matters: clean up stores with dependencies last.
  */

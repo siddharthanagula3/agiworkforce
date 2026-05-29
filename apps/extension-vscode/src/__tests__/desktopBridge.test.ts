@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DesktopBridge } from '../features/desktop-bridge';
+import { DesktopBridge, getBridgeAuthHeaders } from '../features/desktop-bridge';
 import type { BridgeMessage } from '../features/desktop-bridge';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -149,6 +149,19 @@ describe('DesktopBridge', () => {
         bridge.dispose();
       }).not.toThrow();
     });
+  });
+});
+
+describe('bridge HTTP auth headers', () => {
+  it('includes bearer and bridge-token headers when a token is available', () => {
+    expect(getBridgeAuthHeaders(' test-token ')).toEqual({
+      Authorization: 'Bearer test-token',
+      'X-AGI-Bridge-Token': 'test-token',
+    });
+  });
+
+  it('fails closed when no bridge token is available', () => {
+    expect(getBridgeAuthHeaders('')).toBeUndefined();
   });
 });
 

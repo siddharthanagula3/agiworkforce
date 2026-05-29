@@ -17,9 +17,9 @@ import {
   type EmployeeInputConfig,
 } from './employee-input-sanitizer';
 
-// Mock Supabase client
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
+// Mock cloud database client
+vi.mock('@shared/lib/cloud-db-client', () => ({
+  cloudDb: {
     from: vi.fn(() => ({
       insert: vi.fn().mockResolvedValue({ error: null }),
     })),

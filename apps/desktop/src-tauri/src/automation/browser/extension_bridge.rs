@@ -193,9 +193,7 @@ impl ExtensionBridge {
         };
 
         let approved = crate::sys::commands::tool_confirmation::request_confirmation_simple(
-            app_handle,
-            action,
-            &args,
+            app_handle, action, &args,
         )
         .await
         .map_err(Error::Generic)?;
@@ -301,11 +299,8 @@ impl ExtensionBridge {
     pub async fn get_local_storage(&self, key: Option<&str>) -> Result<Value> {
         // SEV-DESK-02: reading localStorage can exfil JWTs, OAuth refresh
         // tokens, and SPA-stored secrets. Many SPAs store auth tokens here.
-        self.require_confirmation(
-            "extension_bridge.get_local_storage",
-            json!({ "key": key }),
-        )
-        .await?;
+        self.require_confirmation("extension_bridge.get_local_storage", json!({ "key": key }))
+            .await?;
 
         let response = self
             .send_message(ExtensionMessage::GetLocalStorage {

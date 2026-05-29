@@ -578,8 +578,10 @@ export const useChatStore = create<ChatStore>()(
                 stream: true,
                 temperature: options.temperature ?? defaultSettings.temperature,
                 max_tokens: options.maxTokens ?? defaultSettings.maxTokens,
-                // Thread effort from thinking-store into the LLM request when enabled
+                // Thread effort from thinking-store into the LLM request when enabled.
+                // Provider-specific API params are normalized by the web LLM route.
                 ...(useThinkingStore.getState().enabled && {
+                  thinking_mode: true,
                   effort: useThinkingStore.getState().effort,
                 }),
               }),

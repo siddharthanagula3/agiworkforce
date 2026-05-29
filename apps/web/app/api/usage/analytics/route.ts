@@ -38,6 +38,15 @@ function rangeToDays(range: string): number | null {
   return null; // all time
 }
 
+function isMissingLedgerTable(error: unknown): boolean {
+  return (
+    !!error &&
+    typeof error === 'object' &&
+    ((error as Record<string, unknown>)['code'] === '42P01' ||
+      String((error as Record<string, unknown>)['message'] ?? '').includes('credit_transactions'))
+  );
+}
+
 /**
  * GET /api/usage/analytics?timeRange=30d
  * Return session analytics and daily usage trends for the current user.
@@ -125,6 +134,25 @@ async function handleGetAnalytics(request: NextRequest) {
       time_range: timeRange,
     });
   } catch (error) {
+    if (isMissingLedgerTable(error)) {
+      logger.warn({ userId }, 'credit_transactions table unavailable; returning empty analytics');
+      return NextResponse.json({
+        daily_usage: [],
+        stats: {
+          total_tokens: 0,
+          total_cost: 0,
+          avg_tokens_per_session: 0,
+          sessions_count: 0,
+          today_tokens: 0,
+          today_cost: 0,
+          week_tokens: 0,
+          week_cost: 0,
+          month_tokens: 0,
+          month_cost: 0,
+        },
+        time_range: timeRange,
+      });
+    }
     logger.error({ error, userId }, 'Failed to fetch usage analytics');
     throw createError.internal('Failed to fetch usage analytics');
   }

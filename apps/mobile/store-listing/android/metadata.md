@@ -68,7 +68,7 @@ We never train on your conversations. Ever.
 
 BYOK keys are stored in Android Keystore, encrypted with hardware-backed protection. We never see them. Each API call goes directly from your device to the provider you picked.
 
-Cloud-mode sync (opt-in) uses your AGI account and stores conversations row-encrypted in Supabase. You can delete your data at any time from Settings → Account.
+Cloud-mode sync (opt-in) uses your AGI account and stores conversations through AGI's Clerk-authenticated Web/API. You can delete your data at any time from Settings → Account.
 
 We do not track you across apps or websites. The app collects no personal data by default; see the on-device Privacy section before any provider key is added.
 

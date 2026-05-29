@@ -17,7 +17,7 @@
  *  13. Step-up auth: 403 + insufficient_scope response shape.
  *
  * Each test mounts the router under supertest with a stub auth middleware,
- * stub Supabase client, and controlled environment variables.
+ * stub Neon client, and controlled environment variables.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -28,23 +28,20 @@ import supertest from 'supertest';
 // Stub environment before any module import that calls requireEnv()
 // ---------------------------------------------------------------------------
 vi.stubEnv('JWT_SECRET', 'test-jwt-secret-must-be-at-least-32-bytes-long!!');
-vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co');
-vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-service-role');
-vi.stubEnv('SUPABASE_ANON_KEY', 'test-anon-key');
-vi.stubEnv('SUPABASE_JWT_SECRET', 'test-jwt-secret-must-be-at-least-32-bytes-long!!');
+vi.stubEnv('NEON_DATABASE_URL', 'postgresql://test:test@localhost:5432/test');
+vi.stubEnv('CLERK_SECRET_KEY', 'test-clerk-secret-key');
 vi.stubEnv('API_BASE_URL', 'https://api.test.example.com');
 
 // ---------------------------------------------------------------------------
-// Stub Supabase client (module-level)
+// Stub Neon client (module-level)
 // ---------------------------------------------------------------------------
 
 const mockFrom = vi.fn();
-const mockSupabase = { from: mockFrom };
+const mockDb = { from: mockFrom };
 
-vi.mock('../lib/supabaseClients', () => ({
-  getServiceClient: () => mockSupabase,
-  getUserScopedClient: () => mockSupabase,
-  mintSupabaseJwt: () => 'stub-supabase-jwt',
+vi.mock('../lib/neonClients', () => ({
+  getServiceClient: () => mockDb,
+  getUserScopedClient: () => mockDb,
 }));
 
 // Stub authenticateToken so routes that require auth don't need a real JWT.
@@ -84,7 +81,7 @@ function buildApp(): ReturnType<typeof express> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers to set up chainable Supabase mock
+// Helpers to set up chainable Neon mock
 // ---------------------------------------------------------------------------
 
 type MockChain = {

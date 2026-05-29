@@ -5,7 +5,7 @@
  * GET  /api/shared?token=<token> - Retrieve a stored conversation by token.
  *
  * POST requires no authentication - the share token acts as the capability.
- * The conversation is stored in the `shared_conversations` Supabase table and
+ * The conversation is stored in the Neon `shared_conversations` table and
  * expires after 30 days (enforced by the GET handler and a DB cron job).
  */
 

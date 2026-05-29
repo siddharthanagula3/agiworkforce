@@ -23,7 +23,7 @@ import { authenticateToken } from '../middleware/auth';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { requireProPlan } from '../middleware/planGate';
 import { AppError } from '../middleware/errorHandler';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 
@@ -69,8 +69,8 @@ const sendMessageSchema = z
 async function verifyConversationOwnership(conversationId: string, userId: string): Promise<void> {
   // Wave 1.5+ singleton sweep: user-scoped client. RLS on `conversations`
   // enforces the same predicate the .eq filter does, defense-in-depth.
-  const supabase = getUserScopedClient(userId);
-  const { data: conversation, error } = await supabase
+  const db = getUserScopedClient(userId);
+  const { data: conversation, error } = await db
     .from('conversations')
     .select('id, user_id')
     .eq('id', conversationId)
@@ -254,8 +254,8 @@ router.get('/', createRateLimiter('cloud-chat-list'), async (req: Request, res: 
     throw new AppError('Unauthorized', 401);
   }
 
-  const supabase = getUserScopedClient(user.userId);
-  const { data: conversations, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data: conversations, error } = await db
     .from('conversations')
     .select('id, title, model, is_archived, created_at, updated_at')
     .eq('user_id', user.userId)
@@ -288,8 +288,8 @@ router.post('/', createRateLimiter('cloud-chat-create'), async (req: Request, re
   const conversationId = randomUUID();
   const now = new Date().toISOString();
 
-  const supabase = getUserScopedClient(user.userId);
-  const { data: conversation, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data: conversation, error } = await db
     .from('conversations')
     .insert({
       id: conversationId,
@@ -334,15 +334,15 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
 
   await verifyConversationOwnership(conversationId, user.userId);
 
-  const supabase = getUserScopedClient(user.userId);
+  const db = getUserScopedClient(user.userId);
   // Fetch conversation metadata and messages in parallel.
   const [convResult, msgsResult] = await Promise.all([
-    supabase
+    db
       .from('conversations')
       .select('id, title, model, is_archived, created_at, updated_at')
       .eq('id', conversationId)
       .single(),
-    supabase
+    db
       .from('messages')
       .select('id, role, content, model, created_at')
       .eq('conversation_id', conversationId)
@@ -389,8 +389,8 @@ router.delete(
 
     await verifyConversationOwnership(conversationId, user.userId);
 
-    const supabase = getUserScopedClient(user.userId);
-    const { error } = await supabase
+    const db = getUserScopedClient(user.userId);
+    const { error } = await db
       .from('conversations')
       .update({ is_deleted: true, updated_at: new Date().toISOString() })
       .eq('id', conversationId)
@@ -429,8 +429,8 @@ router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request,
 
   await verifyConversationOwnership(conversationId, user.userId);
 
-  const supabase = getUserScopedClient(user.userId);
-  const { data: updated, error } = await supabase
+  const db = getUserScopedClient(user.userId);
+  const { data: updated, error } = await db
     .from('conversations')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', conversationId)
@@ -477,14 +477,14 @@ router.post(
 
     const { conversation_id, message, model } = sendMessageSchema.parse(req.body);
 
-    const supabase = getUserScopedClient(user.userId);
+    const db = getUserScopedClient(user.userId);
 
     // Auto-create conversation if none provided
     let conversationId = conversation_id;
     if (!conversationId) {
       const newId = randomUUID();
       const now = new Date().toISOString();
-      const { error: createErr } = await supabase.from('conversations').insert({
+      const { error: createErr } = await db.from('conversations').insert({
         id: newId,
         user_id: user.userId,
         title: message.slice(0, 100),
@@ -505,7 +505,7 @@ router.post(
 
     // Persist user message
     const userMsgId = randomUUID();
-    const { error: userMsgErr } = await supabase.from('messages').insert({
+    const { error: userMsgErr } = await db.from('messages').insert({
       id: userMsgId,
       conversation_id: conversationId,
       role: 'user',
@@ -519,7 +519,7 @@ router.post(
     }
 
     // Fetch conversation history for context
-    const { data: history } = await supabase
+    const { data: history } = await db
       .from('messages')
       .select('role, content')
       .eq('conversation_id', conversationId)
@@ -594,7 +594,7 @@ router.post(
       }
 
       // Persist assistant message
-      const { error: assistantMsgErr } = await supabase.from('messages').insert({
+      const { error: assistantMsgErr } = await db.from('messages').insert({
         id: randomUUID(),
         conversation_id: conversationId,
         role: 'assistant',
@@ -607,7 +607,7 @@ router.post(
       }
 
       // Update conversation timestamp
-      await supabase
+      await db
         .from('conversations')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', conversationId);

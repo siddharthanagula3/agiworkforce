@@ -28,7 +28,7 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock Neon DB and Clerk auth — routes use these instead of Supabase after Wave 3.
+// Mock Neon DB and Clerk auth — routes use these instead of Neon after Wave 3.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();

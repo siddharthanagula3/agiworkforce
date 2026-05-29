@@ -18,14 +18,11 @@
 // References to the mock functions are obtained after import via jest.mocked().
 // ---------------------------------------------------------------------------
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn(),
-      refreshSession: jest.fn(),
-      signOut: jest.fn(),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(),
+  getAuthHeaders: jest.fn(),
+  refreshAuthSession: jest.fn(),
+  clearAuthSession: jest.fn(),
 }));
 
 // Mock Alert so the handleUnrecoverableAuth UI call does not throw in test env
@@ -49,24 +46,32 @@ jest.mock('../lib/abortSignal', () => ({
 // ---------------------------------------------------------------------------
 
 import { api } from '../services/api';
-import { supabase } from '../services/supabase';
+import {
+  clearAuthSession,
+  getAuthHeaders,
+  getAuthToken,
+  refreshAuthSession,
+} from '../services/authSession';
 import { Alert } from 'react-native';
 
 // Typed references to the mock functions
-const mockGetSession = supabase.auth.getSession as jest.Mock;
-const mockRefreshSession = supabase.auth.refreshSession as jest.Mock;
-const mockSignOut = supabase.auth.signOut as jest.Mock;
+const mockGetAuthToken = getAuthToken as jest.Mock;
+const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
+const mockRefreshAuthSession = refreshAuthSession as jest.Mock;
+const mockClearAuthSession = clearAuthSession as jest.Mock;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function mockToken(token: string) {
-  mockGetSession.mockResolvedValue({ data: { session: { access_token: token } } });
+  mockGetAuthToken.mockResolvedValue(token);
+  mockGetAuthHeaders.mockResolvedValue({ Authorization: `Bearer ${token}` });
 }
 
 function mockNoToken() {
-  mockGetSession.mockResolvedValue({ data: { session: null } });
+  mockGetAuthToken.mockResolvedValue(null);
+  mockGetAuthHeaders.mockResolvedValue({});
 }
 
 function makeResponse(status: number, body: unknown): Response {
@@ -86,7 +91,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   // Default: valid session token
   mockToken('access-token-valid');
-  mockSignOut.mockResolvedValue({ error: null });
+  mockRefreshAuthSession.mockResolvedValue(false);
+  mockClearAuthSession.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -140,23 +146,17 @@ describe('401 handling — refresh and retry', () => {
       .mockResolvedValueOnce(makeResponse(200, { data: 'retried' }));
 
     // Refresh succeeds with a new token
-    mockRefreshSession.mockResolvedValueOnce({
-      data: { session: { access_token: 'new-refreshed-token' } },
-      error: null,
-    });
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
     // Second getSession call (after refresh) returns new token
-    mockGetSession.mockResolvedValueOnce({
-      data: { session: { access_token: 'access-token-valid' } },
-    });
-    mockGetSession.mockResolvedValueOnce({
-      data: { session: { access_token: 'new-refreshed-token' } },
-    });
+    mockGetAuthHeaders
+      .mockResolvedValueOnce({ Authorization: 'Bearer access-token-valid' })
+      .mockResolvedValueOnce({ Authorization: 'Bearer new-refreshed-token' });
 
     const result = await api.get<{ data: string }>('/api/needs-refresh');
 
     expect(result).toEqual({ data: 'retried' });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
-    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
   });
 
   it('does not retry a second time when _skipAuthRetry is set (avoids infinite loop)', async () => {
@@ -166,10 +166,7 @@ describe('401 handling — refresh and retry', () => {
     fetchSpy.mockResolvedValueOnce(makeResponse(401, { error: 'Unauthorized' }));
 
     // Refresh fails
-    mockRefreshSession.mockResolvedValueOnce({
-      data: { session: null },
-      error: new Error('refresh failed'),
-    });
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('401');
     // Only 1 fetch call — no retry when refresh fails
@@ -181,27 +178,21 @@ describe('401 handling — refresh and retry', () => {
 // 3. Failed refresh triggers sign-out
 // ---------------------------------------------------------------------------
 
-describe('failed refresh triggers sign-out', () => {
-  it('calls supabase.auth.signOut when refresh returns no session', async () => {
+describe('failed refresh triggers local cloud-session cleanup', () => {
+  it('clears the auth session facade when refresh returns no session', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
 
-    mockRefreshSession.mockResolvedValueOnce({
-      data: { session: null },
-      error: null,
-    });
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('401');
 
-    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
   });
 
   it('shows an alert when session is unrecoverably expired', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
 
-    mockRefreshSession.mockResolvedValueOnce({
-      data: { session: null },
-      error: null,
-    });
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow();
 
@@ -215,10 +206,7 @@ describe('failed refresh triggers sign-out', () => {
   it('throws with a descriptive message after failed refresh', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
 
-    mockRefreshSession.mockResolvedValueOnce({
-      data: { session: null },
-      error: null,
-    });
+    mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('Session expired');
   });
@@ -244,12 +232,7 @@ describe('concurrent 401 de-duplication', () => {
       resolveRefresh = resolve;
     });
 
-    mockRefreshSession.mockReturnValueOnce(
-      refreshPromise.then(() => ({
-        data: { session: { access_token: 'refreshed' } },
-        error: null,
-      })),
-    );
+    mockRefreshAuthSession.mockReturnValueOnce(refreshPromise.then(() => true));
 
     // Kick off both concurrent requests (don't await yet)
     const req1 = api.get('/api/concurrent-1');
@@ -263,7 +246,7 @@ describe('concurrent 401 de-duplication', () => {
     await Promise.allSettled([req1, req2]);
 
     // refreshSession should only have been called once despite two 401s
-    expect(mockRefreshSession).toHaveBeenCalledTimes(1);
+    expect(mockRefreshAuthSession).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -276,28 +259,28 @@ describe('non-401 errors pass through', () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(403, 'Forbidden'));
 
     await expect(api.get('/api/forbidden')).rejects.toThrow('403');
-    expect(mockRefreshSession).not.toHaveBeenCalled();
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 
   it('throws for 500 Internal Server Error without attempting refresh', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(500, 'Server error'));
 
     await expect(api.get('/api/server-error')).rejects.toThrow('500');
-    expect(mockRefreshSession).not.toHaveBeenCalled();
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 
   it('throws for 404 Not Found without attempting refresh', async () => {
     jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(404, 'Not found'));
 
     await expect(api.get('/api/missing')).rejects.toThrow('404');
-    expect(mockRefreshSession).not.toHaveBeenCalled();
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 
   it('propagates network errors (fetch throws)', async () => {
     jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network unreachable'));
 
     await expect(api.get('/api/offline')).rejects.toThrow('Network unreachable');
-    expect(mockRefreshSession).not.toHaveBeenCalled();
+    expect(mockRefreshAuthSession).not.toHaveBeenCalled();
   });
 });
 

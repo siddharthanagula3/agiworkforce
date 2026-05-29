@@ -100,8 +100,8 @@ async fn execute_search_with_agent(
     strategy: &SearchStrategy,
 ) -> SearchAgentResult {
     use super::agents::{
-        CalendarSearchAgent, DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent,
-        SearchAgent, WebSearchAgent,
+        CalendarSearchAgent, DocumentSearchAgent, EmailSearchAgent, MemorySearchAgent, SearchAgent,
+        WebSearchAgent,
     };
 
     let max_results: usize = 10;

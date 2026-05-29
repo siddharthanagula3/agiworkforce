@@ -758,13 +758,14 @@ Mobile v1 should not publicly promise:
 - Broad AGI Managed Cloud.
 - Unlimited compute credits.
 - Full Desktop-level BYOK provider tooling.
+- Mobile BYOK in v1.
 - Full developer agent capabilities.
 - Full artifact generation parity.
 - Full connector/app directory parity.
 
-If BYOK provider chat is present in Mobile v1, it must be explicitly gated,
-clearly labeled, and pass the Local-to-BYOK fork/consent flow. The default Mobile
-v1 public path remains Local-first plus Cloud waitlist/invite.
+Mobile BYOK is not part of Mobile v1. The public Mobile path is small on-device
+Local LLM chat plus Cloud waitlist/invite; Cloud requires invite/subscription
+state before any hosted model request is allowed.
 
 ### 10.3 Mobile V1 Non-Goals
 
@@ -1652,8 +1653,7 @@ These are not blockers to writing the PRD, but they must be answered before
 later implementation phases claim release readiness:
 
 1. Exact Mobile local runtime/model pack shipping mechanism.
-2. Whether Mobile public v1 exposes any BYOK provider chat or only Desktop-first
-   BYOK setup later.
+2. Exact Desktop-first/developer-surface BYOK setup timing after Mobile v1.
 3. Exact App Store privacy nutrition labels after final Mobile data audit.
 4. Exact Cloud invite-code backend and abuse limits.
 5. Exact provider retention metadata schema.

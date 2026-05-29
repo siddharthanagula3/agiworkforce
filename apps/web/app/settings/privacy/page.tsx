@@ -1,25 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Switch } from '@shared/ui/switch';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
  * /settings/privacy -- local-first privacy controls. Round-2 audit P0 #7 (web
- * settings depth). Toggles persist in localStorage in v1; Cloud Managed
- * replaces persistence with a Supabase row. Round-20 adds delete account and
- * data export with confirmation flow.
+ * settings depth). Account privacy controls are persisted through
+ * /api/settings/preferences backed by Neon. Missing persistence is shown as an
+ * error instead of silently using client-only fallback data.
  */
 
-const PRIVACY_KEYS = {
-  locationMetadata: 'agi.privacy.locationMetadata',
-  improveModelTraining: 'agi.privacy.improveModelTraining',
-  shareTelemetry: 'agi.privacy.shareTelemetry',
-  rememberChats: 'agi.privacy.rememberChats',
-} as const;
+const NAMESPACE = 'privacy';
 
-type ToggleKey = keyof typeof PRIVACY_KEYS;
+type ToggleKey = 'locationMetadata' | 'improveModelTraining' | 'shareTelemetry' | 'rememberChats';
 
 interface ToggleSpec {
   id: ToggleKey;
@@ -61,21 +57,11 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
   },
 ];
 
-function readToggle(key: ToggleKey, defaultValue: boolean): boolean {
-  if (typeof window === 'undefined') return defaultValue;
-  const stored = window.localStorage.getItem(PRIVACY_KEYS[key]);
-  if (stored === '1') return true;
-  if (stored === '0') return false;
-  return defaultValue;
-}
-
-function writeToggle(key: ToggleKey, value: boolean): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(PRIVACY_KEYS[key], value ? '1' : '0');
-  } catch {
-    // Private-window / quota errors are non-fatal.
-  }
+function defaultPrivacyState(): Record<ToggleKey, boolean> {
+  return TOGGLES.reduce(
+    (acc, t) => ({ ...acc, [t.id]: t.defaultValue }),
+    {} as Record<ToggleKey, boolean>,
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -101,7 +87,7 @@ function Chevron({ open }: { open: boolean }) {
 function ExpandableSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ borderBottom: '1px solid var(--border)' }}>
+    <div style={{ borderBottom: '1px solid var(--settings-border)' }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -140,12 +126,10 @@ function ExpandableSection({ title, children }: { title: string; children: React
 }
 
 export default function PrivacySettingsPage() {
-  const [state, setState] = useState<Record<ToggleKey, boolean>>(() =>
-    TOGGLES.reduce(
-      (acc, t) => ({ ...acc, [t.id]: readToggle(t.id, t.defaultValue) }),
-      {} as Record<ToggleKey, boolean>,
-    ),
-  );
+  const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
+  const [savingPreferences, setSavingPreferences] = useState(false);
+  const [preferenceError, setPreferenceError] = useState<string | null>(null);
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
 
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -156,10 +140,42 @@ export default function PrivacySettingsPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchPreferenceNamespace<Record<ToggleKey, boolean>>(NAMESPACE, defaultPrivacyState())
+      .then((value) => {
+        if (!cancelled) {
+          setState(value);
+          setPreferenceError(null);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setPreferenceError(
+            error instanceof Error ? error.message : 'Failed to load privacy settings',
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreferences(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function toggle(key: ToggleKey) {
     setState((prev) => {
       const next = { ...prev, [key]: !prev[key] };
-      writeToggle(key, next[key]);
+      setSavingPreferences(true);
+      setPreferenceError(null);
+      savePreferenceNamespace(NAMESPACE, next)
+        .catch((error) => {
+          setPreferenceError(
+            error instanceof Error ? error.message : 'Failed to save privacy settings',
+          );
+        })
+        .finally(() => setSavingPreferences(false));
       return next;
     });
   }
@@ -224,14 +240,24 @@ export default function PrivacySettingsPage() {
           Privacy
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          AGI is local-first. These controls override defaults for this device.
+          AGI is local-first. Web privacy controls are loaded from and saved to your account
+          settings.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
+          {loadingPreferences
+            ? 'Loading account settings...'
+            : savingPreferences
+              ? 'Saving...'
+              : preferenceError
+                ? `Save failed: ${preferenceError}`
+                : 'Synced to your account'}
         </p>
       </div>
 
       {/* Informational banner */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -243,7 +269,7 @@ export default function PrivacySettingsPage() {
             fontSize: 13,
             color: 'var(--text-2)',
             lineHeight: 1.6,
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
           }}
         >
           AGI believes in transparent data practices. Learn how your information is protected when
@@ -280,7 +306,7 @@ export default function PrivacySettingsPage() {
       {/* Preferences (toggles) */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -289,7 +315,7 @@ export default function PrivacySettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -302,7 +328,7 @@ export default function PrivacySettingsPage() {
             key={spec.id}
             style={{
               padding: '16px 20px',
-              borderTop: idx === 0 ? 'none' : '1px solid var(--border)',
+              borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
@@ -345,7 +371,7 @@ export default function PrivacySettingsPage() {
       {/* Your data section */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -354,7 +380,7 @@ export default function PrivacySettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -365,9 +391,10 @@ export default function PrivacySettingsPage() {
 
         {/* Export data row */}
         <div
+          id="shared-chats"
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -391,7 +418,7 @@ export default function PrivacySettingsPage() {
                 fontWeight: 600,
                 color: exporting ? 'var(--text-3)' : 'var(--text-1)',
                 background: 'transparent',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 cursor: exporting ? 'not-allowed' : 'pointer',
                 opacity: exporting ? 0.6 : 1,
@@ -412,7 +439,7 @@ export default function PrivacySettingsPage() {
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -420,13 +447,13 @@ export default function PrivacySettingsPage() {
         >
           <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>Shared chats</div>
           <Link
-            href="/settings/shared-chats"
+            href="#shared-chats"
             style={{
               fontSize: 13,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: '6px 14px',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
           >
@@ -453,7 +480,7 @@ export default function PrivacySettingsPage() {
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: '6px 14px',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
             }}
           >
@@ -574,7 +601,7 @@ export default function PrivacySettingsPage() {
                         fontSize: 12,
                         color: 'var(--text-2)',
                         background: 'transparent',
-                        border: '1px solid var(--border)',
+                        border: '1px solid var(--settings-border)',
                         borderRadius: 'var(--radius-md)',
                         cursor: 'pointer',
                       }}

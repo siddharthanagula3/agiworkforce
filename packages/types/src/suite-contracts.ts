@@ -177,7 +177,7 @@ export function isDeveloperSessionSurface(
  * developer surfaces keep separate workspace-scoped histories. Round-2
  * audit (2026-05-21).
  *
- * Use at any service boundary that touches synced chat — Supabase
+ * Use at any service boundary that touches synced chat — cloud
  * realtime channel subscription, conversationSync.startBackgroundSync,
  * the API gateway chat-history endpoints — so a future caller cannot
  * accidentally cross the boundary.
@@ -289,7 +289,7 @@ export type ChatIntentKind =
   | 'image'
   | 'handoff';
 
-export type ChatReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'max';
+export type ChatReasoningEffort = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface ChatIntent {
   id?: string;
@@ -606,7 +606,7 @@ export interface ProjectKnowledgeFile {
   retentionExpiresAt?: string | null;
   deletedAt?: string | null;
   /**
-   * Storage URI of the underlying binary in Supabase Storage. The
+   * Storage URI of the underlying binary in cloud object storage. The
    * Postgres column is `storage_uri text NOT NULL`. Consumers should
    * not assume this is a public URL — most files require a signed-URL
    * fetch via the storage SDK.

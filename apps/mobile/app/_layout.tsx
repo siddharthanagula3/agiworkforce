@@ -19,7 +19,6 @@ import {
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { supabase } from '@/services/supabase';
 import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
@@ -56,7 +55,7 @@ export default function RootLayout() {
   const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
 
   // CRIT-MOB-01 fix (2026-05-04): initialise MMKV encryption on mount, but do
-  // NOT call initialize() here. The Supabase session must not be loaded until
+  // NOT call initialize() here. Cloud auth state must not be loaded until
   // biometric auth has succeeded. initialize() is called in the effect below
   // that watches `isUnlocked`.
   //
@@ -137,15 +136,15 @@ export default function RootLayout() {
   // Push notifications — register + listeners
   //
   // MOB-1 (audit 2026-05-03): wait for `isInitialized` (MMKV-encryption
-  // init + Supabase session resolve) before calling
+  // init + cloud session resolve) before calling
   // registerForPushNotifications. The previous version fired as soon
   // as `session` was truthy, which could race ahead of the
-  // getAuthHeaders() → supabase.auth.getSession() chain returning a
+  // getAuthHeaders() chain returning a
   // valid token. The push token would then be POST'd to the backend
   // with no Authorization header, registering an unauthenticated
   // device record on the user's account.
   useEffect(() => {
-    if (!session || !isInitialized) return;
+    if (!FEATURES.auth || !session || !isInitialized) return;
 
     registerForPushNotifications();
     const removeListeners = setupNotificationListeners();
@@ -158,7 +157,7 @@ export default function RootLayout() {
 
   // Background fetch — register agent status polling on login
   useEffect(() => {
-    if (!session) return;
+    if (!FEATURES.dispatch || !session) return;
 
     registerBackgroundFetch().catch((err) => {
       console.warn('[RootLayout] Background fetch registration failed:', err);
@@ -171,9 +170,9 @@ export default function RootLayout() {
     };
   }, [session]);
 
-  // Supabase Realtime — cross-surface sync of conversations/messages
+  // Cloud realtime — cross-surface sync of conversations/messages
   useEffect(() => {
-    if (!session) return;
+    if (!FEATURES.cloudChat || !session) return;
 
     let unsubscribe: (() => void) | undefined;
     subscribeToRealtime()
@@ -192,7 +191,7 @@ export default function RootLayout() {
 
   // Dispatch Realtime — desktop→mobile task updates
   useEffect(() => {
-    if (!session) return;
+    if (!FEATURES.dispatch || !session) return;
 
     let unsubscribe: (() => void) | undefined;
     subscribeToDispatch()
@@ -211,14 +210,14 @@ export default function RootLayout() {
 
   // Desktop liveness polling — catch missed Realtime heartbeat updates
   useEffect(() => {
-    if (!session) return;
+    if (!FEATURES.dispatch || !session) return;
     const cleanup = startDesktopStatusPolling();
     return cleanup;
   }, [session]);
 
   // 3-device conversation sync — sync on app resume
   useEffect(() => {
-    if (!session) return;
+    if (!session || !FEATURES.crossDeviceSync) return;
 
     const syncService = getMobileSyncService();
     syncService.startBackgroundSync(
@@ -355,34 +354,11 @@ export default function RootLayout() {
     }
   }, [url, session, isInitialized, router]);
 
-  // CRIT-MOB-01 reset-password handler (red-team fix 2026-05).
-  //
-  // Background: `authStore.resetPassword` previously asked Supabase to
-  // redirect the recovery email to the custom scheme
-  // `agiworkforce://reset-password`. Custom schemes are claim-able by any
-  // installed APK on Android — a hostile app could intercept the recovery
-  // JWT in the URL fragment and seize the account. The redirect is now
-  // an HTTPS App Link (`https://agiworkforce.com/auth/reset-password`),
-  // which requires verified domain ownership (assetlinks.json + AASA in
-  // /.well-known/) so it cannot be hijacked.
-  //
-  // Two flows that land here:
-  //   1. PKCE (preferred) — recovery URL carries `?code=<recoveryCode>` in
-  //      query params. We exchange via supabase.auth.exchangeCodeForSession.
-  //      The token never appears in the fragment / OS URL bar.
-  //   2. Legacy fragment — older Supabase projects emit
-  //      `#access_token=<jwt>&refresh_token=<rt>&type=recovery`. We accept
-  //      these only when the URL fragment also carries `type=recovery` to
-  //      avoid being a generic session-injection sink (an attacker who has
-  //      ANY JWT pair can otherwise inject a session by firing a
-  //      reset-password URL).
-  //
-  // We unconditionally accept the URL only when scheme === 'https' AND
-  // hostname === 'agiworkforce.com' AND the first path segment is `auth`
-  // and the second is `reset-password`. The OS-side App-Link verification
-  // is the gate against hijack; this code is the second wall.
+  // Password reset links are handled by the Web/Clerk account surface.
+  // Mobile keeps this route gate only to avoid treating account links as
+  // pairing/share links.
   useEffect(() => {
-    if (!url || !isInitialized) return;
+    if (!FEATURES.auth || !url || !isInitialized) return;
 
     const parsed = Linking.parse(url);
     const scheme = (parsed.scheme ?? '').toLowerCase();
@@ -395,46 +371,7 @@ export default function RootLayout() {
       segments[0] === 'auth' &&
       segments[1] === 'reset-password';
     if (!isResetPassword) return;
-
-    const code = parsed.queryParams?.code;
-    const codeStr = typeof code === 'string' ? code : null;
-
-    (async () => {
-      if (codeStr) {
-        // PKCE path. supabase.auth.exchangeCodeForSession verifies the code
-        // against Supabase's auth API; an attacker-supplied or expired code
-        // returns an error and we surface it without setting any session.
-        const { error } = await supabase.auth.exchangeCodeForSession(codeStr);
-        if (error) {
-          console.warn('[reset-password] exchangeCodeForSession failed:', error.message);
-          return;
-        }
-        router.replace({ pathname: '/(auth)/reset-password' as const, params: { recovery: '1' } });
-        return;
-      }
-
-      // Legacy fragment path. Reject unless type=recovery — keeps this
-      // handler from becoming a generic session-injection sink.
-      const fragmentMatch = url.match(/#(.*)$/);
-      if (!fragmentMatch?.[1]) return;
-      const fragmentParams = new URLSearchParams(fragmentMatch[1]);
-      if (fragmentParams.get('type') !== 'recovery') {
-        console.warn('[reset-password] fragment present without type=recovery; ignoring');
-        return;
-      }
-      const accessToken = fragmentParams.get('access_token');
-      const refreshToken = fragmentParams.get('refresh_token');
-      if (!accessToken || !refreshToken) return;
-      const { error } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-      if (error) {
-        console.warn('[reset-password] setSession failed:', error.message);
-        return;
-      }
-      router.replace({ pathname: '/(auth)/reset-password' as const, params: { recovery: '1' } });
-    })();
+    router.replace({ pathname: '/(auth)/reset-password' as const });
   }, [url, isInitialized, router]);
 
   // C1b: Share intent handling — receive text/URL shared from other apps

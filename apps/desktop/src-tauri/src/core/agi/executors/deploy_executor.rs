@@ -91,11 +91,7 @@ fn detect_preset(source_path: &str) -> Option<String> {
     let root = Path::new(source_path);
 
     // Check for Next.js
-    for name in &[
-        "next.config.js",
-        "next.config.mjs",
-        "next.config.ts",
-    ] {
+    for name in &["next.config.js", "next.config.mjs", "next.config.ts"] {
         if root.join(name).exists() {
             return Some("nextjs".to_string());
         }

@@ -34,7 +34,7 @@
 /packages/unified-chat/ @siddhartha
 /crates/ @siddhartha
 /services/ @siddhartha
-/supabase/migrations/ @siddhartha
+/apps/web/db/neon/ @siddhartha
 
 # Enterprise/security/compliance claims.
 /docs/enterprise/ @siddhartha

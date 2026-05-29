@@ -15,7 +15,7 @@ Criticality: high
 - Mobile and web clients where gateway routes are enabled.
 - Future managed/private compute runners.
 - Enterprise admin clients for policy, audit, usage-ledger, and support workflows.
-- Provider adapter packages and Supabase-backed backend flows.
+- Provider adapter packages and Neon-backed backend flows.
 
 ## Public API / Exports
 
@@ -55,11 +55,11 @@ Reusable schemas must live in `packages/types`; provider calls must go through p
 
 ## Environment / Secrets
 
-Use `.env.example` as the template. Never commit JWT secrets, Supabase service-role keys, provider keys, webhook secrets, managed compute tokens, or production URLs that imply secret access.
+Use `.env.example` as the template. Never commit JWT secrets, Neon service-role keys, provider keys, webhook secrets, managed compute tokens, or production URLs that imply secret access.
 
 ## Security, Privacy, Data Boundaries
 
-Security/privacy review is required for auth, JWT handling, CORS, rate limits, provider routing, Managed mode, file handling, retention, logging, Supabase service-role use, and any customer usage/credit flow.
+Security/privacy review is required for auth, JWT handling, CORS, rate limits, provider routing, Managed mode, file handling, retention, logging, Neon service-role use, and any customer usage/credit flow.
 
 Managed cloud must stay private beta/waitlisted until abuse, metering, fraud, refunds, disputes, retention, and provider terms are solved.
 

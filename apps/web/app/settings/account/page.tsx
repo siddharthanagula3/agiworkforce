@@ -99,7 +99,7 @@ export default function AccountSettingsPage() {
       {/* Log out of all devices */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -108,7 +108,7 @@ export default function AccountSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -148,7 +148,7 @@ export default function AccountSettingsPage() {
               fontWeight: 500,
               color: 'var(--text-1)',
               background: 'transparent',
-              border: '1px solid var(--border)',
+              border: '1px solid var(--settings-border)',
               borderRadius: 'var(--radius-md)',
               cursor: loggingOut ? 'default' : 'pointer',
               opacity: loggingOut ? 0.5 : 1,
@@ -163,7 +163,7 @@ export default function AccountSettingsPage() {
             style={{
               padding: '0 20px 16px',
               fontSize: 12,
-              color: 'var(--destructive, #ef4444)',
+              color: 'var(--settings-destructive)',
             }}
           >
             {logoutError}
@@ -174,7 +174,7 @@ export default function AccountSettingsPage() {
       {/* Delete account (links to /settings/profile danger zone) */}
       <section
         style={{
-          border: '1px solid var(--destructive, #ef4444)',
+          border: '1px solid var(--settings-destructive)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -183,10 +183,10 @@ export default function AccountSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--destructive, #ef4444)',
+            borderBottom: '1px solid var(--settings-destructive)',
             fontSize: 13,
             fontWeight: 600,
-            color: 'var(--destructive, #ef4444)',
+            color: 'var(--settings-destructive)',
           }}
         >
           Danger Zone
@@ -219,8 +219,8 @@ export default function AccountSettingsPage() {
               padding: '8px 14px',
               fontSize: 13,
               fontWeight: 500,
-              color: 'var(--destructive-foreground, #fff)',
-              background: 'var(--destructive, #ef4444)',
+              color: 'var(--settings-destructive-foreground)',
+              background: 'var(--settings-destructive)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               textDecoration: 'none',
@@ -236,7 +236,7 @@ export default function AccountSettingsPage() {
       {/* Organization / User ID */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -245,7 +245,7 @@ export default function AccountSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -279,7 +279,7 @@ export default function AccountSettingsPage() {
                 padding: '8px 12px',
                 background: 'var(--bg-base, #09090b)',
                 color: 'var(--text-3)',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 minWidth: 0,
                 overflow: 'hidden',
@@ -302,7 +302,7 @@ export default function AccountSettingsPage() {
                 height: 34,
                 padding: 0,
                 background: 'transparent',
-                border: '1px solid var(--border)',
+                border: '1px solid var(--settings-border)',
                 borderRadius: 'var(--radius-md)',
                 color: copied ? 'var(--teal, #21808d)' : 'var(--text-3)',
                 cursor: orgId ? 'pointer' : 'not-allowed',
@@ -322,7 +322,7 @@ export default function AccountSettingsPage() {
       {/* Active sessions table */}
       <section
         style={{
-          border: '1px solid var(--border)',
+          border: '1px solid var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           overflow: 'hidden',
@@ -331,7 +331,7 @@ export default function AccountSettingsPage() {
         <div
           style={{
             padding: '14px 20px',
-            borderBottom: '1px solid var(--border)',
+            borderBottom: '1px solid var(--settings-border)',
             fontSize: 13,
             fontWeight: 600,
             color: 'var(--text-2)',
@@ -356,7 +356,7 @@ export default function AccountSettingsPage() {
               <thead>
                 <tr
                   style={{
-                    borderBottom: '1px solid var(--border)',
+                    borderBottom: '1px solid var(--settings-border)',
                     background: 'var(--bg-hover, rgba(255,255,255,0.03))',
                   }}
                 >
@@ -385,7 +385,7 @@ export default function AccountSettingsPage() {
                     key={idx}
                     style={{
                       borderBottom:
-                        idx < sessionRows.length - 1 ? '1px solid var(--border)' : 'none',
+                        idx < sessionRows.length - 1 ? '1px solid var(--settings-border)' : 'none',
                     }}
                   >
                     <td style={{ padding: '12px 16px', color: 'var(--text-1)', fontWeight: 500 }}>

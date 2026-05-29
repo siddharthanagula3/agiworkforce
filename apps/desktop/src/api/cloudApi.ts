@@ -6,7 +6,7 @@
  */
 
 import { isTauri } from '../lib/runtimeEnvironment';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { API_BASE_URL } from './config';
 
 // Desktop uses the full API URL; web uses relative paths (same-origin) to avoid CORS
@@ -78,7 +78,7 @@ interface UpdateConversationResponse {
 /**
  * Retrieves auth headers for API requests.
  *
- * Desktop (Tauri): Uses supabaseAuth.getSession() for Bearer token.
+ * Desktop (Tauri): Uses cloudAccountAuth.getSession() for Bearer token.
  * Web (cloud): Session is in httpOnly cookies — browser sends them
  * automatically. We fetch a CSRF token for state-changing requests.
  */
@@ -89,31 +89,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   };
 
   // Desktop mode: add Bearer token from Tauri auth service
-  const session = supabaseAuth.getSession();
+  const session = cloudAccountAuth.getSession();
   if (session?.access_token) {
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
 
-  // Web mode: extract token from Supabase base64 cookie + fetch CSRF
+  // Web mode: Clerk session cookies are httpOnly and sent automatically.
+  // Fetch a CSRF token for state-changing requests.
   if (!session?.access_token && typeof document !== 'undefined') {
-    // Supabase stores session in a base64-encoded cookie
-    const sbCookie = document.cookie
-      .split(';')
-      .find((c) => c.trim().startsWith('sb-') && c.includes('auth-token'));
-    if (sbCookie) {
-      try {
-        const val = sbCookie.split('=').slice(1).join('=');
-        const b64 = val.replace('base64-', '');
-        const decoded = JSON.parse(atob(b64));
-        if (decoded?.access_token) {
-          headers['Authorization'] = `Bearer ${decoded.access_token}`;
-        }
-      } catch {
-        // Cookie decode failed — continue without auth
-      }
-    }
-
-    // Fetch CSRF token for state-changing requests
     try {
       const csrfResp = await fetch(`${CLOUD_API_BASE_URL}/api/csrf`, {
         credentials: 'include',

@@ -291,13 +291,6 @@ export type MessagingConnectionRow = {
   updated_at: string;
 };
 
-export type UserIdMappingRow = {
-  clerk_id: string;
-  supabase_uuid: string;
-  email: string | null;
-  mapped_at: string;
-};
-
 export type GitHubInstallationRow = {
   id: string;
   user_id: string;

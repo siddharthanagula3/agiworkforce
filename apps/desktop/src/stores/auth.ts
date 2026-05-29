@@ -24,11 +24,11 @@ import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
 import { accountApi } from '../api/accountApi';
-import { supabaseAuth } from '../services/supabaseAuth';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import { StripeService, type CustomerInfo, type SubscriptionInfo } from '../services/stripe';
 import { subscriptionService, type PlanFeatures } from '../services/subscriptionService';
 import { isSubscriptionActive, isInGracePeriod } from '../utils/featureGates';
-import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/supabase';
+import { type PlanTier, asPlanTier, PLAN_DISPLAY_NAMES } from '../lib/cloudAccountTypes';
 
 // =============================================================================
 // Helpers
@@ -85,7 +85,7 @@ export interface CreditBalance {
 }
 
 // Re-export PlanTier for backwards compatibility
-export type { PlanTier } from '../lib/supabase';
+export type { PlanTier } from '../lib/cloudAccountTypes';
 
 // =============================================================================
 // DesktopAccount Interface (for backwards compatibility)
@@ -131,7 +131,7 @@ interface AuthState {
 
   // Hydration tracking
   _hasHydrated: boolean;
-  // Session has been validated with Supabase (not just rehydrated from cache)
+  // Session has been validated with the cloud auth boundary (not just rehydrated from cache)
   sessionValidated: boolean;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -388,7 +388,7 @@ export function scheduleSubscriptionRetry(userId: string): void {
     if (currentUserId && currentUserId !== userId) {
       return;
     }
-    await supabaseAuth.refreshUserData();
+    await cloudAccountAuth.refreshUserData();
   }, delay);
 }
 
@@ -562,7 +562,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ isLoading: true, error: null }, undefined, 'auth/signIn/start');
 
           try {
-            const response = await supabaseAuth.signIn({ email, password });
+            const response = await cloudAccountAuth.signIn({ email, password });
 
             if (response.error) {
               set({ error: response.error.message }, undefined, 'auth/signIn/error');
@@ -584,7 +584,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ isLoading: true, error: null }, undefined, 'auth/signUp/start');
 
           try {
-            const response = await supabaseAuth.signUp({
+            const response = await cloudAccountAuth.signUp({
               email,
               password,
               displayName: name,
@@ -613,7 +613,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             syncInProgress = false;
             pendingSyncPromise = null;
 
-            await supabaseAuth.signOut();
+            await cloudAccountAuth.signOut();
 
             // Clean up all stores after successful sign out
             await runLogoutCleanup();
@@ -647,7 +647,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ isLoading: true, error: null }, undefined, 'auth/signInWithMagicLink/start');
 
           try {
-            const { error } = await supabaseAuth.signInWithMagicLink(email);
+            const { error } = await cloudAccountAuth.signInWithMagicLink(email);
 
             if (error) {
               set({ error: error.message }, undefined, 'auth/signInWithMagicLink/error');
@@ -669,7 +669,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ isLoading: true, error: null }, undefined, 'auth/resetPassword/start');
 
           try {
-            const { error } = await supabaseAuth.resetPassword(email);
+            const { error } = await cloudAccountAuth.resetPassword(email);
 
             if (error) {
               set({ error: error.message }, undefined, 'auth/resetPassword/error');
@@ -691,7 +691,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set({ isLoading: true, error: null }, undefined, 'auth/signInWithOAuth/start');
 
           try {
-            const { error } = await supabaseAuth.signInWithOAuth(provider);
+            const { error } = await cloudAccountAuth.signInWithOAuth(provider);
 
             if (error) {
               set({ error: error.message }, undefined, 'auth/signInWithOAuth/error');
@@ -904,9 +904,9 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           syncInProgress = true;
           pendingSyncPromise = (async () => {
             try {
-              await supabaseAuth.refreshUserData();
+              await cloudAccountAuth.refreshUserData();
 
-              const authState = supabaseAuth.getState();
+              const authState = cloudAccountAuth.getState();
 
               if (!authState.user) {
                 console.warn('[UnifiedAuth] No authenticated user - skipping sync');
@@ -1227,7 +1227,7 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
 // =============================================================================
 
 export function initializeUnifiedAuthStore(): () => void {
-  const unsubscribe = supabaseAuth.onAuthStateChange((authState) => {
+  const unsubscribe = cloudAccountAuth.onAuthStateChange((authState) => {
     const store = useUnifiedAuthStore.getState();
 
     if (authState.user) {
@@ -1488,5 +1488,5 @@ export interface DesktopAccount {
 
 // Check session on load (browser only)
 if (typeof window !== 'undefined') {
-  supabaseAuth.checkSession();
+  cloudAccountAuth.checkSession();
 }

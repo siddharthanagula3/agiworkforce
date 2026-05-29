@@ -5,7 +5,7 @@ import { logger } from './logger';
 /**
  * WEB-10 (audit 2026-05-03): generic user-facing fallbacks per
  * status-code class. Several call sites construct AppError instances
- * by passing raw Supabase error messages (table names, constraint
+ * by passing raw cloud database error messages (table names, constraint
  * violations, PGRST codes) which would otherwise propagate to the
  * client response body. We log the original message + details
  * server-side and return a safe summary to the caller.
@@ -68,7 +68,7 @@ export function handleError(error: unknown, requestId?: string): NextResponse {
           code: error.code,
           message: safeErrorMessage(error),
           // WEB-10: only forward `details` when the code is safe to
-          // expose - Supabase / SQL details are otherwise dropped.
+          // expose - Neon / SQL details are otherwise dropped.
           ...(error.details && SAFE_TO_EXPOSE_CODES.has(error.code)
             ? { details: error.details }
             : {}),

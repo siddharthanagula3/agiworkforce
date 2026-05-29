@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { GalleryClient } from './GalleryClient';
 
 export const metadata: Metadata = {
@@ -12,8 +13,15 @@ export const metadata: Metadata = {
 export default function GalleryPage() {
   return (
     <div data-design="agi">
-      <Header />
-      <GalleryClient />
+      <main>
+        <div className="agi-shell">
+          <Header />
+        </div>
+        <GalleryClient />
+      </main>
+      <div className="agi-shell">
+        <MarketingFooter />
+      </div>
     </div>
   );
 }

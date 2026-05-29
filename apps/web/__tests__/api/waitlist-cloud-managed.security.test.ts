@@ -3,12 +3,12 @@
  * - Reject requests without a valid CSRF token (403)
  * - Return 429 when the rate limiter signals exceeded
  * - Reject malformed or missing email with 400
- * - NOT leak internal state (table name, Supabase errors, stack traces) in
+ * - NOT leak internal state (table name, cloud database errors, stack traces) in
  *   responses, even on error paths
  *
  * Storage contract:
- * - Email is SHA-256 hashed before storage; only email_hash and a 3-character
- *   display prefix are persisted.
+ * - Normalized email is persisted because launch operations must be able to
+ *   send invite/release emails to waitlisted visitors.
  * - RLS posture: anon CAN insert (open signup); anon CANNOT select/update/delete
  *   (service_role only). Correct for a public-signup waitlist.
  * - Rate limit uses the dedicated 'waitlist' config (5/hour/IP), not 'default'.
@@ -191,7 +191,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
 
       expect(body).not.toContain('secret@example.com');
       expect(body).not.toContain('cloud_managed_waitlist');
-      expect(body).not.toContain('supabase');
+      expect(body).not.toContain('cloudDb');
     });
 
     it('rate limit check runs after CSRF passes', async () => {
@@ -208,7 +208,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
 
   // ─── Input validation — no PII/state leak on validation errors ─────────────
   describe('(c) Input validation error paths', () => {
-    it('returns 400 for missing email, body contains no Supabase details', async () => {
+    it('returns 400 for missing email, body contains no Neon details', async () => {
       const request = makePostRequest({ source: 'byok' });
       const response = await POST(request);
 
@@ -245,22 +245,15 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       );
     });
 
-    it('stores only email_hash and email_prefix, not plaintext email', async () => {
+    it('stores normalized email so launch notifications can be sent', async () => {
       const request = makePostRequest({ email: 'TestUser@example.com', source: 'byok' });
       const response = await POST(request);
 
       expect(response.status).toBe(200);
       expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining('email_hash, email_prefix, source'),
-        [
-          expect.stringMatching(/^[0-9a-f]{64}$/),
-          'tes',
-          'byok',
-          expect.any(String),
-          expect.any(String),
-        ],
+        expect.stringContaining('email, source, joined_at, updated_at'),
+        ['testuser@example.com', 'byok', expect.any(String), expect.any(String)],
       );
-      expect(mockExecute.mock.calls[0]?.[1]).not.toContain('testuser@example.com');
       expect(mockExecute.mock.calls[0]?.[1]).not.toContain('TestUser@example.com');
     });
 
@@ -281,17 +274,16 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
 
   // ─── DB error paths — no internal state leaked ───────────────────────────
   describe('(d) DB error paths — no internal state in response', () => {
-    it('returns ok:true with queued:true when table does not exist (42P01)', async () => {
+    it('fails closed when table does not exist (42P01)', async () => {
       const pgErr = Object.assign(new Error('table not found'), { code: '42P01' });
       mockExecute.mockRejectedValueOnce(pgErr);
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       const response = await POST(request);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(500);
       const data = await response.json();
-      expect(data.ok).toBe(true);
-      expect(data.queued).toBe(true);
+      expect(JSON.stringify(data)).not.toContain('test@example.com');
     });
 
     it('42P01 response does not expose table name or SQL error code', async () => {
@@ -307,15 +299,15 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       expect(body).not.toContain('table not found');
     });
 
-    it('generic DB error returns queued stub without internal details', async () => {
+    it('generic DB error fails closed without internal details', async () => {
       const pgErr = Object.assign(new Error('duplicate key constraint'), { code: '23505' });
       mockExecute.mockRejectedValueOnce(pgErr);
 
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       const response = await POST(request);
 
-      // Any non-42P01 DB error falls through to the stub return — verify no SQL detail exposed
       const body = await response.text();
+      expect(response.status).toBe(500);
       expect(body).not.toContain('23505');
       expect(body).not.toContain('duplicate key constraint');
       expect(body).not.toContain('cloud_managed_waitlist');

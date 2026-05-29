@@ -1,14 +1,14 @@
 import type { Metadata } from 'next';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Changelog | AGI',
-  description:
-    'A dated archive of what shipped. CLI live. Desktop in active development. Honest about what has not.',
+  title: 'Changelog',
+  description: `A dated archive of what shipped and what is aligned to the ${LAUNCH.date} public release.`,
   alternates: { canonical: '/changelog' },
   openGraph: {
-    title: 'Changelog | AGI',
+    title: 'Changelog',
     description: 'A dated archive of what shipped. Honest about what has not.',
     type: 'website',
     url: 'https://agiworkforce.com/changelog',
@@ -53,23 +53,23 @@ const RELEASES: Release[] = [
     date: '2026-02 — 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      'Tauri + React. macOS DMG signed (Apple Developer ID D2PR62RLT4). Linux AppImage. Windows EV cert pending.',
+      `Tauri + React. macOS DMG signed (Apple Developer ID D2PR62RLT4). Linux AppImage. Windows aligned to the ${LAUNCH.date} public release.`,
       'Linux build live; macOS notarization re-enabled once the missing CI secret is restored.',
     ],
   },
 ];
 
 const FORTHCOMING: { item: string; detail: string; quarter: string }[] = [
-  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: 'Q3 2026' },
+  { item: 'Mobile', detail: 'App Store + Play Store listings.', quarter: LAUNCH.date },
   {
     item: 'Chrome extension',
     detail: 'CWS submission once visual review clears.',
-    quarter: 'Q3 2026',
+    quarter: LAUNCH.date,
   },
   {
     item: 'VS Code extension',
     detail: 'Marketplace listing once private beta clears.',
-    quarter: 'Q3 2026',
+    quarter: LAUNCH.date,
   },
   { item: 'Pro tier', detail: 'Opens after security audit closes.', quarter: 'TBD' },
   { item: 'Max tier', detail: 'Opens after Pro stabilizes.', quarter: 'TBD' },

@@ -2,7 +2,7 @@
 
 use crate::data::db::models::{Conversation, Message, MessageRole};
 use crate::data::db::repository;
-use crate::data::supabase_sync;
+use crate::data::cloud_sync;
 use chrono::Utc;
 use tauri::State;
 
@@ -312,14 +312,14 @@ pub fn chat_get_conversation_stats(
     })
 }
 
-/// Manually trigger a bulk sync of all conversations and messages to Supabase.
+/// Manually trigger a bulk sync of all conversations and messages to cloud.
 /// Returns an error if the user's chat_storage_mode is not "cloud".
 #[tauri::command]
 pub async fn sync_conversations_to_cloud(
     db: State<'_, AppDatabase>,
     settings_state: State<'_, crate::sys::commands::settings::SettingsState>,
     user_id: String,
-) -> Result<supabase_sync::BulkSyncResult, String> {
+) -> Result<cloud_sync::BulkSyncResult, String> {
     if user_id.is_empty() {
         return Err("User ID cannot be empty".to_string());
     }
@@ -339,8 +339,8 @@ pub async fn sync_conversations_to_cloud(
         }
     }
 
-    let client = supabase_sync::SupabaseSyncClient::new()
-        .ok_or_else(|| "Supabase is not configured (missing URL or anon key)".to_string())?;
+    let client = cloud_sync::CloudSyncClient::new()
+        .ok_or_else(|| "Cloud sync is not available in the desktop runtime".to_string())?;
 
     // Scope the MutexGuard so it is dropped before any .await
     let (conversations, all_messages) = {

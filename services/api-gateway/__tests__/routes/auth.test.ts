@@ -5,7 +5,7 @@
  * retired (they targeted a `public.users` table that doesn't exist in
  * production; canonical login flow is the device-code path in
  * routes/deviceAuth.ts). The legacy mocks were removed alongside the
- * deleted `lib/supabase` singleton.
+ * deleted `lib/db` singleton.
  *
  * Tests for /api/auth endpoints:
  * - POST /api/auth/register  → 501 retired stub

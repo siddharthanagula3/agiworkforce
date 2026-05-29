@@ -91,6 +91,17 @@ export function readBridgeToken(): string | undefined {
   }
 }
 
+export function getBridgeAuthHeaders(
+  token = readBridgeToken(),
+): Record<string, string> | undefined {
+  if (token === undefined || token.trim() === '') return undefined;
+  const value = token.trim();
+  return {
+    Authorization: `Bearer ${value}`,
+    'X-AGI-Bridge-Token': value,
+  };
+}
+
 /**
  * Allowed message types the extension will SEND to the desktop bridge.
  * Outbound messages with unknown types are dropped (defense-in-depth).
@@ -268,6 +279,18 @@ export class DesktopBridge implements vscode.Disposable {
     if (this._disposed) return;
     this._setStatus('connecting');
 
+    if (getBridgeAuthHeaders() === undefined) {
+      void vscode.window.showWarningMessage(
+        'AGI Workforce: Desktop bridge token not found. ' +
+          'Make sure the AGI Workforce desktop app is running, or run ' +
+          '`agiworkforce desktop --reset-bridge-token` from a terminal.',
+        'Dismiss',
+      );
+      this._setStatus('error');
+      this._scheduleReconnect();
+      return;
+    }
+
     const healthy = await this.healthCheck();
     if (!healthy) {
       this._setStatus('error');
@@ -318,9 +341,14 @@ export class DesktopBridge implements vscode.Disposable {
     const timeout = setTimeout(() => controller.abort(), DesktopBridge.REQUEST_TIMEOUT_MS);
 
     try {
+      const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
+      if (authHeaders === undefined) {
+        return { ok: false, error: 'Desktop bridge auth token is unavailable.' };
+      }
+
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders },
         body: JSON.stringify(payload),
         signal: controller.signal,
       });
@@ -349,8 +377,12 @@ export class DesktopBridge implements vscode.Disposable {
     const timeout = setTimeout(() => controller.abort(), 3_000);
 
     try {
+      const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
+      if (authHeaders === undefined) return false;
+
       const res = await fetch(`${this.baseUrl}/api/health`, {
         method: 'GET',
+        headers: authHeaders,
         signal: controller.signal,
       });
       return res.ok;

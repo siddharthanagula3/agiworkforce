@@ -12,13 +12,14 @@ export type InviteCodeSource =
 
 export type InviteCodeTab = 'invite' | 'waitlist';
 
-/** Typed error codes returned by the validate_and_redeem_invite_code RPC. Cross-surface contract. */
+/** Typed error codes returned by the web API invite-code boundary. Cross-surface contract. */
 export type InviteCodeError =
   | 'invalid_code'
   | 'expired'
   | 'fully_redeemed'
   | 'already_redeemed_by_user'
   | 'anon_signin_failed'
+  | 'not_wired'
   | 'rpc_error';
 
 export interface InviteCodeModalProps {

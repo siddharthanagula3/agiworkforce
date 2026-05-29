@@ -41,7 +41,7 @@ export default function ByokSettingsPage() {
       <div
         role="status"
         style={{
-          border: '1px dashed var(--border)',
+          border: '1px dashed var(--settings-border)',
           borderRadius: 'var(--radius-lg)',
           background: 'var(--bg-elev)',
           padding: '14px 18px',
@@ -58,7 +58,7 @@ export default function ByokSettingsPage() {
             width: 18,
             height: 18,
             borderRadius: '50%',
-            background: 'var(--border)',
+            background: 'var(--settings-border)',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',

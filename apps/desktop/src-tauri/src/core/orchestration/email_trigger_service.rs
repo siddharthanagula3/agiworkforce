@@ -123,19 +123,13 @@ impl EmailTriggerService {
             return Err(format!("Email trigger not found: {}", trigger_id));
         }
 
-        tracing::info!(
-            "[EmailTriggerService] Unregistered trigger {}",
-            trigger_id
-        );
+        tracing::info!("[EmailTriggerService] Unregistered trigger {}", trigger_id);
 
         Ok(())
     }
 
     /// List email triggers, optionally filtered by workflow ID.
-    pub fn list_triggers(
-        &self,
-        workflow_id: Option<&str>,
-    ) -> Result<Vec<EmailTrigger>, String> {
+    pub fn list_triggers(&self, workflow_id: Option<&str>) -> Result<Vec<EmailTrigger>, String> {
         let conn = self.get_connection()?;
 
         if let Some(wf_id) = workflow_id {
@@ -176,10 +170,7 @@ impl EmailTriggerService {
     /// For each unique `account_id` with enabled triggers, spawns a
     /// background task that periodically checks for new email via Gmail
     /// history sync and matches against registered filters.
-    pub fn start(
-        &self,
-        scheduler: Arc<super::WorkflowScheduler>,
-    ) {
+    pub fn start(&self, scheduler: Arc<super::WorkflowScheduler>) {
         if self.running.swap(true, Ordering::SeqCst) {
             tracing::warn!("[EmailTriggerService] Already running, skipping start");
             return;
@@ -191,12 +182,11 @@ impl EmailTriggerService {
         // Attempt to spawn on the Tauri async runtime.
         // If no runtime is available yet (during init), the service
         // will be started lazily once the scheduler ticks.
-        let spawn_result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                tauri::async_runtime::spawn(async move {
-                    email_poll_loop(db_path, scheduler, running).await;
-                });
-            }));
+        let spawn_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            tauri::async_runtime::spawn(async move {
+                email_poll_loop(db_path, scheduler, running).await;
+            });
+        }));
 
         if spawn_result.is_err() {
             self.running.store(false, Ordering::SeqCst);
@@ -277,8 +267,7 @@ async fn check_email_triggers(
     db_path: &str,
     _scheduler: &Arc<super::WorkflowScheduler>,
 ) -> Result<(), String> {
-    let conn =
-        rusqlite::Connection::open(db_path).map_err(|e| format!("DB open failed: {}", e))?;
+    let conn = rusqlite::Connection::open(db_path).map_err(|e| format!("DB open failed: {}", e))?;
 
     let triggers: Vec<EmailTrigger> = {
         let mut stmt = conn
@@ -377,10 +366,7 @@ fn email_matches_trigger(
 
     if let Some(ref filter) = trigger.label_filter {
         let lower = filter.to_lowercase();
-        if !labels
-            .iter()
-            .any(|l| l.to_lowercase() == lower)
-        {
+        if !labels.iter().any(|l| l.to_lowercase() == lower) {
             return false;
         }
     }

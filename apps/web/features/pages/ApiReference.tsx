@@ -142,7 +142,7 @@ const ApiReferencePage: React.FC = () => {
                     View Full API Docs
                   </Button>
                 </a>
-                <a href="/documentation">
+                <a href="/docs">
                   <Button variant="outline">
                     <BookOpen className="mr-2 h-4 w-4" />
                     Documentation
@@ -428,7 +428,7 @@ print(data)`,
                     </div>
                   </a>
                   <a
-                    href="/documentation"
+                    href="/docs"
                     className="flex items-center gap-3 rounded-lg border border-border p-4 transition-colors hover:border-primary"
                   >
                     <BookOpen className="h-5 w-5" />

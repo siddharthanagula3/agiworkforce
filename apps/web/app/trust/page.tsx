@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Trust | AGI',
+  title: 'Trust',
   description: 'Compliance, audits, and security posture — with honest dates.',
   alternates: { canonical: 'https://agiworkforce.com/trust' },
 };
@@ -56,12 +57,11 @@ const SECURITY: { item: string; detail: string }[] = [
   { item: 'Transit', detail: 'TLS 1.3 everywhere. HSTS preload.' },
   {
     item: 'Code signing',
-    detail:
-      'macOS DMG signed with Apple Developer ID D2PR62RLT4 and notarized. Windows EV cert pending.',
+    detail: `macOS DMG signed with Apple Developer ID D2PR62RLT4 and notarized. Windows public release aligned to ${LAUNCH.date}.`,
   },
   {
     item: 'Privacy',
-    detail: 'We do not train on customer data. Local mode never sends prompts off your machine.',
+    detail: POSITIONING.trustBoundary,
   },
 ];
 

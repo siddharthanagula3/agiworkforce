@@ -52,7 +52,7 @@ interface ArtifactsActions {
   /** Switch to a different version of an artifact. */
   setCurrentVersion: (artifactId: string, versionIndex: number) => void;
   /**
-   * Persist artifact to Supabase shared_artifacts and return a share ID.
+   * Persist artifact to Neon shared_artifacts and return a share ID.
    * Falls back gracefully when the table is absent.
    */
   shareArtifact: (artifactId: string) => Promise<string>;

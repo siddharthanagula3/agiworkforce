@@ -1,6 +1,6 @@
 # AGI Mobile — Reddit Launch Drafts
 
-**Target date:** 2026-08-16  
+**Target date:** 2026-07-12
 **Per GTM playbook:** Reddit is second channel after HN.  
 **Subreddits covered:** r/LocalLLaMA, r/india, r/iphone, r/android
 
@@ -18,7 +18,7 @@ We shipped on-device LLM inference for iOS + Android (Qwen3-4B + Gemma/LiteRT + 
 
 **Body:**
 
-Hi LocalLLaMA. We just launched AGI Mobile — a free AI assistant for iOS and Android that runs inference entirely on-device. Thought this community would be interested in the technical choices.
+Hi LocalLLaMA. We just launched AGI Mobile — a free Local + BYOK AI assistant for iOS and Android, with Cloud by invite. Thought this community would be interested in the technical choices.
 
 **Model stack**
 
@@ -74,7 +74,7 @@ Namaste r/india. We just launched AGI Mobile on iOS and Android. Wanted to share
 
 **What it is**
 
-A free AI assistant — like ChatGPT or Gemini — but it runs on your phone, not on a server. Works offline. No subscription. Your conversations are not sent anywhere.
+A free AI assistant — like ChatGPT or Gemini — but users choose the route: Local on the phone, BYOK with a selected provider, or AGI Cloud by invite. Local mode works offline. BYOK lets users pay providers directly.
 
 **Why we built it for India first**
 
@@ -138,11 +138,11 @@ On iPhone 15 (non-Pro) and earlier iPhones down to iPhone 12, the app uses Qwen3
 
 **Privacy**
 
-Conversations stay on your iPhone. No server call during inference. Crash reporting (Sentry) strips all strings over 40 characters before sending. Telemetry is off by default.
+Local-mode conversations stay on your iPhone where supported and are not silently routed to BYOK or Cloud. Crash reporting (Sentry) strips all strings over 40 characters before sending. Telemetry is off by default.
 
-**What is not in v1**
+**Cloud**
 
-Cloud models (Claude, GPT-5, Gemini cloud) are coming but are on a waitlist. This launch is the on-device experience only.
+Cloud models (Claude, GPT-5, Gemini cloud), sync, and hosted tools are available by invite. Local and BYOK are the free launch paths.
 
 App Store link: agiworkforce.com/mobile
 
@@ -181,11 +181,11 @@ The app detects what your device supports:
 - Chat, image Q&A, voice, OCR/scan, translate
 - Memory, Projects, Skills
 - Works offline, no subscription
-- Privacy: conversations never leave your device
+- Privacy: Local mode is not silently routed to BYOK or Cloud
 
-**What is not here yet**
+**Cloud**
 
-Cloud models (hosted AI) are on a waitlist. On-device is the launch.
+Cloud models, sync, and hosted tools are available by invite. Local and BYOK are the free launch paths.
 
 Google Play link: agiworkforce.com/mobile
 

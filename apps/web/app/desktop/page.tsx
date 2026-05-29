@@ -2,23 +2,24 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { LAUNCH, POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Desktop — The native AGI app | AGI',
-  description:
-    'A small Rust binary that runs every provider natively. Local mode runs Ollama or LM Studio without ever touching the cloud. Cloud mode brings BYOK and Realtime cross-device sync.',
+  title: 'Desktop — The native AGI app',
+  description: `The native AGI desktop app for Local, BYOK, and invited Cloud. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/desktop' },
 };
 
 const SPECS: { k: string; v: string }[] = [
   { k: 'Engine', v: 'Pure Rust, Tauri' },
   { k: 'Size', v: '~35 MB installed' },
-  { k: 'Modes', v: 'Local · Cloud (BYOK or managed)' },
+  { k: 'Modes', v: 'Local · BYOK · Cloud invite' },
   { k: 'Storage', v: 'SQLite local · optional cloud sync' },
   { k: 'Computer use', v: 'Browser · files · terminal · screen' },
   { k: 'MCP plugins', v: 'stdio · SSE · streamable HTTP' },
   { k: 'Skills', v: 'Markdown + frontmatter, layered precedence' },
   { k: 'Code signing', v: 'Apple Developer ID D2PR62RLT4' },
+  { k: 'Launch', v: LAUNCH.date },
 ];
 
 export default function DesktopPage() {
@@ -27,18 +28,19 @@ export default function DesktopPage() {
       <main className="agi-shell">
         <Header />
         <section className="agi-page-hero">
-          <h1 className="agi-page-h1">The native desktop.</h1>
+          <p className="agi-section-eyebrow" style={{ marginBottom: 12 }}>
+            {LAUNCH.publicLabel}
+          </p>
+          <h1 className="agi-page-h1">The native desktop for every model.</h1>
           <p className="agi-page-lede">
-            A small Rust binary that runs every provider natively. Local mode runs Ollama or LM
-            Studio without ever touching the cloud. Cloud mode brings BYOK and Realtime cross-device
-            sync.{' '}
-            <strong>
-              Not Electron. Not a wrapper around a website. The chat is the desktop app.
-            </strong>
+            Desktop is the local compute host, BYOK vault, browser bridge, file bridge, and Cloud
+            invite gateway. Local mode keeps work on the machine. BYOK routes only to selected
+            providers. Cloud unlocks hosted sync by invite.{' '}
+            <strong>{POSITIONING.trustBoundary}</strong>
           </p>
           <div className="agi-cta-row">
             <Link href="/download" className="agi-cta-primary">
-              Download
+              {LAUNCH.ctaLabel}
             </Link>
             <Link href="/local" className="agi-cta-ghost">
               Run it offline →
@@ -64,7 +66,8 @@ export default function DesktopPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">macOS</h3>
               <p className="agi-reason-p">
-                Universal DMG, signed with our Apple Developer ID. Both Apple Silicon and Intel.
+                Universal DMG for Apple Silicon and Intel, signed with Apple Developer ID
+                D2PR62RLT4.
               </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
                 Download →
@@ -72,7 +75,9 @@ export default function DesktopPage() {
             </li>
             <li className="agi-reason">
               <h3 className="agi-reason-h">Linux</h3>
-              <p className="agi-reason-p">AppImage. Drop it anywhere on your path and run.</p>
+              <p className="agi-reason-p">
+                AppImage for modern Linux distributions. Drop it anywhere on your path and run.
+              </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
                 Download →
               </Link>
@@ -80,11 +85,12 @@ export default function DesktopPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Windows</h3>
               <p className="agi-reason-p">
-                EXE shipping once the EV certificate clears. Use the AppImage under WSL until then.
+                Windows joins the same public launch date with installer, CLI, and desktop bridge
+                messaging aligned around Local, BYOK, and invited Cloud.
               </p>
-              <span className="agi-cta-ghost" style={{ marginTop: 4, opacity: 0.7 }}>
-                On the waitlist
-              </span>
+              <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
+                Get launch access →
+              </Link>
             </li>
           </ul>
         </section>

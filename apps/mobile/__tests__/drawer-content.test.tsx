@@ -28,15 +28,13 @@ jest.mock('expo-router', () => ({
   usePathname: () => mockPathname,
 }));
 
-jest.mock('../services/supabase', () => ({
-  supabase: {
-    auth: {
-      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
-      onAuthStateChange: jest.fn().mockReturnValue({
-        data: { subscription: { unsubscribe: jest.fn() } },
-      }),
-    },
-  },
+jest.mock('../services/authSession', () => ({
+  getAuthToken: jest.fn(async () => null),
+  getAuthHeaders: jest.fn(async () => ({})),
+  refreshAuthSession: jest.fn(async () => false),
+  clearAuthSession: jest.fn(async () => undefined),
+  getCurrentUser: jest.fn(async () => null),
+  getCurrentUserId: jest.fn(async () => null),
 }));
 
 jest.mock('../lib/mmkv', () => ({
@@ -201,10 +199,10 @@ describe('DrawerContent', () => {
     expect(getByLabelText('About')).toBeTruthy();
   });
 
-  it('shows BYOK keys as a locked local-only utility row', () => {
+  it('shows BYOK as a locked desktop/developer-surface utility row', () => {
     const { getByLabelText, getByText } = renderDrawer();
 
-    const keysRow = getByLabelText('Keys / BYOK. Disabled until secure key storage ships');
+    const keysRow = getByLabelText('BYOK. Desktop and developer surfaces only');
     expect(keysRow.props.accessibilityState.disabled).toBe(true);
     expect(getByText('Locked')).toBeTruthy();
   });

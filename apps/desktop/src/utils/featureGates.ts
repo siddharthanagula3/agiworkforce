@@ -68,8 +68,8 @@ export function checkFeatureAccess(
     case 'advanced_ui_automation':
     case 'email_support':
     case 'llm_cost_tracking':
-      // 'team' is not a canonical PlanTier (per supabase.ts:198 and billing/models.rs).
-      // If a 'team' tier is ever added, update PlanTier in supabase.ts, subscriptionGate.ts,
+      // 'team' is not a canonical PlanTier.
+      // If a 'team' tier is ever added, update PlanTier, subscriptionGate.ts,
       // and Rust billing/models.rs simultaneously.
       return ['hobby', 'pro', 'pro_plus', 'max', 'enterprise'].includes(planName)
         ? { allowed: true }

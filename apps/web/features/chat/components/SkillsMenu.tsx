@@ -77,14 +77,14 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
   const footer = (
     <div className="border-t border-border/40 pt-1">
       <a
-        href="/settings/skills"
+        href="/skills"
         onClick={onClose}
         className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
         Manage skills
       </a>
       <a
-        href="/settings/skills/new"
+        href="/skills"
         onClick={onClose}
         className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >

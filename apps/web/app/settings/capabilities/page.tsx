@@ -1,38 +1,86 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import Link from 'next/link';
 import { Switch } from '@shared/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@shared/ui/select';
 import { Button } from '@shared/ui/button';
-import Link from 'next/link';
+import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
-const LS_PREFIX = 'agi.capabilities.';
+type ToolAccessMode = 'always' | 'needed' | 'custom';
 
-function usePersisted(key: string, fallback: boolean) {
-  const [value, setValue] = useState(fallback);
-  useEffect(() => {
-    const stored = localStorage.getItem(LS_PREFIX + key);
-    if (stored !== null) setValue(stored === 'true');
-  }, [key]);
-  const set = (v: boolean) => {
-    setValue(v);
-    localStorage.setItem(LS_PREFIX + key, String(v));
-  };
-  return [value, set] as const;
-}
+type CapabilitiesSettings = {
+  memory: boolean;
+  searchChats: boolean;
+  generateFromHistory: boolean;
+  toolAccessMode: ToolAccessMode;
+  connectorDiscovery: boolean;
+  artifacts: boolean;
+};
+
+const NAMESPACE = 'capabilities';
+
+const DEFAULT_SETTINGS: CapabilitiesSettings = {
+  memory: true,
+  searchChats: true,
+  generateFromHistory: true,
+  toolAccessMode: 'needed',
+  connectorDiscovery: true,
+  artifacts: true,
+};
 
 export default function CapabilitiesSettingsPage() {
-  const [memory, setMemory] = usePersisted('memory', true);
-  const [searchChats, setSearchChats] = usePersisted('searchChats', true);
-  const [generateFromHistory, setGenerateFromHistory] = usePersisted('generateFromHistory', true);
-  const [connectorDiscovery, setConnectorDiscovery] = usePersisted('connectorDiscovery', true);
-  const [artifacts, setArtifacts] = usePersisted('artifacts', true);
+  const [settings, setSettings] = useState<CapabilitiesSettings>(DEFAULT_SETTINGS);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
 
-  const [toolAccessMode, setToolAccessMode] = useState('needed');
   useEffect(() => {
-    const stored = localStorage.getItem(LS_PREFIX + 'toolAccessMode');
-    if (stored) setToolAccessMode(stored);
+    let cancelled = false;
+    fetchPreferenceNamespace<CapabilitiesSettings>(NAMESPACE, DEFAULT_SETTINGS)
+      .then((value) => {
+        if (!cancelled) setSettings(value);
+      })
+      .catch(() => {
+        // Local defaults remain usable when settings storage is unavailable.
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const persist = useCallback(async (next: CapabilitiesSettings) => {
+    setSettings(next);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await savePreferenceNamespace(NAMESPACE, next);
+      setSavedAt(Date.now());
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  }, []);
+
+  const setBoolean = (key: keyof Omit<CapabilitiesSettings, 'toolAccessMode'>, value: boolean) => {
+    void persist({ ...settings, [key]: value });
+  };
+
+  const setToolAccessMode = (value: ToolAccessMode) => {
+    void persist({ ...settings, toolAccessMode: value });
+  };
+
+  const row = (title: string, description: string, control: ReactNode) => (
+    <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
+      <div>
+        <p className="text-sm font-medium text-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      {control}
+    </div>
+  );
 
   return (
     <div className="space-y-8">
@@ -41,6 +89,15 @@ export default function CapabilitiesSettingsPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Control what AGI can do in your conversations.
         </p>
+        <p className="mt-2 text-xs text-muted-foreground" role="status">
+          {saving
+            ? 'Saving...'
+            : saveError
+              ? `Save failed: ${saveError}`
+              : savedAt
+                ? 'Saved'
+                : 'Synced to your account'}
+        </p>
       </div>
 
       <section className="space-y-4">
@@ -48,47 +105,42 @@ export default function CapabilitiesSettingsPage() {
           Memory
         </h3>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Memory</p>
-            <p className="text-xs text-muted-foreground">
-              Allow AGI to remember details across conversations
-            </p>
-          </div>
-          <Switch checked={memory} onCheckedChange={setMemory} />
-        </div>
+        {row(
+          'Memory',
+          'Allow AGI to remember details across conversations',
+          <Switch
+            checked={settings.memory}
+            onCheckedChange={(value) => setBoolean('memory', value)}
+          />,
+        )}
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Search and reference chats</p>
-            <p className="text-xs text-muted-foreground">
-              Let AGI search your past conversations for context
-            </p>
-          </div>
-          <Switch checked={searchChats} onCheckedChange={setSearchChats} />
-        </div>
+        {row(
+          'Search and reference chats',
+          'Let AGI search your past conversations for context',
+          <Switch
+            checked={settings.searchChats}
+            onCheckedChange={(value) => setBoolean('searchChats', value)}
+          />,
+        )}
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Generate from past chats</p>
-            <p className="text-xs text-muted-foreground">
-              Use conversation history to generate better responses
-            </p>
-          </div>
-          <Switch checked={generateFromHistory} onCheckedChange={setGenerateFromHistory} />
-        </div>
+        {row(
+          'Generate from past chats',
+          'Use conversation history to generate better responses',
+          <Switch
+            checked={settings.generateFromHistory}
+            onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
+          />,
+        )}
 
-        <div className="flex gap-2">
-          <Link
-            href="/settings/memory"
-            className="text-xs text-[var(--chat-accent-primary)] hover:underline"
-          >
-            View and manage memory
-          </Link>
-        </div>
+        <Link
+          href="/settings/memory"
+          className="text-xs text-[var(--chat-accent-primary)] hover:underline"
+        >
+          View and manage memory
+        </Link>
 
-        <Button variant="outline" size="sm" disabled className="text-xs">
-          Import memory from other AI providers
+        <Button variant="outline" size="sm" asChild className="text-xs">
+          <Link href="/settings/memory#import">Import memory from other AI providers</Link>
         </Button>
       </section>
 
@@ -97,20 +149,10 @@ export default function CapabilitiesSettingsPage() {
           General
         </h3>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Tool access mode</p>
-            <p className="text-xs text-muted-foreground">
-              How AGI loads and uses tools from connectors
-            </p>
-          </div>
-          <Select
-            value={toolAccessMode}
-            onValueChange={(v) => {
-              setToolAccessMode(v);
-              localStorage.setItem(LS_PREFIX + 'toolAccessMode', v);
-            }}
-          >
+        {row(
+          'Tool access mode',
+          'How AGI loads and uses tools from connectors',
+          <Select value={settings.toolAccessMode} onValueChange={setToolAccessMode}>
             <SelectTrigger className="w-[200px]">
               <SelectValue />
             </SelectTrigger>
@@ -119,18 +161,17 @@ export default function CapabilitiesSettingsPage() {
               <SelectItem value="needed">Load tools when needed</SelectItem>
               <SelectItem value="custom">Custom</SelectItem>
             </SelectContent>
-          </Select>
-        </div>
+          </Select>,
+        )}
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Connector discovery</p>
-            <p className="text-xs text-muted-foreground">
-              Suggest relevant connectors during conversations
-            </p>
-          </div>
-          <Switch checked={connectorDiscovery} onCheckedChange={setConnectorDiscovery} />
-        </div>
+        {row(
+          'Connector discovery',
+          'Suggest relevant connectors during conversations',
+          <Switch
+            checked={settings.connectorDiscovery}
+            onCheckedChange={(value) => setBoolean('connectorDiscovery', value)}
+          />,
+        )}
       </section>
 
       <section className="space-y-4">
@@ -138,16 +179,14 @@ export default function CapabilitiesSettingsPage() {
           Visuals
         </h3>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-          <div>
-            <p className="text-sm font-medium text-foreground">Artifacts</p>
-            <p className="text-xs text-muted-foreground">
-              Allow AGI to generate interactive content: code previews, charts, and documents
-              rendered inline
-            </p>
-          </div>
-          <Switch checked={artifacts} onCheckedChange={setArtifacts} />
-        </div>
+        {row(
+          'Artifacts',
+          'Allow AGI to generate interactive content: code previews, charts, and documents rendered inline',
+          <Switch
+            checked={settings.artifacts}
+            onCheckedChange={(value) => setBoolean('artifacts', value)}
+          />,
+        )}
       </section>
     </div>
   );

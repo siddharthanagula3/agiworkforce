@@ -325,7 +325,7 @@ describe('PerplexityProvider', () => {
     });
 
     it('should save message to database when sessionId and userId provided', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // Provider makes two fetch calls: proxy first, then log-message.
       mockFetch
         .mockResolvedValueOnce({
@@ -498,7 +498,7 @@ describe('PerplexityProvider', () => {
     });
 
     it('should not save to database when sessionId is missing', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // When sessionId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -512,7 +512,7 @@ describe('PerplexityProvider', () => {
     });
 
     it('should not save to database when userId is missing', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // When userId is absent, the provider skips the log-message call entirely.
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -526,7 +526,7 @@ describe('PerplexityProvider', () => {
     });
 
     it('should handle database save error gracefully', async () => {
-      // DB save path was migrated from supabase to fetch('/api/agents/log-message').
+      // DB save path was migrated from cloudDb to fetch('/api/agents/log-message').
       // The provider's saveMessageToDatabase swallows errors so the main response is unaffected.
       mockFetch
         .mockResolvedValueOnce({

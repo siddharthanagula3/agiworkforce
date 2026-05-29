@@ -13,7 +13,7 @@ callers import through the canonical feature barrel.
 | `core/`         | State orchestration and flows shared across screens.                                                                |
 | `features/`     | Self-contained feature folders (chat, onboarding, billing, settings, messaging, models, companions, waitlist, ...). |
 | `platform/`     | Native adapters: health, permissions, intent bridges, push, voice, TTS, background.                                 |
-| `integrations/` | API / auth / sync / supabase / mcp / cloud + local backends. The only place network and SDK calls happen.           |
+| `integrations/` | API / auth / sync / MCP / cloud + local backends. The only place network and SDK calls happen.                      |
 | `storage/`      | Data boundary. Reads and writes go through here.                                                                    |
 | `ui/`           | Reusable presentation primitives. No business logic, no integrations, no platform.                                  |
 

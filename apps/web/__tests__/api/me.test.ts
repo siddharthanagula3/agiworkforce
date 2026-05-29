@@ -34,8 +34,8 @@ vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// Supabase service client mock (used by SubscriptionService/CreditService)
-vi.mock('@/lib/supabase-server', () => ({
+// cloud database service client mock (used by SubscriptionService/CreditService)
+vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 

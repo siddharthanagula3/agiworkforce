@@ -102,9 +102,9 @@ pub fn is_always_blocked_bundle(identifier: &str) -> bool {
 /// is blocked if it equals the entry or ends with `.` + entry).
 pub fn is_always_blocked_host(host: &str) -> bool {
     let lowered = host.to_lowercase();
-    ALWAYS_BLOCKED_URL_HOSTS.iter().any(|blocked| {
-        lowered == *blocked || lowered.ends_with(&format!(".{}", blocked))
-    })
+    ALWAYS_BLOCKED_URL_HOSTS
+        .iter()
+        .any(|blocked| lowered == *blocked || lowered.ends_with(&format!(".{}", blocked)))
 }
 
 /// Permission status for an application.
@@ -197,11 +197,7 @@ impl AppPermissionManager {
     /// account both the hardcoded `ALWAYS_BLOCKED_BUNDLE_IDS` refuse-list
     /// and any user-configured per-app permission. Apps not in either
     /// list default to `AskEveryTime` so the user is prompted on first use.
-    pub async fn decide(
-        &self,
-        app_name: &str,
-        bundle_id: Option<&str>,
-    ) -> PermissionStatus {
+    pub async fn decide(&self, app_name: &str, bundle_id: Option<&str>) -> PermissionStatus {
         // Hard-blocked categories (investment / crypto / banking) always win.
         if let Some(bid) = bundle_id {
             if is_always_blocked_bundle(bid) {
@@ -345,7 +341,8 @@ mod tests {
         let mgr = AppPermissionManager::new();
         assert!(mgr.check_app("Safari").await.is_none());
 
-        mgr.set_permission("Safari", PermissionStatus::Allowed).await;
+        mgr.set_permission("Safari", PermissionStatus::Allowed)
+            .await;
         assert_eq!(
             mgr.check_app("Safari").await,
             Some(PermissionStatus::Allowed)
@@ -355,9 +352,12 @@ mod tests {
     #[tokio::test]
     async fn test_list_allowed_denied() {
         let mgr = AppPermissionManager::new();
-        mgr.set_permission("Safari", PermissionStatus::Allowed).await;
-        mgr.set_permission("Terminal", PermissionStatus::Denied).await;
-        mgr.set_permission("Finder", PermissionStatus::Allowed).await;
+        mgr.set_permission("Safari", PermissionStatus::Allowed)
+            .await;
+        mgr.set_permission("Terminal", PermissionStatus::Denied)
+            .await;
+        mgr.set_permission("Finder", PermissionStatus::Allowed)
+            .await;
 
         let allowed = mgr.allowed_apps().await;
         assert_eq!(allowed.len(), 2);
@@ -370,8 +370,10 @@ mod tests {
     #[tokio::test]
     async fn test_json_roundtrip() {
         let mgr = AppPermissionManager::new();
-        mgr.set_permission("Safari", PermissionStatus::Allowed).await;
-        mgr.set_permission("Terminal", PermissionStatus::Denied).await;
+        mgr.set_permission("Safari", PermissionStatus::Allowed)
+            .await;
+        mgr.set_permission("Terminal", PermissionStatus::Denied)
+            .await;
 
         let json = mgr.to_json().await.unwrap();
 
@@ -391,7 +393,8 @@ mod tests {
     #[tokio::test]
     async fn test_remove_permission() {
         let mgr = AppPermissionManager::new();
-        mgr.set_permission("Safari", PermissionStatus::Allowed).await;
+        mgr.set_permission("Safari", PermissionStatus::Allowed)
+            .await;
         mgr.remove_permission("Safari").await;
         assert!(mgr.check_app("Safari").await.is_none());
     }

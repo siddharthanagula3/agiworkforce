@@ -115,9 +115,9 @@ vi.mock('../ProjectsView', () => ({
   ProjectsView: () => <div data-testid="projects-view" />,
 }));
 
-// Mock supabaseAuth
-vi.mock('../../../services/supabaseAuth', () => ({
-  supabaseAuth: {
+// Mock cloudAccountAuth
+vi.mock('../../../services/cloudAccountAuth', () => ({
+  cloudAccountAuth: {
     getUser: vi.fn(() => ({ id: 'test-user-id', email: 'test@example.com' })),
     onAuthStateChange: vi.fn(() => ({ unsubscribe: vi.fn() })),
     checkSession: vi.fn(() => Promise.resolve()),

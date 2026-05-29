@@ -14,7 +14,7 @@ import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/respon
  * OpenAI-compatible Chat Completions API
  * Endpoint: POST /v1/chat/completions (via api.agiworkforce.com)
  *
- * Routes to 10+ LLM providers based on model. Auth: Supabase JWT. Billing: cloud credits.
+ * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  */
 async function handleChatCompletions(request: NextRequest) {

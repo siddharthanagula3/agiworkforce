@@ -1656,7 +1656,7 @@ export function ConnectorsPage() {
     [router, pathname, searchParams],
   );
 
-  // Fetch connected connectors from Supabase on mount
+  // Fetch connected connectors from Neon on mount
   useEffect(() => {
     let cancelled = false;
     async function fetchConnectors() {

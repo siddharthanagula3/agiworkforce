@@ -23,10 +23,10 @@ type CustomFixtures = {
 
 export const test = base.extend<CustomFixtures>({
   context: async ({ context }, use) => {
-    const shouldMockSupabase = process.env['E2E_MOCK_SUPABASE'] !== '0';
+    const shouldMockCloudApi = process.env['E2E_MOCK_CLOUD_API'] !== '0';
 
-    if (shouldMockSupabase) {
-      await context.route('**/rest/v1/**', (route) => {
+    if (shouldMockCloudApi) {
+      await context.route('**/api/**', (route) => {
         const method = route.request().method();
 
         if (method === 'GET') {

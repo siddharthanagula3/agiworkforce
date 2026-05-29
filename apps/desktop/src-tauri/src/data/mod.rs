@@ -7,4 +7,4 @@ pub mod db;
 pub mod metrics;
 pub mod settings;
 pub mod state;
-pub mod supabase_sync;
+pub mod cloud_sync;

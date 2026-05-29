@@ -100,7 +100,10 @@ pub fn dispatch_hmac_init(
 ) -> Result<String, String> {
     let key = dispatch_hmac::derive_session_key(&pairing_code, &session_salt)
         .map_err(|e| e.to_string())?;
-    let mut inner = state.inner.lock().map_err(|_| "state lock poisoned".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "state lock poisoned".to_string())?;
     inner.session_key = Some(key);
     // Wipe the cache too — a new pairing means a fresh nonce window.
     inner.cache = NonceCache::new();
@@ -119,10 +122,13 @@ pub fn dispatch_hmac_verify(
     state: State<'_, DispatchHmacState>,
     envelope_json: String,
 ) -> Result<VerifyOutcome, String> {
-    let mut inner = state.inner.lock().map_err(|_| "state lock poisoned".to_string())?;
-    let key = inner
-        .session_key
-        .ok_or_else(|| "dispatch session not initialized — call dispatch_hmac_init first".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "state lock poisoned".to_string())?;
+    let key = inner.session_key.ok_or_else(|| {
+        "dispatch session not initialized — call dispatch_hmac_init first".to_string()
+    })?;
     let cache = &mut inner.cache;
     let outcome = dispatch_hmac::verify(&envelope_json, &key, cache)
         .map(VerifyOutcome::from)
@@ -152,10 +158,13 @@ pub fn dispatch_hmac_sign(
     payload: serde_json::Value,
     msg_type: String,
 ) -> Result<String, String> {
-    let inner = state.inner.lock().map_err(|_| "state lock poisoned".to_string())?;
-    let key = inner
-        .session_key
-        .ok_or_else(|| "dispatch session not initialized — call dispatch_hmac_init first".to_string())?;
+    let inner = state
+        .inner
+        .lock()
+        .map_err(|_| "state lock poisoned".to_string())?;
+    let key = inner.session_key.ok_or_else(|| {
+        "dispatch session not initialized — call dispatch_hmac_init first".to_string()
+    })?;
     dispatch_hmac::sign_to_string(&payload, &msg_type, &key).map_err(|e| e.to_string())
 }
 
@@ -163,7 +172,10 @@ pub fn dispatch_hmac_sign(
 /// connection terminates so a stolen key cannot be reused.
 #[tauri::command]
 pub fn dispatch_hmac_reset(state: State<'_, DispatchHmacState>) -> Result<(), String> {
-    let mut inner = state.inner.lock().map_err(|_| "state lock poisoned".to_string())?;
+    let mut inner = state
+        .inner
+        .lock()
+        .map_err(|_| "state lock poisoned".to_string())?;
     if let Some(mut k) = inner.session_key.take() {
         use zeroize::Zeroize;
         k.zeroize();
@@ -244,9 +256,10 @@ mod tests {
         // Walk the same code path as the Tauri command without the State
         // wrapper.
         let mut inner = state.inner.lock().unwrap();
-        let result = dispatch_hmac::verify(&envelope, &inner.session_key.unwrap(), &mut inner.cache)
-            .map(VerifyOutcome::from)
-            .map_err(verify_error_to_string);
+        let result =
+            dispatch_hmac::verify(&envelope, &inner.session_key.unwrap(), &mut inner.cache)
+                .map(VerifyOutcome::from)
+                .map_err(verify_error_to_string);
         assert_eq!(result, Ok(VerifyOutcome::Signed));
     }
 
@@ -273,8 +286,14 @@ mod tests {
     fn verify_error_strings_are_stable() {
         // Frontend code may pattern-match on these — keep the strings stable.
         assert_eq!(verify_error_to_string(VerifyError::Malformed), "malformed");
-        assert_eq!(verify_error_to_string(VerifyError::NonceReplay), "nonce_replay");
-        assert_eq!(verify_error_to_string(VerifyError::HmacMismatch), "hmac_mismatch");
+        assert_eq!(
+            verify_error_to_string(VerifyError::NonceReplay),
+            "nonce_replay"
+        );
+        assert_eq!(
+            verify_error_to_string(VerifyError::HmacMismatch),
+            "hmac_mismatch"
+        );
         assert_eq!(
             verify_error_to_string(VerifyError::TimestampExpired(30_000)),
             "timestamp_expired"

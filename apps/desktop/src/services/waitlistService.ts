@@ -1,4 +1,4 @@
-import { getSupabase } from '../lib/supabase';
+import { WEB_APP_URL } from '../api/config';
 import type { InviteCodeError } from '../features/cloud-bridge/types';
 
 export interface WaitlistEntry {
@@ -19,7 +19,6 @@ export interface BetaInvite {
   currentUses: number;
   expiresAt: string | null;
   isActive: boolean;
-  // v2-compat: read from metadata jsonb when present; undefined in v1
   planTier?: 'free' | 'pro' | 'enterprise';
   trialDays?: number;
   discountPercent?: number;
@@ -33,8 +32,93 @@ export interface WaitlistStats {
   converted: number;
 }
 
-// InviteCodeError is the cross-surface contract type — re-exported from features/cloud-bridge/types.ts.
 export type { InviteCodeError } from '../features/cloud-bridge/types';
+
+const WEB_API_NOT_WIRED_ERROR =
+  'AGI web API base URL is not configured for desktop Cloud waitlist and invite-code calls.';
+
+class WebApiConfigError extends Error {}
+
+function getWebApiBaseUrl(): string {
+  const configured =
+    (import.meta.env['VITE_AGI_WEB_API_BASE_URL'] as string | undefined)?.trim() ||
+    WEB_APP_URL.trim();
+
+  if (!configured) {
+    throw new WebApiConfigError(WEB_API_NOT_WIRED_ERROR);
+  }
+
+  try {
+    const parsed = new URL(configured);
+    const isLocalhost =
+      parsed.hostname === 'localhost' ||
+      parsed.hostname === '127.0.0.1' ||
+      parsed.hostname === '[::1]';
+    const isAgiWeb =
+      parsed.protocol === 'https:' &&
+      (parsed.hostname === 'agiworkforce.com' || parsed.hostname.endsWith('.agiworkforce.com'));
+
+    if (!isLocalhost && !isAgiWeb) throw new WebApiConfigError(WEB_API_NOT_WIRED_ERROR);
+    if (isLocalhost && parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new WebApiConfigError(WEB_API_NOT_WIRED_ERROR);
+    }
+
+    return parsed.origin;
+  } catch (error) {
+    if (error instanceof WebApiConfigError) throw error;
+    throw new WebApiConfigError(WEB_API_NOT_WIRED_ERROR);
+  }
+}
+
+async function fetchCsrfHeaders(baseUrl: string): Promise<Record<string, string>> {
+  const response = await fetch(`${baseUrl}/api/csrf`, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { 'content-type': 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch CSRF token: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { token?: unknown; csrfToken?: unknown };
+  const token = typeof data.token === 'string' ? data.token : data.csrfToken;
+  if (typeof token !== 'string' || token.length === 0) {
+    throw new Error('CSRF token response was invalid');
+  }
+
+  return {
+    'content-type': 'application/json',
+    'x-csrf-token': token,
+    'x-requested-with': 'agiworkforce-desktop',
+  };
+}
+
+function toInviteCodeError(value: unknown): InviteCodeError {
+  if (
+    value === 'invalid_code' ||
+    value === 'expired' ||
+    value === 'fully_redeemed' ||
+    value === 'already_redeemed_by_user' ||
+    value === 'anon_signin_failed' ||
+    value === 'rpc_error'
+  ) {
+    return value;
+  }
+
+  const message = typeof value === 'string' ? value.toLowerCase() : '';
+  if (message.includes('invalid')) return 'invalid_code';
+  if (message.includes('expired')) return 'expired';
+  if (message.includes('fully') || message.includes('maximum')) return 'fully_redeemed';
+  if (message.includes('already')) return 'already_redeemed_by_user';
+  return 'rpc_error';
+}
+
+function waitlistSourceForWebApi(
+  source: string | undefined,
+): 'byok' | 'sync' | 'billing' | 'other' {
+  return source === 'byok' || source === 'sync' || source === 'billing' ? source : 'other';
+}
 
 class WaitlistService {
   private static instance: WaitlistService;
@@ -49,278 +133,116 @@ class WaitlistService {
   }
 
   async joinWaitlist(entry: WaitlistEntry): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabase();
-
     try {
-      const { error } = await supabase.from('waitlist').insert({
-        email: entry.email.toLowerCase().trim(),
-        name: entry.name || null,
-        company: entry.company || null,
-        role: entry.role || null,
-        use_case: entry.useCase || null,
-        referral_source: entry.referralSource || null,
-        referral_code: entry.referralCode || null,
-        marketing_consent: entry.marketingConsent || false,
-        status: 'pending',
+      const baseUrl = getWebApiBaseUrl();
+      const headers = await fetchCsrfHeaders(baseUrl);
+      const response = await fetch(`${baseUrl}/api/waitlist/cloud-managed`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({
+          email: entry.email.toLowerCase().trim(),
+          source: waitlistSourceForWebApi(entry.referralSource),
+        }),
       });
 
-      if (error) {
-        if (error.code === '23505') {
-          return { success: false, error: 'This email is already on the waitlist!' };
-        }
-        throw error;
+      if (!response.ok) {
+        return { success: false, error: 'Failed to join waitlist. Please try again.' };
       }
 
       return { success: true };
     } catch (error) {
-      console.error('[Waitlist] Error joining waitlist:', error);
+      if (error instanceof WebApiConfigError) {
+        return { success: false, error: error.message };
+      }
       return { success: false, error: 'Failed to join waitlist. Please try again.' };
     }
   }
 
   async checkWaitlistStatus(
-    email: string,
+    _email: string,
   ): Promise<{ onWaitlist: boolean; position?: number; status?: string }> {
-    const supabase = getSupabase();
-
-    try {
-      const { data: entry, error } = await supabase
-        .from('waitlist')
-        .select('id, status, created_at')
-        .eq('email', email.toLowerCase().trim())
-        .single();
-
-      if (error || !entry) {
-        return { onWaitlist: false };
-      }
-
-      const { count } = await supabase
-        .from('waitlist')
-        .select('*', { count: 'exact', head: true })
-        .lt('created_at', entry.created_at)
-        .eq('status', 'pending');
-
-      return {
-        onWaitlist: true,
-        position: (count || 0) + 1,
-        status: entry.status,
-      };
-    } catch (error) {
-      console.error('[Waitlist] Error checking status:', error);
-      return { onWaitlist: false };
-    }
+    return { onWaitlist: false };
   }
 
-  // validateInviteCode is kept as a read-only helper for callers that need to
-  // inspect invite metadata without redeeming (e.g. admin UI, pre-flight UI hints).
-  // Under the current v1 schema, beta_invites has RLS set to block direct SELECT
-  // for anon/authenticated roles — all flows go through the RPC. This method will
-  // always return valid=false in v1 unless called from a service-role context.
-  // InviteCodeModal now calls redeemInviteCode directly (Stage 0b-fix).
   async validateInviteCode(
-    code: string,
+    _code: string,
   ): Promise<{ valid: boolean; invite?: BetaInvite; error?: string }> {
-    const supabase = getSupabase();
-
-    try {
-      const { data, error } = await supabase
-        .from('beta_invites')
-        .select('id, code, max_uses, current_uses, expires_at, is_active, metadata')
-        .eq('code', code.toUpperCase().trim())
-        .eq('is_active', true)
-        .single();
-
-      if (error || !data) {
-        return { valid: false, error: 'invalid_code' };
-      }
-
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        return { valid: false, error: 'expired' };
-      }
-
-      if ((data.current_uses ?? 0) >= (data.max_uses ?? 1)) {
-        return { valid: false, error: 'fully_redeemed' };
-      }
-
-      const meta = (data.metadata ?? {}) as Record<string, unknown>;
-
-      return {
-        valid: true,
-        invite: {
-          id: data.id,
-          code: data.code,
-          maxUses: data.max_uses ?? 1,
-          currentUses: data.current_uses ?? 0,
-          expiresAt: data.expires_at,
-          isActive: data.is_active ?? false,
-          planTier:
-            typeof meta['plan_tier'] === 'string'
-              ? (meta['plan_tier'] as 'free' | 'pro' | 'enterprise')
-              : undefined,
-          trialDays: typeof meta['trial_days'] === 'number' ? meta['trial_days'] : undefined,
-          discountPercent:
-            typeof meta['discount_percent'] === 'number' ? meta['discount_percent'] : undefined,
-          stripeCouponId:
-            typeof meta['stripe_coupon_id'] === 'string' ? meta['stripe_coupon_id'] : undefined,
-        },
-      };
-    } catch (error) {
-      console.error('[Waitlist] Error validating invite:', error);
-      return { valid: false, error: 'rpc_error' };
-    }
+    return { valid: false, error: 'not_available' };
   }
 
-  // redeemInviteCode — atomic validate + redeem via security-definer RPC.
-  // userId parameter removed: auth session (anonymous or linked) provides identity.
-  // For v1 local-only users, an anonymous Supabase session is created inline per
-  // the v1-local-only-cloud-waitlist lock (no account required; anon row upgradeable
-  // via linkIdentity() in v2).
   async redeemInviteCode(
     code: string,
-    source: string = 'cloud_unlock',
+    source = 'cloud_unlock',
   ): Promise<{ success: boolean; inviteId?: string; error?: InviteCodeError }> {
-    const supabase = getSupabase();
-
+    void source;
     try {
-      // Ensure an auth session — anonymous is fine for v1.
-      let {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-        if (anonError || !anonData.session) {
-          console.error('[Waitlist] Anonymous sign-in failed:', anonError);
-          return { success: false, error: 'anon_signin_failed' };
-        }
-        session = anonData.session;
-      }
-
-      // Atomic validate + redeem: FOR UPDATE lock prevents concurrent double-spend.
-      const { data, error } = await supabase.rpc('validate_and_redeem_invite_code', {
-        p_code: code.toUpperCase().trim(),
-        p_surface: 'desktop',
-        p_source: source,
+      const baseUrl = getWebApiBaseUrl();
+      const headers = await fetchCsrfHeaders(baseUrl);
+      const response = await fetch(`${baseUrl}/api/claim-offer`, {
+        method: 'POST',
+        credentials: 'include',
+        headers,
+        body: JSON.stringify({ code: code.toUpperCase().trim() }),
       });
 
-      if (error) {
-        console.error('[Waitlist] RPC error:', error);
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string | { code?: string; message?: string };
+        };
+        const error =
+          typeof body.error === 'object' ? (body.error.code ?? body.error.message) : body.error;
+        return { success: false, error: toInviteCodeError(error) };
+      }
+
+      const data = (await response.json()) as {
+        success?: boolean;
+        inviteId?: string;
+        invite_id?: string;
+        subscription?: { id?: string } | null;
+        error?: string;
+      };
+
+      if (data.success) {
+        return {
+          success: true,
+          inviteId: data.inviteId ?? data.invite_id ?? data.subscription?.id ?? 'claim-offer',
+        };
+      }
+
+      return { success: false, error: toInviteCodeError(data.error) };
+    } catch (error) {
+      if (error instanceof WebApiConfigError) {
         return { success: false, error: 'rpc_error' };
       }
-
-      const result = Array.isArray(data) ? data[0] : data;
-
-      if (!result?.valid) {
-        const errCode = (result?.error ?? 'rpc_error') as InviteCodeError;
-        return { success: false, error: errCode };
-      }
-
-      return { success: true, inviteId: result.invite_id as string };
-    } catch (error) {
-      console.error('[Waitlist] Error redeeming invite:', error);
       return { success: false, error: 'rpc_error' };
     }
   }
 
-  async getReferralCode(userId: string): Promise<string | null> {
-    const supabase = getSupabase();
-
-    try {
-      const { data, error } = await supabase
-        .from('referrals')
-        .select('referral_code')
-        .eq('referrer_id', userId)
-        .single();
-
-      if (error || !data) {
-        return null;
-      }
-
-      return data.referral_code;
-    } catch (error) {
-      console.error('[Waitlist] Error getting referral code:', error);
-      return null;
-    }
+  async getReferralCode(_userId: string): Promise<string | null> {
+    return null;
   }
 
   async getReferralStats(
-    userId: string,
+    _userId: string,
   ): Promise<{ total: number; converted: number; rewarded: number }> {
-    const supabase = getSupabase();
-
-    try {
-      const { data, error } = await supabase
-        .from('referrals')
-        .select('status')
-        .eq('referrer_id', userId);
-
-      if (error || !data) {
-        return { total: 0, converted: 0, rewarded: 0 };
-      }
-
-      return {
-        total: data.length,
-        converted: data.filter((r) => r.status === 'converted' || r.status === 'rewarded').length,
-        rewarded: data.filter((r) => r.status === 'rewarded').length,
-      };
-    } catch (error) {
-      console.error('[Waitlist] Error getting referral stats:', error);
-      return { total: 0, converted: 0, rewarded: 0 };
-    }
+    return { total: 0, converted: 0, rewarded: 0 };
   }
 
   async updateEmailPreferences(
-    email: string,
-    preferences: {
+    _email: string,
+    _preferences: {
       marketingEmails?: boolean;
       productUpdates?: boolean;
       securityAlerts?: boolean;
       weeklyDigest?: boolean;
     },
   ): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabase();
-
-    try {
-      const { error } = await supabase
-        .from('email_preferences')
-        .update({
-          marketing_emails: preferences.marketingEmails,
-          product_updates: preferences.productUpdates,
-          security_alerts: preferences.securityAlerts,
-          weekly_digest: preferences.weeklyDigest,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('email', email.toLowerCase().trim());
-
-      if (error) throw error;
-
-      return { success: true };
-    } catch (error) {
-      console.error('[Waitlist] Error updating email preferences:', error);
-      return { success: false, error: 'Failed to update preferences' };
-    }
+    return { success: false, error: 'Email preferences must be updated from AGI web.' };
   }
 
-  async unsubscribe(token: string): Promise<{ success: boolean; error?: string }> {
-    const supabase = getSupabase();
-
-    try {
-      const { error } = await supabase
-        .from('email_preferences')
-        .update({
-          marketing_emails: false,
-          weekly_digest: false,
-          unsubscribed_at: new Date().toISOString(),
-        })
-        .eq('unsubscribe_token', token);
-
-      if (error) throw error;
-
-      return { success: true };
-    } catch (error) {
-      console.error('[Waitlist] Error unsubscribing:', error);
-      return { success: false, error: 'Failed to unsubscribe' };
-    }
+  async unsubscribe(_token: string): Promise<{ success: boolean; error?: string }> {
+    return { success: false, error: 'Unsubscribe links are handled by AGI web.' };
   }
 }
 

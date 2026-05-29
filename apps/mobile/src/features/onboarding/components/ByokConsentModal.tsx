@@ -1,9 +1,8 @@
 /**
- * Mobile BYOK disabled notice.
+ * Mobile BYOK unsupported notice.
  *
- * Mobile v1 does not accept provider keys until secure device key storage
- * ships. Keep this component fail-closed so any legacy entry point explains
- * the lock instead of unlocking provider routing.
+ * Mobile v1 has no BYOK mode. Keep this component fail-closed so any legacy
+ * entry point explains the boundary instead of unlocking provider routing.
  */
 import { useEffect, useRef } from 'react';
 import { Modal, View, ScrollView, Pressable, Platform } from 'react-native';
@@ -74,7 +73,7 @@ export function ByokConsentModal({ visible, onAccept, onCancel }: ByokConsentMod
             testID="byok-consent-modal-title"
             style={{ fontSize: 17, fontWeight: '600', color: colors.textPrimary, flex: 1 }}
           >
-            Mobile BYOK is locked
+            BYOK is not available on mobile
           </Text>
           <Pressable
             testID="byok-consent-cancel-icon"
@@ -112,22 +111,22 @@ export function ByokConsentModal({ visible, onAccept, onCancel }: ByokConsentMod
             testID="byok-consent-body-p1"
             style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 14 }}
           >
-            Provider keys cannot be added on mobile yet. AGI Mobile v1 stays in Local Mode with
-            local LLMs active on this device.
+            Provider keys cannot be added on mobile. AGI Mobile stays in Local Mode unless you
+            explicitly unlock Cloud Managed with an invite code.
           </Text>
           <Text
             testID="byok-consent-body-p2"
             style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 14 }}
           >
-            We will enable Mobile BYOK only after secure, device-bound key storage and the related
-            recovery flows are ready.
+            Use Desktop or the developer surfaces for BYOK workflows. Mobile is intentionally kept
+            to Local and AGI Managed Cloud invite paths.
           </Text>
           <Text
             testID="byok-consent-body-p3"
             style={{ fontSize: 15, color: colors.textPrimary, lineHeight: 22, marginBottom: 24 }}
           >
-            Cloud Managed remains waitlist-only. Until then, your mobile chats run locally and do
-            not require an account.
+            Cloud Managed remains waitlist-only. Until then, mobile chats run locally and do not
+            require an account.
           </Text>
 
           <Pressable

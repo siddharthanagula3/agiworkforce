@@ -74,7 +74,7 @@ interface MeResponse {
 // ---------------------------------------------------------------------------
 
 export interface AuthState {
-  /** The Supabase user object, or null when signed out */
+  /** The Clerk user summary, or null when signed out */
   user: User | null;
   /** Subscription plan details fetched from /api/me */
   subscription: SubscriptionPlan | null;
@@ -90,14 +90,14 @@ export interface AuthState {
   isLoading: boolean;
   /** Any error that occurred during the last refresh */
   error: string | null;
-  /** True once the Supabase auth state has been determined */
+  /** True once the Clerk auth state has been determined */
   initialized: boolean;
 
   // Actions
   refreshUser: () => Promise<void>;
   updateCredits: (credits: CreditBalance) => void;
   signOut: () => Promise<void>;
-  /** Internal: called by the Supabase auth listener */
+  /** Internal: updates user state after /api/me refresh */
   _setUser: (user: User | null) => void;
   _reset: () => void;
 }
@@ -236,7 +236,7 @@ export const useBillingStore = create<AuthState>()((set, get) => ({
 // ---------------------------------------------------------------------------
 
 if (typeof window !== 'undefined') {
-  // Bootstrap using /api/me (Supabase auth removed; Clerk session is managed by middleware).
+  // Bootstrap using /api/me. Clerk session state is managed by middleware.
   useBillingStore
     .getState()
     .refreshUser()

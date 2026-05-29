@@ -54,7 +54,7 @@ export const HireButton: React.FC<HireButtonProps> = ({
         description: 'You need to be signed in to hire AI employees',
         duration: 4000,
       });
-      router.push('/auth/login');
+      router.push('/login');
       return;
     }
 

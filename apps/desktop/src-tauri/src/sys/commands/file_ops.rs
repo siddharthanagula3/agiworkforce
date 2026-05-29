@@ -416,7 +416,10 @@ pub async fn file_read(
     let canonical = validate_path_security(&path)?;
     // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
     if crate::sys::security::blocked_paths::is_blocked(&canonical) {
-        return Err(format!("Access denied: path is on the blocked-paths denylist: {}", path));
+        return Err(format!(
+            "Access denied: path is on the blocked-paths denylist: {}",
+            path
+        ));
     }
 
     // AUDIT-FIX: H-15 — use canonical (symlink-resolved) path for all fs ops.
@@ -451,7 +454,8 @@ pub async fn file_read(
         return Err(error);
     }
 
-    match fs::read_to_string(&canonical) { // AUDIT-FIX: H-15
+    match fs::read_to_string(&canonical) {
+        // AUDIT-FIX: H-15
         Ok(content) => {
             log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
             info!("Successfully read file: {}", path);
@@ -484,7 +488,10 @@ pub async fn file_write(
     let canonical = validate_path_security(&path)?;
     // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
     if crate::sys::security::blocked_paths::is_blocked(&canonical) {
-        return Err(format!("Access denied: path is on the blocked-paths denylist: {}", path));
+        return Err(format!(
+            "Access denied: path is on the blocked-paths denylist: {}",
+            path
+        ));
     }
 
     if content.len() > 100_000_000 {
@@ -2021,14 +2028,19 @@ pub async fn upload_file(
         .map_err(|e| format!("Could not resolve app data dir: {e}"))?
         .join("uploads");
 
-    fs::create_dir_all(&uploads_dir)
-        .map_err(|e| format!("Failed to create uploads dir: {e}"))?;
+    fs::create_dir_all(&uploads_dir).map_err(|e| format!("Failed to create uploads dir: {e}"))?;
 
     // Use a UUID-prefixed filename to avoid collisions.
     let id = uuid::Uuid::new_v4().to_string();
     let sanitized_name = name
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_alphanumeric() || c == '.' || c == '-' || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect::<String>();
     let file_name = format!("{id}_{sanitized_name}");
     let dest: PathBuf = uploads_dir.join(&file_name);
@@ -2041,7 +2053,9 @@ pub async fn upload_file(
 
     info!(
         "[upload_file] Saved attachment '{}' ({} bytes) → {}",
-        name, actual_size, dest.display()
+        name,
+        actual_size,
+        dest.display()
     );
 
     Ok(FileUploadResult {

@@ -3,7 +3,7 @@
  *
  * Phase A Slice 3: ported from apps/desktop/src/components/UnifiedAgenticChat/.
  *
- * No Tauri, no Supabase, no auth token. Hosts push data via actions; the store
+ * No Tauri, no cloud DB, no auth token. Hosts push data via actions; the store
  * is keyed by conversationId so multiple conversations can coexist in the same
  * package session.
  */

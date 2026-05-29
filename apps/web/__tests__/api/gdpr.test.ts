@@ -37,7 +37,7 @@ vi.mock('@/lib/errors', () => ({
       (error as Error & { statusCode: number }).statusCode = 401;
       return error;
     },
-    supabase: (message: string, details?: string) => {
+    cloudDb: (message: string, details?: string) => {
       const error = new Error(`${message}: ${details}`);
       (error as Error & { statusCode: number }).statusCode = 500;
       return error;

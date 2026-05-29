@@ -101,9 +101,7 @@ pub async fn get_user_presence(
 /// (same-origin, from the Tauri webview).  It is NOT broadcast over the
 /// WebSocket or emitted as a Tauri event.
 #[tauri::command]
-pub async fn bridge_get_token(
-    state: State<'_, RealtimeState>,
-) -> Result<String, String> {
+pub async fn bridge_get_token(state: State<'_, RealtimeState>) -> Result<String, String> {
     Ok(state.token.read().await.clone())
 }
 

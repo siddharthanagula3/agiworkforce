@@ -184,9 +184,7 @@ impl ApiClient {
             let qs = request
                 .query_params
                 .iter()
-                .map(|(k, v)| {
-                    format!("{}={}", urlencoding::encode(k), urlencoding::encode(v))
-                })
+                .map(|(k, v)| format!("{}={}", urlencoding::encode(k), urlencoding::encode(v)))
                 .collect::<Vec<_>>()
                 .join("&");
             if request.url.contains('?') {

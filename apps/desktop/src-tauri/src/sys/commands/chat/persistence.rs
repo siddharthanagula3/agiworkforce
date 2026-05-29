@@ -2,7 +2,7 @@ use chrono::Utc;
 
 use crate::data::db::models::{Message, MessageRole};
 use crate::data::db::repository;
-use crate::data::supabase_sync;
+use crate::data::cloud_sync;
 
 use super::{AppDatabase, ConversationStats};
 
@@ -66,7 +66,7 @@ pub(super) fn save_assistant_message(
     let saved = repository::get_message(&conn, id)
         .map_err(|e| format!("Failed to retrieve assistant message: {e}"))?;
     if cloud_sync {
-        supabase_sync::spawn_sync_message(saved.clone());
+        cloud_sync::spawn_sync_message(saved.clone());
     }
     Ok(saved)
 }
@@ -139,7 +139,7 @@ pub(super) fn compute_or_skip_stats(
 mod tests {
     use super::*;
     use crate::data::db::{repository, Database};
-    use crate::data::supabase_sync::test_take_spawn_count;
+    use crate::data::cloud_sync::test_take_spawn_count;
     use std::sync::Arc;
 
     fn make_test_db() -> (Database, AppDatabase) {
@@ -152,10 +152,10 @@ mod tests {
 
     /// R25-V5: This test exists to enforce v1-LOCAL-ONLY sync gating.
     /// Default ChatPreferences must have chatStorageMode=local, meaning
-    /// cloud_sync_enabled=false, meaning supabase_sync spawn functions must
+    /// cloud_sync_enabled=false, meaning cloud sync functions must
     /// never be called on a normal message save.
     #[test]
-    fn supabase_sync_never_fires_with_cloud_sync_disabled() {
+    fn cloud_sync_never_fires_with_cloud_sync_disabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
         let conv_id =
@@ -166,8 +166,14 @@ mod tests {
         let _ = test_take_spawn_count(); // reset counter
 
         save_assistant_message(
-            &db, conv_id, "user1", "hello world",
-            Some(10), Some(0.001), Some("openai"), "gpt-4",
+            &db,
+            conv_id,
+            "user1",
+            "hello world",
+            Some(10),
+            Some(0.001),
+            Some("openai"),
+            "gpt-4",
             false, // cloud_sync_enabled = false (default ChatPreferences)
         )
         .expect("save should succeed");
@@ -175,37 +181,43 @@ mod tests {
         assert_eq!(
             test_take_spawn_count(),
             0,
-            "supabase_sync must not fire when cloud_sync_enabled=false (default ChatPreferences)"
+            "cloud sync must not fire when cloud_sync_enabled=false (default ChatPreferences)"
         );
     }
 
-    /// Positive control: confirms the spawn counter and code path actually fire
-    /// when cloud_sync=true. Without this, a broken counter silently passes the
-    /// negative test above.
+    /// Desktop v1 keeps cloud sync as an explicit fail-closed boundary; even
+    /// a direct call with cloud_sync=true must not enqueue a background upload.
     #[tokio::test]
-    async fn supabase_sync_fires_when_cloud_sync_enabled() {
+    async fn cloud_sync_noops_when_cloud_sync_enabled() {
         let (_db_inner, db) = make_test_db();
         let conn = db.connection().expect("connection");
         let conv_id = repository::create_conversation(
-            &conn, "test-conv-cloud".to_string(), "user2".to_string(),
+            &conn,
+            "test-conv-cloud".to_string(),
+            "user2".to_string(),
         )
         .expect("create conversation");
         drop(conn);
 
         let _ = test_take_spawn_count();
 
-        // SupabaseSyncClient::new() returns None in test (SUPABASE_URL not set),
-        // but the spawn itself must still be counted.
         save_assistant_message(
-            &db, conv_id, "user2", "cloud test",
-            None, None, None, "gpt-4",
+            &db,
+            conv_id,
+            "user2",
+            "cloud test",
+            None,
+            None,
+            None,
+            "gpt-4",
             true, // cloud_sync_enabled = true
         )
         .expect("save should succeed");
 
-        assert!(
-            test_take_spawn_count() > 0,
-            "supabase_sync spawn must be called when cloud_sync_enabled=true"
+        assert_eq!(
+            test_take_spawn_count(),
+            0,
+            "cloud sync must fail closed without enqueuing a background upload"
         );
     }
 }

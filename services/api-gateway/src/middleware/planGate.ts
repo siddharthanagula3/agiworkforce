@@ -10,7 +10,7 @@
  */
 
 import type { NextFunction, Request, Response } from 'express';
-import { getUserScopedClient } from '../lib/supabaseClients';
+import { getUserScopedClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
 /**

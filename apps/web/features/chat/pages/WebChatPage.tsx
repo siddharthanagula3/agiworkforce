@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { useRouter, useParams } from 'next/navigation';
 import { useChatStream } from '@/lib/hooks/useChatStream';
@@ -15,7 +15,6 @@ import {
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
 import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
-import { hasByokEnvKeys } from '@/lib/byok-access';
 import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -40,7 +39,6 @@ import { useChatStore as useUnifiedChatStore } from '@agiworkforce/unified-chat'
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { WebChatMessageMetadata } from '../types/message-metadata';
 import { cn } from '@shared/lib/utils';
-import { LOCAL_PROVIDER_KEYS } from '@/lib/byok-access';
 
 type SendMeta = {
   agentMode?: string;
@@ -144,24 +142,16 @@ export default function WebChatPage() {
     s.availableModels.find((m) => m.id === s.selectedModelId),
   );
 
-  // Pre-emptive access gate: redirect to /byok only when the user has neither
-  // an active subscription, a local model selected, nor any BYOK env keys set.
-  // BYOK users (plan_tier='free' with env keys) and local-model users must not
-  // be redirected -- only truly unconfigured visitors should hit /byok.
+  // Web chat is subscription-backed managed gateway only. Local and BYOK are
+  // desktop/developer-surface trust boundaries, not Web chat modes.
   useEffect(() => {
     let cancelled = false;
 
     async function checkAccess() {
-      const selectedProviderKey = selectedModel?.providerKey ?? '';
-      if (LOCAL_PROVIDER_KEYS.has(selectedProviderKey)) return;
+      const sub = await refreshSubscriptionStatus();
 
-      const [sub, byokAvailable] = await Promise.all([
-        refreshSubscriptionStatus(),
-        hasByokEnvKeys(),
-      ]);
-
-      if (!cancelled && !isSubscriptionValid(sub) && !byokAvailable) {
-        router.replace('/byok');
+      if (!cancelled && !isSubscriptionValid(sub)) {
+        router.replace('/pricing?from=web-chat');
       }
     }
 
@@ -169,7 +159,7 @@ export default function WebChatPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, selectedModel]);
+  }, [router]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
 
@@ -190,6 +180,7 @@ export default function WebChatPage() {
   }, []);
 
   const [composerClearSignal, setComposerClearSignal] = useState(0);
+  const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
   const [pendingByokHandoff, setPendingByokHandoff] = useState<PendingByokHandoff | null>(null);
   const [selectedHandoffContextIds, setSelectedHandoffContextIds] = useState<string[]>([]);
   const [handoffPreview, setHandoffPreview] = useState<WebLocalToByokPreview | null>(null);
@@ -255,34 +246,12 @@ export default function WebChatPage() {
   // composer so users always see where the next turn is going (local device,
   // BYOK provider host, or AGI managed gateway) before they send.
   const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
-    const providerKey = selectedModel?.providerKey;
-    const providerMode: ProviderMode = !providerKey
-      ? 'Local'
-      : providerKey === 'managed_cloud'
-        ? 'ManagedGateway'
-        : providerKey === 'local' ||
-            providerKey === 'ollama' ||
-            providerKey === 'lmstudio' ||
-            providerKey === 'executorch' ||
-            providerKey === 'llamacpp'
-          ? 'Local'
-          : 'DirectByok';
+    const providerMode: ProviderMode = 'ManagedGateway';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
       modelId: selectedModelId,
-      destinationHost:
-        providerMode === 'Local'
-          ? undefined
-          : providerKey === 'anthropic'
-            ? 'api.anthropic.com'
-            : providerKey === 'openai'
-              ? 'api.openai.com'
-              : providerKey === 'google'
-                ? 'generativelanguage.googleapis.com'
-                : providerKey === 'managed_cloud'
-                  ? 'gateway.agiworkforce.com'
-                  : undefined,
+      destinationHost: 'gateway.agiworkforce.com',
     });
   }, [selectedModel, selectedModelId]);
 
@@ -293,38 +262,50 @@ export default function WebChatPage() {
     loadConversation,
     deleteConversation,
     updateConversation,
+    setActiveConversation,
   } = useConversations();
 
-  // Share current conversation
-  const activeConversationTitle = useMemo(
-    () => conversations.find((c) => c.id === activeConversationId)?.title,
-    [conversations, activeConversationId],
+  const displayedConversationId = urlConversationId ?? bareChatSessionId;
+  const displayedMessages = useMemo(
+    () =>
+      displayedConversationId && activeConversationId === displayedConversationId ? messages : [],
+    [activeConversationId, displayedConversationId, messages],
   );
-  const { share, isSharing, hasMessages } = useShareConversation(activeConversationTitle);
+  const displayedConversation = useMemo(
+    () =>
+      displayedConversationId
+        ? (conversations.find((c) => c.id === displayedConversationId) ?? null)
+        : null,
+    [conversations, displayedConversationId],
+  );
 
-  // Session creation guard
-  const creationPending = React.useRef(false);
+  // Share current conversation
+  const activeConversationTitle = displayedConversation?.title;
+  const { share, isSharing } = useShareConversation(activeConversationTitle);
+  const hasMessages = displayedMessages.length > 0;
 
-  // On mount: if URL has a conversation ID, load it. Otherwise create one.
+  // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
+  // the empty new-chat surface and create persistence only when the user sends.
+  const routeInitializedRef = useRef(false);
   useEffect(() => {
+    if (routeInitializedRef.current && !urlConversationId) return;
+    routeInitializedRef.current = true;
+
     if (urlConversationId) {
       if (urlConversationId !== activeConversationId) {
-        loadConversation(urlConversationId);
-      }
-    } else if (!activeConversationId && !creationPending.current) {
-      creationPending.current = true;
-      createConversation('New Chat')
-        .then((conv) => {
-          if (conv) {
-            router.replace(`/chat/${conv.id}`);
+        void loadConversation(urlConversationId).then((ok) => {
+          if (!ok) {
+            setBareChatSessionId(null);
+            setActiveConversation(null);
+            router.replace('/chat');
           }
-        })
-        .finally(() => {
-          creationPending.current = false;
         });
+      }
+    } else if (activeConversationId) {
+      setBareChatSessionId(null);
+      setActiveConversation(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlConversationId]);
+  }, [activeConversationId, loadConversation, router, setActiveConversation, urlConversationId]);
 
   const sendContent = useCallback(
     async (
@@ -338,16 +319,17 @@ export default function WebChatPage() {
       const convId =
         options.conversationId ||
         urlConversationId ||
-        activeConversationId ||
+        bareChatSessionId ||
         (await createConversation('New Chat', selectedModelId).then((c) => {
           if (c) {
-            router.replace(`/chat/${c.id}`);
+            if (!urlConversationId) setBareChatSessionId(c.id);
             return c.id;
           }
           return null;
         }));
 
       if (!convId) return;
+      if (!urlConversationId) setBareChatSessionId(convId);
 
       // Read image files as base64 data URLs so the LLM can process them
       const resolvedAttachments = options.attachments
@@ -385,35 +367,28 @@ export default function WebChatPage() {
         skillBody: options.meta?.skillBody,
       });
     },
-    [
-      urlConversationId,
-      activeConversationId,
-      createConversation,
-      sendMessage,
-      selectedModelId,
-      router,
-    ],
+    [urlConversationId, bareChatSessionId, createConversation, sendMessage, selectedModelId],
   );
 
   const handleSend = useCallback(
     (content: string, attachments?: File[], skillId?: string, meta?: SendMeta): false | void => {
       void skillId; // skill identity resolved; body is carried in meta.skillBody
-      const sourceConversationId = urlConversationId || activeConversationId;
-      const conversation = sourceConversationId
-        ? (conversations.find((item) => item.id === sourceConversationId) ?? null)
-        : null;
+      const sourceConversationId = displayedConversationId;
+      const conversation = displayedConversation;
 
+      const webLocalToByokHandoffEnabled = false;
       if (
+        webLocalToByokHandoffEnabled &&
         sourceConversationId &&
         shouldForkLocalToByok({
           conversation,
-          messages,
+          messages: displayedMessages,
           targetModelId: selectedModelId,
         })
       ) {
         const candidates = buildHandoffContextCandidates({
           conversationId: sourceConversationId,
-          messages,
+          messages: displayedMessages,
           outgoingContent: content,
         });
         setPendingByokHandoff({
@@ -433,12 +408,11 @@ export default function WebChatPage() {
       void sendContent(content, { attachments, meta });
     },
     [
-      activeConversationId,
-      conversations,
-      messages,
+      displayedConversation,
+      displayedConversationId,
+      displayedMessages,
       selectedModelId,
       sendContent,
-      urlConversationId,
     ],
   );
 
@@ -525,7 +499,8 @@ export default function WebChatPage() {
       });
 
       addMessage(systemMessage);
-      router.push(`/chat/${fork.id}`);
+      setBareChatSessionId(fork.id);
+      router.push('/chat');
       setComposerClearSignal((value) => value + 1);
       setPendingByokHandoff(null);
       setSelectedHandoffContextIds([]);
@@ -554,33 +529,37 @@ export default function WebChatPage() {
   ]);
 
   const handleNewChat = useCallback(() => {
-    creationPending.current = true;
-    createConversation('New Chat')
-      .then((conv) => {
-        if (conv) {
-          router.push(`/chat/${conv.id}`);
-        }
-      })
-      .finally(() => {
-        creationPending.current = false;
-      });
-  }, [createConversation, router]);
+    setActiveConversation(null);
+    setBareChatSessionId(null);
+    setComposerPrefill(undefined);
+    setComposerClearSignal((value) => value + 1);
+    router.push('/chat');
+  }, [router, setActiveConversation]);
 
   const handleSelectSession = useCallback(
     (id: string) => {
-      router.push(`/chat/${id}`);
+      setBareChatSessionId(id);
+      void loadConversation(id).then((ok) => {
+        if (!ok) {
+          setBareChatSessionId(null);
+          setActiveConversation(null);
+        }
+      });
+      router.push('/chat');
     },
-    [router],
+    [loadConversation, router, setActiveConversation],
   );
 
   const handleDeleteSession = useCallback(
     (id: string) => {
       deleteConversation(id);
-      if (id === activeConversationId) {
+      if (id === displayedConversationId) {
+        setBareChatSessionId(null);
+        setActiveConversation(null);
         router.push('/chat');
       }
     },
-    [deleteConversation, activeConversationId, router],
+    [deleteConversation, displayedConversationId, router, setActiveConversation],
   );
 
   const handleRenameSession = useCallback(
@@ -603,15 +582,15 @@ export default function WebChatPage() {
   // Intentionally only re-runs on messages.length, not the full messages array, to
   // avoid re-running on every streaming chunk.
   useEffect(() => {
-    if (!activeConversationId || messages.length !== 2) return;
-    const convo = conversations.find((c) => c.id === activeConversationId);
+    if (!displayedConversationId || displayedMessages.length !== 2) return;
+    const convo = conversations.find((c) => c.id === displayedConversationId);
     if (!convo || convo.title !== 'New Chat') return;
-    const firstUser = messages[0];
+    const firstUser = displayedMessages[0];
     if (!firstUser || firstUser.role !== 'user') return;
     const title = firstUser.content.trim().slice(0, 60).replace(/\n/g, ' ') || 'New Chat';
-    updateConversation(activeConversationId, { title });
+    updateConversation(displayedConversationId, { title });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, activeConversationId, conversations, updateConversation]);
+  }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
 
   const handleDeleteMessage = useCallback(
     (id: string) => {
@@ -622,25 +601,25 @@ export default function WebChatPage() {
 
   const handleEditMessage = useCallback(
     (id: string) => {
-      if (!activeConversationId || isStreaming) return;
-      const msg = messages.find((m) => m.id === id);
+      if (!displayedConversationId || isStreaming) return;
+      const msg = displayedMessages.find((m) => m.id === id);
       if (!msg || msg.role !== 'user') return;
       setComposerPrefill(msg.content);
       deleteMessage(id);
     },
-    [activeConversationId, messages, isStreaming, deleteMessage],
+    [displayedConversationId, displayedMessages, isStreaming, deleteMessage],
   );
 
   const handleRegenerateMessage = useCallback(
     (id: string) => {
-      if (!activeConversationId || isStreaming) return;
-      const idx = messages.findIndex((m) => m.id === id);
+      if (!displayedConversationId || isStreaming) return;
+      const idx = displayedMessages.findIndex((m) => m.id === id);
       if (idx <= 0) return;
       // Find the user message just before this one
-      let userMsg: (typeof messages)[0] | undefined;
+      let userMsg: (typeof displayedMessages)[0] | undefined;
       for (let i = idx - 1; i >= 0; i--) {
-        if (messages[i]?.role === 'user') {
-          userMsg = messages[i];
+        if (displayedMessages[i]?.role === 'user') {
+          userMsg = displayedMessages[i];
           break;
         }
       }
@@ -649,17 +628,27 @@ export default function WebChatPage() {
       deleteMessage(id);
       sendMessage(userMsg.content, {
         model: selectedModelId,
-        conversationId: activeConversationId,
+        conversationId: displayedConversationId,
       });
     },
-    [activeConversationId, messages, isStreaming, deleteMessage, sendMessage, selectedModelId],
+    [
+      displayedConversationId,
+      displayedMessages,
+      isStreaming,
+      deleteMessage,
+      sendMessage,
+      selectedModelId,
+    ],
   );
 
   const chatMessages = useMemo(
-    () => messages.map((m) => toChatMessage(m, activeConversationId ?? '')),
-    [messages, activeConversationId],
+    () =>
+      displayedConversationId
+        ? displayedMessages.map((m) => toChatMessage(m, displayedConversationId))
+        : [],
+    [displayedMessages, displayedConversationId],
   );
-  const isEmptyChat = chatMessages.length === 0 && !isLoading;
+  const isEmptyChat = !displayedConversationId || (chatMessages.length === 0 && !isLoading);
 
   // Count distinct research sources across all messages for the toggle badge.
   // chatMessages use the unified-chat shape where searchResults is a flat array.
@@ -680,7 +669,7 @@ export default function WebChatPage() {
       {/* Sidebar */}
       <ChatSidebar
         sessions={conversations}
-        activeSessionId={activeConversationId ?? undefined}
+        activeSessionId={displayedConversationId ?? undefined}
         onNewChat={handleNewChat}
         onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}

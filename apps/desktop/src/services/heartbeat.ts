@@ -1,58 +1,27 @@
 /**
  * Desktop Surface Heartbeat Service
  *
- * Upserts to `surface_heartbeats` with surface='desktop' on mount and every 60 s
- * while the app is active. Automatically stops when the document is hidden or
- * the cleanup function is called (app close / component unmount).
- *
- * The caller (App.tsx) calls startDesktopHeartbeat() once after auth resolves
- * and receives a cleanup function to call on unmount.
+ * Cloud surface heartbeats are handled by the API gateway/device-link path.
+ * The desktop app must not write directly to the cloud database from the
+ * frontend. This service keeps the lifecycle hook in place and avoids network
+ * side effects until the Clerk-authenticated heartbeat endpoint is wired.
  */
 
-import { getSupabase } from '../lib/supabase';
+const HEARTBEAT_INTERVAL_MS = 60_000;
 
-const HEARTBEAT_INTERVAL_MS = 60_000; // 60 seconds
-
-async function sendHeartbeat(userId: string): Promise<void> {
-  try {
-    const supabase = getSupabase();
-    const untypedClient = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
-
-    // Skip if user has no active Supabase session (avoids 401 network errors).
-    // Desktop uses device-link OAuth — Supabase JS session may not exist.
-    const { data: sessionData } = await untypedClient.auth.getSession();
-    if (!sessionData?.session?.access_token) return;
-
-    await untypedClient.from('surface_heartbeats').upsert(
-      {
-        user_id: userId,
-        surface_id: 'desktop',
-        last_seen_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,surface_id' },
-    );
-  } catch {
-    // Non-fatal — silently ignore
-  }
+async function sendHeartbeat(_userId: string): Promise<void> {
+  // Intentionally no-op: desktop cloud heartbeat requires a Clerk-authenticated
+  // server endpoint, not client-side database access.
 }
 
-/**
- * Start sending periodic heartbeats for the desktop surface.
- *
- * @param userId - Authenticated Supabase user ID
- * @returns Cleanup function — call this when the component unmounts or user signs out
- */
 export function startDesktopHeartbeat(userId: string): () => void {
-  // Send immediately on start
   void sendHeartbeat(userId);
 
   const intervalId = setInterval(() => {
-    // Pause while the tab/window is hidden (app is backgrounded on macOS)
     if (document.visibilityState === 'hidden') return;
     void sendHeartbeat(userId);
   }, HEARTBEAT_INTERVAL_MS);
 
-  // Also resume immediately when the document becomes visible again
   const handleVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
       void sendHeartbeat(userId);

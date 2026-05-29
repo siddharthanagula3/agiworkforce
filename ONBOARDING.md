@@ -78,7 +78,7 @@ Legal, privacy, or compliance reviewer:
 | `packages/`           | Shared TypeScript contracts, providers, runtime, UI, compliance, and utilities. |
 | `crates/`             | Shared Rust runtime/protocol/command/sandbox pieces.                            |
 | `services/`           | Deployable backend services.                                                    |
-| `supabase/`           | Canonical root database migrations.                                             |
+| `apps/web/db/neon/`   | Canonical Neon database migrations.                                             |
 | `docs/current/`       | Compact current product, architecture, commercial, and repo-operability docs.   |
 | `docs/agent-context/` | Machine-readable repo map for LLM coding agents.                                |
 | `audit/`              | Evidence ledgers, scans, parity research, and repo-organization reports.        |

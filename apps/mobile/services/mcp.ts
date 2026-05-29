@@ -25,13 +25,12 @@ import type {
 
 import { API_URL } from '@/lib/constants';
 import { secureFetch } from './secureFetch';
-import { supabase } from './supabase';
+import { getAuthToken } from './authSession';
 
 export type { McpCallToolResult, McpServerCatalog, McpServerConfig, McpToolCatalog };
 
 async function getAuthHeader(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
+  const token = await getAuthToken();
   return token ? `Bearer ${token}` : null;
 }
 

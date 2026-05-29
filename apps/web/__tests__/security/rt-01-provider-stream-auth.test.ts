@@ -67,8 +67,8 @@ vi.mock('@/utils/env', () => ({
   },
   requireEnv: (key: string) => {
     const map: Record<string, string> = {
-      NEXT_PUBLIC_SUPABASE_URL: 'https://test.supabase.co',
-      SUPABASE_SERVICE_ROLE_KEY: 'test-service-key',
+      NEON_DATABASE_URL: 'https://localhost',
+      CLERK_SECRET_KEY: 'test-service-key',
     };
     return map[key] ?? '';
   },

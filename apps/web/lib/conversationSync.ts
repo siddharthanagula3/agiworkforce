@@ -4,7 +4,7 @@
  * Uses the /api/chat/conversations REST endpoints for push/pull.
  * Conflict resolution is last-write-wins based on `updated_at` timestamps.
  *
- * NOTE: Migrated from Supabase direct table access to REST API routes.
+ * NOTE: Migrated from REST API route-backed table access to REST API routes.
  */
 
 import { assertSurfaceCanSyncChats } from '@agiworkforce/types';
@@ -182,14 +182,14 @@ export class ConversationSyncService {
 
   /**
    * Subscribe to realtime conversation changes for the authenticated user.
-   * (no-op stub - Supabase Realtime has been removed)
+   * (no-op stub - Realtime has been removed)
    *
    * Returns a no-op unsubscribe function. Callers should use polling or
    * another mechanism for cross-device sync.
    */
   subscribe(_userId: string, _onUpdate: (event: SyncEvent) => void): () => void {
     console.warn(
-      '[ConversationSyncService] subscribe() called but Supabase Realtime has been removed. No subscription created.',
+      '[ConversationSyncService] subscribe() called but Realtime has been removed. No subscription created.',
     );
     return () => {};
   }
@@ -198,7 +198,7 @@ export class ConversationSyncService {
    * Remove the realtime subscription (no-op stub).
    */
   unsubscribe(): void {
-    // Supabase Realtime channel removed; nothing to clean up
+    // Realtime channel removed; nothing to clean up
   }
 
   // -------------------------------------------------------------------------

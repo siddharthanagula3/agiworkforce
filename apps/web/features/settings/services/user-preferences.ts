@@ -1,6 +1,6 @@
 /**
  * Settings Service
- * Manages user settings and preferences with full Supabase integration
+ * Manages user settings and preferences with full Neon integration
  * Includes TOTP 2FA authentication support
  *
  * Storage: Vercel Blob (requires BLOB_READ_WRITE_TOKEN env var on the server)
@@ -8,7 +8,7 @@
  * from browser code, so BLOB_READ_WRITE_TOKEN is safe server-side.
  */
 
-// AD-6 override: avatar storage migrated from Supabase Storage to Vercel Blob.
+// AD-6 override: avatar storage migrated from Vercel Blob to Vercel Blob.
 import { put } from '@vercel/blob';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 
@@ -78,8 +78,8 @@ async function importTOTPEncryptionKey(keyMaterial: Uint8Array): Promise<CryptoK
   );
 }
 
-// Legacy TOTP key derived from NEXT_PUBLIC_SUPABASE_URL is no longer available
-// after the Supabase-to-Neon migration. Any TOTP secrets encrypted with the old
+// Legacy TOTP key derived from NEON_DATABASE_URL is no longer available
+// after the Neon-to-Neon migration. Any TOTP secrets encrypted with the old
 // key cannot be decrypted automatically. Users will need to re-enroll.
 async function getLegacyTOTPEncryptionKey(): Promise<CryptoKey | null> {
   return null;
@@ -611,7 +611,7 @@ class SettingsService {
   }
 
   /**
-   * Upload avatar to Vercel Blob (migrated from Supabase Storage, AD-6 override).
+   * Upload avatar to Vercel Blob (migrated from Vercel Blob, AD-6 override).
    * Requires BLOB_READ_WRITE_TOKEN on the server.
    */
   async uploadAvatar(file: File): Promise<{ data: string; error?: string }> {

@@ -2,9 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
+import { POSITIONING } from '../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'Comparative reviews — Claude, ChatGPT, Gemini, Perplexity vs AGI',
+  title: 'Comparative reviews - Claude, ChatGPT, Gemini, Perplexity, Codex, Claude Code vs AGI',
   description:
     'Honest reviews of the major AI tools and where AGI sits. The case for us is the routing across all of them.',
   alternates: { canonical: 'https://agiworkforce.com/compare' },
@@ -24,7 +25,24 @@ const REVIEWS = [
     take: 'Best tool-use reflex in the field, strongest agent harness, broadest plugin ecosystem on the cloud-app side.',
     where_we_lose: 'No Apple Watch app. No Atlas browser of our own.',
     where_we_win:
-      'BYOK against OpenAI directly with zero markup, plus 11 other providers in the same thread.',
+      'BYOK against OpenAI and other supported providers in the same thread, with route-specific provider billing.',
+  },
+  {
+    name: 'OpenAI Codex',
+    href: '/compare/codex',
+    take: 'A serious coding agent across CLI, app, IDE, and cloud workflows. It sets the benchmark for developer-agent UX.',
+    where_we_lose:
+      'We still need to prove the same cloud-task polish, PR flow, and OpenAI-level coding-model integration.',
+    where_we_win:
+      'AGI Code is designed around local models, BYOK providers, and provider switching instead of a single model ecosystem.',
+  },
+  {
+    name: 'Anthropic Claude Code',
+    href: '/compare/claude-code',
+    take: 'The terminal-native coding workflow is excellent: repo context, permissions, MCP, hooks, and iterative command loops.',
+    where_we_lose: 'Claude Code is more mature today for Anthropic-model coding workflows.',
+    where_we_win:
+      'AGI targets the same developer control pattern across Local, BYOK, and invite-only Cloud modes.',
   },
   {
     name: 'Google Gemini',
@@ -51,13 +69,13 @@ export default function ComparePage() {
           <h1 className="agi-page-h1">Comparative reviews.</h1>
           <p className="agi-page-lede">
             The other AI tools are not bad. Several are excellent.{' '}
-            <strong>The case for AGI is the routing across all of them</strong> — that lane was
-            empty until we shipped. These reviews are honest. Where we lose, we say so.
+            <strong>The case for AGI is explicit routing across supported providers</strong>. These
+            reviews are honest. Where we lose, we say so. {POSITIONING.trustBoundary}
           </p>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">The four reviews</p>
-          <div className="agi-tier-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          <div className="agi-tier-grid">
             {REVIEWS.map((r) => (
               <article key={r.name} className="agi-tier" style={{ gap: 14 }}>
                 <h2 className="agi-tier-name">{r.name}</h2>

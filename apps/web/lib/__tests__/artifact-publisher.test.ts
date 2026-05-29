@@ -107,7 +107,7 @@ describe('publishArtifact (web adapter)', () => {
   it('waitlist result has no DB side-effects (no upsert called)', async () => {
     // No DB mock needed — the new publisher never calls the DB.
     // This test is a regression guard: if a DB call were accidentally
-    // re-introduced it would fail at the import stage (no SupabaseClient).
+    // re-introduced it would fail at the import stage (no NeonClient).
     const result = await publishArtifact({
       computeSession: makeSession(),
       generatedFile: makeFile(),

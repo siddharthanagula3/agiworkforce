@@ -6,7 +6,7 @@
  * ```ts
  * import { createDatabaseClient } from '@agiworkforce/data-layer';
  *
- * const db = createDatabaseClient(); // reads AGI_DATABASE_PROVIDER (default: supabase)
+ * const db = createDatabaseClient(); // reads AGI_DATABASE_PROVIDER (default: neon)
  * const userDb = db.withUser(jwtFromRequest);
  * const rows = await userDb.query<{ id: string }>(
  *   'select id from conversations where user_id = $1',
@@ -16,8 +16,9 @@
  *
  * # Why this package exists
  *
- * The codebase couples to Supabase today. This package introduces the seam to
- * swap Supabase for Neon, RDS, S3, Auth0, etc. without rewriting feature code.
+ * The hosted product runs on Neon for database and Clerk for auth. This package
+ * keeps provider seams explicit so migration and compatibility code cannot
+ * silently select a legacy backend.
  *
  * - Read `docs/current/technical-architecture.md` for the system map.
  * - Read `docs/archive/2026-05-21-docs-consolidation/SCALING.md`
@@ -63,13 +64,6 @@ export type {
 // Concrete adapter classes — exported for advanced users (testing,
 // embedding) but feature code should prefer the factory functions.
 export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
-
-export {
-  SupabaseAuthAdapter,
-  SupabaseDatabaseAdapter,
-  SupabaseRealtimeAdapter,
-  SupabaseStorageAdapter,
-} from './adapters/supabase';
 
 export { NeonDatabaseAdapter } from './adapters/neon';
 export { PostgresDatabaseAdapter } from './adapters/postgres';

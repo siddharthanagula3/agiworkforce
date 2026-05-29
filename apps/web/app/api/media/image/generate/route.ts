@@ -22,7 +22,7 @@ import { randomUUID } from 'crypto';
  * - OpenAI DALL-E 3
  * - Stability AI Stable Image Core (v2beta)
  *
- * Users authenticate with their Supabase JWT and must have an active subscription.
+ * Users authenticate with Clerk and must have an active subscription.
  */
 
 // Next.js route configuration - image generation takes 10–30s, so we extend to 60s.

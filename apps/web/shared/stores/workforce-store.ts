@@ -4,7 +4,7 @@
  *
  * All mutations and queries go through the API routes (/api/workforce,
  * /api/marketplace) which provide server-side validation, rate limiting,
- * CSRF protection, and catalog enrichment. Supabase Realtime subscriptions
+ * CSRF protection, and catalog enrichment. Realtime subscriptions
  * have been removed; the store now relies on API calls and window events.
  */
 
@@ -283,12 +283,12 @@ export const useWorkforceStore = create<WorkforceState>()(
 
 /**
  * Set up workforce change notifications.
- * Supabase Realtime has been removed; this is now a no-op. Callers should
+ * Realtime has been removed; this is now a no-op. Callers should
  * rely on polling via fetchHiredEmployees() or window events.
  */
 export const setupWorkforceSubscription = () => {
   logger.warn(
-    '[WorkforceStore] setupWorkforceSubscription called but Supabase Realtime has been removed. Using API polling instead.',
+    '[WorkforceStore] setupWorkforceSubscription called but Realtime has been removed. Using API polling instead.',
   );
 };
 
@@ -299,7 +299,7 @@ export const cleanupWorkforceSubscription = () => {};
 
 /**
  * Check if subscription is active for the current user.
- * Always returns false since Supabase Realtime has been removed.
+ * Always returns false since Realtime has been removed.
  */
 export const isWorkforceSubscriptionActive = (): boolean => false;
 

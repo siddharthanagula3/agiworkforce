@@ -75,7 +75,9 @@ pub fn configure_web_search_agent(
                 // Configure with Perplexity endpoint
                 Ok(agent.configure("https://api.perplexity.ai/search", &api_key))
             } else {
-                tracing::warn!("Perplexity selected but no API key provided, falling back to DuckDuckGo");
+                tracing::warn!(
+                    "Perplexity selected but no API key provided, falling back to DuckDuckGo"
+                );
                 Ok(agent)
             }
         }

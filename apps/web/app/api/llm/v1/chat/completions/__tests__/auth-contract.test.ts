@@ -16,7 +16,7 @@
  * The team-lead spec mentions "cookie"; this route is Bearer-only by design
  * (auth-gate.ts:42-46 explicitly rejects cookie-style requests up front), so
  * the "forged cookie" case is realised here as a forged Bearer token whose
- * Supabase JWT verification fails. Either way the contract is: no valid auth
+ * Neon JWT verification fails. Either way the contract is: no valid auth
  * → HTTP 401.
  *
  * The route's downstream dependencies (rate-limit, CSRF, subscription, credit

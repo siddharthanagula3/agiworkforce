@@ -216,7 +216,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             success: false,
             error: {
               code: 'TABLE_NOT_FOUND',
-              message: 'The hired_employees table needs to be created in Supabase',
+              message: 'The hired_employees table needs to be created in Neon',
             },
           },
           { status: 503, headers: corsHeaders },

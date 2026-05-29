@@ -127,7 +127,7 @@ GOOGLE_API_KEY=AIza...
           </p>
           <Link
             href="/byok"
-            style={{ fontSize: 14, color: 'var(--amber, #c8892a)', textDecoration: 'underline' }}
+            style={{ fontSize: 14, color: 'var(--agi-amber)', textDecoration: 'underline' }}
           >
             Join the Cloud Managed waitlist &rarr;
           </Link>

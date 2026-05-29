@@ -3,7 +3,7 @@
  *
  * Tests for the critical billing/token enforcement functionality.
  * The service now delegates to /api/usage and /api/usage/deduct via fetch
- * rather than calling Supabase RPCs directly.
+ * rather than calling Neon SQLs directly.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';

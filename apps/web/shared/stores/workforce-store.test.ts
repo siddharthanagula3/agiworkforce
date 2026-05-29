@@ -3,7 +3,7 @@
  * Tests for the workforce management store (hired employees).
  *
  * The store now calls /api/workforce (GET, POST, DELETE) via fetch()
- * instead of direct Supabase queries. Tests mock global fetch and the
+ * instead of direct Neon queries. Tests mock global fetch and the
  * CSRF header helper accordingly.
  */
 
@@ -30,9 +30,9 @@ vi.mock('@/lib/client/csrf', () => ({
   })),
 }));
 
-// Mock Supabase client (still needed for realtime subscription code)
-vi.mock('@shared/lib/supabase-client', () => ({
-  supabase: {
+// Mock cloud database client (still needed for realtime subscription code)
+vi.mock('@shared/lib/cloud-db-client', () => ({
+  cloudDb: {
     from: vi.fn(),
     channel: vi.fn(() => ({
       on: vi.fn(() => ({

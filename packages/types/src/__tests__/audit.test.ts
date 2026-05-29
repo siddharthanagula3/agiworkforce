@@ -33,7 +33,7 @@ function makeMinimalParams(overrides: Partial<Parameters<typeof createAuditEvent
     userId: 'usr-abc',
     surface: 'desktop' as AuditSurface,
     action: 'auth_login' as AuditAction,
-    resource: 'supabase-auth',
+    resource: 'clerk-auth',
     outcome: 'success' as AuditOutcome,
     ...overrides,
   };
@@ -52,7 +52,7 @@ describe('createAuditEvent — required fields', () => {
     expect(event.userId).toBe('usr-abc');
     expect(event.surface).toBe('desktop');
     expect(event.action).toBe('auth_login');
-    expect(event.resource).toBe('supabase-auth');
+    expect(event.resource).toBe('clerk-auth');
     expect(event.outcome).toBe('success');
     expect(event.severity).toBeDefined();
   });

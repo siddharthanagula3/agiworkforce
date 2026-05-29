@@ -83,7 +83,7 @@ Managed cloud/credits remain waitlist or private beta until metering, fraud, ref
 | Shared TS     | `packages`                     | Contracts, providers, runtime, UI, tools.                         |
 | Shared Rust   | `crates`                       | Protocol, command registry, sandbox, runtime utilities.           |
 | Services      | `services`                     | API gateway, signaling, future managed compute.                   |
-| Database      | `supabase`                     | Canonical migrations.                                             |
+| Database      | `apps/web/db/neon`             | Canonical Neon migrations.                                        |
 | Evidence      | `audit`                        | Source-backed parity and audit ledgers.                           |
 | Durable docs  | `docs`                         | Current product, architecture, decisions, launch, security.       |
 | Working notes | `tasks`                        | Execution notes and temporary research.                           |

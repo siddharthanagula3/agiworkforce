@@ -1,10 +1,10 @@
-//! Transfer commands — move conversations between local SQLite and cloud Supabase.
+//! Transfer commands — move conversations between local SQLite and explicit cloud chat storage.
 //!
 //! `transfer_local_to_cloud` reads a conversation + its messages from SQLite,
-//! creates them in Supabase via the cloud CRUD commands, then optionally deletes
-//! the local source rows.
+//! creates them via the cloud CRUD commands, then optionally deletes the local
+//! source rows.
 //!
-//! `transfer_cloud_to_local` reads from Supabase, creates in SQLite via
+//! `transfer_cloud_to_local` reads from cloud chat storage, creates in SQLite via
 //! repository functions, then optionally deletes the cloud source rows.
 
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,7 @@ use super::state::AppDatabase;
 #[serde(rename_all = "camelCase")]
 pub struct TransferResult {
     /// The conversation identifier in the *destination* system.
-    /// For local→cloud this is the Supabase UUID string.
+    /// For local→cloud this is the cloud conversation ID.
     /// For cloud→local this is the SQLite i64 as a string.
     pub conversation_id: String,
     /// Number of messages successfully written to the destination.
@@ -42,7 +42,7 @@ pub struct TransferResult {
 // local → cloud
 // ---------------------------------------------------------------------------
 
-/// Transfer a local SQLite conversation and its messages to Supabase cloud.
+/// Transfer a local SQLite conversation and its messages to cloud chat storage.
 ///
 /// Parameters:
 /// - `local_conversation_id` — the SQLite primary key (i64)
@@ -135,10 +135,10 @@ pub async fn transfer_local_to_cloud(
 // cloud → local
 // ---------------------------------------------------------------------------
 
-/// Transfer a cloud Supabase conversation and its messages to local SQLite.
+/// Transfer a cloud conversation and its messages to local SQLite.
 ///
 /// Parameters:
-/// - `cloud_conversation_id` — the Supabase UUID string
+/// - `cloud_conversation_id` — the cloud conversation ID
 /// - `user_id` — the local user ID to use for the SQLite insert
 /// - `delete_cloud` — if true, delete the cloud conversation after transfer
 #[tauri::command]
@@ -243,7 +243,7 @@ fn derive_title_from_messages(messages: &[CloudMessage]) -> Option<String> {
     None
 }
 
-/// Parse a Supabase ISO 8601 timestamp string into a `DateTime<Utc>`.
+/// Parse a cloud ISO 8601 timestamp string into a `DateTime<Utc>`.
 /// Falls back to `Utc::now()` on parse failure.
 fn parse_cloud_timestamp(ts: &str) -> chrono::DateTime<chrono::Utc> {
     ts.parse::<chrono::DateTime<chrono::Utc>>()

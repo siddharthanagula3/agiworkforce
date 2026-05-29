@@ -22,7 +22,6 @@ import type {
   RunPageAction,
   ScheduledTask,
 } from './types';
-import { getDefaultModelFor } from '@agiworkforce/types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import {
   loadShortcuts,
@@ -41,11 +40,6 @@ import {
   TASK_ALARM_PREFIX,
 } from './features/background/tasks';
 import { getPlatformPrompt } from './platform-prompts';
-import {
-  streamFromProvider,
-  type ProviderStreamProvider,
-  type StreamChunk as ProviderStreamChunk,
-} from './providerStreamClient';
 // Wires `@agiworkforce/browser-tool`'s canonical action shapes onto the
 // extension's existing `RunPageAction` machinery. The package's runtime
 // (Playwright-based) is NOT bundled — only types travel through this
@@ -64,12 +58,9 @@ import {
   DOM_MUTATION_MESSAGE_TYPES,
   EXTENSION_PAGE_ONLY_MESSAGE_TYPES,
   DEFAULT_AGI_BRIDGE_URL,
-  DEFAULT_AGI_CLOUD_API_URL,
   ORIGIN_EXTENSION_PAGE,
   MAX_CONTEXT_HTML_CHARS,
   validateBridgeUrl,
-  validateCloudApiUrl,
-  validateGatewayUrl,
   validateShortcutActions,
 } from './background/policy';
 
@@ -132,6 +123,14 @@ const state: BackgroundState = {
   messageQueue: [],
   isProcessingQueue: false,
 };
+
+interface ActiveChatStream {
+  controller: AbortController;
+  cancelRequested: boolean;
+  cancelNotified: boolean;
+}
+
+const activeChatStreams = new Map<string, ActiveChatStream>();
 
 // Pending requests waiting for responses
 const pendingRequests = new Map<
@@ -784,7 +783,7 @@ async function executeScheduledTask(task: ScheduledTask): Promise<void> {
     // any code path with this extension's context that can write to local
     // storage (a future bug, a corrupted import-tasks flow) could plant a
     // multi-megabyte prompt. We cap at 10 000 chars — far above legitimate
-    // user input but small enough to bound LLM cost on the user's API key.
+    // user input but small enough to bound bridge/runtime work.
     const TASK_PROMPT_MAX_CHARS = 10_000;
     const safePrompt = String(task.prompt).slice(0, TASK_PROMPT_MAX_CHARS);
     if (safePrompt.length < task.prompt.length) {
@@ -1128,6 +1127,28 @@ async function handleMessageAsync(
     case 'CHAT_MESSAGE': {
       const chatMsg = message as import('./types').ChatMessageMessage;
       void handleChatMessage(chatMsg, sender);
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'CANCEL_STREAM': {
+      const cancelMsg = message as import('./types').CancelStreamMessage;
+      const active = activeChatStreams.get(cancelMsg.id);
+      if (!active) {
+        return { success: false, error: 'No active stream for id' } as ExtensionResponse;
+      }
+      active.cancelRequested = true;
+      if (!active.cancelNotified) {
+        active.cancelNotified = true;
+        const chunk: import('./types').ChatChunkMessage = {
+          type: 'CHAT_CHUNK',
+          id: cancelMsg.id,
+          text: '',
+          done: true,
+          error: 'Cancelled.',
+        };
+        chrome.runtime.sendMessage(chunk).catch(() => {});
+      }
+      active.controller.abort();
       return { success: true } as ExtensionResponse;
     }
 
@@ -1522,10 +1543,10 @@ async function handleMessageAsync(
 
     case 'IN_PAGE_PROMPT' as ExtensionMessage['type']: {
       // Sent by the in-page chat panel (content-script) to run a prompt and
-      // return the full accumulated response text. Uses the same provider-stream
-      // / bridge / native fallback chain as CHAT_MESSAGE but resolves to a
-      // simple { success, text } rather than broadcasting chunks, since content
-      // scripts cannot receive chunked messages while the panel waits.
+      // return the full accumulated response text. Uses the same local bridge /
+      // native chain as CHAT_MESSAGE but resolves to a simple { success, text }
+      // rather than broadcasting chunks, since content scripts cannot receive
+      // chunked messages while the panel waits.
       const promptPayload = message as unknown as { prompt?: string };
       const promptText = typeof promptPayload.prompt === 'string' ? promptPayload.prompt : '';
       if (!promptText) {
@@ -1762,8 +1783,6 @@ const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
   { value: 'greenhouse.io', mode: 'suffix' },
   { value: 'workday.com', mode: 'suffix' },
   // CHROME-NEW-003 (2026-05-04): the extension's own auth surfaces.
-  { value: 'supabase.co', mode: 'suffix' },
-  { value: 'supabase.io', mode: 'suffix' },
   { value: 'agiworkforce.com', mode: 'suffix' },
 ];
 
@@ -2609,400 +2628,6 @@ async function getAgiBridgeBaseUrl(): Promise<string> {
   });
 }
 
-/**
- * Resolve the cloud API URL from chrome.storage.local (`agi_cloud_api_url`),
- * falling back to DEFAULT_AGI_CLOUD_API_URL. The URL must pass
- * validateCloudApiUrl (HTTPS, non-local). Invalid stored values are discarded
- * and the default is used.
- */
-async function getAgiCloudApiUrl(): Promise<string> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('agi_cloud_api_url', (result) => {
-      if (chrome.runtime.lastError) {
-        resolve(DEFAULT_AGI_CLOUD_API_URL);
-        return;
-      }
-      const raw = (result['agi_cloud_api_url'] as string | undefined)?.trim();
-      if (!raw) {
-        resolve(DEFAULT_AGI_CLOUD_API_URL);
-        return;
-      }
-      const validated = validateCloudApiUrl(raw);
-      if (!validated) {
-        logger.error('Stored cloud API URL failed validation, using default', { raw });
-        resolve(DEFAULT_AGI_CLOUD_API_URL);
-        return;
-      }
-      resolve(validated);
-    });
-  });
-}
-
-/**
- * Handle a chat message by calling the AGI Workforce cloud API directly.
- * Used when the desktop bridge is unavailable but the user has set an API key.
- *
- * Security: apiKey comes exclusively from chrome.storage.session (CRIT-004 /
- * chrome-HIGH-3). It is never accepted from message wire.
- *
- * The SSE format parsed here matches the OpenAI chat completions streaming
- * format. Chunks are forwarded to the side panel via broadcastChunk in the
- * same CHAT_CHUNK format as the bridge path — no UI changes needed.
- */
-async function handleDirectCloudChat(
-  cloudUrl: string,
-  apiKey: string,
-  messages: Array<{ role: string; content: string }>,
-  broadcastChunk: (text: string, done: boolean, error?: string) => void,
-): Promise<void> {
-  const resp = await fetch(cloudUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({ messages, stream: true }),
-    signal: AbortSignal.timeout(60000),
-  });
-
-  if (!resp.ok || !resp.body) {
-    const errText = `Cloud API error: ${resp.status} ${resp.statusText}`;
-    broadcastChunk('', true, errText);
-    return;
-  }
-
-  const reader = resp.body.getReader();
-  const decoder = new TextDecoder();
-  let sseBuffer = '';
-
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    sseBuffer += decoder.decode(value, { stream: true });
-    const lines = sseBuffer.split('\n');
-    sseBuffer = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed === 'data: [DONE]') continue;
-      const dataStr = trimmed.startsWith('data: ') ? trimmed.slice(6) : trimmed;
-      try {
-        const parsed = JSON.parse(dataStr) as {
-          choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
-          content?: string;
-          done?: boolean;
-        };
-        const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
-        if (delta) {
-          broadcastChunk(delta, false);
-        }
-        if (parsed.done || parsed.choices?.[0]?.finish_reason === 'stop') {
-          broadcastChunk('', true);
-          return;
-        }
-      } catch {
-        // Non-JSON SSE line — skip
-      }
-    }
-  }
-  // Flush remaining buffer
-  const remaining = sseBuffer.trim();
-  if (remaining && remaining !== 'data: [DONE]') {
-    const dataStr = remaining.startsWith('data: ') ? remaining.slice(6) : remaining;
-    try {
-      const parsed = JSON.parse(dataStr) as {
-        choices?: Array<{ delta?: { content?: string }; finish_reason?: string }>;
-        content?: string;
-      };
-      const delta = parsed.choices?.[0]?.delta?.content ?? parsed.content ?? '';
-      if (delta) broadcastChunk(delta, false);
-    } catch {
-      // Final fragment not valid JSON — discard
-    }
-  }
-  broadcastChunk('', true);
-}
-
-/**
- * Settings keys for the optional `/api/v1/providers/:id/stream` path that
- * routes through the AGI Workforce api-gateway instead of the local desktop
- * bridge. Default-off; enabled by setting `chrome.storage.local.agi_use_provider_stream = true`.
- */
-const USE_PROVIDER_STREAM_KEY = 'agi_use_provider_stream';
-const GATEWAY_URL_KEY = 'agi_gateway_url';
-const PROVIDER_OVERRIDE_KEY = 'agi_provider_override';
-const SUPABASE_JWT_SESSION_KEY = 'agi_supabase_jwt';
-const DEFAULT_GATEWAY_URL = 'https://api.agiworkforce.com';
-const VALID_PROVIDER_IDS: ReadonlySet<ProviderStreamProvider> = new Set([
-  'anthropic',
-  'openai',
-  'google',
-  'ollama',
-]);
-
-// validateGatewayUrl is now imported from `./background/policy` (M-02 audit
-// 2026-05-19). The function deliberately uses an EXACT-match allowlist —
-// no open subdomain rule — to prevent compromise of any delegated subdomain
-// from compromising the JWT pipeline.
-
-interface ProviderStreamSettings {
-  enabled: boolean;
-  gatewayUrl: string;
-  providerOverride: 'auto' | ProviderStreamProvider;
-}
-
-async function getProviderStreamSettings(): Promise<ProviderStreamSettings> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(
-      [USE_PROVIDER_STREAM_KEY, GATEWAY_URL_KEY, PROVIDER_OVERRIDE_KEY],
-      (result) => {
-        if (chrome.runtime.lastError) {
-          resolve({ enabled: false, gatewayUrl: DEFAULT_GATEWAY_URL, providerOverride: 'auto' });
-          return;
-        }
-        const enabled = result[USE_PROVIDER_STREAM_KEY] === true;
-        const gatewayRaw = (result[GATEWAY_URL_KEY] as string | undefined)?.trim() ?? '';
-        const overrideRaw = (result[PROVIDER_OVERRIDE_KEY] as string | undefined)?.trim();
-        const providerOverride: 'auto' | ProviderStreamProvider =
-          overrideRaw && VALID_PROVIDER_IDS.has(overrideRaw as ProviderStreamProvider)
-            ? (overrideRaw as ProviderStreamProvider)
-            : 'auto';
-        // SECURITY (C-1): Allowlist-validate the stored gateway URL. If storage
-        // was tampered (e.g. evil.com written by a content script), fall back to
-        // the manifest-declared default silently. This prevents JWT exfiltration.
-        const gatewayUrl = validateGatewayUrl(gatewayRaw) ?? DEFAULT_GATEWAY_URL;
-        resolve({ enabled, gatewayUrl, providerOverride });
-      },
-    );
-  });
-}
-
-async function getSupabaseJwtFromStorage(): Promise<string | null> {
-  return new Promise((resolve) => {
-    try {
-      chrome.storage.session.get(SUPABASE_JWT_SESSION_KEY, (sessionResult) => {
-        if (chrome.runtime.lastError) {
-          resolve(null);
-          return;
-        }
-        const stored = (sessionResult[SUPABASE_JWT_SESSION_KEY] as string | undefined)?.trim();
-        resolve(stored && stored.startsWith('eyJ') ? stored : null);
-      });
-    } catch {
-      resolve(null);
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Tier cache — fetched from /api/me, stored in chrome.storage.local under
-// 'agi_user_tier'. Refreshed on demand and on a 30-minute alarm (Phase 3 #41).
-//
-// Bearer-token auth side-steps the BLOCKED_COOKIE_DOMAINS guard: cookies
-// would leak across origins, but a JWT pulled from session storage and sent
-// in the Authorization header is fine.
-// ---------------------------------------------------------------------------
-
-const TIER_CACHE_KEY = 'agi_user_tier';
-const TIER_CACHE_TIMESTAMP_KEY = 'agi_user_tier_fetched_at';
-const TIER_REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-
-/**
- * Allowlist of /api/me hosts the extension may call. Mirrors the gateway
- * allowlist but uses the marketing domain (agiworkforce.com) where /api/me
- * lives in the Next.js app — the api.agiworkforce.com gateway proxies
- * different routes.
- */
-const ME_ENDPOINT_ALLOWLIST = new Set<string>([
-  'https://agiworkforce.com',
-  'https://www.agiworkforce.com',
-  'http://localhost:3000',
-  'http://localhost:3001',
-]);
-
-function deriveMeEndpoint(gatewayUrl: string): string | null {
-  // Default to agiworkforce.com unless the gateway is explicitly localhost
-  // (developer dev-stack pointing at next-dev directly).
-  try {
-    const u = new URL(gatewayUrl);
-    if (u.hostname === 'localhost' || u.hostname === '127.0.0.1') {
-      const candidate = `${u.protocol}//${u.host}`;
-      if (ME_ENDPOINT_ALLOWLIST.has(candidate)) {
-        return `${candidate}/api/me`;
-      }
-    }
-  } catch {
-    /* fall through */
-  }
-  return 'https://agiworkforce.com/api/me';
-}
-
-interface ApiMeResponse {
-  plan?: { tier?: string };
-  routing_preferences?: { us_only?: boolean };
-  feature_flags?: Record<string, unknown>;
-}
-
-/**
- * Fetch /api/me with Bearer auth and cache the tier locally. Silent on
- * failure — the popup falls back to whatever was cached previously, or
- * hides the tier badge if no cache exists yet.
- */
-async function refreshUserTierFromApi(): Promise<void> {
-  try {
-    const jwt = await getSupabaseJwtFromStorage();
-    if (!jwt) return;
-
-    const settings = await getProviderStreamSettings();
-    const meUrl = deriveMeEndpoint(settings.gatewayUrl);
-    if (!meUrl) return;
-
-    const response = await fetch(meUrl, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        Accept: 'application/json',
-      },
-      credentials: 'omit',
-    });
-
-    if (!response.ok) {
-      return;
-    }
-
-    const body = (await response.json()) as ApiMeResponse;
-    const tier = body.plan?.tier;
-    if (typeof tier !== 'string' || tier.length === 0) {
-      return;
-    }
-
-    await chrome.storage.local.set({
-      [TIER_CACHE_KEY]: tier,
-      [TIER_CACHE_TIMESTAMP_KEY]: Date.now(),
-    });
-  } catch {
-    // Network errors, malformed JSON, storage failures — all silent.
-  }
-}
-
-// Schedule a periodic refresh while the service worker is alive. The
-// alarm survives SW restarts (Chrome restores alarms on startup).
-const TIER_REFRESH_ALARM_NAME = 'agi-user-tier-refresh';
-chrome.alarms.create(TIER_REFRESH_ALARM_NAME, {
-  periodInMinutes: TIER_REFRESH_INTERVAL_MS / 60_000,
-});
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === TIER_REFRESH_ALARM_NAME) {
-    void refreshUserTierFromApi();
-  }
-});
-
-// Also refresh on extension activation so a fresh install sees the tier
-// without waiting 30 minutes.
-void refreshUserTierFromApi();
-
-function inferProviderFromModel(modelId: string | undefined): ProviderStreamProvider {
-  if (!modelId) return 'anthropic';
-  const m = modelId.toLowerCase();
-  if (m.startsWith('claude-')) return 'anthropic';
-  if (m.startsWith('gpt-') || m.startsWith('o1-') || m.startsWith('codex-')) return 'openai';
-  if (m.startsWith('gemini-')) return 'google';
-  if (
-    m === 'ollama-local' ||
-    m.startsWith('llama') ||
-    m.startsWith('qwen') ||
-    m.startsWith('mistral')
-  ) {
-    return 'ollama';
-  }
-  return 'anthropic';
-}
-
-async function getSelectedModel(): Promise<string> {
-  // W5-06: quick mode bypasses user-selected model with the fast-status slot.
-  if (quickModeCache) {
-    return getDefaultModelFor('free', 'fast-status');
-  }
-  return new Promise((resolve) => {
-    chrome.storage.local.get('agi_model', (result) => {
-      const defaultModel = getDefaultModelFor('free', 'chat');
-      if (chrome.runtime.lastError) {
-        resolve(defaultModel);
-        return;
-      }
-      const stored = (result['agi_model'] as string | undefined)?.trim();
-      resolve(stored && stored !== 'auto' ? stored : defaultModel);
-    });
-  });
-}
-
-/**
- * Broadcast a PAYWALL_HIT message to all open extension views (popup, side panel).
- * Views that are not open will silently ignore the rejected sendMessage.
- */
-function broadcastPaywallHit(feature: string, requiredTier: string, reason?: string): void {
-  const msg: import('./types').PaywallHitMessage = {
-    type: 'PAYWALL_HIT',
-    feature,
-    requiredTier,
-    ...(reason ? { reason } : {}),
-  };
-  chrome.runtime.sendMessage(msg).catch(() => {
-    // No listeners open (popup / side panel closed) — silently ignore.
-  });
-}
-
-/**
- * Stream a chat reply via the api-gateway's `/api/v1/providers/:id/stream`
- * endpoint. Throws if the upstream returns an error chunk so the caller can
- * fall back to the legacy bridge path.
- *
- * When a paywall chunk is received the function broadcasts PAYWALL_HIT to all
- * extension views and returns normally (does NOT throw) — the caller must not
- * fall back to the bridge in that case, as the cap is enforced server-side and
- * retrying against the bridge won't help.
- */
-async function streamChatViaProvider(params: {
-  gatewayUrl: string;
-  providerId: ProviderStreamProvider;
-  jwt: string;
-  model: string;
-  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
-  broadcast: (text: string, done: boolean, error?: string) => void;
-}): Promise<{ paywalled: boolean }> {
-  const { gatewayUrl, providerId, jwt, model, messages, broadcast } = params;
-  const stream = streamFromProvider({
-    gatewayUrl,
-    providerId,
-    authToken: jwt,
-    request: { model, messages },
-  });
-  let sawError: { code?: string; message: string } | null = null;
-  for await (const chunk of stream as AsyncIterable<ProviderStreamChunk>) {
-    if (chunk.type === 'text-delta') {
-      if (chunk.delta) broadcast(chunk.delta, false);
-    } else if (chunk.type === 'paywall') {
-      // Tier cap hit — surface the paywall UI and stop streaming without
-      // triggering the legacy-bridge fallback.
-      broadcastPaywallHit(chunk.feature, chunk.requiredTier, chunk.reason);
-      broadcast('', true);
-      return { paywalled: true };
-    } else if (chunk.type === 'error') {
-      sawError = { ...(chunk.code ? { code: chunk.code } : {}), message: chunk.message };
-    } else if (chunk.type === 'stop') {
-      if (sawError) {
-        throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
-      }
-      broadcast('', true);
-      return { paywalled: false };
-    }
-  }
-  if (sawError) {
-    throw new Error(`provider-stream:${sawError.code ?? 'STREAM_ERROR'}:${sawError.message}`);
-  }
-  broadcast('', true);
-  return { paywalled: false };
-}
-
 async function handleChatMessage(
   message: import('./types').ChatMessageMessage,
   _sender: chrome.runtime.MessageSender,
@@ -3012,11 +2637,10 @@ async function handleChatMessage(
   // it as the authoritative provider key. A malicious page (via a compromised
   // allowlisted origin or via XSS on an allowlisted site) could craft a
   // `CHAT_MESSAGE` carrying an attacker-controlled `apiKey` and force every
-  // outbound LLM request to authenticate against that key, or to a key the
-  // attacker wants the user to bill. The api key MUST come from the user's
-  // own session storage — written exclusively by the trusted side-panel UI
-  // — and never from the message wire. The `apiKey` destructure is gone;
-  // the resolution path below queries `chrome.storage.session.agi_api_key`.
+  // outbound request to authenticate against that key, or to a key the
+  // attacker wants the user to bill. Chrome chat now stays inside the
+  // desktop/native bridge boundary, so no provider API key is resolved here.
+  // The `apiKey` destructure is gone.
   const { id, text, pageContext, conversationHistory = [], attachments } = message;
 
   const broadcastChunk = (chunkText: string, done: boolean, error?: string): void => {
@@ -3032,6 +2656,14 @@ async function handleChatMessage(
       // Side panel may not be open; ignore
     });
   };
+
+  const streamController = new AbortController();
+  const activeStream: ActiveChatStream = {
+    controller: streamController,
+    cancelRequested: false,
+    cancelNotified: false,
+  };
+  activeChatStreams.set(id, activeStream);
 
   // Build message array for the API
   const messages: Array<{ role: string; content: string }> = [];
@@ -3068,10 +2700,10 @@ async function handleChatMessage(
 
   // Round-2 audit P0 #3 fix (2026-05-21): if the side panel forwarded inline
   // data-URL attachments, surface them as a structured annotation so the
-  // model can reference them. The provider-stream and bridge layers can
-  // upgrade this into proper multi-modal content in a follow-up; today the
-  // annotation alone closes the regression of attachments being silently
-  // dropped between the composer and the model.
+  // model can reference them. The desktop bridge can upgrade this into proper
+  // multi-modal content in a follow-up; today the annotation alone closes the
+  // regression of attachments being silently dropped between the composer and
+  // the model.
   if (attachments && attachments.length > 0) {
     const attachmentSummary = attachments
       .map((dataUrl, idx) => {
@@ -3085,149 +2717,48 @@ async function handleChatMessage(
 
   messages.push({ role: 'user', content: userContent });
 
-  // Optional: route via the AGI Workforce api-gateway provider-stream endpoint.
-  // Default-off; user opts in by setting `agi_use_provider_stream = true` in
-  // chrome.storage.local along with a Supabase JWT in chrome.storage.session.
-  const providerStreamSettings = await getProviderStreamSettings();
-  if (providerStreamSettings.enabled) {
-    const jwt = await getSupabaseJwtFromStorage();
-    if (jwt) {
-      try {
-        const model = await getSelectedModel();
-        const providerId =
-          providerStreamSettings.providerOverride === 'auto'
-            ? inferProviderFromModel(model)
-            : providerStreamSettings.providerOverride;
-        const streamResult = await streamChatViaProvider({
-          gatewayUrl: providerStreamSettings.gatewayUrl,
-          providerId,
-          jwt,
-          model,
-          messages: messages as Array<{
-            role: 'user' | 'assistant' | 'system';
-            content: string;
-          }>,
-          broadcast: broadcastChunk,
-        });
-        // If the API returned a paywall response, do not fall through to the
-        // legacy bridge — the cap is enforced server-side and the PAYWALL_HIT
-        // broadcast has already been sent to the popup/side-panel.
-        if (streamResult.paywalled) return;
-        return;
-      } catch (err) {
-        logger.warn('Provider-stream path failed, falling back to legacy bridge', err);
-        // fall through to legacy fetch + native fallback
-      }
-    } else {
-      logger.debug(
-        'Provider-stream enabled but no Supabase JWT in session storage — using legacy path',
-      );
-    }
-  }
-
-  // Resolve the bridge URL at call time so it picks up any in-session changes.
-  const AGI_API_BASE = await getAgiBridgeBaseUrl();
-
-  // Resolve the API key strictly from chrome.storage.session — written only by
-  // the trusted side-panel UI. See chrome-HIGH-3 comment at the top of
-  // handleChatMessage for why message-body apiKey is no longer accepted.
-  // CRIT-004 still applies: do NOT fall back to chrome.storage.local.
-  const resolvedApiKey: string | null = await new Promise((resolve) => {
-    try {
-      chrome.storage.session.get('agi_api_key', (sessionResult) => {
-        if (chrome.runtime.lastError) {
-          logger.warn('Failed to read API key from session storage', {
-            error: chrome.runtime.lastError.message,
-          });
-          resolve(null);
-          return;
-        }
-        const sessionStored = (sessionResult['agi_api_key'] as string | undefined)?.trim();
-        resolve(sessionStored ?? null);
-      });
-    } catch {
-      resolve(null);
-    }
-  });
-
-  // ── Cloud-fallback gate ────────────────────────────────────────────────────
-  // When the desktop bridge is not connected, attempt direct cloud API call.
-  // API key is read exclusively from chrome.storage.session (CRIT-004 /
-  // chrome-HIGH-3). The check `!state.isNativeConnected` mirrors the bridge
-  // connect state; even if the bridge URL fetch below would succeed, we skip
-  // this path when the bridge IS connected to preserve existing behavior.
-  if (!state.isNativeConnected) {
-    if (resolvedApiKey) {
-      try {
-        const cloudUrl = await getAgiCloudApiUrl();
-        logger.debug('Bridge not connected — using cloud API fallback', { cloudUrl });
-        await handleDirectCloudChat(cloudUrl, resolvedApiKey, messages, broadcastChunk);
-        return;
-      } catch (cloudErr) {
-        logger.warn('Cloud API fallback failed', cloudErr);
-        const errMsg = cloudErr instanceof Error ? cloudErr.message : 'Cloud request failed';
-        broadcastChunk('', true, errMsg);
-        return;
-      }
-    } else {
-      // No bridge, no API key — give a clear, actionable error.
-      broadcastChunk(
-        'Desktop not connected. Set an API key in extension settings for cloud mode.',
-        true,
-      );
+  try {
+    // Resolve the bridge URL at call time so it picks up any in-session changes.
+    const AGI_API_BASE = await getAgiBridgeBaseUrl();
+    if (streamController.signal.aborted) {
       return;
     }
-  }
 
-  try {
-    // Attempt to stream via the AGI Workforce API.
-    // The desktop app may expose an HTTP endpoint; fall back to native if unavailable.
+    // Attempt to stream via the local desktop bridge only.
+    // If unavailable, fail closed or use native messaging; never fall back to hosted APIs.
     let streamed = false;
 
-    // SECURITY (C-2): Never forward the provider API key to the local desktop
-    // bridge (http://localhost:8787). The desktop app authenticates bridge calls
-    // with its own pairing token, not with provider keys. Provider API keys must
-    // only be sent to the provider's own endpoint (api.openai.com, etc.).
-    // Bridge calls use X-Bridge-Token instead; if no bridge token is configured
-    // the request still goes through without a key (desktop supplies its own).
-    const bridgeBaseUrl = AGI_API_BASE ?? '';
-    const isBridgeRequest =
-      bridgeBaseUrl.includes('localhost') || bridgeBaseUrl.includes('127.0.0.1');
-
     const fetchHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (!isBridgeRequest && resolvedApiKey) {
-      // Only attach provider API key when sending to a remote (non-bridge) endpoint.
-      fetchHeaders['Authorization'] = `Bearer ${resolvedApiKey}`;
-    }
     // Bridge-token attachment: read pairing token from session storage.
     // This is set during the one-time popup pairing flow.
-    if (isBridgeRequest) {
-      const bridgeToken = await new Promise<string | null>((res) => {
-        try {
-          chrome.storage.session.get('agi_bridge_token', (r) => {
-            if (chrome.runtime.lastError) {
-              res(null);
-              return;
-            }
-            const t = (r['agi_bridge_token'] as string | undefined)?.trim();
-            res(t ?? null);
-          });
-        } catch {
-          res(null);
-        }
-      });
-      if (bridgeToken) {
-        fetchHeaders['X-Bridge-Token'] = bridgeToken;
+    const bridgeToken = await new Promise<string | null>((res) => {
+      try {
+        chrome.storage.session.get('agi_bridge_token', (r) => {
+          if (chrome.runtime.lastError) {
+            res(null);
+            return;
+          }
+          const t = (r['agi_bridge_token'] as string | undefined)?.trim();
+          res(t ?? null);
+        });
+      } catch {
+        res(null);
       }
+    });
+    if (bridgeToken) {
+      fetchHeaders['X-Bridge-Token'] = bridgeToken;
     }
 
     try {
+      const timeoutId = setTimeout(() => {
+        streamController.abort();
+      }, 60_000);
       const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
         method: 'POST',
         headers: fetchHeaders,
         body: JSON.stringify({ messages, stream: true }),
-        signal: AbortSignal.timeout(60000),
-      });
+        signal: streamController.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
       if (resp.ok && resp.body) {
         streamed = true;
@@ -3240,6 +2771,7 @@ async function handleChatMessage(
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
+          if (streamController.signal.aborted) return;
           sseBuffer += decoder.decode(value, { stream: true });
           // Split on newlines — the last element may be an incomplete line,
           // so we keep it in the buffer for the next iteration.
@@ -3290,6 +2822,16 @@ async function handleChatMessage(
         return;
       }
     } catch (fetchErr) {
+      if (streamController.signal.aborted) {
+        if (!activeStream.cancelRequested || !activeStream.cancelNotified) {
+          broadcastChunk(
+            '',
+            true,
+            activeStream.cancelRequested ? 'Cancelled.' : 'Bridge request timed out.',
+          );
+        }
+        return;
+      }
       // Network error or local API unavailable — fall through to native.
       // Log for diagnostics but don't surface to user.
       logger.debug('Chat SSE fetch failed, falling back to native', fetchErr);
@@ -3298,6 +2840,12 @@ async function handleChatMessage(
     if (!streamed) {
       // Fall back: forward to native desktop app via existing QUEUE_MESSAGE path
       if (state.isNativeConnected && state.nativePort) {
+        if (streamController.signal.aborted) {
+          if (!activeStream.cancelNotified) {
+            broadcastChunk('', true, 'Cancelled.');
+          }
+          return;
+        }
         try {
           const nativeResp = (await withTimeout(
             sendNativeRequest({
@@ -3312,6 +2860,12 @@ async function handleChatMessage(
 
           if (nativeResp?.reply) {
             broadcastChunk(nativeResp.reply, false);
+          }
+          if (streamController.signal.aborted) {
+            if (!activeStream.cancelNotified) {
+              broadcastChunk('', true, 'Cancelled.');
+            }
+            return;
           }
           broadcastChunk('', true);
           return;
@@ -3332,6 +2886,8 @@ async function handleChatMessage(
     const errText = error instanceof Error ? error.message : 'Unknown error';
     broadcastChunk('', true, errText);
     showNotification('Chat Error', errText);
+  } finally {
+    activeChatStreams.delete(id);
   }
 }
 
@@ -3341,50 +2897,17 @@ async function handleChatMessage(
  * Returns the full accumulated response text so the panel can render it
  * without needing a chunked messaging protocol.
  *
- * Fallback chain (same as handleChatMessage):
- *  1. Provider-stream via api-gateway (if enabled + JWT present)
- *  2. HTTP fetch to AGI bridge (localhost:8787)
- *  3. Native messaging to desktop app
- *  4. Offline message
+ * Fallback chain (same trust boundary as handleChatMessage):
+ *  1. HTTP fetch to AGI bridge (localhost:8787)
+ *  2. Native messaging to desktop app
+ *  3. Offline message
  */
 async function handleInPagePrompt(prompt: string): Promise<string> {
   const messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
     { role: 'user', content: prompt },
   ];
 
-  // Path 1 — provider-stream via api-gateway
-  const providerStreamSettings = await getProviderStreamSettings();
-  if (providerStreamSettings.enabled) {
-    const jwt = await getSupabaseJwtFromStorage();
-    if (jwt) {
-      try {
-        const model = await getSelectedModel();
-        const providerId =
-          providerStreamSettings.providerOverride === 'auto'
-            ? inferProviderFromModel(model)
-            : providerStreamSettings.providerOverride;
-        let accumulated = '';
-        const streamResult = await streamChatViaProvider({
-          gatewayUrl: providerStreamSettings.gatewayUrl,
-          providerId,
-          jwt,
-          model,
-          messages,
-          broadcast: (chunk: string, _done: boolean) => {
-            accumulated += chunk;
-          },
-        });
-        if (streamResult.paywalled) {
-          throw new Error('Feature requires upgrade');
-        }
-        if (accumulated) return accumulated;
-      } catch (err) {
-        logger.warn('In-page prompt: provider-stream failed, falling back', err);
-      }
-    }
-  }
-
-  // Path 2 — HTTP bridge
+  // Path 1 — HTTP bridge
   const AGI_API_BASE = await getAgiBridgeBaseUrl();
   try {
     const resp = await fetch(`${AGI_API_BASE}/v1/chat/stream`, {
@@ -3407,7 +2930,7 @@ async function handleInPagePrompt(prompt: string): Promise<string> {
     logger.debug('In-page prompt: bridge fetch failed, trying native');
   }
 
-  // Path 3 — native messaging
+  // Path 2 — native messaging
   if (state.isNativeConnected && state.nativePort) {
     try {
       const nativeResp = (await withTimeout(
@@ -3426,8 +2949,8 @@ async function handleInPagePrompt(prompt: string): Promise<string> {
     }
   }
 
-  // Path 4 — offline
-  return 'The AGI Workforce desktop app is not running or no provider is configured. Please start the desktop app or configure a provider in the extension popup.';
+  // Path 3 — offline
+  return 'The AGI Workforce desktop app is not running. Please start it and try again.';
 }
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

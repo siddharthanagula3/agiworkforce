@@ -13,7 +13,7 @@
  *    - nonce_replay surfaced
  *    - session_not_initialised when no session
  *  - signOutbound: delegates to Rust via Tauri invoke
- *  - rotateDispatchKey: calls supabaseRpc + dispatch_hmac_init with retry
+ *  - rotateDispatchKey: calls cloud key rotation + dispatch_hmac_init with retry
  *  - resetDispatchSession: clears state
  *  - isDispatchSessionActive: reflects session state
  */
@@ -253,16 +253,16 @@ describe('rotateDispatchKey', () => {
     await setupSession();
   });
 
-  it('calls supabaseRpc and re-initialises session key', async () => {
+  it('calls cloud key rotation and re-initialises session key', async () => {
     const newKeyHex = 'b'.repeat(64);
     mockInvoke.mockResolvedValueOnce(newKeyHex); // dispatch_hmac_init after rotation
-    const supabaseRpc = vi.fn().mockResolvedValue({ new_salt: 'newsalt' });
+    const rotateKeyRequest = vi.fn().mockResolvedValue({ new_salt: 'newsalt' });
     const onKeyRotated = vi.fn();
     setDispatchCallbacks({ onKeyRotated });
 
-    await rotateDispatchKey('ABCD1234', supabaseRpc);
+    await rotateDispatchKey('ABCD1234', rotateKeyRequest);
 
-    expect(supabaseRpc).toHaveBeenCalledOnce();
+    expect(rotateKeyRequest).toHaveBeenCalledOnce();
     expect(mockInvoke).toHaveBeenCalledWith('dispatch_hmac_init', {
       pairingCode: 'ABCD1234',
       sessionSalt: 'newsalt',
@@ -273,16 +273,16 @@ describe('rotateDispatchKey', () => {
 
   it('retries up to 3 times on failure then throws', async () => {
     vi.useFakeTimers();
-    const supabaseRpc = vi.fn().mockRejectedValue(new Error('network'));
+    const rotateKeyRequest = vi.fn().mockRejectedValue(new Error('network'));
 
     // Attach rejection handler immediately so it's not unhandled.
-    const rotatePromise = rotateDispatchKey('ABCD1234', supabaseRpc).catch((e: unknown) => e);
+    const rotatePromise = rotateDispatchKey('ABCD1234', rotateKeyRequest).catch((e: unknown) => e);
     // Advance timers to flush exponential backoff delays (1s, 2s).
     await vi.runAllTimersAsync();
     const result = await rotatePromise;
     expect(result).toBeInstanceOf(Error);
     expect((result as Error).message).toMatch('key rotation failed after 3 attempts');
-    expect(supabaseRpc).toHaveBeenCalledTimes(3);
+    expect(rotateKeyRequest).toHaveBeenCalledTimes(3);
     vi.useRealTimers();
   });
 });
