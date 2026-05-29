@@ -215,6 +215,7 @@ leads/
 **/.temp/
 .worktrees/
 .code-review-graph/
+.firecrawl/
 dist-web
 # Build artifacts (Vite SPA output)
 apps/web/public/chat
