@@ -19,7 +19,6 @@ import {
   Code2,
   Copy,
   FileText,
-  Lightbulb,
   Menu,
   Share2,
   Sparkles,
@@ -30,7 +29,6 @@ import { Badge } from '@/components/ui/badge';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useThemeColors } from '@/src/ui/theme';
 import { useArtifactStore, accentColorForKind } from './store';
-import { RECEIVED_ARTIFACTS } from './data';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 
 interface ArtifactsGalleryScreenProps {
@@ -129,12 +127,6 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
     [cardWidth],
   );
 
-  // Inspiration section always appears below user artifacts.
-  const ListFooter = useMemo(
-    () => <InspirationSection cardWidth={cardWidth} onPress={setSelectedArtifact} />,
-    [cardWidth],
-  );
-
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       {/* Header bar */}
@@ -172,121 +164,12 @@ export function ArtifactsGalleryScreen({ initialLoading = false }: ArtifactsGall
           testID="artifacts-grid"
           contentContainerStyle={listContentStyle}
           ListEmptyComponent={<ArtifactsEmptyState />}
-          ListFooterComponent={ListFooter}
           showsVerticalScrollIndicator={false}
         />
       )}
 
       <ArtifactPreviewModal artifact={selectedArtifact} onClose={() => setSelectedArtifact(null)} />
     </SafeAreaView>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// InspirationSection — mock data as an "Inspiration" footer below user artifacts
-// ---------------------------------------------------------------------------
-
-interface InspirationSectionProps {
-  cardWidth: number;
-  onPress: (artifact: MobileArtifact) => void;
-}
-
-function InspirationSection({ cardWidth, onPress }: InspirationSectionProps) {
-  const c = useThemeColors();
-
-  return (
-    <View testID="artifacts-inspiration-section">
-      {/* Divider + section label */}
-      <View className="flex-row items-center gap-3 mb-5 mt-8">
-        <View className="flex-1 h-px" style={{ backgroundColor: c.border }} />
-        <View className="flex-row items-center gap-2">
-          <Lightbulb size={14} color={c.textMuted} />
-          <Text
-            className="text-[12px] font-semibold tracking-widest uppercase"
-            style={{ color: c.textMuted }}
-          >
-            Inspiration
-          </Text>
-        </View>
-        <View className="flex-1 h-px" style={{ backgroundColor: c.border }} />
-      </View>
-
-      {/* GetInspired call-to-action card */}
-      <GetInspiredCard />
-
-      {/* 2-column grid of mock examples */}
-      <View className="flex-row flex-wrap" style={{ gap: CARD_GAP }}>
-        {RECEIVED_ARTIFACTS.map((artifact, index) => (
-          <ArtifactCard
-            key={artifact.id}
-            artifact={artifact}
-            width={cardWidth}
-            onPress={onPress}
-            style={index % NUM_COLUMNS !== 0 ? { marginLeft: CARD_GAP } : undefined}
-          />
-        ))}
-      </View>
-    </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// GetInspiredCard (unchanged visual)
-// ---------------------------------------------------------------------------
-
-function GetInspiredCard() {
-  const c = useThemeColors();
-
-  return (
-    <Pressable
-      className="h-[72px] rounded-2xl border flex-row items-center justify-between px-6 mb-7 active:opacity-85"
-      style={{ backgroundColor: c.surfaceElevated, borderColor: c.border }}
-      accessibilityLabel="Get inspired"
-      accessibilityRole="button"
-    >
-      <View className="flex-row items-center gap-4">
-        <Lightbulb size={27} color={c.textPrimary} />
-        <Text className="text-[20px] font-semibold" style={{ color: c.textPrimary }}>
-          Get inspired
-        </Text>
-      </View>
-
-      <View className="w-[132px] h-[42px] items-center justify-center">
-        <View
-          className="absolute w-16 h-9 rounded-md -rotate-6"
-          style={{ backgroundColor: c.agentActive, left: 8 }}
-        >
-          <Text className="text-[7px] mt-2 ml-2" style={{ color: c.black }}>
-            Hi
-          </Text>
-        </View>
-        <View
-          className="absolute w-16 h-9 rounded-md border"
-          style={{ backgroundColor: c.white, borderColor: c.border, left: 42 }}
-        >
-          <View className="flex-row gap-0.5 mt-4 ml-3">
-            {[4, 8, 12, 7, 10].map((height, index) => (
-              <View
-                key={index}
-                className="w-1 rounded-sm"
-                style={{ height, backgroundColor: c.terraCotta }}
-              />
-            ))}
-          </View>
-        </View>
-        <View
-          className="absolute w-16 h-9 rounded-md rotate-6 items-center justify-center"
-          style={{ backgroundColor: c.agentWarning, right: 4 }}
-        >
-          <Text className="text-[6px] font-semibold" style={{ color: c.black }}>
-            How petty are you?
-          </Text>
-          <Text className="text-[9px] font-bold mt-0.5" style={{ color: c.black }}>
-            53%
-          </Text>
-        </View>
-      </View>
-    </Pressable>
   );
 }
 

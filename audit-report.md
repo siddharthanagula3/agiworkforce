@@ -2,11 +2,11 @@
 
 > RECONSTRUCTED instrument (original deleted). New-instrument numbers — compare deltas only within this script, NOT to the prior documented baseline.
 >
-> HEAD: `edad0802e`
+> HEAD: `083a8dce9`
 
 | Signal                                      | Count |
 | ------------------------------------------- | ----: |
-| Slop markers (non-test)                     |  2784 |
+| Slop markers (non-test)                     |  2783 |
 | Mock/random/hardcoded-data files (non-test) |   155 |
 | Rust todo!/unimplemented!                   |     0 |
 | `as any`                                    |    59 |
