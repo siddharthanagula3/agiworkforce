@@ -68,6 +68,15 @@ pub enum AgentEvent {
         session_id: String,
         reason: &'static str,
     },
+    /// Budget cap reached: cumulative spend exceeded `--max-budget-usd`.
+    /// The agent loop is stopped; no further model calls will be made.
+    BudgetExhausted {
+        session_id: String,
+        /// Cumulative spend in USD at the point the cap was hit.
+        cumulative_dollars: f64,
+        /// The configured cap.
+        limit_dollars: f64,
+    },
     /// Error path — paired with [`CliError::kind`] and a runbook hint.
     Error {
         session_id: String,
@@ -174,5 +183,28 @@ mod tests {
         let text = String::from_utf8(buf).unwrap();
         assert_eq!(text.matches('\n').count(), 1);
         assert!(text.starts_with('{'));
+    }
+
+    #[test]
+    fn budget_exhausted_serializes_with_event_tag_and_fields() {
+        let ev = AgentEvent::BudgetExhausted {
+            session_id: "s42".into(),
+            cumulative_dollars: 0.05,
+            limit_dollars: 0.04,
+        };
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(
+            json.contains(r#""event":"budget_exhausted""#),
+            "missing event tag: {json}"
+        );
+        assert!(json.contains(r#""session_id":"s42""#), "missing session_id: {json}");
+        assert!(
+            json.contains("cumulative_dollars"),
+            "missing cumulative_dollars: {json}"
+        );
+        assert!(
+            json.contains("limit_dollars"),
+            "missing limit_dollars: {json}"
+        );
     }
 }

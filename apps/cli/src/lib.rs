@@ -415,7 +415,9 @@ pub struct Cli {
     /// Emit partial-message chunks (token deltas) as `stream_event` events
     /// when `--output-format stream-json` is active. Off by default — final
     /// `assistant_message` events are still emitted either way.
-    #[arg(long = "include-partial-messages")]
+    /// Hidden: per-token deltas are not yet forwarded through the NDJSON writer;
+    /// the flag parses but has no effect until that sprint lands.
+    #[arg(long = "include-partial-messages", hide = true)]
     include_partial_messages: bool,
 
     /// Stop the session when total spend exceeds this many USD.
@@ -1293,7 +1295,7 @@ pub async fn run_main() -> Result<()> {
                         ..Default::default()
                     }
                 };
-                app_server::run_app_server(cfg).await
+                app_server::run_app_server(cfg, app_server::make_dispatch()).await
             }
             Command::Cloud { action } => {
                 let cc = cloud::CloudConfig::default();
@@ -1990,11 +1992,51 @@ pub async fn run_main() -> Result<()> {
         &file_context_result.text,
     );
 
-    // Build effective system prompt (base + append)
-    let effective_system_prompt = match (&cli.system_prompt, &cli.append_system_prompt) {
+    // --system-prompt-file: read base system prompt from file (wins over --system-prompt).
+    let file_base_prompt: Option<String> = if let Some(ref path) = cli.system_prompt_file {
+        match std::fs::read_to_string(path) {
+            Ok(contents) => Some(contents),
+            Err(e) => {
+                anyhow::bail!("--system-prompt-file: cannot read '{}': {}", path, e);
+            }
+        }
+    } else {
+        None
+    };
+
+    // --append-system-prompt-file: read append content from file.
+    let file_append_prompt: Option<String> = if let Some(ref path) = cli.append_system_prompt_file
+    {
+        match std::fs::read_to_string(path) {
+            Ok(contents) => Some(contents),
+            Err(e) => {
+                anyhow::bail!(
+                    "--append-system-prompt-file: cannot read '{}': {}",
+                    path,
+                    e
+                );
+            }
+        }
+    } else {
+        None
+    };
+
+    // Build effective system prompt (base + append).
+    // Priority: file contents win over inline flags when both are provided.
+    let resolved_base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
+    let resolved_append = {
+        // Combine inline append and file append with a newline separator when both present.
+        match (cli.append_system_prompt.as_deref(), file_append_prompt.as_deref()) {
+            (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
+            (Some(inline), None) => Some(inline.to_string()),
+            (None, Some(from_file)) => Some(from_file.to_string()),
+            (None, None) => None,
+        }
+    };
+    let effective_system_prompt = match (resolved_base, resolved_append.as_deref()) {
         (Some(base), Some(append)) => Some(format!("{}\n\n{}", base, append)),
-        (Some(base), None) => Some(base.clone()),
-        (None, Some(append)) => Some(append.clone()),
+        (Some(base), None) => Some(base.to_string()),
+        (None, Some(append)) => Some(append.to_string()),
         (None, None) => None,
     };
 
@@ -2055,6 +2097,8 @@ pub async fn run_main() -> Result<()> {
             normalized_cli_options.disallowed_tools.clone(),
             normalized_cli_options.mcp_config_load_options(),
             file_context_result.images,
+            cli.max_budget_usd,
+            cli.session_id_override.clone(),
         )
         .await;
     }
@@ -2427,6 +2471,8 @@ pub async fn run_oneshot(
     disallowed_tools: Vec<String>,
     mcp_config_options: mcp::McpConfigLoadOptions,
     image_attachments: Vec<ImageAttachment>,
+    max_budget_usd: Option<f64>,
+    session_id_override: Option<String>,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2434,6 +2480,7 @@ pub async fn run_oneshot(
     session.set_provider_override(&config.default.provider);
     session.apply_ui_config(config);
     session.max_turns = max_turns;
+    session.max_budget_usd = max_budget_usd;
     session.skip_permissions = skip_permissions;
     session.auto_approve_safe = auto_approve_safe;
     session.quiet = quiet;
@@ -2447,6 +2494,12 @@ pub async fn run_oneshot(
         session.plan_mode = true;
     }
     session.enable_managed_session()?;
+    // Wire --session-id: override the auto-generated session UUID with the
+    // caller-supplied one.  Must be called after enable_managed_session so
+    // the managed session object exists.
+    if let Some(ref sid) = session_id_override {
+        session.override_session_id(sid)?;
+    }
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
     // If the user attached image files via --file, queue them as pending image
@@ -2744,5 +2797,50 @@ mod tests {
         .expect("accept edits permission mode should parse");
         let accept_options = crate::cli_options::CliOptions::from_cli(&accept_edits);
         assert!(accept_options.should_auto_approve_safe(false));
+    }
+
+    #[test]
+    fn system_prompt_file_flag_parses() {
+        let cli = Cli::try_parse_from([
+            "agiworkforce",
+            "--system-prompt-file",
+            "/tmp/sys.txt",
+            "hello",
+        ])
+        .expect("--system-prompt-file should parse");
+        assert_eq!(cli.system_prompt_file.as_deref(), Some("/tmp/sys.txt"));
+    }
+
+    #[test]
+    fn max_budget_usd_flag_parses() {
+        let cli =
+            Cli::try_parse_from(["agiworkforce", "--max-budget-usd", "1.50", "hello"])
+                .expect("--max-budget-usd should parse");
+        assert!((cli.max_budget_usd.unwrap() - 1.50).abs() < 1e-9);
+    }
+
+    #[test]
+    fn session_id_flag_parses() {
+        let cli = Cli::try_parse_from([
+            "agiworkforce",
+            "--session-id",
+            "my-session-abc",
+            "hello",
+        ])
+        .expect("--session-id should parse");
+        assert_eq!(
+            cli.session_id_override.as_deref(),
+            Some("my-session-abc")
+        );
+    }
+
+    #[test]
+    fn include_partial_messages_is_hidden_but_parseable() {
+        // Flag must still parse (embedders may pass it); it should not error.
+        let cli =
+            Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
+                .expect("--include-partial-messages should remain parseable");
+        // The flag value is parsed but the flag is hidden from --help.
+        assert!(cli.include_partial_messages);
     }
 }
