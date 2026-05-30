@@ -29,12 +29,16 @@ export function validateRequiredEnvVars(): ValidationResult {
   const criticalVars = [
     'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
     'CLERK_SECRET_KEY',
-    'DATABASE_URL',
     'STRIPE_SECRET_KEY',
     'STRIPE_WEBHOOK_SECRET',
     'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY',
     'NEXT_PUBLIC_APP_URL',
   ];
+
+  // DB connection: accept either DATABASE_URL or AGI_DATABASE_URL (mirrors health/route.ts)
+  if (!process.env['DATABASE_URL'] && !process.env['AGI_DATABASE_URL']) {
+    errors.push('Missing critical environment variable: DATABASE_URL or AGI_DATABASE_URL');
+  }
 
   // Important but non-critical variables (specific features won't work without these)
   // These generate warnings, not errors - server will still start
