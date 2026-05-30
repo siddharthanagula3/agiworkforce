@@ -88,12 +88,12 @@ function defaultCapabilities(overrides: Partial<ModelCapabilities> = {}): ModelC
 const MODEL_CATALOG: CatalogModel[] = [
   // ---- OpenAI ----
   {
-    id: 'gpt-5.4',
-    name: 'GPT-5.4',
+    id: 'gpt-5.5',
+    name: 'GPT-5.5',
     provider: 'openai',
-    contextWindow: 400_000,
+    contextWindow: 1_050_000,
     maxOutputTokens: 16_384,
-    inputCost: 10,
+    inputCost: 5,
     outputCost: 30,
     capabilities: defaultCapabilities({
       vision: true,
@@ -123,21 +123,6 @@ const MODEL_CATALOG: CatalogModel[] = [
     status: 'active',
   },
   {
-    id: 'gpt-5.4-nano',
-    name: 'GPT-5.4 Nano',
-    provider: 'openai',
-    contextWindow: 128_000,
-    maxOutputTokens: 16_384,
-    inputCost: 0.5,
-    outputCost: 1.5,
-    capabilities: defaultCapabilities({ vision: true }),
-    speed: 'very-fast',
-    quality: 'fair',
-    qualityTier: 'fast',
-    bestFor: ['quick answers', 'summarization', 'translation'],
-    status: 'active',
-  },
-  {
     id: 'o3',
     name: 'OpenAI o3',
     provider: 'openai',
@@ -155,13 +140,13 @@ const MODEL_CATALOG: CatalogModel[] = [
 
   // ---- Anthropic ----
   {
-    id: 'claude-opus-4.6',
-    name: 'Claude 4.6 Opus',
+    id: 'claude-opus-4.8',
+    name: 'Claude 4.8 Opus',
     provider: 'anthropic',
-    contextWindow: 200_000,
-    maxOutputTokens: 32_000,
-    inputCost: 15,
-    outputCost: 75,
+    contextWindow: 1_000_000,
+    maxOutputTokens: 64_000,
+    inputCost: 5,
+    outputCost: 25,
     capabilities: defaultCapabilities({
       vision: true,
       thinking: true,
@@ -639,13 +624,10 @@ router.get('/', createRateLimiter('default'), async (req: Request, res: Response
       'qwen-turbo',
       'qwen-coder-flash',
       'grok-4-mini',
-      'gpt-5.4-nano',
       'sonar',
       'codestral-2',
       // Pro tier additions
-      'gpt-5.4',
-      'gpt-5.4-codex-low',
-      'gpt-5.4-codex-medium',
+      'gpt-5.5',
       'claude-sonnet-4.6',
       'claude-sonnet-4.5',
       'gemini-3.1-pro-preview',
@@ -674,13 +656,10 @@ router.get('/', createRateLimiter('default'), async (req: Request, res: Response
       'qwen-turbo',
       'qwen-coder-flash',
       'grok-4-mini',
-      'gpt-5.4-nano',
       'sonar',
       'codestral-2',
       // Pro additions
-      'gpt-5.4',
-      'gpt-5.4-codex-low',
-      'gpt-5.4-codex-medium',
+      'gpt-5.5',
       'claude-sonnet-4.6',
       'claude-sonnet-4.5',
       'gemini-3.1-pro-preview',
@@ -692,14 +671,11 @@ router.get('/', createRateLimiter('default'), async (req: Request, res: Response
       'mistral-large-3',
       'mistral-medium-3',
       // Flagship additions (Max tier only)
-      'claude-opus-4.6',
-      'gpt-5.4-pro',
+      'claude-opus-4.8',
       'o3',
       'grok-4',
       'deepseek-r1',
       'kimi-k2.5-thinking',
-      'gpt-5.4-codex-xhigh',
-      'gpt-5.4-codex-high',
     ]);
     models = models.filter((m) => allowedModelIds.has(m.id));
   } else if (planTierFilter && planTierFilter !== 'pro' && planTierFilter !== 'max') {

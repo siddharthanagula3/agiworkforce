@@ -473,6 +473,17 @@ export function getServiceClient(): CloudDbClient {
   return serviceClient;
 }
 
+/**
+ * SECURITY (P1-GW-RLS): this does NOT scope the client to the user. It returns
+ * the same service-role client as getServiceClient(); the `userId` argument is
+ * ignored. The Neon HTTP driver issues every query as an independent one-shot
+ * request, so there is no session in which `SET LOCAL request.jwt.claims` could
+ * persist across queries — Postgres RLS bound to `auth.uid()` is therefore NOT
+ * active here. Tenant isolation rests SOLELY on the explicit
+ * `.eq('user_id', …)` / ownership filters in each route. There is no RLS
+ * backstop: a route that drops its ownership filter WILL leak across tenants.
+ * Keep the filters; do not rely on a database-level safety net that is absent.
+ */
 export function getUserScopedClient(_userId: string): CloudDbClient {
   return getServiceClient();
 }

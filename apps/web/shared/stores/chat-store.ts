@@ -296,7 +296,7 @@ const DEFAULT_MODELS: ChatModel[] = getPickerModels({ includeSearchModels: true 
 });
 
 const DEFAULT_SELECTED_MODEL =
-  getProviderDefaultModel('openai') ?? DEFAULT_MODELS[0]?.id ?? 'gpt-5.4';
+  getProviderDefaultModel('openai') ?? DEFAULT_MODELS[0]?.id ?? 'gpt-5.5';
 
 const DEFAULT_SETTINGS: Conversation['settings'] = {
   temperature: 0.7,

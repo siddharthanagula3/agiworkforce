@@ -140,11 +140,10 @@ function getProviderKey(provider: Provider): string {
  * Check the user's subscription tier and enforce model access.
  * Returns the tier string.
  *
- * P0-G (Wave 1): the subscription read flows through an RLS-bound
- * client minted from `userId`, replacing the previous service-role
- * singleton. The lookup is still filtered by `.eq('user_id', userId)`
- * — RLS adds defense-in-depth so a missing-filter regression here
- * cannot leak another tenant's plan_tier.
+ * P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
+ * RLS — see lib/neonClients.ts). The `.eq('user_id', userId)` filter is the
+ * SOLE tenant-isolation mechanism; there is no RLS backstop, so a
+ * missing-filter regression here WOULD leak another tenant's plan_tier.
  */
 async function enforcePlanTier(userId: string, model: string): Promise<string> {
   const userDb = getUserScopedClient(userId);
@@ -742,10 +741,10 @@ router.post(
     }
 
     // Streaming response
-    // P0-G (Wave 1): RLS-bound client for the fire-and-forget usage_events
-    // inserts. RLS on usage_events enforces `user_id = auth.uid()` so any
-    // future regression that drops the explicit user_id field defaults to
-    // safe-fail rather than mis-attribution.
+    // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
+    // usage_events rows carry the explicit user_id set on insert; there is no
+    // `user_id = auth.uid()` RLS backstop, so the explicit field is the SOLE
+    // guard against mis-attribution. Keep setting it.
     const usageDb = getUserScopedClient(user.userId);
 
     if (body.stream) {

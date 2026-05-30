@@ -67,8 +67,9 @@ const sendMessageSchema = z
 // =============================================================================
 
 async function verifyConversationOwnership(conversationId: string, userId: string): Promise<void> {
-  // Wave 1.5+ singleton sweep: user-scoped client. RLS on `conversations`
-  // enforces the same predicate the .eq filter does, defense-in-depth.
+  // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
+  // RLS — see lib/neonClients.ts). The explicit `.eq('user_id', …)` filter below
+  // is the SOLE tenant-isolation mechanism; there is no RLS backstop.
   const db = getUserScopedClient(userId);
   const { data: conversation, error } = await db
     .from('conversations')

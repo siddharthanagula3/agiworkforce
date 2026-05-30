@@ -123,25 +123,25 @@ describe('OpenAIProvider', () => {
     it('should return available models', () => {
       const models = OpenAIProvider.getAvailableModels();
 
-      expect(models).toContain('gpt-5.4');
-      expect(models).toContain('gpt-5.4');
-      expect(models).toContain('o3');
+      // gpt-5.4 and o3 were removed from the catalog; current models are gpt-5.5 + gpt-5.4-mini
+      expect(models).toContain('gpt-5.5');
+      expect(models).toContain('gpt-5.4-mini');
       expect(models.length).toBeGreaterThan(0);
     });
 
     it('should return image models', () => {
       const models = OpenAIProvider.getImageModels();
 
-      expect(models).toContain('gpt-image-1.5');
-      expect(models).toContain('dall-e-3');
+      // gpt-image-1.5 and dall-e-3 were removed; current image model is gpt-image-2
+      expect(models).toContain('gpt-image-2');
       expect(models.length).toBeGreaterThan(0);
     });
 
     it('should return video models', () => {
       const models = OpenAIProvider.getVideoModels();
 
-      expect(models).toContain('sora-2');
-      expect(models.length).toBeGreaterThan(0);
+      // sora-2 was removed from the catalog; OpenAI video models list is now empty
+      expect(models).toEqual([]);
     });
 
     it('should return audio models', () => {

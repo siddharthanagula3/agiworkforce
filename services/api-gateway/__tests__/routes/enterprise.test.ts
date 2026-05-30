@@ -7,19 +7,23 @@ import { enterpriseRouter } from '../../src/routes/enterprise';
 
 const { state } = vi.hoisted(() => ({
   state: {
+    // P1-GW-ENT: membership rows as the DB actually returns them — no nested
+    // `organization`. The route now fetches organizations in a second query.
     memberships: [
       {
         organization_id: '11111111-1111-4111-8111-111111111111',
         role: 'owner',
         joined_at: '2026-05-21T00:00:00.000Z',
-        organization: {
-          id: '11111111-1111-4111-8111-111111111111',
-          name: 'Acme',
-          slug: 'acme',
-          created_by: 'user-123',
-          created_at: '2026-05-21T00:00:00.000Z',
-          updated_at: '2026-05-21T00:00:00.000Z',
-        },
+      },
+    ],
+    organizations: [
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        name: 'Acme',
+        slug: 'acme',
+        created_by: 'user-123',
+        created_at: '2026-05-21T00:00:00.000Z',
+        updated_at: '2026-05-21T00:00:00.000Z',
       },
     ],
     membershipRole: 'owner',
@@ -32,6 +36,13 @@ vi.mock('../../src/lib/neonClients', () => {
     const query = {
       select: vi.fn(() => query),
       eq: vi.fn(() => query),
+      // P1-GW-ENT: the organizations second query resolves via `.in('id', ids)`.
+      in: vi.fn(() => {
+        if (table === 'organizations') {
+          return Promise.resolve({ data: state.organizations, error: null });
+        }
+        return Promise.resolve({ data: [], error: null });
+      }),
       order: vi.fn(() => {
         if (table === 'organization_members') {
           return Promise.resolve({ data: state.memberships, error: null });

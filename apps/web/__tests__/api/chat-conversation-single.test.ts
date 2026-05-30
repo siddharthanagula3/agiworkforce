@@ -198,7 +198,7 @@ describe('Single Conversation API', () => {
       });
 
       it('should update conversation model', async () => {
-        const updated = { ...mockConversation, model: 'gpt-5.4' };
+        const updated = { ...mockConversation, model: 'gpt-5.5' };
         mockQuery.mockResolvedValueOnce([updated]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
@@ -207,14 +207,14 @@ describe('Single Conversation API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-5.4' }),
+          body: JSON.stringify({ model: 'gpt-5.5' }),
         });
         const response = await PUT(request, mockContext);
 
         expect(response.status).toBe(200);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
-          expect.arrayContaining(['gpt-5.4']),
+          expect.arrayContaining(['gpt-5.5']),
         );
       });
 

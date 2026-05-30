@@ -30,3 +30,29 @@ create table if not exists public.github_pr_review_attempts (
 
 create index if not exists idx_github_pr_review_installation
   on public.github_pr_review_attempts(installation_id);
+
+-- Hot-path index for the debounce query:
+-- select ... from github_pr_review_attempts
+--   where installation_id = $1 and pr_number = $2
+--   order by attempted_at desc limit 1
+create index if not exists idx_github_pr_review_attempts_installation_pr_attempted
+  on public.github_pr_review_attempts(installation_id, pr_number, attempted_at desc);
+
+-- Hot-path index for the monthly quota count query:
+-- select count(*) from github_pr_review_attempts
+--   where installation_id = $1 and attempted_at > (now() - interval '30 days')
+--   and status = any ($2)
+create index if not exists idx_github_pr_review_attempts_installation_attempted
+  on public.github_pr_review_attempts(installation_id, attempted_at desc);
+
+-- Cleanup job: drop rows older than 30 days to bound table growth.
+-- Called periodically (e.g. from a cron or pg_cron job).
+create or replace function public.cleanup_old_github_pr_review_attempts()
+returns void
+language plpgsql
+as $$
+begin
+  delete from public.github_pr_review_attempts
+  where attempted_at < now() - interval '30 days';
+end;
+$$;

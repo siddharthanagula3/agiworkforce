@@ -23,6 +23,14 @@ interface RevocationCacheEntry {
   cachedAt: number;
 }
 const revocationCache = new Map<string, RevocationCacheEntry>();
+
+// SECURITY (P1-GW-REVOKE): evict a jti from the positive-cache so a freshly
+// revoked token is rejected immediately instead of riding the 5s cache window.
+// /auth/logout calls this right after writing the revocation row.
+export function evictRevocationCache(jti: string): void {
+  revocationCache.delete(jti);
+}
+
 interface AccountStatusEntry {
   status: string;
   cachedAt: number;

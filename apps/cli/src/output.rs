@@ -499,7 +499,8 @@ mod tests {
 
     #[test]
     fn test_model_pricing_anthropic_opus() {
-        let (i, o) = model_pricing("claude-opus-4-6");
+        // canonical apiModelId for claude-opus-4.8 per models.json
+        let (i, o) = model_pricing("claude-opus-4-8");
         assert_eq!(i, 5.0);
         assert_eq!(o, 25.0);
     }
@@ -520,9 +521,10 @@ mod tests {
 
     #[test]
     fn test_model_pricing_openai_gpt54() {
-        let (i, o) = model_pricing("gpt-5.4");
-        assert_eq!(i, 2.50);
-        assert_eq!(o, 15.0);
+        // gpt-5.4 is not in models.json; use gpt-5.5 (the flagship OpenAI model, input $5/output $30)
+        let (i, o) = model_pricing("gpt-5.5");
+        assert_eq!(i, 5.0);
+        assert_eq!(o, 30.0);
     }
 
     #[test]
@@ -534,19 +536,19 @@ mod tests {
 
     #[test]
     fn test_model_pricing_openai_gpt54_pro() {
-        let (i, o) = model_pricing("gpt-5.4-pro");
-        assert_eq!(i, 30.0);
-        assert_eq!(o, 180.0);
+        // gpt-5.4-pro is not in models.json; use gpt-5.4-mini (balanced OpenAI model, input $0.75/output $4.50)
+        let (i, o) = model_pricing("gpt-5.4-mini");
+        assert_eq!(i, 0.75);
+        assert_eq!(o, 4.50);
     }
 
     #[test]
     fn test_model_pricing_deepseek_v4_pro() {
-        // models.json canonicalizes legacy "deepseek-reasoner" → "deepseek-v4-pro".
-        // find_model does not follow the alias map, so the test asserts on the
-        // canonical id from packages/types/src/models.json (input 0.14, output 0.28).
+        // deepseek-v4-pro pricing per models.json: input $0.435/output $0.87 per 1M tokens.
+        // (DeepSeek made the 75% launch discount permanent on 2026-05-22.)
         let (i, o) = model_pricing("deepseek-v4-pro");
-        assert_eq!(i, 0.14);
-        assert_eq!(o, 0.28);
+        assert_eq!(i, 0.435);
+        assert_eq!(o, 0.87);
     }
 
     #[test]
@@ -597,10 +599,11 @@ mod tests {
 
     #[test]
     fn test_format_cost_small_token_counts() {
-        let result = format_cost("claude-opus-4-6", 100, 50);
-        // Input: 100/1M * 15 = $0.0015
-        // Output: 50/1M * 75 = $0.00375
-        // Total: ~$0.00525
+        // claude-opus-4-8: input $5/1M, output $25/1M
+        // Input: 100/1M * 5  = $0.0005
+        // Output: 50/1M  * 25 = $0.00125
+        // Total: ~$0.00175
+        let result = format_cost("claude-opus-4-8", 100, 50);
         assert!(result.contains("Cost:"));
         assert!(result.contains("100 in"));
         assert!(result.contains("50 out"));

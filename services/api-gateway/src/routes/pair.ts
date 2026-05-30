@@ -173,8 +173,9 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
 
   logger.info({ userId: user.userId, desktopId, code }, 'Pairing confirmation from desktop');
 
-  // Wave 1.5+ singleton sweep: user-scoped client. RLS on `desktop_devices`
-  // is the second line of defense if the .eq filter ever drops.
+  // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
+  // RLS — see lib/neonClients.ts). The explicit ownership filter below is the
+  // SOLE tenant-isolation mechanism; there is no RLS backstop. Do not drop it.
   const userDb = getUserScopedClient(user.userId);
 
   // Verify the desktop belongs to this user

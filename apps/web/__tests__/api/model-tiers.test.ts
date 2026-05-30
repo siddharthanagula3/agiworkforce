@@ -126,9 +126,9 @@ describe('canAccessModel — max tier', () => {
     }
   });
 
-  it('allows claude-opus-4.7 for max users', () => {
-    // Catalog flagship_additions now lists claude-opus-4.7 (4.6 retired).
-    expect(canAccessModel('claude-opus-4.7', 'max')).toBe(true);
+  it('allows claude-opus-4.8 for max users', () => {
+    // Catalog flagship_additions lists claude-opus-4.8 (4.6 and 4.7 retired).
+    expect(canAccessModel('claude-opus-4.8', 'max')).toBe(true);
   });
 
   it('allows gpt-5.5 for max users', () => {
@@ -201,8 +201,8 @@ describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase tier names correctly', () => {
     expect(canAccessModel('gpt-5.4-mini', 'HOBBY')).toBe(true);
     expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
-    // Use the current flagship; claude-opus-4.6 is no longer in any tier list.
-    expect(canAccessModel('claude-opus-4.7', 'MAX')).toBe(true);
+    // Use the current flagship; claude-opus-4.6/4.7 are retired; 4.8 is canonical.
+    expect(canAccessModel('claude-opus-4.8', 'MAX')).toBe(true);
   });
 });
 

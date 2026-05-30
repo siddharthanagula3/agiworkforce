@@ -51,9 +51,9 @@ export async function requireProPlan(
   }
 
   try {
-    // Wave 1.5+ singleton sweep: post-auth user-scoped query. RLS on
-    // `subscriptions` is then enforced even if the .eq filter is dropped
-    // by a future regression.
+    // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
+    // RLS — see lib/neonClients.ts). The `.eq('user_id', …)` filter below is the
+    // SOLE tenant-isolation mechanism; there is no RLS backstop. Do not drop it.
     const userDb = getUserScopedClient(user.userId);
     const { data: subscription, error } = await userDb
       .from('subscriptions')

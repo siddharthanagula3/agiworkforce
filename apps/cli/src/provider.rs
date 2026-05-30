@@ -342,11 +342,12 @@ mod tests {
     fn test_catalog_has_new_models() {
         let catalog = model_catalog();
         let ids: Vec<&str> = catalog.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&"claude-opus-4-6"));
+        // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json
+        assert!(ids.contains(&"claude-opus-4-8"));
         assert!(ids.contains(&"claude-sonnet-4-6"));
-        assert!(ids.contains(&"gpt-5.4"));
+        // gpt-5.4 / gpt-5.4-pro are not in models.json; the live OpenAI models are gpt-5.5 and gpt-5.4-mini
+        assert!(ids.contains(&"gpt-5.5"));
         assert!(ids.contains(&"gpt-5.4-mini"));
-        assert!(ids.contains(&"gpt-5.4-pro"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
         assert!(ids.contains(&"gemini-3.1-flash-lite"));
         // grok-4-0709 (apiModelId for grok-4) and grok-4-1-fast-reasoning are
@@ -451,11 +452,12 @@ mod tests {
             .filter(|m| m.supports_reasoning)
             .map(|m| m.id.as_str())
             .collect();
-        assert!(reasoning_ids.contains(&"claude-opus-4-6"));
+        // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json (thinking=true)
+        assert!(reasoning_ids.contains(&"claude-opus-4-8"));
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
-        assert!(reasoning_ids.contains(&"gpt-5.4"));
+        // gpt-5.4 / gpt-5.4-pro removed from models.json; use gpt-5.5 and gpt-5.4-mini
+        assert!(reasoning_ids.contains(&"gpt-5.5"));
         assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
-        assert!(reasoning_ids.contains(&"gpt-5.4-pro"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
         // grok-4-0709 was deprecated in the Phase 3 catalog refresh; the live
         // xAI flagship is grok-4.3 which has reasoning enabled.
@@ -475,29 +477,33 @@ mod tests {
 
     #[test]
     fn test_audio_capabilities() {
-        let gpt54 = find_model("gpt-5.4").unwrap();
-        assert!(!gpt54.supports_audio_input);
-        assert!(!gpt54.supports_audio_output);
+        // gpt-5.5 is the current OpenAI flagship in models.json
+        let gpt55 = find_model("gpt-5.5").unwrap();
+        assert!(!gpt55.supports_audio_input);
+        assert!(!gpt55.supports_audio_output);
 
         let gemini_flash = find_model("gemini-3.1-flash-lite").unwrap();
         assert!(!gemini_flash.supports_audio_input);
         assert!(!gemini_flash.supports_audio_output);
 
-        let claude = find_model("claude-opus-4-6").unwrap();
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        let claude = find_model("claude-opus-4-8").unwrap();
         assert!(!claude.supports_audio_input);
         assert!(!claude.supports_audio_output);
     }
 
     #[test]
     fn test_pdf_support() {
-        let claude = find_model("claude-opus-4-6").unwrap();
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        let claude = find_model("claude-opus-4-8").unwrap();
         assert!(!claude.supports_pdf);
 
         let gemini = find_model("gemini-3.1-pro-preview").unwrap();
         assert!(!gemini.supports_pdf);
 
-        let gpt54 = find_model("gpt-5.4").unwrap();
-        assert!(!gpt54.supports_pdf);
+        // gpt-5.5 is the current OpenAI flagship in models.json
+        let gpt55 = find_model("gpt-5.5").unwrap();
+        assert!(!gpt55.supports_pdf);
     }
 
     // ── find_model ─────────────────────────────────────────────
@@ -511,7 +517,8 @@ mod tests {
 
     #[test]
     fn test_find_model_case_insensitive() {
-        let model = find_model("Claude-Opus-4-6");
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        let model = find_model("Claude-Opus-4-8");
         assert!(model.is_some());
     }
 
@@ -522,11 +529,12 @@ mod tests {
 
     #[test]
     fn test_find_model_new_entries() {
-        assert!(find_model("claude-opus-4-6").is_some());
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        assert!(find_model("claude-opus-4-8").is_some());
         assert!(find_model("claude-sonnet-4-6").is_some());
-        assert!(find_model("gpt-5.4").is_some());
+        // gpt-5.4 / gpt-5.4-pro are not in models.json; use gpt-5.5 and gpt-5.4-mini
+        assert!(find_model("gpt-5.5").is_some());
         assert!(find_model("gpt-5.4-mini").is_some());
-        assert!(find_model("gpt-5.4-pro").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
         assert!(find_model("gemini-3.1-flash-lite").is_some());
         // grok-4-0709 was deprecated in Phase 3 — use grok-4.3 (live xAI flagship).
@@ -626,8 +634,10 @@ mod tests {
 
     #[test]
     fn test_supports_tool_use_true() {
-        assert!(supports_tool_use("claude-opus-4-6"));
-        assert!(supports_tool_use("gpt-5.4"));
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (tools=true)
+        assert!(supports_tool_use("claude-opus-4-8"));
+        // gpt-5.5 is the current OpenAI flagship (tools=true)
+        assert!(supports_tool_use("gpt-5.5"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
         // grok-4-0709 deprecated; use grok-4.3 (live xAI flagship).
         assert!(supports_tool_use("grok-4.3"));
@@ -687,11 +697,12 @@ mod tests {
 
     #[test]
     fn test_supports_reasoning_true() {
-        assert!(supports_reasoning("claude-opus-4-6"));
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (thinking=true)
+        assert!(supports_reasoning("claude-opus-4-8"));
         assert!(supports_reasoning("claude-sonnet-4-6"));
-        assert!(supports_reasoning("gpt-5.4"));
+        // gpt-5.4 / gpt-5.4-pro not in models.json; gpt-5.5 and gpt-5.4-mini are current
+        assert!(supports_reasoning("gpt-5.5"));
         assert!(supports_reasoning("gpt-5.4-mini"));
-        assert!(supports_reasoning("gpt-5.4-pro"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
         assert!(supports_reasoning("deepseek-v4-pro"));
     }
@@ -727,13 +738,14 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_paid_model() {
-        let model = find_model("claude-opus-4-6").unwrap();
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        // context: 1,000,000 (1M), input $5.00/output $25.00
+        let model = find_model("claude-opus-4-8").unwrap();
         let detail = format_model_detail(&model);
-        assert!(detail.contains("claude-opus-4-6"));
+        assert!(detail.contains("claude-opus-4-8"));
         assert!(detail.contains("(anthropic)"));
         assert!(detail.contains("[active]"));
-        assert!(detail.contains("200K tokens"));
-        assert!(detail.contains("4K tokens"));
+        assert!(detail.contains("1M tokens"));
         assert!(detail.contains("$5.00 / $25.00"));
         assert!(detail.contains("Tool use:        yes"));
         assert!(detail.contains("Vision:          yes"));
@@ -757,18 +769,15 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_deepseek_v4_pro() {
-        // Generic detail-formatter smoke test on a reasoning model. Was
-        // originally named test_format_model_detail_no_tools_with_vision and
-        // pinned to legacy "deepseek-reasoner" (tools=yes, vision=no);
-        // canonical "deepseek-v4-pro" in models.json has tools+vision+reasoning
-        // all yes and pricing 0.14/0.28.
+        // deepseek-v4-pro in models.json: tools=yes, vision=yes, reasoning=yes,
+        // pricing $0.435/$0.87 per 1M tokens (permanent discount since 2026-05-22).
         let model = find_model("deepseek-v4-pro").unwrap();
         let detail = format_model_detail(&model);
         assert!(detail.contains("Tool use:        yes"));
         assert!(detail.contains("Vision:          yes"));
         assert!(detail.contains("Reasoning:       yes"));
         assert!(!detail.contains("free (local)"));
-        assert!(detail.contains("$0.14 / $0.28"));
+        assert!(detail.contains("$0.43 / $0.87"));
     }
 
     // ── format_model_list ──────────────────────────────────────
@@ -785,10 +794,11 @@ mod tests {
     #[test]
     fn test_format_model_list_contains_new_models() {
         let list = format_model_list();
-        assert!(list.contains("claude-opus-4-6"));
-        assert!(list.contains("gpt-5.4"));
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
+        assert!(list.contains("claude-opus-4-8"));
+        // gpt-5.4 / gpt-5.4-pro removed from models.json; gpt-5.5 and gpt-5.4-mini are current
+        assert!(list.contains("gpt-5.5"));
         assert!(list.contains("gpt-5.4-mini"));
-        assert!(list.contains("gpt-5.4-pro"));
         assert!(list.contains("gemini-3.1-pro-preview"));
         assert!(list.contains("gemini-3.1-flash-lite"));
         // grok-4-0709 deprecated; grok-4.3 is the live xAI flagship.
