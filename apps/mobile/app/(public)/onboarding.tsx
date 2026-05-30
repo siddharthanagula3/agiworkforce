@@ -145,6 +145,9 @@ export default function OnboardingScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  // True while tier2LoadModel is in flight — gates the skip button so the user
+  // cannot enter chat model-less before the ExecuTorch load completes.
+  const [tier2Loading, setTier2Loading] = useState(false);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const modelPickerRef = useRef<BottomSheet>(null);
 
@@ -245,6 +248,7 @@ export default function OnboardingScreen() {
       // models never populate downloadUrl / checksum / format on OnDeviceModel.
       if (recommendedModel.executorchPreset) {
         const preset = recommendedModel.executorchPreset;
+        setTier2Loading(true);
         tier2LoadModel(preset, (fractional) => {
           // react-native-executorch reports progress as 0..1.
           setDownloadProgress(fractional * 100);
@@ -264,9 +268,11 @@ export default function OnboardingScreen() {
               last_used_at: null,
               capabilities: null,
             });
+            setTier2Loading(false);
             finishOnboarding();
           })
           .catch((err: unknown) => {
+            setTier2Loading(false);
             const msg = err instanceof Error ? err.message : 'Download failed. Please try again.';
             setDownloadError(msg);
           });
@@ -318,13 +324,17 @@ export default function OnboardingScreen() {
   );
 
   const handleSkipToChat = useCallback(() => {
+    // Block skip while the ExecuTorch model is loading — allowing the user to
+    // enter chat before tier2LoadModel resolves would leave them model-less
+    // (resolveLocalModelRef would throw "not downloaded yet").
+    if (tier2Loading) return;
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
     }
     cancelDownload(recommendedModel.id);
     finishOnboarding();
-  }, [recommendedModel.id, finishOnboarding]);
+  }, [tier2Loading, recommendedModel.id, finishOnboarding]);
 
   return (
     <SafeAreaView testID="onboarding-root" style={{ flex: 1, backgroundColor: colors.background }}>
@@ -352,6 +362,7 @@ export default function OnboardingScreen() {
             model={recommendedModel}
             onSkip={handleSkipToChat}
             error={downloadError}
+            skipDisabled={tier2Loading}
           />
         )}
       </Reanimated.View>
@@ -620,6 +631,7 @@ function DownloadScreen({
   model,
   onSkip,
   error,
+  skipDisabled = false,
 }: {
   colors: ReturnType<typeof useThemeColors>;
   progress: number;
@@ -627,6 +639,8 @@ function DownloadScreen({
   model: RecommendedModel;
   onSkip: () => void;
   error?: string | null;
+  /** True while the ExecuTorch model is loading — disables skip to prevent model-less chat. */
+  skipDisabled?: boolean;
 }) {
   const pct = Math.round(progress);
   const bytesDownloaded = (progress / 100) * model.fileSizeBytes;
@@ -688,9 +702,14 @@ function DownloadScreen({
       <Pressable
         testID="download-skip-btn"
         onPress={onSkip}
+        disabled={skipDisabled}
         accessibilityRole="button"
         accessibilityLabel="Continue to chat"
-        style={[styles.skipBtn, { backgroundColor: 'rgba(255,255,255,0.08)' }]}
+        accessibilityState={{ disabled: skipDisabled }}
+        style={[
+          styles.skipBtn,
+          { backgroundColor: 'rgba(255,255,255,0.08)', opacity: skipDisabled ? 0.4 : 1 },
+        ]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
       </Pressable>
