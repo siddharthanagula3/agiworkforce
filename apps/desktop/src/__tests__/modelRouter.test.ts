@@ -120,8 +120,8 @@ describe('Mistral model routing', () => {
 // ---------------------------------------------------------------------------
 
 describe('Anthropic thinking model routing', () => {
-  it('claude-opus-4.6 has the thinking capability enabled', () => {
-    const meta = getModelMetadata('claude-opus-4.6');
+  it('claude-opus-4.8 has the thinking capability enabled', () => {
+    const meta = getModelMetadata('claude-opus-4.8');
     expect(meta).not.toBeNull();
     expect(meta?.capabilities?.thinking).toBe(true);
   });
@@ -131,19 +131,19 @@ describe('Anthropic thinking model routing', () => {
     expect(meta?.apiModelId).toBe('claude-sonnet-4-6');
   });
 
-  it('claude-opus-4.6 has the correct apiModelId', () => {
-    const meta = getModelMetadata('claude-opus-4.6');
-    expect(meta?.apiModelId).toBe('claude-opus-4-6');
+  it('claude-opus-4.8 has the correct apiModelId', () => {
+    const meta = getModelMetadata('claude-opus-4.8');
+    expect(meta?.apiModelId).toBe('claude-opus-4-8');
   });
 
-  it('getModelForRequest with claude-opus-4.6 returns it unchanged (manual selection)', () => {
-    const result = getModelForRequest('claude-opus-4.6', 'Solve this hard math problem', false);
-    expect(result.modelId).toBe('claude-opus-4.6');
+  it('getModelForRequest with claude-opus-4.8 returns it unchanged (manual selection)', () => {
+    const result = getModelForRequest('claude-opus-4.8', 'Solve this hard math problem', false);
+    expect(result.modelId).toBe('claude-opus-4.8');
     expect(result.wasRouted).toBe(false);
   });
 
   it('anthropic thinking models have computerUse capability (Claude-specific)', () => {
-    const opusMeta = getModelMetadata('claude-opus-4.6');
+    const opusMeta = getModelMetadata('claude-opus-4.8');
     expect(opusMeta?.capabilities?.computerUse).toBe(true);
   });
 });

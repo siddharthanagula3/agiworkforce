@@ -73,10 +73,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('gpt-5.4', 'openai');
+      await store.selectModel('gpt-5.5', 'openai');
 
       const state = useModelStore.getState();
-      expect(state.selectedModel).toBe('gpt-5.4');
+      expect(state.selectedModel).toBe('gpt-5.5');
       expect(state.selectedProvider).toBe('openai');
     });
 
@@ -84,10 +84,10 @@ describe('modelStore', () => {
       const { useModelStore } = await import('../stores/modelStore');
       const store = useModelStore.getState();
 
-      await store.selectModel('claude-opus-4.7', 'anthropic');
+      await store.selectModel('claude-opus-4.8', 'anthropic');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('claude-opus-4.7');
+      expect(state.recentModels).toContain('claude-opus-4.8');
     });
 
     it('should handle selection errors gracefully', async () => {
