@@ -70,19 +70,40 @@ function validateEmail(email: string): string {
  *   WaitlistValidationError  — invalid email format (checked locally)
  *   WaitlistNetworkError     — API/network failure
  */
+/**
+ * Fetch a CSRF token from the Web/API layer. The token is bound to an anonymous
+ * session cookie set by this GET; the native HTTP stack persists that cookie and
+ * replays it on the subsequent POST, so `requireCsrfToken` validates server-side.
+ */
+async function fetchCsrfToken(): Promise<string> {
+  const { token } = await api.get<{ token?: string }>('/api/csrf');
+  if (!token) {
+    throw new Error('Failed to acquire CSRF token');
+  }
+  return token;
+}
+
 export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitlistResult> {
   const email = validateEmail(input.email);
 
   try {
-    await api.post<{ ok?: boolean; joined?: boolean }>('/api/waitlist/cloud-managed', {
-      email,
-      // SEPARATE mobile cloud-waitlist list (rolls up into the shared total via the
-      // cloud_managed_waitlist `source` column) — mobile local-only beta funnel.
-      source: 'mobile',
-      country: input.country,
-      deviceModel: input.deviceModel,
-      deviceTier: input.deviceTier,
-    });
+    // /api/waitlist/cloud-managed is CSRF-protected (requireCsrfToken); without
+    // this preflight every mobile signup 403'd and no row was ever written.
+    const csrfToken = await fetchCsrfToken();
+
+    await api.post<{ ok?: boolean; joined?: boolean }>(
+      '/api/waitlist/cloud-managed',
+      {
+        email,
+        // SEPARATE mobile cloud-waitlist list (rolls up into the shared total via
+        // the cloud_managed_waitlist `source` column) — mobile local-only funnel.
+        source: 'mobile',
+        country: input.country,
+        deviceModel: input.deviceModel,
+        deviceTier: input.deviceTier,
+      },
+      { headers: { 'x-csrf-token': csrfToken } },
+    );
   } catch (err) {
     throw new WaitlistNetworkError(err);
   }
@@ -113,5 +134,10 @@ export async function submitWaitlistForSource(
   submission: WaitlistSubmission,
   source: string,
 ): Promise<WaitlistResult> {
-  return api.post<WaitlistResult>('/api/waitlist', { ...submission, source });
+  const csrfToken = await fetchCsrfToken();
+  return api.post<WaitlistResult>(
+    '/api/waitlist',
+    { ...submission, source },
+    { headers: { 'x-csrf-token': csrfToken } },
+  );
 }
