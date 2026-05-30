@@ -195,7 +195,7 @@ mod h13_resolve_model_for_strategy {
             20000,
             "fallback-model",
         );
-        assert_eq!(model, "claude-opus-4.7");
+        assert_eq!(model, "claude-opus-4.8");
     }
 
     #[test]
@@ -258,7 +258,7 @@ mod h13_resolve_model_for_strategy {
     fn auto_premium_boundary_at_16000() {
         let model =
             LLMRouter::resolve_model_for_strategy(RoutingStrategy::AutoPremium, 16000, "fallback");
-        assert_eq!(model, "claude-opus-4.7");
+        assert_eq!(model, "claude-opus-4.8");
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Pre-configured MCP connector manifests.
 //!
-//! Provides a catalog of 87 built-in connector definitions that the frontend
+//! Provides a catalog of 86 built-in connector definitions that the frontend
 //! can display in a connector marketplace. Each manifest describes the MCP
 //! server package, auth requirements, icon, and documentation links so users
 //! can one-click install popular integrations.
@@ -114,7 +114,7 @@ fn manifest(
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
-/// Returns all 87 built-in connector manifests.
+/// Returns all 86 built-in connector manifests.
 ///
 /// The MCP configs use placeholder env values (e.g. `"YOUR_API_KEY"`) that
 /// the frontend should replace with real credentials before connecting.
@@ -1505,8 +1505,9 @@ mod tests {
 
     #[test]
     fn builtin_connectors_has_expected_count() {
+        // Supabase connector removed in commit d56bb265 ("migrate cloud stack to neon and clerk").
         let connectors = get_builtin_connectors();
-        assert_eq!(connectors.len(), 87);
+        assert_eq!(connectors.len(), 86);
     }
 
     #[test]

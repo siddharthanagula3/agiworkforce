@@ -812,12 +812,17 @@ mod tests {
     }
 
     #[test]
-    fn auto_detect_works_on_openai_o3_model() {
-        // Uses "o3" (canonical catalog entry with capabilities.thinking=true) rather
-        // than "o3-mini" which is no longer in models.json (deprecated by era 2026-05).
+    fn auto_detect_works_on_openai_reasoning_model() {
+        // Uses "gpt-5.5" (catalog reasoning model with capabilities.thinking=true).
+        // "o3" was removed from models.json as of 2026-05-29.
         // The "think about" trigger phrase produces ThinkingBudget::Low = 10K tokens.
-        let thinking =
-            resolve_thinking_parameter("o3", None, None, false, "Think about how to solve this");
+        let thinking = resolve_thinking_parameter(
+            "gpt-5.5",
+            None,
+            None,
+            false,
+            "Think about how to solve this",
+        );
         match thinking {
             Some(ThinkingParameter::Budget { budget_tokens, .. }) => {
                 assert_eq!(budget_tokens, 10_000);
