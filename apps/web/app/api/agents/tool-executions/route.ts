@@ -12,6 +12,7 @@
  */
 
 import 'server-only';
+import { assertNonInternalHostname } from '@/lib/egress-policy';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -102,8 +103,23 @@ async function handleExecuteTool(request: NextRequest) {
     switch (tool.integration_type) {
       case 'webhook': {
         const config = tool.config as Record<string, string>;
-        if (!config['webhookUrl']) throw new Error('webhookUrl not configured');
-        const resp = await fetch(config['webhookUrl'], {
+        const webhookUrl = config['webhookUrl'];
+        if (!webhookUrl) throw new Error('webhookUrl not configured');
+        // SSRF guard: a user-registered webhookUrl must never be fetched if it
+        // points at an internal/link-local/private host (e.g. the cloud metadata
+        // endpoint 169.254.169.254) or uses a non-http(s) scheme. Reject BEFORE
+        // any server-side request is made.
+        let parsedWebhook: URL;
+        try {
+          parsedWebhook = new URL(webhookUrl);
+        } catch {
+          throw new Error('webhookUrl is not a valid URL');
+        }
+        if (parsedWebhook.protocol !== 'http:' && parsedWebhook.protocol !== 'https:') {
+          throw new Error('webhookUrl must use http or https');
+        }
+        assertNonInternalHostname(webhookUrl);
+        const resp = await fetch(webhookUrl, {
           method: config['method'] ?? 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parameters, context: context ?? {} }),
