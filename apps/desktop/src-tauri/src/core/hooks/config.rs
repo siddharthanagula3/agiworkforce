@@ -27,16 +27,13 @@ const MAX_COMMAND_LENGTH: usize = 4096;
 /// Type of hook action to execute.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum HookType {
     /// Execute a shell command.
+    #[default]
     Command,
 }
 
-impl Default for HookType {
-    fn default() -> Self {
-        Self::Command
-    }
-}
 
 /// A single hook definition.
 ///

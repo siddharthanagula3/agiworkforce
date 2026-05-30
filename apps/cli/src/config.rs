@@ -758,7 +758,9 @@ mod tests {
     #[test]
     fn test_default_config_is_valid() {
         let config = CliConfig::default();
-        assert_eq!(config.default.model, "claude-opus-4-7");
+        // default model is derived from models.json anthropic.taskRouting.complex_reasoning
+        // → canonical id "claude-opus-4.8" → apiModelId "claude-opus-4-8"
+        assert_eq!(config.default.model, "claude-opus-4-8");
         assert_eq!(config.default.provider, "anthropic");
         assert!(config.default.stream);
         assert_eq!(config.default.max_tokens, 8192);
@@ -948,7 +950,8 @@ mod tests {
         let config = CliConfig::default();
         let out = config.display();
         assert!(out.contains("Model:"));
-        assert!(out.contains("claude-opus-4-7"));
+        // default model is "claude-opus-4-8" (apiModelId for claude-opus-4.8 per models.json)
+        assert!(out.contains("claude-opus-4-8"));
         assert!(out.contains("Provider:"));
         assert!(out.contains("anthropic"));
         assert!(out.contains("Stream:"));
@@ -1051,7 +1054,8 @@ mod tests {
 
         let mut config = CliConfig::default();
         config.merge_env_overrides();
-        assert_eq!(config.default.model, "claude-opus-4-7");
+        // default model is "claude-opus-4-8" (apiModelId for claude-opus-4.8 per models.json)
+        assert_eq!(config.default.model, "claude-opus-4-8");
         assert_eq!(config.default.provider, "anthropic");
         assert_eq!(config.default.max_tokens, 8192);
     }
@@ -1448,9 +1452,10 @@ privacy_mode = "local"
     #[test]
     fn test_get_value_model() {
         let config = CliConfig::default();
+        // default model is "claude-opus-4-8" (apiModelId for claude-opus-4.8 per models.json)
         assert_eq!(
             config.get_value("model"),
-            Some("claude-opus-4-7".to_string())
+            Some("claude-opus-4-8".to_string())
         );
     }
 

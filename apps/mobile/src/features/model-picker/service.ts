@@ -56,7 +56,7 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only. Mobile BYOK is not available.';
+export const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only. Mobile BYOK is not available.';
 
 /**
  * Static model descriptions shown as a subtitle in the picker.
@@ -81,7 +81,7 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
   // Cloud providers (shown as locked in v1 — informational only)
   // Anthropic
   // eslint-disable-next-line no-restricted-syntax
-  'claude-opus-4.6': 'Most capable for ambitious work',
+  'claude-opus-4.8': 'Most capable for ambitious work',
   // eslint-disable-next-line no-restricted-syntax
   'claude-sonnet-4.6': 'Most efficient for everyday tasks',
   // eslint-disable-next-line no-restricted-syntax

@@ -201,7 +201,11 @@ pub async fn pkce_login(provider_name: &str) -> Result<OAuthTokens> {
     let redirect_uri = format!("http://127.0.0.1:{port}/callback");
     let auth_url = build_authorize_url(&provider, &redirect_uri, &challenge, &state);
     eprintln!("[/login] Opening browser: {}", auth_url);
-    let _ = webbrowser::open(&auth_url);
+    // Explicit user-initiated `/login` flow: route through the open chokepoint.
+    let _ = crate::oauth::open_external_url(
+        &auth_url,
+        crate::oauth::UserActionContext::user_initiated(),
+    );
     let expected_state = state.clone();
     let code = tokio::task::spawn_blocking(move || capture_redirect(listener, &expected_state))
         .await

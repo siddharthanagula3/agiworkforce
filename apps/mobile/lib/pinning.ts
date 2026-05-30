@@ -145,20 +145,54 @@ export function assertPinningReadyIfEnforced(): void {
 }
 
 /**
- * Release-build launch blocker. Throws when running outside __DEV__ and the
- * placeholder pins are still in place — better than silent fail-open.
+ * Pure, testable classification of pinning state at startup.
  *
- * Evaluated at module load so a broken release build fails before any UI
- * mounts.
+ * - `dev-or-test`  — guard is skipped (development / test tooling).
+ * - `disabled`     — PINNING_ENFORCED is false; `secureFetch` is passthrough.
+ * - `unprovisioned`— enforced but pins are still placeholders. The app MUST
+ *                    still launch; pinned-host requests fail closed at the
+ *                    network layer (a placeholder hash never matches a real
+ *                    cert), and on-device-first v1 flows don't hit pinned hosts.
+ * - `ok`           — enforced with real provisioned pins.
  */
-function enforceProvisionedPinsForRelease(): void {
-  // Test environments and dev tooling should NOT trip the placeholder guard.
-  if (typeof __DEV__ !== 'undefined' && __DEV__) return;
-  if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return;
-  if (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_APP_ENV === 'development') return;
-  if (PINNING_ENFORCED && hasPlaceholderPins()) {
-    throw new Error('TLS pinning not provisioned');
-  }
+export type PinningStartupState = 'dev-or-test' | 'disabled' | 'unprovisioned' | 'ok';
+
+export function pinningStartupState(opts: {
+  isDev: boolean;
+  isTest: boolean;
+}): PinningStartupState {
+  if (opts.isDev || opts.isTest) return 'dev-or-test';
+  if (!PINNING_ENFORCED) return 'disabled';
+  if (hasPlaceholderPins()) return 'unprovisioned';
+  return 'ok';
 }
 
-enforceProvisionedPinsForRelease();
+/**
+ * Release-build startup check. P0-FIX (2026-05-29): this previously THREW at
+ * module load, which — because lib/pinning.ts is eagerly imported from
+ * app/_layout.tsx — crashed the WHOLE app on launch in every release build
+ * that still had placeholder pins. That made the app unlaunchable, which is
+ * strictly worse than degraded network security in a local-first v1 (chat is
+ * on-device; the pinned hosts are gated). It now WARNS instead of throwing;
+ * fail-closed behaviour is preserved at the `secureFetch` layer (placeholder
+ * pins can never match a real certificate). Provisioning real SPKI pins before
+ * public launch remains a tracked release/ops task (see reports/BLOCKERS.md and
+ * the runbook above).
+ */
+function reportPinningStatusAtStartup(): PinningStartupState {
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__;
+  const isTest =
+    (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') ||
+    (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_APP_ENV === 'development');
+  const state = pinningStartupState({ isDev, isTest });
+  if (state === 'unprovisioned') {
+    console.warn(
+      '[pinning] TLS pins are not provisioned (placeholder values present). ' +
+        'Requests to pinned hosts will fail closed; the app still launches. ' +
+        'Provision real SPKI pins before public launch (runbook in lib/pinning.ts).',
+    );
+  }
+  return state;
+}
+
+reportPinningStatusAtStartup();

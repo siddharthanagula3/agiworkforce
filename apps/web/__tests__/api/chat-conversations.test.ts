@@ -219,7 +219,7 @@ describe('Chat Conversations API', () => {
       });
 
       it('should create conversation with specific model', async () => {
-        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.4' };
+        const newConv = { id: 'new-conv', title: 'New conversation', model: 'gpt-5.5' };
         mockQuery.mockResolvedValueOnce([newConv]);
 
         const request = new NextRequest('http://localhost/api/chat/conversations', {
@@ -228,14 +228,14 @@ describe('Chat Conversations API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ model: 'gpt-5.4' }),
+          body: JSON.stringify({ model: 'gpt-5.5' }),
         });
         const response = await POST(request);
 
         expect(response.status).toBe(201);
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_conversations'),
-          expect.arrayContaining(['gpt-5.4']),
+          expect.arrayContaining(['gpt-5.5']),
         );
       });
 

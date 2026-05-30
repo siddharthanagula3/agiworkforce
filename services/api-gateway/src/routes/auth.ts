@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { authenticatedUserSchema } from '../authenticated-user';
 import { requireEnv } from '../env';
 import { AppError } from '../middleware/errorHandler';
-import { authenticateToken } from '../middleware/auth';
+import { authenticateToken, evictRevocationCache } from '../middleware/auth';
 import { getServiceClient } from '../lib/neonClients';
 import { logger } from '../lib/logger';
 
@@ -109,6 +109,11 @@ router.post('/logout', authRateLimiter, authenticateToken, async (req: Request, 
       throw new AppError('Logout failed', 500);
     }
   }
+
+  // SECURITY (P1-GW-REVOKE): drop this jti from the auth middleware's positive
+  // revocation cache so the very next request with this token re-checks the DB
+  // and is rejected immediately, rather than passing for up to 5s.
+  evictRevocationCache(jti);
 
   return res.json({ ok: true, revoked: true });
 });

@@ -735,7 +735,7 @@ impl AnthropicComputerUseAgent {
         let all_perms = self.app_permissions.list_permissions().await;
         for perm in &all_perms {
             if let Some(bid) = perm.bundle_id.as_deref() {
-                if SAFETY_DENY_BUNDLES.iter().any(|d| *d == bid)
+                if SAFETY_DENY_BUNDLES.contains(&bid)
                     || super::app_permissions::is_always_blocked_bundle(bid)
                 {
                     return Some(format!(

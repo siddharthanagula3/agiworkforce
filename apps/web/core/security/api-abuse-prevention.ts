@@ -90,7 +90,7 @@ function getModelCostTier(model: string): keyof typeof MODEL_COST_TIERS {
   const normalizedModel = canonicalModelId.toLowerCase();
   if (
     normalizedModel.includes('opus') ||
-    normalizedModel.includes('gpt-5.4') ||
+    normalizedModel.includes('gpt-5.5') ||
     normalizedModel.includes('sonar-pro')
   ) {
     return 'high';

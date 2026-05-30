@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { tokenLogger, logTokenUsage } from './token-usage-tracker';
 
-const OPENAI_MODEL = 'gpt-5.4';
+const OPENAI_MODEL = 'gpt-5.5';
 const ANTHROPIC_MODEL = 'claude-sonnet-4.6';
 const GOOGLE_MODEL = 'gemini-3.1-flash-lite';
 const PERPLEXITY_MODEL = 'sonar-pro';

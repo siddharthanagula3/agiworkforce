@@ -115,9 +115,10 @@ export function estimateTokens(text: string, model?: string): number {
   const charCount = text.length;
   const id = model?.toLowerCase() ?? '';
 
-  // Order matters: more specific Opus 4.7 prefix BEFORE the generic
-  // `claude` family check.
-  if (id.startsWith('claude-opus-4-7') || id.startsWith('claude-opus-4.7')) {
+  // Order matters: the more specific Opus 4.x prefix BEFORE the generic
+  // `claude` family check. Version-resilient (matches any claude-opus-4.x —
+  // e.g. 4.6/4.7/4.8) so it does not drift when the catalog flagship changes.
+  if (id.startsWith('claude-opus-4')) {
     return Math.ceil(charCount * TOKENS_PER_CHAR_CLAUDE_OPUS_4_7);
   }
 

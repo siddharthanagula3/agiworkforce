@@ -2138,9 +2138,9 @@ pub async fn run_main() -> Result<()> {
             let token = auth::AuthStore::load()
                 .ok()
                 .and_then(|s| s.entries.get("agiworkforce").cloned())
-                .and_then(|e| match e {
-                    auth::AuthEntry::OAuth { access, .. } => Some(access),
-                    auth::AuthEntry::ApiKey { key } => Some(key),
+                .map(|e| match e {
+                    auth::AuthEntry::OAuth { access, .. } => access,
+                    auth::AuthEntry::ApiKey { key } => key,
                 });
 
             let remaining: u8 = if let Some(bearer) = token {

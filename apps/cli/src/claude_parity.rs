@@ -548,16 +548,16 @@ pub fn render_install_app(app_name: &str) -> String {
     };
 
     if let Some(install_url) = url {
-        let opened = webbrowser::open(install_url).is_ok();
-        if opened {
-            format!(
-                "{app_name} app installation\n  Opening install page in your browser: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
-            )
-        } else {
-            format!(
-                "{app_name} app installation\n  Visit: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
-            )
-        }
+        // Do NOT auto-launch a browser here. This helper runs from a slash-command
+        // dispatch table that is also exercised by tests and command-palette
+        // enumeration, so opening a tab here fired GitHub/Slack install pages
+        // unprompted (the connector OAuth flow is cloud-deferred and not yet
+        // wired). Print the URL instead; the user opens it themselves. When the
+        // connector flow ships, route an explicit open through
+        // `crate::oauth::open_external_url(.., UserActionContext::user_initiated())`.
+        format!(
+            "{app_name} app installation\n  Visit: {install_url}\n  Complete the authorization flow and then reconnect via /plugin."
+        )
     } else {
         format!(
             "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  Authenticate in the target service, then run /plugin or agi plugin list."
@@ -1170,6 +1170,50 @@ mod tests {
                 "/{command} is listed as shared runtime command but is not handled"
             );
         }
+    }
+
+    /// Regression guard for the auto-opening browser-tab bug: dispatching ANY
+    /// shared slash command (including `/install-github-app` and
+    /// `/install-slack-app`) must NOT launch an external browser on its own.
+    /// All external opens route through `crate::oauth::open_external_url`, whose
+    /// test spy records every launch that passes the user-action gate. A plain
+    /// command dispatch is not a user-initiated open, so the count must stay 0.
+    #[test]
+    fn dispatching_shared_commands_never_opens_a_browser() {
+        let _guard = crate::oauth::external_open_spy::lock();
+        crate::oauth::external_open_spy::enable_and_reset();
+
+        // Cover every shared runtime command, plus the two install commands and
+        // their leading-slash forms explicitly (the exact tabs from the bug).
+        let mut commands: Vec<String> = shared_runtime_command_names()
+            .iter()
+            .map(|c| (*c).to_string())
+            .collect();
+        commands.extend([
+            "/install-github-app".to_string(),
+            "/install-slack-app".to_string(),
+            "install-github-app".to_string(),
+            "install-slack-app".to_string(),
+        ]);
+
+        for command in &commands {
+            let mut session = test_session();
+            let _ = handle_shared_command(command, "test", &mut session);
+        }
+
+        // Also call the install renderer directly — it must not open either.
+        for app in ["GitHub", "Slack", "github", "slack"] {
+            let _ = render_install_app(app);
+        }
+
+        let opens = crate::oauth::external_open_spy::open_count();
+        crate::oauth::external_open_spy::disable();
+
+        assert_eq!(
+            opens, 0,
+            "shared command dispatch launched {opens} unprompted browser tab(s); \
+             external opens must be gated behind explicit user action"
+        );
     }
 
     #[test]

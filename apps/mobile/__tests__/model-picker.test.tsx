@@ -111,6 +111,7 @@ import { useModelInstallStore } from '../src/features/model-picker/installStore'
 import { useModelStore } from '../src/features/model-picker/store';
 import {
   AUTO_MODES,
+  CLOUD_LOCK_REASON,
   DEFAULT_LOCAL_MODEL_ID,
   LOCKED_CLOUD_MODELS,
   MODEL_LIST,
@@ -207,9 +208,7 @@ describe('ModelPickerSheet', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker();
 
-    const lockedRow = getByLabelText(
-      `${lockedModel.name}, locked, Cloud Managed and BYOK are disabled in Mobile v1`,
-    );
+    const lockedRow = getByLabelText(`${lockedModel.name}, locked, ${CLOUD_LOCK_REASON}`);
     expect(lockedRow.props.accessibilityState.disabled).toBe(true);
   });
 
@@ -258,11 +257,7 @@ describe('ModelPickerSheet', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker();
 
-    fireEvent.press(
-      getByLabelText(
-        `${lockedModel.name}, locked, Cloud Managed and BYOK are disabled in Mobile v1`,
-      ),
-    );
+    fireEvent.press(getByLabelText(`${lockedModel.name}, locked, ${CLOUD_LOCK_REASON}`));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).not.toHaveBeenCalled();

@@ -10,18 +10,15 @@ use serde::{Deserialize, Serialize};
 /// Web search provider options
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum WebSearchProvider {
     /// DuckDuckGo (free, no API key required)
+    #[default]
     DuckDuckGo,
     /// Perplexity API (requires API key, better results)
     Perplexity,
 }
 
-impl Default for WebSearchProvider {
-    fn default() -> Self {
-        Self::DuckDuckGo
-    }
-}
 
 /// Configuration for web search integration
 #[derive(Debug, Clone, Serialize, Deserialize)]
