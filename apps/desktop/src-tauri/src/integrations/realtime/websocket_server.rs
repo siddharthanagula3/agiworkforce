@@ -396,7 +396,7 @@ impl RealtimeServer {
                         }
                     };
 
-                    let is_plain_http = peek_len >= 5 && &peek_buf[..5] == b"POST ";
+                    let is_plain_http = peek_len >= 5 && &peek_buf[..5] == b"POST "; // utf8-safe: [u8] not &str
 
                     let clients = self.clients.clone();
                     let senders = self.senders.clone();
@@ -1962,8 +1962,8 @@ mod tests {
         // token must be 64 hex chars (32 bytes)
         assert_eq!(token.len(), 64, "token should be 64 hex chars");
         assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
-        // fingerprint is first 8 chars of token
-        assert_eq!(fingerprint, &token[..8]);
+        // fingerprint is first 8 chars of token (all ASCII hex)
+        assert_eq!(fingerprint, &token[..8]); // utf8-safe: hex token
         // pair_token shared state updated
         assert_eq!(*pair_token.read().await, token);
     }
@@ -1995,7 +1995,7 @@ mod tests {
         let token = body["token"].as_str().unwrap();
         let fingerprint = body["fingerprint"].as_str().unwrap();
         assert_eq!(fingerprint.len(), 8);
-        assert_eq!(fingerprint, &token[..8]);
+        assert_eq!(fingerprint, &token[..8]); // utf8-safe: hex token
     }
 
     #[tokio::test]

@@ -230,7 +230,10 @@ pub async fn db_execute_prepared(
 
     if is_write_operation {
         let preview = if sql.len() > 200 {
-            format!("{}...", &sql[..200])
+            format!(
+                "{}...",
+                &sql[..crate::core::agi::floor_char_boundary(&sql, 200)]
+            )
         } else {
             sql.clone()
         };

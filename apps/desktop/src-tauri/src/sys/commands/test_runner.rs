@@ -853,8 +853,11 @@ fn runner_unavailable(runner: &str, error: &str, elapsed: u64) -> TestRunResult 
 
 fn truncate_output(raw: &str) -> String {
     if raw.len() > MAX_OUTPUT_BYTES {
-        let truncated = &raw[..MAX_OUTPUT_BYTES];
-        format!("{}\n\n[... output truncated at 64 KB]", truncated)
+        let safe_end = crate::core::agi::floor_char_boundary(raw, MAX_OUTPUT_BYTES);
+        format!(
+            "{}\n\n[... output truncated at 64 KB]",
+            &raw[..safe_end]
+        )
     } else {
         raw.to_string()
     }

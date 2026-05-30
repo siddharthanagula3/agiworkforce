@@ -40,7 +40,10 @@ fn build_browser_script_confirmation_request(
         tool_description: format!(
             "{action_label}: {}",
             if script.len() > 200 {
-                format!("{}...", &script[..200])
+                format!(
+                    "{}...",
+                    &script[..crate::core::agi::floor_char_boundary(script, 200)]
+                )
             } else {
                 script.to_string()
             }

@@ -2017,7 +2017,10 @@ impl ToolExecutor {
                     let value_preview = match v {
                         Value::String(s) => {
                             if s.len() > 30 {
-                                format!("\"{}...\"", &s[..27])
+                                format!(
+                                    "\"{}...\"",
+                                    &s[..crate::core::agi::floor_char_boundary(s, 27)]
+                                )
                             } else {
                                 format!("\"{}\"", s)
                             }

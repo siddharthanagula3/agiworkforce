@@ -134,7 +134,7 @@ fn create_safe_tool_id(server_name: &str, tool_name: &str) -> String {
     hasher.update([0u8]);
     hasher.update(tool_name.as_bytes());
     let digest = hasher.finalize();
-    let short_hash = hex::encode(&digest[..20]);
+    let short_hash = hex::encode(&digest[..20]); // utf8-safe: [u8] sha2 digest, not &str
     format!(
         "mcp{}h{}{}",
         TOOL_ID_DELIMITER, TOOL_ID_DELIMITER, short_hash

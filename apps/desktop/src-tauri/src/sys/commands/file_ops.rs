@@ -1391,7 +1391,10 @@ pub async fn fs_read_file_content(
     let language = detect_language(&file_path);
 
     let excerpt = if content.len() > 500 {
-        format!("{}...", &content[..500])
+        format!(
+            "{}...",
+            &content[..crate::core::agi::floor_char_boundary(&content, 500)]
+        )
     } else {
         content.clone()
     };
