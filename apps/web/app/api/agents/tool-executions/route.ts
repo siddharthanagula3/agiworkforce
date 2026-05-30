@@ -123,7 +123,14 @@ async function handleExecuteTool(request: NextRequest) {
           method: config['method'] ?? 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parameters, context: context ?? {} }),
+          // SSRF redirect bypass: the pre-fetch guard only validates the initial
+          // URL. A 3xx Location could point at an internal host (e.g. IMDS), so
+          // do not auto-follow — surface the redirect as a failed webhook.
+          redirect: 'manual',
         });
+        if (resp.status >= 300 && resp.status < 400) {
+          throw new Error('Webhook redirects are not allowed');
+        }
         if (!resp.ok) throw new Error(`Webhook returned ${resp.status}`);
         result = (await resp.json()) as Record<string, unknown>;
         success = true;

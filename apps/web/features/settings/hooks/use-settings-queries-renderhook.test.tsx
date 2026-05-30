@@ -359,3 +359,47 @@ describe('useAuditLogActions — renderHook (GET /api/settings/audit-logs/action
     expect(result.current.error).toBeTruthy();
   });
 });
+
+// ============================================================================
+// useToggle2FA — enable honesty (A9): enable2FA() is setup-only; the hook must
+// NOT claim "2FA enabled" when the server keeps it off until a code is verified.
+// ============================================================================
+
+describe('useToggle2FA — enable must not falsely report success (A9)', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  it('enable does NOT toast success even when enable2FA() resolves without error', async () => {
+    const { toast } = await import('sonner');
+    const { useToggle2FA } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
+
+    result.current.mutate(true);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(vi.mocked(toast.success)).not.toHaveBeenCalled();
+  });
+
+  it('enable surfaces toast.error so the user knows verification is still required', async () => {
+    const { toast } = await import('sonner');
+    const { useToggle2FA } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
+
+    result.current.mutate(true);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(vi.mocked(toast.error)).toHaveBeenCalled();
+  });
+
+  it('enable mutation ends in error state — 2FA is not actually turned on', async () => {
+    const { useToggle2FA } = await import('./use-settings-queries');
+    const { result } = renderHook(() => useToggle2FA(), { wrapper: makeWrapper() });
+
+    result.current.mutate(true);
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.data).toBeUndefined();
+  });
+});
