@@ -11,6 +11,7 @@
 // AD-6 override: avatar storage migrated from Vercel Blob to Vercel Blob.
 import { put } from '@vercel/blob';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 // =============================================================================
 // TOTP 2FA Configuration
@@ -561,53 +562,168 @@ class SettingsService {
   }
 
   /**
-   * Update user profile
-   * TODO: Implement PATCH /api/me or /api/settings/profile route for profile updates.
+   * Update user profile via PATCH /api/me.
+   * Persists display_name and avatar_url to the profiles table.
+   * Fields not backed by a DB column (bio, phone, timezone, language)
+   * are stored in user_settings under the "profile" namespace via
+   * PUT /api/settings/preferences.
    */
-  async updateProfile(_profile: Partial<UserProfile>): Promise<{ error?: string }> {
-    return {};
+  async updateProfile(profile: Partial<UserProfile>): Promise<{ error?: string }> {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { error: 'User not authenticated' };
+      }
+
+      const csrfToken = await getCsrfToken();
+
+      // Persist DB-backed fields (display_name, avatar_url) via PATCH /api/me.
+      const corePayload: Record<string, unknown> = {};
+      if (profile.name !== undefined) corePayload['display_name'] = profile.name;
+      if (profile.avatar_url !== undefined) corePayload['avatar_url'] = profile.avatar_url;
+
+      if (Object.keys(corePayload).length > 0) {
+        const res = await fetch('/api/me', {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify(corePayload),
+        });
+
+        if (!res.ok) {
+          const err = (await res.json().catch(() => ({}))) as { error?: string };
+          return { error: err.error ?? `HTTP ${res.status}` };
+        }
+      }
+
+      // Persist non-DB fields (bio, phone, timezone, language) in user_settings.
+      const extPayload: Record<string, unknown> = {};
+      if (profile.bio !== undefined) extPayload['bio'] = profile.bio;
+      if (profile.phone !== undefined) extPayload['phone'] = profile.phone;
+      if (profile.timezone !== undefined) extPayload['timezone'] = profile.timezone;
+      if (profile.language !== undefined) extPayload['language'] = profile.language;
+
+      if (Object.keys(extPayload).length > 0) {
+        const prefRes = await fetch('/api/settings/preferences', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            'x-csrf-token': csrfToken,
+          },
+          body: JSON.stringify({ namespace: 'profile', value: extPayload }),
+        });
+
+        if (!prefRes.ok) {
+          const err = (await prefRes.json().catch(() => ({}))) as { error?: string };
+          return { error: err.error ?? `HTTP ${prefRes.status}` };
+        }
+      }
+
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Get user settings
-   * TODO: Implement /api/settings/preferences route for persistent user settings.
-   * Returns in-memory defaults until a dedicated route is available.
+   * Get user settings from GET /api/settings/preferences.
+   * Falls back to hard-coded defaults only when the server returns an error
+   * so that on-disk values are never silently discarded.
    */
   async getSettings(): Promise<{ data: UserSettings; error?: string }> {
-    return {
-      data: {
-        email_notifications: true,
-        push_notifications: true,
-        workflow_alerts: true,
-        employee_updates: true,
-        system_maintenance: true,
-        marketing_emails: false,
-        weekly_reports: true,
-        instant_alerts: true,
-        two_factor_enabled: false,
-        session_timeout: 60,
-        theme: 'dark',
-        auto_save: true,
-        debug_mode: false,
-        analytics_enabled: true,
-        cache_size: '1GB',
-        backup_frequency: 'daily',
-        retention_period: 30,
-        max_concurrent_jobs: 10,
-        default_ai_provider: 'openai',
-        prefer_streaming: true,
-        ai_temperature: 0.7,
-        ai_max_tokens: 4000,
-      },
+    const hardcodedDefaults: UserSettings = {
+      email_notifications: true,
+      push_notifications: true,
+      workflow_alerts: true,
+      employee_updates: true,
+      system_maintenance: true,
+      marketing_emails: false,
+      weekly_reports: true,
+      instant_alerts: true,
+      two_factor_enabled: false,
+      session_timeout: 60,
+      theme: 'dark',
+      auto_save: true,
+      debug_mode: false,
+      analytics_enabled: true,
+      cache_size: '1GB',
+      backup_frequency: 'daily',
+      retention_period: 30,
+      max_concurrent_jobs: 10,
+      default_ai_provider: 'openai',
+      prefer_streaming: true,
+      ai_temperature: 0.7,
+      ai_max_tokens: 4000,
     };
+
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { data: hardcodedDefaults, error: 'User not authenticated' };
+      }
+
+      const res = await fetch('/api/settings/preferences', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        return { data: hardcodedDefaults, error: `HTTP ${res.status}` };
+      }
+
+      const json = (await res.json()) as { settings?: Record<string, unknown> };
+      const stored = json.settings ?? {};
+
+      // Merge stored values over defaults so new fields always have safe values.
+      return {
+        data: { ...hardcodedDefaults, ...(stored as Partial<UserSettings>) },
+      };
+    } catch (error) {
+      return {
+        data: hardcodedDefaults,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Update user settings
-   * TODO: Implement PATCH /api/settings/preferences route for persisting user settings.
+   * Update user settings via PUT /api/settings/preferences.
    */
-  async updateSettings(_settings: Partial<UserSettings>): Promise<{ error?: string }> {
-    return {};
+  async updateSettings(settings: Partial<UserSettings>): Promise<{ error?: string }> {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { error: 'User not authenticated' };
+      }
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch('/api/settings/preferences', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ settings }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { error: err.error ?? `HTTP ${res.status}` };
+      }
+
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
@@ -667,29 +783,103 @@ class SettingsService {
   }
 
   /**
-   * Get user API keys
-   * TODO: Implement /api/settings/api-keys route for API key management.
+   * Get user API keys via GET /api/settings/api-keys.
    */
   async getAPIKeys(): Promise<{ data: APIKey[]; error?: string }> {
-    return { data: [] };
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { data: [], error: 'User not authenticated' };
+      }
+
+      const res = await fetch('/api/settings/api-keys', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        return { data: [], error: `HTTP ${res.status}` };
+      }
+
+      const json = (await res.json()) as { api_keys: APIKey[] };
+      return { data: json.api_keys ?? [] };
+    } catch (error) {
+      return {
+        data: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Create new API key
-   * TODO: Implement POST /api/settings/api-keys route.
+   * Create new API key via POST /api/settings/api-keys.
    */
   async createAPIKey(
-    _name: string,
+    name: string,
   ): Promise<{ data: APIKey | null; error?: string; fullKey?: string }> {
-    return { data: null, error: 'API key management not yet available via API' };
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { data: null, error: 'User not authenticated' };
+      }
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch('/api/settings/api-keys', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { data: null, error: err.error ?? `HTTP ${res.status}` };
+      }
+
+      const json = (await res.json()) as { api_key: APIKey; full_key: string };
+      return { data: json.api_key, fullKey: json.full_key };
+    } catch (error) {
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Delete API key
-   * TODO: Implement DELETE /api/settings/api-keys/[id] route.
+   * Revoke (soft-delete) an API key via DELETE /api/settings/api-keys/[id].
    */
-  async deleteAPIKey(_keyId: string): Promise<{ error?: string }> {
-    return { error: 'API key management not yet available via API' };
+  async deleteAPIKey(keyId: string): Promise<{ error?: string }> {
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { error: 'User not authenticated' };
+      }
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch(`/api/settings/api-keys/${encodeURIComponent(keyId)}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        return { error: err.error ?? `HTTP ${res.status}` };
+      }
+
+      return {};
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   // ===========================================================================

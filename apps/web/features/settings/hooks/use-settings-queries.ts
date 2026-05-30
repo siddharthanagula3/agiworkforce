@@ -22,6 +22,8 @@ import settingsService, {
 import { toast } from 'sonner';
 import { logger } from '@shared/lib/logger';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
+import { getAuthToken } from '@shared/lib/get-auth-token';
+import { getCsrfToken } from '@/lib/client/csrf';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -562,11 +564,23 @@ export interface OrganizationSettings {
 export function useOrganizationSettings(
   organizationId?: string,
 ): UseQueryResult<OrganizationSettings | null, Error> {
+  void organizationId; // reserved for future org-switcher; route returns current user's org
   return useQuery<OrganizationSettings | null, Error>({
     queryKey: ['settings', 'organization', organizationId ?? 'current'],
-    // TODO: Add /api/settings/organization route for organization settings.
     queryFn: async (): Promise<OrganizationSettings | null> => {
-      return null;
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const res = await fetch('/api/settings/organization', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { organization: OrganizationSettings | null };
+      return json.organization;
     },
     staleTime: 10 * 60 * 1000, // 10 minutes
     gcTime: 30 * 60 * 1000, // 30 minutes
@@ -593,9 +607,29 @@ export function useUpdateOrganizationSettings(): UseMutationResult<
     Error,
     { organizationId: string; updates: Partial<OrganizationSettings> }
   >({
-    // TODO: Add PATCH /api/settings/organization route.
-    mutationFn: async ({ updates }) => {
-      return updates;
+    mutationFn: async ({ updates }): Promise<Partial<OrganizationSettings>> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch('/api/settings/organization', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify(updates),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { organization: Partial<OrganizationSettings> };
+      return json.organization ?? updates;
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -643,9 +677,21 @@ export function useTeamMembers(
 ): UseQueryResult<TeamMember[], Error> {
   return useQuery<TeamMember[], Error>({
     queryKey: ['settings', 'team', organizationId ?? ''],
-    // TODO: Add /api/settings/team route for team member management.
     queryFn: async (): Promise<TeamMember[]> => {
-      return [];
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const url = `/api/settings/team?organizationId=${encodeURIComponent(organizationId!)}`;
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { members: TeamMember[] };
+      return json.members ?? [];
     },
     enabled: !!organizationId,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -673,15 +719,38 @@ export function useInviteTeamMember(): UseMutationResult<
     Error,
     { organizationId: string; email: string; role: TeamMember['role'] }
   >({
-    // TODO: Add POST /api/settings/team/invite route.
-    mutationFn: async (_params: {
+    mutationFn: async ({
+      organizationId,
+      email,
+      role,
+    }: {
       organizationId: string;
       email: string;
       role: TeamMember['role'];
     }): Promise<TeamMember> => {
-      throw new Error(
-        'Team member invitations require a dedicated server route (pending implementation)',
-      );
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch('/api/settings/team', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ organizationId, email, role }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { member: TeamMember };
+      if (!json.member) throw new Error('Invalid response from server');
+      return json.member;
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -709,11 +778,29 @@ export function useRemoveTeamMember(): UseMutationResult<
   const queryClient: QueryClient = useQueryClient();
 
   return useMutation<void, Error, { memberId: string; organizationId: string }>({
-    // TODO: Add DELETE /api/settings/team/[memberId] route.
-    mutationFn: async ({ memberId: _memberId }) => {
-      throw new Error(
-        'Team member removal requires a dedicated server route (pending implementation)',
-      );
+    mutationFn: async ({
+      memberId,
+    }: {
+      memberId: string;
+      organizationId: string;
+    }): Promise<void> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch(`/api/settings/team/${encodeURIComponent(memberId)}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -745,11 +832,33 @@ export function useUpdateTeamMemberRole(): UseMutationResult<
     Error,
     { memberId: string; organizationId: string; role: TeamMember['role'] }
   >({
-    // TODO: Add PATCH /api/settings/team/[memberId] route.
-    mutationFn: async ({ memberId: _memberId, role: _role }) => {
-      throw new Error(
-        'Team member role update requires a dedicated server route (pending implementation)',
-      );
+    mutationFn: async ({
+      memberId,
+      role,
+    }: {
+      memberId: string;
+      organizationId: string;
+      role: TeamMember['role'];
+    }): Promise<void> => {
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const csrfToken = await getCsrfToken();
+
+      const res = await fetch(`/api/settings/team/${encodeURIComponent(memberId)}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({ role }),
+      });
+
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `HTTP ${res.status}`);
+      }
     },
     onSuccess: (_, { organizationId }) => {
       queryClient.invalidateQueries({
@@ -801,11 +910,24 @@ export function useUserActivity(
   userId?: string,
   limit: number = 50,
 ): UseQueryResult<UserActivity[], Error> {
+  void userId; // current user is resolved server-side from auth token
   return useQuery<UserActivity[], Error>({
     queryKey: ['settings', 'activity', userId ?? 'current', limit],
-    // TODO: Add /api/settings/activity route for user activity history.
     queryFn: async (): Promise<UserActivity[]> => {
-      return [];
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const params = new URLSearchParams({ limit: String(limit) });
+      const res = await fetch(`/api/settings/activity?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { activities: UserActivity[] };
+      return json.activities ?? [];
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -866,14 +988,6 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
     limit = 100,
     offset = 0,
   } = filters || {};
-  // Query key includes filter params so React Query re-fetches when filters change.
-  void userId;
-  void action;
-  void resourceType;
-  void startDate;
-  void endDate;
-  void limit;
-  void offset;
 
   return useQuery<AuditLogEntry[], Error>({
     queryKey: [
@@ -889,9 +1003,28 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
         offset,
       },
     ],
-    // TODO: Add /api/settings/audit-logs route for audit log access.
     queryFn: async (): Promise<AuditLogEntry[]> => {
-      return [];
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const params = new URLSearchParams();
+      if (action) params.set('action', action);
+      if (resourceType) params.set('resourceType', resourceType);
+      if (startDate) params.set('startDate', startDate.toISOString());
+      if (endDate) params.set('endDate', endDate.toISOString());
+      params.set('limit', String(limit));
+      params.set('offset', String(offset));
+
+      const res = await fetch(`/api/settings/audit-logs?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { entries: AuditLogEntry[] };
+      return json.entries ?? [];
     },
     staleTime: 2 * 60 * 1000, // 2 minutes
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -909,9 +1042,20 @@ export function useAuditLogs(filters?: AuditLogFilters): UseQueryResult<AuditLog
 export function useAuditLogActions(): UseQueryResult<string[], Error> {
   return useQuery<string[], Error>({
     queryKey: ['audit', 'actions'],
-    // TODO: Add /api/settings/audit-logs/actions route for filter dropdown.
     queryFn: async (): Promise<string[]> => {
-      return [];
+      const token = await getAuthToken();
+      if (!token) throw new Error('User not authenticated');
+
+      const res = await fetch('/api/settings/audit-logs/actions', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+
+      const json = (await res.json()) as { actions: string[] };
+      return json.actions ?? [];
     },
     staleTime: 30 * 60 * 1000, // 30 minutes
     gcTime: 60 * 60 * 1000, // 1 hour
