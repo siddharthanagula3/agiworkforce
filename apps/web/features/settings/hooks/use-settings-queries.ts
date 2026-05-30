@@ -444,14 +444,26 @@ export function useToggle2FA(): UseMutationResult<
 
   return useMutation<boolean, Error, boolean, SettingsMutationContext>({
     mutationFn: async (enabled: boolean): Promise<boolean> => {
-      const { error } = enabled
-        ? await settingsService.enable2FA()
-        : await settingsService.disable2FA('');
+      if (enabled) {
+        // Enabling 2FA is a multi-step enrollment (setup -> scan QR -> verify a
+        // TOTP code). enable2FA() only performs SETUP; the server keeps 2FA OFF
+        // until a code is verified. Reporting success here would be a lie, so we
+        // surface that verification is still required rather than flipping the
+        // flag. (Full enrollment dialog is tracked as a follow-up.)
+        const { error } = await settingsService.enable2FA();
+        if (error) {
+          throw new Error(error);
+        }
+        throw new Error(
+          'Two-factor setup started — enabling still requires verifying a code from your authenticator app. This step is not available yet.',
+        );
+      }
 
+      const { error } = await settingsService.disable2FA('');
       if (error) {
         throw new Error(error);
       }
-      return enabled;
+      return false;
     },
     onMutate: async (enabled: boolean): Promise<SettingsMutationContext> => {
       await queryClient.cancelQueries({
@@ -462,14 +474,23 @@ export function useToggle2FA(): UseMutationResult<
         queryKeys.settings.preferences(),
       );
 
-      queryClient.setQueryData<UserSettings>(queryKeys.settings.preferences(), (old) =>
-        old ? { ...old, two_factor_enabled: enabled } : old,
-      );
+      // Only optimistically reflect a DISABLE (which truly takes effect on
+      // success). An enable is never real until a code is verified, so never
+      // optimistically flip 2FA on.
+      if (!enabled) {
+        queryClient.setQueryData<UserSettings>(queryKeys.settings.preferences(), (old) =>
+          old ? { ...old, two_factor_enabled: false } : old,
+        );
+      }
 
       return { previousSettings };
     },
     onSuccess: (enabled: boolean): void => {
-      toast.success(`2FA ${enabled ? 'enabled' : 'disabled'} successfully`);
+      // Only a real disable reaches success; enable throws "verification
+      // required" above, so it never falsely toasts "enabled".
+      if (!enabled) {
+        toast.success('2FA disabled successfully');
+      }
     },
     onError: (
       error: Error,

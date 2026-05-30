@@ -157,4 +157,33 @@ describe('POST /api/agents/tool-executions — SSRF guard (webhook)', () => {
       expect.objectContaining({ method: 'POST' }),
     );
   });
+
+  it('fetch is issued with redirect: "manual" (no auto-follow)', async () => {
+    setupDbForWebhookUrl('https://hooks.example.com/webhook');
+
+    await POST(makeRequest());
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://hooks.example.com/webhook',
+      expect.objectContaining({ redirect: 'manual' }),
+    );
+  });
+
+  it('a 3xx redirect (e.g. -> IMDS) is rejected and NOT followed', async () => {
+    setupDbForWebhookUrl('https://hooks.example.com/webhook');
+    // The initial host passes the guard, but the response is a redirect to an
+    // internal host. With redirect:"manual" the route must refuse, not follow.
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 302,
+      headers: { get: () => 'http://169.254.169.254/latest/meta-data/' },
+      json: async () => ({}),
+    });
+
+    await POST(makeRequest());
+
+    // Only the initial request is made; the redirect target is never fetched.
+    expect(mockFetch).toHaveBeenCalledOnce();
+  });
 });
