@@ -516,7 +516,13 @@ async function verifyBackupCode(code: string, hashedCodes: string[]): Promise<nu
 
 class SettingsService {
   /**
-   * Get user profile via /api/me
+   * Get user profile via /api/me merged with the stored "profile" namespace
+   * from /api/settings/preferences?namespace=profile.
+   *
+   * Fields backed by the profiles DB table (id, email, name, avatar_url, plan)
+   * come from /api/me. Extended fields (bio, phone, timezone, language) are
+   * persisted by updateProfile() into the preferences store and read back here
+   * so they round-trip correctly.
    */
   async getProfile(): Promise<{ data: UserProfile | null; error?: string }> {
     try {
@@ -525,14 +531,22 @@ class SettingsService {
         return { data: null, error: 'User not authenticated' };
       }
 
-      const res = await fetch('/api/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        return { data: null, error: `HTTP ${res.status}` };
+      // Fetch both endpoints in parallel; a failure on the preferences side is
+      // non-fatal — we fall back to defaults for the extended fields only.
+      const [meRes, prefRes] = await Promise.all([
+        fetch('/api/me', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch('/api/settings/preferences?namespace=profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+      ]);
+
+      if (!meRes.ok) {
+        return { data: null, error: `HTTP ${meRes.status}` };
       }
 
-      const me = (await res.json()) as {
+      const me = (await meRes.json()) as {
         id: string;
         email?: string | null;
         name?: string | null;
@@ -540,16 +554,32 @@ class SettingsService {
         plan?: { tier?: string };
       };
 
+      // Read stored extended profile fields; ignore if the preferences fetch failed.
+      type StoredProfile = {
+        bio?: string;
+        phone?: string;
+        timezone?: string;
+        language?: string;
+      };
+      let stored: StoredProfile = {};
+      if (prefRes.ok) {
+        const prefJson = (await prefRes.json()) as { settings?: StoredProfile };
+        if (prefJson.settings && typeof prefJson.settings === 'object') {
+          stored = prefJson.settings;
+        }
+      }
+
       return {
         data: {
           id: me.id,
           email: me.email ?? undefined,
           name: me.name ?? undefined,
           avatar_url: me.avatar_url ?? undefined,
-          // bio, phone, timezone, language not returned by /api/me
-          // TODO: extend /api/me GET or add /api/settings/profile route
-          timezone: 'America/New_York',
-          language: 'en',
+          // Extended fields: stored value takes precedence over the safe default.
+          timezone: stored.timezone ?? 'America/New_York',
+          language: stored.language ?? 'en',
+          bio: stored.bio,
+          phone: stored.phone,
           plan: me.plan?.tier,
         },
       };

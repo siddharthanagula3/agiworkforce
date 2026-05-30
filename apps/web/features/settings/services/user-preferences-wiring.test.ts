@@ -181,6 +181,96 @@ describe('settingsService — updateProfile', () => {
   });
 });
 
+describe('settingsService — getProfile (round-trip: extended fields read from preferences)', () => {
+  beforeEach(async () => {
+    fetchMock.mockReset();
+    await setupMocks();
+  });
+
+  const mePayload = {
+    id: 'u1',
+    email: 'alice@example.com',
+    name: 'Alice',
+    avatar_url: null,
+    plan: { tier: 'free' },
+  };
+
+  it('calls GET /api/me AND GET /api/settings/preferences?namespace=profile in parallel', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(mePayload))
+      .mockResolvedValueOnce(
+        makeResponse({ settings: { timezone: 'Europe/London', language: 'fr' } }),
+      );
+
+    const { settingsService } = await import('./user-preferences');
+    await settingsService.getProfile();
+
+    const urls = (fetchMock.mock.calls as [string][]).map(([url]) => url);
+    expect(urls).toContain('/api/me');
+    expect(
+      urls.some((u) => u.includes('/api/settings/preferences') && u.includes('namespace=profile')),
+    ).toBe(true);
+  });
+
+  it('surfaces stored timezone and language over hardcoded defaults', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(mePayload))
+      .mockResolvedValueOnce(
+        makeResponse({ settings: { timezone: 'Asia/Tokyo', language: 'ja' } }),
+      );
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.getProfile();
+
+    expect(result.error).toBeUndefined();
+    expect(result.data?.timezone).toBe('Asia/Tokyo');
+    expect(result.data?.language).toBe('ja');
+  });
+
+  it('surfaces stored bio and phone — which were previously invisible', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(mePayload))
+      .mockResolvedValueOnce(
+        makeResponse({ settings: { bio: 'AI researcher', phone: '+1-555-0100' } }),
+      );
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.getProfile();
+
+    expect(result.data?.bio).toBe('AI researcher');
+    expect(result.data?.phone).toBe('+1-555-0100');
+  });
+
+  it('falls back to safe defaults when preferences fetch fails — does not error the whole call', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse(mePayload))
+      .mockResolvedValueOnce(makeResponse({ error: 'DB error' }, 500));
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.getProfile();
+
+    // /api/me succeeded so we have a profile.
+    expect(result.data).not.toBeNull();
+    expect(result.error).toBeUndefined();
+    // Falls back to hardcoded defaults.
+    expect(result.data?.timezone).toBe('America/New_York');
+    expect(result.data?.language).toBe('en');
+    expect(result.data?.bio).toBeUndefined();
+  });
+
+  it('returns error only when /api/me fails — not when preferences fetch fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(makeResponse({ error: 'Unauthorized' }, 401))
+      .mockResolvedValueOnce(makeResponse({ settings: {} }));
+
+    const { settingsService } = await import('./user-preferences');
+    const result = await settingsService.getProfile();
+
+    expect(result.data).toBeNull();
+    expect(result.error).toBeTruthy();
+  });
+});
+
 describe('settingsService — getAPIKeys', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
