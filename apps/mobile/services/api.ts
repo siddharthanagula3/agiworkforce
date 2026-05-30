@@ -122,6 +122,8 @@ function handleUnrecoverableAuth(): void {
 interface RequestOptions {
   timeout?: number;
   signal?: AbortSignal;
+  /** Extra request headers (e.g. an `x-csrf-token` for state-changing posts). */
+  headers?: Record<string, string>;
   /** Skip the automatic 401 retry (used internally to avoid infinite loops). */
   _skipAuthRetry?: boolean;
 }
@@ -140,7 +142,11 @@ async function request<T>(
   try {
     const response = await secureFetch(`${API_URL}${path}`, {
       ...init,
-      headers: { ...headers, ...(init.headers as Record<string, string>) },
+      headers: {
+        ...headers,
+        ...(options.headers ?? {}),
+        ...(init.headers as Record<string, string>),
+      },
       signal: options.signal
         ? combineAbortSignals([options.signal, controller.signal])
         : controller.signal,

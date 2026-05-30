@@ -27,9 +27,10 @@ jest.mock('../lib/mmkv', () => ({
 
 jest.mock('../services/api', () => {
   const post = jest.fn();
+  const get = jest.fn();
   return {
-    api: { post },
-    __mocks: { post },
+    api: { post, get },
+    __mocks: { post, get },
   };
 });
 
@@ -45,9 +46,9 @@ import {
 } from '../src/features/waitlist';
 
 // Retrieve the inner mock functions after imports so they are fully initialised.
-const { post } = (
+const { post, get } = (
   jest.requireMock('../services/api') as {
-    __mocks: { post: jest.Mock };
+    __mocks: { post: jest.Mock; get: jest.Mock };
   }
 ).__mocks;
 
@@ -76,6 +77,8 @@ function resetStore() {
 beforeEach(() => {
   jest.clearAllMocks();
   resetStore();
+  // CSRF preflight: GET /api/csrf resolves a token by default.
+  get.mockResolvedValue({ token: 'test-csrf-token' });
 });
 
 // ---------------------------------------------------------------------------
@@ -91,6 +94,9 @@ describe('joinWaitlist — success', () => {
     expect(post).toHaveBeenCalledWith(
       '/api/waitlist/cloud-managed',
       expect.objectContaining({ email: 'test@example.com' }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
+      }),
     );
   });
 
@@ -112,6 +118,9 @@ describe('joinWaitlist — success', () => {
         deviceModel: 'iPhone 16',
         deviceTier: 2,
       }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
+      }),
     );
   });
 
@@ -121,6 +130,30 @@ describe('joinWaitlist — success', () => {
     const result = await joinWaitlist({ email: 'a@b.com' });
 
     expect(result).toEqual({ rank: 0 });
+  });
+
+  it('fetches a CSRF token from /api/csrf BEFORE posting (no preflight = 403)', async () => {
+    post.mockResolvedValueOnce({ ok: true });
+
+    await joinWaitlist({ email: 'a@b.com' });
+
+    expect(get).toHaveBeenCalledWith('/api/csrf');
+    // The token must reach the POST so requireCsrfToken passes server-side.
+    expect(post).toHaveBeenCalledWith(
+      '/api/waitlist/cloud-managed',
+      expect.anything(),
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
+      }),
+    );
+  });
+
+  it('throws WaitlistNetworkError and does NOT post when the CSRF preflight fails', async () => {
+    get.mockReset();
+    get.mockResolvedValueOnce({}); // no token returned
+
+    await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
+    expect(post).not.toHaveBeenCalled();
   });
 });
 
