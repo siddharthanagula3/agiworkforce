@@ -90,3 +90,27 @@ describe('on-device catalog: getModelsForRole', () => {
     expect(getModelsForRole('premium-multimodal-alt').every((m) => !m.shipsInV1)).toBe(true);
   });
 });
+
+describe('on-device catalog: executorch URLs include the HF /resolve/ segment (A14)', () => {
+  it('default model preset modelSource uses /resolve/ (raw .pte, not the HTML browser)', () => {
+    const model = getDefaultModel();
+    const preset = model.executorchPreset;
+    expect(preset).toBeDefined();
+    expect(preset?.modelSource).toContain('/resolve/');
+    expect(preset?.modelSource).toMatch(/\.pte$/);
+  });
+
+  it('every shippable executorch preset uses /resolve/ in all artifact URLs', () => {
+    for (const m of getShippableModels()) {
+      const preset = m.executorchPreset;
+      if (!preset) continue;
+      for (const url of [
+        preset.modelSource,
+        preset.tokenizerSource,
+        preset.tokenizerConfigSource,
+      ]) {
+        if (url) expect(url).toContain('/resolve/');
+      }
+    }
+  });
+});

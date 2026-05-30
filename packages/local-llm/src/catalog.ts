@@ -4,7 +4,11 @@ import type { OnDeviceModel } from '@agiworkforce/types';
 // react-native-executorch 0.8.4's modelUrls.ts. If the package is upgraded,
 // verify these match the new VERSION_TAG so artifact URLs stay in sync.
 const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-executorch';
-const ET_VERSION_TAG = 'v0.8.0';
+// Mirrors react-native-executorch 0.8.4 `constants/versions.ts`
+// (`VERSION_TAG = 'resolve/v0.8.0'`). The `resolve/` segment is the HuggingFace
+// raw-file ref path — without it the URL resolves to the repo's HTML file
+// browser instead of the .pte bytes, so model download fails.
+const ET_VERSION_TAG = 'resolve/v0.8.0';
 
 // License note for Qwen2.5-VL-3B: research report claims Apache-2.0, but the
 // memory lock (v1-model-selection-final-2026-05-18.md) flags it as potentially
