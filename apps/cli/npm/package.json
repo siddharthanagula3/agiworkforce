@@ -1,6 +1,6 @@
 {
   "name": "@agiworkforce/cli",
-  "version": "1.0.0",
+  "version": "1.7.1",
   "description": "AGI Workforce CLI — multi-model AI agent for your terminal. BYOK, 10+ Providers including local Ollama, MCP support, computer use.",
   "license": "Proprietary",
   "bin": {
@@ -46,11 +46,11 @@
     "url": "https://github.com/siddharthanagula3/agiworkforce/issues"
   },
   "optionalDependencies": {
-    "@agiworkforce/cli-darwin-arm64": "1.0.0",
-    "@agiworkforce/cli-darwin-x64": "1.0.0",
-    "@agiworkforce/cli-linux-arm64": "1.0.0",
-    "@agiworkforce/cli-linux-x64": "1.0.0",
-    "@agiworkforce/cli-win32-arm64": "1.0.0",
-    "@agiworkforce/cli-win32-x64": "1.0.0"
+    "@agiworkforce/cli-darwin-arm64": "1.7.1",
+    "@agiworkforce/cli-darwin-x64": "1.7.1",
+    "@agiworkforce/cli-linux-arm64": "1.7.1",
+    "@agiworkforce/cli-linux-x64": "1.7.1",
+    "@agiworkforce/cli-win32-arm64": "1.7.1",
+    "@agiworkforce/cli-win32-x64": "1.7.1"
   }
 }
