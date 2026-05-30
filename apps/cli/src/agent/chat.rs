@@ -59,6 +59,27 @@ async fn run_pre_tool_use_hooks(
 }
 
 impl AgentSession {
+    /// Build a streaming chunk callback that is json-events-aware.
+    ///
+    /// When `self.json_events` is `true` the callback emits every chunk as a
+    /// `MessageDelta` JSONL event to stdout (matching the first-turn sink wired
+    /// by `lib.rs`).  Otherwise it falls back to a raw `print!` so human-mode
+    /// output is unaffected.
+    pub(crate) fn continuation_sink(&self) -> StreamCallback {
+        if self.json_events {
+            let sid = self.json_session_id.clone();
+            Box::new(move |chunk: &str| {
+                crate::agent_events::AgentEvent::MessageDelta {
+                    session_id: sid.clone(),
+                    text: chunk.to_string(),
+                }
+                .emit_stdout();
+            })
+        } else {
+            Box::new(|chunk: &str| print!("{}", chunk))
+        }
+    }
+
     /// Send a user message and run the full agentic loop.
     pub async fn send(
         &mut self,
@@ -291,7 +312,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 &self.messages,
                                 max_tokens,
                                 Some(&tool_defs),
-                                Box::new(|chunk| print!("{}", chunk)),
+                                self.continuation_sink(),
                             )
                             .await
                             {
@@ -329,7 +350,17 @@ message -- revise and call `update_plan` again.\n\n",
                                          the upstream provider was not contacted.",
                                         fallback_model
                                     );
-                                    print!("{}", demo_text);
+                                    // In json-events mode emit as a MessageDelta;
+                                    // in human mode use the raw print! path.
+                                    if self.json_events {
+                                        crate::agent_events::AgentEvent::MessageDelta {
+                                            session_id: self.json_session_id.clone(),
+                                            text: demo_text.clone(),
+                                        }
+                                        .emit_stdout();
+                                    } else {
+                                        print!("{}", demo_text);
+                                    }
                                     Ok(crate::models::CompletionResult {
                                         text: demo_text,
                                         tool_calls: vec![],
@@ -349,7 +380,7 @@ message -- revise and call `update_plan` again.\n\n",
                                         &self.messages,
                                         max_tokens,
                                         Some(&tool_defs),
-                                        Box::new(|chunk| print!("{}", chunk)),
+                                        self.continuation_sink(),
                                     )
                                     .await
                                 };
@@ -1203,7 +1234,7 @@ message -- revise and call `update_plan` again.\n\n",
                 &self.messages,
                 max_tokens,
                 Some(&tool_defs),
-                Box::new(|chunk| print!("{}", chunk)),
+                self.continuation_sink(),
             )
             .await
             {
@@ -1224,7 +1255,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 &self.messages,
                                 max_tokens,
                                 Some(&tool_defs),
-                                Box::new(|chunk| print!("{}", chunk)),
+                                self.continuation_sink(),
                             )
                             .await?
                         } else {

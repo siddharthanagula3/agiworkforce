@@ -1051,6 +1051,10 @@ pub async fn run_main() -> Result<()> {
                     .map(|s| s.to_string())
                     .unwrap_or_else(|| "exec".to_string());
                 if cli.json_events {
+                    // Thread json_events mode so continuation/retry/fallback turns
+                    // emit MessageDelta events instead of raw print!.
+                    session.json_events = true;
+                    session.json_session_id = session_id.clone();
                     let sid = session_id.clone();
                     session.on_fallback =
                         Some(agent::FallbackSink(Box::new(move |from, to, kind| {
@@ -2503,6 +2507,15 @@ pub async fn run_oneshot(
     // the managed session object exists.
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
+    }
+    // Thread json_events mode into the session so ALL turns (continuation,
+    // retry, fallback) emit MessageDelta events instead of raw print!.
+    if json_events {
+        session.json_events = true;
+        session.json_session_id = session
+            .managed_session_id()
+            .unwrap_or("exec")
+            .to_string();
     }
     // Wire --max-budget-usd: emit BudgetExhausted only when --json-events is
     // active so stdout is not polluted in text/json-pretty output modes.
