@@ -34,6 +34,12 @@ Retention: Keep for the life of the mission; fold resolved blockers into CHANGEL
 - **Remaining ops/launch task (flag for founder):** provision real SPKI SHA-256 pins for `agiworkforce.com`, `signaling.agiworkforce.com`, `api.agiworkforce.com` (and the BYOK hosts when BYOK ships) before public launch, and mirror them into `app.config.js` `NSPinnedDomains` (iOS) + `network_security_config.xml` (Android). Until then, keep `PINNING_ENFORCED=true` (fail-closed) — do NOT flip to false.
 - **Status:** Code fixed + tested; pin provisioning is a tracked launch task (not blocking app launch or the gate battery).
 
+### B-006 — Mobile waitlist CSRF cookie round-trip not device-verified (A4)
+- **Blocker:** The cloud-managed waitlist route is CSRF-protected, with the token HMAC-bound to an anonymous-session cookie set by `GET /api/csrf`. The mobile client now does the preflight (fetch token → send `x-csrf-token`), but whether the native HTTP stack persists + replays that session cookie on the subsequent POST cannot be verified in CI/unit tests (needs a real device + live server).
+- **Impact:** If the cookie does NOT round-trip on a given platform, `requireCsrfToken` would still reject (token's session ≠ request's session). The unit tests prove the client sends the token; they cannot prove server-side validation succeeds end-to-end.
+- **Workaround/decision:** Shipped the correct, extension-mirroring client fix (RN fetch uses NSURLSession/OkHttp shared cookie stores by default, so it should round-trip). Documented as a device-QA verification item. ALTERNATIVE if it fails on-device: a native-app CSRF exemption on the waitlist route keyed by an app header/attestation (a native app is not CSRF-vulnerable), to be decided with the web owner — do NOT weaken CSRF for browser clients.
+- **Status:** Code shipped + unit-tested (`e01013e54`); end-to-end device verification is a tracked QA task.
+
 ### B-002 — `timeout` command unavailable on macOS shell
 - **Blocker:** GNU `timeout` is not installed; shell `timeout ...` returns "command not found".
 - **Impact:** Cannot time-box shell commands with `timeout`.
