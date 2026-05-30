@@ -317,7 +317,10 @@ impl ComputerUseAction {
             ComputerUseAction::RightClick { x, y } => format!("Right-click at ({}, {})", x, y),
             ComputerUseAction::Type { text, .. } => {
                 let preview = if text.len() > 50 {
-                    format!("{}...", &text[..50])
+                    format!(
+                        "{}...",
+                        &text[..crate::core::agi::floor_char_boundary(text, 50)]
+                    )
                 } else {
                     text.clone()
                 };

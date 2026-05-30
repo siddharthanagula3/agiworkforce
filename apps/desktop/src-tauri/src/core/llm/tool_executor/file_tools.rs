@@ -81,10 +81,12 @@ impl ToolExecutor {
         match fs::read_to_string(&validated_path).await {
             Ok(content) => {
                 let content = if content.len() > FILE_READ_MAX_CHARS {
+                    let safe_end =
+                        crate::core::agi::floor_char_boundary(&content, FILE_READ_MAX_CHARS);
                     format!(
                         "{}\n\n... [truncated to first {} chars out of {}]",
-                        &content[..FILE_READ_MAX_CHARS],
-                        FILE_READ_MAX_CHARS,
+                        &content[..safe_end],
+                        safe_end,
                         content.len()
                     )
                 } else {
@@ -127,10 +129,14 @@ impl ToolExecutor {
                     match pdf_extract_result {
                         Ok(extracted_text) => {
                             let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
+                                let safe_end = crate::core::agi::floor_char_boundary(
+                                    &extracted_text,
+                                    FILE_READ_MAX_CHARS,
+                                );
                                 format!(
                                     "{}\n\n... [truncated to first {} chars out of {}]",
-                                    &extracted_text[..FILE_READ_MAX_CHARS],
-                                    FILE_READ_MAX_CHARS,
+                                    &extracted_text[..safe_end],
+                                    safe_end,
                                     extracted_text.len()
                                 )
                             } else {

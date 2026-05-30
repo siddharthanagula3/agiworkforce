@@ -244,7 +244,7 @@ impl Sandbox {
         }
 
         // Write code to file
-        let script_filename = format!("script_{}.{}", &self.id[..8], runner.extension);
+        let script_filename = format!("script_{}.{}", &self.id[..8], runner.extension); // utf8-safe: uuid hex
         let script_path = self.workspace_path.join(&script_filename);
         std::fs::write(&script_path, &config.code)?;
 

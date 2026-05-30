@@ -537,7 +537,10 @@ impl From<&ToolConfirmationRequest> for ToolConfirmationSummary {
                         Value::String(s) => {
                             // Truncate long strings
                             if s.len() > 50 {
-                                format!("\"{}...\"", &s[..47])
+                                format!(
+                                    "\"{}...\"",
+                                    &s[..crate::core::agi::floor_char_boundary(s, 47)]
+                                )
                             } else {
                                 format!("\"{}\"", s)
                             }

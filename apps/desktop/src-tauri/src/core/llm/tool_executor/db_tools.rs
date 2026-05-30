@@ -200,7 +200,10 @@ impl ToolExecutor {
         // available when troubleshooting without bleeding into default-level
         // log streams. Truncate to 200 chars to bound a misbehaving model.
         let trimmed_query = if query.len() > 200 {
-            format!("{}…", &query[..200])
+            format!(
+                "{}…",
+                &query[..crate::core::agi::floor_char_boundary(query, 200)]
+            )
         } else {
             query.to_string()
         };

@@ -224,7 +224,7 @@ impl ToolResultCache {
             tracing::debug!(
                 "[ToolCache] Cache HIT for tool '{}' (key: {})",
                 tool_name,
-                &cache_key[..16]
+                &cache_key[..16] // utf8-safe: sha256 hex
             );
 
             return Some(result);
@@ -237,7 +237,7 @@ impl ToolResultCache {
         tracing::debug!(
             "[ToolCache] Cache MISS for tool '{}' (key: {})",
             tool_name,
-            &cache_key[..16]
+            &cache_key[..16] // utf8-safe: sha256 hex
         );
 
         None
@@ -295,7 +295,7 @@ impl ToolResultCache {
         tracing::debug!(
             "[ToolCache] Cached result for tool '{}' (key: {}, size: {} bytes, ttl: {}s)",
             tool_name,
-            &cache_key[..16],
+            &cache_key[..16], // utf8-safe: sha256 hex
             size_bytes,
             ttl.as_secs()
         );
@@ -353,7 +353,7 @@ impl ToolResultCache {
 
             tracing::debug!(
                 "[ToolCache] Invalidated cache entry (key: {})",
-                &cache_key[..16]
+                &cache_key[..16] // utf8-safe: sha256 hex
             );
         }
     }

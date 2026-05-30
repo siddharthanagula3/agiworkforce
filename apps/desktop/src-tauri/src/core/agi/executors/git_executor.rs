@@ -847,7 +847,10 @@ impl PrCreationWorkflow {
         prompt.push_str("## Diff Content (truncated)\n```diff\n");
         // Limit diff to avoid token limits
         let diff_preview = if diff_summary.diff_content.len() > 10000 {
-            &diff_summary.diff_content[..10000]
+            &diff_summary.diff_content[..crate::core::agi::floor_char_boundary(
+                &diff_summary.diff_content,
+                10000,
+            )]
         } else {
             &diff_summary.diff_content
         };
@@ -1887,7 +1890,7 @@ impl GitExecutor {
 
         tracing::info!(
             "[GitExecutor] git_commit: Created commit {} with message '{}' in '{}'",
-            &commit_hash[..8],
+            &commit_hash[..8], // utf8-safe: git oid hex
             message,
             canonical_path.display()
         );
@@ -1904,7 +1907,7 @@ impl GitExecutor {
                 .await;
             tracing::debug!(
                 "[GitExecutor] Tracked git commit {} for audit: {}",
-                &commit_hash[..8],
+                &commit_hash[..8], // utf8-safe: git oid hex
                 canonical_path.display()
             );
         }

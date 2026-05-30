@@ -537,7 +537,7 @@ impl TaskDecomposer {
                     "[TaskDecomposer] Cache HIT for goal '{}' (task_id={}, hash={}). Skipping LLM call.",
                     goal.description,
                     cache_key.task_id,
-                    &cache_key.input_content_hash[..16],
+                    &cache_key.input_content_hash[..16], // utf8-safe: sha256 hex
                 );
 
                 let mut graph = DependencyGraph::new();
@@ -563,7 +563,7 @@ impl TaskDecomposer {
             "[TaskDecomposer] Cache MISS for goal '{}' (task_id={}, hash={}). Calling LLM.",
             goal.description,
             cache_key.task_id,
-            &cache_key.input_content_hash[..16],
+            &cache_key.input_content_hash[..16], // utf8-safe: sha256 hex
         );
 
         // Use LLM to analyze and decompose the task
