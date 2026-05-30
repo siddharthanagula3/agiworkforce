@@ -1,52 +1,22 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
-const inputStyle: React.CSSProperties = {
-  background: 'var(--agi-bg-2)',
-  border: '1px solid var(--agi-rule)',
-  color: 'var(--agi-ink)',
-  padding: '10px 14px',
-  borderRadius: 6,
-  fontSize: 14,
-  fontFamily: 'inherit',
-  width: '100%',
-};
-
+/**
+ * /auth/update-password was the Supabase email-link callback for password
+ * reset. The project migrated to Clerk, which uses a code-based reset flow
+ * embedded in the <SignIn> component at /login. This page now redirects
+ * there so no dead form is reachable.
+ */
 export default function UpdatePasswordPage() {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
+  const router = useRouter();
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (password !== confirm) {
-      setMessage({ text: 'Passwords do not match.', type: 'error' });
-      return;
-    }
-    setLoading(true);
-    setMessage(null);
-    try {
-      const res = await fetch('/api/auth/update-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? 'Update failed');
-      }
-      setMessage({ text: 'Password updated. Sign in with the new password.', type: 'info' });
-    } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'Update failed', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }
+  useEffect(() => {
+    router.replace('/login');
+  }, [router]);
 
   return (
     <div data-design="agi">
@@ -56,86 +26,8 @@ export default function UpdatePasswordPage() {
           className="agi-section"
           style={{ borderBottom: 'none', maxWidth: 440, margin: '0 auto' }}
         >
-          <p className="agi-section-eyebrow">Update password</p>
-          <h1 className="agi-page-h1" style={{ marginBottom: 16 }}>
-            New password.
-          </h1>
-          <p className="agi-page-lede" style={{ marginBottom: 24 }}>
-            Set a new account password.{' '}
-            <strong>
-              This does not change your local key-vault master password - that one is unrecoverable
-              by design.
-            </strong>
-          </p>
-          <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: 'var(--agi-ink-quiet)',
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                New password
-              </span>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="new-password"
-                minLength={8}
-                style={inputStyle}
-              />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: 'var(--agi-ink-quiet)',
-                  letterSpacing: '0.04em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                Confirm password
-              </span>
-              <input
-                type="password"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
-                required
-                autoComplete="new-password"
-                minLength={8}
-                style={inputStyle}
-              />
-            </label>
-            {message && (
-              <p
-                style={{
-                  color: message.type === 'error' ? 'var(--agi-error)' : 'var(--agi-amber)',
-                  fontSize: 13,
-                  margin: 0,
-                }}
-              >
-                {message.text}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="agi-cta-primary"
-              style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
-            >
-              {loading ? 'Updating...' : 'Update password'}
-            </button>
-          </form>
-          <p
-            style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}
-          >
-            <Link href="/login" style={{ color: 'var(--agi-ink)' }}>
-              Back to sign in
-            </Link>
+          <p className="agi-page-lede" style={{ textAlign: 'center' }}>
+            Redirecting to sign in...
           </p>
         </section>
         <MarketingFooter />
