@@ -73,11 +73,11 @@ describe('modelStore', () => {
     });
 
     it('adds model to recent models', async () => {
-      // Use gpt-5.4 which is in the pro/max allowed list
-      await useModelStore.getState().selectModel('gpt-5.4', 'openai');
+      // Use gpt-5.5 which is in the max allowed list (flagship tier)
+      await useModelStore.getState().selectModel('gpt-5.5', 'openai');
 
       const state = useModelStore.getState();
-      expect(state.recentModels).toContain('gpt-5.4');
+      expect(state.recentModels).toContain('gpt-5.5');
     });
   });
 
