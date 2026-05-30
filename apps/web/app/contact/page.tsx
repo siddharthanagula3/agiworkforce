@@ -10,28 +10,27 @@ export default function ContactPage() {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     setError(null);
     const form = e.currentTarget;
     const data = new FormData(form);
     try {
-      const res = await fetch('/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: data.get('name'),
-          email: data.get('email'),
-          subject: data.get('subject'),
-          message: data.get('message'),
-        }),
-      });
-      if (!res.ok) throw new Error('Failed to send');
+      const name = String(data.get('name') ?? '').trim();
+      const email = String(data.get('email') ?? '').trim();
+      const subject = String(data.get('subject') ?? '').trim();
+      const message = String(data.get('message') ?? '').trim();
+      const body = `Name: ${name}\nEmail: ${email}\n\n${message}`;
+      const mailto =
+        `mailto:contact@agiworkforce.com` +
+        `?subject=${encodeURIComponent(subject)}` +
+        `&body=${encodeURIComponent(body)}`;
+      window.location.href = mailto;
       setSubmitted(true);
       form.reset();
     } catch {
-      setError('Could not send. Email contact@agiworkforce.com directly.');
+      setError('Could not open mail client. Email contact@agiworkforce.com directly.');
     } finally {
       setPending(false);
     }

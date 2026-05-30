@@ -1,37 +1,45 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
+import { useSignIn } from '@clerk/nextjs';
 import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
-const getAppUrl = () =>
-  process.env['NEXT_PUBLIC_APP_URL'] ||
-  (typeof window !== 'undefined' ? window.location.origin : '');
-
 export default function ForgotPasswordPage() {
-  const appUrl = useMemo(() => getAppUrl(), []);
+  const { signIn } = useSignIn();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!signIn) return;
     setLoading(true);
     setMessage(null);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, redirectTo: `${appUrl}/auth/update-password` }),
-      });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? 'Reset failed');
+      // Clerk v7 signals API: initialize sign-in with identifier, then trigger
+      // the reset_password_email_code flow via the dedicated resetPasswordEmailCode
+      // sub-object. The create() call pins the account; sendCode() dispatches the email.
+      const { error: createError } = await signIn.create({ identifier: email });
+      if (createError) {
+        setMessage({ text: createError.message ?? 'Reset failed', type: 'error' });
+        return;
       }
-      setMessage({ text: 'Reset email sent. Check your inbox.', type: 'info' });
+      const { error: sendError } = await signIn.resetPasswordEmailCode.sendCode();
+      if (sendError) {
+        setMessage({ text: sendError.message ?? 'Reset failed', type: 'error' });
+        return;
+      }
+      setMessage({
+        text: 'Reset code sent. Check your inbox, then sign in at /login to enter the code and set a new password.',
+        type: 'info',
+      });
     } catch (err) {
-      setMessage({ text: err instanceof Error ? err.message : 'Reset failed', type: 'error' });
+      const clerkErr = err as { errors?: Array<{ message?: string }> };
+      const msg =
+        clerkErr?.errors?.[0]?.message ?? (err instanceof Error ? err.message : 'Reset failed');
+      setMessage({ text: msg, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -50,7 +58,7 @@ export default function ForgotPasswordPage() {
             Forgot your password?
           </h1>
           <p className="agi-page-lede" style={{ marginBottom: 28 }}>
-            We&rsquo;ll email you a link to reset it.{' '}
+            We&rsquo;ll email you a reset code.{' '}
             <strong>
               Note: this resets your account password. Your local key-vault master password is
               separate and unrecoverable by design.
@@ -99,11 +107,11 @@ export default function ForgotPasswordPage() {
             )}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !signIn}
               className="agi-cta-primary"
               style={{ border: 'none', cursor: 'pointer', textAlign: 'center' }}
             >
-              {loading ? 'Sending...' : 'Send reset link'}
+              {loading ? 'Sending...' : 'Send reset code'}
             </button>
           </form>
           <p
