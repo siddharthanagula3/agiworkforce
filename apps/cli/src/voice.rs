@@ -72,19 +72,28 @@ const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
 /// # Privacy gate
 ///
 /// When the active session is `Local`, audio is NEVER sent to the OpenAI cloud
-/// Whisper API unless the caller explicitly sets `voice_cloud_opt_in = true`.
+/// Whisper API unless the user has explicitly opted in by setting the
+/// environment variable `AGIWORKFORCE_VOICE_ALLOW_CLOUD=1`.
+///
 /// This implements the hard-lock rule: "Never silently route Local audio to
-/// cloud without an explicit gate."  With `Local` mode and `opt_in = false` the
-/// OpenAI backend is suppressed entirely; if no local whisper binary is on PATH
-/// either, voice mode exits with a clear message directing the user to install
-/// one or explicitly opt in.
+/// cloud without an explicit gate."  The opt-in is read inside this function
+/// so the gate cannot be bypassed by the caller.  With `Local` mode and no
+/// opt-in the OpenAI backend is suppressed entirely; if no local whisper
+/// binary is on PATH either, voice mode exits with a clear message directing
+/// the user to install one or explicitly opt in.
 pub async fn run_voice_mode(
     session: &mut AgentSession,
     config: &CliConfig,
     voice_lang: &str,
-    voice_cloud_opt_in: bool,
 ) -> Result<()> {
     let privacy_mode = session.privacy_mode.clone();
+
+    // Read the cloud opt-in from the environment.  This must NOT be a
+    // function parameter — keeping the decision here prevents callers from
+    // accidentally widening the gate.
+    let voice_cloud_opt_in = std::env::var("AGIWORKFORCE_VOICE_ALLOW_CLOUD")
+        .map(|v| v.trim() == "1")
+        .unwrap_or(false);
     // Validate language
     if !SUPPORTED_LANGUAGES
         .iter()
@@ -1031,6 +1040,66 @@ mod tests {
             result.is_ok(),
             "gate_cloud_egress must pass TranscriptionBackend::None (nothing to egress)"
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // transcribe — the call path invariant
+    //
+    // These tests verify that the gate is actually consulted inside transcribe()
+    // itself, not just in the pure predicate.  Deleting the gate_cloud_egress
+    // call from transcribe() must break this test.
+    // -----------------------------------------------------------------------
+
+    /// INVARIANT (call-path): A Local session never REACHES the cloud
+    /// transcription call — transcribe() returns Err before encode_wav/network.
+    #[tokio::test]
+    async fn transcribe_blocks_local_cloud_before_any_io() {
+        // A zero-sample recording is fine — the gate fires before encode_wav.
+        let recording = AudioRecording { samples: vec![] };
+        let result = transcribe(
+            &TranscriptionBackend::OpenAiApi,
+            &recording,
+            "en",
+            &PrivacyMode::Local,
+            false, // opt_in = false
+        )
+        .await;
+        assert!(
+            result.is_err(),
+            "transcribe() must refuse to proceed when backend=OpenAiApi, mode=Local, opt_in=false"
+        );
+        let msg = format!("{:#}", result.unwrap_err());
+        assert!(
+            msg.contains("Privacy boundary blocked"),
+            "transcribe() error must cite the privacy boundary; got: {msg}"
+        );
+    }
+
+    /// Confirm transcribe() would succeed for Local + local binary (no egress).
+    /// We don't exercise the full path (binary not on PATH in CI), but we
+    /// confirm gate_cloud_egress is not blocking a LocalBinary backend.
+    #[tokio::test]
+    async fn transcribe_gate_passes_for_local_binary() {
+        let recording = AudioRecording { samples: vec![0i16; 10] };
+        // Use a path that doesn't exist — we only care that the gate does NOT
+        // block (it will fail later at the subprocess call, not at the gate).
+        let result = transcribe(
+            &TranscriptionBackend::LocalBinary(PathBuf::from("/nonexistent/whisper")),
+            &recording,
+            "en",
+            &PrivacyMode::Local,
+            false,
+        )
+        .await;
+        // The gate must NOT fire — any error here should be from encode_wav or
+        // the subprocess, not from Privacy boundary blocked.
+        if let Err(ref e) = result {
+            let msg = format!("{:#}", e);
+            assert!(
+                !msg.contains("Privacy boundary blocked"),
+                "transcribe() must not cite privacy boundary for LocalBinary backend; got: {msg}"
+            );
+        }
     }
 
     // -----------------------------------------------------------------------

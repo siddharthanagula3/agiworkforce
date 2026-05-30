@@ -106,4 +106,5 @@ windows-appcontainer = []
 # specific capability is needed in the future, port from reference/codex-cli/ as needed.
 
 [dev-dependencies]
+assert_cmd = "2.2.2"
 insta = "1"
