@@ -10,6 +10,22 @@ interface CsrfTokenResponse {
   expiresIn: number; // milliseconds
 }
 
+/**
+ * Typed error thrown when /api/csrf returns a non-ok HTTP response.
+ * Carries the HTTP `status` code so callers can distinguish e.g. 429
+ * rate-limit responses from true network failures without breaking
+ * callers that only use `instanceof Error` or `.message`.
+ */
+export class CsrfTokenError extends Error {
+  readonly status: number;
+
+  constructor(status: number, statusText: string) {
+    super(`Failed to fetch CSRF token: ${statusText}`);
+    this.name = 'CsrfTokenError';
+    this.status = status;
+  }
+}
+
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
 
@@ -25,7 +41,7 @@ async function fetchCsrfToken(): Promise<string> {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch CSRF token: ${response.statusText}`);
+    throw new CsrfTokenError(response.status, response.statusText);
   }
 
   const data: CsrfTokenResponse = await response.json();
