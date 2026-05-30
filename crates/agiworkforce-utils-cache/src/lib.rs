@@ -123,8 +123,21 @@ fn lock_if_runtime<K, V>(m: &Mutex<LruCache<K, V>>) -> Option<MutexGuard<'_, Lru
 where
     K: Eq + Hash,
 {
-    tokio::runtime::Handle::try_current().ok()?;
-    Some(tokio::task::block_in_place(|| m.blocking_lock()))
+    // `block_in_place` panics on a current-thread runtime (it has no other
+    // worker thread to hand work off to), and `blocking_lock` itself panics
+    // when called from within an async context on any flavor. So branch on the
+    // runtime flavor: on the multi-threaded runtime keep the faithful blocking
+    // path; on a current-thread runtime (or any future flavor) take a
+    // non-blocking `try_lock`. The guard is never held across an `.await` here,
+    // so an uncontended single-thread lock always succeeds and semantics are
+    // preserved without risking a panic.
+    let handle = tokio::runtime::Handle::try_current().ok()?;
+    match handle.runtime_flavor() {
+        tokio::runtime::RuntimeFlavor::MultiThread => {
+            Some(tokio::task::block_in_place(|| m.blocking_lock()))
+        }
+        _ => m.try_lock().ok(),
+    }
 }
 
 /// Computes the SHA-1 digest of `bytes`.
@@ -167,6 +180,40 @@ mod tests {
         assert!(cache.get(&"b").is_none());
         assert_eq!(cache.get(&"a"), Some(1));
         assert_eq!(cache.get(&"c"), Some(3));
+    }
+
+    // Regression test for P1-CACHE-PANIC: on a current-thread runtime the old
+    // `block_in_place(|| m.blocking_lock())` path panicked with "can call
+    // blocking only when running on the multi-threaded runtime". This test
+    // exercises the cache under a current_thread runtime and asserts both that
+    // it does not panic AND that the cache actually functions (a real HIT), so
+    // a "disable-on-current-thread" facade cannot pass it.
+    #[tokio::test(flavor = "current_thread")]
+    async fn works_on_current_thread_runtime() {
+        let cache = BlockingLruCache::new(NonZeroUsize::new(2).expect("capacity"));
+
+        // Would panic on the old implementation; must succeed now.
+        assert!(cache.get(&"first").is_none());
+        cache.insert("first", 1);
+        // Real cache hit — proves the cache is enabled, not silently disabled.
+        assert_eq!(cache.get(&"first"), Some(1));
+
+        // Exercise the insert-with paths under current_thread too.
+        assert_eq!(cache.get_or_insert_with("second", || 2), 2);
+        assert_eq!(cache.get(&"second"), Some(2));
+        assert_eq!(cache.get_or_insert_with("second", || 99), 2);
+
+        let computed = cache
+            .get_or_try_insert_with::<()>("third", || Ok(3))
+            .expect("factory ok");
+        assert_eq!(computed, 3);
+        assert_eq!(cache.get(&"third"), Some(3));
+
+        // Eviction still works (capacity 2): "first" should have been pushed out.
+        assert!(cache.get(&"first").is_none());
+
+        assert_eq!(cache.remove(&"second"), Some(2));
+        assert!(cache.blocking_lock().is_some());
     }
 
     #[test]

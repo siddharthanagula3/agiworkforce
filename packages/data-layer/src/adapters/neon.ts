@@ -35,10 +35,14 @@
  *   USING (user_id::text = current_setting('request.jwt.claim.sub', true));
  * ```
  *
- * The JWT itself is NOT verified here — that's the AuthAdapter's job. We
- * only decode the `sub` claim (base64url-decode the middle segment, parse
- * JSON, read `.sub`). If verification matters for your security model, do
- * it before calling `withUser(jwt)`.
+ * SECURITY: `withUser(jwt)` does NOT verify the JWT signature — it only
+ * base64url-decodes the middle segment and reads `.sub`. Binding an
+ * unverified `sub` to RLS is an impersonation footgun, so `withUser()` is
+ * DEFAULT-DENY: it throws unless the adapter is constructed with
+ * `unsafeAllowUnverifiedJwtSubject: true`. Verify the token upstream
+ * (Clerk `verifyToken` / `ClerkAuthAdapter.verifyJwt`) BEFORE opting in.
+ * The live web gateway never calls this path; it derives identity from
+ * Clerk `auth()` directly.
  *
  * ## Connection pooling
  *
@@ -79,6 +83,9 @@ export const MIGRATION_GUIDE = `
 
 3. Verify Clerk session tokens before calling db.withUser(jwt). The GUC
    binding (set local request.jwt.claim.sub) drives your RLS policies.
+   withUser() is default-deny: it THROWS unless the adapter was constructed
+   with { unsafeAllowUnverifiedJwtSubject: true }, which acknowledges you
+   have already signature-verified the token upstream.
 
 4. Flip env vars (no code change required):
      AGI_DATABASE_PROVIDER=neon
@@ -117,9 +124,15 @@ async function loadNeon(): Promise<NeonModule> {
 
 /**
  * Decode the `sub` claim from a JWT WITHOUT verifying its signature.
- * Verification belongs in the AuthAdapter — by the time we get here the
- * caller has already proven the JWT is good. We just need the subject to
- * bind it as a session GUC for RLS.
+ *
+ * @internal SECURITY: this trusts an UNVERIFIED token. An attacker who can
+ * reach a caller that forwards a self-minted JWT here controls the `sub`
+ * that drives RLS — i.e. impersonation. It is ONLY safe when the caller has
+ * already verified the signature (e.g. via {@link ClerkAuthAdapter.verifyJwt}
+ * / Clerk `verifyToken`) BEFORE handing the token to `withUser`. Because
+ * that precondition is invisible from here, `withUser` is default-deny: it
+ * refuses to call this unless the adapter was explicitly constructed with
+ * `unsafeAllowUnverifiedJwtSubject: true`. Do not export this helper.
  *
  * Throws if the JWT is malformed (wrong segment count, non-JSON middle,
  * missing/non-string `sub`). Throwing surfaces operator config bugs early
@@ -182,6 +195,23 @@ export interface NeonDatabaseAdapterConfig extends DatabaseConnectionConfig {
    * so a per-request adapter doesn't open a new TCP-WebSocket per call.
    */
   poolPromise?: Promise<Pool>;
+  /**
+   * Opt in to the UNVERIFIED-JWT escape hatch.
+   *
+   * @internal SECURITY DEFAULT-DENY. `withUser(jwt)` decodes the `sub` claim
+   * of the supplied token WITHOUT verifying its signature and binds it as the
+   * RLS subject. If a caller forwards an attacker-minted JWT, the attacker
+   * picks the `sub` and impersonates any user. So `withUser()` THROWS unless
+   * this flag is explicitly set to `true`, forcing the integrator to
+   * acknowledge that the token has already been signature-verified upstream
+   * (Clerk `verifyToken` / {@link ClerkAuthAdapter}) before it reaches here.
+   *
+   * The live web gateway never sets this — it derives identity from Clerk
+   * `auth()` directly and never calls `withUser`. Leave it unset unless you
+   * are wiring a verified-token-only path and have proven the verification
+   * happens first.
+   */
+  unsafeAllowUnverifiedJwtSubject?: boolean;
 }
 
 /**
@@ -332,14 +362,34 @@ export class NeonDatabaseAdapter implements DatabaseAdapter {
    * scope. Subsequent `query()` / `execute()` / `transaction()` calls run
    * `SET LOCAL request.jwt.claim.sub = $1` so RLS policies see the user.
    *
-   * The JWT signature is NOT verified here — that's the AuthAdapter's job.
-   * This method only decodes the `sub` claim.
-   *
    * The returned adapter shares the parent's pool — calling `dispose()` on
    * it only unbinds the per-instance state. The pool lifetime is owned by
    * the root adapter that constructed it.
+   *
+   * @internal SECURITY: the JWT signature is NOT verified here — this method
+   * only decodes the `sub` claim. Decoding an unverified token and binding
+   * its `sub` to RLS is an impersonation footgun, so this method is
+   * DEFAULT-DENY: it throws unless the adapter was constructed with
+   * `unsafeAllowUnverifiedJwtSubject: true`. The integrator MUST verify the
+   * token's signature upstream (Clerk `verifyToken` / {@link ClerkAuthAdapter})
+   * before opting in. The live web gateway never calls this path; it derives
+   * identity from Clerk `auth()` directly.
+   *
+   * @throws DataLayerConfigError when the opt-in flag is not set, or when the
+   * JWT is malformed (handled by {@link decodeJwtSub}).
    */
   withUser(jwt: string): DatabaseAdapter {
+    if (this.config.unsafeAllowUnverifiedJwtSubject !== true) {
+      throw new DataLayerConfigError(
+        'NeonDatabaseAdapter.withUser() decodes an UNVERIFIED JWT `sub` and binds it ' +
+          'as the RLS subject — forwarding an attacker-minted token here is an ' +
+          'impersonation footgun. Verify the token signature upstream (Clerk ' +
+          'verifyToken / ClerkAuthAdapter.verifyJwt) FIRST, then construct the ' +
+          'adapter with { unsafeAllowUnverifiedJwtSubject: true } to acknowledge ' +
+          'that precondition. The live web gateway derives identity from Clerk ' +
+          'auth() directly and must not use this path.',
+      );
+    }
     const sub = decodeJwtSub(jwt);
     // Hand the parent's pool promise down so the child re-uses the same
     // pool instead of constructing a new TCP/WebSocket connection.
