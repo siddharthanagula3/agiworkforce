@@ -10,7 +10,7 @@
  *   2. Mock react-native-executorch-expo-resource-fetcher to provide a sentinel.
  *   3. Mock expo-router/entry (heavy native dep — not needed for this assertion).
  *   4. Mock ./polyfills (also native).
- *   5. require('apps/mobile/index.js') and assert initExecutorch was called
+ *   5. load the apps/mobile entry point and assert initExecutorch was called
  *      with the Expo fetcher sentinel as resourceFetcher.
  *
  * This test FAILS without the fix (initExecutorch never called) and PASSES with it.
