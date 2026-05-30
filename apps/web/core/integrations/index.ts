@@ -111,12 +111,6 @@ export {
 
 // Marketing Endpoints
 export {
-  // Contact Form
-  submitContactForm,
-  type ContactFormData,
-  // Newsletter
-  subscribeToNewsletter,
-  type NewsletterData,
   // Blog
   getBlogPosts,
   getBlogCategories,
@@ -124,7 +118,6 @@ export {
   type BlogPostsParams,
   // Resources
   getResources,
-  trackResourceDownload,
   type Resource,
   // Pricing
   getPricingPlans,

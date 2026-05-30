@@ -4,6 +4,13 @@ import { useState } from 'react';
 import { AlertTriangle, Zap, CreditCard, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { buyTokenPack } from '@features/billing/services/token-pack-purchase';
+
+// Cloud/billing is waitlist-gated. Set NEXT_PUBLIC_CHECKOUT_ENABLED=true in env
+// to open live checkout for invite-only beta (mirrors server AGI_MANAGED_CREDITS_PRIVATE_BETA).
+// Defaults to off so free users are routed to the waitlist, not a live purchase flow.
+const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
 
 export interface CreditAlertModalProps {
   isOpen: boolean;
@@ -25,6 +32,7 @@ export function CreditAlertModal({
   percentageUsed,
 }: CreditAlertModalProps) {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
@@ -38,36 +46,35 @@ export function CreditAlertModal({
   };
 
   const handleBuyTopUp = async () => {
+    // Gate top-up behind the managed-credits waitlist.
+    // When checkout is not enabled, redirect to the waitlist instead of hitting
+    // a live Stripe flow. The old raw fetch also had no CSRF header (403) and
+    // a hardcoded amount_cents -- replaced by the proper buyTokenPack service.
+    if (!CHECKOUT_ENABLED) {
+      router.push('/pricing#waitlist');
+      onClose();
+      return;
+    }
+
+    if (!user) {
+      router.push('/pricing');
+      onClose();
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch('/api/credit-topup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount_cents: 10000 }), // $100 top-up
+      // Route through the authenticated buyTokenPack service (CSRF, auth, error
+      // reporting) instead of the old bare fetch with no CSRF header.
+      // $100 / 10000-credit top-up is the single pack offered from this modal.
+      await buyTokenPack({
+        userId: user.id,
+        userEmail: user.email ?? '',
+        packId: 'topup-10000',
+        tokens: 10000,
+        price: 100,
       });
-
-      const data = (await res.json().catch(() => null)) as {
-        url?: string | null;
-        error?: string | { message?: string };
-      } | null;
-
-      if (!res.ok) {
-        const message =
-          typeof data?.error === 'string'
-            ? data.error
-            : data?.error && typeof data.error === 'object'
-              ? data.error.message
-              : null;
-        throw new Error(message || 'Failed to create checkout');
-      }
-
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL returned');
-      }
     } catch (error) {
-      console.error('Top-up error:', error);
       alert(error instanceof Error ? error.message : 'Failed to initiate top-up');
     } finally {
       setLoading(false);

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useVoiceInputStore } from './voice-input-store';
+import { useVoiceInputStore, _resetRuntimeRefs } from './voice-input-store';
 
 // ─── Mock SpeechRecognition ───────────────────────────────────────────────────
 
@@ -328,6 +328,77 @@ describe('voiceInputStore', () => {
 
       expect(useVoiceInputStore.getState().mode).toBe('error');
       expect(useVoiceInputStore.getState().error).toContain('microphone');
+    });
+  });
+
+  // ── transcribeViaServer posts to /api/voice/transcribe ────────────────────
+
+  describe('transcribeViaServer — correct endpoint URL', () => {
+    let mockStream: MediaStream;
+
+    beforeEach(() => {
+      // Reset module-level runtime refs so rt.recognition from any prior Web
+      // Speech test does not cause stopListening to take Path A instead of B.
+      _resetRuntimeRefs();
+
+      // Disable Web Speech API so the MediaRecorder (server-transcription) path is taken.
+      Object.defineProperty(window, 'SpeechRecognition', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      Object.defineProperty(window, 'webkitSpeechRecognition', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+
+      currentMockRecorder = new MockMediaRecorder();
+      Object.defineProperty(window, 'MediaRecorder', {
+        value: MediaRecorderCtor,
+        writable: true,
+        configurable: true,
+      });
+
+      mockStream = {
+        getTracks: vi.fn().mockReturnValue([{ stop: vi.fn() }]),
+      } as unknown as MediaStream;
+
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { getUserMedia: vi.fn().mockResolvedValue(mockStream) },
+        writable: true,
+        configurable: true,
+      });
+
+      useVoiceInputStore.setState({ mode: 'idle', preferServerTranscription: false });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(window, 'MediaRecorder', {
+        value: undefined,
+        writable: true,
+        configurable: true,
+      });
+      vi.unstubAllGlobals();
+    });
+
+    it('POSTs to /api/voice/transcribe (not /api/voice/transcriptions)', async () => {
+      const fetchMock = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ text: 'hello' }),
+        text: async () => '',
+      });
+      vi.stubGlobal('fetch', fetchMock);
+
+      await useVoiceInputStore.getState().startListening();
+      await useVoiceInputStore.getState().stopListening();
+
+      // fetch must have been called at least once (the transcription request)
+      expect(fetchMock).toHaveBeenCalled();
+      // The first positional argument of the first call must be the correct route.
+      // Non-null assertion is safe: the toHaveBeenCalled() above guarantees calls[0] exists.
+
+      expect(fetchMock.mock.calls[0]![0]).toBe('/api/voice/transcribe');
     });
   });
 

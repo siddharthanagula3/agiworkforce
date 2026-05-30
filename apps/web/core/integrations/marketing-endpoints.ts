@@ -4,66 +4,6 @@
 const API_BASE = '';
 
 // ============================================================================
-// CONTACT FORM
-// ============================================================================
-
-export interface ContactFormData {
-  firstName: string;
-  lastName: string;
-  email: string;
-  company: string;
-  phone?: string;
-  companySize?: string;
-  message: string;
-  source?: string;
-}
-
-export async function submitContactForm(data: ContactFormData) {
-  const response = await fetch(`${API_BASE}/api/contact`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to submit contact form');
-  }
-
-  return response.json();
-}
-
-// ============================================================================
-// NEWSLETTER
-// ============================================================================
-
-export interface NewsletterData {
-  email: string;
-  name?: string;
-  source?: string;
-  tags?: string[];
-}
-
-export async function subscribeToNewsletter(data: NewsletterData) {
-  const response = await fetch(`${API_BASE}/api/newsletter/subscribe`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to subscribe to newsletter');
-  }
-
-  return response.json();
-}
-
-// ============================================================================
 // BLOG POSTS
 // ============================================================================
 
@@ -141,23 +81,6 @@ export async function getResources(type?: string) {
   // TODO: implement via /api/resources once route is available.
   void type;
   return [] as Resource[];
-}
-
-export async function trackResourceDownload(resourceId: string, userEmail?: string) {
-  const response = await fetch(`${API_BASE}/api/resources/download`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ resourceId, userEmail }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to track download');
-  }
-
-  return response.json();
 }
 
 // ============================================================================

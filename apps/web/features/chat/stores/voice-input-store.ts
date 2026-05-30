@@ -4,7 +4,7 @@
  * Manages recording lifecycle (idle → listening → transcribing → idle),
  * accumulates transcript text, and provides a transcribe() action that
  * first tries the Web Speech API (SpeechRecognition) and falls back to
- * the /api/voice/transcriptions server endpoint when unavailable.
+ * the /api/voice/transcribe server endpoint when unavailable.
  *
  * Non-persisted runtime state (mediaStream, recorder chunks) lives only
  * in refs inside the actions; only user preferences (language, fallback
@@ -29,7 +29,7 @@ export interface VoiceInputState {
   language: string;
   /**
    * When true, skip the Web Speech API even if available and go straight
-   * to the /api/voice/transcriptions server endpoint.
+   * to the /api/voice/transcribe server endpoint.
    */
   preferServerTranscription: boolean;
 }
@@ -90,6 +90,20 @@ const rt: RuntimeRefs = {
   stopResolve: null,
 };
 
+/**
+ * Reset all module-level runtime refs to their initial state.
+ * Exported for test isolation only — do not call in production code.
+ *
+ * @internal
+ */
+export function _resetRuntimeRefs(): void {
+  rt.mediaStream = null;
+  rt.mediaRecorder = null;
+  rt.audioChunks = [];
+  rt.recognition = null;
+  rt.stopResolve = null;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getSpeechRecognitionCtor(): SpeechRecognitionConstructor | null {
@@ -113,7 +127,7 @@ function getBestMimeType(): string {
   return '';
 }
 
-/** POST audio blob to /api/voice/transcriptions and return the transcript text. */
+/** POST audio blob to /api/voice/transcribe and return the transcript text. */
 async function transcribeViaServer(blob: Blob, language: string): Promise<string> {
   const form = new FormData();
   const ext = blob.type.includes('mp4') ? 'mp4' : 'webm';
@@ -121,7 +135,7 @@ async function transcribeViaServer(blob: Blob, language: string): Promise<string
   form.append('model', 'whisper-1');
   if (language) form.append('language', language);
 
-  const response = await fetch('/api/voice/transcriptions', {
+  const response = await fetch('/api/voice/transcribe', {
     method: 'POST',
     body: form,
   });
