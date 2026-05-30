@@ -251,7 +251,9 @@ pub fn truncate(s: &str, max: usize) -> String {
     if s.len() <= max {
         s.to_string()
     } else {
-        format!("{}...", &s[..max.saturating_sub(3)])
+        // Use floor_char_boundary so a multibyte char straddling the cut never panics.
+        let cut = crate::core::agi::floor_char_boundary(s, max.saturating_sub(3));
+        format!("{}...", &s[..cut])
     }
 }
 

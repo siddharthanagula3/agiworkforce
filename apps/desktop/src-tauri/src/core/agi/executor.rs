@@ -373,7 +373,7 @@ impl AGIExecutor {
         context: &ExecutionContext,
     ) -> Result<serde_json::Value> {
         let session_id = uuid::Uuid::new_v4().to_string();
-        let tool_id = format!("{}_{}", tool_name, &session_id[..8]);
+        let tool_id = format!("{}_{}", tool_name, &session_id[..8]); // utf8-safe: uuid hex
         let start_time = std::time::Instant::now();
 
         // Emit tool stream started event

@@ -324,7 +324,10 @@ impl HookContext {
     pub fn with_prompt(mut self, prompt: impl Into<String>) -> Self {
         let prompt_str = prompt.into();
         self.prompt = Some(if prompt_str.len() > 500 {
-            format!("{}...", &prompt_str[..497])
+            format!(
+                "{}...",
+                &prompt_str[..crate::core::agi::floor_char_boundary(&prompt_str, 497)]
+            )
         } else {
             prompt_str
         });

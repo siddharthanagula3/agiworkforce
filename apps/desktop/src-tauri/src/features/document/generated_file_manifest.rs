@@ -182,7 +182,7 @@ fn build_generated_document_manifest_with_root(
         .to_string();
     let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
     let identity_hash = sha256_hex(format!("{file_uri}:{checksum_sha256}:{now}").as_bytes());
-    let identity_short = &identity_hash[..16];
+    let identity_short = &identity_hash[..16]; // utf8-safe: sha256 hex
     let compute_session_id = format!("local-compute-session-{identity_short}");
     let generated_file_id = format!("generated-file-{identity_short}");
     let artifact_id = format!("artifact-{identity_short}");

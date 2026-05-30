@@ -182,10 +182,12 @@ impl CodeGenerator {
             }
 
             let truncated_content = if content.len() > 2000 {
+                let safe_end =
+                    crate::core::agi::floor_char_boundary(content, 2000);
                 format!(
                     "{}...\n[truncated {} chars]",
-                    &content[..2000],
-                    content.len() - 2000
+                    &content[..safe_end],
+                    content.len() - safe_end
                 )
             } else {
                 content.clone()
@@ -352,10 +354,12 @@ impl CodeGenerator {
                 break;
             }
             let truncated_content = if content.len() > 2000 {
+                let safe_end =
+                    crate::core::agi::floor_char_boundary(content, 2000);
                 format!(
                     "{}...\n[truncated {} chars]",
-                    &content[..2000],
-                    content.len() - 2000
+                    &content[..safe_end],
+                    content.len() - safe_end
                 )
             } else {
                 content.clone()
