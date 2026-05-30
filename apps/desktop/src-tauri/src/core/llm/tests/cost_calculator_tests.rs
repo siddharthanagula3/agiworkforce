@@ -221,11 +221,11 @@ mod tests {
     #[test]
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.4: $2.50/M input, $15.00/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4", 1_000_000, 1_000_000);
+        // gpt-5.5: $5.00/M input, $30.00/M output (gpt-5.4 removed from catalog 2026-05-29)
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.5", 1_000_000, 1_000_000);
         assert!(
-            (cost - 17.50).abs() < 1e-9,
-            "Expected $17.50 for gpt-5.4 1M+1M tokens, got ${}",
+            (cost - 35.00).abs() < 1e-9,
+            "Expected $35.00 for gpt-5.5 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -233,11 +233,12 @@ mod tests {
     #[test]
     fn test_openai_gpt5_nano_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.4-nano: $0.20/M input, $1.25/M output
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 0);
+        // gpt-5.4-mini: $0.75/M input, $4.50/M output
+        // (gpt-5.4-nano aliased to gpt-5.4-mini in catalog canonicalization)
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-mini", 1_000_000, 0);
         assert!(
-            (cost - 0.20).abs() < 1e-9,
-            "Expected $0.20 for gpt-5.4-nano 1M input only, got ${}",
+            (cost - 0.75).abs() < 1e-9,
+            "Expected $0.75 for gpt-5.4-mini 1M input only, got ${}",
             cost
         );
     }
@@ -389,11 +390,11 @@ mod tests {
     #[test]
     fn test_qwen_max_cost() {
         let calc = CostCalculator::new();
-        // qwen-max: $1.20/M input, $6.00/M output
+        // qwen-max: $1.60/M input, $6.40/M output
         let cost = calc.calculate(Provider::Qwen, "qwen-max", 1_000_000, 1_000_000);
         assert!(
-            (cost - 7.20).abs() < 1e-9,
-            "Expected $7.20 for qwen-max 1M+1M tokens, got ${}",
+            (cost - 8.00).abs() < 1e-9,
+            "Expected $8.00 for qwen-max 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -401,11 +402,11 @@ mod tests {
     #[test]
     fn test_moonshot_kimi_k2_6_cost() {
         let calc = CostCalculator::new();
-        // kimi-k2.6: $0.60/M input, $2.50/M output (kimi-k2.5 EOL 2026-05-25; alias maps to k2.6)
+        // kimi-k2.6: $0.95/M input, $4.00/M output
         let cost = calc.calculate(Provider::Moonshot, "kimi-k2.6", 1_000_000, 1_000_000);
         assert!(
-            (cost - 3.10).abs() < 1e-9,
-            "Expected $3.10 for kimi-k2.6 1M+1M tokens, got ${}",
+            (cost - 4.95).abs() < 1e-9,
+            "Expected $4.95 for kimi-k2.6 1M+1M tokens, got ${}",
             cost
         );
     }

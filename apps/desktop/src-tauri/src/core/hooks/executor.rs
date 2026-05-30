@@ -330,8 +330,7 @@ impl HookExecutor {
             let config = self.config.read();
             config
                 .get_matching_hooks(context.event, tool_name)?
-                .into_iter()
-                .map(|h| h.clone())
+                .into_iter().cloned()
                 .collect::<Vec<_>>()
         };
 
@@ -410,17 +409,10 @@ impl HookExecutor {
 
         let results = futures::future::join_all(futures).await;
 
-        // Collect results, logging any errors but not failing
-        Ok(results
-            .into_iter()
-            .filter_map(|r| match r {
-                Ok(result) => Some(result),
-                Err(e) => {
-                    tracing::warn!("Hook execution error: {}", e);
-                    None
-                }
-            })
-            .collect())
+        // Propagate hard errors (Timeout, InvalidWorkingDirectory, semaphore, spawn).
+        // Soft failures (exit code ≠ 0) come back as Ok(success:false) and are not Err,
+        // so non-blocking fire-and-forget semantics are preserved for command failures.
+        results.into_iter().collect()
     }
 
     /// Execute a single hook command.

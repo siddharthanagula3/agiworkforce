@@ -62,6 +62,8 @@ mod tests {
 
     #[test]
     fn test_openai_adapter_responses_api_gpt5() {
+        // Uses gpt-5.5 (catalog reasoning model with thinking support).
+        // gpt-5.4 was removed from models.json as of 2026-05-29.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -72,7 +74,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4".to_string(),
+            model: "gpt-5.5".to_string(),
             temperature: Some(0.3),
             max_tokens: Some(2000),
             stream: false,
@@ -99,7 +101,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.4");
+        assert_eq!(adapted["model"], "gpt-5.5");
         assert_eq!(adapted["input"], "Explain quantum computing");
         assert_eq!(adapted["instructions"], "You are a helpful assistant.");
         assert_eq!(adapted["reasoning"]["effort"], "medium");
@@ -107,6 +109,8 @@ mod tests {
 
     #[test]
     fn test_openai_adapter_reasoning_model_with_budget() {
+        // Uses gpt-5.5 (catalog reasoning model with thinking support).
+        // "o3" was removed from models.json as of 2026-05-29.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -117,7 +121,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "o3".to_string(),
+            model: "gpt-5.5".to_string(),
             temperature: Some(1.0),
             max_tokens: Some(4000),
             stream: false,
@@ -147,7 +151,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "o3");
+        assert_eq!(adapted["model"], "gpt-5.5");
         assert_eq!(adapted["reasoning"]["effort"], "high"); // 8000 tokens = high effort
     }
 
