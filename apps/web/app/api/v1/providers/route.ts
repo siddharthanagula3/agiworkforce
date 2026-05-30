@@ -4,6 +4,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { getEnv } from '@/utils/env';
 import { withRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/v1/providers — proxy to api-gateway provider availability list.
@@ -12,12 +13,29 @@ import { withRateLimit } from '@/lib/rate-limit';
  * inject the gateway auth token without exposing it to the browser.
  *
  * Sprint S8 (web app integration with the OpenClaw-port adapters).
+ *
+ * Security: API_GATEWAY_URL is validated against https scheme in production
+ * (mirrors the guard in [providerId]/stream/route.ts lines 131-142).
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
+
+  // Validate gateway URL — production must use https, not localhost or plain http.
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const parsed = new URL(gatewayUrl);
+      if (parsed.protocol !== 'https:') {
+        logger.error({ gatewayUrl }, 'API_GATEWAY_URL must use https in production');
+        return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+    }
+  }
+
   const authHeader = request.headers.get('authorization') ?? '';
 
   const res = await fetch(`${gatewayUrl}/api/v1/providers`, {
