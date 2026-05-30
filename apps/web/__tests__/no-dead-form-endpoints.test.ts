@@ -47,14 +47,14 @@ describe('no dead form endpoints — guard', () => {
     expect(src).toContain('window.location.href');
   });
 
-  it('/forgot-password page uses Clerk useSignIn (no server proxy)', () => {
+  it('/forgot-password page does not call a dead server route and redirects to /login', () => {
     const src = readPage('app/forgot-password/page.tsx');
-    // Must import Clerk hook
-    expect(src).toContain('useSignIn');
-    // Must call Clerk strategy
-    expect(src).toContain('reset_password_email_code');
-    // Must not call the missing backend route
-    expect(src).not.toContain('/api/auth/forgot-password');
+    // Must redirect to /login (Clerk <SignIn> owns the full reset flow there)
+    expect(src).toContain('/login');
+    // Must not fetch to the missing backend route (comments are ok, fetch calls are not)
+    expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\/auth\/forgot-password['"`]/);
+    // Must not contain any fetch to any api route
+    expect(src).not.toMatch(/fetch\s*\(\s*['"`]\/api\//);
   });
 
   it('/auth/update-password page redirects to /login (no dead fetch)', () => {
