@@ -68,9 +68,9 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    // P0-G (Wave 1): RLS-bound client minted per-request from req.user.userId.
-    // Replaces the old service-role singleton which bypassed RLS — a
-    // missing-filter regression here would have leaked across tenants.
+    // P1-GW-RLS: getUserScopedClient returns the service-role client (no DB-level
+    // RLS — see lib/neonClients.ts). Tenant isolation rests SOLELY on the
+    // explicit user filter passed into the RPC below; there is no RLS backstop.
     const userDb = getUserScopedClient(user.userId);
     const { data, error } = await userDb.rpc('get_credit_balance', {
       p_user_id: user.userId,
@@ -131,7 +131,8 @@ router.post('/check', createRateLimiter('credits-check'), async (req: Request, r
   // SECURITY: Use strict schema to reject unexpected fields
   const { amount_cents } = checkCreditsSchema.parse(req.body);
 
-  // P0-G: RLS-bound user-scoped client.
+  // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
+  // Isolation rests SOLELY on the explicit user id passed into the RPC below.
   const userDb = getUserScopedClient(user.userId);
   const { data, error } = await userDb.rpc('check_credits_available', {
     p_user_id: user.userId,
@@ -166,7 +167,8 @@ router.post('/deduct', createRateLimiter('credits-deduct'), async (req: Request,
     req.body,
   );
 
-  // P0-G: RLS-bound user-scoped client.
+  // P1-GW-RLS: service-role client (no DB-level RLS — see lib/neonClients.ts).
+  // Isolation rests SOLELY on the explicit user id passed into the RPC below.
   const userDb = getUserScopedClient(user.userId);
   const { data, error } = await userDb.rpc('deduct_credits', {
     p_user_id: user.userId,

@@ -117,7 +117,7 @@ function ConfigEditorSection() {
       </p>
       <div className="space-y-3">
         {[
-          { label: 'Model', value: model, onChange: setModel, placeholder: 'e.g. claude-opus-4-6' },
+          { label: 'Model', value: model, onChange: setModel, placeholder: 'e.g. claude-opus-4.8' },
           {
             label: 'Provider',
             value: provider,

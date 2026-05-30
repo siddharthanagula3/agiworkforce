@@ -247,8 +247,8 @@ pub async fn oauth_login(provider: &OAuthProvider) -> Result<crate::auth::AuthEn
     eprintln!("  Opening browser for authorization...\n");
     eprintln!("  {}\n", auth_url.dimmed());
 
-    // Try to open browser
-    if webbrowser::open(&auth_url).is_err() {
+    // Try to open browser (explicit user-initiated auth flow).
+    if !open_external_url(&auth_url, UserActionContext::user_initiated()) {
         eprintln!("  Could not open browser. Copy this URL manually:\n");
         eprintln!("  {}\n", auth_url.cyan());
     }
@@ -372,8 +372,8 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
     eprintln!();
     eprintln!("  {} Waiting for authorization...", "⏳".dimmed());
 
-    // Try to open browser
-    let _ = webbrowser::open(&verification_url);
+    // Try to open browser (explicit user-initiated device-code flow).
+    let _ = open_external_url(&verification_url, UserActionContext::user_initiated());
 
     // Step 3: Poll for token
     let max_attempts = (device.expires_in / device.interval).max(1);
@@ -445,4 +445,221 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
         "Authorization timed out after {}s. Please try again.",
         device.expires_in
     )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// External-URL open chokepoint
+//
+// Every code path that wants to launch the user's default browser MUST route
+// through `open_external_url`. The chokepoint refuses to open anything unless
+// the caller proves the action was explicitly triggered by the user
+// (`UserActionContext::user_initiated()`). This makes "a browser tab opened on
+// its own" structurally impossible: a non-user-initiated context is a no-op,
+// and tests can install a spy to assert no real URL is ever launched.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Proof that an external-open was requested as a direct result of explicit
+/// user action (a typed command, a clicked button, an interactive auth flow the
+/// user started). Background/module-load/test code constructs the non-user
+/// variant, which makes [`open_external_url`] a no-op.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UserActionContext {
+    triggered_by_user: bool,
+}
+
+impl UserActionContext {
+    /// Build a context for an open that the user explicitly initiated.
+    pub const fn user_initiated() -> Self {
+        Self {
+            triggered_by_user: true,
+        }
+    }
+
+    /// Build a context for a non-user-initiated path. [`open_external_url`]
+    /// never launches a browser for this context.
+    pub const fn non_user_initiated() -> Self {
+        Self {
+            triggered_by_user: false,
+        }
+    }
+
+    /// Whether this context permits launching an external browser.
+    pub const fn triggered_by_user(&self) -> bool {
+        self.triggered_by_user
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod external_open_spy {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    /// Serializes spy-using tests across the whole test binary so the shared
+    /// static counters can't race under cargo's parallel test runner. Callers
+    /// hold the returned guard for the duration of their spy interaction.
+    pub fn lock() -> MutexGuard<'static, ()> {
+        static SPY_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        SPY_LOCK
+            .get_or_init(|| Mutex::new(()))
+            // Recover from a poisoned lock: a panicking test must not wedge the
+            // rest of the suite. The guarded data is unit `()`, so there is no
+            // invariant to repair.
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// When set, [`super::open_external_url`] records the call instead of
+    /// touching a real browser. Used by tests to prove no unprompted open ever
+    /// happens without launching a real URL.
+    pub(super) static SPY_ENABLED: AtomicBool = AtomicBool::new(false);
+    /// Count of opens that actually reached the launch step (i.e. passed the
+    /// user-action gate) while the spy was enabled.
+    pub(super) static OPEN_COUNT: AtomicUsize = AtomicUsize::new(0);
+
+    pub fn enable_and_reset() {
+        OPEN_COUNT.store(0, Ordering::SeqCst);
+        SPY_ENABLED.store(true, Ordering::SeqCst);
+    }
+
+    pub fn disable() {
+        SPY_ENABLED.store(false, Ordering::SeqCst);
+    }
+
+    pub fn open_count() -> usize {
+        OPEN_COUNT.load(Ordering::SeqCst)
+    }
+
+    pub(super) fn is_enabled() -> bool {
+        SPY_ENABLED.load(Ordering::SeqCst)
+    }
+
+    pub(super) fn record_open() {
+        OPEN_COUNT.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+/// The single chokepoint for launching the user's default browser.
+///
+/// Returns `true` only when a browser was (or, under the test spy, would have
+/// been) launched. Refuses to open anything for a non-user-initiated context,
+/// so module-load, registration, and test paths can never trigger a tab on
+/// their own. Never panics — failures degrade to `false` so callers can fall
+/// back to printing the URL.
+#[must_use]
+pub fn open_external_url(url: &str, ctx: UserActionContext) -> bool {
+    if !ctx.triggered_by_user() {
+        return false;
+    }
+
+    #[cfg(test)]
+    {
+        if external_open_spy::is_enabled() {
+            external_open_spy::record_open();
+            return true;
+        }
+    }
+
+    webbrowser::open(url).is_ok()
+}
+
+#[cfg(test)]
+mod open_chokepoint_tests {
+    use super::*;
+
+    #[test]
+    fn non_user_initiated_never_opens() {
+        let _guard = external_open_spy::lock();
+        external_open_spy::enable_and_reset();
+        let opened = open_external_url(
+            "https://example.com/should-not-open",
+            UserActionContext::non_user_initiated(),
+        );
+        external_open_spy::disable();
+        assert!(!opened, "non-user-initiated context must not open a browser");
+        assert_eq!(
+            external_open_spy::open_count(),
+            0,
+            "non-user-initiated open must not reach the launch step"
+        );
+    }
+
+    #[test]
+    fn user_initiated_reaches_launch_step_under_spy() {
+        let _guard = external_open_spy::lock();
+        external_open_spy::enable_and_reset();
+        let opened = open_external_url(
+            "https://example.com/ok",
+            UserActionContext::user_initiated(),
+        );
+        external_open_spy::disable();
+        assert!(opened, "user-initiated open should reach the (spied) launcher");
+        assert_eq!(external_open_spy::open_count(), 1);
+    }
+
+    /// Source-level invariant: the raw browser launcher (`webbrowser::open(`) may
+    /// appear in `apps/cli/src` EXACTLY once — inside this file's chokepoint
+    /// `open_external_url`. This catches a future regression that re-adds a
+    /// *direct* launch (the exact original-bug pattern, e.g. in
+    /// `render_install_app`), which a runtime spy on the chokepoint cannot see
+    /// because a direct call never routes through the spy.
+    #[test]
+    fn webbrowser_open_only_called_from_the_chokepoint() {
+        use std::path::Path;
+        // Build the needle at runtime so this test's own source does not
+        // self-match the literal it is searching for.
+        let needle = ["webbrowser", "::open("].concat();
+        let src_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+
+        fn collect_rs(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+            let entries = match std::fs::read_dir(dir) {
+                Ok(e) => e,
+                Err(_) => return,
+            };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_rs(&path, out);
+                } else if path.extension().and_then(|e| e.to_str()) == Some("rs") {
+                    out.push(path);
+                }
+            }
+        }
+
+        let mut files = Vec::new();
+        collect_rs(&src_root, &mut files);
+        assert!(!files.is_empty(), "no .rs files found under {src_root:?}");
+
+        let mut hits: Vec<(std::path::PathBuf, usize)> = Vec::new();
+        for file in &files {
+            let contents = std::fs::read_to_string(file).unwrap_or_default();
+            for (idx, line) in contents.lines().enumerate() {
+                // Only count real call sites, not prose: comment/doc lines that
+                // merely mention the launcher (like this test's own docstring)
+                // are excluded.
+                let trimmed = line.trim_start();
+                if trimmed.starts_with("//") {
+                    continue;
+                }
+                if line.contains(&needle) {
+                    hits.push((file.clone(), idx + 1));
+                }
+            }
+        }
+
+        assert_eq!(
+            hits.len(),
+            1,
+            "raw browser launcher must be called from exactly one site (the \
+             open_external_url chokepoint); found {} call(s): {:?}",
+            hits.len(),
+            hits
+        );
+        let (hit_path, _) = &hits[0];
+        assert_eq!(
+            hit_path.file_name().and_then(|n| n.to_str()),
+            Some("oauth.rs"),
+            "the single raw browser launcher must live in oauth.rs (the \
+             chokepoint), found it in {hit_path:?}"
+        );
+    }
 }

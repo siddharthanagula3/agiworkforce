@@ -730,10 +730,14 @@ mod tests {
 
     #[test]
     fn test_context_limit_known_models() {
-        assert_eq!(context_limit("claude-opus-4-6"), 200_000);
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8: 1,000,000 context per models.json
+        assert_eq!(context_limit("claude-opus-4-8"), 1_000_000);
+        // claude-sonnet-4-6 has 200,000 context per models.json
         assert_eq!(context_limit("claude-sonnet-4-6"), 200_000);
-        assert_eq!(context_limit("gpt-5.4"), 1_000_000);
+        // gpt-5.5 is the current OpenAI flagship: 1,050,000 context per models.json
+        assert_eq!(context_limit("gpt-5.5"), 1_050_000);
         assert_eq!(context_limit("gemini-3.1-pro-preview"), 2_000_000);
+        // deepseek-chat is not in models.json; prefix-based fallback returns 128,000
         assert_eq!(context_limit("deepseek-chat"), 128_000);
     }
 
@@ -744,8 +748,10 @@ mod tests {
 
     #[test]
     fn test_context_limit_case_insensitive() {
-        assert_eq!(context_limit("GPT-5.4"), 1_000_000);
-        assert_eq!(context_limit("CLAUDE-OPUS-4-6"), 200_000);
+        // gpt-5.5 is the current OpenAI flagship: 1,050,000 context per models.json
+        assert_eq!(context_limit("GPT-5.5"), 1_050_000);
+        // claude-opus-4-8 is the apiModelId for claude-opus-4.8: 1,000,000 context per models.json
+        assert_eq!(context_limit("CLAUDE-OPUS-4-8"), 1_000_000);
     }
 
     #[test]

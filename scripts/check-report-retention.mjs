@@ -10,14 +10,28 @@ const reportRoots = [
   {
     path: 'reports',
     purpose: 'product, parity, screenshot, and generated evidence reports',
+    // Named canonical control documents that intentionally live at the reports/
+    // root (referenced by the recon→goal mission and the goal-loop verifier).
+    // They are tracked artifacts, not scratch dumps, so each must still carry
+    // ownership/status metadata (enforced below).
+    allowedRootFiles: [
+      'README.md',
+      'BLOCKERS.md',
+      'DEFINITION_OF_DONE.md',
+      'ARCHITECTURE.md',
+      'LAUNCH_ESTIMATE.md',
+    ],
   },
   {
     path: 'audit/reports',
     purpose: 'security, defect, dead-code, and remediation evidence reports',
+    allowedRootFiles: ['README.md'],
   },
 ];
 
 const requiredMarkers = ['Status:', 'Owner:', 'Purpose:', 'Retention:'];
+// Lighter contract for allowlisted root control docs: must be owned + status-tracked.
+const controlDocMarkers = ['Status:', 'Owner:'];
 
 function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
@@ -58,11 +72,23 @@ for (const reportRoot of reportRoots) {
 
   requireReadme(reportRoot.path);
 
+  const allowedRootFiles = reportRoot.allowedRootFiles || ['README.md'];
   for (const entry of childEntries(reportRoot.path)) {
     if (entry.name === 'README.md') continue;
     const entryPath = path.posix.join(reportRoot.path, entry.name);
 
     if (!entry.isDirectory()) {
+      if (allowedRootFiles.includes(entry.name)) {
+        const body = readText(entryPath);
+        for (const marker of controlDocMarkers) {
+          if (!body.includes(marker)) {
+            errors.push(
+              `${entryPath} is an allowlisted control report but is missing required marker: ${marker}`,
+            );
+          }
+        }
+        continue;
+      }
       errors.push(
         `${entryPath} is a loose report file; move it into a named report collection with README retention metadata.`,
       );

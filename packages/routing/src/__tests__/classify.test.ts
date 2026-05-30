@@ -870,22 +870,24 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a'.repeat(38), 'gpt-4o-mini')).toBe(10);
   });
 
-  it('uses Opus 4.7 tokenizer (with 18% inflation)', () => {
-    // 100 chars / 3.5 * 1.18 ≈ 33.71 → ceil = 34.
-    expect(estimateTokens('a'.repeat(100), 'claude-opus-4-7')).toBe(34);
+  it('uses Opus tokenizer (with 18% inflation) for any claude-opus-4.x', () => {
+    // 100 chars / 3.5 * 1.18 ≈ 33.71 → ceil = 34. Version-resilient: the opus
+    // family shares a token density, so the current flagship (4.8) matches.
+    expect(estimateTokens('a'.repeat(100), 'claude-opus-4.8')).toBe(34);
   });
 
-  it('Opus 4.7 supports dot-separator naming', () => {
-    expect(estimateTokens('a'.repeat(100), 'claude-opus-4.7')).toBe(34);
+  it('Opus tokenizer supports dash-separator naming', () => {
+    expect(estimateTokens('a'.repeat(100), 'claude-opus-4-8')).toBe(34);
   });
 
-  it('uses regular Claude tokenizer for claude-sonnet-4.6', () => {
+  it('uses regular Claude tokenizer for non-opus claude (claude-sonnet-4.6)', () => {
     // 35 chars / 3.5 = 10 tokens.
     expect(estimateTokens('a'.repeat(35), 'claude-sonnet-4.6')).toBe(10);
   });
 
-  it('uses regular Claude tokenizer for claude-opus-4.6', () => {
-    expect(estimateTokens('a'.repeat(35), 'claude-opus-4.6')).toBe(10);
+  it('opus inflation makes claude-opus-4.8 heavier than the regular Claude rate', () => {
+    // 35 chars: regular = 10; opus inflated = ceil(35/3.5*1.18) = 12.
+    expect(estimateTokens('a'.repeat(35), 'claude-opus-4.8')).toBe(12);
   });
 
   it('uses Gemini tokenizer for gemini-3.1-flash-lite', () => {
@@ -913,11 +915,11 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a')).toBe(1);
   });
 
-  it('Opus 4.7 inflation makes it heavier than other Claude', () => {
+  it('Opus inflation makes opus heavier than other Claude models', () => {
     const txt = 'a'.repeat(1000);
-    const opus47 = estimateTokens(txt, 'claude-opus-4-7');
-    const opus46 = estimateTokens(txt, 'claude-opus-4.6');
-    expect(opus47).toBeGreaterThan(opus46);
+    const opus = estimateTokens(txt, 'claude-opus-4.8');
+    const sonnet = estimateTokens(txt, 'claude-sonnet-4.6');
+    expect(opus).toBeGreaterThan(sonnet);
   });
 
   it('Gemini is the lightest tokenizer per char', () => {

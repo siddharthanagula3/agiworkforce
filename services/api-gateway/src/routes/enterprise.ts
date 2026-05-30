@@ -33,18 +33,19 @@ const supportCaseSchema = z.object({
     .default('security_sensitive'),
 });
 
-interface OrganizationMembershipRow {
+interface MembershipRow {
   organization_id: string;
   role: OrganizationRole;
   joined_at: string;
-  organization: {
-    id: string;
-    name: string;
-    slug: string;
-    created_by: string;
-    created_at: string;
-    updated_at: string;
-  } | null;
+}
+
+interface OrganizationRow {
+  id: string;
+  name: string;
+  slug: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface EnterprisePolicyRow {
@@ -142,45 +143,69 @@ router.get(
     const user = requireUser(req);
     const db = getUserScopedClient(user.userId);
 
-    const { data, error } = await db
+    // P1-GW-ENT: the Neon query layer (lib/neonClients.assertColumnList)
+    // collapses any select containing `(` to `SELECT *`, so the PostgREST
+    // resource-embedding syntax `organization:organizations ( … )` never
+    // returns a joined `organization` object — every row was dropped by the
+    // downstream `.filter`. Fetch memberships, then the organizations they
+    // reference, in two explicit queries and stitch them in JS.
+    const { data: membershipData, error: membershipError } = await db
       .from('organization_members')
-      .select(
-        `
-        organization_id,
-        role,
-        joined_at,
-        organization:organizations (
-          id,
-          name,
-          slug,
-          created_by,
-          created_at,
-          updated_at
-        )
-      `,
-      )
+      .select('organization_id, role, joined_at')
       .eq('user_id', user.userId)
       .order('joined_at', { ascending: false });
 
-    if (error) {
-      logger.error({ error, userId: user.userId }, 'Failed to fetch enterprise organizations');
+    if (membershipError) {
+      logger.error(
+        { error: membershipError, userId: user.userId },
+        'Failed to fetch enterprise organizations',
+      );
       throw new AppError('Failed to fetch organizations', 500);
     }
 
-    const organizations = ((data ?? []) as unknown as OrganizationMembershipRow[])
-      .filter((row) => row.organization)
-      .map((row) => ({
-        id: row.organization?.id,
-        name: row.organization?.name,
-        slug: row.organization?.slug,
-        createdBy: row.organization?.created_by,
-        createdAt: row.organization?.created_at,
-        updatedAt: row.organization?.updated_at,
-        membership: {
-          role: row.role,
-          joinedAt: row.joined_at,
-        },
-      }));
+    const memberships = (membershipData ?? []) as MembershipRow[];
+    if (memberships.length === 0) {
+      res.json({ organizations: [] });
+      return;
+    }
+
+    const organizationIds = Array.from(new Set(memberships.map((row) => row.organization_id)));
+
+    const { data: orgData, error: orgError } = await db
+      .from('organizations')
+      .select('id, name, slug, created_by, created_at, updated_at')
+      .in('id', organizationIds);
+
+    if (orgError) {
+      logger.error(
+        { error: orgError, userId: user.userId },
+        'Failed to fetch enterprise organizations',
+      );
+      throw new AppError('Failed to fetch organizations', 500);
+    }
+
+    const orgById = new Map<string, OrganizationRow>(
+      ((orgData ?? []) as OrganizationRow[]).map((org) => [org.id, org]),
+    );
+
+    const organizations = memberships
+      .map((row) => {
+        const org = orgById.get(row.organization_id);
+        if (!org) return null;
+        return {
+          id: org.id,
+          name: org.name,
+          slug: org.slug,
+          createdBy: org.created_by,
+          createdAt: org.created_at,
+          updatedAt: org.updated_at,
+          membership: {
+            role: row.role,
+            joinedAt: row.joined_at,
+          },
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
     res.json({ organizations });
   },

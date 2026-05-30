@@ -71,7 +71,7 @@ impl DraftManager {
                     attachments,
                     focus_mode: row.get(3)?,
                     saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                        .unwrap_or_else(|| Utc::now()),
+                        .unwrap_or_else(Utc::now),
                 })
             })
             .optional()?;
@@ -116,7 +116,7 @@ impl DraftManager {
                     attachments,
                     focus_mode: row.get(3)?,
                     saved_at: chrono::DateTime::from_timestamp(row.get(4)?, 0)
-                        .unwrap_or_else(|| Utc::now()),
+                        .unwrap_or_else(Utc::now),
                 })
             })?
             .collect::<SqliteResult<Vec<_>>>()?;

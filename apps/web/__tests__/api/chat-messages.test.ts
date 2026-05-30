@@ -399,7 +399,7 @@ describe('Chat Messages API', () => {
           body: JSON.stringify({
             content: 'I can help!',
             role: 'assistant',
-            model: 'gpt-5.4',
+            model: 'gpt-5.5',
             skipLlm: true,
           }),
         });
@@ -411,7 +411,7 @@ describe('Chat Messages API', () => {
         // Verify the insert includes the model parameter
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_messages'),
-          expect.arrayContaining(['gpt-5.4']),
+          expect.arrayContaining(['gpt-5.5']),
         );
       });
     });

@@ -25,9 +25,12 @@ import { requireCsrfToken } from '@/lib/csrf';
  * by the database policy.
  */
 
-type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
+// 'mobile' is a SEPARATE list (the mobile local-only beta cloud-waitlist) that still
+// rolls up into the countable cloud_managed_waitlist total — separate list via the
+// `source` column, shared rollup via a count across all sources.
+type WaitlistSource = 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
-const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'other']);
+const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'mobile', 'other']);
 
 function isValidSource(value: unknown): value is WaitlistSource {
   return typeof value === 'string' && VALID_SOURCES.has(value as WaitlistSource);

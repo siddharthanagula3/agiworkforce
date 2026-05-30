@@ -5,6 +5,7 @@ import {
   assertPinningReadyIfEnforced,
   hasPlaceholderPins,
   hostHasPins,
+  pinningStartupState,
   pinsForUrl,
   requiresPin,
 } from '@/lib/pinning';
@@ -50,69 +51,32 @@ describe('PINNING_ENFORCED', () => {
   });
 });
 
-describe('placeholder guard', () => {
-  it('detects placeholder pins so a release build fails loudly', () => {
+describe('startup pinning guard (P0-FIX 2026-05-29: release builds must LAUNCH, not crash)', () => {
+  it('detects placeholder pins so the startup guard can warn', () => {
     expect(hasPlaceholderPins()).toBe(true);
   });
 
-  it('simulated release-mode launch with placeholders throws', () => {
-    const guardFn = (
-      enforced: boolean,
-      pins: ReadonlyArray<string>,
-      isDev: boolean,
-      isTest: boolean,
-      appEnv?: string,
-    ): void => {
-      if (isDev || isTest) return;
-      if (appEnv === 'development') return;
-      if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
-        throw new Error('TLS pinning not provisioned');
-      }
-    };
-
-    const allPlaceholderPins = Object.values(PINS_BY_HOST).flat();
-    expect(() => guardFn(true, allPlaceholderPins, false, false)).toThrow(
-      /TLS pinning not provisioned/,
-    );
+  // REGRESSION (DoD D2): the guard previously threw at module load, crashing
+  // every release build on launch via the app/_layout.tsx import chain.
+  it('release build with placeholder pins is "unprovisioned" and does NOT throw', () => {
+    expect(() => pinningStartupState({ isDev: false, isTest: false })).not.toThrow();
+    expect(pinningStartupState({ isDev: false, isTest: false })).toBe('unprovisioned');
   });
 
-  it('release-mode launch with real pins does not throw', () => {
-    const guardFn = (
-      enforced: boolean,
-      pins: ReadonlyArray<string>,
-      isDev: boolean,
-      isTest: boolean,
-      appEnv?: string,
-    ): void => {
-      if (isDev || isTest) return;
-      if (appEnv === 'development') return;
-      if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
-        throw new Error('TLS pinning not provisioned');
-      }
-    };
-
-    expect(() =>
-      guardFn(true, ['sha256/realhash1=', 'sha256/realhash2='], false, false),
-    ).not.toThrow();
+  it('dev and test builds skip the guard (state "dev-or-test")', () => {
+    expect(pinningStartupState({ isDev: true, isTest: false })).toBe('dev-or-test');
+    expect(pinningStartupState({ isDev: false, isTest: true })).toBe('dev-or-test');
   });
 
-  it('development-app release builds can run on a physical device before production pins exist', () => {
-    const guardFn = (
-      enforced: boolean,
-      pins: ReadonlyArray<string>,
-      isDev: boolean,
-      isTest: boolean,
-      appEnv?: string,
-    ): void => {
-      if (isDev || isTest) return;
-      if (appEnv === 'development') return;
-      if (enforced && pins.some((h) => h.includes('PLACEHOLDER_REPLACE_BEFORE_LAUNCH_'))) {
-        throw new Error('TLS pinning not provisioned');
-      }
-    };
-
-    const allPlaceholderPins = Object.values(PINS_BY_HOST).flat();
-    expect(() => guardFn(true, allPlaceholderPins, false, false, 'development')).not.toThrow();
+  it('importing lib/pinning (runs the startup check at module load) does not crash', () => {
+    // The module already loaded at the top of this file; prove a fresh, isolated
+    // require also does not throw even though placeholder pins are present.
+    expect(() => {
+      jest.isolateModules(() => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.isolateModules requires a synchronous require to re-evaluate the module's load-time guard.
+        require('@/lib/pinning');
+      });
+    }).not.toThrow();
   });
 });
 

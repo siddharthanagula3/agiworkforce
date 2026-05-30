@@ -162,10 +162,16 @@ router.post('/token', createRateLimiter('device-register'), async (req: Request,
     email = user.email;
   }
 
+  // SECURITY (P1-GW-REVOKE): mint a unique `jti` into every gateway token so
+  // per-token revocation and /auth/logout actually work. Without it the
+  // revocation check in middleware/auth.ts is a no-op (no jti to look up) and
+  // logout bails to `{ revoked: false }`. `jwtid` sets the standard `jti`
+  // claim that the revocation path + revoked_jwts table key on.
   const accessToken = jwt.sign({ userId, email }, JWT_SECRET, {
     expiresIn: ACCESS_TOKEN_EXPIRES_SECONDS,
     issuer: 'agiworkforce-api-gateway',
     audience: 'agiworkforce',
+    jwtid: crypto.randomUUID(),
   });
 
   const consumedAt = new Date().toISOString();

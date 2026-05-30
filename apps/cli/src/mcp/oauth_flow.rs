@@ -402,19 +402,21 @@ pub async fn start_pkce_flow(
     // URL when the browser failed to open AND we genuinely need the user to
     // copy it manually. In the success path the user only sees an opaque
     // "opening browser" line.
-    match webbrowser::open(&authorize_url) {
-        Ok(_) => {
-            eprintln!(
-                "\n  [mcp oauth] opened browser for {} (waiting for callback)\n",
-                server_url
-            );
-        }
-        Err(_) => {
-            eprintln!(
-                "\n  [mcp oauth] could not open browser for {} — copy this URL manually:\n  {}\n",
-                server_url, authorize_url
-            );
-        }
+    // Explicit user-initiated MCP-connect auth flow: route through the open
+    // chokepoint so non-user paths can never launch a browser.
+    if crate::oauth::open_external_url(
+        &authorize_url,
+        crate::oauth::UserActionContext::user_initiated(),
+    ) {
+        eprintln!(
+            "\n  [mcp oauth] opened browser for {} (waiting for callback)\n",
+            server_url
+        );
+    } else {
+        eprintln!(
+            "\n  [mcp oauth] could not open browser for {} — copy this URL manually:\n  {}\n",
+            server_url, authorize_url
+        );
     }
 
     // 4. Wait for the redirect (with timeout so headless CI fails fast).

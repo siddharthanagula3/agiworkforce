@@ -49,7 +49,7 @@ export const DEFAULT_ANTHROPIC_COLLABORATION_MODEL: AnthropicModel =
 
 export const SUPPORTED_OPENAI_MODELS = getProviderModelIds('openai', CHAT_MODEL_TYPES);
 export type OpenAIModel = string;
-export const DEFAULT_OPENAI_MODEL: OpenAIModel = getProviderDefaultModel('openai') ?? 'gpt-5.4';
+export const DEFAULT_OPENAI_MODEL: OpenAIModel = getProviderDefaultModel('openai') ?? 'gpt-5.5';
 export const DEFAULT_OPENAI_FAST_MODEL: OpenAIModel =
   getTaskModelForProvider('openai', 'fast_completion') ?? DEFAULT_OPENAI_MODEL;
 export const SUPPORTED_OPENAI_IMAGE_MODELS = getProviderModelIds('openai', IMAGE_MODEL_TYPES);

@@ -76,7 +76,9 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
   try {
     await api.post<{ ok?: boolean; joined?: boolean }>('/api/waitlist/cloud-managed', {
       email,
-      source: 'other',
+      // SEPARATE mobile cloud-waitlist list (rolls up into the shared total via the
+      // cloud_managed_waitlist `source` column) — mobile local-only beta funnel.
+      source: 'mobile',
       country: input.country,
       deviceModel: input.deviceModel,
       deviceTier: input.deviceTier,
