@@ -8,6 +8,33 @@ use super::common::print_tool_status;
 use super::ToolResult;
 
 // ---------------------------------------------------------------------------
+// Privacy guard for the advisor tool (M24)
+//
+// The advisor tool always calls a CLOUD model. When the active session is in
+// Local privacy mode no context must leave the device, so the advisor must be
+// blocked before it reaches `consult()`.
+//
+// `AgentSession` keeps this flag in sync with its `privacy_mode` (on construction,
+// `set_privacy_mode`, and `adopt_provider_privacy_mode`), so `execute_advisor`
+// fails closed whenever the active session is Local. Process-global because tool
+// executors run without session context; the CLI runs one primary session at a
+// time, and the default (`false`) keeps the advisor available outside Local mode.
+// ---------------------------------------------------------------------------
+
+static ADVISOR_LOCAL_PRIVACY_GUARD: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Set the Local-privacy guard for the advisor tool.
+///
+/// Pass `true` whenever `AgentSession::privacy_mode` is `PrivacyMode::Local`,
+/// `false` when it transitions away. This prevents `execute_advisor` from
+/// making any outbound cloud call while the session is under the Local privacy
+/// boundary.
+pub(crate) fn set_advisor_local_privacy_mode(is_local: bool) {
+    ADVISOR_LOCAL_PRIVACY_GUARD.store(is_local, std::sync::atomic::Ordering::SeqCst);
+}
+
+// ---------------------------------------------------------------------------
 // M18: Session-scoped task / team / cron registry
 // ---------------------------------------------------------------------------
 
@@ -584,6 +611,19 @@ pub(super) async fn execute_cron_list(args: &HashMap<String, String>) -> Result<
 // ---------------------------------------------------------------------------
 
 pub(super) async fn execute_advisor(args: &HashMap<String, String>) -> Result<ToolResult> {
+    // Privacy boundary: the advisor always calls a cloud model. Block the call
+    // before touching the network when the session is in Local privacy mode.
+    if ADVISOR_LOCAL_PRIVACY_GUARD.load(std::sync::atomic::Ordering::SeqCst) {
+        return Ok(ToolResult {
+            tool_name: "advisor".into(),
+            success: false,
+            output: "advisor is unavailable in Local privacy mode: \
+                     context must not leave this device. \
+                     Switch to BYOK or Managed mode to use the advisor tool."
+                .into(),
+        });
+    }
+
     let question = match args.get("question").filter(|q| !q.is_empty()) {
         Some(q) => q.clone(),
         None => {
@@ -877,4 +917,153 @@ pub(super) async fn execute_lsp_document_symbols(
 
 pub(super) async fn execute_lsp_format(args: &HashMap<String, String>) -> Result<ToolResult> {
     lsp_request_for_file(args, "textDocument/formatting").await
+}
+
+// ---------------------------------------------------------------------------
+// Tests for the advisor privacy gate
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod advisor_privacy_tests {
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+
+    use super::{execute_advisor, set_advisor_local_privacy_mode, ADVISOR_LOCAL_PRIVACY_GUARD};
+
+    /// Serialisation lock: `ADVISOR_LOCAL_PRIVACY_GUARD` is process-wide, so
+    /// all tests that touch it must run sequentially.
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    /// RAII helper that holds the serialisation lock for the test's lifetime
+    /// and resets the privacy guard on drop.
+    #[allow(dead_code)]
+    struct Guard<'a>(std::sync::MutexGuard<'a, ()>);
+    impl Drop for Guard<'_> {
+        fn drop(&mut self) {
+            set_advisor_local_privacy_mode(false);
+        }
+    }
+
+    fn acquire() -> Guard<'static> {
+        let g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        // Always start each test from a clean state.
+        ADVISOR_LOCAL_PRIVACY_GUARD
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        Guard(g)
+    }
+
+    /// In Local privacy mode `execute_advisor` must return an error immediately
+    /// without reaching `consult()` (no cloud call, success=false, message
+    /// mentions Local privacy).
+    ///
+    /// FAILS without the `ADVISOR_LOCAL_PRIVACY_GUARD` check.
+    /// PASSES with it.
+    #[tokio::test]
+    async fn advisor_blocked_in_local_privacy_mode() {
+        let _guard = acquire();
+
+        // Simulate a Local-mode session.
+        set_advisor_local_privacy_mode(true);
+
+        let mut args = HashMap::new();
+        args.insert("question".to_string(), "What is 2 + 2?".to_string());
+
+        let result = execute_advisor(&args)
+            .await
+            .expect("execute_advisor should return Ok, not Err");
+
+        assert!(
+            !result.success,
+            "advisor should fail in Local privacy mode, got success=true"
+        );
+        assert!(
+            result.output.contains("unavailable in Local privacy mode"),
+            "error message should mention Local privacy mode, got: {}",
+            result.output
+        );
+        assert!(
+            result.output.contains("context must not leave this device"),
+            "error message should explain the privacy constraint, got: {}",
+            result.output
+        );
+        assert_eq!(result.tool_name, "advisor");
+    }
+
+    /// Outside Local mode the advisor proceeds past the privacy gate and fails
+    /// downstream (no API key in CI/test env). The failure message must NOT
+    /// contain the Local-privacy text, confirming the gate was not triggered.
+    #[tokio::test]
+    async fn advisor_not_blocked_outside_local_mode() {
+        let _guard = acquire();
+
+        // Guard starts as false (non-Local) — confirm it's clear.
+        set_advisor_local_privacy_mode(false);
+
+        let orig_anthropic = std::env::var("ANTHROPIC_API_KEY").ok();
+        let orig_openai = std::env::var("OPENAI_API_KEY").ok();
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::remove_var("OPENAI_API_KEY");
+
+        let mut args = HashMap::new();
+        args.insert("question".to_string(), "test".to_string());
+
+        let result = execute_advisor(&args)
+            .await
+            .expect("execute_advisor should return Ok");
+
+        if let Some(v) = orig_anthropic {
+            std::env::set_var("ANTHROPIC_API_KEY", v);
+        }
+        if let Some(v) = orig_openai {
+            std::env::set_var("OPENAI_API_KEY", v);
+        }
+
+        // The downstream error must NOT be the Local-privacy gate message.
+        assert!(
+            !result.output.contains("unavailable in Local privacy mode"),
+            "privacy gate should NOT fire in non-Local mode, got: {}",
+            result.output
+        );
+    }
+
+    /// Toggling from Local to non-Local must clear the guard so the advisor
+    /// can proceed past the privacy check again.
+    #[tokio::test]
+    async fn advisor_guard_toggles_correctly() {
+        let _guard = acquire();
+
+        // Activate Local mode — call must be blocked.
+        set_advisor_local_privacy_mode(true);
+
+        let mut args = HashMap::new();
+        args.insert("question".to_string(), "ping".to_string());
+
+        let blocked = execute_advisor(&args).await.unwrap();
+        assert!(!blocked.success);
+        assert!(blocked.output.contains("unavailable in Local privacy mode"));
+
+        // Deactivate Local mode.
+        set_advisor_local_privacy_mode(false);
+
+        let orig_a = std::env::var("ANTHROPIC_API_KEY").ok();
+        let orig_o = std::env::var("OPENAI_API_KEY").ok();
+        std::env::remove_var("ANTHROPIC_API_KEY");
+        std::env::remove_var("OPENAI_API_KEY");
+
+        let not_blocked = execute_advisor(&args).await.unwrap();
+
+        if let Some(v) = orig_a {
+            std::env::set_var("ANTHROPIC_API_KEY", v);
+        }
+        if let Some(v) = orig_o {
+            std::env::set_var("OPENAI_API_KEY", v);
+        }
+
+        // After clearing the guard the privacy message must not appear.
+        assert!(
+            !not_blocked.output.contains("unavailable in Local privacy mode"),
+            "guard should be cleared after set_advisor_local_privacy_mode(false), got: {}",
+            not_blocked.output
+        );
+    }
 }
