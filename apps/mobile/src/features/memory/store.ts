@@ -234,6 +234,8 @@ export async function retrieveMemoryContext(
   const textResults = await searchMemoryByText(query, k);
   if (textResults.length > 0) return textResults;
 
-  // Fallback: pinned facts first, then most recent
-  return listMemoryFacts({ limit: k });
+  // Relevance gate: only inject pinned facts when no keyword or vector match
+  // is found. Unpinned, non-matching memories are not relevant to the current
+  // query and must NOT be injected into the chat context.
+  return listMemoryFacts({ pinned: true, limit: k });
 }
