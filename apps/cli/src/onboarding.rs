@@ -96,7 +96,7 @@ fn print_welcome_banner() {
     eprintln!(
         "  {}  {}",
         "✦".cyan(),
-        "Multi-model fallback — `-m claude-opus-4-6,gpt-5.5,llama3.1:8b`".dimmed()
+        "Multi-model fallback — `-m claude-opus-4-8,gpt-5.5,llama3.1:8b`".dimmed()
     );
     eprintln!(
         "  {}  {}\n",
@@ -219,13 +219,7 @@ fn select_auth_provider() -> Result<AuthChoice> {
         .interact()
         .context("Failed to display auth menu")?;
 
-    match selection {
-        0 => Ok(AuthChoice::Provider("ollama")),
-        1 => Ok(AuthChoice::ApiKey),
-        2 => Ok(AuthChoice::OtherProviders),
-        3 => Ok(AuthChoice::Provider("agiworkforce")),
-        _ => Ok(AuthChoice::Skip),
-    }
+    Ok(auth_choice_for_index(selection))
 }
 
 fn select_other_provider() -> Result<AuthChoice> {
@@ -246,22 +240,72 @@ fn select_other_provider() -> Result<AuthChoice> {
         .interact()
         .context("Failed to display provider menu")?;
 
-    match selection {
-        0 => Ok(AuthChoice::Provider("openai")),
-        1 => Ok(AuthChoice::Provider("anthropic")),
-        2 => Ok(AuthChoice::Provider("copilot")),
-        3 => Ok(AuthChoice::Provider("openrouter")),
-        4 => Ok(AuthChoice::Provider("nvidia")),
-        5 => Ok(AuthChoice::Provider("ollama")),
-        _ => Ok(AuthChoice::Skip),
-    }
+    Ok(other_provider_choice_for_index(selection))
 }
 
+/// Choose a local (Ollama) model for the local-only path. Returns
+/// `(model_id, provider, has_reasoning)` to match `select_model`, so a
+/// local-only first run never lands on a cloud default it cannot run offline.
+fn select_local_model() -> Result<(String, String, bool)> {
+    let models = crate::model_catalog::models_for("ollama");
+    if models.is_empty() {
+        // Sensible default if the catalog carries no local entries.
+        return Ok(("llama3.1".to_string(), "ollama".to_string(), false));
+    }
+
+    let labels: Vec<String> = models
+        .iter()
+        .map(|m| format!("{}  ({})", m.display_name, m.id))
+        .collect();
+
+    let selection = dialoguer::Select::new()
+        .with_prompt("  Choose your local model (Ollama)")
+        .items(&labels)
+        .default(0)
+        .interact()
+        .context("Failed to display local model menu")?;
+
+    let chosen = models[selection];
+    Ok((chosen.id.clone(), "ollama".to_string(), false))
+}
+
+#[derive(Debug, PartialEq, Eq)]
 enum AuthChoice {
+    /// A cloud provider that requires an interactive login (OAuth/API key).
     Provider(&'static str),
+    /// A LOCAL provider (Ollama/LM Studio) — runs on-device, needs no account,
+    /// and must NEVER fall through to the cloud login menu.
+    Local(&'static str),
     ApiKey,
     OtherProviders,
     Skip,
+}
+
+/// Pure mapping for the primary login menu (`select_auth_provider`). Index 0 is
+/// "Local model — no account required" and resolves to a LOCAL provider, not a
+/// cloud login (the v1 local-only first-run must not demand an account).
+fn auth_choice_for_index(selection: usize) -> AuthChoice {
+    match selection {
+        0 => AuthChoice::Local("ollama"),
+        1 => AuthChoice::ApiKey,
+        2 => AuthChoice::OtherProviders,
+        3 => AuthChoice::Provider("agiworkforce"),
+        _ => AuthChoice::Skip,
+    }
+}
+
+/// Pure mapping for the "Other providers" submenu (`select_other_provider`).
+/// Index 5 is "Ollama (local)" — also a LOCAL provider, never a cloud login.
+fn other_provider_choice_for_index(selection: usize) -> AuthChoice {
+    match selection {
+        0 => AuthChoice::Provider("openai"),
+        1 => AuthChoice::Provider("anthropic"),
+        2 => AuthChoice::Provider("copilot"),
+        3 => AuthChoice::Provider("openrouter"),
+        4 => AuthChoice::Provider("nvidia"),
+        5 => AuthChoice::Local("ollama"),
+        _ => AuthChoice::Skip,
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -655,7 +699,18 @@ pub async fn run_onboarding() -> Result<bool> {
         other => other,
     };
 
+    let chose_local = matches!(&auth_choice, AuthChoice::Local(_));
+
     match auth_choice {
+        AuthChoice::Local(_provider) => {
+            // Local-only path: no account, no cloud login. The cloud login menu
+            // must never appear here (the v1 local-only first-run bug).
+            eprintln!("\n  {} Local model — no account needed.", "✓".green().bold());
+            eprintln!(
+                "  {}",
+                "Runs on your machine. Install Ollama (ollama.com), start it, then pull a model (e.g. `ollama pull llama3.1`).".dimmed()
+            );
+        }
         AuthChoice::Provider(provider) => {
             if let Err(e) = crate::auth::interactive_login_for_provider(Some(provider)).await {
                 eprintln!("\n  {} Authentication failed: {}", "⚠".yellow().bold(), e);
@@ -683,8 +738,14 @@ pub async fn run_onboarding() -> Result<bool> {
         }
     }
 
-    // Step 5: Model selection
-    match select_model() {
+    // Step 5: Model selection — local choice picks a local model so a local-only
+    // user never ends up with a cloud default they cannot run offline.
+    let model_selection = if chose_local {
+        select_local_model()
+    } else {
+        select_model()
+    };
+    match model_selection {
         Ok((model_id, provider, has_reasoning)) => {
             // Step 5b: Reasoning effort (if model supports it)
             let reasoning = if has_reasoning {
@@ -770,4 +831,42 @@ pub async fn run_onboarding() -> Result<bool> {
 
     eprintln!();
     Ok(true)
+}
+
+#[cfg(test)]
+mod local_first_run_tests {
+    use super::{auth_choice_for_index, other_provider_choice_for_index, AuthChoice};
+
+    #[test]
+    fn local_model_choice_resolves_to_local_not_cloud_login() {
+        // Primary menu index 0 = "Local model — no account required".
+        assert_eq!(auth_choice_for_index(0), AuthChoice::Local("ollama"));
+        // It must NOT route into any cloud login path (the v1 first-run bug).
+        assert!(!matches!(
+            auth_choice_for_index(0),
+            AuthChoice::Provider(_) | AuthChoice::ApiKey | AuthChoice::OtherProviders
+        ));
+    }
+
+    #[test]
+    fn other_providers_ollama_entry_resolves_to_local() {
+        // "Other providers" submenu index 5 = "Ollama (local)".
+        assert_eq!(other_provider_choice_for_index(5), AuthChoice::Local("ollama"));
+    }
+
+    #[test]
+    fn cloud_providers_still_resolve_to_provider_login() {
+        assert_eq!(auth_choice_for_index(3), AuthChoice::Provider("agiworkforce"));
+        assert_eq!(other_provider_choice_for_index(0), AuthChoice::Provider("openai"));
+        assert_eq!(other_provider_choice_for_index(1), AuthChoice::Provider("anthropic"));
+        assert_eq!(other_provider_choice_for_index(2), AuthChoice::Provider("copilot"));
+    }
+
+    #[test]
+    fn local_choice_carries_a_local_provider_not_a_cloud_default() {
+        match auth_choice_for_index(0) {
+            AuthChoice::Local(p) => assert_eq!(p, "ollama"),
+            other => panic!("expected Local, got {other:?}"),
+        }
+    }
 }
