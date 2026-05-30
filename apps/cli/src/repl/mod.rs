@@ -179,8 +179,12 @@ pub async fn run_repl(
                                     .cyan()
                                     .bold()
                             );
+                            // voice_cloud_opt_in = false: Local sessions MUST NOT
+                            // egress audio to OpenAI cloud without explicit consent.
+                            // The gate inside run_voice_mode enforces this.
                             if let Err(e) =
-                                crate::voice::run_voice_mode(&mut session, config, &lang).await
+                                crate::voice::run_voice_mode(&mut session, config, &lang, false)
+                                    .await
                             {
                                 output::print_error(&format!("Voice mode error: {:#}", e));
                             }
