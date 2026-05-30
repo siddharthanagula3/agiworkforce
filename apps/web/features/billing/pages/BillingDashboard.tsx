@@ -44,6 +44,11 @@ import { Subscription } from '@features/billing/components/Billing/Subscription'
 import { Usage } from '@features/billing/components/Billing/Usage';
 import { Topup } from '@features/billing/components/Billing/Topup';
 
+// Cloud/billing is waitlist-gated. Set NEXT_PUBLIC_CHECKOUT_ENABLED=true in env
+// to open live checkout for invite-only beta (mirrors server STRIPE_CHECKOUT_ENABLED).
+// Defaults to off so free users are routed to the waitlist, not a live purchase flow.
+const CHECKOUT_ENABLED = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED'] === 'true';
+
 const BillingPage: React.FC = () => {
   const { user } = useAuthStore();
   const searchParams = useSearchParams();
@@ -174,6 +179,14 @@ const BillingPage: React.FC = () => {
       return;
     }
 
+    // Gate all paid-plan checkout behind the managed-credits/checkout waitlist.
+    // When checkout is not enabled, redirect to /pricing#waitlist instead of
+    // hitting a live Stripe flow.
+    if (!CHECKOUT_ENABLED && plan !== 'enterprise') {
+      window.location.href = '/pricing#waitlist';
+      return;
+    }
+
     try {
       if (plan === 'hobby') {
         toast.loading('Redirecting to checkout...');
@@ -252,6 +265,12 @@ const BillingPage: React.FC = () => {
   const handleBuyTokenPack = async (pack: CreditPack) => {
     if (!user) {
       toast.error('Please log in to purchase credits');
+      return;
+    }
+
+    // Gate credit pack purchases behind the managed-credits waitlist.
+    if (!CHECKOUT_ENABLED) {
+      window.location.href = '/pricing#waitlist';
       return;
     }
 

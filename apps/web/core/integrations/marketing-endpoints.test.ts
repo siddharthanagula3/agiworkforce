@@ -6,26 +6,25 @@
  * createSupportTicket, getUserTickets, getResources, and getPricingPlans are
  * now stub implementations that return empty arrays/objects pending API route
  * implementation.
+ *
+ * submitContactForm, subscribeToNewsletter, and trackResourceDownload were
+ * removed; they posted to nonexistent API routes and had zero live callers.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  submitContactForm,
-  subscribeToNewsletter,
   getBlogPosts,
   getBlogCategories,
   getResources,
-  trackResourceDownload,
   getPricingPlans,
   getSupportCategories,
   getHelpArticles,
   getFAQItems,
   createSupportTicket,
   getUserTickets,
-  type ContactFormData,
-  type NewsletterData,
   type SupportTicket,
 } from './marketing-endpoints';
+import * as endpoints from './marketing-endpoints';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -46,113 +45,17 @@ describe('Marketing Endpoints', () => {
     vi.restoreAllMocks();
   });
 
-  describe('submitContactForm', () => {
-    const mockFormData: ContactFormData = {
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john@example.com',
-      company: 'Acme Inc',
-      phone: '+1234567890',
-      companySize: '50-100',
-      message: 'I would like to learn more about your product.',
-      source: 'website',
-    };
-
-    it('should submit contact form successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, id: 'contact-123' }),
-      });
-
-      const result = await submitContactForm(mockFormData);
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/contact'),
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(mockFormData),
-        }),
-      );
+  describe('removed dead exports', () => {
+    it('no longer exports submitContactForm', () => {
+      expect('submitContactForm' in endpoints).toBe(false);
     });
 
-    it('should throw error on submission failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Invalid email format' }),
-      });
-
-      await expect(submitContactForm(mockFormData)).rejects.toThrow(
-        new Error('Invalid email format'),
-      );
+    it('no longer exports subscribeToNewsletter', () => {
+      expect('subscribeToNewsletter' in endpoints).toBe(false);
     });
 
-    it('should handle network errors', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      await expect(submitContactForm(mockFormData)).rejects.toThrow(new Error('Network error'));
-    });
-
-    it('should use default error message when none provided', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({}),
-      });
-
-      await expect(submitContactForm(mockFormData)).rejects.toThrow(
-        new Error('Failed to submit contact form'),
-      );
-    });
-  });
-
-  describe('subscribeToNewsletter', () => {
-    const mockNewsletterData: NewsletterData = {
-      email: 'subscriber@example.com',
-      name: 'Jane Doe',
-      source: 'footer',
-      tags: ['product-updates', 'blog'],
-    };
-
-    it('should subscribe to newsletter successfully', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
-
-      const result = await subscribeToNewsletter(mockNewsletterData);
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/newsletter/subscribe'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify(mockNewsletterData),
-        }),
-      );
-    });
-
-    it('should throw error on subscription failure', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: () => Promise.resolve({ error: 'Email already subscribed' }),
-      });
-
-      await expect(subscribeToNewsletter(mockNewsletterData)).rejects.toThrow(
-        new Error('Email already subscribed'),
-      );
-    });
-
-    it('should handle minimal newsletter data', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
-
-      await subscribeToNewsletter({ email: 'test@example.com' });
-
-      const callBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(callBody.email).toBe('test@example.com');
+    it('no longer exports trackResourceDownload', () => {
+      expect('trackResourceDownload' in endpoints).toBe(false);
     });
   });
 
@@ -246,42 +149,6 @@ describe('Marketing Endpoints', () => {
 
       expect(Array.isArray(result)).toBe(true);
       expect(result.length).toBe(0);
-    });
-  });
-
-  describe('trackResourceDownload', () => {
-    it('should track resource download', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
-
-      const result = await trackResourceDownload('resource-123', 'user@example.com');
-
-      expect(result.success).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/resources/download'),
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            resourceId: 'resource-123',
-            userEmail: 'user@example.com',
-          }),
-        }),
-      );
-    });
-
-    it('should work without user email', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true }),
-      });
-
-      await trackResourceDownload('resource-123');
-
-      const callBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(callBody.resourceId).toBe('resource-123');
-      expect(callBody.userEmail).toBeUndefined();
     });
   });
 
