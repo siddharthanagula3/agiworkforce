@@ -35,6 +35,8 @@ export default [
       'coverage/**',
       '**/coverage/**',
       '**/.expo/**',
+      // Downloaded VS Code test harness (binaries + sample extensions) — not source
+      '**/.vscode-test/**',
       '.claude/worktrees/**',
       '**/.claude/worktrees/**',
       '.worktrees/**',
