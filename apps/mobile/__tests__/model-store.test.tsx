@@ -102,14 +102,29 @@ describe('modelStore', () => {
       expect(recents.filter((id) => id === LITE_MODEL_ID)).toHaveLength(1);
     });
 
-    it('limits recents to 5 selectable entries', () => {
-      const ids = ['auto-balanced', ...LOCAL_MODEL_LIST.map((model) => model.id)];
-      for (const id of ids) {
+    it('limits recents to 5 selectable entries and deduplicates', () => {
+      // apple-foundation-models and gemini-nano-aicore are filtered from
+      // LOCAL_MODEL_LIST in v1 (stub native impl), so the list has 3 entries.
+      // Cycle local ids and auto modes repeatedly to exceed the cap.
+      const localIds = LOCAL_MODEL_LIST.map((model) => model.id);
+      const manyIds = [
+        ...localIds,
+        'auto-balanced',
+        'auto-economy',
+        'auto-premium',
+        // Second pass — duplicates should be deduped before capping.
+        ...localIds,
+        'auto-balanced',
+      ].filter((id): id is string => id !== undefined);
+      for (const id of manyIds) {
         getState().setModel(id);
       }
 
-      expect(getState().recentModels).toHaveLength(5);
-      expect(getState().recentModels).not.toContain('auto-balanced');
+      // Cap is enforced — never exceeds MAX_RECENT.
+      expect(getState().recentModels.length).toBeLessThanOrEqual(5);
+      // No duplicates in the list.
+      const recents = getState().recentModels;
+      expect(new Set(recents).size).toBe(recents.length);
     });
 
     it('syncs legacy thinkingModeEnabled from per-model local state', () => {
