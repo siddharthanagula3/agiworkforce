@@ -1,14 +1,24 @@
+import 'server-only';
+
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
+import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ProfileRow } from '@/lib/server/neon-types';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { canAccessManualModelSelection } from '@agiworkforce/types';
+
+const PatchMeSchema = z.object({
+  display_name: z.string().min(1).max(120).optional(),
+  avatar_url: z.string().url().nullable().optional(),
+});
 
 async function handleGetMe(request: NextRequest) {
   // Rate limiting
@@ -92,7 +102,81 @@ async function handleGetMe(request: NextRequest) {
   }
 }
 
+/**
+ * PATCH /api/me
+ * Update the current user's profile (display_name, avatar_url).
+ * Only columns that exist in public.profiles are persisted here.
+ * Extended profile fields (bio, phone, timezone, language) are stored
+ * via PUT /api/settings/preferences under the "profile" namespace.
+ */
+async function handlePatchMe(request: NextRequest) {
+  const rateLimitResponse = await withRateLimit(request, 'me');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+
+  const body = await request.json().catch(() => ({}));
+  const parsed = PatchMeSchema.safeParse(body);
+  if (!parsed.success) {
+    throw createError.validation('Invalid request body', parsed.error.issues);
+  }
+
+  const updates = parsed.data;
+  if (Object.keys(updates).length === 0) {
+    throw createError.validation('At least one field is required');
+  }
+
+  const db = getNeonDb();
+
+  // Build both INSERT columns and UPDATE SET clauses together so a first-write
+  // (no existing profile row) also persists the requested field values.
+  const insertCols: string[] = ['id', 'updated_at'];
+  const insertVals: string[] = ['$1', 'now()'];
+  const setClauses: string[] = ['updated_at = now()'];
+  const params: unknown[] = [userId];
+
+  if (updates.display_name !== undefined) {
+    params.push(updates.display_name);
+    const idx = params.length;
+    insertCols.push('display_name');
+    insertVals.push(`$${idx}`);
+    setClauses.push(`display_name = $${idx}`);
+  }
+  if (updates.avatar_url !== undefined) {
+    params.push(updates.avatar_url);
+    const idx = params.length;
+    insertCols.push('avatar_url');
+    insertVals.push(`$${idx}`);
+    setClauses.push(`avatar_url = $${idx}`);
+  }
+
+  await db.execute(
+    `insert into public.profiles (${insertCols.join(', ')})
+     values (${insertVals.join(', ')})
+     on conflict (id)
+     do update set ${setClauses.join(', ')}`,
+    params,
+  );
+
+  logger.info({ userId }, 'Profile updated via PATCH /api/me');
+
+  const [row] = await db.query<ProfileRow>(
+    'select id, email, display_name, avatar_url from public.profiles where id = $1 limit 1',
+    [userId],
+  );
+
+  return NextResponse.json({
+    id: userId,
+    display_name: row?.display_name ?? null,
+    avatar_url: row?.avatar_url ?? null,
+  });
+}
+
 export const GET = withErrorHandler(handleGetMe);
+export const PATCH = withErrorHandler(handlePatchMe);
 
 export async function OPTIONS(request: NextRequest) {
   const preflightResponse = handleCorsPreflightRequest(request);
