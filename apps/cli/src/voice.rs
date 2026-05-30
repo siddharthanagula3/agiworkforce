@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::agent::AgentSession;
+use crate::agent::{AgentSession, PrivacyMode};
 use crate::config::CliConfig;
 use crate::markdown::MarkdownRenderer;
 use crate::output;
@@ -68,11 +68,23 @@ const SUPPORTED_LANGUAGES: &[(&str, &str)] = &[
 /// Listens for push-to-talk input (SPACE to record, ESC to exit). After each
 /// recording, audio is transcribed via Whisper and the resulting text is fed
 /// into the agent session as a normal user message.
+///
+/// # Privacy gate
+///
+/// When the active session is `Local`, audio is NEVER sent to the OpenAI cloud
+/// Whisper API unless the caller explicitly sets `voice_cloud_opt_in = true`.
+/// This implements the hard-lock rule: "Never silently route Local audio to
+/// cloud without an explicit gate."  With `Local` mode and `opt_in = false` the
+/// OpenAI backend is suppressed entirely; if no local whisper binary is on PATH
+/// either, voice mode exits with a clear message directing the user to install
+/// one or explicitly opt in.
 pub async fn run_voice_mode(
     session: &mut AgentSession,
     config: &CliConfig,
     voice_lang: &str,
+    voice_cloud_opt_in: bool,
 ) -> Result<()> {
+    let privacy_mode = session.privacy_mode.clone();
     // Validate language
     if !SUPPORTED_LANGUAGES
         .iter()
@@ -86,8 +98,15 @@ pub async fn run_voice_mode(
         );
     }
 
-    // Detect transcription backend
-    let backend = detect_backend();
+    // Detect transcription backend, then apply the Local-mode privacy gate.
+    //
+    // When the session is Local and the user has NOT explicitly opted in to
+    // cloud egress, we must not use the OpenAI Whisper API even if an API key
+    // is present.  We downgrade to the local binary in that case; if no local
+    // binary exists either, we abort with guidance rather than silently egress.
+    let raw_backend = detect_backend();
+    let backend = gate_backend(raw_backend, &privacy_mode, voice_cloud_opt_in);
+
     match &backend {
         TranscriptionBackend::OpenAiApi => {
             eprintln!(
@@ -103,10 +122,18 @@ pub async fn run_voice_mode(
             );
         }
         TranscriptionBackend::None => {
-            output::print_error(
-                "No transcription backend available.\n\
-                 Set OPENAI_API_KEY for the Whisper API, or install the `whisper` CLI tool.",
-            );
+            if privacy_mode == PrivacyMode::Local && !voice_cloud_opt_in {
+                output::print_error(
+                    "Voice mode in Local privacy mode requires a local whisper binary on PATH.\n\
+                     Install `whisper` or `whisper-cpp` for fully local transcription, or pass\n\
+                     `--voice-cloud-opt-in` to explicitly allow audio egress to OpenAI cloud.",
+                );
+            } else {
+                output::print_error(
+                    "No transcription backend available.\n\
+                     Set OPENAI_API_KEY for the Whisper API, or install the `whisper` CLI tool.",
+                );
+            }
             return Ok(());
         }
     }
@@ -161,7 +188,7 @@ pub async fn run_voice_mode(
 
         // Transcribe
         let spinner = output::create_spinner("Transcribing...");
-        let transcript = transcribe(&backend, &recording, voice_lang).await;
+        let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, voice_cloud_opt_in).await;
         spinner.finish_and_clear();
 
         let text = match transcript {
@@ -298,6 +325,89 @@ fn detect_backend() -> TranscriptionBackend {
         }
     }
 
+    TranscriptionBackend::None
+}
+
+// ---------------------------------------------------------------------------
+// Privacy gate — HARD LOCK: no silent Local→cloud egress
+// ---------------------------------------------------------------------------
+
+/// Assert that cloud egress is permitted given the current privacy context.
+///
+/// This is the authoritative, pure-function enforcement point for the rule:
+/// *"Never silently route Local chats, files, or sessions to BYOK or managed
+/// cloud."*
+///
+/// - `OpenAiApi` backend + `Local` mode + `opt_in = false` → **Err** (fail-closed).
+/// - `LocalBinary` backend → always **Ok** (runs on-device, no egress).
+/// - `OpenAiApi` backend + non-Local mode → **Ok** (user is knowingly in cloud mode).
+/// - `OpenAiApi` backend + `opt_in = true` → **Ok** (explicit user consent granted).
+///
+/// The function is intentionally I/O-free so that the invariant can be verified
+/// by deterministic unit tests without any network or audio device access.
+fn gate_cloud_egress(
+    backend: &TranscriptionBackend,
+    privacy_mode: &PrivacyMode,
+    opt_in: bool,
+) -> Result<()> {
+    match backend {
+        TranscriptionBackend::OpenAiApi => {
+            if *privacy_mode == PrivacyMode::Local && !opt_in {
+                bail!(
+                    "Privacy boundary blocked: this session is Local, but voice transcription \
+                     would send audio to the OpenAI cloud Whisper API.\n\
+                     \n\
+                     Options:\n\
+                     • Install `whisper` or `whisper-cpp` for fully on-device transcription.\n\
+                     • Run with `--voice-cloud-opt-in` to explicitly allow cloud egress (this \
+                       will leave Local mode for voice transcription only).\n\
+                     \n\
+                     This matches the behaviour of `/continue-with-byok` for chat — audio \
+                     egress must always be intentional and visible."
+                );
+            }
+            Ok(())
+        }
+        // Local binary runs entirely on-device — no egress regardless of mode.
+        TranscriptionBackend::LocalBinary(_) | TranscriptionBackend::None => Ok(()),
+    }
+}
+
+/// Apply the privacy gate to a raw backend selection, returning the effective
+/// backend that may be used for transcription.
+///
+/// If the raw backend is `OpenAiApi` but the session is `Local` without opt-in,
+/// this function falls back to the local binary (if available) or `None`.
+/// Callers should inspect the returned backend; if `None`, no transcription is
+/// possible and the caller must surface a helpful message to the user.
+fn gate_backend(
+    raw: TranscriptionBackend,
+    privacy_mode: &PrivacyMode,
+    opt_in: bool,
+) -> TranscriptionBackend {
+    match raw {
+        TranscriptionBackend::OpenAiApi
+            if *privacy_mode == PrivacyMode::Local && !opt_in =>
+        {
+            // Suppress cloud backend: look for a local fallback instead.
+            find_local_binary_backend()
+        }
+        other => other,
+    }
+}
+
+/// Probe for an on-device whisper binary without checking the API key.
+fn find_local_binary_backend() -> TranscriptionBackend {
+    for bin in &["whisper", "whisper-cpp"] {
+        if let Ok(output) = std::process::Command::new("which").arg(bin).output() {
+            if output.status.success() {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() {
+                    return TranscriptionBackend::LocalBinary(PathBuf::from(path));
+                }
+            }
+        }
+    }
     TranscriptionBackend::None
 }
 
@@ -668,7 +778,16 @@ async fn transcribe(
     backend: &TranscriptionBackend,
     recording: &AudioRecording,
     language: &str,
+    privacy_mode: &PrivacyMode,
+    opt_in: bool,
 ) -> Result<String> {
+    // Belt-and-suspenders: enforce the privacy gate at the stream layer,
+    // immediately before any network call could be made.  gate_backend()
+    // should have already prevented an OpenAiApi backend from reaching here in
+    // a Local session without opt-in, but we assert again so the invariant
+    // holds even if the call chain changes in future.
+    gate_cloud_egress(backend, privacy_mode, opt_in)?;
+
     // First encode to WAV
     let wav_path = encode_wav(recording)?;
 
@@ -811,3 +930,165 @@ fn language_name(code: &str) -> &'static str {
 
 // cpal re-export for the check function
 use cpal::traits::{DeviceTrait, HostTrait};
+
+// ---------------------------------------------------------------------------
+// Tests — privacy-gate invariant
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Helper: construct a dummy LocalBinary backend at a fake path.
+    fn local_bin() -> TranscriptionBackend {
+        TranscriptionBackend::LocalBinary(PathBuf::from("/usr/local/bin/whisper"))
+    }
+
+    // -----------------------------------------------------------------------
+    // gate_cloud_egress — the authoritative no-silent-egress invariant
+    // -----------------------------------------------------------------------
+
+    /// INVARIANT: Local session + OpenAI backend + no explicit opt-in MUST fail.
+    /// This is the core P1-PRIVACY-01 assertion.
+    #[test]
+    fn local_session_cloud_backend_no_opt_in_is_blocked() {
+        let result = gate_cloud_egress(
+            &TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Local,
+            false, // opt_in = false
+        );
+        assert!(
+            result.is_err(),
+            "gate_cloud_egress must block OpenAiApi + Local + opt_in=false"
+        );
+        let msg = format!("{:#}", result.unwrap_err());
+        assert!(
+            msg.contains("Privacy boundary blocked"),
+            "Error message must reference the privacy boundary; got: {msg}"
+        );
+    }
+
+    /// INVARIANT: Local session + OpenAI backend + explicit opt-in is permitted.
+    /// (User made an informed choice — egress is intentional and visible.)
+    #[test]
+    fn local_session_cloud_backend_with_opt_in_is_allowed() {
+        let result = gate_cloud_egress(
+            &TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Local,
+            true, // opt_in = true
+        );
+        assert!(
+            result.is_ok(),
+            "gate_cloud_egress must allow OpenAiApi + Local + opt_in=true"
+        );
+    }
+
+    /// INVARIANT: BYOK session + OpenAI backend is always permitted (user is
+    /// already in a cloud-egress mode).
+    #[test]
+    fn byok_session_cloud_backend_is_allowed() {
+        let result = gate_cloud_egress(
+            &TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Byok,
+            false,
+        );
+        assert!(
+            result.is_ok(),
+            "gate_cloud_egress must allow OpenAiApi in Byok mode"
+        );
+    }
+
+    /// INVARIANT: Managed session + OpenAI backend is always permitted.
+    #[test]
+    fn managed_session_cloud_backend_is_allowed() {
+        let result = gate_cloud_egress(
+            &TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Managed,
+            false,
+        );
+        assert!(
+            result.is_ok(),
+            "gate_cloud_egress must allow OpenAiApi in Managed mode"
+        );
+    }
+
+    /// INVARIANT: Local session + LocalBinary backend is always permitted
+    /// (no network egress involved).
+    #[test]
+    fn local_session_local_binary_is_always_allowed() {
+        let result = gate_cloud_egress(&local_bin(), &PrivacyMode::Local, false);
+        assert!(
+            result.is_ok(),
+            "gate_cloud_egress must allow LocalBinary in any mode (no egress)"
+        );
+    }
+
+    /// INVARIANT: The None backend passes gate_cloud_egress (nothing to egress).
+    #[test]
+    fn none_backend_passes_gate() {
+        let result = gate_cloud_egress(&TranscriptionBackend::None, &PrivacyMode::Local, false);
+        assert!(
+            result.is_ok(),
+            "gate_cloud_egress must pass TranscriptionBackend::None (nothing to egress)"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // gate_backend — downgrade behaviour
+    // -----------------------------------------------------------------------
+
+    /// gate_backend must downgrade OpenAiApi to None when Local + no opt-in
+    /// and no local binary is available.  We cannot control PATH in tests so
+    /// we assert the output is either None or LocalBinary — never OpenAiApi.
+    #[test]
+    fn gate_backend_suppresses_openai_for_local_no_opt_in() {
+        let effective = gate_backend(
+            TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Local,
+            false,
+        );
+        // Must NOT be OpenAiApi — any other variant is acceptable.
+        assert!(
+            !matches!(effective, TranscriptionBackend::OpenAiApi),
+            "gate_backend must not return OpenAiApi for Local + no opt-in"
+        );
+    }
+
+    /// gate_backend must pass OpenAiApi through unchanged when opt-in is true.
+    #[test]
+    fn gate_backend_passes_openai_for_local_with_opt_in() {
+        let effective = gate_backend(
+            TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Local,
+            true,
+        );
+        assert!(
+            matches!(effective, TranscriptionBackend::OpenAiApi),
+            "gate_backend must return OpenAiApi when opt_in=true"
+        );
+    }
+
+    /// gate_backend must pass OpenAiApi through unchanged for non-Local modes.
+    #[test]
+    fn gate_backend_passes_openai_for_byok() {
+        let effective = gate_backend(
+            TranscriptionBackend::OpenAiApi,
+            &PrivacyMode::Byok,
+            false,
+        );
+        assert!(
+            matches!(effective, TranscriptionBackend::OpenAiApi),
+            "gate_backend must return OpenAiApi for Byok mode (already cloud-egress mode)"
+        );
+    }
+
+    /// gate_backend must pass LocalBinary through unchanged regardless of mode.
+    #[test]
+    fn gate_backend_passes_local_binary_unchanged() {
+        let effective = gate_backend(local_bin(), &PrivacyMode::Local, false);
+        assert!(
+            matches!(effective, TranscriptionBackend::LocalBinary(_)),
+            "gate_backend must preserve LocalBinary backend"
+        );
+    }
+}
