@@ -134,6 +134,7 @@ dependencies = [
 name = "agiworkforce-cli"
 version = "1.7.1"
 dependencies = [
+ "agiworkforce-app-server",
  "agiworkforce-command-registry",
  "agiworkforce-protocol",
  "agiworkforce-sandbox-policy",

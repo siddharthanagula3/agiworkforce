@@ -1247,6 +1247,38 @@ message -- revise and call `update_plan` again.\n\n",
             final_response = continuation.text;
             current_tool_calls = continuation.tool_calls;
 
+            // Budget enforcement: stop the agent loop when cumulative spend exceeds the cap.
+            if let Some(budget_cap) = self.max_budget_usd {
+                let cumulative = crate::cost_ledger::dollars_for(
+                    &self.model,
+                    total_input,
+                    total_output,
+                    total_cache_read,
+                    total_cache_creation,
+                );
+                if cumulative >= budget_cap {
+                    let session_id = self
+                        .managed_session_id()
+                        .unwrap_or("(no session)")
+                        .to_string();
+                    eprintln!(
+                        "\n{}",
+                        format!(
+                            "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
+                            cumulative, budget_cap
+                        )
+                        .yellow()
+                    );
+                    crate::agent_events::AgentEvent::BudgetExhausted {
+                        session_id,
+                        cumulative_dollars: cumulative,
+                        limit_dollars: budget_cap,
+                    }
+                    .emit_stdout();
+                    break;
+                }
+            }
+
             if detect_content_loop(&final_response) {
                 self.loop_strike_count += 1;
 

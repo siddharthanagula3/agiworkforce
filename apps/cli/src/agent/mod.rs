@@ -78,6 +78,9 @@ pub struct AgentSession {
     pub(crate) hooks_config: hooks::HooksConfig,
     pub(crate) mcp_manager: Option<mcp::McpManager>,
     pub max_turns: Option<usize>,
+    /// If set, stop the agent loop when cumulative spend exceeds this many USD
+    /// and emit a `budget_exhausted` status event.
+    pub max_budget_usd: Option<f64>,
     pub plan_mode: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
     pub plan_approved: bool,
@@ -271,6 +274,7 @@ impl AgentSession {
             hooks_config,
             mcp_manager: None,
             max_turns: None,
+            max_budget_usd: None,
             plan_mode: false,
             permission_mode: crate::cli_options::PermissionMode::Default,
             plan_approved: false,
@@ -686,6 +690,20 @@ impl AgentSession {
         let managed_session = ManagedSession::load_from_path(&resolved.path)?;
         self.adopt_managed_session(managed_session, resolved.path);
         self.sync_managed_session_metadata()?;
+        Ok(())
+    }
+
+    /// Override the managed session ID with a caller-supplied UUID.  This must
+    /// be called after `enable_managed_session` so the session object exists.
+    /// Useful for embedder-driven flows that pre-allocate session IDs.
+    pub fn override_session_id(&mut self, session_id: &str) -> Result<()> {
+        if let Some(ref mut ms) = self.managed_session {
+            ms.session_id = session_id.to_string();
+            if let Some(ref path) = self.managed_session_path {
+                ms.save_to_path(path)?;
+            }
+            self.sync_managed_session_metadata()?;
+        }
         Ok(())
     }
 

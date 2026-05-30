@@ -36,6 +36,7 @@ dead_code = "deny"
 await_holding_lock = "warn"
 
 [dependencies]
+agiworkforce-app-server = { path = "../../crates/agiworkforce-app-server" }
 agiworkforce-protocol = { path = "../../crates/agiworkforce-protocol" }
 agiworkforce-sandbox-policy = { path = "../../crates/sandbox-policy" }
 agiworkforce-command-registry = { path = "../../crates/agiworkforce-command-registry" }
