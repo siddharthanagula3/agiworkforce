@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { addCsrfHeaders } from '@/lib/client/csrf';
+import { addCsrfHeaders, CsrfTokenError } from '@/lib/client/csrf';
 
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
 
@@ -42,8 +42,12 @@ export function WaitlistForm({
         setErrorMsg(data.error ?? 'Something went wrong. Please try again.');
         setState('error');
       }
-    } catch {
-      setErrorMsg('Network error. Please try again.');
+    } catch (err) {
+      if (err instanceof CsrfTokenError && err.status === 429) {
+        setErrorMsg('Too many requests. Please wait a moment and try again.');
+      } else {
+        setErrorMsg('Network error. Please try again.');
+      }
       setState('error');
     }
   }

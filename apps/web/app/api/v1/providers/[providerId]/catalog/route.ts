@@ -4,9 +4,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import { getEnv } from '@/utils/env';
 import { withRateLimit } from '@/lib/rate-limit';
+import { logger } from '@/lib/logger';
 
 /**
  * GET /api/v1/providers/:providerId/catalog — proxy to api-gateway model catalog.
+ *
+ * Security: API_GATEWAY_URL is validated against https scheme in production
+ * (mirrors the guard in [providerId]/stream/route.ts lines 131-142).
  */
 export async function GET(
   request: NextRequest,
@@ -17,6 +21,20 @@ export async function GET(
 
   const { providerId } = await params;
   const gatewayUrl = getEnv('API_GATEWAY_URL', 'http://localhost:3000').replace(/\/+$/, '');
+
+  // Validate gateway URL — production must use https, not localhost or plain http.
+  if (process.env.NODE_ENV === 'production') {
+    try {
+      const parsed = new URL(gatewayUrl);
+      if (parsed.protocol !== 'https:') {
+        logger.error({ gatewayUrl }, 'API_GATEWAY_URL must use https in production');
+        return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+      }
+    } catch {
+      return NextResponse.json({ error: 'Gateway misconfigured' }, { status: 503 });
+    }
+  }
+
   const authHeader = request.headers.get('authorization') ?? '';
 
   const res = await fetch(
