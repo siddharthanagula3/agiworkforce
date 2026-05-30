@@ -5,7 +5,7 @@
 export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
 export { detectCapabilities, isThermallyThrottled } from './capabilities';
 export { tier1Generate } from './tier1';
-export { tier2LoadModel, tier2Generate, tier2Release } from './tier2';
+export { tier2LoadModel, tier2Generate, tier2Release, _setLLMModuleForTesting } from './tier2';
 export { tier3LoadModel, tier3Generate, tier3Release } from './tier3';
 export {
   getModelById,
