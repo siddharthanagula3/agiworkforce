@@ -15,7 +15,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v1.0.0 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
+ AGI Workforce v1.7.1 │ claude-sonnet-4-6 │ anthropic │  main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -108,14 +108,14 @@ network, 5xx, or stream-disconnect, the next model takes over — provider
 auto-switched, banner flashed, JSON event emitted.
 
 ```bash
-agi -m claude-opus-4-6,gpt-5.4,llama3.1:8b "refactor main.rs"
+agi -m claude-opus-4.8,gpt-5.5,llama3.1:8b "refactor main.rs"
 ```
 
 Pair with `--demo` to see the rotation fire deterministically:
 
 ```bash
-agi --demo --json-events exec -m claude-sonnet-4-6,gpt-5.4 "hi"
-# → {"event":"fallback_triggered","from":"claude-sonnet-4-6","to":"gpt-5.4","reason":"api_rate_limit"}
+agi --demo --json-events exec -m claude-sonnet-4-6,gpt-5.5 "hi"
+# → {"event":"fallback_triggered","from":"claude-sonnet-4-6","to":"gpt-5.5","reason":"api_rate_limit"}
 ```
 
 ### 4. Session replay / fork
@@ -179,10 +179,10 @@ Use `/agents`, `/agents show <name>`, `/agents create <name> [--global]`, and
 
 ```
 agi --demo --json-events exec \
-  -m claude-sonnet-4-6,gpt-5.4 "refactor main.rs"
+  -m claude-sonnet-4-6,gpt-5.5 "refactor main.rs"
 # 1. spawning + ready_for_prompt events
 # 2. demo synthesizes 429
-# 3. ↘ Falling back: claude-sonnet-4-6 → gpt-5.4 (api_rate_limit)
+# 3. ↘ Falling back: claude-sonnet-4-6 → gpt-5.5 (api_rate_limit)
 # 4. fallback_triggered JSON event
 # 5. fresh model answers
 # 6. turn_usage + finished events

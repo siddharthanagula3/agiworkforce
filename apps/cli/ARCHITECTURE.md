@@ -311,7 +311,7 @@ Subscription paths for GitHub Copilot (`~/.copilot/token.json`) and ChatGPT Plus
 **FallbackChain** ([routing/fallback.rs](src/routing/fallback.rs)):
 
 ```bash
-agi -m "claude-opus-4-6,gpt-5.4,llama3.1:8b"
+agi -m "claude-opus-4.8,gpt-5.5,llama3.1:8b"
 ```
 
 - Comma-separated, parsed by `FallbackChain::parse()`

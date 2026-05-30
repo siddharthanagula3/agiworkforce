@@ -81,7 +81,7 @@ agi exec "what files are in this directory?"
 agi
 
 # 5. Multi-provider with fallback chain
-agi exec -m "claude-opus-4-6,gpt-5.4,llama3.1:8b" "explain this code"
+agi exec -m "claude-opus-4.8,gpt-5.5,llama3.1:8b" "explain this code"
 ```
 
 ## 22 subcommands

@@ -3,15 +3,21 @@
 //
 // E7 / P1-CATALOG class-guard: the single source of truth for model IDs is
 // packages/types/src/models.json. This guard fails if NON-TEST TypeScript
-// shipping code references a model ID that is NOT in the canonical catalog
-// (i.e. a removed/ghost/drifted ID). It is the durable backstop that stops the
-// recurring catalog-drift class (see reports/audit/RECONCILED.md).
+// shipping code OR hand-maintained doc files (.md/.mdx) reference a model ID
+// that is NOT in the canonical catalog (i.e. a removed/ghost/drifted ID). It
+// is the durable backstop that stops the recurring catalog-drift class (see
+// reports/audit/RECONCILED.md).
 //
-// Scope: .ts/.tsx under apps/ packages/ services/ (excluding tests, specs,
-// __tests__, dist, node_modules, .next, _archive). Comment lines (JSDoc///) are
-// skipped — doc examples are hygiene, not live behavior. The Rust catalog reads
-// models.json via include_str!, so Rust drift is covered by `cargo test` + the
-// Rust ghost-model tests; this guard targets the hand-maintained TS sites.
+// Scope:
+//   - .ts/.tsx under apps/ packages/ services/ (excluding tests, specs,
+//     __tests__, dist, node_modules, .next, _archive). Comment lines (JSDoc///)
+//     are skipped — doc examples are hygiene, not live behavior.
+//   - .md/.mdx under apps/ packages/ services/ (same exclusions). HTML comment
+//     lines (<!-- ... -->) are skipped for markdown files.
+//
+// The Rust catalog reads models.json via include_str!, so Rust drift is covered
+// by `cargo test` + the Rust ghost-model tests; this guard targets the
+// hand-maintained TS and doc sites.
 //
 // Extend DISALLOWED when curating models.json (remove an ID -> add it here).
 
@@ -84,6 +90,7 @@ const SKIP_DIR = new Set([
 ]);
 const isTestFile = (f) => /\.(test|spec)\.[cm]?tsx?$/.test(f) || /\.stories\./.test(f);
 const isTs = (f) => /\.[cm]?tsx?$/.test(f);
+const isMd = (f) => /\.mdx?$/.test(f);
 
 function* walk(dir) {
   let entries;
@@ -99,15 +106,23 @@ function* walk(dir) {
       if (SKIP_DIR.has(e.name)) continue;
       yield* walk(full);
     } else if (e.isFile() && isTs(e.name) && !isTestFile(e.name)) {
-      yield full;
+      yield { file: full, kind: 'ts' };
+    } else if (e.isFile() && isMd(e.name)) {
+      yield { file: full, kind: 'md' };
     }
   }
 }
 
-// Skip comment lines (JSDoc examples are not live behavior).
+// Skip comment lines in TypeScript/TSX (JSDoc examples are not live behavior).
 function isCommentLine(line) {
   const t = line.trim();
   return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('*/');
+}
+
+// Skip HTML comment lines in Markdown (<!-- ... -->).
+function isMdCommentLine(line) {
+  const t = line.trim();
+  return t.startsWith('<!--');
 }
 
 if (!fs.existsSync(CATALOG)) {
@@ -117,7 +132,7 @@ if (!fs.existsSync(CATALOG)) {
 
 const violations = [];
 for (const scanRoot of SCAN_ROOTS) {
-  for (const file of walk(path.join(root, scanRoot))) {
+  for (const { file, kind } of walk(path.join(root, scanRoot))) {
     let text;
     try {
       text = fs.readFileSync(file, 'utf8');
@@ -128,9 +143,10 @@ for (const scanRoot of SCAN_ROOTS) {
       DISALLOWED_SUBSTRING.some((id) => text.includes(id)) ||
       DISALLOWED_TOKEN.some((id) => text.includes(id));
     if (!cheapHit) continue;
+    const skipComment = kind === 'md' ? isMdCommentLine : isCommentLine;
     const lines = text.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (isCommentLine(lines[i])) continue;
+      if (skipComment(lines[i])) continue;
       for (const id of DISALLOWED_SUBSTRING) {
         if (lines[i].includes(id)) {
           violations.push({
@@ -156,7 +172,9 @@ for (const scanRoot of SCAN_ROOTS) {
 }
 
 if (violations.length > 0) {
-  console.error('Model-catalog integrity check FAILED — removed/ghost model IDs in live TS code:');
+  console.error(
+    'Model-catalog integrity check FAILED — removed/ghost model IDs in live TS or doc files:',
+  );
   console.error(
     '(IDs must come from packages/types/src/models.json — fix the site or update DISALLOWED if the ID was re-added.)\n',
   );
@@ -167,4 +185,6 @@ if (violations.length > 0) {
   process.exit(1);
 }
 
-console.log('Model-catalog integrity check passed (no removed/ghost model IDs in live TS code).');
+console.log(
+  'Model-catalog integrity check passed (no removed/ghost model IDs in live TS or doc files).',
+);
