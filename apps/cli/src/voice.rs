@@ -86,7 +86,7 @@ pub async fn run_voice_mode(
     config: &CliConfig,
     voice_lang: &str,
 ) -> Result<()> {
-    let privacy_mode = session.privacy_mode.clone();
+    let privacy_mode = session.privacy_mode;
 
     // Read the cloud opt-in from the environment.  This must NOT be a
     // function parameter — keeping the decision here prevents callers from
