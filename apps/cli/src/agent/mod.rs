@@ -271,6 +271,11 @@ impl AgentSession {
         );
 
         let privacy_mode = provider_privacy_mode(&provider);
+        // Keep the advisor tool's Local-privacy guard in sync with this session's
+        // privacy mode so a Local session can never reach the cloud advisor.
+        crate::features::exec::tools::set_advisor_local_privacy_mode(
+            privacy_mode == PrivacyMode::Local,
+        );
 
         Self {
             messages: vec![system_message],
@@ -563,6 +568,9 @@ impl AgentSession {
 
     pub fn set_privacy_mode(&mut self, mode: PrivacyMode) {
         self.privacy_mode = mode;
+        crate::features::exec::tools::set_advisor_local_privacy_mode(
+            mode == PrivacyMode::Local,
+        );
     }
 
     pub fn apply_ui_config(&mut self, config: &CliConfig) {
@@ -602,6 +610,9 @@ impl AgentSession {
         if self.privacy_mode != PrivacyMode::Local || provider_mode == PrivacyMode::Local {
             self.privacy_mode = provider_mode;
         }
+        crate::features::exec::tools::set_advisor_local_privacy_mode(
+            self.privacy_mode == PrivacyMode::Local,
+        );
     }
 
     /// Switch the active output style.

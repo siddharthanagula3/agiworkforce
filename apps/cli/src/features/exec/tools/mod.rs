@@ -15,6 +15,7 @@ mod task_registry;
 mod web;
 
 pub use task_registry::session_task_summaries;
+pub(crate) use task_registry::set_advisor_local_privacy_mode;
 
 use bash::execute_run_command;
 #[cfg(test)]
