@@ -527,7 +527,8 @@ mod tests {
             get_canonicalized_id("claude-sonnet-4-6"),
             "claude-sonnet-4.6"
         );
-        assert_eq!(get_canonicalized_id("claude-opus-4-6"), "claude-opus-4.6");
+        // claude-opus-4-6 is a legacy dash-form alias; catalog maps it to claude-opus-4.8.
+        assert_eq!(get_canonicalized_id("claude-opus-4-6"), "claude-opus-4.8");
         assert_eq!(
             get_canonicalized_id("gemini-3-pro-preview"),
             "gemini-3.1-pro-preview"
@@ -537,8 +538,8 @@ mod tests {
             get_canonicalized_id("claude-sonnet-4-5"),
             "claude-sonnet-4.6"
         );
-        // gpt-5.4-nano is its own SKU now (was previously aliased to mini).
-        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-nano");
+        // gpt-5.4-nano is aliased to gpt-5.4-mini in the catalog canonicalization map.
+        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-mini");
     }
 
     #[test]
