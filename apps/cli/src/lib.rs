@@ -317,7 +317,9 @@ pub struct Cli {
     no_sandbox: bool,
 
     /// Input format for print/SDK mode (text or stream-json).
-    #[arg(long, value_name = "FORMAT", value_enum, default_value = "text")]
+    /// Hidden: stream-json NDJSON command parsing is not yet wired to stdin;
+    /// the flag parses but stdin is always consumed as plain text.
+    #[arg(long, value_name = "FORMAT", value_enum, default_value = "text", hide = true)]
     input_format: cli_options::InputFormat,
 
     /// Permission mode for tool use.
@@ -2099,6 +2101,7 @@ pub async fn run_main() -> Result<()> {
             file_context_result.images,
             cli.max_budget_usd,
             cli.session_id_override.clone(),
+            cli.json_events,
         )
         .await;
     }
@@ -2473,6 +2476,7 @@ pub async fn run_oneshot(
     image_attachments: Vec<ImageAttachment>,
     max_budget_usd: Option<f64>,
     session_id_override: Option<String>,
+    json_events: bool,
 ) -> Result<()> {
     let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
     // Apply config-based provider override (e.g. "ollama-cloud") when the
@@ -2499,6 +2503,22 @@ pub async fn run_oneshot(
     // the managed session object exists.
     if let Some(ref sid) = session_id_override {
         session.override_session_id(sid)?;
+    }
+    // Wire --max-budget-usd: emit BudgetExhausted only when --json-events is
+    // active so stdout is not polluted in text/json-pretty output modes.
+    if max_budget_usd.is_some() && json_events {
+        let managed_id = session
+            .managed_session_id()
+            .unwrap_or("(no session)")
+            .to_string();
+        session.on_budget_exhausted = Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
+            agent_events::AgentEvent::BudgetExhausted {
+                session_id: managed_id.clone(),
+                cumulative_dollars: cumulative,
+                limit_dollars: limit,
+            }
+            .emit_stdout();
+        })));
     }
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
@@ -2831,6 +2851,37 @@ mod tests {
         assert_eq!(
             cli.session_id_override.as_deref(),
             Some("my-session-abc")
+        );
+    }
+
+    #[tokio::test]
+    async fn session_id_override_wires_to_managed_session() {
+        // Behavioral test: override_session_id() actually mutates the managed
+        // session's session_id so managed_session_id() returns the caller value.
+        let sys_ctx = context::gather_system_context();
+        let mut session = agent::AgentSession::new("claude-sonnet-4-6", &sys_ctx, None);
+        session
+            .enable_managed_session()
+            .expect("enable_managed_session should succeed");
+        let auto_id = session
+            .managed_session_id()
+            .expect("session should exist after enable")
+            .to_string();
+        assert!(!auto_id.is_empty(), "auto-generated session id should not be empty");
+
+        let custom = "test-override-id-behavioral";
+        session
+            .override_session_id(custom)
+            .expect("override_session_id should succeed");
+        assert_eq!(
+            session.managed_session_id(),
+            Some(custom),
+            "managed_session_id should reflect the overridden id"
+        );
+        assert_ne!(
+            session.managed_session_id(),
+            Some(auto_id.as_str()),
+            "id should have changed from the auto-generated value"
         );
     }
 
