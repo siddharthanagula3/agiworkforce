@@ -330,8 +330,21 @@ message -- revise and call `update_plan` again.\n\n",
                         if let Some((kind, true)) = cli_err_kind {
                             for fallback_model in chain.tail() {
                                 let prev_model = self.model.clone();
+                                let prev_provider = self.provider.clone();
+                                // Privacy-boundary guard: mutate provider/model and then
+                                // validate the boundary BEFORE calling stream_completion.
+                                // If the session is Local and the fallback is a cloud provider,
+                                // restore state and break fail-closed — never egress Local
+                                // session history to the network silently.
                                 self.model = fallback_model.clone();
                                 self.provider = crate::models::detect_provider(fallback_model);
+                                if let Err(boundary_err) = self.validate_privacy_boundary() {
+                                    // Restore state so the session remains coherent.
+                                    self.model = prev_model;
+                                    self.provider = prev_provider;
+                                    last_err = boundary_err;
+                                    break;
+                                }
                                 eprintln!(
                                     "  {}",
                                     format!(
@@ -1227,6 +1240,10 @@ message -- revise and call `update_plan` again.\n\n",
             }
 
             eprintln!();
+            // Privacy-boundary guard: re-validate before every continuation call.
+            // The provider may have been mutated by the fallback loop on the first
+            // call; we must never stream Local session history to a cloud provider.
+            self.validate_privacy_boundary()?;
             let continuation = match models::stream_completion(
                 config,
                 &self.provider,
@@ -1503,6 +1520,96 @@ mod tests {
             name: name.to_string(),
             arguments,
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Privacy-boundary invariant tests (no-silent-egress)
+    //
+    // These verify the LOCKED rule: a Local session must never reach
+    // stream_completion on a cloud provider, even if the fallback loop mutates
+    // self.provider to cloud mid-flight.
+    //
+    // Before the fix, the fallback loop mutated self.provider and called
+    // stream_completion without re-running validate_privacy_boundary.  The
+    // guards added in the fallback loop and before every continuation call are
+    // what these tests exercise as regression verifiers.
+    // -----------------------------------------------------------------------
+
+    fn make_local_session() -> AgentSession {
+        let ctx = crate::context::SystemContext {
+            cwd: "/tmp".to_string(),
+            git_branch: None,
+            git_status_summary: None,
+            git_remote_url: None,
+            project_type: None,
+            project_language: None,
+            ci_providers: vec![],
+            monorepo_type: None,
+            package_manager: None,
+            containerization: vec![],
+            editor_configs: vec![],
+            os: "test".to_string(),
+            shell: "test".to_string(),
+        };
+        // "llama3" routes to Ollama(Local) -> PrivacyMode::Local
+        AgentSession::new("llama3", &ctx, None)
+    }
+
+    /// Simulates the pre-fix fallback-loop provider mutation (setting self.provider
+    /// to Anthropic on a Local session) and asserts that validate_privacy_boundary
+    /// returns an error — proving the guard prevents stream_completion from being
+    /// reached with cloud credentials on a Local session.
+    ///
+    /// Without the fix: the fallback loop mutated self.provider and called
+    /// stream_completion unconditionally.  With the fix: validate_privacy_boundary()
+    /// is called after mutation; if it fails, state is restored and the loop breaks.
+    #[test]
+    fn local_session_cloud_fallback_blocked_by_privacy_boundary() {
+        let mut session = make_local_session();
+
+        // Confirm the session starts as Local.
+        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_ok());
+
+        // Simulate the pre-fix fallback loop mutation: set provider to cloud.
+        let cloud_provider = crate::models::detect_provider("claude-sonnet-4-5");
+        session.model = "claude-sonnet-4-5".to_string();
+        session.provider = cloud_provider;
+
+        // The guard must catch this — stream_completion must never be reached.
+        let boundary_result = session.validate_privacy_boundary();
+        assert!(
+            boundary_result.is_err(),
+            "privacy boundary must block a Local session whose provider was mutated to cloud; \
+             this is the no-silent-egress regression test"
+        );
+
+        let err_msg = format!("{}", boundary_result.unwrap_err());
+        assert!(
+            err_msg.contains("Privacy boundary blocked"),
+            "error must identify the boundary violation; got: {err_msg}"
+        );
+        assert!(
+            err_msg.contains("claude-sonnet-4-5"),
+            "error must name the offending model; got: {err_msg}"
+        );
+    }
+
+    /// Inverse: a Local session whose provider is mutated to another local Ollama
+    /// model must NOT be blocked — local-to-local fallback is always allowed.
+    #[test]
+    fn local_session_local_fallback_not_blocked() {
+        let mut session = make_local_session();
+        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
+
+        // "llama3.1:8b" -> Ollama(Local), confirmed in provider_dispatch tests.
+        session.model = "llama3.1:8b".to_string();
+        session.provider = crate::models::detect_provider("llama3.1:8b");
+
+        assert!(
+            session.validate_privacy_boundary().is_ok(),
+            "Local session falling back to a local Ollama model must NOT be blocked"
+        );
     }
 
     #[tokio::test]
