@@ -13,7 +13,7 @@
  * The mock is reset between tests so each test gets a fresh call log.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DatabaseAdapter } from '../types';
+import { DataLayerConfigError, type DatabaseAdapter } from '../types';
 
 // ---------------------------------------------------------------------------
 // Mock state — visible to both the mock factory and the assertions.
@@ -204,6 +204,7 @@ describe('NeonDatabaseAdapter.transaction', () => {
   it('binds the JWT subject via SET LOCAL when withUser was called', async () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'user-42' }));
     await scoped.transaction(async (tx) => {
@@ -218,10 +219,87 @@ describe('NeonDatabaseAdapter.transaction', () => {
   });
 });
 
+describe('NeonDatabaseAdapter.withUser — UNVERIFIED-JWT default-deny (P1-DATALAYER-JWT)', () => {
+  // The footgun: withUser decodes the `sub` of an UNVERIFIED JWT and binds it
+  // as the RLS subject. An attacker who reaches this with a self-minted token
+  // picks any `sub` and impersonates any user. The fix makes withUser
+  // default-deny: it refuses to decode/bind unless the integrator explicitly
+  // opted in by constructing the adapter with unsafeAllowUnverifiedJwtSubject,
+  // which acknowledges the token was signature-verified upstream first.
+
+  it('THROWS by default — refuses an attacker-influenced JWT when no opt-in flag is set', () => {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      // unsafeAllowUnverifiedJwtSubject intentionally NOT set → default-deny.
+    });
+    // Attacker-minted token claiming to be the victim. Unverified.
+    const forged = makeJwt({ sub: 'victim-admin-user' });
+    expect(() => adapter.withUser(forged)).toThrow(DataLayerConfigError);
+    expect(() => adapter.withUser(forged)).toThrow(/unsafeAllowUnverifiedJwtSubject/);
+  });
+
+  it('default-deny throws BEFORE decoding — no pool client is ever checked out', async () => {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    expect(() => adapter.withUser(makeJwt({ sub: 'attacker' }))).toThrow(DataLayerConfigError);
+    // The deny happens at withUser() time, before any SET LOCAL could fire.
+    const setLocal = state.clientCalls.find((c) =>
+      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+    );
+    expect(setLocal).toBeUndefined();
+  });
+
+  it('opt-in is required even for a well-formed token (the flag, not the token, gates)', () => {
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+    });
+    // Perfectly well-formed JWT — still denied, because the signature was
+    // never verified and the integrator did not acknowledge that precondition.
+    expect(() => adapter.withUser(makeJwt({ sub: 'well-formed' }))).toThrow(
+      /verify the token signature upstream|Verify the token signature upstream/i,
+    );
+  });
+
+  it('binds the decoded sub once the integrator opts in (verified-upstream path)', async () => {
+    state.clientQueryHandler = async (sql) =>
+      sql.toLowerCase().startsWith('select')
+        ? { rows: [{ id: 7 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
+    });
+    const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
+    const rows = await scoped.query<{ id: number }>('select id from t');
+    expect(rows).toEqual([{ id: 7 }]);
+    const setLocal = state.clientCalls.find((c) =>
+      c.sql.startsWith('SET LOCAL request.jwt.claim.sub'),
+    );
+    expect(setLocal?.params).toEqual(['user-abc']);
+  });
+
+  it('propagates the opt-in flag to the withUser child so nested binding still works', async () => {
+    state.clientQueryHandler = async (sql) =>
+      sql.toLowerCase().startsWith('select')
+        ? { rows: [{ id: 1 }], rowCount: 1 }
+        : { rows: [], rowCount: 0 };
+    const adapter = new NeonDatabaseAdapter({
+      connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
+    });
+    const scoped = adapter.withUser(makeJwt({ sub: 'u-1' }));
+    // The child must still carry the flag — re-binding through the child
+    // (e.g. a second request scope) must not regress to default-deny.
+    expect(() => (scoped as NeonDatabaseAdapter).withUser(makeJwt({ sub: 'u-2' }))).not.toThrow();
+  });
+});
+
 describe('NeonDatabaseAdapter.withUser', () => {
   it('returns a NEW adapter instance (immutable)', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'u-1' }));
     expect(scoped).not.toBe(adapter);
@@ -235,6 +313,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
         : { rows: [], rowCount: 0 };
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     const scoped = adapter.withUser(makeJwt({ sub: 'user-abc' }));
     const rows = await scoped.query<{ id: number }>('select id from t');
@@ -248,6 +327,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
   it('throws DataLayerConfigError when the JWT is malformed', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     expect(() => adapter.withUser('not-a-jwt')).toThrow(/3-segment JWT/);
   });
@@ -255,6 +335,7 @@ describe('NeonDatabaseAdapter.withUser', () => {
   it('throws when JWT has no sub claim', () => {
     const adapter = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     expect(() => adapter.withUser(makeJwt({ name: 'Ada' }))).toThrow(/no string `sub` claim/);
   });
@@ -295,6 +376,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
 
     const root = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
 
     // Prime the root pool by running one unscoped query so the lazy
@@ -321,6 +403,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
         : { rows: [], rowCount: 0 };
     const root = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     await root.query('select 1'); // prime
     const child = root.withUser(makeJwt({ sub: 'c1' }));
@@ -337,6 +420,7 @@ describe('NeonDatabaseAdapter pool sharing (P0-J)', () => {
   it('child created from withUser rejects on its own query after child dispose', async () => {
     const root = new NeonDatabaseAdapter({
       connectionString: 'postgresql://u:p@ep.neon.tech/db',
+      unsafeAllowUnverifiedJwtSubject: true,
     });
     const child = root.withUser(makeJwt({ sub: 'c1' }));
     await child.dispose();
