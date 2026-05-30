@@ -1257,10 +1257,6 @@ message -- revise and call `update_plan` again.\n\n",
                     total_cache_creation,
                 );
                 if cumulative >= budget_cap {
-                    let session_id = self
-                        .managed_session_id()
-                        .unwrap_or("(no session)")
-                        .to_string();
                     eprintln!(
                         "\n{}",
                         format!(
@@ -1269,12 +1265,12 @@ message -- revise and call `update_plan` again.\n\n",
                         )
                         .yellow()
                     );
-                    crate::agent_events::AgentEvent::BudgetExhausted {
-                        session_id,
-                        cumulative_dollars: cumulative,
-                        limit_dollars: budget_cap,
+                    // Emit the machine-readable event via the injected callback.
+                    // lib.rs wires this only when --json-events is active so that
+                    // stdout is never polluted in text/json-pretty output modes.
+                    if let Some(ref sink) = self.on_budget_exhausted {
+                        (sink.0)(cumulative, budget_cap);
                     }
-                    .emit_stdout();
                     break;
                 }
             }

@@ -51,6 +51,15 @@ impl std::fmt::Debug for FallbackSink {
     }
 }
 
+/// Sink invoked when the budget cap is hit: `(cumulative_usd, limit_usd)`.
+pub struct BudgetSink(pub Box<dyn Fn(f64, f64) + Send + Sync>);
+
+impl std::fmt::Debug for BudgetSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("BudgetSink(<callback>)")
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -78,9 +87,12 @@ pub struct AgentSession {
     pub(crate) hooks_config: hooks::HooksConfig,
     pub(crate) mcp_manager: Option<mcp::McpManager>,
     pub max_turns: Option<usize>,
-    /// If set, stop the agent loop when cumulative spend exceeds this many USD
-    /// and emit a `budget_exhausted` status event.
+    /// If set, stop the agent loop when cumulative spend exceeds this many USD.
     pub max_budget_usd: Option<f64>,
+    /// Optional callback invoked when the budget cap is hit.
+    /// `(cumulative_usd, limit_usd)` — caller is responsible for emitting
+    /// any JSON event; chat.rs always writes a human-readable line to stderr.
+    pub on_budget_exhausted: Option<BudgetSink>,
     pub plan_mode: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
     pub plan_approved: bool,
@@ -275,6 +287,7 @@ impl AgentSession {
             mcp_manager: None,
             max_turns: None,
             max_budget_usd: None,
+            on_budget_exhausted: None::<BudgetSink>,
             plan_mode: false,
             permission_mode: crate::cli_options::PermissionMode::Default,
             plan_approved: false,

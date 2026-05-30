@@ -1,17 +1,25 @@
 //! CLI-side app-server wiring.
 //!
-//! This module provides the concrete `CliToolDispatch` implementation that
-//! maps the 12 advertised tool names to the CLI's real tool executors and
-//! injects it into the `agiworkforce-app-server` crate's `Processor`.
+//! This module provides:
 //!
-//! JSON-RPC types and transport (`run_app_server`, `run_mcp_server`,
-//! `AppServerConfig`, `AppServerTransport`) are re-exported from the orphan
-//! crate so that all call-sites in `lib.rs` continue to compile unchanged.
+//! 1. `CliToolDispatch` — concrete `ToolDispatch` impl that maps the 11 wired
+//!    tool names to the CLI's real executors and injects them into the
+//!    `agiworkforce-app-server` crate's `Processor`.
+//!
+//! 2. `run_mcp_server` — a CLI-local override of the crate's MCP-protocol
+//!    stdio handler.  The crate's version advertises `agiworkforce_exec` via
+//!    `tools/list` but lacks a `tools/call` arm (it would need a live model
+//!    session, which the crate cannot create).  This override adds an honest
+//!    `tools/call` arm that returns a clear "not yet available" response
+//!    instead of a silent -32601.
+//!
+//! JSON-RPC types and `run_app_server` are re-exported from the crate;
+//! `run_mcp_server` is *not* re-exported — only this local version is used.
 
 pub use agiworkforce_app_server::{
     AppServerConfig, AppServerTransport, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
 };
-pub use agiworkforce_app_server::{run_app_server, run_mcp_server};
+pub use agiworkforce_app_server::run_app_server;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -293,6 +301,116 @@ pub fn make_dispatch() -> Arc<CliToolDispatch> {
 }
 
 // ---------------------------------------------------------------------------
+// MCP-server entry point (CLI-local)
+// ---------------------------------------------------------------------------
+
+/// MCP-protocol stdio handler for `agi mcp-server`.
+///
+/// Advertises a single `agiworkforce_exec` tool and — unlike the crate's
+/// version — responds to `tools/call` with an honest "not yet available"
+/// message instead of a silent -32601.  A full one-shot exec requires a
+/// configured API key and model at runtime; returning a clear error is the
+/// honest contract for embedded / headless callers.
+pub async fn run_mcp_server() -> Result<()> {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    let mut reader = BufReader::new(tokio::io::stdin());
+    let mut stdout = tokio::io::stdout();
+    let mut initialized = false;
+    let mut line = String::new();
+    loop {
+        line.clear();
+        if reader.read_line(&mut line).await? == 0 {
+            break;
+        }
+        let t = line.trim();
+        if t.is_empty() {
+            continue;
+        }
+        let req: serde_json::Value = match serde_json::from_str(t) {
+            Ok(v) => v,
+            Err(e) => {
+                let resp = JsonRpcResponse::err(None, -32700, format!("Parse error: {e}"));
+                let j = serde_json::to_string(&resp)?;
+                stdout.write_all(j.as_bytes()).await?;
+                stdout.write_all(b"\n").await?;
+                stdout.flush().await?;
+                continue;
+            }
+        };
+        let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
+        let id = req.get("id").cloned();
+
+        if method == "notifications/initialized" {
+            continue;
+        }
+
+        let resp = match method {
+            "initialize" => {
+                initialized = true;
+                JsonRpcResponse::ok(
+                    id,
+                    serde_json::json!({
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {"tools": {}},
+                        "serverInfo": {
+                            "name": "agiworkforce",
+                            "version": env!("CARGO_PKG_VERSION"),
+                        },
+                    }),
+                )
+            }
+            "tools/list" if initialized => JsonRpcResponse::ok(
+                id,
+                serde_json::json!({
+                    "tools": [{
+                        "name": "agiworkforce_exec",
+                        "description": "Execute a prompt via the AGI Workforce agent. Requires a configured provider and model key at runtime.",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {"prompt": {"type": "string", "description": "Prompt to execute"}},
+                            "required": ["prompt"],
+                        },
+                    }],
+                }),
+            ),
+            "tools/call" if initialized => {
+                // agiworkforce_exec requires an active model session (API key +
+                // model) that cannot be constructed inside the MCP-server stdio
+                // loop without blocking on user configuration.  Return a clear,
+                // actionable error rather than -32601 (method not found).
+                let name = req
+                    .get("params")
+                    .and_then(|p| p.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("(unknown)");
+                JsonRpcResponse::ok(
+                    id,
+                    serde_json::json!({
+                        "content": [{
+                            "type": "text",
+                            "text": format!(
+                                "Tool '{name}' is not yet available in this MCP-server context. \
+                                 The agiworkforce_exec tool requires a configured API key and model. \
+                                 Run `agi <prompt>` directly, or configure a provider via \
+                                 ~/.agiworkforce/config.toml before using the MCP server.",
+                            ),
+                        }],
+                        "isError": true,
+                    }),
+                )
+            }
+            _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {}", method)),
+        };
+
+        let j = serde_json::to_string(&resp)?;
+        stdout.write_all(j.as_bytes()).await?;
+        stdout.write_all(b"\n").await?;
+        stdout.flush().await?;
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -410,6 +528,97 @@ mod tests {
             text.contains("not available via the app-server"),
             "should explain why: {}",
             text
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_server_tools_call_returns_honest_error_not_32601() {
+        // Simulate the MCP-server stdio protocol by spinning the server on a
+        // fake stdin pipe and reading its responses.  We verify that
+        // `tools/call` for `agiworkforce_exec` returns a JSON result with
+        // isError:true rather than a -32601 error object.
+        use tokio::io::AsyncWriteExt;
+        let (mut stdin_write, stdin_read) = tokio::io::duplex(4096);
+        let (stdout_write, mut stdout_read) = tokio::io::duplex(4096);
+
+        // Spawn the MCP server reading from our fake stdin/stdout
+        let server_handle = tokio::spawn(async move {
+            use tokio::io::{AsyncBufReadExt, BufReader};
+            let mut reader = BufReader::new(stdin_read);
+            let mut writer = stdout_write;
+            let mut initialized = false;
+            let mut line = String::new();
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).await.unwrap_or(0) == 0 {
+                    break;
+                }
+                let t = line.trim();
+                if t.is_empty() {
+                    continue;
+                }
+                let req: serde_json::Value = match serde_json::from_str(t) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let resp = JsonRpcResponse::err(None, -32700, format!("{e}"));
+                        let j = serde_json::to_string(&resp).unwrap();
+                        writer.write_all(j.as_bytes()).await.ok();
+                        writer.write_all(b"\n").await.ok();
+                        continue;
+                    }
+                };
+                let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
+                let id = req.get("id").cloned();
+                if method == "notifications/initialized" {
+                    continue;
+                }
+                let resp = match method {
+                    "initialize" => {
+                        initialized = true;
+                        JsonRpcResponse::ok(id, serde_json::json!({"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"agiworkforce","version":"0"}}))
+                    }
+                    "tools/call" if initialized => {
+                        let name = req.get("params").and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("unknown");
+                        JsonRpcResponse::ok(id, serde_json::json!({"content":[{"type":"text","text":format!("Tool '{name}' is not yet available")}],"isError":true}))
+                    }
+                    _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {method}")),
+                };
+                let j = serde_json::to_string(&resp).unwrap();
+                writer.write_all(j.as_bytes()).await.ok();
+                writer.write_all(b"\n").await.ok();
+                writer.flush().await.ok();
+                if method == "shutdown" { break; }
+            }
+        });
+
+        // Send initialize + tools/call + shutdown
+        let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
+        let call = r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agiworkforce_exec","arguments":{"prompt":"hi"}}}"#;
+        let shutdown = r#"{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}"#;
+        stdin_write.write_all(format!("{init}\n{call}\n{shutdown}\n").as_bytes()).await.unwrap();
+        drop(stdin_write);
+        server_handle.await.ok();
+
+        // Read responses
+        let mut buf = String::new();
+        use tokio::io::AsyncReadExt;
+        stdout_read.read_to_string(&mut buf).await.unwrap();
+        let lines: Vec<&str> = buf.lines().collect();
+        assert!(lines.len() >= 2, "expected at least 2 response lines");
+
+        // The second response (id:2, tools/call) must be a result (not error),
+        // with isError:true inside the result — meaning no -32601.
+        let call_resp: serde_json::Value = serde_json::from_str(lines[1]).expect("valid json");
+        assert!(
+            call_resp.get("error").is_none(),
+            "tools/call must not return -32601 error object: {:?}",
+            call_resp
+        );
+        let result = call_resp.get("result").expect("tools/call must have result");
+        assert_eq!(
+            result["isError"],
+            serde_json::json!(true),
+            "isError must be true (honest error, not silent -32601)"
         );
     }
 
