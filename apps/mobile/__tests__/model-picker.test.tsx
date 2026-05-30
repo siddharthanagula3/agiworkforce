@@ -181,11 +181,14 @@ describe('ModelPickerSheet', () => {
   });
 
   it('renders on-device model names from the local catalog', () => {
-    const { getByText } = renderPicker();
+    const { getByText, queryByText } = renderPicker();
 
     expect(getByText('AGI Standard')).toBeTruthy();
     expect(getByText('AGI Lite')).toBeTruthy();
-    expect(getByText('Apple Intelligence')).toBeTruthy();
+    // Apple Intelligence and Gemini Nano are hidden in v1 (stub native impl).
+    // They are preserved in the catalog (shipsInV1:true) but filtered from the
+    // picker in model-picker/service.ts until the native impl ships.
+    expect(queryByText('Apple Intelligence')).toBeNull();
   });
 
   it('renders local and locked cloud hierarchy immediately', () => {

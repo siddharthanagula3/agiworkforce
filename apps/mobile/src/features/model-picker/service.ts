@@ -118,11 +118,27 @@ const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
   shipsInV1: true,
 };
 
+/**
+ * System-runtime-only models (Apple Foundation Models, Gemini Nano AICore)
+ * ship a stub native impl in v1 that always returns "not available".
+ * They are preserved in the catalog (shipsInV1:true) for future activation,
+ * but must NOT appear as selectable rows in the picker until the native impl
+ * is functional. Filter them out here rather than changing the catalog so
+ * catalog.test.ts and the integrity guard remain unaffected.
+ */
+const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
+
+function isSystemRuntimeOnly(model: OnDeviceModel): boolean {
+  return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
+}
+
 function safeGetShippableModels(): OnDeviceModel[] {
   try {
     if (typeof getCatalogShippableModels === 'function') {
       const models = getCatalogShippableModels();
-      if (Array.isArray(models) && models.length > 0) return models;
+      // Filter out system-runtime-only models (stubbed native impls in v1).
+      const selectable = models.filter((m) => !isSystemRuntimeOnly(m));
+      if (Array.isArray(selectable) && selectable.length > 0) return selectable;
     }
   } catch {
     // Tests may mock @agiworkforce/local-llm partially; keep the picker stable.
