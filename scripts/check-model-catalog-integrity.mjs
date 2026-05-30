@@ -91,6 +91,10 @@ const SKIP_DIR = new Set([
 const isTestFile = (f) => /\.(test|spec)\.[cm]?tsx?$/.test(f) || /\.stories\./.test(f);
 const isTs = (f) => /\.[cm]?tsx?$/.test(f);
 const isMd = (f) => /\.mdx?$/.test(f);
+// Historical records (changelogs, release notes) legitimately reference removed IDs
+// when documenting their removal ("was gpt-5.4", "no longer pins gpt-5.4"). Scanning
+// them is a false positive — the guard targets docs that present CURRENT usage.
+const isHistoricalDoc = (f) => /^(CHANGELOG|HISTORY|RELEASES?|CHANGES)([.-]|$)/i.test(f);
 
 function* walk(dir) {
   let entries;
@@ -107,7 +111,7 @@ function* walk(dir) {
       yield* walk(full);
     } else if (e.isFile() && isTs(e.name) && !isTestFile(e.name)) {
       yield { file: full, kind: 'ts' };
-    } else if (e.isFile() && isMd(e.name)) {
+    } else if (e.isFile() && isMd(e.name) && !isHistoricalDoc(e.name)) {
       yield { file: full, kind: 'md' };
     }
   }
