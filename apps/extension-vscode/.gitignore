@@ -1,3 +1,6 @@
 out/
 node_modules/
 *.vsix
+
+# Downloaded VS Code test harness (vscode-test)
+.vscode-test/
