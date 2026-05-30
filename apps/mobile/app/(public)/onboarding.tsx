@@ -26,6 +26,7 @@ import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
+import { recordInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -39,6 +40,7 @@ import {
   detectCapabilities,
   getDefaultModel,
   getShippableModels,
+  tier2LoadModel,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
@@ -238,8 +240,41 @@ export default function OnboardingScreen() {
       setDownloadProgress(0);
       setDownloadError(null);
 
+      // ExecuTorch path — catalog has an executorchPreset with HF URLs. This
+      // takes priority over the generic downloadUrl path because ExecuTorch
+      // models never populate downloadUrl / checksum / format on OnDeviceModel.
+      if (recommendedModel.executorchPreset) {
+        const preset = recommendedModel.executorchPreset;
+        tier2LoadModel(preset, (fractional) => {
+          // react-native-executorch reports progress as 0..1.
+          setDownloadProgress(fractional * 100);
+        })
+          .then(async () => {
+            // Record the model as installed so resolveLocalModelRef accepts it
+            // on the first chat turn (format='pte', no local_path).
+            await recordInstalledModel({
+              id: recommendedModel.id,
+              display_name: recommendedModel.displayName,
+              runtime: 'local',
+              format: 'pte',
+              size_bytes: recommendedModel.fileSizeBytes,
+              sha256: null,
+              local_path: null,
+              installed_at: Date.now(),
+              last_used_at: null,
+              capabilities: null,
+            });
+            finishOnboarding();
+          })
+          .catch((err: unknown) => {
+            const msg = err instanceof Error ? err.message : 'Download failed. Please try again.';
+            setDownloadError(msg);
+          });
+        return;
+      }
+
       if (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format) {
-        // Real download path — catalog fields are present.
+        // Generic GGUF / safetensors download path — catalog has full fields.
         // ModelFormat in storage/types uses the same string literals as OnDeviceModel.format.
         downloadModel({
           modelId: recommendedModel.id,
@@ -274,12 +309,10 @@ export default function OnboardingScreen() {
         return;
       }
 
-      // Model catalog entry is not yet fully populated (downloadUrl / checksum /
-      // format missing). Rather than simulating fake download progress, skip
-      // straight to chat — the model will be available on a future update.
-      // TODO(model-catalog-engineer): populate downloadUrl + checksum + format in
-      // @agiworkforce/local-llm catalog to activate the real download path above.
-      finishOnboarding();
+      // No download path available — catalog is not yet populated and no
+      // executorchPreset is present. Show an error instead of silently landing
+      // in chat with no model ready.
+      setDownloadError('This model cannot be downloaded yet. Pick a different model to continue.');
     },
     [recommendedModel, finishOnboarding],
   );
