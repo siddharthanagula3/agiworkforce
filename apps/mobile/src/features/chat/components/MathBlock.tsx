@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/text';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';
+import { colors } from '@/src/ui/theme';
 
 // KaTeX CDN — pinned minor version for stability.
 const KATEX_VERSION = '0.16.21';
@@ -146,7 +147,7 @@ export function MathBlock({ latex, display }: MathBlockProps) {
         style={[
           styles.blockContainer,
           { height },
-          { backgroundColor: isDark ? 'rgba(33, 128, 141, 0.08)' : 'rgba(33, 128, 141, 0.06)' },
+          { backgroundColor: isDark ? `${colors.teal}14` : `${colors.teal}0f` },
         ]}
         accessibilityLabel={`Math equation: ${latex}`}
         accessibilityRole="image"
@@ -241,15 +242,15 @@ const styles = StyleSheet.create({
   },
   webView: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.transparent,
   },
   fallbackBlock: {
-    backgroundColor: 'rgba(33, 128, 141, 0.08)',
+    backgroundColor: `${colors.teal}14`,
     borderRadius: 6,
     padding: 8,
     marginVertical: 6,
     borderLeftWidth: 2,
-    borderLeftColor: '#21808d',
+    borderLeftColor: colors.teal,
   },
   fallbackText: {
     fontFamily: 'Menlo',
@@ -262,6 +263,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Menlo',
     fontStyle: 'italic',
     fontSize: 13,
-    backgroundColor: 'rgba(33, 128, 141, 0.08)',
+    backgroundColor: `${colors.teal}14`,
   },
 });
