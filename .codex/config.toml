@@ -8,7 +8,7 @@
 
 # Model selection is intentionally left to the local Codex CLI/default profile.
 # Do not pin guessed model IDs here; repo model IDs live in packages/types/src/models.json.
-model_reasoning_effort = "medium"
+model_reasoning_effort = "xhigh"
 
 # History - persistent instructions applied to every session
 [history]
