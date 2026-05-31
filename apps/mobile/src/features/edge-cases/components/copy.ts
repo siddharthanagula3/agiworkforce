@@ -79,4 +79,28 @@ export const EDGE_COPY = {
     bodySuffix: " We'll email you. For now, on-device works great.",
     cta: 'Got it',
   },
+
+  /** MessageErrorScreen — ModelMissingError */
+  modelMissing: {
+    title: 'Model not installed',
+    body: 'The selected local model is not downloaded yet. Install it to start chatting on-device.',
+    retry: 'Choose a model',
+    cancel: 'Dismiss',
+  },
+
+  /** MessageErrorScreen — DiskFullError */
+  diskFull: {
+    title: 'Not enough storage',
+    body: 'There is not enough free space to run this model. Free up space and try again.',
+    retry: 'Try again',
+    cancel: 'Dismiss',
+  },
+
+  /** MessageErrorScreen — NetworkError */
+  networkError: {
+    title: "Can't connect",
+    body: 'We could not reach the network. Check your connection and try again.',
+    retry: 'Try again',
+    cancel: 'Dismiss',
+  },
 } as const;
