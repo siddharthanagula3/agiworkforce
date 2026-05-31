@@ -465,6 +465,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         );
         const localRef = await resolveLocalModelRef(model);
         let localStreamingRaw = '';
+        // Measure on-device decode rate (tokens/sec) from first token to done.
+        let localTokenCount = 0;
+        let localFirstTokenAt = 0;
         const updateLocalStream = (parsed: ParsedLocalThinking) => {
           if (parsed.hasReasoning && !thinkingStartTimes.has(conversationId)) {
             thinkingStartTimes.set(conversationId, Date.now());
@@ -504,6 +507,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           requestId: assistantMessageId,
           onToken: (token) => {
             if (controller.signal.aborted) return;
+            if (localFirstTokenAt === 0) localFirstTokenAt = Date.now();
+            localTokenCount += 1;
             localStreamingRaw += token;
             updateLocalStream(parseLocalThinking(localStreamingRaw));
           },
