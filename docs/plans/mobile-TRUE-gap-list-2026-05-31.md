@@ -1,5 +1,9 @@
 # Mobile TRUE Gap List (verified vs actual code, 2026-05-31)
 
+Status: Active plan
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Verified 81 items: ALREADY-BUILT 67 · PARTIAL 8 · REAL-GAP 6 · WRONG-CLAIM 0.
 Source: workflow w2mtl50bv. The parity spec massively over-reported; ~83% of claimed gaps are working code.
 

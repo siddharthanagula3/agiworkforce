@@ -1,9 +1,11 @@
 # On-Device LLMs for AGI Mobile — Cited Research (2026)
 
 Status: RESEARCH COMPLETE (2026-05-31). Unblocks Phase-A coding (was gated on this).
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Source: deep-research workflow `wsq6bzm62` — 109 agents, 17 sources, 3-vote adversarial verification
 (2/3 refutes to kill a claim). High-confidence claims passed 3-0; medium passed 2-1 with dissent kept as caveat.
-Owner: founder + platform
 
 ## Why this matters for our thesis
 

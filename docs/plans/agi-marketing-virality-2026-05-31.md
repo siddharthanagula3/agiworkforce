@@ -1,6 +1,9 @@
 # AGI — Marketing, Virality & AI-Powered Growth (Research-Based, 2026)
 
 Status: RESEARCH SYNTHESIS (2026-05-31). Growth playbook input, not a locked decision.
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Source: deep-research workflow `wnmhx1pzq` (+resume `w8mnl4muy`) — 73 agents, 8 angles, 128 claims, **18–19
 survived adversarial verification**, 1–2 killed. Synthesis hand-written from verified findings (the workflow's
 auto-synthesis overflowed; research + verify cached and extracted).

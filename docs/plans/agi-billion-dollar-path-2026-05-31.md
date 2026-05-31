@@ -1,6 +1,9 @@
 # AGI — Path to Break-Even, Profitability & a $1B Exit (Research-Based, 2026)
 
 Status: RESEARCH SYNTHESIS (2026-05-31). Strategy input, not a locked decision.
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Source: deep-research workflow `wsszx3wh7` — 87 agents, 9 angles, 161 claims, **22 survived adversarial
 verification** (3-vote, 2/3-to-kill), 2 killed. Synthesis hand-written from the verified findings (the workflow's
 auto-synthesis agents overflowed on the digest; research + verify phases succeeded and are cached).
