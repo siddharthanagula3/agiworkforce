@@ -13,6 +13,10 @@ interface WaitlistState {
   country?: string;
   rank?: number;
   joinedAt?: string;
+  cloudUnlocked: boolean;
+  inviteId?: string;
+  inviteCode?: string;
+  cloudUnlockedAt?: string;
 
   /**
    * Called after `joinWaitlist()` resolves successfully.
@@ -22,6 +26,9 @@ interface WaitlistState {
     submission: Pick<JoinWaitlistInput, 'email' | 'country'>,
     result: JoinWaitlistResult,
   ) => void;
+
+  /** Called after invite-code redemption unlocks Cloud Managed private beta access. */
+  markInviteRedeemed: (redemption: { code: string; inviteId?: string }) => void;
 
   /** Clears all waitlist state (e.g. when switching accounts or resetting app). */
   clear: () => void;
@@ -35,6 +42,7 @@ export const useWaitlistStore = create<WaitlistState>()(
   persist(
     (set) => ({
       joined: false,
+      cloudUnlocked: false,
 
       markJoined: (submission, result) =>
         set({
@@ -45,6 +53,14 @@ export const useWaitlistStore = create<WaitlistState>()(
           joinedAt: new Date().toISOString(),
         }),
 
+      markInviteRedeemed: (redemption) =>
+        set({
+          cloudUnlocked: true,
+          inviteId: redemption.inviteId,
+          inviteCode: redemption.code.trim().toUpperCase(),
+          cloudUnlockedAt: new Date().toISOString(),
+        }),
+
       clear: () =>
         set({
           joined: false,
@@ -52,6 +68,10 @@ export const useWaitlistStore = create<WaitlistState>()(
           country: undefined,
           rank: undefined,
           joinedAt: undefined,
+          cloudUnlocked: false,
+          inviteId: undefined,
+          inviteCode: undefined,
+          cloudUnlockedAt: undefined,
         }),
     }),
     {
@@ -65,6 +85,10 @@ export const useWaitlistStore = create<WaitlistState>()(
         country: state.country,
         rank: state.rank,
         joinedAt: state.joinedAt,
+        cloudUnlocked: state.cloudUnlocked,
+        inviteId: state.inviteId,
+        inviteCode: state.inviteCode,
+        cloudUnlockedAt: state.cloudUnlockedAt,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[waitlistStore] Hydration failed:', error);

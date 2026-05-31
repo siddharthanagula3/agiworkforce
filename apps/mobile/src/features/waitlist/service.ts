@@ -50,6 +50,8 @@ export class WaitlistNetworkError extends Error {
 // ---------------------------------------------------------------------------
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const LOCAL_ALPHA_INVITE_CODE = 'ALPHATESTER';
+const LOCAL_ALPHA_INVITE_ID = 'mobile-alpha-tester';
 
 function validateEmail(email: string): string {
   const trimmed = email.trim().toLowerCase();
@@ -112,17 +114,22 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
 }
 
 /**
- * Invite redemption is a Clerk-authenticated Web/API flow. Mobile v1 has no
- * direct cloud auth surface, so this fails closed until the invite account
- * flow is enabled.
+ * Redeem the Mobile Cloud private-beta invite.
+ *
+ * The public Cloud path remains closed by feature flags, but alpha testers can
+ * unlock the gated auth/cloud surface locally with the launch invite code.
+ * Authenticated server-side subscription claiming happens after sign-in.
  */
 export async function redeemInviteCode(
   code: string,
   source: string = 'other',
 ): Promise<{ success: boolean; inviteId?: string; error?: InviteCodeError }> {
-  void code;
   void source;
-  return { success: false, error: 'rpc_error' };
+  const normalizedCode = code.trim().toUpperCase();
+  if (normalizedCode === LOCAL_ALPHA_INVITE_CODE) {
+    return { success: true, inviteId: LOCAL_ALPHA_INVITE_ID };
+  }
+  return { success: false, error: 'invalid_code' };
 }
 
 /**

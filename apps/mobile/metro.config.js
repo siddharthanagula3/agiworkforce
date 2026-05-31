@@ -22,4 +22,23 @@ config.resolver.nodeModulesPaths = [
 // nodeModulesPaths above handles dual-root resolution
 // Do NOT set disableHierarchicalLookup — it breaks workspace package transitive deps
 
-module.exports = withNativeWind(config, { input: './global.css' });
+const nativeWindConfig = withNativeWind(config, { input: './global.css' });
+const nativeWindResolveRequest = nativeWindConfig.resolver.resolveRequest;
+const nobleHashesRoot = path.dirname(require.resolve('@noble/hashes'));
+
+const packageExportRemaps = new Map([
+  ['event-target-shim/index', require.resolve('event-target-shim')],
+  ['@noble/hashes/crypto', path.join(nobleHashesRoot, 'crypto.js')],
+  ['@noble/hashes/crypto.js', path.join(nobleHashesRoot, 'crypto.js')],
+]);
+
+nativeWindConfig.resolver.resolveRequest = (context, moduleName, platform) => {
+  const remappedPath = packageExportRemaps.get(moduleName);
+  if (remappedPath) {
+    return { type: 'sourceFile', filePath: remappedPath };
+  }
+
+  return nativeWindResolveRequest(context, moduleName, platform);
+};
+
+module.exports = nativeWindConfig;

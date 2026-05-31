@@ -1,4 +1,5 @@
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 export interface RemoteChatFeatureFlags {
   v1LocalOnly: boolean;
@@ -22,7 +23,8 @@ export function getRemoteChatDisabledReason(
   flags: RemoteChatFeatureFlags = FEATURES,
 ): string | null {
   void flags.byokKeys;
-  if (flags.v1LocalOnly && !flags.cloudChat) {
+  const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
+  if (flags.v1LocalOnly && !flags.cloudChat && !cloudUnlocked) {
     return MOBILE_REMOTE_CHAT_DISABLED_MESSAGE;
   }
   return null;

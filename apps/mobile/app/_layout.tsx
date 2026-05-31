@@ -38,12 +38,15 @@ import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatc
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 
 export default function RootLayout() {
   const [isMmkvReady, setIsMmkvReady] = useState(false);
   const { session, isLoading, isInitialized, initialize } = useAuthStore();
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const authEnabled = FEATURES.auth || cloudUnlocked;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
   const router = useRouter();
@@ -257,11 +260,9 @@ export default function RootLayout() {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = (segments[0] as string) === '(public)';
 
-    // v1 local-only: auth flows are feature-gated off. Never redirect to the
-    // (auth) group — the login screen is intentionally a redirect-stub in
-    // this mode. If we somehow landed there (legacy state, deep link),
-    // route to onboarding or (app) like the post-sign-in branch below.
-    if (!FEATURES.auth) {
+    // Public v1 keeps auth hidden. Invite-redeemed alpha testers are allowed
+    // through the existing auth group after Cloud Managed unlock.
+    if (!authEnabled) {
       if (inAuthGroup) {
         const onboardingDone = storage.getString('onboarding-done');
         if (!onboardingDone) {
@@ -309,7 +310,7 @@ export default function RootLayout() {
         }
       }
     }
-  }, [session, isInitialized, isMmkvReady, segments, router]);
+  }, [session, isInitialized, isMmkvReady, segments, router, authEnabled]);
 
   // C1: Deep linking — handles agiworkforce://pair/CODE and agiworkforce://pair?code=CODE
   // Required for QR desktop pairing when app is backgrounded or closed
