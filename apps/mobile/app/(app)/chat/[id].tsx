@@ -36,6 +36,7 @@ import { useWaitlistStore } from '@/src/features/waitlist';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
 import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
+import { MessageSkeleton } from '@/src/features/chat/components/MessageSkeleton';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -703,10 +704,7 @@ export default function ChatScreen() {
 
         {/* Messages */}
         {isLoadingMessages && conversationMessages.length === 0 ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator color={colors.teal} size="small" />
-            <Text className="text-xs text-white/30 mt-2">Loading messages...</Text>
-          </View>
+          <MessageSkeleton />
         ) : (
           <MessageList
             messages={conversationMessages}
