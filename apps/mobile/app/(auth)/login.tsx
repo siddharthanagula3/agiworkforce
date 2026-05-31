@@ -5,12 +5,13 @@ import { Text } from '@/components/ui/text';
 import { LoginForm } from '@/src/features/auth/components/LoginForm';
 import { OAuthButtons } from '@/src/features/auth/components/OAuthButtons';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 export default function LoginScreen() {
-  // v1 local-only: auth UI is gated off. Bounce to the app shell instead of
-  // returning null (which stranded users on a blank screen when the auth
-  // guard in app/_layout.tsx redirected here on a 401).
-  if (!FEATURES.auth) return <Redirect href="/(app)" />;
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  // Public v1 keeps auth hidden. Invite-redeemed alpha testers can sign in or
+  // sign up after unlocking Cloud Managed access with their invitation code.
+  if (!FEATURES.auth && !cloudUnlocked) return <Redirect href="/(app)" />;
   return (
     <SafeAreaView className="flex-1 bg-surface-base">
       <KeyboardAvoidingView

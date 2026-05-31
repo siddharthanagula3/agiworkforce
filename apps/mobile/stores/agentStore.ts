@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
-import { useConnectionStore } from '@/stores/connectionStore';
 import type { StatusStep, ToolCall, ApprovalRequest } from '@/types/chat';
 
 /** A file or output artifact produced by an agent run */
@@ -101,9 +100,11 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        useConnectionStore.getState().sendControl('approval_response', {
-          approvalId: id,
-          decision: 'approved',
+        void import('@/stores/connectionStore').then(({ useConnectionStore }) => {
+          useConnectionStore.getState().sendControl('approval_response', {
+            approvalId: id,
+            decision: 'approved',
+          });
         });
       },
 
@@ -115,10 +116,12 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        useConnectionStore.getState().sendControl('approval_response', {
-          approvalId: id,
-          decision: 'rejected',
-          reason,
+        void import('@/stores/connectionStore').then(({ useConnectionStore }) => {
+          useConnectionStore.getState().sendControl('approval_response', {
+            approvalId: id,
+            decision: 'rejected',
+            reason,
+          });
         });
       },
     }),

@@ -230,6 +230,8 @@ export default function ChatScreen() {
     return def.surface === 'local' ? 'local' : 'cloud';
   }, []);
 
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+
   const handleModelSelect = useCallback(
     (newModelId: string) => {
       const hasMessages = conversationMessages.length > 0;
@@ -242,7 +244,7 @@ export default function ChatScreen() {
       const currentMode = resolveAppMode(selectedModel);
       const nextMode = resolveAppMode(newModelId);
 
-      if (nextMode === 'cloud' && !FEATURES.cloudChat) {
+      if (nextMode === 'cloud' && !FEATURES.cloudChat && !cloudUnlocked) {
         modelPickerRef.current?.close();
         setWaitlistSheetVisible(true);
         return;
@@ -262,14 +264,14 @@ export default function ChatScreen() {
       useModelStore.getState().setModel(newModelId);
       modelPickerRef.current?.close();
     },
-    [conversationMessages.length, selectedModel, resolveAppMode],
+    [conversationMessages.length, selectedModel, resolveAppMode, cloudUnlocked],
   );
 
   const handleModeSwitchConfirm = useCallback(async () => {
     const nextModelId = modeSwitchState.pendingModelId;
     if (!nextModelId) return;
 
-    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat) {
+    if (modeSwitchState.toMode === 'cloud' && !FEATURES.cloudChat && !cloudUnlocked) {
       setModeSwitchState((s) => ({ ...s, visible: false }));
       setWaitlistSheetVisible(true);
       return;
@@ -277,7 +279,7 @@ export default function ChatScreen() {
 
     useModelStore.getState().setModel(nextModelId);
     setModeSwitchState((s) => ({ ...s, visible: false }));
-  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode]);
+  }, [modeSwitchState.pendingModelId, modeSwitchState.toMode, cloudUnlocked]);
 
   const handleModeSwitchCancel = useCallback(() => {
     setModeSwitchState((s) => ({ ...s, visible: false }));

@@ -92,6 +92,7 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const provenance = isAssistant && !message.isStreaming ? getProvenance(message.model) : null;
+  const hasReasoning = isAssistant && message.reasoning !== undefined;
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
   const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
   const [showExportSheet, setShowExportSheet] = useState(false);
@@ -330,9 +331,9 @@ export const MessageBubble = memo(function MessageBubble({
             )}
 
             {/* Inline thinking chip (before main content, assistant only) */}
-            {isAssistant && message.reasoning ? (
+            {hasReasoning ? (
               <ThinkingChip
-                thinkingText={message.reasoning}
+                thinkingText={message.reasoning ?? ''}
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
               />

@@ -10,19 +10,13 @@ module.exports = function (api) {
         'babel-preset-expo',
         {
           jsxImportSource: 'nativewind',
-          // react-native-reanimated 3.16+ requires react-native-worklets as a peer dep
-          // which is not installed as a real native module. babel-preset-expo
-          // auto-discovers reanimated and adds its Babel plugin — disable that
-          // auto-inclusion in Jest (NODE_ENV=test) to avoid worklets resolution errors.
+          // Expo SDK 55 auto-discovers Reanimated 4 and injects
+          // react-native-worklets/plugin. Keep that disabled in Jest.
+          worklets: !isTest,
           reanimated: !isTest,
         },
       ],
       'nativewind/babel',
-    ],
-    plugins: [
-      // Only include the reanimated Babel plugin in production/development Metro builds,
-      // not in Jest where react-native-worklets is unavailable as a native module.
-      ...(isTest ? [] : ['react-native-reanimated/plugin']),
     ],
   };
 };

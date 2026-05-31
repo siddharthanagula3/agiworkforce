@@ -55,6 +55,8 @@ const cancelledBeforeStream = new Set<string>();
 const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
+const DEFAULT_LOCAL_SYSTEM_PROMPT =
+  'You are AGI, a concise helpful assistant running locally on this device. Keep final answers separate from any thinking or reasoning text.';
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -83,6 +85,70 @@ function normalizeLocalMessageContent(
     })
     .filter(Boolean)
     .join('\n');
+}
+
+function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[] {
+  if (messages.some((message) => message.role === 'system' && message.content.trim())) {
+    return messages;
+  }
+  return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...messages];
+}
+
+interface ParsedLocalThinking {
+  content: string;
+  reasoning: string;
+  hasReasoning: boolean;
+}
+
+const LOCAL_REASONING_TAG_RE = /<\s*(\/?)\s*(think|thinking|reasoning)\s*>/gi;
+const PARTIAL_LOCAL_REASONING_TAG_RE =
+  /<\s*\/?\s*(?:t|th|thi|thin|think|thinki|thinkin|thinking|r|re|rea|reas|reaso|reason|reasoni|reasonin|reasoning)?$/i;
+
+function stripPartialLocalReasoningTag(raw: string): string {
+  return raw.replace(PARTIAL_LOCAL_REASONING_TAG_RE, '');
+}
+
+function parseLocalThinking(raw: string): ParsedLocalThinking {
+  const safeRaw = stripPartialLocalReasoningTag(raw);
+  LOCAL_REASONING_TAG_RE.lastIndex = 0;
+
+  let cursor = 0;
+  let mode: 'content' | 'reasoning' = 'content';
+  let content = '';
+  let reasoning = '';
+  let hasReasoning = false;
+  let match: RegExpExecArray | null;
+
+  while ((match = LOCAL_REASONING_TAG_RE.exec(safeRaw)) !== null) {
+    const segment = safeRaw.slice(cursor, match.index);
+    if (mode === 'reasoning') {
+      reasoning += segment;
+    } else {
+      content += segment;
+    }
+
+    const isClosingTag = match[1] === '/';
+    if (isClosingTag) {
+      mode = 'content';
+    } else {
+      hasReasoning = true;
+      mode = 'reasoning';
+    }
+    cursor = LOCAL_REASONING_TAG_RE.lastIndex;
+  }
+
+  const tail = safeRaw.slice(cursor);
+  if (mode === 'reasoning') {
+    reasoning += tail;
+  } else {
+    content += tail;
+  }
+
+  return {
+    content: content.replace(/^\s+/, ''),
+    reasoning: reasoning.trim(),
+    hasReasoning,
+  };
 }
 
 function localSetupMessage(error: unknown): string {
@@ -381,23 +447,30 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     try {
       if (remoteDisabledReason) {
-        const localMessages: LocalLlmMessage[] = historyMessages.slice(0, -1).map((message) => ({
-          role:
-            message.role === 'assistant' || message.role === 'system' || message.role === 'user'
-              ? message.role
-              : 'user',
-          content: normalizeLocalMessageContent(message.content),
-        }));
+        const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(
+          historyMessages.slice(0, -1).map((message) => ({
+            role:
+              message.role === 'assistant' || message.role === 'system' || message.role === 'user'
+                ? message.role
+                : 'user',
+            content: normalizeLocalMessageContent(message.content),
+          })),
+        );
         const localRef = await resolveLocalModelRef(model);
-        let localStreamingContent = '';
-        const updateLocalStream = (nextContent: string) => {
+        let localStreamingRaw = '';
+        const updateLocalStream = (parsed: ParsedLocalThinking) => {
+          if (parsed.hasReasoning && !thinkingStartTimes.has(conversationId)) {
+            thinkingStartTimes.set(conversationId, Date.now());
+          }
+
           const currentMsgStore = getMsgStore();
           const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
           const updatedMsgs = msgs.map((m) =>
             m.id === assistantMessageId
               ? {
                   ...m,
-                  content: nextContent,
+                  content: parsed.content,
+                  reasoning: parsed.hasReasoning ? parsed.reasoning : undefined,
                   isStreaming: true,
                   metadata: {
                     ...m.metadata,
@@ -408,7 +481,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               : m,
           );
 
-          set({ streamingContent: nextContent });
+          set({
+            streamingContent: parsed.content,
+            streamingReasoning: parsed.hasReasoning ? parsed.reasoning : '',
+          });
           currentMsgStore.setState((s) => ({
             messages: { ...s.messages, [conversationId]: updatedMsgs },
           }));
@@ -421,8 +497,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           requestId: assistantMessageId,
           onToken: (token) => {
             if (controller.signal.aborted) return;
-            localStreamingContent += token;
-            updateLocalStream(localStreamingContent);
+            localStreamingRaw += token;
+            updateLocalStream(parseLocalThinking(localStreamingRaw));
           },
         });
         if (controller.signal.aborted) {
@@ -430,10 +506,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           streamingConversations.delete(conversationId);
           return;
         }
+        const parsedFinal = parseLocalThinking(result.text.trim() || localStreamingRaw.trim());
         const finalContent =
-          result.text.trim() ||
-          localStreamingContent.trim() ||
+          parsedFinal.content.trim() ||
           'The local model returned an empty response. Try again with a shorter prompt.';
+        const finalReasoning = parsedFinal.hasReasoning ? parsedFinal.reasoning : undefined;
+        const startedAt = thinkingStartTimes.get(conversationId);
+        const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
+        thinkingStartTimes.delete(conversationId);
 
         const currentMsgStore = getMsgStore();
         const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
@@ -442,6 +522,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ? {
                 ...m,
                 content: finalContent,
+                reasoning: finalReasoning,
                 isStreaming: false,
                 metadata: {
                   ...m.metadata,
@@ -449,6 +530,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   localMode: true,
                   localModelId: localRef.modelId,
                   localModelName: localRef.displayName,
+                  ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
                 },
               }
             : m,
