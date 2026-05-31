@@ -450,51 +450,91 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
         })}
       </View>
 
-      {/* Recents section */}
-      {recentConversations.length > 0 && (
+      {/* Recents + search section */}
+      {conversations.length > 0 && (
         <View className="px-4 pt-4 flex-1">
+          {/* Search conversations */}
+          <View
+            className="mb-2 flex-row items-center rounded-md px-2"
+            style={{
+              backgroundColor: colors.surfaceHover,
+              borderWidth: 1,
+              borderColor: colors.border,
+              height: 34,
+            }}
+          >
+            <Search size={14} color={colors.textMuted} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search conversations"
+              placeholderTextColor={colors.textMuted}
+              style={{ flex: 1, marginLeft: 6, fontSize: 13, color: colors.textPrimary }}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+              accessibilityLabel="Search conversations"
+            />
+            {isSearching && (
+              <Pressable
+                onPress={() => setSearchQuery('')}
+                hitSlop={8}
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+              >
+                <X size={14} color={colors.textMuted} />
+              </Pressable>
+            )}
+          </View>
+
           <Text
             className="text-[11px] font-semibold uppercase tracking-wider mb-2"
             style={{ color: colors.textMuted }}
           >
-            Recents
+            {isSearching ? 'Results' : 'Recents'}
           </Text>
-          <View className="gap-0.5">
-            {recentConversations.map((conv) => {
-              const activeConv = pathname.includes(conv.id);
-              return (
-                <Pressable
-                  key={conv.id}
-                  onPress={() => handleConversationPress(conv.id)}
-                  style={{
-                    height: 32,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    justifyContent: 'center',
-                    backgroundColor: activeConv ? colors.surfaceHover : 'transparent',
-                  }}
-                  accessibilityLabel={`Open conversation: ${conv.title}`}
-                  accessibilityRole="button"
-                >
-                  <Text
-                    numberOfLines={1}
+          {displayedConversations.length > 0 ? (
+            <View className="gap-0.5">
+              {displayedConversations.map((conv) => {
+                const activeConv = pathname.includes(conv.id);
+                return (
+                  <Pressable
+                    key={conv.id}
+                    onPress={() => handleConversationPress(conv.id)}
                     style={{
-                      fontSize: 13,
-                      color: activeConv ? colors.textPrimary : colors.textSecondary,
-                      fontWeight: activeConv ? '500' : '400',
+                      height: 32,
+                      paddingHorizontal: 12,
+                      borderRadius: 6,
+                      justifyContent: 'center',
+                      backgroundColor: activeConv ? colors.surfaceHover : 'transparent',
                     }}
+                    accessibilityLabel={`Open conversation: ${conv.title}`}
+                    accessibilityRole="button"
                   >
-                    {conv.title}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        fontSize: 13,
+                        color: activeConv ? colors.textPrimary : colors.textSecondary,
+                        fontWeight: activeConv ? '500' : '400',
+                      }}
+                    >
+                      {conv.title}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={{ fontSize: 13, color: colors.textMuted, paddingHorizontal: 12 }}>
+              No conversations match &ldquo;{searchQuery.trim()}&rdquo;
+            </Text>
+          )}
         </View>
       )}
 
-      {/* Spacer if no recents */}
-      {recentConversations.length === 0 && <View className="flex-1" />}
+      {/* Spacer if no conversations */}
+      {conversations.length === 0 && <View className="flex-1" />}
 
       {/* Local profile card */}
       <View className="px-3 py-3" style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
