@@ -1,5 +1,5 @@
-import { useCallback } from 'react';
-import { View, Pressable } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import {
@@ -16,6 +16,8 @@ import {
   Key,
   Info,
   Lock,
+  Search,
+  X,
   type LucideIcon,
 } from 'lucide-react-native';
 import { type DrawerContentComponentProps } from '@react-navigation/drawer';
@@ -269,7 +271,16 @@ export function DrawerContent(_props: DrawerContentComponentProps) {
   const createConversation = useChatStore((s) => s.createConversation);
   const user = useAuthStore((s) => s.user);
 
-  const recentConversations = conversations.slice(0, 10);
+  const [searchQuery, setSearchQuery] = useState('');
+  const trimmedQuery = searchQuery.trim().toLowerCase();
+  const isSearching = trimmedQuery.length > 0;
+
+  // When searching, match titles across ALL conversations; otherwise show the
+  // 10 most recent. Title-only match (message bodies are not loaded here).
+  const displayedConversations = useMemo(() => {
+    if (!isSearching) return conversations.slice(0, 10);
+    return conversations.filter((c) => (c.title || '').toLowerCase().includes(trimmedQuery));
+  }, [isSearching, trimmedQuery, conversations]);
 
   const handleNewChat = useCallback(async () => {
     try {
