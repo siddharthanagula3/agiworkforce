@@ -7,7 +7,7 @@ export type ThemeMode = 'dark' | 'light' | 'system';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export type TTSProvider = 'system' | 'cloud';
 
-interface Personalization {
+export interface Personalization {
   fullName: string;
   nickname: string;
   occupation: string;
