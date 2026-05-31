@@ -16,6 +16,7 @@ import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
+import { consolidateFactsFromTurn } from '@/src/features/memory/services/consolidation';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
@@ -421,6 +422,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     } catch {
       // Non-fatal: memory/personalization injection must never block a chat turn.
+    }
+
+    // Learn from this turn: extract durable facts from the user's message and
+    // persist new ones (deduped). Fire-and-forget — never await, never block the
+    // turn — and skip entirely in temporary/incognito chats.
+    if (!useSettingsStore.getState().isTemporaryChat) {
+      void consolidateFactsFromTurn({ message: content, conversationId });
     }
 
     msgStore.setState((state) => {
