@@ -35,6 +35,7 @@ import { useAgentStore } from '@/stores/agentStore';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelTierWarningBanner } from '@/src/features/chat/components/ModelTierWarningBanner';
+import { SendErrorBanner } from '@/src/features/chat/components/SendErrorBanner';
 import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useVoicePlayback } from '@/src/features/voice/hooks/useVoicePlayback';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -93,6 +94,8 @@ export default function ChatScreen() {
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const paywallError = useChatStore((s) => s.paywallError);
   const clearPaywallError = useChatStore((s) => s.clearPaywallError);
+  const sendError = useChatStore((s) => s.error);
+  const clearError = useChatStore((s) => s.clearError);
   const enqueueOfflineMessage = useChatStore((s) => s.enqueueOfflineMessage);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
 
@@ -723,6 +726,24 @@ export default function ChatScreen() {
 
         {/* Model-tier warning — shown when Opus-class model selected on free tier */}
         <ModelTierWarningBanner />
+
+        {/* Send/stream failure banner with retry — surfaces store.error (was silent) */}
+        <SendErrorBanner
+          error={sendError}
+          onRetry={
+            conversationMessages.some((m) => m.role === 'user')
+              ? () => {
+                  if (!id) return;
+                  const lastUser = [...conversationMessages]
+                    .reverse()
+                    .find((m) => m.role === 'user');
+                  clearError();
+                  if (lastUser) retryMessage(id, lastUser.id);
+                }
+              : undefined
+          }
+          onDismiss={clearError}
+        />
 
         {/* Composer — shows TaskChips when conversation is empty */}
         <Composer
