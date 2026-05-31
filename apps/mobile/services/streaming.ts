@@ -1,6 +1,7 @@
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { AbortError } from '@agiworkforce/utils/async';
+import type { Effort } from '@agiworkforce/types';
 import {
   streamFromProvider,
   type ProviderStreamProvider,
@@ -75,6 +76,7 @@ async function attemptStream(
     }>;
     stream: true;
     thinking?: boolean;
+    effort?: Effort;
   },
   callbacks: StreamCallbacks,
   signal: AbortSignal,
@@ -244,6 +246,7 @@ async function attemptProviderStream(
       role: string;
       content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
     }>;
+    effort?: Effort;
   },
   callbacks: StreamCallbacks,
   signal: AbortSignal,
@@ -267,7 +270,11 @@ async function attemptProviderStream(
     gatewayUrl: API_URL,
     providerId,
     authToken: token,
-    request: { model: body.model, messages: flattened },
+    request: {
+      model: body.model,
+      messages: flattened,
+      ...(body.effort ? { effort: body.effort } : {}),
+    },
     signal,
   });
 
@@ -314,6 +321,7 @@ export async function streamChat(
     }>;
     stream: true;
     thinking?: boolean;
+    effort?: Effort;
   },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
@@ -335,7 +343,11 @@ export async function streamChat(
   if (USE_PROVIDER_STREAM) {
     try {
       const ok = await attemptProviderStream(
-        { model: body.model, messages: body.messages },
+        {
+          model: body.model,
+          messages: body.messages,
+          ...(body.effort ? { effort: body.effort } : {}),
+        },
         callbacks,
         combinedSignal,
       );
