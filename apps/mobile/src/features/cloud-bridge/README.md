@@ -33,8 +33,9 @@ interface InviteCodeModalProps {
 ## Two tabs
 
 **Invite tab** — calls `redeemInviteCode(code, source)` from `features/waitlist/service.ts`.
-Mobile v1 fails closed here until invite redemption is available through the
-Clerk-authenticated Web/API account flow.
+Mobile public v1 keeps Cloud closed by default, but private beta testers can
+unlock the auth/cloud surface with an invitation code before signing in or
+creating an account.
 
 **Waitlist tab** — preserves the existing mobile rank-in-line UX (email + country).
 This is the consolidation of the former `CloudWaitlistSheet.tsx` content. Calls

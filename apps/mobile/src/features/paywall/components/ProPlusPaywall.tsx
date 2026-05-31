@@ -18,7 +18,7 @@
  *   proRef.current?.expand();
  */
 
-import { useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -64,8 +64,6 @@ export const ProPlusPaywall = forwardRef<BottomSheet, ProPlusPaywallProps>(
 
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
 
-    const snapPoints = useMemo(() => ['auto'], []);
-
     const handleSheetChange = useCallback(
       (index: number) => {
         if (index === -1) {
@@ -104,7 +102,6 @@ export const ProPlusPaywall = forwardRef<BottomSheet, ProPlusPaywallProps>(
       <BottomSheet
         ref={sheetRef}
         index={-1}
-        snapPoints={snapPoints}
         onChange={handleSheetChange}
         enablePanDownToClose
         enableDynamicSizing

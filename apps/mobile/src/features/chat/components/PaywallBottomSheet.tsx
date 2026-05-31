@@ -26,7 +26,7 @@
  *   />
  */
 
-import { useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -100,8 +100,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
 
     // Expose expand() / close() / snapToIndex() to the parent via forwardRef.
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
-    // 'auto' snap point lets the sheet size itself to content.
-    const snapPoints = useMemo(() => ['auto'], []);
 
     const featureLabel = FEATURE_LABELS[feature] ?? UNKNOWN_FEATURE_LABEL;
     const tierLabel = TIER_LABELS[requiredTier] ?? UNKNOWN_TIER_LABEL;
@@ -148,7 +146,6 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       <BottomSheet
         ref={sheetRef}
         index={-1}
-        snapPoints={snapPoints}
         onChange={handleSheetChange}
         enablePanDownToClose
         enableDynamicSizing

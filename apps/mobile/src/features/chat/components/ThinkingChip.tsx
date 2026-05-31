@@ -10,9 +10,10 @@ import { Clock, ChevronRight, ChevronDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
 
-/** Strips <thinking> and <reasoning> XML tags from content. */
+/** Strips local/provider reasoning XML tags from content. */
 function stripReasoningTags(text: string): string {
   return text
+    .replace(/<\/?think>/gi, '')
     .replace(/<\/?thinking>/gi, '')
     .replace(/<\/?reasoning>/gi, '')
     .trim();

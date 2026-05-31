@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import {
   Modal,
   View,
@@ -55,6 +56,8 @@ interface InviteTabProps {
 
 function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTabProps) {
   const colors = useThemeColors();
+  const router = useRouter();
+  const markInviteRedeemed = useWaitlistStore((s) => s.markInviteRedeemed);
   const [code, setCode] = useState('');
   const [state, setState] = useState<InviteState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -76,11 +79,13 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
     }
 
     setState('success');
+    markInviteRedeemed({ code: trimmedCode, inviteId: result.inviteId });
     if (result.inviteId) onRedeemed?.(result.inviteId);
     setTimeout(() => {
       onClose();
+      router.push('/(auth)/login' as never);
     }, 1500);
-  }, [canSubmit, trimmedCode, source, onRedeemed, onClose]);
+  }, [canSubmit, trimmedCode, source, markInviteRedeemed, onRedeemed, onClose, router]);
 
   if (state === 'success') {
     return (

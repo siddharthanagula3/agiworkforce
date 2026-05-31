@@ -44,16 +44,23 @@ jest.mock('expo-local-authentication', () => ({
 // lib/biometricFlagStore.ts, not in the MMKV-backed settingsStore.
 let mockBiometricLockEnabledFlag = true;
 jest.mock('@/lib/biometricFlagStore', () => ({
-  useBiometricFlag: (selector: (s: { enabled: boolean }) => unknown) =>
-    selector({ enabled: mockBiometricLockEnabledFlag }),
+  useBiometricFlag: (selector: (s: { enabled: boolean; hydrated: boolean }) => unknown) =>
+    selector({ enabled: mockBiometricLockEnabledFlag, hydrated: true }),
   hydrateBiometricFlag: jest.fn().mockResolvedValue(undefined),
 }));
 
 import { useBiometricGate } from '../src/features/auth/hooks/useBiometricGate';
 
+let consoleWarnSpy: jest.SpyInstance;
+
 beforeEach(() => {
   jest.clearAllMocks();
+  consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   mockBiometricLockEnabledFlag = true;
+});
+
+afterEach(() => {
+  consoleWarnSpy.mockRestore();
 });
 
 describe('useBiometricGate — fail-closed on error', () => {
