@@ -19,7 +19,7 @@ import { extractCandidateFacts } from './factExtractor';
 
 /** Normalize a fact string for duplicate comparison (case/space-insensitive). */
 function normalizeKey(fact: string): string {
-  return fact.trim().toLowerCase().replace(/\s+/u, ' ');
+  return fact.trim().toLowerCase().replace(/\s+/gu, ' ');
 }
 
 /**
