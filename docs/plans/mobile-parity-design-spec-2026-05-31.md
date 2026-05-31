@@ -1,5 +1,9 @@
 # AGI Workforce Mobile (Expo 55 + RN 0.84) — THINKING Display, Settings Architecture & CLOUD-vs-LOCAL Feature Spec
 
+Status: Active plan
+Owner: founder + platform
+Last updated: 2026-05-31
+
 ## 1. THINKING / REASONING DISPLAY SPECIFICATION
 
 ### Current Leading Pattern (Claude iOS, ChatGPT iOS, Gemini iOS)

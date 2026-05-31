@@ -1,5 +1,9 @@
 # AGI Workforce LLM Caching & Cost Architecture Report
 
+Status: Active plan
+Owner: founder + platform
+Last updated: 2026-05-30
+
 ## Executive Summary
 
 AGI Workforce operates a multi-provider LLM platform with partial prompt/token caching support. Only 9 of ~80 catalog models have accurate cache-read pricing; most providers' cache tokens go untracked or miscalculated. OpenRouter demonstrates a unified caching pattern (provider-aware routing + sticky sessions + per-provider cache pricing) that AGI should selectively adopt. Critical audit findings: (1) cost-tracker.ts omits cacheReadInputTokens from OTel total_tokens, (2) DeepSeek adapter lacks cache token extraction despite 99% cache-read discount, (3) OpenAI cache_creation is miscalculated at 1.25x when it should be 1.0x, (4) Vercel AI SDK v2 is opaque to caching entirely.
