@@ -22,6 +22,7 @@ export { FileUnreadableModal } from './FileUnreadableModal';
 export type { FileUnreadableModalProps } from './FileUnreadableModal';
 export { CloudTeaseModal } from './CloudTeaseModal';
 export type { CloudTeaseModalProps } from './CloudTeaseModal';
+export { ModelMissingError, DiskFullError, NetworkError } from './MessageErrorScreen';
 
 // Copy constants — expose for external use (e.g. snapshot tests)
 export { EDGE_COPY } from './copy';
