@@ -1,6 +1,9 @@
 # On-Device Runtime — 2-Year Bet + Gemma/Audio Resolution (2026-05-31)
 
 Status: RESEARCH COMPLETE + CODE-VERIFIED. **DECISION = OPTION B (founder, 2026-05-31).**
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Sources: deep-research `weciim595` (102 agents, 20 sources, 3-vote verify) + direct repo + npm/GitHub-API checks.
 Supersedes the "Gemma-3n default" call. Read with `mobile-ondevice-llm-research-2026-05-31.md`.
 

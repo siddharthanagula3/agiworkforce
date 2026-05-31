@@ -1,5 +1,9 @@
 # AGI Workforce Mobile: Auto-Modality Model Selection + Download-on-Demand (LOCAL mode)
 
+Status: Active plan
+Owner: founder + platform
+Last updated: 2026-05-31
+
 ## 1. Context & Goal
 
 **Feature**: In LOCAL mode, automatically select the right on-device model based on composer input:

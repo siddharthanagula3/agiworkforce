@@ -2,6 +2,7 @@
 
 Status: ACTIVE DIRECTION (founder-stated 2026-05-31). Plan; no code yet pending gap-verification + research.
 Owner: founder + platform
+Last updated: 2026-05-31
 
 ## Goal (founder's words, distilled)
 

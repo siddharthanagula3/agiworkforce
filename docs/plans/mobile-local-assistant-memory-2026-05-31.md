@@ -1,11 +1,13 @@
 # AGI Mobile — Local Personal Assistant with Learning Memory (No Fine-Tuning)
 
 Status: DESIGN COMPLETE (2026-05-31). Plan/spec — no code yet. Slots into Phase C (TestFlight), with a small
+Owner: founder + platform
+Last updated: 2026-05-31
+
 Phase-1 slice that can ride the Phase-A hardening pass.
 Source: design workflow `wh15npeay` — 8 agents (3 explore: hermes-agent + our memory code + prompt-injection
 point; 2 web: on-device memory techniques + consumer "remembers you" UX; 3 design + synthesis). Reuse claims are
 grounded in real `file:line` from `apps/mobile`.
-Owner: founder + platform
 Related: `docs/plans/mobile-ondevice-llm-research-2026-05-31.md` (why keyword-over-embeddings in v1),
 `docs/plans/mobile-release-strategy-2026-05-31.md` (phasing), `~/Desktop/reference/hermes-agent/` (reference).
 

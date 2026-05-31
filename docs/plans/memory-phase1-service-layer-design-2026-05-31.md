@@ -1,5 +1,9 @@
 # Memory Phase-1 Service-Layer Architecture (Code-Structure Applied)
 
+Status: Active plan
+Owner: founder + platform
+Last updated: 2026-05-31
+
 ## Overview
 
 This design applies the code-structure SERVICE-LAYER skill to the memory feature by:
