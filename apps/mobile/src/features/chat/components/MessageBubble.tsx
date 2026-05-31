@@ -43,6 +43,18 @@ import type { ChatMessage, Artifact } from '@/types/chat';
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
 
+/**
+ * Whether the message's model can produce reasoning. Only hides the thinking
+ * chip for models explicitly flagged `supportsThinking: false` (e.g. plain
+ * local models that never emit <think> blocks). Unknown/auto models keep the
+ * existing behavior of showing the chip whenever `reasoning` is present.
+ */
+function modelSupportsThinking(modelId?: string): boolean {
+  if (!modelId || isAutoMode(modelId)) return true;
+  const def = getModelById(modelId);
+  return def?.supportsThinking !== false;
+}
+
 /** Returns provenance strings for an assistant message's model field. */
 function getProvenance(model?: string): { provider?: string; model?: string } | null {
   if (!model) return null;
@@ -92,7 +104,8 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const provenance = isAssistant && !message.isStreaming ? getProvenance(message.model) : null;
-  const hasReasoning = isAssistant && message.reasoning !== undefined;
+  const hasReasoning =
+    isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
   const [expandedArtifact, setExpandedArtifact] = useState<Artifact | null>(null);
   const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
   const [showExportSheet, setShowExportSheet] = useState(false);
