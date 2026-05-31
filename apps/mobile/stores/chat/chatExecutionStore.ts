@@ -12,6 +12,7 @@ import {
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useAgentControlStore } from '@/stores/agentControlStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -394,6 +395,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
+    // Resolve the per-conversation reasoning effort (UI sets it via AddToChatSheet →
+    // agentControlStore). Forwarded to the API so the selected effort actually takes effect.
+    const agentControl = useAgentControlStore
+      .getState()
+      .resolve(conversationId, projectState.activeProjectId);
+
     // Inject top-K relevant memory facts as system context (on-device, graceful fallback)
     try {
       const memFacts = await retrieveMemoryContext(content, 5);
@@ -577,7 +584,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
 
       await streamChat(
-        { model, messages: historyMessages, stream: true, thinking: true },
+        {
+          model,
+          messages: historyMessages,
+          stream: true,
+          thinking: true,
+          effort: agentControl.effort,
+        },
         {
           onDelta: (delta: StreamDelta) => {
             const state = get();

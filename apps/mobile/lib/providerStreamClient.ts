@@ -10,6 +10,7 @@
  * `Response.body` should fall back to a polyfill (`react-native-sse`).
  */
 
+import type { Effort } from '@agiworkforce/types';
 import { secureFetch } from '@/services/secureFetch';
 
 export type ProviderStreamProvider = 'anthropic' | 'openai' | 'ollama' | 'google';
