@@ -527,6 +527,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
         thinkingStartTimes.delete(conversationId);
 
+        // On-device decode rate: tokens emitted / wall-clock since the first token.
+        const decodeMs = localFirstTokenAt > 0 ? Date.now() - localFirstTokenAt : 0;
+        const tokensPerSecond =
+          decodeMs > 0 && localTokenCount > 1
+            ? Math.round((localTokenCount / decodeMs) * 1000 * 10) / 10
+            : undefined;
+
         const currentMsgStore = getMsgStore();
         const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
         const updatedMsgs = msgs.map((m) =>
@@ -536,6 +543,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 content: finalContent,
                 reasoning: finalReasoning,
                 isStreaming: false,
+                ...(tokensPerSecond !== undefined ? { tokensPerSecond } : {}),
                 metadata: {
                   ...m.metadata,
                   localRuntime: result.runtime,
