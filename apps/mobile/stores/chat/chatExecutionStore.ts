@@ -13,7 +13,9 @@ import {
 } from '@/src/features/model-picker/localModelRuntime';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
+import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
@@ -89,9 +91,14 @@ function normalizeLocalMessageContent(
 }
 
 function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[] {
-  if (messages.some((message) => message.role === 'system' && message.content.trim())) {
-    return messages;
-  }
+  // Always lead with the base identity prompt. Other system messages (persona,
+  // memory, project instructions) are additive context, not a replacement — so
+  // we only skip prepending when the base prompt itself is already present.
+  const hasBase = messages.some(
+    (message) =>
+      message.role === 'system' && message.content.trim() === DEFAULT_LOCAL_SYSTEM_PROMPT,
+  );
+  if (hasBase) return messages;
   return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...messages];
 }
 
@@ -401,18 +408,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       .getState()
       .resolve(conversationId, projectState.activeProjectId);
 
-    // Inject top-K relevant memory facts as system context (on-device, graceful fallback)
+    // Inject personalization + top-K relevant memories as system context.
+    // A pure composer decides block content + order ([persona, memory]); any
+    // failure here must never block a chat turn (graceful, on-device).
     try {
       const memFacts = await retrieveMemoryContext(content, 5);
-      if (memFacts.length > 0) {
-        const memBlock = [
-          'User memory (retrieved for this turn — treat as background context):',
-          ...memFacts.map((f, i) => `${i + 1}. ${f.fact}`),
-        ].join('\n');
-        historyMessages.unshift({ role: 'system', content: memBlock });
+      const { personalization } = useSettingsStore.getState();
+      const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
+      // Unshift in reverse so the final order is [persona, memory, ...existing].
+      for (let i = blocks.length - 1; i >= 0; i -= 1) {
+        historyMessages.unshift(blocks[i]);
       }
     } catch {
-      // Non-fatal: memory retrieval failure must never block a chat turn.
+      // Non-fatal: memory/personalization injection must never block a chat turn.
     }
 
     msgStore.setState((state) => {
