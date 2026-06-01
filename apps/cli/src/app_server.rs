@@ -282,6 +282,7 @@ impl ToolDispatch for CliToolDispatch {
             require_confirmation: false,
             auto_approve_safe: true,
             quiet: true,
+            approval_callback: None,
         };
 
         let result = execute_tool_with_opts(&call, &opts).await?;

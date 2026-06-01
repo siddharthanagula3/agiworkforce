@@ -403,6 +403,64 @@ fn crossterm_to_keyaction(
 }
 
 // ---------------------------------------------------------------------------
+// Tool approval (TUI overlay path)
+// ---------------------------------------------------------------------------
+
+/// Map an approval-overlay button choice to the broker decision the tool layer
+/// understands. "Allow once" persists nothing; "Always Allow" is recorded in
+/// the `PermissionStore` by the tool layer so later calls skip the prompt;
+/// "Deny" / "Deny All" both stop *this* call (Deny All additionally latches the
+/// broker so the rest of the turn's requests auto-cancel).
+fn approval_choice_to_decision(
+    choice: crate::tui::widgets::approval_overlay::ApprovalChoice,
+) -> crate::tui::approval_broker::ApprovalDecision {
+    use crate::tui::approval_broker::ApprovalDecision;
+    use crate::tui::widgets::approval_overlay::ApprovalChoice;
+    match choice {
+        ApprovalChoice::Yes => ApprovalDecision::AllowOnce,
+        ApprovalChoice::AlwaysAllow => ApprovalDecision::AlwaysAllow,
+        ApprovalChoice::No => ApprovalDecision::Deny,
+        ApprovalChoice::DenyAll => ApprovalDecision::Cancel,
+    }
+}
+
+/// Render a keyboard-navigable approval modal and return the user's choice.
+///
+/// The agent turn is parked on the broker (`request().await`) while this runs,
+/// so a synchronous key loop here cannot starve it. This intentionally touches
+/// only `terminal` + local overlay state — never `TuiApp` — so it composes with
+/// the `&mut app.session` borrow held by the in-flight agent future.
+fn run_tui_approval_modal(
+    terminal: &mut Terminal<CrosstermBackend<Stdout>>,
+    request: &crate::tui::approval_broker::ApprovalRequest,
+) -> Result<crate::tui::widgets::approval_overlay::ApprovalChoice> {
+    use crate::tui::widgets::approval_overlay::{ApprovalChoice, ApprovalOverlayState};
+    use crate::tui::widgets::interactive::{InteractiveView, ViewAction};
+
+    let mut overlay = ApprovalOverlayState::default();
+    overlay.open(request.summary.clone(), request.detail.clone());
+
+    loop {
+        terminal.draw(|frame| {
+            let area = frame.area();
+            frame.render_widget(Clear, area);
+            overlay.render_into(frame, area);
+        })?;
+
+        if event::poll(Duration::from_millis(TICK_RATE_MS))? {
+            if let Event::Key(key) = event::read()? {
+                match overlay.handle_key(crossterm_to_keyaction(key)) {
+                    ViewAction::Submit(_) | ViewAction::Close => {
+                        return Ok(overlay.result.unwrap_or(ApprovalChoice::No));
+                    }
+                    ViewAction::Continue | ViewAction::SideAction(_) => {}
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Terminal setup
 // ---------------------------------------------------------------------------
 
@@ -2579,7 +2637,27 @@ async fn send_message(
     // Share buffer with the render loop so partial output is visible
     let config_clone = app.config.clone();
 
-    // Spawn streaming on a separate task so we can render while waiting
+    // Install a per-turn TUI approval broker. Tool code reaches it through the
+    // approval callback (`broker.request(...).await`); we drain pending
+    // requests in the loop below and resolve them with a keyboard-navigable
+    // overlay instead of `dialoguer` freezing the alternate screen. A fresh
+    // broker per turn means "Deny All" and queue state reset cleanly each send.
+    let broker = crate::tui::approval_broker::ApprovalBroker::new();
+    {
+        let cb_broker = broker.clone();
+        let callback: crate::tools::ApprovalCallback = Arc::new(move |req| {
+            let broker = cb_broker.clone();
+            Box::pin(async move { broker.request(req).await })
+        });
+        app.session.on_tool_approval = Some(crate::agent::ToolApprovalSink(callback));
+    }
+
+    // Drive the agent turn while staying responsive to approval requests. The
+    // event loop is otherwise parked inside this `.await`, so without the
+    // `select!` the broker's oneshot would deadlock (the worker waits for a
+    // decision the frozen UI can never deliver). `biased` polls the turn future
+    // first; a pending approval can only exist while the turn is still in
+    // flight, so this never strands a queued request.
     let result = {
         let callback = Box::new(move |chunk: &str| {
             if let Ok(mut buf) = buf_for_callback.lock() {
@@ -2587,10 +2665,37 @@ async fn send_message(
             }
         });
 
-        // Update stream_buffer for render loop before sending
-        // (the actual streaming happens inside session.send)
-        app.session.send(&config_clone, user_text, callback).await
+        let send_fut = app.session.send(&config_clone, user_text, callback);
+        tokio::pin!(send_fut);
+
+        loop {
+            tokio::select! {
+                biased;
+                outcome = &mut send_fut => break outcome,
+                _ = broker.notified() => {
+                    while let Some(req) = broker.drain_pending().await {
+                        let choice = run_tui_approval_modal(terminal, &req)?;
+                        broker
+                            .complete(req.id, approval_choice_to_decision(choice))
+                            .await;
+                        if matches!(
+                            choice,
+                            crate::tui::widgets::approval_overlay::ApprovalChoice::DenyAll
+                        ) {
+                            // Stop prompting for the rest of this turn.
+                            broker.deny_all_remaining().await;
+                        }
+                    }
+                }
+            }
+        }
     };
+
+    // Tear down the per-turn approval wiring so a later turn can never reference
+    // a broker whose drain loop has ended. Any straggling request (none expected
+    // once the turn future resolved) is cancelled defensively.
+    app.session.on_tool_approval = None;
+    broker.cancel_all().await;
 
     // Copy final streamed content into stream_buffer for last render
     if let Ok(buf) = buf_for_display.lock() {
@@ -2676,6 +2781,272 @@ mod tests {
 
     fn make_key(code: crossterm::event::KeyCode) -> crossterm::event::KeyEvent {
         crossterm::event::KeyEvent::new(code, crossterm::event::KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn approval_choice_maps_to_expected_decision() {
+        use crate::tui::approval_broker::ApprovalDecision;
+        use crate::tui::widgets::approval_overlay::ApprovalChoice;
+
+        assert_eq!(
+            approval_choice_to_decision(ApprovalChoice::Yes),
+            ApprovalDecision::AllowOnce
+        );
+        assert_eq!(
+            approval_choice_to_decision(ApprovalChoice::AlwaysAllow),
+            ApprovalDecision::AlwaysAllow
+        );
+        assert_eq!(
+            approval_choice_to_decision(ApprovalChoice::No),
+            ApprovalDecision::Deny
+        );
+        assert_eq!(
+            approval_choice_to_decision(ApprovalChoice::DenyAll),
+            ApprovalDecision::Cancel
+        );
+
+        // Allowing decisions let the tool run; denials must not.
+        assert!(approval_choice_to_decision(ApprovalChoice::Yes).is_allowing());
+        assert!(approval_choice_to_decision(ApprovalChoice::AlwaysAllow).is_allowing());
+        assert!(!approval_choice_to_decision(ApprovalChoice::No).is_allowing());
+        assert!(!approval_choice_to_decision(ApprovalChoice::DenyAll).is_allowing());
+    }
+
+    /// End-to-end: a denied decision routed through callback → broker → tool
+    /// must produce an observable "denied" tool result and never touch disk —
+    /// proving behavior, not just compilation. The whole flow is wrapped in a
+    /// timeout so that a future deadlock regression fails fast instead of
+    /// hanging the suite (the symptom we want CI to catch).
+    #[tokio::test]
+    async fn denied_approval_blocks_tool_execution_via_callback() {
+        use crate::tui::approval_broker::{ApprovalBroker, ApprovalDecision};
+
+        let (success, exists) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let broker = ApprovalBroker::new();
+            let cb_broker = broker.clone();
+            let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |req| {
+                let broker = cb_broker.clone();
+                Box::pin(async move { broker.request(req).await })
+            });
+
+            // Drive the broker from a separate task: deny whatever is requested.
+            let drain_broker = broker.clone();
+            let drain = tokio::spawn(async move {
+                drain_broker.notified().await;
+                if let Some(req) = drain_broker.drain_pending().await {
+                    drain_broker.complete(req.id, ApprovalDecision::Deny).await;
+                }
+            });
+
+            // Path inside cwd so `validate_file_path` accepts it and the
+            // approval callback is actually reached (mirrors the proven
+            // file_ops::write_file_uses_approval_callback test).
+            let tmp = tempfile::tempdir_in(".").expect("tempdir");
+            let target = tmp.path().join("denied.txt");
+
+            let call = crate::agent::ToolCall {
+                name: "write_file".to_string(),
+                args: std::collections::HashMap::from([
+                    ("path".to_string(), target.display().to_string()),
+                    ("content".to_string(), "should not be written".to_string()),
+                ]),
+            };
+            let opts = crate::tools::ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: false,
+                quiet: true,
+                approval_callback: Some(callback),
+            };
+
+            let result = crate::tools::execute_tool_with_opts(&call, &opts)
+                .await
+                .expect("tool executes");
+            drain.await.expect("drain task");
+
+            (result.success, target.exists())
+        })
+        .await
+        .expect("approval flow must not deadlock");
+
+        assert!(!success, "denied write must report failure");
+        assert!(!exists, "denied write must not create the file on disk");
+    }
+
+    /// Positive counterpart: an AllowOnce decision routed through
+    /// callback → broker → tool must let the write reach disk. Proves the
+    /// allow path is wired, not just the deny path.
+    #[tokio::test]
+    async fn allowed_approval_runs_tool_via_callback() {
+        use crate::tui::approval_broker::{ApprovalBroker, ApprovalDecision};
+
+        let (success, contents) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let broker = ApprovalBroker::new();
+            let cb_broker = broker.clone();
+            let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |req| {
+                let broker = cb_broker.clone();
+                Box::pin(async move { broker.request(req).await })
+            });
+
+            let drain_broker = broker.clone();
+            let drain = tokio::spawn(async move {
+                drain_broker.notified().await;
+                if let Some(req) = drain_broker.drain_pending().await {
+                    drain_broker.complete(req.id, ApprovalDecision::AllowOnce).await;
+                }
+            });
+
+            let tmp = tempfile::tempdir_in(".").expect("tempdir");
+            let target = tmp.path().join("allowed.txt");
+
+            let call = crate::agent::ToolCall {
+                name: "write_file".to_string(),
+                args: std::collections::HashMap::from([
+                    ("path".to_string(), target.display().to_string()),
+                    ("content".to_string(), "written\n".to_string()),
+                ]),
+            };
+            let opts = crate::tools::ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: false,
+                quiet: true,
+                approval_callback: Some(callback),
+            };
+
+            let result = crate::tools::execute_tool_with_opts(&call, &opts)
+                .await
+                .expect("tool executes");
+            drain.await.expect("drain task");
+
+            let contents = std::fs::read_to_string(&target).ok();
+            (result.success, contents)
+        })
+        .await
+        .expect("approval flow must not deadlock");
+
+        assert!(success, "allowed write must report success");
+        assert_eq!(
+            contents.as_deref(),
+            Some("written\n"),
+            "allowed write must land the exact content on disk"
+        );
+    }
+
+    /// Integration: two parallel tools each queue an approval through ONE shared
+    /// broker, a single FIFO drain loop (mirroring the `send_message` overlay
+    /// loop) resolves both, and each tool must observe ITS OWN decision.
+    ///
+    /// This is the gap the prior tests leave: `approval_broker::drains_requests_fifo`
+    /// exercises FIFO at the broker layer with fake workers, and the two
+    /// `*_approval_*_via_callback` tests each drive a SINGLE real tool. Nothing
+    /// covers two concurrent *real* tools (`join_all` in `chat.rs`) racing
+    /// through the FIFO. We grant one path and deny the other to prove the
+    /// decisions are routed per-request (not swapped or broadcast).
+    ///
+    /// Decisions key off `req.kind` content (the target path), NOT drain order:
+    /// under concurrency the enqueue order is nondeterministic, so asserting on
+    /// "first drained" would be flaky. Keying on identity makes the assertion
+    /// order-independent while still exercising the single-at-a-time FIFO drain.
+    /// The whole flow is timeout-wrapped so a deadlock regression fails fast.
+    #[tokio::test]
+    async fn two_parallel_tools_each_observe_their_own_decision_via_fifo() {
+        use crate::tui::approval_broker::{
+            ApprovalBroker, ApprovalDecision, ApprovalRequestKind,
+        };
+
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            let broker = ApprovalBroker::new();
+            let cb_broker = broker.clone();
+            let callback: crate::tools::ApprovalCallback = std::sync::Arc::new(move |req| {
+                let broker = cb_broker.clone();
+                Box::pin(async move { broker.request(req).await })
+            });
+
+            // Two distinct in-cwd targets so `validate_file_path` accepts them and
+            // each produces a distinct `FileWrite { path }` approval kind.
+            let tmp = tempfile::tempdir_in(".").expect("tempdir");
+            let allow_target = tmp.path().join("allow.txt");
+            let deny_target = tmp.path().join("deny.txt");
+
+            // FIFO drain loop: park on `notified()`, then drain ALL pending each
+            // wake (notify_one coalesces, so two near-simultaneous requests may
+            // produce a single wake), completing until BOTH have a decision.
+            // Decision is chosen from the request's target path: allow_target ->
+            // AllowOnce, anything else -> Deny.
+            let drain_broker = broker.clone();
+            let drain = tokio::spawn(async move {
+                let mut completed = 0;
+                while completed < 2 {
+                    drain_broker.notified().await;
+                    while let Some(req) = drain_broker.drain_pending().await {
+                        let is_allow = matches!(
+                            &req.kind,
+                            ApprovalRequestKind::FileWrite { path }
+                                if path.file_name()
+                                    == std::path::Path::new("allow.txt").file_name()
+                        );
+                        let decision = if is_allow {
+                            ApprovalDecision::AllowOnce
+                        } else {
+                            ApprovalDecision::Deny
+                        };
+                        drain_broker.complete(req.id, decision).await;
+                        completed += 1;
+                    }
+                }
+            });
+
+            let mk_call = |path: &std::path::Path, body: &str| crate::agent::ToolCall {
+                name: "write_file".to_string(),
+                args: std::collections::HashMap::from([
+                    ("path".to_string(), path.display().to_string()),
+                    ("content".to_string(), body.to_string()),
+                ]),
+            };
+            let opts = crate::tools::ToolExecOptions {
+                require_confirmation: true,
+                auto_approve_safe: false,
+                quiet: true,
+                approval_callback: Some(callback),
+            };
+
+            // Run BOTH tools concurrently (mirrors `join_all` in chat.rs). Each
+            // independently calls `broker.request().await` through the shared
+            // callback; the single drain loop resolves them via the FIFO.
+            let allow_call = mk_call(&allow_target, "allowed\n");
+            let deny_call = mk_call(&deny_target, "should not be written");
+            let (allow_res, deny_res) = tokio::join!(
+                crate::tools::execute_tool_with_opts(&allow_call, &opts),
+                crate::tools::execute_tool_with_opts(&deny_call, &opts),
+            );
+            drain.await.expect("drain task");
+
+            let allow_res = allow_res.expect("allow tool executes");
+            let deny_res = deny_res.expect("deny tool executes");
+
+            (
+                allow_res.success,
+                std::fs::read_to_string(&allow_target).ok(),
+                deny_res.success,
+                deny_target.exists(),
+            )
+        })
+        .await
+        .expect("two-tool approval flow must not deadlock");
+
+        let (allow_success, allow_contents, deny_success, deny_exists) = outcome;
+
+        // The allowed tool observed AllowOnce: it succeeded and wrote its file.
+        assert!(allow_success, "allowed tool must report success");
+        assert_eq!(
+            allow_contents.as_deref(),
+            Some("allowed\n"),
+            "allowed tool must land its exact content on disk"
+        );
+
+        // The denied tool observed Deny: it failed and never touched disk —
+        // proving the two decisions were routed per-request, not swapped.
+        assert!(!deny_success, "denied tool must report failure");
+        assert!(!deny_exists, "denied tool must not create its file on disk");
     }
 
     // Build the thinnest possible TuiApp without touching the filesystem or

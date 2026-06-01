@@ -60,6 +60,15 @@ impl std::fmt::Debug for BudgetSink {
     }
 }
 
+#[derive(Clone)]
+pub struct ToolApprovalSink(pub crate::tools::ApprovalCallback);
+
+impl std::fmt::Debug for ToolApprovalSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ToolApprovalSink(<callback>)")
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -102,6 +111,7 @@ pub struct AgentSession {
     pub auto_approve_plan: bool,
     pub skip_permissions: bool,
     pub auto_approve_safe: bool,
+    pub on_tool_approval: Option<ToolApprovalSink>,
     pub quiet: bool,
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -309,6 +319,7 @@ impl AgentSession {
             auto_approve_plan: false,
             skip_permissions: false,
             auto_approve_safe: false,
+            on_tool_approval: None::<ToolApprovalSink>,
             quiet: false,
             fast_mode: false,
             original_model: None,
