@@ -621,6 +621,16 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     let mut lines: Vec<Line> = Vec::new();
 
     if app.chat_messages.is_empty() && !app.is_loading {
+        use crate::design_system::AccessMode;
+        use crate::tui::terminal_palette::{v3_success, v3_teal, v3_terracotta};
+        // Access-mode colors match the status-bar chip so the visual identity is
+        // consistent across the app.
+        let (mode_label, mode_color) = match provider_access_mode(&app.session.provider) {
+            AccessMode::Local => ("local · on-device & private", v3_success()),
+            AccessMode::Byok => ("your own key · BYOK", v3_teal()),
+            AccessMode::Cloud => ("AGI cloud subscription", v3_terracotta()),
+        };
+
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  Welcome to AGI",
@@ -629,16 +639,29 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                 .add_modifier(Modifier::BOLD),
         )));
         lines.push(Line::from(""));
+        // Orient the user: which model are they on, reached via which mode.
+        lines.push(Line::from(vec![
+            Span::styled("  Model  ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                app.model_name.clone(),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled("   ◉ ", Style::default().fg(mode_color)),
+            Span::styled(mode_label, Style::default().fg(mode_color)),
+        ]));
+        lines.push(Line::from(Span::styled(
+            "  Run models on-device, with your own key, or on AGI cloud — /model to switch.",
+            Style::default().fg(Color::DarkGray),
+        )));
+        lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "  Type a message and press Enter to send.",
             Style::default().fg(Color::DarkGray),
         )));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands. Shift+Tab to switch modes.",
-            Style::default().fg(Color::DarkGray),
-        )));
-        lines.push(Line::from(Span::styled(
-            "  Press Esc to quit.",
+            "  Type / for commands · Shift+Tab to switch modes · Esc to quit.",
             Style::default().fg(Color::DarkGray),
         )));
     } else {
