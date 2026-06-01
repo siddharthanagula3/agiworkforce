@@ -63,6 +63,11 @@ function getState() {
   return useDispatchStore.getState();
 }
 
+// sendTask dispatches the control message via a dynamic import('connectionStore')
+// (load-bearing — breaks the connectionStore<->dispatchStore circular dep), so the
+// sendControl/queueControl call lands on a later microtask. Flush before asserting.
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 function resetStore() {
   useDispatchStore.setState({ messages: [] });
 }
