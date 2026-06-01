@@ -215,7 +215,7 @@ describe('dispatchStore', () => {
       expect(new Date(msg.timestamp).toISOString()).toBe(msg.timestamp);
     });
 
-    it('queues the control message when disconnected', () => {
+    it('queues the control message when disconnected', async () => {
       const { useConnectionStore } = require('../stores/connectionStore');
       const mockQueueControl = jest.fn();
       useConnectionStore.getState.mockReturnValue({
@@ -225,6 +225,10 @@ describe('dispatchStore', () => {
       });
 
       getState().sendTask('Queued task');
+      // sendTask sends via a dynamic import('connectionStore') (load-bearing —
+      // breaks the connectionStore↔dispatchStore circular dep), so the control
+      // call lands on a later microtask. Flush before asserting.
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(mockQueueControl).toHaveBeenCalledWith(
         'dispatch_task',
@@ -234,7 +238,7 @@ describe('dispatchStore', () => {
       );
     });
 
-    it('sends control message directly when connected', () => {
+    it('sends control message directly when connected', async () => {
       const { useConnectionStore } = require('../stores/connectionStore');
       const mockSendControl = jest.fn();
       useConnectionStore.getState.mockReturnValue({
@@ -244,6 +248,8 @@ describe('dispatchStore', () => {
       });
 
       getState().sendTask('Direct task');
+      // Flush the dynamic-import microtask before asserting (see note above).
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       expect(mockSendControl).toHaveBeenCalledWith(
         'dispatch_task',
