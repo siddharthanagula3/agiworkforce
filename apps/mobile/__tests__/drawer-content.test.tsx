@@ -80,6 +80,8 @@ jest.mock('lucide-react-native', () => ({
   Key: jest.fn().mockReturnValue(null),
   Info: jest.fn().mockReturnValue(null),
   Lock: jest.fn().mockReturnValue(null),
+  Search: jest.fn().mockReturnValue(null),
+  X: jest.fn().mockReturnValue(null),
 }));
 
 jest.mock('@react-navigation/drawer', () => ({}));
