@@ -866,9 +866,45 @@ fn render_fallback_banner(frame: &mut ratatui::Frame, chat_area: Rect, app: &Tui
     frame.render_widget(banner_widget, area);
 }
 
+/// Classify the active runtime provider into an access mode for the status
+/// chip. Presentation only — mirrors the model-picker grouping and never
+/// affects routing. A keyless OpenAI-compatible endpoint (e.g. LM Studio) and
+/// Ollama are Local; the AGI-managed endpoint is Cloud; anything with a key is
+/// BYOK.
+fn provider_access_mode(provider: &crate::models::Provider) -> crate::design_system::AccessMode {
+    use crate::design_system::AccessMode;
+    use crate::models::{OllamaMode, Provider};
+    match provider {
+        // Local Ollama is on-device; Ollama Cloud is a hosted service reached
+        // with the user's key, so it is BYOK (data leaves the device).
+        Provider::Ollama(OllamaMode::Local) => AccessMode::Local,
+        Provider::Ollama(OllamaMode::Cloud) => AccessMode::Byok,
+        Provider::Custom { api_key_env, .. } => {
+            if api_key_env.is_some() {
+                AccessMode::Byok
+            } else {
+                AccessMode::Local
+            }
+        }
+        Provider::OpenAICompatible {
+            name, api_key_env, ..
+        } => {
+            if name.eq_ignore_ascii_case("agi-cloud") || name.eq_ignore_ascii_case("agicloud") {
+                AccessMode::Cloud
+            } else if api_key_env.is_none() {
+                AccessMode::Local
+            } else {
+                AccessMode::Byok
+            }
+        }
+        Provider::Anthropic | Provider::Google => AccessMode::Byok,
+    }
+}
+
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
     use crate::tui::terminal_palette::{
-        v3_danger, v3_muted, v3_on_dark, v3_on_light, v3_status_bar_bg, v3_success,
+        v3_danger, v3_muted, v3_on_dark, v3_on_light, v3_status_bar_bg, v3_success, v3_teal,
+        v3_terracotta,
     };
     let badge_fg = if app.mode == InteractionMode::Chat {
         v3_on_dark()
@@ -899,9 +935,25 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         Some(crate::sandbox::SandboxType::None) | None => ("no sandbox", v3_danger()),
     };
 
-    let status = Line::from(vec![
-        mode_span,
-        Span::raw(" "),
+    // Access-mode chip: always show whether the active model is reached via
+    // LOCAL (on-device), BYOK (your own key), or CLOUD (managed subscription).
+    // Keeps AGI's core differentiator visible at all times. Purely a label —
+    // it reflects the active provider, it never changes routing.
+    let access_span = {
+        use crate::design_system::AccessMode;
+        let (label, color) = match provider_access_mode(&app.session.provider) {
+            AccessMode::Local => ("local", v3_success()),
+            AccessMode::Byok => ("byok", v3_teal()),
+            AccessMode::Cloud => ("cloud", v3_terracotta()),
+        };
+        Span::styled(
+            format!("◉ {label}"),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        )
+    };
+
+    let mut spans: Vec<Span> = vec![mode_span, Span::raw(" "), access_span, Span::raw("  ")];
+    spans.extend([
         Span::styled(cost_str, Style::default().fg(v3_muted())),
         Span::raw("  "),
         Span::styled(effort_str, Style::default().fg(v3_muted())),
@@ -914,6 +966,7 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
         Span::raw("  "),
         Span::styled("Esc: quit", Style::default().fg(v3_muted())),
     ]);
+    let status = Line::from(spans);
 
     let bar =
         Paragraph::new(status).style(Style::default().bg(v3_status_bar_bg()).fg(v3_on_dark()));
@@ -2810,6 +2863,44 @@ mod tests {
         assert!(approval_choice_to_decision(ApprovalChoice::AlwaysAllow).is_allowing());
         assert!(!approval_choice_to_decision(ApprovalChoice::No).is_allowing());
         assert!(!approval_choice_to_decision(ApprovalChoice::DenyAll).is_allowing());
+    }
+
+    #[test]
+    fn provider_access_mode_classifies_trust_boundary() {
+        use crate::design_system::AccessMode;
+        use crate::models::{OllamaMode, Provider};
+
+        // Local: on-device Ollama + keyless OpenAI-compatible (LM Studio).
+        assert_eq!(
+            provider_access_mode(&Provider::Ollama(OllamaMode::Local)),
+            AccessMode::Local
+        );
+        assert_eq!(
+            provider_access_mode(&crate::models::lmstudio_provider()),
+            AccessMode::Local
+        );
+
+        // BYOK: keyed cloud providers + Ollama Cloud (hosted, needs a key, so
+        // data leaves the device — must NOT read as Local).
+        assert_eq!(provider_access_mode(&Provider::Anthropic), AccessMode::Byok);
+        assert_eq!(
+            provider_access_mode(&crate::models::openai_provider()),
+            AccessMode::Byok
+        );
+        assert_eq!(
+            provider_access_mode(&Provider::Ollama(OllamaMode::Cloud)),
+            AccessMode::Byok
+        );
+
+        // Cloud: the AGI-managed endpoint.
+        assert_eq!(
+            provider_access_mode(&Provider::OpenAICompatible {
+                name: "agi-cloud",
+                base_url: "https://api.agiworkforce.com/v1/chat/completions",
+                api_key_env: Some("AGI_API_KEY"),
+            }),
+            AccessMode::Cloud
+        );
     }
 
     /// End-to-end: a denied decision routed through callback → broker → tool
