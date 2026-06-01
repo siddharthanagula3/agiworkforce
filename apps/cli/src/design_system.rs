@@ -64,6 +64,67 @@ impl ProviderId {
             _ => None,
         }
     }
+
+    /// Which access mode / trust boundary this provider belongs to.
+    ///
+    /// This is purely a *presentation* grouping for pickers and status — it
+    /// never changes routing or mixes trust boundaries. Local = on-device or a
+    /// user-controlled endpoint (data stays with the user); Cloud = the
+    /// AGI-managed subscription; everything else is BYOK (the user supplies the
+    /// provider key and pays the provider directly).
+    pub fn access_mode(self) -> AccessMode {
+        match self {
+            ProviderId::Ollama | ProviderId::LMStudio | ProviderId::CustomOpenAICompatible => {
+                AccessMode::Local
+            }
+            ProviderId::AGICloud => AccessMode::Cloud,
+            _ => AccessMode::Byok,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AccessMode — the three trust boundaries AGI exposes to users
+// ---------------------------------------------------------------------------
+
+/// The access mode a model is reached through. Surfaced as the top-level
+/// grouping in the model picker so a new user immediately sees the AGI value
+/// proposition: run local, bring your own key, or use a managed subscription.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AccessMode {
+    /// On-device (Ollama, LM Studio) or a user-controlled endpoint.
+    Local,
+    /// A cloud provider reached with the user's own API key.
+    Byok,
+    /// The AGI-managed cloud subscription.
+    Cloud,
+}
+
+impl AccessMode {
+    /// Display order: local first (the privacy-first default), then BYOK, then
+    /// managed cloud.
+    pub const ORDER: &'static [AccessMode] =
+        &[AccessMode::Local, AccessMode::Byok, AccessMode::Cloud];
+
+    /// Short section label.
+    pub fn label(self) -> &'static str {
+        match self {
+            AccessMode::Local => "Local",
+            AccessMode::Byok => "Bring your own key",
+            AccessMode::Cloud => "Cloud subscription",
+        }
+    }
+
+    /// One-line value-prop tagline shown under the section header. Kept short so
+    /// it fits beside the label inside a narrow (≈70-col) picker without
+    /// truncating.
+    pub fn tagline(self) -> &'static str {
+        match self {
+            AccessMode::Local => "on-device · private · free",
+            AccessMode::Byok => "your own provider keys",
+            AccessMode::Cloud => "managed by AGI subscription",
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
