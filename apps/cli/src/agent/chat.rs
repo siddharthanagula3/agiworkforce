@@ -953,13 +953,17 @@ message -- revise and call `update_plan` again.\n\n",
                     require_confirmation: !self.skip_permissions,
                     auto_approve_safe: self.auto_approve_safe,
                     quiet: self.quiet,
+                    approval_callback: self
+                        .on_tool_approval
+                        .as_ref()
+                        .map(|sink| sink.0.clone()),
                 };
                 let futures = runnable.iter().map(|tc| {
                     let legacy = super::executor::ToolCall {
                         name: tc.1.clone(),
                         args: value_to_legacy_args(&tc.2),
                     };
-                    let opts = exec_opts;
+                    let opts = exec_opts.clone();
                     let id = tc.0.clone();
                     let name = tc.1.clone();
                     let args = tc.2.clone();
@@ -1158,6 +1162,10 @@ message -- revise and call `update_plan` again.\n\n",
                         require_confirmation: !self.skip_permissions,
                         auto_approve_safe: self.auto_approve_safe,
                         quiet: self.quiet,
+                        approval_callback: self
+                            .on_tool_approval
+                            .as_ref()
+                            .map(|sink| sink.0.clone()),
                     };
                     crate::tools::execute_tool_with_opts(&legacy, &opts).await?
                 };

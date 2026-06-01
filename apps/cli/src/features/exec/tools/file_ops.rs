@@ -5,11 +5,13 @@ use anyhow::Result;
 use colored::Colorize;
 use dialoguer::Confirm;
 
+use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+
 use super::common::{
     generate_simple_diff, preview_string, print_tool_status, truncate_line,
     truncate_output_with_save, validate_file_path, MAX_FILE_LINES,
 };
-use super::ToolResult;
+use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
 #[derive(Debug, Deserialize)]
 struct MultiEditOp {
@@ -190,6 +192,7 @@ pub(super) async fn execute_read_file_inner(args: &HashMap<String, String>) -> R
 pub(super) async fn execute_write_file(
     args: &HashMap<String, String>,
     require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let path = match args.get("path") {
         Some(p) => p,
@@ -238,50 +241,77 @@ pub(super) async fn execute_write_file(
     if require_confirmation {
         let line_count = content.lines().count();
 
-        if file_path.exists() && file_path.is_file() {
-            match std::fs::read_to_string(file_path) {
-                Ok(existing) => {
-                    let diff = generate_simple_diff(&existing, content);
-                    eprintln!(
-                        "{}",
-                        format!("  Diff for {} ({} lines):", path, line_count).dimmed()
-                    );
-                    for line in diff.lines() {
-                        if let Some(rest) = line.strip_prefix('+') {
-                            eprintln!("  {}{}", "+".green(), rest.green());
-                        } else if let Some(rest) = line.strip_prefix('-') {
-                            eprintln!("  {}{}", "-".red(), rest.red());
-                        } else {
-                            eprintln!("  {}", line.dimmed());
-                        }
-                    }
-                }
-                Err(_) => {
-                    eprintln!(
-                        "{}",
-                        format!("  Will write {} lines to {}", line_count, path).dimmed()
-                    );
-                }
+        if let Some(decision) = request_approval(
+            approval_callback,
+            ApprovalRequest::new(
+                ApprovalRequestKind::FileWrite {
+                    path: file_path.to_path_buf(),
+                },
+                "Allow this file write?",
+                file_write_detail(path, content, file_path, line_count),
+            ),
+        )
+        .await
+        {
+            // Resolved by the TUI approval overlay (or any installed callback).
+            // This decision is authoritative — do NOT fall through to the
+            // dialoguer confirm below, which would double-prompt on the
+            // alternate screen and auto-deny when stdin is not a TTY.
+            if !approval_allows(decision) {
+                return Ok(ToolResult {
+                    tool_name: "write_file".to_string(),
+                    success: false,
+                    output: "User denied file write".to_string(),
+                });
             }
         } else {
-            eprintln!(
-                "{}",
-                format!("  [new file] {} ({} lines)", path, line_count).dimmed()
-            );
-        }
+            // No TUI callback (REPL / headless): preview the change, then fall
+            // back to the blocking dialoguer confirm.
+            if file_path.exists() && file_path.is_file() {
+                match std::fs::read_to_string(file_path) {
+                    Ok(existing) => {
+                        let diff = generate_simple_diff(&existing, content);
+                        eprintln!(
+                            "{}",
+                            format!("  Diff for {} ({} lines):", path, line_count).dimmed()
+                        );
+                        for line in diff.lines() {
+                            if let Some(rest) = line.strip_prefix('+') {
+                                eprintln!("  {}{}", "+".green(), rest.green());
+                            } else if let Some(rest) = line.strip_prefix('-') {
+                                eprintln!("  {}{}", "-".red(), rest.red());
+                            } else {
+                                eprintln!("  {}", line.dimmed());
+                            }
+                        }
+                    }
+                    Err(_) => {
+                        eprintln!(
+                            "{}",
+                            format!("  Will write {} lines to {}", line_count, path).dimmed()
+                        );
+                    }
+                }
+            } else {
+                eprintln!(
+                    "{}",
+                    format!("  [new file] {} ({} lines)", path, line_count).dimmed()
+                );
+            }
 
-        let confirmed = Confirm::new()
-            .with_prompt("Allow this file write?")
-            .default(true)
-            .interact()
-            .unwrap_or(false);
+            let confirmed = Confirm::new()
+                .with_prompt("Allow this file write?")
+                .default(true)
+                .interact()
+                .unwrap_or(false);
 
-        if !confirmed {
-            return Ok(ToolResult {
-                tool_name: "write_file".to_string(),
-                success: false,
-                output: "User denied file write".to_string(),
-            });
+            if !confirmed {
+                return Ok(ToolResult {
+                    tool_name: "write_file".to_string(),
+                    success: false,
+                    output: "User denied file write".to_string(),
+                });
+            }
         }
     }
 
@@ -320,9 +350,33 @@ pub(super) async fn execute_write_file(
     }
 }
 
+fn file_write_detail(
+    display_path: &str,
+    content: &str,
+    file_path: &std::path::Path,
+    line_count: usize,
+) -> Vec<String> {
+    if file_path.exists() && file_path.is_file() {
+        if let Ok(existing) = std::fs::read_to_string(file_path) {
+            let mut detail = vec![format!("Diff for {} ({} lines):", display_path, line_count)];
+            detail.extend(
+                generate_simple_diff(&existing, content)
+                    .lines()
+                    .take(40)
+                    .map(str::to_string),
+            );
+            return detail;
+        }
+        return vec![format!("Will write {} lines to {}", line_count, display_path)];
+    }
+
+    vec![format!("[new file] {} ({} lines)", display_path, line_count)]
+}
+
 pub(super) async fn execute_edit_file(
     args: &HashMap<String, String>,
     require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let path = match args.get("path") {
         Some(p) => p,
@@ -422,21 +476,43 @@ pub(super) async fn execute_edit_file(
     if require_confirmation {
         let old_preview = preview_string(old_string, 3);
         let new_preview = preview_string(new_string, 3);
-        eprintln!("  {} {}", "-".red(), old_preview.red());
-        eprintln!("  {} {}", "+".green(), new_preview.green());
 
-        let confirmed = Confirm::new()
-            .with_prompt("Allow this edit?")
-            .default(true)
-            .interact()
-            .unwrap_or(false);
+        if let Some(decision) = request_approval(
+            approval_callback,
+            ApprovalRequest::new(
+                ApprovalRequestKind::FileEdit {
+                    path: file_path.to_path_buf(),
+                },
+                "Allow this edit?",
+                vec![format!("- {}", old_preview), format!("+ {}", new_preview)],
+            ),
+        )
+        .await
+        {
+            if !approval_allows(decision) {
+                return Ok(ToolResult {
+                    tool_name: "edit_file".to_string(),
+                    success: false,
+                    output: "User denied edit".to_string(),
+                });
+            }
+        } else {
+            eprintln!("  {} {}", "-".red(), old_preview.red());
+            eprintln!("  {} {}", "+".green(), new_preview.green());
 
-        if !confirmed {
-            return Ok(ToolResult {
-                tool_name: "edit_file".to_string(),
-                success: false,
-                output: "User denied edit".to_string(),
-            });
+            let confirmed = Confirm::new()
+                .with_prompt("Allow this edit?")
+                .default(true)
+                .interact()
+                .unwrap_or(false);
+
+            if !confirmed {
+                return Ok(ToolResult {
+                    tool_name: "edit_file".to_string(),
+                    success: false,
+                    output: "User denied edit".to_string(),
+                });
+            }
         }
     }
 
@@ -462,6 +538,7 @@ pub(super) async fn execute_edit_file(
 pub(super) async fn execute_apply_patch(
     args: &HashMap<String, String>,
     require_confirm: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let patch = match args.get("patch") {
         Some(p) => p,
@@ -478,11 +555,26 @@ pub(super) async fn execute_apply_patch(
             "apply_patch",
             &format!("Apply patch ({} lines)", patch.lines().count()),
         );
-        if !Confirm::new()
-            .with_prompt("Apply this patch?")
-            .default(false)
-            .interact()
-            .unwrap_or(false)
+        let allowed = if let Some(decision) = request_approval(
+            approval_callback,
+            ApprovalRequest::new(
+                ApprovalRequestKind::Patch { files: Vec::new() },
+                "Apply this patch?",
+                patch.lines().take(40).map(str::to_string).collect(),
+            ),
+        )
+        .await
+        {
+            approval_allows(decision)
+        } else {
+            Confirm::new()
+                .with_prompt("Apply this patch?")
+                .default(false)
+                .interact()
+                .unwrap_or(false)
+        };
+
+        if !allowed
         {
             return Ok(ToolResult {
                 tool_name: "apply_patch".into(),
@@ -517,6 +609,7 @@ pub(super) async fn execute_apply_patch(
 pub(super) async fn execute_multiedit(
     args: &HashMap<String, String>,
     require_confirm: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let path = match args.get("path") {
         Some(p) => p.clone(),
@@ -599,32 +692,53 @@ pub(super) async fn execute_multiedit(
 
     if require_confirm {
         let diff = generate_simple_diff(&original, &updated);
-        eprintln!(
-            "{}",
-            format!("  Diff for {} ({} edits):", path, edits.len()).dimmed()
-        );
-        for line in diff.lines() {
-            if let Some(rest) = line.strip_prefix('+') {
-                eprintln!("  {}{}", "+".green(), rest.green());
-            } else if let Some(rest) = line.strip_prefix('-') {
-                eprintln!("  {}{}", "-".red(), rest.red());
-            } else {
-                eprintln!("  {}", line.dimmed());
+        if let Some(decision) = request_approval(
+            approval_callback,
+            ApprovalRequest::new(
+                ApprovalRequestKind::FileEdit {
+                    path: file_path.to_path_buf(),
+                },
+                "Allow these edits?",
+                diff.lines().take(40).map(str::to_string).collect(),
+            ),
+        )
+        .await
+        {
+            if !approval_allows(decision) {
+                return Ok(ToolResult {
+                    tool_name: "multiedit".into(),
+                    success: false,
+                    output: "User denied multiedit".into(),
+                });
             }
-        }
+        } else {
+            eprintln!(
+                "{}",
+                format!("  Diff for {} ({} edits):", path, edits.len()).dimmed()
+            );
+            for line in diff.lines() {
+                if let Some(rest) = line.strip_prefix('+') {
+                    eprintln!("  {}{}", "+".green(), rest.green());
+                } else if let Some(rest) = line.strip_prefix('-') {
+                    eprintln!("  {}{}", "-".red(), rest.red());
+                } else {
+                    eprintln!("  {}", line.dimmed());
+                }
+            }
 
-        let confirmed = Confirm::new()
-            .with_prompt("Allow these edits?")
-            .default(true)
-            .interact()
-            .unwrap_or(false);
+            let confirmed = Confirm::new()
+                .with_prompt("Allow these edits?")
+                .default(true)
+                .interact()
+                .unwrap_or(false);
 
-        if !confirmed {
-            return Ok(ToolResult {
-                tool_name: "multiedit".into(),
-                success: false,
-                output: "User denied multiedit".into(),
-            });
+            if !confirmed {
+                return Ok(ToolResult {
+                    tool_name: "multiedit".into(),
+                    success: false,
+                    output: "User denied multiedit".into(),
+                });
+            }
         }
     }
 
@@ -845,10 +959,42 @@ mod tests {
         args.insert("path".to_string(), path.display().to_string());
         args.insert("content".to_string(), "beta\n".to_string());
 
-        let result = execute_write_file(&args, false).await.unwrap();
+        let result = execute_write_file(&args, false, None).await.unwrap();
 
         assert!(!result.success);
         assert!(result.output.contains("File has not been read yet"));
+    }
+
+    #[tokio::test]
+    async fn write_file_uses_approval_callback() {
+        let tmp = tempfile::tempdir_in(".").expect("tempdir");
+        let path = tmp.path().join("new.txt");
+        let seen_kind: std::sync::Arc<std::sync::Mutex<Option<ApprovalRequestKind>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(None));
+        let seen_for_callback = std::sync::Arc::clone(&seen_kind);
+        let callback: ApprovalCallback = std::sync::Arc::new(move |request| {
+            let seen_for_callback = std::sync::Arc::clone(&seen_for_callback);
+            Box::pin(async move {
+                *seen_for_callback.lock().expect("seen lock") = Some(request.kind);
+                crate::tui::approval_broker::ApprovalDecision::Deny
+            })
+        });
+
+        let mut args = HashMap::new();
+        args.insert("path".to_string(), path.display().to_string());
+        args.insert("content".to_string(), "beta\n".to_string());
+
+        let result = execute_write_file(&args, true, Some(&callback))
+            .await
+            .unwrap();
+
+        assert!(!result.success);
+        assert_eq!(result.output, "User denied file write");
+        assert!(!path.exists());
+        assert_eq!(
+            *seen_kind.lock().expect("seen lock"),
+            Some(ApprovalRequestKind::FileWrite { path })
+        );
     }
 
     #[tokio::test]
@@ -867,7 +1013,7 @@ mod tests {
         edit_args.insert("old_string".to_string(), "alpha".to_string());
         edit_args.insert("new_string".to_string(), "beta".to_string());
 
-        let edit_result = execute_edit_file(&edit_args, false).await.unwrap();
+        let edit_result = execute_edit_file(&edit_args, false, None).await.unwrap();
 
         assert!(edit_result.success, "{}", edit_result.output);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "beta\n");
@@ -892,7 +1038,7 @@ mod tests {
             .to_string(),
         );
 
-        let result = execute_multiedit(&args, false).await.unwrap();
+        let result = execute_multiedit(&args, false, None).await.unwrap();
 
         assert!(!result.success);
         assert!(result.output.contains("File has not been read yet"));

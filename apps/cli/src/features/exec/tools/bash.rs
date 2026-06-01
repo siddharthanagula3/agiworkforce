@@ -6,15 +6,17 @@ use dialoguer::Confirm;
 use tokio::process::Command;
 
 use crate::safety::{classify_command, CommandSafety};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
     describe_command, print_tool_status, truncate_output_with_save, COMMAND_TIMEOUT,
 };
-use super::ToolResult;
+use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
 
 pub(super) async fn execute_run_command(
     args: &HashMap<String, String>,
     require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let command = match args.get("command") {
         Some(c) => c,
@@ -50,40 +52,81 @@ pub(super) async fn execute_run_command(
                 }
                 None => {
                     let (prompt_msg, default) = match safety {
-                        CommandSafety::Dangerous => {
-                            eprintln!(
-                                "  {} {}",
-                                "DANGEROUS:".red().bold(),
-                                describe_command(command).red()
-                            );
-                            ("This command could be destructive. Allow it?", false)
-                        }
-                        _ => {
-                            eprintln!(
-                                "  {} {}",
-                                "Command:".yellow(),
-                                describe_command(command).dimmed()
-                            );
-                            ("Allow this command?", true)
-                        }
+                        CommandSafety::Dangerous => (
+                            "This command could be destructive. Allow it?",
+                            false,
+                        ),
+                        _ => ("Allow this command?", true),
                     };
 
-                    let confirmed = Confirm::new()
-                        .with_prompt(prompt_msg)
-                        .default(default)
-                        .interact()
-                        .unwrap_or(false);
+                    if let Some(decision) = request_approval(
+                        approval_callback,
+                        ApprovalRequest::new(
+                            ApprovalRequestKind::Exec {
+                                command: command.to_string(),
+                            },
+                            prompt_msg,
+                            vec![describe_command(command)],
+                        ),
+                    )
+                    .await
+                    {
+                        if !approval_allows(decision) {
+                            return Ok(ToolResult {
+                                tool_name: "run_command".to_string(),
+                                success: false,
+                                output: "User denied command execution".to_string(),
+                            });
+                        }
 
-                    if !confirmed {
-                        return Ok(ToolResult {
-                            tool_name: "run_command".to_string(),
-                            success: false,
-                            output: "User denied command execution".to_string(),
-                        });
+                        let mut perms =
+                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        match decision {
+                            ApprovalDecision::AllowSession => {
+                                perms.allow_session_for_process(command);
+                            }
+                            ApprovalDecision::AlwaysAllow => {
+                                perms.allow_always(command);
+                                let _ = perms.save();
+                            }
+                            _ => {}
+                        }
+                    } else {
+                        match safety {
+                            CommandSafety::Dangerous => {
+                                eprintln!(
+                                    "  {} {}",
+                                    "DANGEROUS:".red().bold(),
+                                    describe_command(command).red()
+                                );
+                            }
+                            _ => {
+                                eprintln!(
+                                    "  {} {}",
+                                    "Command:".yellow(),
+                                    describe_command(command).dimmed()
+                                );
+                            }
+                        }
+
+                        let confirmed = Confirm::new()
+                            .with_prompt(prompt_msg)
+                            .default(default)
+                            .interact()
+                            .unwrap_or(false);
+
+                        if !confirmed {
+                            return Ok(ToolResult {
+                                tool_name: "run_command".to_string(),
+                                success: false,
+                                output: "User denied command execution".to_string(),
+                            });
+                        }
+
+                        let mut perms =
+                            crate::permissions::PermissionStore::load().unwrap_or_default();
+                        perms.allow_session_for_process(command);
                     }
-
-                    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
-                    perms.allow_session_for_process(command);
                 }
             }
         }
@@ -187,5 +230,43 @@ pub(super) async fn execute_run_command(
                 COMMAND_TIMEOUT.as_secs()
             ),
         }),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    #[tokio::test]
+    async fn unsafe_command_uses_approval_callback() {
+        let seen_kind: Arc<Mutex<Option<ApprovalRequestKind>>> = Arc::new(Mutex::new(None));
+        let seen_for_callback = Arc::clone(&seen_kind);
+        let callback: ApprovalCallback = Arc::new(move |request| {
+            let seen_for_callback = Arc::clone(&seen_for_callback);
+            Box::pin(async move {
+                *seen_for_callback.lock().expect("seen lock") = Some(request.kind);
+                ApprovalDecision::Deny
+            })
+        });
+
+        let mut args = HashMap::new();
+        args.insert(
+            "command".to_string(),
+            "rm -rf /tmp/agiworkforce-callback-test".to_string(),
+        );
+
+        let result = execute_run_command(&args, true, Some(&callback))
+            .await
+            .expect("tool result");
+
+        assert!(!result.success);
+        assert_eq!(result.output, "User denied command execution");
+        assert_eq!(
+            *seen_kind.lock().expect("seen lock"),
+            Some(ApprovalRequestKind::Exec {
+                command: "rm -rf /tmp/agiworkforce-callback-test".to_string()
+            })
+        );
     }
 }
