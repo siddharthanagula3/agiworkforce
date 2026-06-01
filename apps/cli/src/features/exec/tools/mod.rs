@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
 
 use anyhow::Result;
 use serde::Deserialize;
@@ -43,6 +46,8 @@ use task_registry::{
 use web::is_private_or_internal_ip;
 use web::{execute_tool_search, execute_web_fetch, execute_web_search};
 
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest};
+
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -64,11 +69,18 @@ impl ToolResult {
     }
 }
 
-#[derive(Clone, Copy)]
+pub type ApprovalCallback = Arc<
+    dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ApprovalDecision> + Send>>
+        + Send
+        + Sync,
+>;
+
+#[derive(Clone)]
 pub struct ToolExecOptions {
     pub require_confirmation: bool,
     pub auto_approve_safe: bool,
     pub quiet: bool,
+    pub approval_callback: Option<ApprovalCallback>,
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +93,7 @@ pub async fn execute_tool(call: &ToolCall, require_confirmation: bool) -> Result
         require_confirmation,
         auto_approve_safe: false,
         quiet: false,
+        approval_callback: None,
     };
     execute_tool_with_opts(call, &opts).await
 }
@@ -92,19 +105,30 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
 
     let result = match canonical_name {
         "read_file" => execute_read_file_with_opts(&call.args, opts.quiet).await,
-        "write_file" => execute_write_file(&call.args, require_confirm).await,
-        "run_command" => execute_run_command(&call.args, require_confirm).await,
+        "write_file" => {
+            execute_write_file(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
+        "run_command" => {
+            execute_run_command(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
         "search_files" => execute_search_files_with_opts(&call.args, opts.quiet).await,
         "list_directory" => execute_list_directory_with_opts(&call.args, opts.quiet).await,
-        "edit_file" => file_ops::execute_edit_file(&call.args, require_confirm).await,
+        "edit_file" => {
+            file_ops::execute_edit_file(&call.args, require_confirm, opts.approval_callback.as_ref())
+                .await
+        }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
-        "apply_patch" => execute_apply_patch(&call.args, require_confirm).await,
+        "apply_patch" => {
+            execute_apply_patch(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
         "grep_files" => execute_grep_files(&call.args, opts.quiet).await,
         "tool_search" => execute_tool_search(&call.args).await,
         "glob" => execute_glob(&call.args).await,
         "batch" => Box::pin(execute_batch(call, opts)).await,
-        "multiedit" => execute_multiedit(&call.args, require_confirm).await,
+        "multiedit" => {
+            execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
         "powershell" => execute_powershell(&call.args).await,
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read().await,
@@ -140,6 +164,23 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
     };
 
     result
+}
+
+pub(crate) async fn request_approval(
+    approval_callback: Option<&ApprovalCallback>,
+    request: ApprovalRequest,
+) -> Option<ApprovalDecision> {
+    let callback = approval_callback?;
+    Some(callback(request).await)
+}
+
+pub(crate) fn approval_allows(decision: ApprovalDecision) -> bool {
+    matches!(
+        decision,
+        ApprovalDecision::AllowOnce
+            | ApprovalDecision::AllowSession
+            | ApprovalDecision::AlwaysAllow
+    )
 }
 
 pub(crate) fn canonical_tool_name(tool_name: &str) -> &str {
@@ -670,6 +711,7 @@ mod tests {
             require_confirmation: false,
             auto_approve_safe: true,
             quiet: true,
+            approval_callback: None,
         };
 
         let result = execute_batch(&call, &opts).await.unwrap();
