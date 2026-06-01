@@ -26,7 +26,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph};
 
 use crate::design_system::{
-    capability_for_model, capability_label, provider_display, Effort, ProviderId,
+    capability_for_model, capability_label, provider_display, AccessMode, Effort, ProviderId,
 };
 use crate::model_catalog::Model;
 
@@ -37,7 +37,10 @@ use crate::model_catalog::Model;
 /// One focusable item in the flat navigation list.
 #[derive(Debug, Clone)]
 pub enum PickerRow {
-    /// Provider section header (collapsible in future; expanded for MVP).
+    /// Top-level access-mode section header (Local / BYOK / Cloud). This is the
+    /// first thing a new user sees, surfacing the AGI value proposition.
+    AccessModeHeader { mode: AccessMode },
+    /// Provider sub-section header within an access mode.
     ProviderHeader { provider_id: ProviderId },
     /// A selectable model row.
     ModelRow {
@@ -82,39 +85,52 @@ impl ModelPickerState {
         let query = self.search.to_lowercase();
         self.rows.clear();
 
-        for &pid in ProviderId::ALL {
-            let disp = provider_display(pid);
-            // Collect models matching this provider and search query.
-            let matching: Vec<Model> = all_models
-                .iter()
-                .filter(|m| {
-                    let catalog_pid = ProviderId::from_catalog_name(&m.provider);
-                    let pid_match = catalog_pid == Some(pid);
-                    if !pid_match {
-                        return false;
-                    }
-                    if query.is_empty() {
-                        return true;
-                    }
-                    m.id.to_lowercase().contains(&query)
-                        || disp.label.to_lowercase().contains(&query)
-                        || m.display_name.to_lowercase().contains(&query)
-                })
-                .cloned()
-                .collect();
+        // Group by access mode (Local / BYOK / Cloud) first, then provider,
+        // then models. An access mode with no matching models is skipped so the
+        // picker never shows an empty section.
+        for &mode in AccessMode::ORDER {
+            let mut mode_rows: Vec<PickerRow> = Vec::new();
 
-            if matching.is_empty() {
+            for &pid in ProviderId::ALL {
+                if pid.access_mode() != mode {
+                    continue;
+                }
+                let disp = provider_display(pid);
+                let matching: Vec<Model> = all_models
+                    .iter()
+                    .filter(|m| {
+                        let catalog_pid = ProviderId::from_catalog_name(&m.provider);
+                        if catalog_pid != Some(pid) {
+                            return false;
+                        }
+                        if query.is_empty() {
+                            return true;
+                        }
+                        m.id.to_lowercase().contains(&query)
+                            || disp.label.to_lowercase().contains(&query)
+                            || m.display_name.to_lowercase().contains(&query)
+                    })
+                    .cloned()
+                    .collect();
+
+                if matching.is_empty() {
+                    continue;
+                }
+
+                mode_rows.push(PickerRow::ProviderHeader { provider_id: pid });
+                for m in matching {
+                    mode_rows.push(PickerRow::ModelRow {
+                        provider_id: pid,
+                        model: m,
+                    });
+                }
+            }
+
+            if mode_rows.is_empty() {
                 continue;
             }
-
-            self.rows
-                .push(PickerRow::ProviderHeader { provider_id: pid });
-            for m in matching {
-                self.rows.push(PickerRow::ModelRow {
-                    provider_id: pid,
-                    model: m,
-                });
-            }
+            self.rows.push(PickerRow::AccessModeHeader { mode });
+            self.rows.append(&mut mode_rows);
         }
     }
 
@@ -125,7 +141,7 @@ impl ModelPickerState {
             .enumerate()
             .filter_map(|(i, r)| match r {
                 PickerRow::ModelRow { .. } => Some(i),
-                PickerRow::ProviderHeader { .. } => None,
+                _ => None,
             })
             .collect()
     }
@@ -270,7 +286,7 @@ pub fn render(
         Style::default(),
     );
     let badge_span = Span::styled(
-        " 13+ providers ",
+        " Local · BYOK · Cloud ",
         Style::default()
             .fg(Color::DarkGray)
             .add_modifier(Modifier::DIM),
@@ -376,10 +392,18 @@ fn render_list(
         .skip(scroll_offset)
         .take(visible_rows)
         .map(|(i, row)| match row {
+            PickerRow::AccessModeHeader { mode } => {
+                // Top-level section: the AGI value proposition, front and centre.
+                let text = format!("{}  ·  {}", mode.label().to_uppercase(), mode.tagline());
+                ListItem::new(text).style(
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+                )
+            }
             PickerRow::ProviderHeader { provider_id } => {
                 let disp = provider_display(*provider_id);
-                let local_tag = if disp.is_local { "  LOCAL" } else { "" };
-                let text = format!(" {} {}", disp.label, local_tag);
+                let text = format!("  {}", disp.label);
                 ListItem::new(text).style(
                     Style::default()
                         .fg(Color::Cyan)
@@ -498,7 +522,7 @@ pub fn handle_key(
                 let current_pid = match state.rows.get(state.cursor) {
                     Some(PickerRow::ModelRow { provider_id, .. }) => Some(*provider_id),
                     Some(PickerRow::ProviderHeader { provider_id }) => Some(*provider_id),
-                    None => None,
+                    Some(PickerRow::AccessModeHeader { .. }) | None => None,
                 };
                 let next_pid = if let Some(cpid) = current_pid {
                     let pos = providers_in_rows
@@ -593,5 +617,91 @@ pub fn handle_key(
         }
 
         _ => PickerAction::Nothing,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn model(id: &str, provider: &str) -> Model {
+        serde_json::from_str(&format!(
+            "{{\"id\":\"{id}\",\"provider\":\"{provider}\",\"display_name\":\"{id}\",\"context_window\":8192,\"max_output_tokens\":4096,\"input_price_per_1m\":0.0,\"output_price_per_1m\":0.0,\"supports_tools\":true,\"supports_vision\":false,\"supports_reasoning\":false}}"
+        ))
+        .expect("model fixture")
+    }
+
+    fn mode_headers(state: &ModelPickerState) -> Vec<AccessMode> {
+        state
+            .rows
+            .iter()
+            .filter_map(|r| match r {
+                PickerRow::AccessModeHeader { mode } => Some(*mode),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn provider_access_modes_classify_correctly() {
+        assert_eq!(ProviderId::Ollama.access_mode(), AccessMode::Local);
+        assert_eq!(ProviderId::LMStudio.access_mode(), AccessMode::Local);
+        assert_eq!(
+            ProviderId::CustomOpenAICompatible.access_mode(),
+            AccessMode::Local
+        );
+        assert_eq!(ProviderId::Anthropic.access_mode(), AccessMode::Byok);
+        assert_eq!(ProviderId::OpenAI.access_mode(), AccessMode::Byok);
+        assert_eq!(ProviderId::DeepSeek.access_mode(), AccessMode::Byok);
+        assert_eq!(ProviderId::AGICloud.access_mode(), AccessMode::Cloud);
+    }
+
+    #[test]
+    fn rebuild_groups_by_access_mode_local_first() {
+        let models = vec![
+            model("claude-x", "anthropic"), // BYOK
+            model("llama-3", "ollama"),     // Local
+            model("agi-1", "agi-cloud"),    // Cloud
+        ];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        assert_eq!(
+            mode_headers(&state),
+            vec![AccessMode::Local, AccessMode::Byok, AccessMode::Cloud]
+        );
+        assert!(matches!(
+            state.rows.first(),
+            Some(PickerRow::AccessModeHeader {
+                mode: AccessMode::Local
+            })
+        ));
+    }
+
+    #[test]
+    fn empty_access_mode_is_skipped() {
+        let models = vec![model("claude-x", "anthropic")];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+        assert_eq!(mode_headers(&state), vec![AccessMode::Byok]);
+    }
+
+    #[test]
+    fn headers_are_not_selectable_and_cursor_lands_on_models() {
+        let models = vec![model("llama-3", "ollama"), model("claude-x", "anthropic")];
+        let mut state = ModelPickerState::default();
+        state.rebuild_rows(&models);
+
+        for idx in state.selectable_indices() {
+            assert!(matches!(state.rows[idx], PickerRow::ModelRow { .. }));
+        }
+        // Navigation skips both header kinds.
+        state.cursor = state.selectable_indices()[0];
+        state.cursor_down();
+        assert!(matches!(state.rows[state.cursor], PickerRow::ModelRow { .. }));
     }
 }
