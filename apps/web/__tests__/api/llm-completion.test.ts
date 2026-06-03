@@ -7,7 +7,7 @@ vi.mock('@/lib/rate-limit', () => ({
 }));
 
 // Bypass model-tier gating in unit tests — fixtures use canonical IDs (deepseek-chat,
-// grok-4, etc.) that exist in the model catalog but are not in any tier allowlist
+// grok-4.3, etc.) that exist in the model catalog but are not in any tier allowlist
 // (economy/pro_additions/flagship_additions). The tier policy is integration-tested
 // elsewhere; here we just want to verify the route's auth/credit/response behavior.
 vi.mock('@/lib/model-tiers', () => ({
@@ -396,7 +396,7 @@ describe('POST /api/llm/completion', () => {
       mockGetProviderFromModel.mockReturnValue('xai');
       mockSendRequest.mockResolvedValue({
         content: 'Response from Grok',
-        model: 'grok-4',
+        model: 'grok-4.3',
         promptTokens: 100,
         completionTokens: 50,
         totalTokens: 150,
@@ -409,17 +409,17 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'grok-4',
+          model: 'grok-4.3',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });
 
       await POST(request);
 
-      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4');
+      expect(mockGetProviderFromModel).toHaveBeenCalledWith('grok-4.3');
       expect(mockSendRequest).toHaveBeenCalledWith(
         'xai',
-        expect.objectContaining({ model: 'grok-4' }),
+        expect.objectContaining({ model: 'grok-4.3' }),
       );
     });
 
@@ -461,7 +461,7 @@ describe('POST /api/llm/completion', () => {
   // =========================================================================
   describe('Fallback Model Selection', () => {
     it('should return 402 when credits are insufficient and no fallback available', async () => {
-      // Use max tier since claude-opus-4.6 requires max or enterprise tier
+      // Use max tier since claude-opus-4.8 requires max or enterprise tier
       mockGetSubscription.mockResolvedValue({
         id: 'sub_123',
         status: 'active',
@@ -487,7 +487,7 @@ describe('POST /api/llm/completion', () => {
           Authorization: 'Bearer valid-token',
         },
         body: JSON.stringify({
-          model: 'claude-opus-4.6',
+          model: 'claude-opus-4.8',
           messages: [{ role: 'user', content: 'Hello' }],
         }),
       });

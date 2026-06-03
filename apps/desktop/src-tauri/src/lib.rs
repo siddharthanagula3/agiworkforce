@@ -383,6 +383,7 @@ pub fn run() {
 
             let llm_state = tauri::async_runtime::block_on(LLMState::with_cache(db_conn_arc.clone()));
             app.manage(llm_state);
+            app.manage(crate::sys::commands::llm::RateLimitState::default());
 
             // Initialize browser automation with graceful degradation.
             // SEV-DESK-02: pass the Tauri AppHandle so ExtensionBridge can

@@ -1,7 +1,7 @@
 /**
  * desktopBridge.ts — Connects VS Code extension to AGI Workforce desktop app
  *
- * Communication via HTTP localhost API + WebSocket for real-time events.
+ * Communication via authenticated localhost WebSocket frames.
  * Auto-reconnects on disconnect. Health-checked periodically.
  *
  * Wave 3 enhancements:
@@ -99,6 +99,7 @@ export function getBridgeAuthHeaders(
   return {
     Authorization: `Bearer ${value}`,
     'X-AGI-Bridge-Token': value,
+    'X-AGI-App-Server-Token': value,
   };
 }
 
@@ -146,6 +147,25 @@ export const ALLOWED_BRIDGE_COMMANDS: ReadonlySet<string> = new Set([
   'workbench.action.files.openFile',
 ]);
 
+const OUTBOUND_COMMAND_TYPES: Readonly<Record<string, string>> = {
+  'code-snippet': 'vscode:code-snippet',
+  'sync-context': 'vscode:sync-context',
+  'agent-action': 'vscode:agent-action',
+};
+
+function outboundTypeForCommand(command: string): string | undefined {
+  return OUTBOUND_COMMAND_TYPES[command];
+}
+
+function isJsonRpcFrame(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'jsonrpc' in value &&
+    ('result' in value || 'error' in value)
+  );
+}
+
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface DesktopBridgeConfig {
@@ -176,6 +196,7 @@ export class DesktopBridge implements vscode.Disposable {
   private _ws: WebSocket | undefined;
   private _reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   private _healthTimer: ReturnType<typeof setTimeout> | undefined;
+  private _handshakeTimer: ReturnType<typeof setTimeout> | undefined;
   private _handlers: BridgeMessageHandler[] = [];
   private _port: number;
   private _disposed = false;
@@ -205,7 +226,7 @@ export class DesktopBridge implements vscode.Disposable {
   private static readonly BACKOFF_MULTIPLIER = 2;
 
   private static readonly HEALTH_CHECK_INTERVAL_MS = 30_000;
-  private static readonly REQUEST_TIMEOUT_MS = 10_000;
+  private static readonly HANDSHAKE_TIMEOUT_MS = 5_000;
 
   constructor(port: number) {
     this._port = port;
@@ -291,13 +312,6 @@ export class DesktopBridge implements vscode.Disposable {
       return;
     }
 
-    const healthy = await this.healthCheck();
-    if (!healthy) {
-      this._setStatus('error');
-      this._scheduleReconnect();
-      return;
-    }
-
     this._connectWebSocket();
     this._startHealthLoop();
   }
@@ -318,10 +332,10 @@ export class DesktopBridge implements vscode.Disposable {
     await this.connect();
   }
 
-  // ── HTTP API ────────────────────────────────────────────────────────────
+  // ── Bridge API ──────────────────────────────────────────────────────────
 
   /**
-   * Send a command to the desktop app via HTTP POST.
+   * Send a command to the desktop app over the authenticated WebSocket bridge.
    * When bridge is down, returns a graceful error instead of throwing.
    */
   async sendToDesktop<T = unknown>(
@@ -336,61 +350,36 @@ export class DesktopBridge implements vscode.Disposable {
       };
     }
 
-    const url = `${this.baseUrl}/api/bridge/${command}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DesktopBridge.REQUEST_TIMEOUT_MS);
-
-    try {
-      const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
-      if (authHeaders === undefined) {
-        return { ok: false, error: 'Desktop bridge auth token is unavailable.' };
-      }
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-
-      const json = (await res.json()) as BridgeResponse<T>;
-      return json;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      // If fetch fails, bridge may have gone down
-      if (this._status === 'connected') {
-        this._setStatus('error');
-        this._closeWebSocket();
-        this._scheduleReconnect();
-      }
-      return { ok: false, error: message };
-    } finally {
-      clearTimeout(timeout);
+    const messageType = outboundTypeForCommand(command);
+    if (messageType === undefined) {
+      return {
+        ok: false,
+        error: `Desktop bridge command '${command}' is not supported by the WebSocket bridge protocol.`,
+      };
     }
+
+    const sent = this._wsSend({
+      type: messageType,
+      payload,
+      timestamp: Date.now(),
+    });
+    return sent ? { ok: true } : { ok: false, error: 'Desktop bridge WebSocket is unavailable.' };
   }
 
   /**
-   * Health check — pings the desktop app's health endpoint.
+   * Health check for the actual bridge protocol.
+   *
+   * There is no supported HTTP bridge health endpoint in the desktop bridge
+   * protocol. Treat the authenticated WebSocket as the source of truth and
+   * optionally send a best-effort ping frame when it is open.
    */
   async healthCheck(): Promise<boolean> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3_000);
-
-    try {
-      const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
-      if (authHeaders === undefined) return false;
-
-      const res = await fetch(`${this.baseUrl}/api/health`, {
-        method: 'GET',
-        headers: authHeaders,
-        signal: controller.signal,
-      });
-      return res.ok;
-    } catch {
-      return false;
-    } finally {
-      clearTimeout(timeout);
+    const ws = this._ws;
+    const ok = this._status === 'connected' && this._authOk && ws?.readyState === WebSocket.OPEN;
+    if (ok) {
+      this._wsSend({ type: 'vscode:ping', payload: {}, timestamp: Date.now() });
     }
+    return ok;
   }
 
   // ── WebSocket (real-time) ───────────────────────────────────────────────
@@ -410,7 +399,14 @@ export class DesktopBridge implements vscode.Disposable {
     this._bridgeToken = readBridgeToken();
 
     try {
-      this._ws = new WebSocket(this.wsUrl);
+      const authHeaders = getBridgeAuthHeaders(this._bridgeToken);
+      if (authHeaders === undefined) {
+        this._setStatus('error');
+        this._scheduleReconnect();
+        return;
+      }
+
+      this._ws = new WebSocket(this.wsUrl, { headers: authHeaders });
 
       this._ws.onopen = () => {
         this._resetBackoff();
@@ -424,6 +420,7 @@ export class DesktopBridge implements vscode.Disposable {
             ws.send(
               JSON.stringify({ type: 'auth', token: this._bridgeToken, timestamp: Date.now() }),
             );
+            this._startHandshakeTimeout();
           }
           // Stay in 'connecting' until auth_ok is received.
         } else {
@@ -448,6 +445,11 @@ export class DesktopBridge implements vscode.Disposable {
           const validated = parseBridgeInbound(parsedRaw);
           if (validated === undefined) {
             console.warn(`[AGI Workforce Bridge] dropping malformed inbound frame:`, parsedRaw);
+            if (!this._authOk && isJsonRpcFrame(parsedRaw)) {
+              this._setStatus('error');
+              this._closeWebSocket();
+              this._scheduleReconnect();
+            }
             return;
           }
           // Build a BridgeMessage envelope for downstream handlers that
@@ -467,6 +469,7 @@ export class DesktopBridge implements vscode.Disposable {
           // VSCODE-03: handle auth_ok handshake before passing to application handlers.
           if (raw.type === 'auth_ok') {
             this._authOk = true;
+            this._clearHandshakeTimeout();
             this._setStatus('connected');
             // Now safe to announce ourselves.
             this._wsSend({
@@ -499,6 +502,7 @@ export class DesktopBridge implements vscode.Disposable {
       this._ws.onclose = () => {
         this._ws = undefined;
         this._authOk = false;
+        this._clearHandshakeTimeout();
         if (!this._disposed) {
           const previousStatus = this._status;
           this._setStatus('disconnected');
@@ -522,6 +526,7 @@ export class DesktopBridge implements vscode.Disposable {
   }
 
   private _closeWebSocket(): void {
+    this._clearHandshakeTimeout();
     if (this._ws !== undefined) {
       this._ws.onopen = null;
       this._ws.onmessage = null;
@@ -532,23 +537,29 @@ export class DesktopBridge implements vscode.Disposable {
     }
   }
 
-  private _wsSend(message: BridgeMessage): void {
+  private _wsSend(message: BridgeMessage): boolean {
     // VSCODE-03: only send allowed outbound types, and only after auth_ok.
     if (!ALLOWED_OUTBOUND_TYPES.has(message.type)) {
       console.warn(`[AGI Workforce Bridge] blocked unknown outbound type: ${message.type}`);
-      return;
+      return false;
     }
     if (!this._authOk && message.type !== 'auth') {
       console.warn(
         `[AGI Workforce Bridge] dropping outbound '${message.type}' — auth not complete.`,
       );
-      return;
+      return false;
     }
     // Capture local ref to prevent TOCTOU race with _closeWebSocket()
     const ws = this._ws;
     if (ws !== undefined && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+      try {
+        ws.send(JSON.stringify(message));
+        return true;
+      } catch {
+        return false;
+      }
     }
+    return false;
   }
 
   // ── Convenience methods ─────────────────────────────────────────────────
@@ -649,6 +660,23 @@ export class DesktopBridge implements vscode.Disposable {
     if (this._reconnectTimer !== undefined) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = undefined;
+    }
+  }
+
+  private _startHandshakeTimeout(): void {
+    this._clearHandshakeTimeout();
+    this._handshakeTimer = setTimeout(() => {
+      if (this._disposed || this._authOk) return;
+      this._setStatus('error');
+      this._closeWebSocket();
+      this._scheduleReconnect();
+    }, DesktopBridge.HANDSHAKE_TIMEOUT_MS);
+  }
+
+  private _clearHandshakeTimeout(): void {
+    if (this._handshakeTimer !== undefined) {
+      clearTimeout(this._handshakeTimer);
+      this._handshakeTimer = undefined;
     }
   }
 

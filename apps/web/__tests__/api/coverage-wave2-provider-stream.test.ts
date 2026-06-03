@@ -78,7 +78,7 @@ function makeRequest(providerId: string, body?: object): NextRequest {
       },
       body: JSON.stringify(
         body ?? {
-          model: 'claude-sonnet-4-5',
+          model: 'claude-sonnet-4-6',
           messages: [{ role: 'user', content: 'Hello' }],
         },
       ),

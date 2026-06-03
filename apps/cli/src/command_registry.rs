@@ -98,11 +98,19 @@ fn plugin_command_registry_entries(
     {
         return out;
     }
-    for command_path in plugins_mgr.command_paths() {
+    for entry in plugins_mgr.command_path_entries() {
+        let plugin_root = entry.plugin_root;
+        let command_path = entry.path;
+        if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &command_path) {
+            continue;
+        }
         if command_path.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&command_path) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
+                for dir_entry in entries.flatten() {
+                    let path = dir_entry.path();
+                    if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &path) {
+                        continue;
+                    }
                     if path.is_file() && path.extension().and_then(|ext| ext.to_str()) == Some("md")
                     {
                         push_plugin_command(&path, reserved_names, &mut out);

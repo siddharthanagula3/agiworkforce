@@ -25,7 +25,7 @@
  * | `AGI_AUTH_PROVIDER`                | `clerk`       | Auth factory |
  * | `AGI_STORAGE_PROVIDER`             | explicit only | Storage      |
  * | `AGI_REALTIME_PROVIDER`            | explicit only | Realtime     |
- * | `AGI_DATABASE_URL` / `DATABASE_URL`| —             | Neon, PG     |
+ * | `AGI_DATABASE_URL` / `DATABASE_URL`| —             | Neon DB      |
  * | `CLERK_JWT_KEY` / `CLERK_SECRET_KEY`| —            | Clerk auth   |
  * | `CLERK_AUTHORIZED_PARTIES`          | —             | Clerk auth   |
  *
@@ -47,7 +47,6 @@ import {
 } from './types';
 import { ClerkAuthAdapter } from './adapters/clerk';
 import { NeonDatabaseAdapter } from './adapters/neon';
-import { PostgresDatabaseAdapter } from './adapters/postgres';
 
 // Browser-safe env getter — falls back to `undefined` if `process.env`
 // isn't defined (we're not in Node). This lets the factory be imported
@@ -84,12 +83,12 @@ function readRequiredEnvProvider<T extends string>(name: string, allowed: readon
 // Database
 // ============================================================================
 
-const DATABASE_PROVIDERS = ['neon', 'postgres'] as const;
+const DATABASE_PROVIDERS = ['neon'] as const;
 
 export interface CreateDatabaseClientOptions {
   /** Explicit provider; if omitted, reads `AGI_DATABASE_PROVIDER`. */
   provider?: DatabaseProvider;
-  /** Postgres-compatible connection string (Neon / Postgres only). */
+  /** Postgres-compatible Neon connection string. */
   connectionString?: string;
   poolSize?: number;
   applicationName?: string;
@@ -110,9 +109,7 @@ export interface CreateDatabaseClientOptions {
  *   });
  */
 export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): DatabaseAdapter {
-  const provider =
-    opts.provider ??
-    readEnvProvider<DatabaseProvider>('AGI_DATABASE_PROVIDER', 'neon', DATABASE_PROVIDERS);
+  const provider = selectDatabaseProvider(opts.provider ?? readEnv('AGI_DATABASE_PROVIDER'));
 
   switch (provider) {
     case 'neon': {
@@ -128,20 +125,18 @@ export function createDatabaseClient(opts: CreateDatabaseClientOptions = {}): Da
       if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
       return new NeonDatabaseAdapter(cfg);
     }
-    case 'postgres': {
-      const connectionString =
-        opts.connectionString ?? readEnv('AGI_DATABASE_URL') ?? readEnv('DATABASE_URL');
-      if (!connectionString) {
-        throw new DataLayerConfigError(
-          'Postgres adapter requires AGI_DATABASE_URL (or DATABASE_URL) — a postgres:// connection string.',
-        );
-      }
-      const cfg: DatabaseConnectionConfig = { connectionString };
-      if (opts.poolSize !== undefined) cfg.poolSize = opts.poolSize;
-      if (opts.applicationName !== undefined) cfg.applicationName = opts.applicationName;
-      return new PostgresDatabaseAdapter(cfg);
-    }
   }
+}
+
+function selectDatabaseProvider(raw: string | undefined): DatabaseProvider {
+  if (!raw) return 'neon';
+  if ((DATABASE_PROVIDERS as readonly string[]).includes(raw)) {
+    return raw as DatabaseProvider;
+  }
+  throw new DataLayerConfigError(
+    `Database provider "${raw}" is not selectable in production. ` +
+      'Only neon is currently implemented; raw postgres remains a migration skeleton.',
+  );
 }
 
 // ============================================================================

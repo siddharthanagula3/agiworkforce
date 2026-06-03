@@ -6,11 +6,17 @@ pub mod streaming;
 
 pub use provider_dispatch::{
     detect_provider, provider_from_name, provider_name, register_custom_providers,
+    resolve_selected_provider, selection_provider_override, try_detect_provider,
 };
 pub use streaming::{parse_paywall_body, stream_completion};
 
 /// Maximum time to wait between successive stream chunks before giving up.
 pub(crate) const STREAM_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// Internal marker attached to tool-call arguments when a provider streams
+/// malformed function-call JSON. The agent loop turns this into a tool error
+/// before any executor sees the arguments.
+pub(crate) const INVALID_TOOL_ARGS_MARKER: &str = "__agi_invalid_tool_args";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,6 +150,24 @@ pub fn mistral_provider() -> Provider {
         name: "mistral",
         base_url: "https://api.mistral.ai/v1/chat/completions",
         api_key_env: Some("MISTRAL_API_KEY"),
+    }
+}
+
+/// OpenRouter — OpenAI-compatible aggregator endpoint.
+pub fn openrouter_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "openrouter",
+        base_url: "https://openrouter.ai/api/v1/chat/completions",
+        api_key_env: Some("OPENROUTER_API_KEY"),
+    }
+}
+
+/// NVIDIA NIM — OpenAI-compatible hosted endpoint.
+pub fn nvidia_provider() -> Provider {
+    Provider::OpenAICompatible {
+        name: "nvidia",
+        base_url: "https://integrate.api.nvidia.com/v1/chat/completions",
+        api_key_env: Some("NVIDIA_API_KEY"),
     }
 }
 

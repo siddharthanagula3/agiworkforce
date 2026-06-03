@@ -51,7 +51,7 @@ vi.mock('@/stores/chatStore', () => ({
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
-      id: 'gpt-5.4',
+      id: 'gpt-5.5',
       name: 'GPT-5.4',
       provider: 'OpenAI',
       description: 'Most capable GPT model',

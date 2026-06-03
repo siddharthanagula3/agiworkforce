@@ -57,6 +57,14 @@ function generateMessageId(): string {
   return `dispatch-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+function getConnectionStore() {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const { useConnectionStore } =
+    require('@/stores/connectionStore') as typeof import('@/stores/connectionStore');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  return useConnectionStore;
+}
+
 export const useDispatchStore = create<DispatchState>()(
   persist(
     (set) => ({
@@ -96,42 +104,26 @@ export const useDispatchStore = create<DispatchState>()(
           sentAt: new Date().toISOString(),
         };
 
-        void import('@/stores/connectionStore')
-          .then(({ useConnectionStore }) => {
-            const { sendControl, status, queueControl } = useConnectionStore.getState();
+        try {
+          const { sendControl, status, queueControl } = getConnectionStore().getState();
 
-            try {
-              if (status === 'connected') {
-                sendControl('dispatch_task', payload);
-              } else {
-                // Queue for delivery when reconnected
-                queueControl('dispatch_task', payload);
-              }
-            } catch (err) {
-              set((state) => ({
-                messages: state.messages.map((m) =>
-                  m.id === id ? { ...m, taskStatus: 'failed' as TaskStatus } : m,
-                ),
-              }));
-              Alert.alert(
-                'Dispatch Failed',
-                `Could not send task to desktop. ${err instanceof Error ? err.message : 'Check your connection.'}`,
-                [{ text: 'OK' }],
-              );
-            }
-          })
-          .catch((err) => {
-            set((state) => ({
-              messages: state.messages.map((m) =>
-                m.id === id ? { ...m, taskStatus: 'failed' as TaskStatus } : m,
-              ),
-            }));
-            Alert.alert(
-              'Dispatch Failed',
-              `Could not send task to desktop. ${err instanceof Error ? err.message : 'Check your connection.'}`,
-              [{ text: 'OK' }],
-            );
-          });
+          if (status === 'connected') {
+            sendControl('dispatch_task', payload);
+          } else {
+            queueControl('dispatch_task', payload);
+          }
+        } catch (err) {
+          set((state) => ({
+            messages: state.messages.map((m) =>
+              m.id === id ? { ...m, taskStatus: 'failed' as TaskStatus } : m,
+            ),
+          }));
+          Alert.alert(
+            'Dispatch Failed',
+            `Could not send task to desktop. ${err instanceof Error ? err.message : 'Check your connection.'}`,
+            [{ text: 'OK' }],
+          );
+        }
       },
 
       clearThread: () => set({ messages: [] }),

@@ -48,16 +48,16 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
   });
 
   it('allows same-provider switch (claude→claude) on byok tier', async () => {
-    const result = await simulateSendMessage('claude-opus-4-6', 'claude-sonnet-4.6', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'claude-sonnet-4.6', mockContext);
     expect(result.blocked).toBe(false);
     expect(result.activeModelAfter).toBe('claude-sonnet-4.6');
   });
 
   it('blocks cross-provider switch (claude→gpt) on free tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('byok');
-    const result = await simulateSendMessage('claude-opus-4-6', 'gpt-5.5', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.5', mockContext);
     expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('claude-opus-4-6');
+    expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
   it('blocks cross-provider switch (gpt→gemini) on hobby tier', async () => {
@@ -69,14 +69,14 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
 
   it('blocks cross-provider switch (claude→grok) on pro tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('pro');
-    const result = await simulateSendMessage('claude-opus-4-6', 'grok-4', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'grok-4.3', mockContext);
     expect(result.blocked).toBe(true);
-    expect(result.activeModelAfter).toBe('claude-opus-4-6');
+    expect(result.activeModelAfter).toBe('claude-opus-4.8');
   });
 
   it('allows cross-provider switch (claude→gpt) on pro_plus tier', async () => {
     vi.mocked(resolveTier).mockResolvedValue('pro_plus');
-    const result = await simulateSendMessage('claude-opus-4-6', 'gpt-5.5', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'gpt-5.5', mockContext);
     expect(result.blocked).toBe(false);
     expect(result.activeModelAfter).toBe('gpt-5.5');
   });
@@ -90,20 +90,20 @@ describe('sidebar sendMessage — paywall guard (P0-F)', () => {
 
   it('allows auto-mode switch on any tier (never gated)', async () => {
     vi.mocked(resolveTier).mockResolvedValue('byok');
-    const result = await simulateSendMessage('claude-opus-4-6', 'auto-balanced', mockContext);
+    const result = await simulateSendMessage('claude-opus-4.8', 'auto-balanced', mockContext);
     expect(result.blocked).toBe(false);
     expect(result.activeModelAfter).toBe('auto-balanced');
   });
 
   it('does not advance activeModel on blocked switch', async () => {
     vi.mocked(resolveTier).mockResolvedValue('byok');
-    let activeModel = 'claude-opus-4-6';
+    let activeModel = 'claude-opus-4.8';
 
     const r1 = await simulateSendMessage(activeModel, 'gpt-5.5', mockContext);
     expect(r1.blocked).toBe(true);
     // activeModel must not advance
     activeModel = r1.activeModelAfter;
-    expect(activeModel).toBe('claude-opus-4-6');
+    expect(activeModel).toBe('claude-opus-4.8');
 
     // Second attempt on same provider should still work
     const r2 = await simulateSendMessage(activeModel, 'claude-sonnet-4.6', mockContext);
@@ -216,7 +216,7 @@ describe('resolveTier — workspace tier spoofing regression (P0-F hardening)', 
     >('../integrations/tierResolver');
 
     const tier = await realResolveTier(ctx, false);
-    const guardResult = guardProviderSwitch('claude-opus-4-6', 'gpt-5.5', tier);
+    const guardResult = guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier);
     expect(guardResult).toBe('upgrade-required');
   });
 });

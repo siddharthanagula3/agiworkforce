@@ -143,6 +143,7 @@ agiworkforce.db*
 
 # --- Generated files ---
 package-lock.json
+!apps/cli/npm/package-lock.json
 yarn.lock
 
 # --- Debug files ---

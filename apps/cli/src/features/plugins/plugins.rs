@@ -1,8 +1,7 @@
-#![allow(dead_code, unused_imports)]
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // Manifest discovery — Sprint B6
@@ -112,6 +111,12 @@ pub struct LoadedPlugin {
     pub manifest_dependencies: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PluginManifestPath {
+    pub plugin_root: PathBuf,
+    pub path: PathBuf,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
     #[serde(default)]
@@ -187,7 +192,6 @@ pub enum PluginSource {
 // AUDIT-FIX: H-16 — supply-chain integrity claim required on install.
 pub enum PluginIntegrity {
     PinnedSha256(String),
-    Sigstore(PathBuf),
     UnsafeSkip,
 }
 
@@ -211,6 +215,68 @@ pub enum PluginInstallOutcome {
 
 const AGIWORKFORCE_DIR: &str = ".agiworkforce";
 const PLUGINS_DIR: &str = "plugins";
+const MAX_PLUGIN_NAME_BYTES: usize = 128;
+
+pub fn derive_plugin_install_name(
+    source: &str,
+    explicit_name: Option<&str>,
+) -> Result<String, String> {
+    let name = match explicit_name {
+        Some(name) => name.trim().to_string(),
+        None => {
+            let source = source.trim().trim_end_matches(['/', '\\']);
+            let path_name = Path::new(source)
+                .file_name()
+                .and_then(|name| name.to_str())
+                .filter(|name| !name.is_empty());
+            path_name
+                .or_else(|| {
+                    source
+                        .rsplit(['/', ':'])
+                        .next()
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                })
+                .map(|name| name.trim_end_matches(".git").to_string())
+                .ok_or_else(|| "plugin name could not be derived from source".to_string())?
+        }
+    };
+
+    validate_plugin_name(&name)?;
+    Ok(name)
+}
+
+pub fn validate_plugin_name(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("plugin name must not be empty".to_string());
+    }
+    if name.len() > MAX_PLUGIN_NAME_BYTES {
+        return Err(format!(
+            "plugin name must be at most {} bytes",
+            MAX_PLUGIN_NAME_BYTES
+        ));
+    }
+    if matches!(name, "." | "..") {
+        return Err("plugin name must not be '.' or '..'".to_string());
+    }
+
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return Err("plugin name must not be empty".to_string());
+    };
+    if !first.is_ascii_alphanumeric() {
+        return Err("plugin name must start with an ASCII letter or digit".to_string());
+    }
+    if !name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Err(
+            "plugin name may only contain ASCII letters, digits, '.', '_' and '-'".to_string(),
+        );
+    }
+    Ok(())
+}
 
 impl Default for PluginsManager {
     fn default() -> Self {
@@ -303,6 +369,19 @@ impl PluginsManager {
                 }
             }
 
+            let manifest_commands = manifest
+                .as_ref()
+                .map(|m| sanitize_manifest_paths(&path, &name, "commands", &m.commands))
+                .unwrap_or_default();
+            let manifest_agents = manifest
+                .as_ref()
+                .map(|m| sanitize_manifest_paths(&path, &name, "agents", &m.agents))
+                .unwrap_or_default();
+            let manifest_skills = manifest
+                .as_ref()
+                .map(|m| sanitize_manifest_paths(&path, &name, "skills", &m.skills))
+                .unwrap_or_default();
+
             self.plugins.push(LoadedPlugin {
                 config_name: name,
                 manifest_name: manifest.as_ref().and_then(|m| m.name.clone()),
@@ -320,18 +399,9 @@ impl PluginsManager {
                     .unwrap_or_default(),
                 error: None,
                 format,
-                manifest_commands: manifest
-                    .as_ref()
-                    .map(|m| m.commands.clone())
-                    .unwrap_or_default(),
-                manifest_agents: manifest
-                    .as_ref()
-                    .map(|m| m.agents.clone())
-                    .unwrap_or_default(),
-                manifest_skills: manifest
-                    .as_ref()
-                    .map(|m| m.skills.clone())
-                    .unwrap_or_default(),
+                manifest_commands,
+                manifest_agents,
+                manifest_skills,
                 manifest_hooks: manifest.as_ref().and_then(|m| m.hooks.clone()),
                 manifest_dependencies: manifest
                     .as_ref()
@@ -444,26 +514,59 @@ impl PluginsManager {
     /// Return all plugin-declared command file paths, absolute.
     /// Loaders should walk these and register the same way user-level
     /// commands get registered.
-    pub fn command_paths(&self) -> Vec<PathBuf> {
+    pub fn command_path_entries(&self) -> Vec<PluginManifestPath> {
         self.plugins
             .iter()
-            .flat_map(|p| p.manifest_commands.iter().map(|rel| p.root.join(rel)))
+            .flat_map(|p| {
+                p.manifest_commands
+                    .iter()
+                    .filter_map(|rel| manifest_path_entry(p, rel))
+            })
+            .collect()
+    }
+
+    pub fn command_paths(&self) -> Vec<PathBuf> {
+        self.command_path_entries()
+            .into_iter()
+            .map(|entry| entry.path)
             .collect()
     }
 
     /// Return all plugin-declared skill file/dir paths, absolute.
-    pub fn skill_paths(&self) -> Vec<PathBuf> {
+    pub fn skill_path_entries(&self) -> Vec<PluginManifestPath> {
         self.plugins
             .iter()
-            .flat_map(|p| p.manifest_skills.iter().map(|rel| p.root.join(rel)))
+            .flat_map(|p| {
+                p.manifest_skills
+                    .iter()
+                    .filter_map(|rel| manifest_path_entry(p, rel))
+            })
+            .collect()
+    }
+
+    pub fn skill_paths(&self) -> Vec<PathBuf> {
+        self.skill_path_entries()
+            .into_iter()
+            .map(|entry| entry.path)
             .collect()
     }
 
     /// Return all plugin-declared agent file paths, absolute.
-    pub fn agent_paths(&self) -> Vec<PathBuf> {
+    pub fn agent_path_entries(&self) -> Vec<PluginManifestPath> {
         self.plugins
             .iter()
-            .flat_map(|p| p.manifest_agents.iter().map(|rel| p.root.join(rel)))
+            .flat_map(|p| {
+                p.manifest_agents
+                    .iter()
+                    .filter_map(|rel| manifest_path_entry(p, rel))
+            })
+            .collect()
+    }
+
+    pub fn agent_paths(&self) -> Vec<PathBuf> {
+        self.agent_path_entries()
+            .into_iter()
+            .map(|entry| entry.path)
             .collect()
     }
 
@@ -539,7 +642,18 @@ impl PluginsManager {
     }
 
     pub fn install(&self, req: PluginInstallRequest) -> PluginInstallOutcome {
+        if let Err(error) = validate_plugin_name(&req.name) {
+            return PluginInstallOutcome::Failed { error };
+        }
         let target = self.global_dir.join(&req.name);
+        if !target.starts_with(&self.global_dir) {
+            return PluginInstallOutcome::Failed {
+                error: format!(
+                    "plugin install target escapes plugin directory: {}",
+                    target.display()
+                ),
+            };
+        }
         if target.exists() {
             return PluginInstallOutcome::AlreadyInstalled { path: target };
         }
@@ -598,9 +712,7 @@ impl PluginsManager {
     }
 }
 
-// AUDIT-FIX: H-16 — supply-chain integrity gate. SHA-256 is verified locally;
-// Sigstore sidecar verification stub returns an error until the `sigstore`
-// crate is wired in (introducing it here would be an undocumented dep).
+// AUDIT-FIX: H-16 — supply-chain integrity gate. SHA-256 is verified locally.
 fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result<(), String> {
     match integrity {
         PluginIntegrity::PinnedSha256(expected) => {
@@ -614,18 +726,6 @@ fn verify_plugin_integrity(target: &Path, integrity: &PluginIntegrity) -> Result
                     actual
                 ))
             }
-        }
-        PluginIntegrity::Sigstore(sidecar) => {
-            if !sidecar.exists() {
-                return Err(format!(
-                    "sigstore sidecar not found at: {}",
-                    sidecar.display()
-                ));
-            }
-            Err(
-                "sigstore verification not yet wired (re-run with --integrity sha256:<hex> or --unsafe-no-integrity)"
-                    .to_string(),
-            )
         }
         PluginIntegrity::UnsafeSkip => {
             eprintln!(
@@ -690,6 +790,85 @@ fn extract_string_headers(
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn sanitize_manifest_paths(
+    plugin_root: &Path,
+    plugin_name: &str,
+    field: &str,
+    paths: &[PathBuf],
+) -> Vec<PathBuf> {
+    paths
+        .iter()
+        .filter_map(|rel| match safe_manifest_relative_path(plugin_root, rel) {
+            Ok(path) => Some(path),
+            Err(error) => {
+                eprintln!(
+                    "[plugins] Rejected {} path '{}' in plugin '{}': {}",
+                    field,
+                    rel.display(),
+                    plugin_name,
+                    error
+                );
+                None
+            }
+        })
+        .collect()
+}
+
+fn safe_manifest_relative_path(
+    plugin_root: &Path,
+    rel: &Path,
+) -> std::result::Result<PathBuf, String> {
+    if rel.as_os_str().is_empty() {
+        return Err("path must not be empty".to_string());
+    }
+    if rel.is_absolute() {
+        return Err("absolute paths are not allowed".to_string());
+    }
+    if !rel
+        .components()
+        .all(|component| matches!(component, Component::Normal(_)))
+    {
+        return Err(
+            "path must be relative and must not contain '.', '..', or root segments".to_string(),
+        );
+    }
+
+    let joined = plugin_root.join(rel);
+    if joined.exists() && !plugin_path_stays_within_root(plugin_root, &joined) {
+        return Err("resolved path escapes the plugin root".to_string());
+    }
+
+    Ok(rel.to_path_buf())
+}
+
+fn manifest_path_entry(plugin: &LoadedPlugin, rel: &Path) -> Option<PluginManifestPath> {
+    let path = plugin.root.join(rel);
+    if path.exists() && !plugin_path_stays_within_root(&plugin.root, &path) {
+        eprintln!(
+            "[plugins] Rejected manifest path '{}' in plugin '{}': resolved path escapes the plugin root",
+            rel.display(),
+            plugin.config_name
+        );
+        return None;
+    }
+    Some(PluginManifestPath {
+        plugin_root: plugin.root.clone(),
+        path,
+    })
+}
+
+pub fn plugin_path_stays_within_root(plugin_root: &Path, candidate: &Path) -> bool {
+    let root = match plugin_root.canonicalize() {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+    let candidate = match candidate.canonicalize() {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+    candidate.starts_with(root)
 }
 
 /// Probe a plugin root for any of the supported manifest paths and
@@ -790,4 +969,187 @@ pub fn build_discoverable_tools(
         });
     }
     tools
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn write_test_plugin(root: &Path) {
+        let manifest = root.join(".agiworkforce-plugin").join("plugin.json");
+        std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        std::fs::write(manifest, r#"{"name":"safe-plugin","version":"1.0.0"}"#).unwrap();
+    }
+
+    fn write_test_manifest(root: &Path, content: &str) {
+        let manifest = root.join(".agiworkforce-plugin").join("plugin.json");
+        std::fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        std::fs::write(manifest, content).unwrap();
+    }
+
+    #[test]
+    fn plugin_install_name_derives_from_sources() {
+        assert_eq!(
+            derive_plugin_install_name("https://github.com/acme/cool-plugin.git", None).unwrap(),
+            "cool-plugin"
+        );
+        assert_eq!(
+            derive_plugin_install_name("/tmp/plugins/local-plugin/", None).unwrap(),
+            "local-plugin"
+        );
+        assert_eq!(
+            derive_plugin_install_name("ignored-source", Some("explicit_name")).unwrap(),
+            "explicit_name"
+        );
+    }
+
+    #[test]
+    fn plugin_install_name_rejects_path_traversal_and_bad_segments() {
+        for name in [
+            "", ".", "..", "../evil", "/abs", "a/b", "a\\b", "-bad", "bad name",
+        ] {
+            assert!(
+                derive_plugin_install_name("ignored-source", Some(name)).is_err(),
+                "{name:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn plugin_install_rejects_invalid_name_before_writing() {
+        let home = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let manager = PluginsManager {
+            global_dir: home.path().join("plugins"),
+            plugins: Vec::new(),
+        };
+
+        let outcome = manager.install(PluginInstallRequest {
+            source: PluginSource::Local(source.path().to_path_buf()),
+            name: "../evil".to_string(),
+            integrity: PluginIntegrity::UnsafeSkip,
+        });
+
+        match outcome {
+            PluginInstallOutcome::Failed { error } => {
+                assert!(error.contains("plugin name"), "{error}");
+            }
+            _ => panic!("invalid plugin name should fail"),
+        }
+        assert!(!home.path().join("evil").exists());
+        assert!(!home.path().join("plugins").exists());
+    }
+
+    #[test]
+    fn plugin_install_accepts_safe_name_inside_plugin_root() {
+        let home = tempfile::tempdir().unwrap();
+        let source = tempfile::tempdir().unwrap();
+        write_test_plugin(source.path());
+        let manager = PluginsManager {
+            global_dir: home.path().join("plugins"),
+            plugins: Vec::new(),
+        };
+
+        let outcome = manager.install(PluginInstallRequest {
+            source: PluginSource::Local(source.path().to_path_buf()),
+            name: "safe-plugin".to_string(),
+            integrity: PluginIntegrity::UnsafeSkip,
+        });
+
+        match outcome {
+            PluginInstallOutcome::Installed { path, .. } => {
+                assert_eq!(path, home.path().join("plugins").join("safe-plugin"));
+                assert!(path
+                    .join(".agiworkforce-plugin")
+                    .join("plugin.json")
+                    .exists());
+            }
+            PluginInstallOutcome::Failed { error } => panic!("install failed: {error}"),
+            PluginInstallOutcome::AlreadyInstalled { path } => {
+                panic!("unexpected existing install: {}", path.display())
+            }
+        }
+    }
+
+    #[test]
+    fn manifest_command_skill_and_agent_paths_cannot_escape_plugin_root() {
+        let home = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        let plugin_root = plugins_dir.join("path-plugin");
+        std::fs::create_dir_all(plugin_root.join("commands")).unwrap();
+        std::fs::create_dir_all(plugin_root.join("skills")).unwrap();
+        std::fs::create_dir_all(plugin_root.join("agents")).unwrap();
+        std::fs::write(plugin_root.join("commands").join("ok.md"), "ok").unwrap();
+        std::fs::write(plugin_root.join("skills").join("SKILL.md"), "ok").unwrap();
+        std::fs::write(plugin_root.join("agents").join("agent.md"), "ok").unwrap();
+
+        write_test_manifest(
+            &plugin_root,
+            r#"{
+              "name": "path-plugin",
+              "commands": ["commands/ok.md", "../outside.md", "/tmp/outside-command.md"],
+              "skills": ["skills/SKILL.md", "../outside-skill.md", "/tmp/outside-skill.md"],
+              "agents": ["agents/agent.md", "../outside-agent.md", "/tmp/outside-agent.md"]
+            }"#,
+        );
+
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        manager.load_all(None).unwrap();
+
+        assert_eq!(
+            manager.command_paths(),
+            vec![plugin_root.join("commands").join("ok.md")]
+        );
+        assert_eq!(
+            manager.skill_paths(),
+            vec![plugin_root.join("skills").join("SKILL.md")]
+        );
+        assert_eq!(
+            manager.agent_paths(),
+            vec![plugin_root.join("agents").join("agent.md")]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn manifest_paths_reject_symlink_targets_outside_plugin_root() {
+        use std::os::unix::fs::symlink;
+
+        let home = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let plugins_dir = home.path().join("plugins");
+        let plugin_root = plugins_dir.join("symlink-plugin");
+        std::fs::create_dir_all(&plugin_root).unwrap();
+        let outside_file = outside.path().join("leak.md");
+        std::fs::write(&outside_file, "secret").unwrap();
+        symlink(&outside_file, plugin_root.join("leak.md")).unwrap();
+
+        write_test_manifest(
+            &plugin_root,
+            r#"{
+              "name": "symlink-plugin",
+              "commands": ["leak.md"],
+              "skills": ["leak.md"],
+              "agents": ["leak.md"]
+            }"#,
+        );
+
+        let mut manager = PluginsManager {
+            global_dir: plugins_dir,
+            plugins: Vec::new(),
+        };
+        manager.load_all(None).unwrap();
+
+        assert!(manager.command_paths().is_empty());
+        assert!(manager.skill_paths().is_empty());
+        assert!(manager.agent_paths().is_empty());
+        assert!(!plugin_path_stays_within_root(
+            &plugin_root,
+            &plugin_root.join("leak.md")
+        ));
+    }
 }

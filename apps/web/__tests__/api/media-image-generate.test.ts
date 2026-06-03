@@ -467,14 +467,14 @@ describe('POST /api/media/image/generate', () => {
   });
 
   // =========================================================================
-  // Happy path — OpenAI DALL-E
+  // Happy path — OpenAI GPT Image
   // =========================================================================
   describe('Success — OpenAI provider', () => {
     it('should return 200 with generated image url', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          data: [{ url: 'https://example.com/dalle-image.png' }],
+          data: [{ url: 'https://example.com/gpt-image.png' }],
         }),
       });
 
@@ -487,8 +487,8 @@ describe('POST /api/media/image/generate', () => {
       expect(data.success).toBe(true);
       expect(data.provider).toBe('openai');
       expect(data.images).toHaveLength(1);
-      expect(data.images[0].url).toBe('https://example.com/dalle-image.png');
-      expect(data.model).toBe('dall-e-3');
+      expect(data.images[0].url).toBe('https://example.com/gpt-image.png');
+      expect(data.model).toBe('gpt-image-2-medium');
       expect(typeof data.cost_estimate).toBe('number');
       expect(typeof data.latency_ms).toBe('number');
     });
@@ -507,7 +507,7 @@ describe('POST /api/media/image/generate', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.model).toBe('dall-e-3-hd');
+      expect(data.model).toBe('gpt-image-2-high');
     });
   });
 

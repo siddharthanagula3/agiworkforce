@@ -1,7 +1,7 @@
 /**
  * Catalog SSOT regression: OPENAI_MODEL_CATALOG must derive from
  * `models.json` and surface every OpenAI-provider entry, including the
- * current default `gpt-5.5`. Earlier versions were hardcoded at GPT-5.4
+ * current default `gpt-5.5`. Earlier versions were hardcoded at GPT-5.5
  * while models.json declared `defaultModel: 'gpt-5.5'`.
  */
 

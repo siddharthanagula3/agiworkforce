@@ -31,6 +31,17 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
+/// UI mode for an MCP elicitation request.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ElicitationMode {
+    /// Render `requestedSchema` as a local form.
+    #[default]
+    Form,
+    /// Ask the user to complete the request at an external URL.
+    Url,
+}
+
 /// Server → client `elicitation/create` request payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ElicitationRequest {
@@ -39,6 +50,19 @@ pub struct ElicitationRequest {
     /// JSON Schema describing the structured input the server expects.
     #[serde(rename = "requestedSchema")]
     pub requested_schema: serde_json::Value,
+    /// How the user should complete the request.
+    #[serde(default)]
+    pub mode: ElicitationMode,
+    /// URL for URL-mode elicitations.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    /// Server-supplied correlation identifier.
+    #[serde(
+        default,
+        rename = "elicitationId",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub elicitation_id: Option<String>,
 }
 
 /// Action the user took in response to the elicitation.
@@ -63,6 +87,12 @@ impl ElicitationResponse {
         Self {
             action: ElicitationAction::Accept,
             content: Some(content),
+        }
+    }
+    pub fn accept_without_content() -> Self {
+        Self {
+            action: ElicitationAction::Accept,
+            content: None,
         }
     }
     pub fn decline() -> Self {
@@ -169,6 +199,9 @@ mod tests {
         ElicitationRequest {
             message: "Please confirm".into(),
             requested_schema: serde_json::json!({"type": "object"}),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
         }
     }
 
@@ -180,6 +213,37 @@ mod tests {
         assert!(json.contains("\"requestedSchema\""));
         let back: ElicitationRequest = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(req, back);
+    }
+
+    #[test]
+    fn request_defaults_to_form_mode_when_omitted() {
+        let req: ElicitationRequest = serde_json::from_value(serde_json::json!({
+            "message": "Please confirm",
+            "requestedSchema": {"type": "object"}
+        }))
+        .expect("deserialize");
+
+        assert_eq!(req.mode, ElicitationMode::Form);
+        assert!(req.url.is_none());
+        assert!(req.elicitation_id.is_none());
+    }
+
+    #[test]
+    fn url_mode_and_elicitation_id_round_trip() {
+        let req = ElicitationRequest {
+            message: "Open browser".into(),
+            requested_schema: serde_json::json!({"type": "object"}),
+            mode: ElicitationMode::Url,
+            url: Some("https://example.com/oauth".into()),
+            elicitation_id: Some("req-123".into()),
+        };
+        let json = serde_json::to_value(&req).expect("serialize");
+
+        assert_eq!(json["mode"], "url");
+        assert_eq!(json["url"], "https://example.com/oauth");
+        assert_eq!(json["elicitationId"], "req-123");
+        let back: ElicitationRequest = serde_json::from_value(json).expect("deserialize");
+        assert_eq!(back, req);
     }
 
     #[test]
@@ -197,6 +261,11 @@ mod tests {
         let cancel = serde_json::to_string(&ElicitationResponse::cancel()).unwrap();
         assert!(cancel.contains("\"action\":\"cancel\""));
         assert!(!cancel.contains("\"content\""));
+
+        let empty_accept = serde_json::to_string(&ElicitationResponse::accept_without_content())
+            .expect("serialize");
+        assert!(empty_accept.contains("\"action\":\"accept\""));
+        assert!(!empty_accept.contains("\"content\""));
     }
 
     #[tokio::test]

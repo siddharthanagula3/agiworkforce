@@ -171,10 +171,8 @@ router.get('/pending', createRateLimiter('device-status'), async (req: Request, 
     .limit(50);
 
   if (error) {
-    // Table may not exist yet — return empty list gracefully
-    logger.debug({ error }, 'Failed to fetch pending approval requests (table may not exist)');
-    res.json({ desktopId, pending: [] });
-    return;
+    logger.error({ error, desktopId }, 'Failed to fetch pending approval requests');
+    throw new AppError('Failed to fetch pending approval requests', 500);
   }
 
   res.json({
@@ -211,18 +209,22 @@ router.post(
     await verifyDesktopOwnership(desktopId, user.userId);
 
     const db = getUserScopedClient(user.userId);
-    // Update the approval request status in DB (best-effort, table may not exist)
-    const { error: updateError } = await db
+    const { data: updatedRows, error: updateError } = await db
       .from('agent_approval_requests')
       .update({ status: 'approved', resolved_at: new Date().toISOString() })
       .eq('id', requestId)
-      .eq('user_id', user.userId);
+      .eq('user_id', user.userId)
+      .eq('desktop_id', desktopId)
+      .eq('status', 'pending')
+      .select('id');
 
     if (updateError) {
-      logger.debug(
-        { error: updateError },
-        'Failed to update approval request (table may not exist)',
-      );
+      logger.error({ error: updateError, desktopId, requestId }, 'Failed to approve request');
+      throw new AppError('Failed to approve request', 500);
+    }
+
+    if (!updatedRows || updatedRows.length !== 1) {
+      throw new AppError('Approval request not found or already resolved', 404);
     }
 
     // Send approval command to desktop via WebSocket
@@ -270,8 +272,7 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
   await verifyDesktopOwnership(desktopId, user.userId);
 
   const db = getUserScopedClient(user.userId);
-  // Update the approval request status in DB (best-effort)
-  const { error: updateError } = await db
+  const { data: updatedRows, error: updateError } = await db
     .from('agent_approval_requests')
     .update({
       status: 'denied',
@@ -279,10 +280,18 @@ router.post('/deny', createRateLimiter('device-command'), async (req: Request, r
       resolved_at: new Date().toISOString(),
     })
     .eq('id', requestId)
-    .eq('user_id', user.userId);
+    .eq('user_id', user.userId)
+    .eq('desktop_id', desktopId)
+    .eq('status', 'pending')
+    .select('id');
 
   if (updateError) {
-    logger.debug({ error: updateError }, 'Failed to update denial request (table may not exist)');
+    logger.error({ error: updateError, desktopId, requestId }, 'Failed to deny request');
+    throw new AppError('Failed to deny request', 500);
+  }
+
+  if (!updatedRows || updatedRows.length !== 1) {
+    throw new AppError('Approval request not found or already resolved', 404);
   }
 
   // Send denial command to desktop via WebSocket

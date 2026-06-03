@@ -29,7 +29,6 @@ const GPT_51_REASONING_EFFORTS = ['none', 'low', 'medium', 'high'] as const;
 const GPT_52_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
 const GPT_CODEX_REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const;
 const GPT_PRO_REASONING_EFFORTS = ['medium', 'high', 'xhigh'] as const;
-const GPT_5_PRO_REASONING_EFFORTS = ['high'] as const;
 const GPT_51_CODEX_MAX_REASONING_EFFORTS = ['none', 'medium', 'high', 'xhigh'] as const;
 const GPT_51_CODEX_MINI_REASONING_EFFORTS = ['medium'] as const;
 const GENERIC_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
@@ -90,9 +89,6 @@ export function resolveOpenAISupportedReasoningEfforts(
   }
   if (/^gpt-5(?:\.\d+)?-codex(?:-|$)/u.test(id) || provider === 'openai-codex') {
     return GPT_CODEX_REASONING_EFFORTS;
-  }
-  if (id === 'gpt-5-pro') {
-    return GPT_5_PRO_REASONING_EFFORTS;
   }
   if (/^gpt-5\.[2-9](?:\.\d+)?-pro(?:-|$)/u.test(id)) {
     return GPT_PRO_REASONING_EFFORTS;

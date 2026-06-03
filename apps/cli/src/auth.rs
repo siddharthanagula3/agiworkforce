@@ -275,6 +275,8 @@ fn auth_status_from_store(
             } => {
                 // Determine token type label from provider name
                 let auth_type = match provider.as_str() {
+                    "agiworkforce" => "AGI Workforce OAuth".to_string(),
+                    "managed_cloud" => "AGI Workforce OAuth".to_string(),
                     "copilot" => "Copilot OAuth".to_string(),
                     "chatgpt" => "ChatGPT OAuth".to_string(),
                     _ => "oauth".to_string(),
@@ -341,6 +343,8 @@ const GITHUB_CLIENT_ID: &str = "Ov23li8tweQw6odWQebz";
 /// OpenAI/ChatGPT OAuth App client ID for device flow authentication.
 /// Public per OAuth spec (not a secret). Registered via OpenAI developer portal.
 const CHATGPT_CLIENT_ID: &str = "app_EMoamEEZ73f0CkXaXp7hrann";
+const AGIWORKFORCE_AUTH_KEY: &str = "agiworkforce";
+const AGIWORKFORCE_API_BASE: &str = "https://api.agiworkforce.com";
 /// Maximum number of polling attempts during device code authentication (5s intervals = 5min).
 const MAX_POLL_ATTEMPTS: u32 = 60;
 
@@ -852,72 +856,136 @@ pub async fn interactive_login() -> Result<()> {
     Ok(())
 }
 
-/// Login for a specific provider by name (used by onboarding wizard).
-///
-/// Delegates to OAuth flow for known providers, or falls back to
-/// `interactive_login()` for subscription-based providers.
-pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()> {
-    match provider {
-        Some("agiworkforce") | Some("agi") => {
-            let api_base = "https://api.agiworkforce.com";
-            let entry = crate::oauth::device_code_login(api_base).await?;
-            let mut store = AuthStore::load()?;
-            store.entries.insert("agiworkforce".to_string(), entry);
-            store.save()?;
-            Ok(())
-        }
-        Some(pid) => {
-            if let Some(provider_cfg) = crate::oauth::get_provider(pid) {
-                let entry = crate::oauth::oauth_login(provider_cfg).await?;
-                let mut store = AuthStore::load()?;
-                store.entries.insert(pid.to_string(), entry);
-                store.save()?;
-                Ok(())
-            } else {
-                // Fall back to existing interactive flow
-                interactive_login().await
-            }
-        }
-        None => interactive_login().await,
+fn save_auth_entry(key: &str, entry: AuthEntry) -> Result<()> {
+    let mut store = AuthStore::load()?;
+    store.entries.insert(key.to_string(), entry);
+    store.save()
+}
+
+pub(crate) fn is_agiworkforce_login_provider(provider: Option<&str>) -> bool {
+    matches!(provider, None | Some("agi") | Some("agiworkforce"))
+}
+
+pub async fn login_agiworkforce() -> Result<()> {
+    let entry = crate::oauth::device_code_login(AGIWORKFORCE_API_BASE).await?;
+    save_auth_entry(AGIWORKFORCE_AUTH_KEY, entry)
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ApiKeyProvider {
+    id: &'static str,
+    label: &'static str,
+    env_var: &'static str,
+}
+
+const API_KEY_PROVIDERS: &[ApiKeyProvider] = &[
+    ApiKeyProvider {
+        id: "anthropic",
+        label: "Anthropic",
+        env_var: "ANTHROPIC_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "openai",
+        label: "OpenAI",
+        env_var: "OPENAI_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "google",
+        label: "Google",
+        env_var: "GOOGLE_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "xai",
+        label: "xAI",
+        env_var: "XAI_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "deepseek",
+        label: "DeepSeek",
+        env_var: "DEEPSEEK_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "mistral",
+        label: "Mistral",
+        env_var: "MISTRAL_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "perplexity",
+        label: "Perplexity",
+        env_var: "PERPLEXITY_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "qwen",
+        label: "Qwen / DashScope",
+        env_var: "QWEN_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "moonshot",
+        label: "Moonshot / Kimi",
+        env_var: "MOONSHOT_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "zhipu",
+        label: "Zhipu / GLM",
+        env_var: "ZHIPU_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "ollama-cloud",
+        label: "Ollama Cloud",
+        env_var: "OLLAMA_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "openrouter",
+        label: "OpenRouter",
+        env_var: "OPENROUTER_API_KEY",
+    },
+    ApiKeyProvider {
+        id: "nvidia",
+        label: "NVIDIA NIM",
+        env_var: "NVIDIA_API_KEY",
+    },
+];
+
+fn normalize_api_key_provider_id(provider: &str) -> Option<&'static str> {
+    match provider.to_ascii_lowercase().as_str() {
+        "anthropic" => Some("anthropic"),
+        "openai" => Some("openai"),
+        "google" => Some("google"),
+        "xai" | "grok" => Some("xai"),
+        "deepseek" => Some("deepseek"),
+        "mistral" | "mistral-ai" | "mistralai" => Some("mistral"),
+        "perplexity" => Some("perplexity"),
+        "qwen" | "dashscope" => Some("qwen"),
+        "moonshot" | "kimi" => Some("moonshot"),
+        "zhipu" | "glm" => Some("zhipu"),
+        "ollama-cloud" | "ollama_cloud" | "ollamacloud" => Some("ollama-cloud"),
+        "openrouter" | "open-router" | "open_router" => Some("openrouter"),
+        "nvidia" | "nvidia-nim" | "nvidia_nim" | "nim" => Some("nvidia"),
+        _ => None,
     }
 }
 
-/// Interactive API key setup (used by onboarding wizard).
-///
-/// Prompts for provider selection and API key entry, then persists to auth.json.
-pub async fn interactive_api_key_login() -> Result<()> {
-    let choices = &[
-        "Anthropic (ANTHROPIC_API_KEY)",
-        "OpenAI (OPENAI_API_KEY)",
-        "Google (GOOGLE_API_KEY)",
-        "xAI (XAI_API_KEY)",
-        "DeepSeek (DEEPSEEK_API_KEY)",
-        "Mistral (MISTRAL_API_KEY)",
-        "Cancel",
-    ];
+fn api_key_provider(provider: &str) -> Option<ApiKeyProvider> {
+    let normalized = normalize_api_key_provider_id(provider)?;
+    API_KEY_PROVIDERS
+        .iter()
+        .copied()
+        .find(|candidate| candidate.id == normalized)
+}
 
-    let selection = dialoguer::Select::new()
-        .with_prompt("Select provider for API key")
-        .items(choices)
-        .default(0)
-        .interact()
-        .context("Failed to display provider menu")?;
+pub(crate) fn is_api_key_provider(provider: &str) -> bool {
+    api_key_provider(provider).is_some()
+}
 
-    let provider_id = match selection {
-        0 => "anthropic",
-        1 => "openai",
-        2 => "google",
-        3 => "xai",
-        4 => "deepseek",
-        5 => "mistral",
-        _ => {
-            println!("Cancelled.");
-            return Ok(());
-        }
-    };
+pub async fn interactive_api_key_login_for_provider(provider: &str) -> Result<()> {
+    let provider = api_key_provider(provider)
+        .ok_or_else(|| anyhow::anyhow!("Unknown API-key provider '{}'", provider))?;
 
     let key = dialoguer::Password::new()
-        .with_prompt(format!("Enter {} API key", provider_id))
+        .with_prompt(format!(
+            "Enter {} API key ({})",
+            provider.label, provider.env_var
+        ))
         .interact()
         .context("Failed to read API key")?;
 
@@ -925,18 +993,75 @@ pub async fn interactive_api_key_login() -> Result<()> {
         bail!("Empty API key.");
     }
 
-    let mut store = AuthStore::load()?;
-    store
-        .entries
-        .insert(provider_id.to_string(), AuthEntry::ApiKey { key });
-    store.save()?;
-
+    save_auth_entry(provider.id, AuthEntry::ApiKey { key })?;
     println!(
-        "  {} {} API key saved.",
+        "  {} {} API key saved to auth.json.",
         "Done!".green().bold(),
-        provider_id,
+        provider.label,
     );
     Ok(())
+}
+
+/// Login for a specific provider by name (used by onboarding wizard).
+///
+/// `None` intentionally means AGI Workforce cloud login; subscription providers
+/// are only selected when named explicitly.
+pub async fn interactive_login_for_provider(provider: Option<&str>) -> Result<()> {
+    if is_agiworkforce_login_provider(provider) {
+        return login_agiworkforce().await;
+    }
+
+    match provider {
+        Some("copilot") => {
+            println!("\n{}", "Connecting to GitHub Copilot...".cyan());
+            let entry = login_copilot().await?;
+            save_auth_entry("copilot", entry)
+        }
+        Some("chatgpt") => {
+            println!("\n{}", "Connecting to ChatGPT...".cyan());
+            let entry = login_chatgpt().await?;
+            save_auth_entry("chatgpt", entry)
+        }
+        Some(pid) => {
+            if let Some(provider_cfg) = crate::oauth::get_provider(pid) {
+                let entry = crate::oauth::oauth_login(provider_cfg).await?;
+                save_auth_entry(pid, entry)
+            } else if is_api_key_provider(pid) {
+                interactive_api_key_login_for_provider(pid).await
+            } else {
+                bail!(
+                    "Unknown provider '{}'. Available: agiworkforce, anthropic, openai, google, xai, deepseek, mistral, perplexity, qwen, moonshot, zhipu, ollama-cloud, openrouter, nvidia, copilot, chatgpt",
+                    pid
+                )
+            }
+        }
+        None => unreachable!("handled by is_agiworkforce_login_provider"),
+    }
+}
+
+/// Interactive API key setup (used by onboarding wizard).
+///
+/// Prompts for provider selection and API key entry, then persists to auth.json.
+pub async fn interactive_api_key_login() -> Result<()> {
+    let mut choices: Vec<String> = API_KEY_PROVIDERS
+        .iter()
+        .map(|provider| format!("{} ({})", provider.label, provider.env_var))
+        .collect();
+    choices.push("Cancel".to_string());
+
+    let selection = dialoguer::Select::new()
+        .with_prompt("Select provider for API key")
+        .items(&choices)
+        .default(0)
+        .interact()
+        .context("Failed to display provider menu")?;
+
+    if selection >= API_KEY_PROVIDERS.len() {
+        println!("Cancelled.");
+        return Ok(());
+    }
+
+    interactive_api_key_login_for_provider(API_KEY_PROVIDERS[selection].id).await
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1013,6 +1138,18 @@ fn extract_chatgpt_account_id(jwt: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_login_provider_targets_agiworkforce() {
+        assert!(is_agiworkforce_login_provider(None));
+        assert!(is_agiworkforce_login_provider(Some("agi")));
+        assert!(is_agiworkforce_login_provider(Some("agiworkforce")));
+
+        assert!(!is_agiworkforce_login_provider(Some("openai")));
+        assert!(!is_agiworkforce_login_provider(Some("chatgpt")));
+        assert!(!is_agiworkforce_login_provider(Some("copilot")));
+        assert!(!is_agiworkforce_login_provider(Some("anthropic")));
+    }
 
     // Helper: build a minimal AuthStore in-memory (bypasses disk I/O)
     fn make_store(entries: Vec<(&str, AuthEntry)>) -> AuthStore {
@@ -1109,6 +1246,23 @@ mod tests {
         assert_eq!(results[0].status, "unknown"); // expires=0
         assert!(results[0].has_refresh_token);
         assert!(!results[0].permissions_secure);
+    }
+
+    #[test]
+    fn test_auth_status_agiworkforce_type() {
+        let store = make_store(vec![(
+            "agiworkforce",
+            AuthEntry::OAuth {
+                refresh: "refresh".into(),
+                access: "access".into(),
+                expires: 0,
+                account_id: None,
+            },
+        )]);
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let results = auth_status_from_store(&store, now_ms, true);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].auth_type, "AGI Workforce OAuth");
     }
 
     #[test]

@@ -57,14 +57,14 @@ export default function Home() {
         <CampaignHero
           eyebrow={`${LAUNCH.publicLabel} · ${POSITIONING.wedge}`}
           title="Every model. Every surface. Your choice."
-          lede={`${MARKETING.providers.display} providers in one thread. Local sessions stay local. BYOK uses the provider the user selects. Managed Cloud opens by invite code while controls mature.`}
-          primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
-          secondaryCta={{ href: '/solutions', label: 'Map the suite' }}
+          lede={`${MARKETING.providers.display} provider routes in one account. Try hosted Auto Economy on the web, then move serious work to local, BYOK, desktop, CLI, VS Code, Chrome, or mobile.`}
+          primaryCta={{ href: '/chat', label: 'Try AGI free' }}
+          secondaryCta={{ href: '/download', label: 'Install local app' }}
           chips={['Web', 'Mobile', 'Desktop', 'CLI', 'Chrome', 'VS Code']}
           panelTitle="AGI suite"
           panelRows={[
-            { k: 'Modes', v: 'Local, BYOK, and invite-only managed cloud' },
-            { k: 'Surface order', v: 'Mobile, Website, Desktop, CLI, Chrome, VS Code' },
+            { k: 'Modes', v: 'Web trial, Local, BYOK, and invite-only managed cloud' },
+            { k: 'Surface order', v: 'Website, Desktop, Mobile, CLI, Chrome, VS Code' },
             { k: 'Boundary', v: POSITIONING.trustBoundary },
             { k: 'Launch', v: LAUNCH.date },
           ]}
@@ -116,10 +116,10 @@ export default function Home() {
               href: '/byok',
             },
             {
-              meta: 'Cloud invite',
-              title: 'Managed Cloud later',
-              body: 'Invite codes capture high-intent demand for hosted sync, managed compute, and higher-capacity workflows after controls are proven.',
-              href: '/pricing',
+              meta: 'Web',
+              title: 'Hosted trial',
+              body: 'Signed-in website users can try Auto Economy with a small prompt cap while higher hosted capacity stays waitlisted.',
+              href: '/chat',
             },
           ]}
         />
@@ -129,22 +129,22 @@ export default function Home() {
           title="Route each visitor to the surface they care about."
           routes={[
             {
-              meta: 'Mobile',
-              title: 'AGI Mobile',
-              body: 'Local chat, BYOK providers, approvals, dispatch, and cloud invite capture.',
-              href: '/mobile',
-            },
-            {
               meta: 'Website',
               title: 'AGI Web',
-              body: 'Account, projects, artifacts, billing, waitlist, docs, and shared web chats.',
-              href: '/business',
+              body: 'Familiar browser chat, account, projects, artifacts, waitlist capture, docs, and shared conversations.',
+              href: '/chat',
             },
             {
               meta: 'Desktop',
               title: 'AGI Desktop',
               body: 'Local compute host, BYOK vault, computer use, files, browser, MCP, and sync bridge.',
               href: '/desktop',
+            },
+            {
+              meta: 'Mobile',
+              title: 'AGI Mobile',
+              body: 'Local chat, BYOK providers, approvals, dispatch, and cloud invite capture.',
+              href: '/mobile',
             },
             {
               meta: 'CLI',
@@ -227,8 +227,8 @@ export default function Home() {
                 locking them to one company&apos;s models.
               </p>
             </div>
-            <a href="/mobile" className="agi-cta-primary" style={{ alignSelf: 'center' }}>
-              Start with mobile &rarr;
+            <a href="/chat" className="agi-cta-primary" style={{ alignSelf: 'center' }}>
+              Try web chat &rarr;
             </a>
           </div>
         </section>

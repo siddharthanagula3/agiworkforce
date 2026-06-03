@@ -86,11 +86,11 @@ describe('buildStatusBarText', () => {
   });
 
   it('shows all chips together', () => {
-    const text = buildStatusBarText('gpt-5-pro', true, true, true, 8787);
+    const text = buildStatusBarText('gpt-5.5', true, true, true, 8787);
     expect(text).toContain('plan');
     expect(text).toContain('mcp');
     expect(text).toContain('bridge:8787');
-    expect(text).toContain('gpt-5-pro');
+    expect(text).toContain('gpt-5.5');
   });
 });
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, Image as ImageIcon, Clapperboard, Clock } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
-export type MediaGenProvider = 'dall-e-3' | 'google' | 'stability' | 'runway' | 'veo3';
+export type MediaGenProvider = 'gpt-image-2' | 'google' | 'stability' | 'runway' | 'veo3';
 
 interface MediaGenerationProgressProps {
   type: 'image' | 'video';
@@ -15,7 +15,7 @@ interface MediaGenerationProgressProps {
 // Estimated generation times per provider (seconds)
 const PROVIDER_ESTIMATES: Record<string, { min: number; max: number; label: string }> = {
   // Image providers
-  'dall-e-3': { min: 10, max: 25, label: 'DALL-E 3' },
+  'gpt-image-2': { min: 10, max: 25, label: 'GPT Image 2' },
   google: { min: 8, max: 20, label: 'Imagen 4' },
   stability: { min: 10, max: 20, label: 'Stable Image' },
   // Video providers

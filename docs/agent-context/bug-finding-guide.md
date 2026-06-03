@@ -17,6 +17,9 @@ Last updated: 2026-05-20
 
 ## High-Signal Search Patterns
 
+- Full AI/LLM failure taxonomy: `docs/agent-context/llm-failure-taxonomy.json`
+- Staged LLM-failure guard: `pnpm check:llm-failures:staged`
+- Strict taxonomy guard: `pnpm check:llm-failures:strict`
 - Security randomness: `rg "Math\\.random|Date\\.now\\(\\).*id|nonce|token" apps packages services`
 - Provider/model drift: `rg "gpt-|claude-|gemini-|sonnet|opus|haiku" apps packages services crates`
 - Privacy boundary drift: `rg "privacy_mode|PrivacyMode|BYOK|Managed|Local" apps packages crates services`

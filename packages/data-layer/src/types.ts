@@ -132,7 +132,8 @@ export interface VerifiedJwt {
 }
 
 /**
- * Refreshed access + refresh token pair. Returned by `refreshToken()`.
+ * Refreshed access + refresh token pair. Returned by adapters that support
+ * refresh-token exchange.
  */
 export interface RefreshedTokens {
   accessToken: string;
@@ -142,8 +143,10 @@ export interface RefreshedTokens {
 }
 
 /**
- * Auth adapter. Verifies JWTs minted by the upstream identity provider
- * and refreshes expired access tokens.
+ * Auth adapter. Verifies JWTs minted by the upstream identity provider.
+ * Refresh-token exchange is an optional capability because providers such as
+ * Clerk handle session refresh through cookies or native SDK sessions instead
+ * of a server-side refresh-token API.
  *
  * Implementations:
  * - Clerk: verifies signature against Clerk session-token keys/JWKS.
@@ -162,10 +165,11 @@ export interface AuthAdapter {
   verifyJwt(token: string): Promise<VerifiedJwt | null>;
 
   /**
-   * Trade a refresh token for a new access + refresh pair. Returns null on
-   * invalid / revoked refresh token. Throws on transient infra failure.
+   * Trade a refresh token for a new access + refresh pair when the provider
+   * exposes that server-side capability. Returns null on invalid / revoked
+   * refresh token. Throws on transient infra failure.
    */
-  refreshToken(refreshToken: string): Promise<RefreshedTokens | null>;
+  refreshToken?(refreshToken: string): Promise<RefreshedTokens | null>;
 }
 
 // ============================================================================
@@ -252,10 +256,11 @@ export interface RealtimeAdapter {
 // ============================================================================
 
 /**
- * Database providers we have adapters for or are committed to building.
- * Add a new entry only when you also add an adapter file under `adapters/`.
+ * Database providers selectable by the runtime factory. Raw Postgres has a
+ * skeleton adapter exported for migration work, but it is not production
+ * selectable until implemented.
  */
-export type DatabaseProvider = 'neon' | 'postgres';
+export type DatabaseProvider = 'neon';
 
 /**
  * Auth providers. `clerk` has a server verification adapter. `auth0` and

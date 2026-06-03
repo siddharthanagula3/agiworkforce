@@ -25,6 +25,7 @@ import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
 import { isValidUuid } from '../validations/ids';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 const router: Router = Router();
 
@@ -54,6 +55,13 @@ interface MobileDevice {
   push_token: string | null;
   created_at: string;
   updated_at: string;
+}
+
+interface AgentApprovalRequestRow {
+  id: string;
+  tool_name: string | null;
+  agent_id: string | null;
+  created_at: string;
 }
 
 // =============================================================================
@@ -95,16 +103,12 @@ const pairingCodeResponseSchema = z.object({
   wsUrl: z.string(),
   qrData: z.string(),
   // SECURITY (C2, redteam-services 2026-05-04): per-role pair tokens issued by
-  // the signaling server. We MUST forward the desktop token to the desktop
-  // client (over the authenticated gateway channel) and the mobile token to
-  // the mobile client. Optional during the rollout window; required in
-  // production once SIGNALING_REQUIRE_PAIR_TOKEN=1.
-  pairTokens: z
-    .object({
-      desktop: z.string(),
-      mobile: z.string(),
-    })
-    .optional(),
+  // the signaling server. Pairing is unusable without these because the
+  // signaling server requires the role token on WebSocket registration.
+  pairTokens: z.object({
+    desktop: z.string(),
+    mobile: z.string(),
+  }),
 });
 
 // SECURITY: .strict() rejects unexpected fields
@@ -114,6 +118,10 @@ const feedbackSchema = z
     message: z.string().min(1).max(5000),
   })
   .strict();
+
+function buildPairingQrData(code: string, pairToken: string): string {
+  return `agiw:${code}:${pairToken}`;
+}
 
 // =============================================================================
 // ROUTES
@@ -248,15 +256,18 @@ router.post(
 
     const ttlSeconds = parseResult.data.ttlSeconds;
 
+    if (!SIGNALING_INTERNAL_SECRET) {
+      throw new AppError('Signaling pairing is not configured', 503);
+    }
+
     let fetchResponse: globalThis.Response;
     try {
-      fetchResponse = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+      fetchResponse = await fetchWithTimeout(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
         method: 'POST',
+        timeoutMs: 10_000,
         headers: {
           'Content-Type': 'application/json',
-          ...(SIGNALING_INTERNAL_SECRET
-            ? { Authorization: `Bearer ${SIGNALING_INTERNAL_SECRET}` }
-            : {}),
+          Authorization: `Bearer ${SIGNALING_INTERNAL_SECRET}`,
         },
         body: JSON.stringify({
           ttlSeconds,
@@ -291,19 +302,14 @@ router.post(
 
     const payload = pairingCodeResponseSchema.parse(jsonBody);
 
-    // SECURITY (C2): forward both pair tokens. The mobile client (current
-    // request) gets the mobile token; the desktop client picks up its own
-    // token via a separate authenticated channel — typically the
-    // /api/desktop/* endpoints which read from a server-side store keyed
-    // by user_id. For Wave 3, we return both tokens here and rely on the
-    // caller's surface ID to select the right one. (When the gateway has
-    // persistent device routing, the desktop token should NOT round-trip
-    // through the mobile response.)
+    // SECURITY (C2): forward the signaling-issued role tokens to the
+    // authenticated caller so the desktop/mobile clients can register with the
+    // signaling server. Do not log these tokens.
     res.json({
       code: payload.code,
       expiresAt: payload.expiresAt,
       expiresIn: payload.expiresIn,
-      qrData: payload.qrData,
+      qrData: buildPairingQrData(payload.code, payload.pairTokens.desktop),
       signaling: {
         httpUrl: payload.httpUrl,
         wsUrl: payload.wsUrl,
@@ -353,8 +359,9 @@ router.get('/', createRateLimiter('device-list'), async (req: Request, res: Resp
  * Get status of running agents for the authenticated user
  * GET /mobile/agent-status
  *
- * Returns a stub response — actual agent status is delivered from the
- * desktop app to the mobile client via WebSocket in real-time.
+ * Returns pending approval summaries for background notification polling.
+ * Live running-agent state is still delivered over the paired desktop
+ * realtime channel and is not inferred from this polling endpoint.
  *
  * SECURITY: Rate limited to 60/min for read-only polling
  */
@@ -367,8 +374,34 @@ router.get(
       throw new AppError('Unauthorized', 401);
     }
 
-    // Stub: real agent status flows through WebSocket from the desktop app
-    res.json({ agents: [], pendingApprovals: 0 });
+    const db = getUserScopedClient(user.userId);
+    const { data: pendingRequests, error } = await db
+      .from('agent_approval_requests')
+      .select('id, tool_name, agent_id, created_at')
+      .eq('user_id', user.userId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) {
+      logger.error({ error }, 'Failed to fetch mobile pending approvals');
+      throw new AppError('Failed to fetch pending approvals', 500);
+    }
+
+    const pendingApprovals = ((pendingRequests ?? []) as AgentApprovalRequestRow[]).map(
+      (request) => ({
+        id: request.id,
+        agentName: request.agent_id ?? 'Agent',
+        toolName: request.tool_name ?? 'tool',
+        description: 'Agent action requires approval',
+      }),
+    );
+
+    res.json({
+      pendingApprovals,
+      pendingApprovalCount: pendingApprovals.length,
+      liveAgentStatusAvailable: false,
+    });
   },
 );
 
@@ -397,6 +430,22 @@ router.post(
       },
       'Mobile feedback received',
     );
+
+    const db = getUserScopedClient(user.userId);
+    const { error } = await db.from('feedback').insert({
+      user_id: user.userId,
+      subject: `mobile:${type}`,
+      message,
+      metadata: {
+        source: 'mobile',
+        type,
+      },
+    });
+
+    if (error) {
+      logger.error({ error, feedbackType: type }, 'Failed to persist mobile feedback');
+      throw new AppError('Failed to submit feedback', 500);
+    }
 
     res.json({ success: true });
   },

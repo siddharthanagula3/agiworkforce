@@ -193,6 +193,55 @@ impl Default for CliConfig {
             },
         );
         providers.insert(
+            "perplexity".to_string(),
+            ProviderConfig {
+                api_key_env: Some("PERPLEXITY_API_KEY".to_string()),
+                base_url: None,
+            },
+        );
+        providers.insert(
+            "qwen".to_string(),
+            ProviderConfig {
+                api_key_env: Some("QWEN_API_KEY".to_string()),
+                base_url: None,
+            },
+        );
+        providers.insert(
+            "moonshot".to_string(),
+            ProviderConfig {
+                api_key_env: Some("MOONSHOT_API_KEY".to_string()),
+                base_url: None,
+            },
+        );
+        providers.insert(
+            "zhipu".to_string(),
+            ProviderConfig {
+                api_key_env: Some("ZHIPU_API_KEY".to_string()),
+                base_url: None,
+            },
+        );
+        providers.insert(
+            "lmstudio".to_string(),
+            ProviderConfig {
+                api_key_env: None,
+                base_url: Some("http://localhost:1234/v1".to_string()),
+            },
+        );
+        providers.insert(
+            "openrouter".to_string(),
+            ProviderConfig {
+                api_key_env: Some("OPENROUTER_API_KEY".to_string()),
+                base_url: Some("https://openrouter.ai/api/v1".to_string()),
+            },
+        );
+        providers.insert(
+            "nvidia".to_string(),
+            ProviderConfig {
+                api_key_env: Some("NVIDIA_API_KEY".to_string()),
+                base_url: Some("https://integrate.api.nvidia.com/v1".to_string()),
+            },
+        );
+        providers.insert(
             "ollama-cloud".to_string(),
             ProviderConfig {
                 api_key_env: Some("OLLAMA_API_KEY".to_string()),
@@ -240,10 +289,16 @@ impl CliConfig {
         }
 
         let contents = std::fs::read_to_string(&path).context("Failed to read config file")?;
-        let mut config: CliConfig =
-            toml::from_str(&contents).context("Failed to parse config.toml")?;
+        let loaded: CliConfig = toml::from_str(&contents).context("Failed to parse config.toml")?;
+        let mut config = Self::with_builtin_defaults(loaded);
         config.source.global_path = Some(path);
         Ok(config)
+    }
+
+    fn with_builtin_defaults(loaded: CliConfig) -> Self {
+        let mut config = Self::default();
+        config.merge_from(&loaded);
+        config
     }
 
     /// Load project-level config from `.agiworkforce/config.toml` in the current directory.
@@ -771,6 +826,13 @@ mod tests {
         assert!(config.providers.contains_key("mistral"));
         assert!(config.providers.contains_key("xai"));
         assert!(config.providers.contains_key("deepseek"));
+        assert!(config.providers.contains_key("perplexity"));
+        assert!(config.providers.contains_key("qwen"));
+        assert!(config.providers.contains_key("moonshot"));
+        assert!(config.providers.contains_key("zhipu"));
+        assert!(config.providers.contains_key("lmstudio"));
+        assert!(config.providers.contains_key("openrouter"));
+        assert!(config.providers.contains_key("nvidia"));
         assert!(config.providers.contains_key("ollama-cloud"));
         assert!(config.ui.output_style.is_none());
         assert!(config.ui.privacy_mode.is_none());
@@ -1413,6 +1475,33 @@ privacy_mode = "local"
         loaded.source.global_path = Some(config_file.clone());
 
         assert_eq!(loaded.source.global_path.unwrap(), config_file);
+    }
+
+    #[test]
+    fn test_loaded_legacy_config_backfills_builtin_providers() {
+        let legacy_model = crate::model_catalog::fast_completion_model("anthropic");
+        let legacy = format!(
+            r#"
+[default]
+model = "{legacy_model}"
+provider = "anthropic"
+
+[providers.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"
+
+[providers.ollama]
+base_url = "http://localhost:11434"
+"#
+        );
+        let loaded: CliConfig = toml::from_str(&legacy).unwrap();
+        let config = CliConfig::with_builtin_defaults(loaded);
+
+        assert_eq!(config.default.model, legacy_model);
+        assert!(config.providers.contains_key("anthropic"));
+        assert!(config.providers.contains_key("ollama"));
+        assert!(config.providers.contains_key("openrouter"));
+        assert!(config.providers.contains_key("nvidia"));
+        assert!(config.providers.contains_key("perplexity"));
     }
 
     // --- Serialization does not include source ---

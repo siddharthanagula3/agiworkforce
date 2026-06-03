@@ -221,7 +221,12 @@ pub fn restore_into_session(session: &mut AgentSession, conv: &SavedConversation
         .map(|m| Message::text(&m.role, &m.content))
         .collect();
 
-    session.switch_model(&conv.model);
+    if let Err(err) = session.switch_model(&conv.model) {
+        eprintln!(
+            "Saved conversation model `{}` is no longer recognized; keeping current model. {}",
+            conv.model, err
+        );
+    }
     session.total_input_tokens = conv.total_input_tokens;
     session.total_output_tokens = conv.total_output_tokens;
 
@@ -479,7 +484,7 @@ mod tests {
         let dir = tmp.path();
 
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-4-6", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
         session
             .messages
             .push(Message::text("user", "What is Rust?"));
@@ -494,7 +499,7 @@ mod tests {
         let loaded = load_conversation_in_dir(&id, dir).unwrap();
 
         assert_eq!(loaded.id, id);
-        assert_eq!(loaded.model, "claude-opus-4-6");
+        assert_eq!(loaded.model, "claude-opus-4-8");
         assert_eq!(loaded.total_input_tokens, 10);
         assert_eq!(loaded.total_output_tokens, 25);
         // system + user + assistant = 3 messages
@@ -619,7 +624,7 @@ mod tests {
     #[test]
     fn test_export_as_json_basic() {
         let ctx = test_ctx();
-        let mut session = AgentSession::new("claude-opus-4-6", &ctx, None);
+        let mut session = AgentSession::new("claude-opus-4-8", &ctx, None);
         session.messages.push(Message::text("user", "Hello"));
         session
             .messages
@@ -631,7 +636,7 @@ mod tests {
         let json_str = export_as_json(&session).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
-        assert_eq!(parsed["model"], "claude-opus-4-6");
+        assert_eq!(parsed["model"], "claude-opus-4-8");
         assert_eq!(parsed["total_input_tokens"], 10);
         assert_eq!(parsed["total_output_tokens"], 20);
         assert_eq!(parsed["turn_count"], 1);
@@ -730,7 +735,7 @@ mod tests {
         let conv = SavedConversation {
             id: "20260317_120000".to_string(),
             title: "Test restore".to_string(),
-            model: "claude-sonnet-4-20250514".to_string(),
+            model: "claude-sonnet-4-6".to_string(),
             created_at: "2026-03-17T12:00:00Z".to_string(),
             updated_at: "2026-03-17T12:00:00Z".to_string(),
             messages: vec![
@@ -763,7 +768,7 @@ mod tests {
         let mut session = AgentSession::new("gpt-5.5", &ctx, None);
         restore_into_session(&mut session, &conv);
 
-        assert_eq!(session.model, "claude-sonnet-4-20250514");
+        assert_eq!(session.model, "claude-sonnet-4-6");
         assert_eq!(session.total_input_tokens, 100);
         assert_eq!(session.total_output_tokens, 200);
         // 2 user messages = 2 turns

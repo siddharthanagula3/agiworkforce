@@ -9,6 +9,7 @@ import { immer } from 'zustand/middleware/immer';
 import { useShallow } from 'zustand/react/shallow';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import {
   getPickerModels,
   getModelMetadataById,
@@ -566,12 +567,14 @@ export const useChatStore = create<ChatStore>()(
             const startTime = Date.now();
 
             // Call the LLM completions API with streaming
+            const headers = await addCsrfHeaders({
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            });
+
             const response = await fetch('/api/llm/v1/chat/completions', {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
+              headers,
               body: JSON.stringify({
                 model: modelId,
                 messages: messageHistory,
@@ -590,15 +593,22 @@ export const useChatStore = create<ChatStore>()(
 
             if (!response.ok) {
               const errorData = await response.json().catch(() => ({}));
+              const serverError = (errorData as { error?: { code?: string; message?: string } })
+                .error;
               const errorMessage =
                 response.status === 401
                   ? 'Session expired. Please sign in again.'
                   : response.status === 402
                     ? 'Insufficient credits. Please add credits to continue.'
-                    : response.status === 429
-                      ? 'Rate limit reached. Please wait a moment and try again.'
-                      : (errorData as { error?: { message?: string } }).error?.message ||
-                        `Request failed (${response.status})`;
+                    : serverError?.code === 'website_trial_prompt_limit_reached'
+                      ? (serverError.message ??
+                        'You have used the 3 free Auto Economy prompts for this account.')
+                      : serverError?.code === 'free_trial_auto_economy_only' ||
+                          serverError?.code === 'free_trial_feature_unavailable'
+                        ? (serverError.message ?? 'Auto Economy is required for free trial access.')
+                        : response.status === 429
+                          ? 'Rate limit reached. Please wait a moment and try again.'
+                          : serverError?.message || `Request failed (${response.status})`;
               throw new Error(errorMessage);
             }
 

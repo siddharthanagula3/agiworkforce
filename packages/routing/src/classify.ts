@@ -89,7 +89,7 @@ const RE_WHITESPACE = /\s+/;
 
 const TOKENS_PER_CHAR_GPT = 1 / 3.8;
 const TOKENS_PER_CHAR_CLAUDE = 1 / 3.5;
-const TOKENS_PER_CHAR_CLAUDE_OPUS_4_7 = (1 / 3.5) * 1.18;
+const TOKENS_PER_CHAR_CLAUDE_OPUS_4 = (1 / 3.5) * 1.18;
 const TOKENS_PER_CHAR_GEMINI = 1 / 4.0;
 const TOKENS_PER_CHAR_DEEPSEEK = 1 / 3.4;
 const TOKENS_PER_CHAR_DEFAULT = 1 / 3.5;
@@ -99,7 +99,7 @@ const TOKENS_PER_CHAR_DEFAULT = 1 / 3.5;
  *
  * `model` is matched as a case-insensitive prefix:
  *   - `gpt-4o*`, `gpt-5*` → GPT family.
- *   - `claude-opus-4-7*` → Opus 4.7 (+18% inflation).
+ *   - `claude-opus-4*` → Opus 4 family (+18% inflation).
  *   - any other `claude-*` → other Claude family.
  *   - `gemini-*` → Gemini family.
  *   - `deepseek-*` → DeepSeek family.
@@ -117,9 +117,9 @@ export function estimateTokens(text: string, model?: string): number {
 
   // Order matters: the more specific Opus 4.x prefix BEFORE the generic
   // `claude` family check. Version-resilient (matches any claude-opus-4.x —
-  // e.g. 4.6/4.7/4.8) so it does not drift when the catalog flagship changes.
+  // e.g. 4.8) so it does not drift when the catalog flagship changes.
   if (id.startsWith('claude-opus-4')) {
-    return Math.ceil(charCount * TOKENS_PER_CHAR_CLAUDE_OPUS_4_7);
+    return Math.ceil(charCount * TOKENS_PER_CHAR_CLAUDE_OPUS_4);
   }
 
   if (id.startsWith('gpt-4o') || id.startsWith('gpt-5')) {

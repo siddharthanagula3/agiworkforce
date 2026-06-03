@@ -3,8 +3,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   MessageSquare,
-  Zap,
-  Code2,
   Plus,
   Search,
   FolderOpen,
@@ -18,19 +16,40 @@ import {
   ChevronDown,
   Settings,
 } from 'lucide-react';
-import { useChatStore } from '@/stores/unified/chat/chatStore';
-import type { ConversationSummary } from '@/stores/unified/chat/types';
 import { useBillingStore } from '@/stores/unified/auth';
+import type { ChatHostConversation } from '@agiworkforce/unified-chat';
 import type { V3Mode } from './WebShellV3';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
 type RecentsGroup = {
   label: string;
-  items: ConversationSummary[];
+  items: SidebarConversation[];
 };
 
-function groupConversations(convos: ConversationSummary[]): RecentsGroup[] {
+type SidebarConversation = {
+  id: string;
+  title: string;
+  updatedAt: Date;
+};
+
+function toDate(value: string | Date | undefined): Date {
+  if (value instanceof Date) return value;
+  const parsed = value ? new Date(value) : new Date();
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
+function normalizeConversations(conversations: ChatHostConversation[]): SidebarConversation[] {
+  return conversations
+    .filter((conversation) => !conversation.archived)
+    .map((conversation) => ({
+      id: conversation.id,
+      title: conversation.title,
+      updatedAt: toDate(conversation.updatedAt ?? conversation.createdAt),
+    }));
+}
+
+function groupConversations(convos: SidebarConversation[]): RecentsGroup[] {
   const now = Date.now();
   const HOUR = 3_600_000;
   const DAY = 86_400_000;
@@ -122,7 +141,7 @@ export interface WebSidebarProps {
   onNavigateView?: (view: string) => void;
   onJumpConversation?: (id: string) => void;
   onOpenAccountMenu?: () => void;
-  accountMenuOpen?: boolean;
+  conversations?: ChatHostConversation[];
 }
 
 export function WebSidebar({
@@ -133,16 +152,19 @@ export function WebSidebar({
   onNavigateView,
   onJumpConversation,
   onOpenAccountMenu,
-  accountMenuOpen = false,
+  conversations: hostConversations = [],
 }: WebSidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [showAll, setShowAll] = useState(false);
 
-  const conversations = useChatStore((s) => s.conversations);
   const user = useBillingStore((s) => s.user);
   const sidebarUserMeta = (user?.['user_metadata'] as Record<string, unknown> | undefined) ?? {};
   const subscription = useBillingStore((s) => s.subscription);
   const planDisplayName = subscription?.display_name ?? 'Free';
+  const conversations = useMemo(
+    () => normalizeConversations(hostConversations),
+    [hostConversations],
+  );
 
   const groups = useMemo(() => groupConversations(conversations), [conversations]);
   const displayGroups = useMemo(() => {
@@ -252,38 +274,34 @@ export function WebSidebar({
             padding: 2,
           }}
         >
-          {(
-            [
-              { id: 'chat' as V3Mode, label: 'Chat', icon: MessageSquare },
-              { id: 'cowork' as V3Mode, label: 'Cowork', icon: Zap },
-              { id: 'code' as V3Mode, label: 'Code', icon: Code2 },
-            ] as const
-          ).map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => onModeChange(id)}
-              data-active={mode === id}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
-                padding: '4px 6px',
-                borderRadius: 6,
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: 12,
-                fontWeight: mode === id ? 600 : 400,
-                background: mode === id ? 'var(--chat-surface-elevated)' : 'transparent',
-                color: mode === id ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
-                transition: 'background 120ms, color 120ms',
-              }}
-            >
-              <Icon size={12} />
-              <span>{label}</span>
-            </button>
-          ))}
+          {([{ id: 'chat' as V3Mode, label: 'Chat', icon: MessageSquare }] as const).map(
+            ({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => onModeChange(id)}
+                data-active={mode === id}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 4,
+                  padding: '4px 6px',
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 12,
+                  fontWeight: mode === id ? 600 : 400,
+                  background: mode === id ? 'var(--chat-surface-elevated)' : 'transparent',
+                  color: mode === id ? 'var(--chat-text-primary)' : 'var(--chat-text-secondary)',
+                  transition: 'background 120ms, color 120ms',
+                }}
+              >
+                <Icon size={12} />
+                <span>{label}</span>
+              </button>
+            ),
+          )}
         </div>
       )}
 
@@ -530,7 +548,7 @@ export function WebSidebar({
       >
         <button
           onClick={onOpenAccountMenu}
-          data-open={accountMenuOpen}
+          title="Account settings"
           style={{
             width: '100%',
             display: 'flex',

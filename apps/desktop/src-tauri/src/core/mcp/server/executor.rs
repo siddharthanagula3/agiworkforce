@@ -130,10 +130,52 @@ impl DesktopMcpServerExecutor {
         )))
     }
 
+    async fn validate_mcp_server_tool_policy(
+        &self,
+        tool_name: &str,
+        arguments: &HashMap<String, Value>,
+    ) -> Option<McpServerToolOutcome> {
+        let Some(confirmation_state) =
+            self.app_handle
+                .try_state::<crate::sys::commands::tool_confirmation::ToolConfirmationState>()
+        else {
+            tracing::error!(
+                "[SECURITY][MCP] ToolConfirmationState unavailable — denying {}",
+                tool_name
+            );
+            return Some(self.outcome_from_error(
+                "MCP tool execution denied: security validation unavailable.".to_string(),
+            ));
+        };
+
+        let guard = confirmation_state.tool_guard();
+        let params = serde_json::to_value(arguments).unwrap_or_else(|_| json!({}));
+        if let Err(error) = guard.validate_tool_call(tool_name, &params).await {
+            tracing::warn!(
+                "[SECURITY][MCP] ToolGuard rejected MCP server tool {}: {}",
+                tool_name,
+                error
+            );
+            return Some(self.outcome_from_error(format!(
+                "MCP tool '{}' rejected by ToolGuard: {}",
+                tool_name, error
+            )));
+        }
+
+        None
+    }
+
     async fn execute_chat(
         &self,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
+        if let Some(outcome) = self
+            .validate_mcp_server_tool_policy("agi_chat", &arguments)
+            .await
+        {
+            return Ok(outcome);
+        }
+
         let message = match self.require_string_argument(&arguments, "message") {
             Ok(message) => message,
             Err(outcome) => return Ok(outcome),
@@ -142,7 +184,19 @@ impl DesktopMcpServerExecutor {
         let model = self
             .optional_string_argument(&arguments, "model")
             .unwrap_or_else(|| "auto".to_string());
-        let system_prompt = self.optional_string_argument(&arguments, "system_prompt");
+        if model != "auto" {
+            return Ok(self.outcome_from_error(
+                "Explicit model selection is disabled for external MCP agi_chat calls. Use auto routing or configure the desktop app model settings.".to_string(),
+            ));
+        }
+        if self
+            .optional_string_argument(&arguments, "system_prompt")
+            .is_some()
+        {
+            return Ok(self.outcome_from_error(
+                "Custom system prompts are disabled for external MCP agi_chat calls.".to_string(),
+            ));
+        }
         let explicit_model_selection = model != "auto";
 
         let request = ChatSendMessageRequest {
@@ -171,7 +225,7 @@ impl DesktopMcpServerExecutor {
             enable_agent_mode: Some(false),
             prefer_cloud_credits: false,
             frontend_message_id: None,
-            custom_instructions: system_prompt,
+            custom_instructions: None,
             project_folder: None,
             model_capabilities: None,
             incognito: Some(true),
@@ -226,6 +280,13 @@ impl DesktopMcpServerExecutor {
         &self,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
+        if let Some(outcome) = self
+            .validate_mcp_server_tool_policy("agi_execute_skill", &arguments)
+            .await
+        {
+            return Ok(outcome);
+        }
+
         let skill_name = match self.require_string_argument(&arguments, "skill_name") {
             Ok(skill_name) => skill_name,
             Err(outcome) => return Ok(outcome),
@@ -469,6 +530,13 @@ impl DesktopMcpServerExecutor {
         &self,
         arguments: HashMap<String, Value>,
     ) -> Result<McpServerToolOutcome, String> {
+        if let Some(outcome) = self
+            .validate_mcp_server_tool_policy("agi_run_task", &arguments)
+            .await
+        {
+            return Ok(outcome);
+        }
+
         let task = match self.require_string_argument(&arguments, "task") {
             Ok(task) => task,
             Err(outcome) => return Ok(outcome),

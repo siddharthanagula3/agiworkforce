@@ -1,8 +1,8 @@
 //! Ratatui TUI feature — full interactive terminal UI (~100K LOC).
 //!
 //! The live implementation lives at crate::tui (apps/cli/src/tui/).
-//! This module is a placeholder. The tui/ directory is EXCLUDED from the
-//! Phase 6 pilot moves — it is too active (12K line chatwidget/tests.rs,
-//! ongoing snapshot tests) to safely reorganise incrementally.
+//! This module is a compatibility anchor for the Phase 6 feature layout. The
+//! tui/ directory is excluded from the pilot moves because it is too active to
+//! safely reorganise incrementally.
 //!
-//! Currently empty — migrate only after all other features stabilise.
+//! Migrate only after all other features stabilise.

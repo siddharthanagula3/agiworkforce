@@ -11,10 +11,14 @@
 //! then calls `test_run` again.
 
 use serde::{Deserialize, Serialize};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 use tracing::{debug, info, warn};
+
+use crate::sys::commands::settings::SettingsState;
+use crate::sys::security::command_validator::reject_if_root;
 
 // ─────────────────────────────────────────────
 // Types
@@ -142,12 +146,21 @@ fn detect_runner(root: &Path) -> TestRunner {
 /// * `timeout_secs`  — Timeout in seconds (default 120).
 #[tauri::command]
 pub async fn test_run(
+    settings_state: tauri::State<'_, SettingsState>,
     project_root: Option<String>,
     runner: Option<String>,
     filter: Option<String>,
     timeout_secs: Option<u64>,
 ) -> Result<TestRunResult, String> {
-    let root = resolve_root(project_root);
+    if let Err(e) = reject_if_root() {
+        return Err(e.to_string());
+    }
+
+    let allowed_directories = {
+        let settings = settings_state.settings.lock().await;
+        settings.allowed_directories.clone()
+    };
+    let root = resolve_authorized_root(project_root, &allowed_directories)?;
     let timeout = Duration::from_secs(timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS));
 
     let runner_enum = match runner.as_deref() {
@@ -182,7 +195,7 @@ pub async fn test_run(
 /// Detect which test runner would be used for a project.
 #[tauri::command]
 pub async fn test_detect_runner(project_root: Option<String>) -> Result<String, String> {
-    let root = resolve_root(project_root);
+    let root = resolve_root(project_root)?;
     let runner = tokio::task::spawn_blocking(move || detect_runner(&root))
         .await
         .map_err(|e| format!("Detect task panicked: {}", e))?;
@@ -771,6 +784,7 @@ fn run_bun_test(root: &Path, filter: Option<&str>, timeout: Duration) -> TestRun
 // Helpers
 // ─────────────────────────────────────────────
 
+#[derive(Debug)]
 struct CommandOutput {
     raw: String,
     status_ok: bool,
@@ -791,49 +805,101 @@ fn timed_command(
 
     debug!("[test_runner] running: {} {:?} in {:?}", cmd, args, cwd);
 
-    // We use std::process::Command (blocking). The calling function already
-    // runs inside spawn_blocking so this is fine.
-    // Spawn the child process and enforce the timeout via a background thread.
-    let child = Command::new(cmd)
+    let mut command = Command::new(cmd);
+    configure_process_group(&mut command);
+    command
         .args(args)
         .current_dir(cwd)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    let mut child = command
         .spawn()
         .map_err(|e| format!("Failed to spawn '{}': {}", cmd, e))?;
 
-    // Use a channel to get the output from a worker thread, then select with timeout.
-    let (tx, rx) = std::sync::mpsc::channel::<Result<std::process::Output, String>>();
-    let cmd_owned = cmd.to_string();
-    std::thread::spawn(move || {
-        let result = child
-            .wait_with_output()
-            .map_err(|e| format!("Failed to wait for '{}': {}", cmd_owned, e));
-        let _ = tx.send(result);
+    let stdout_handle = child.stdout.take().map(|mut stdout| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = stdout.read_to_end(&mut buf);
+            buf
+        })
+    });
+    let stderr_handle = child.stderr.take().map(|mut stderr| {
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let _ = stderr.read_to_end(&mut buf);
+            buf
+        })
     });
 
-    let output = match rx.recv_timeout(timeout) {
-        Ok(Ok(out)) => out,
-        Ok(Err(e)) => return Err(e),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+    let start = Instant::now();
+    let status = loop {
+        if let Some(status) = child
+            .try_wait()
+            .map_err(|e| format!("Failed to poll '{}': {}", cmd, e))?
+        {
+            break status;
+        }
+
+        if start.elapsed() >= timeout {
+            terminate_child(&mut child);
+            let _ = join_reader(stdout_handle);
+            let _ = join_reader(stderr_handle);
             return Err(format!("Command timed out after {}s", timeout.as_secs()));
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            return Err(format!(
-                "Command '{}' channel disconnected unexpectedly",
-                cmd
-            ));
-        }
+
+        std::thread::sleep(Duration::from_millis(25));
     };
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let stdout = String::from_utf8_lossy(&join_reader(stdout_handle)).to_string();
+    let stderr = String::from_utf8_lossy(&join_reader(stderr_handle)).to_string();
     let raw = format!("{}\n{}", stdout, stderr);
 
     Ok(CommandOutput {
         raw,
-        status_ok: output.status.success(),
+        status_ok: status.success(),
     })
+}
+
+#[cfg(unix)]
+fn configure_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_process_group(_command: &mut Command) {}
+
+fn join_reader(handle: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    handle
+        .and_then(|handle| handle.join().ok())
+        .unwrap_or_default()
+}
+
+fn terminate_child(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let process_group = format!("-{}", child.id());
+        let _ = Command::new("kill")
+            .args(["-TERM", &process_group])
+            .status();
+
+        for _ in 0..10 {
+            if child.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+
+        let _ = Command::new("kill")
+            .args(["-KILL", &process_group])
+            .status();
+    }
+
+    if child.try_wait().ok().flatten().is_none() {
+        let _ = child.kill();
+    }
+    let _ = child.wait();
 }
 
 fn runner_unavailable(runner: &str, error: &str, elapsed: u64) -> TestRunResult {
@@ -854,10 +920,7 @@ fn runner_unavailable(runner: &str, error: &str, elapsed: u64) -> TestRunResult 
 fn truncate_output(raw: &str) -> String {
     if raw.len() > MAX_OUTPUT_BYTES {
         let safe_end = crate::core::agi::floor_char_boundary(raw, MAX_OUTPUT_BYTES);
-        format!(
-            "{}\n\n[... output truncated at 64 KB]",
-            &raw[..safe_end]
-        )
+        format!("{}\n\n[... output truncated at 64 KB]", &raw[..safe_end])
     } else {
         raw.to_string()
     }
@@ -884,18 +947,99 @@ fn extract_count(line: &str, keyword: &str) -> usize {
     0
 }
 
-fn resolve_root(root_hint: Option<String>) -> PathBuf {
+fn resolve_authorized_root(
+    root_hint: Option<String>,
+    allowed_directories: &[String],
+) -> Result<PathBuf, String> {
+    let root = resolve_root(root_hint)?;
+
+    if root.parent().is_none() {
+        return Err("Refusing to run tests from the filesystem root".to_string());
+    }
+
+    if allowed_directories.is_empty() {
+        return Err("No allowed directories configured for test_run".to_string());
+    }
+
+    let allowed_dirs = allowed_directories
+        .iter()
+        .map(|dir| std::fs::canonicalize(dir).unwrap_or_else(|_| PathBuf::from(dir)))
+        .collect::<Vec<_>>();
+    let root_str = root.to_string_lossy();
+    if !crate::sys::commands::file_ops::is_path_allowed(&root_str, &allowed_dirs) {
+        return Err(format!(
+            "Project root is outside allowed directories: {}",
+            root.display()
+        ));
+    }
+
+    Ok(root)
+}
+
+fn resolve_root(root_hint: Option<String>) -> Result<PathBuf, String> {
     if let Some(r) = root_hint {
-        let p = PathBuf::from(&r);
-        if p.exists() && p.is_dir() {
-            return p;
-        }
+        return canonical_project_root(&r);
     }
     if let Ok(proj) = std::env::var("AGI_PROJECT_FOLDER") {
-        let p = PathBuf::from(&proj);
-        if p.exists() && p.is_dir() {
-            return p;
-        }
+        return canonical_project_root(&proj);
     }
-    std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
+    let cwd = std::env::current_dir().map_err(|e| format!("Failed to get current dir: {}", e))?;
+    canonical_project_root(
+        cwd.to_str()
+            .ok_or_else(|| "Current directory contains invalid UTF-8".to_string())?,
+    )
+}
+
+fn canonical_project_root(path: &str) -> Result<PathBuf, String> {
+    let canonical = crate::sys::commands::file_ops::validate_path_security(path)?;
+    if !canonical.is_dir() {
+        return Err(format!("Project root is not a directory: {}", path));
+    }
+    Ok(canonical)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_authorized_root, timed_command};
+    use std::fs;
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_run_root_must_be_inside_allowed_directories() {
+        let allowed = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+
+        let err = resolve_authorized_root(
+            Some(outside.path().to_string_lossy().to_string()),
+            &[allowed.path().to_string_lossy().to_string()],
+        )
+        .unwrap_err();
+
+        assert!(err.contains("outside allowed directories"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn timed_command_kills_process_on_timeout() {
+        let dir = tempdir().unwrap();
+        let marker = dir.path().join("timeout-marker");
+        let marker_quoted = marker.to_string_lossy().replace('\'', "'\\''");
+        let script = format!("sleep 1; touch '{}'", marker_quoted);
+
+        let err = timed_command(
+            "sh",
+            &["-c", &script],
+            dir.path(),
+            Duration::from_millis(100),
+        )
+        .unwrap_err();
+        assert!(err.contains("timed out"));
+
+        std::thread::sleep(Duration::from_millis(1_200));
+        assert!(
+            fs::metadata(&marker).is_err(),
+            "timed-out process should have been killed before touching marker"
+        );
+    }
 }

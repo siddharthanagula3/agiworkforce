@@ -514,7 +514,7 @@ export class GrokProvider {
   }
 
   /**
-   * Get available models (Jan 2026 - Grok 4 series)
+   * Get available models (Jan 2026 - Grok 4.3 series)
    * Uses shared config from @shared/config/supported-models.ts
    */
   static getAvailableModels(): string[] {
@@ -538,9 +538,8 @@ export class GrokProvider {
   /**
    * Get models optimized for tool calling.
    *
-   * NOTE: Several legacy Grok IDs (grok-4-1-fast-*, grok-4-fast-*, grok-4-0709,
-   * grok-code-fast-1, grok-3) deprecate 2026-05-15. Replacement is grok-4.3
-   * (always-on chain-of-thought, $1.25/$2.50, 1M ctx). See plan §14 follow-up #1.
+   * NOTE: Legacy Grok 4 fast aliases route through catalog canonicalization.
+   * The user-facing agent list exposes only the current catalog model.
    */
   static getAgentModels(): string[] {
     return ['grok-4.3'];

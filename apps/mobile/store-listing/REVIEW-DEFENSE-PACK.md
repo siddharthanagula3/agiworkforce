@@ -316,7 +316,7 @@ the 5.1.2(i) consent modal.
 `FEATURES.imageGen = false` in `apps/mobile/lib/v1FeatureFlags.ts`.
 
 There is **no image generation surface in the v1 binary**. No Stable
-Diffusion, no DALL-E, no Ideogram, no model-generated image API is
+Diffusion, no GPT Image, no Ideogram, no model-generated image API is
 called. The flag is a compile-time constant; the UI that would invoke
 image generation is not reachable by any navigation path in v1.
 
@@ -324,7 +324,7 @@ Apple Guideline 1.1.1 (objectionable content) and Google Play's
 Inappropriate Content policy require image generation apps to
 prevent generation of CSAM and other harmful content. These
 requirements apply to v1.1+ when image generation ships. At that
-point, provider-side filters (OpenAI DALL-E's built-in classifier,
+point, provider-side filters (OpenAI GPT Image built-in classifier,
 Anthropic's safety layers) plus AGI's own system-prompt guardrails
 will be the implementation layer.
 

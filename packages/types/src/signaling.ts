@@ -13,7 +13,8 @@
  *
  * const options: SignalingClientOptions = {
  *   wsUrl: 'ws://localhost:4000',
- *   code: '123456',
+ *   code: 'ABCD1234WXYZ',
+ *   pairToken: '<role-specific token from the pairing response>',
  *   role: 'desktop',
  *   onEvent: (event) => {
  *     if (event.type === 'peer_ready') {
@@ -97,6 +98,14 @@ export type SignalingEvent =
       type: 'peer_left';
       /** Role of the peer that disconnected */
       role: SignalingRole;
+      /** Optional server-supplied disconnect reason */
+      reason?: 'disconnect' | 'error' | 'timeout' | 'terminated';
+    }
+  /** Server acknowledgement for an application-level heartbeat */
+  | {
+      type: 'heartbeat_ack';
+      /** Server timestamp, in Unix epoch milliseconds */
+      timestamp: number;
     }
   /** The pairing session has expired (5-minute TTL by default) */
   | { type: 'session_expired' }
@@ -149,8 +158,10 @@ export type SignalKind = 'offer' | 'answer' | 'ice' | 'control';
 export interface SignalingClientOptions {
   /** WebSocket URL of the signaling server */
   wsUrl: string;
-  /** 6-digit pairing code for the session */
+  /** Pairing code for the session */
   code: string;
+  /** Role-specific HMAC token issued by the signaling server for this pairing. */
+  pairToken: string;
   /** Role of this client in the peer connection */
   role: SignalingRole;
   /** Optional metadata to share with peers (e.g., device info, capabilities) */

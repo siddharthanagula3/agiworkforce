@@ -358,7 +358,7 @@ Rules:
         )
     };
 
-    // Prefer GLM-4.7-Flash for Gemini-style ghost text prompt completion.
+    // Prefer the current GLM catalog model for Gemini-style ghost text prompt completion.
     // In this app, cloud providers are typically accessed via ManagedCloud (Vercel-backed API),
     // so prefer ManagedCloud + model hint first, then direct Zhipu if available, while keeping
     // the normal router-generated fallbacks.
@@ -367,8 +367,8 @@ Rules:
             0,
             RouteCandidate {
                 provider: Provider::ManagedCloud,
-                model: "glm-4.7-flash".to_string(),
-                reason: "prompt-completion-managed-cloud-glm-free",
+                model: "glm-5.1".to_string(),
+                reason: "prompt-completion-managed-cloud-glm-current",
                 strategy: None,
             },
         );
@@ -379,8 +379,8 @@ Rules:
             usize::from(has_managed_cloud),
             RouteCandidate {
                 provider: Provider::Zhipu,
-                model: "glm-4.7-flash".to_string(),
-                reason: "prompt-completion-zhipu-free",
+                model: "glm-5.1".to_string(),
+                reason: "prompt-completion-zhipu-current",
                 strategy: None,
             },
         );

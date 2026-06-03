@@ -123,6 +123,71 @@ pub fn parse_paywall_body(body: &str) -> Option<CliError> {
     Some(CliError::paywall(feature, required_tier, reason))
 }
 
+fn value_kind(value: &Value) -> &'static str {
+    match value {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(_) => "number",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    }
+}
+
+fn empty_tool_arguments() -> Value {
+    Value::Object(serde_json::Map::new())
+}
+
+fn invalid_tool_arguments(
+    tool_name: &str,
+    error: impl Into<String>,
+    raw: impl Into<String>,
+) -> Value {
+    let raw = raw.into().chars().take(2_000).collect::<String>();
+    let mut payload = serde_json::Map::new();
+    payload.insert(
+        super::INVALID_TOOL_ARGS_MARKER.to_string(),
+        Value::Bool(true),
+    );
+    payload.insert(
+        "tool_name".to_string(),
+        Value::String(tool_name.to_string()),
+    );
+    payload.insert("error".to_string(), Value::String(error.into()));
+    payload.insert("raw".to_string(), Value::String(raw));
+    Value::Object(payload)
+}
+
+fn parse_tool_arguments_json(tool_name: &str, raw: &str) -> Value {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return empty_tool_arguments();
+    }
+
+    match serde_json::from_str::<Value>(trimmed) {
+        Ok(Value::Object(map)) => Value::Object(map),
+        Ok(other) => invalid_tool_arguments(
+            tool_name,
+            format!("expected JSON object, got {}", value_kind(&other)),
+            trimmed,
+        ),
+        Err(error) => invalid_tool_arguments(tool_name, error.to_string(), trimmed),
+    }
+}
+
+fn normalize_tool_arguments_value(tool_name: &str, value: Option<&Value>) -> Value {
+    match value {
+        Some(Value::String(raw)) => parse_tool_arguments_json(tool_name, raw),
+        Some(Value::Object(map)) => Value::Object(map.clone()),
+        Some(Value::Null) | None => empty_tool_arguments(),
+        Some(other) => invalid_tool_arguments(
+            tool_name,
+            format!("expected JSON object, got {}", value_kind(other)),
+            other.to_string(),
+        ),
+    }
+}
+
 fn anthropic_tools_json(tool_defs: &[ToolDefinition]) -> Vec<Value> {
     let last_idx = tool_defs.len().saturating_sub(1);
     tool_defs
@@ -274,6 +339,8 @@ pub async fn stream_completion(
             let base_url = config
                 .base_url("ollama")
                 .unwrap_or_else(|| "http://localhost:11434".to_string());
+            crate::local_models::ensure_local_model_available(&client, "ollama", &base_url, model)
+                .await?;
             stream_ollama(
                 &client,
                 &base_url,
@@ -304,9 +371,13 @@ pub async fn stream_completion(
             )
             .await
         }
-        Provider::OpenAICompatible {
-            name: _, base_url, ..
-        } => {
+        Provider::OpenAICompatible { name, base_url, .. } => {
+            if *name == "lmstudio" {
+                crate::local_models::ensure_local_model_available(
+                    &client, "lmstudio", base_url, model,
+                )
+                .await?;
+            }
             stream_openai_compatible(
                 &client,
                 api_key.as_deref().unwrap_or_default(),
@@ -529,8 +600,10 @@ async fn stream_anthropic(
                         "content_block_stop" => {
                             // If we were accumulating a tool call, finalize it
                             if !current_tool_name.is_empty() {
-                                let arguments = serde_json::from_str(&current_tool_input)
-                                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                                let arguments = parse_tool_arguments_json(
+                                    &current_tool_name,
+                                    &current_tool_input,
+                                );
                                 tool_calls.push(ToolCallResponse {
                                     id: current_tool_id.clone(),
                                     name: current_tool_name.clone(),
@@ -980,16 +1053,7 @@ async fn stream_ollama(
                                 .and_then(|n| n.as_str())
                                 .unwrap_or_default()
                                 .to_string();
-                            let args = func
-                                .get("arguments")
-                                .and_then(|a| {
-                                    if a.is_string() {
-                                        serde_json::from_str(a.as_str().unwrap_or("{}")).ok()
-                                    } else {
-                                        Some(a.clone())
-                                    }
-                                })
-                                .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                            let args = normalize_tool_arguments_value(&name, func.get("arguments"));
                             let id = format!("ollama_{}", tool_calls.len());
                             tool_calls.push(ToolCallResponse {
                                 id,
@@ -1281,8 +1345,7 @@ async fn parse_openai_sse_stream(
     for idx in sorted_indices {
         if let Some((id, name, args_json)) = tool_call_buffers.remove(&idx) {
             if !name.is_empty() {
-                let arguments = serde_json::from_str(&args_json)
-                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+                let arguments = parse_tool_arguments_json(&name, &args_json);
                 tool_calls.push(ToolCallResponse {
                     id,
                     name,

@@ -1,8 +1,8 @@
 use chrono::Utc;
 
+use crate::data::cloud_sync;
 use crate::data::db::models::{Message, MessageRole};
 use crate::data::db::repository;
-use crate::data::cloud_sync;
 
 use super::{AppDatabase, ConversationStats};
 
@@ -138,8 +138,8 @@ pub(super) fn compute_or_skip_stats(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::db::{repository, Database};
     use crate::data::cloud_sync::test_take_spawn_count;
+    use crate::data::db::{repository, Database};
     use std::sync::Arc;
 
     fn make_test_db() -> (Database, AppDatabase) {

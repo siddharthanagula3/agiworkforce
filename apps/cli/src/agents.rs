@@ -56,7 +56,9 @@ impl AgentDefinition {
     pub fn apply_to_session(&self, session: &mut crate::agent::AgentSession) {
         if let Some(ref model) = self.model {
             if !model.is_empty() {
-                session.switch_model(model);
+                if let Err(err) = session.switch_model(model) {
+                    eprintln!("Agent `{}` model override ignored: {}", self.name, err);
+                }
             }
         }
         if let Some(ref tools) = self.tools {
@@ -79,7 +81,9 @@ impl AgentDefinition {
             let mode = match perm.as_str() {
                 "plan" => Some(PermissionMode::Plan),
                 "acceptEdits" | "accept-edits" => Some(PermissionMode::AcceptEdits),
-                "bypassPermissions" | "bypass-permissions" => Some(PermissionMode::BypassPermissions),
+                "bypassPermissions" | "bypass-permissions" => {
+                    Some(PermissionMode::BypassPermissions)
+                }
                 "dontAsk" | "dont-ask" => Some(PermissionMode::DontAsk),
                 _ => None,
             };
@@ -148,9 +152,14 @@ pub fn discover_agents() -> Vec<AgentDefinition> {
         .load_all(std::env::current_dir().ok().as_deref())
         .is_ok()
     {
-        for path in plugins_mgr.agent_paths() {
+        for entry in plugins_mgr.agent_path_entries() {
+            let plugin_root = entry.plugin_root;
+            let path = entry.path;
+            if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &path) {
+                continue;
+            }
             if path.is_dir() {
-                load_agents_from_dir(&path, &mut agents);
+                load_agents_from_plugin_dir(&path, &plugin_root, &mut agents);
             } else if path.extension().and_then(|e| e.to_str()) == Some("md") {
                 if let Ok(agent) = load_agent(&path) {
                     agents.push(agent);
@@ -165,6 +174,10 @@ pub fn discover_agents() -> Vec<AgentDefinition> {
 /// Load agent definition markdown files from a directory.
 fn load_agents_from_dir(dir: &Path, agents: &mut Vec<AgentDefinition>) {
     load_agents_from_dir_depth(dir, agents, 0);
+}
+
+fn load_agents_from_plugin_dir(dir: &Path, plugin_root: &Path, agents: &mut Vec<AgentDefinition>) {
+    load_agents_from_plugin_dir_depth(dir, plugin_root, agents, 0);
 }
 
 fn load_agents_from_dir_depth(dir: &Path, agents: &mut Vec<AgentDefinition>, depth: usize) {
@@ -183,6 +196,41 @@ fn load_agents_from_dir_depth(dir: &Path, agents: &mut Vec<AgentDefinition>, dep
     for path in paths {
         if path.is_dir() {
             load_agents_from_dir_depth(&path, agents, depth + 1);
+            continue;
+        }
+
+        if path.extension().and_then(|e| e.to_str()) == Some("md") {
+            if let Ok(agent) = load_agent(&path) {
+                agents.push(agent);
+            }
+        }
+    }
+}
+
+fn load_agents_from_plugin_dir_depth(
+    dir: &Path,
+    plugin_root: &Path,
+    agents: &mut Vec<AgentDefinition>,
+    depth: usize,
+) {
+    if depth > 6 || !crate::plugins::plugin_path_stays_within_root(plugin_root, dir) {
+        return;
+    }
+
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let mut paths: Vec<PathBuf> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+
+    for path in paths {
+        if !crate::plugins::plugin_path_stays_within_root(plugin_root, &path) {
+            continue;
+        }
+        if path.is_dir() {
+            load_agents_from_plugin_dir_depth(&path, plugin_root, agents, depth + 1);
             continue;
         }
 
@@ -1076,7 +1124,9 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             session.allowed_tools.as_deref(),
             Some(&["read_file".to_string()][..])
         );
-        assert!(session.disallowed_tools.contains(&"run_command".to_string()));
+        assert!(session
+            .disallowed_tools
+            .contains(&"run_command".to_string()));
         assert_eq!(session.max_turns, Some(5));
         assert!(matches!(
             session.permission_mode,
@@ -1087,7 +1137,10 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             .messages
             .iter()
             .any(|m| m.role == "system" && m.text_content().contains("You are a test agent."));
-        assert!(has_prompt, "apply_to_session should inject system prompt message");
+        assert!(
+            has_prompt,
+            "apply_to_session should inject system prompt message"
+        );
     }
 
     #[test]
@@ -1099,7 +1152,7 @@ You are a research specialist. Your job is to analyze topics deeply."#;
         let agent = AgentDefinition {
             name: "model-override-agent".to_string(),
             description: "Test".to_string(),
-            model: Some("claude-opus-4-6".to_string()),
+            model: Some("claude-opus-4-8".to_string()),
             tools: None,
             disallowed_tools: None,
             max_turns: None,
@@ -1110,6 +1163,6 @@ You are a research specialist. Your job is to analyze topics deeply."#;
 
         agent.apply_to_session(&mut session);
         assert_ne!(session.model, initial_model);
-        assert_eq!(session.model, "claude-opus-4-6");
+        assert_eq!(session.model, "claude-opus-4-8");
     }
 }

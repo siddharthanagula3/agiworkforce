@@ -1,16 +1,13 @@
 //! Google Batch API Commands
 //!
-//! Provides Tauri IPC commands for asynchronous large-volume LLM processing
-//! via Google AI Batch API at 50% cost savings with 24-hour SLO.
+//! Provides Tauri IPC command shapes for asynchronous large-volume LLM
+//! processing through a Google Batch backend when one is connected.
 //!
-//! **NOTE**: This is currently a mock/stub implementation using in-memory storage.
-//! Job data is NOT persisted across app restarts. A future version will integrate
-//! with the real Google AI Batch API and persist job state to the local database.
+//! This desktop build does not connect directly to Google Batch. Local in-memory
+//! preview mode is opt-in via `AGI_ENABLE_LOCAL_IN_MEMORY_GOOGLE_BATCH=1` so IPC
+//! calls do not present preview data as a real remote backend.
 //!
-//! **FIX-028 (Sprint 5)** — every public IPC in this module now returns a
-//! `beta_warning` field in its response so the frontend can render a
-//! "BETA: in-memory only — jobs vanish on restart" banner. The IPC names
-//! and shapes are unchanged so existing UI bindings keep working.
+//! The IPC names and shapes are unchanged so existing UI bindings keep working.
 
 use chrono::Utc;
 use once_cell::sync::Lazy;
@@ -18,12 +15,30 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// In-memory store for batch jobs (for stub implementation)
+const LOCAL_PREVIEW_ENV: &str = "AGI_ENABLE_LOCAL_IN_MEMORY_GOOGLE_BATCH";
+
+/// In-memory store for explicitly enabled local preview jobs.
 static BATCH_JOBS: Lazy<Mutex<HashMap<String, BatchJob>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
 static EMBEDDINGS_JOBS: Lazy<Mutex<HashMap<String, EmbeddingsBatchJob>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+
+fn google_batch_local_preview_enabled() -> bool {
+    std::env::var(LOCAL_PREVIEW_ENV)
+        .map(|value| matches!(value.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn ensure_google_batch_backend_available() -> Result<(), String> {
+    if google_batch_local_preview_enabled() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Google Batch is not connected in this desktop build. Use the managed cloud batch backend, or set {LOCAL_PREVIEW_ENV}=1 for local in-memory preview mode."
+    ))
+}
 
 /// Generate a unique job name
 fn generate_job_name(prefix: &str) -> String {
@@ -42,19 +57,16 @@ fn get_timestamp() -> String {
 /// Google AI pricing (input, output, cache) per 1M tokens.
 ///
 /// Sourced from `models.json` via `models_config::get_pricing` so we don't
-/// drift from the canonical catalog (rule-models-json.md).  Cache pricing
-/// is approximated as 1/4 of input — Anthropic-style cache-read multiplier
-/// — until per-model cache pricing is added to the catalog.
+/// drift from the canonical catalog. The current desktop catalog stores
+/// input/output prices only, so cache price is zero until the catalog has an
+/// explicit Google cache field.
 fn get_model_pricing(model: &str) -> (f64, f64, f64) {
     use crate::core::llm::models_config::get_pricing;
     use crate::core::llm::Provider;
 
     let pricing = get_pricing(&Provider::Google, model);
     match pricing {
-        Some(p) => {
-            let cache_per_million = p.input_per_million * 0.25;
-            (p.input_per_million, p.output_per_million, cache_per_million)
-        }
+        Some(p) => (p.input_per_million, p.output_per_million, 0.0),
         None => {
             tracing::warn!(
                 model = %model,
@@ -160,6 +172,8 @@ pub struct EmbeddingResult {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EmbeddingsBatchJob {
     pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
     pub state: BatchJobState,
     pub model: String,
     pub create_time: String,
@@ -181,6 +195,8 @@ pub async fn google_batch_create(
     display_name: Option<String>,
     _output_type: Option<String>,
 ) -> Result<BatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     let request_count = requests.map(|r| r.len() as u32).unwrap_or(0);
 
     let job = BatchJob {
@@ -217,6 +233,8 @@ pub async fn google_batch_create(
 /// Returns the BatchJob if found, or an error
 #[tauri::command]
 pub async fn google_batch_get(job_name: String) -> Result<BatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     if let Ok(jobs) = BATCH_JOBS.lock() {
         if let Some(job) = jobs.get(&job_name) {
             return Ok(job.clone());
@@ -233,6 +251,8 @@ pub async fn google_batch_list(
     _page_token: Option<String>,
     _filter: Option<String>,
 ) -> Result<ListBatchJobsResponse, String> {
+    ensure_google_batch_backend_available()?;
+
     let jobs = if let Ok(jobs) = BATCH_JOBS.lock() {
         jobs.values().cloned().collect()
     } else {
@@ -249,6 +269,8 @@ pub async fn google_batch_list(
 /// Sets the job state to CANCELLED
 #[tauri::command]
 pub async fn google_batch_cancel(job_name: String) -> Result<BatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     if let Ok(mut jobs) = BATCH_JOBS.lock() {
         if let Some(job) = jobs.get_mut(&job_name) {
             job.state = BatchJobState::Cancelled;
@@ -263,6 +285,8 @@ pub async fn google_batch_cancel(job_name: String) -> Result<BatchJob, String> {
 /// Removes the job from storage
 #[tauri::command]
 pub async fn google_batch_delete(job_name: String) -> Result<(), String> {
+    ensure_google_batch_backend_available()?;
+
     if let Ok(mut jobs) = BATCH_JOBS.lock() {
         if jobs.remove(&job_name).is_some() {
             return Ok(());
@@ -278,16 +302,16 @@ pub async fn google_batch_get_results(
     job_name: String,
     _output_path: Option<String>,
 ) -> Result<BatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     if let Ok(jobs) = BATCH_JOBS.lock() {
         if let Some(job) = jobs.get(&job_name) {
-            // Return job with mock results if it's in a terminal state
             if matches!(
                 job.state,
                 BatchJobState::Succeeded | BatchJobState::Failed | BatchJobState::Cancelled
             ) {
                 return Ok(job.clone());
             }
-            // For non-terminal states, return the job as-is
             return Ok(job.clone());
         }
     }
@@ -304,11 +328,17 @@ pub async fn google_batch_create_embeddings(
     _task_type: Option<String>,
     display_name: Option<String>,
 ) -> Result<EmbeddingsBatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     let text_count = texts.map(|t| t.len() as u32).unwrap_or(0);
-    let model = model.unwrap_or_else(|| "gemini-embedding-001".to_string());
+    let model = model.ok_or_else(|| {
+        "Embedding batch model is required; select it from the configured model catalog."
+            .to_string()
+    })?;
 
     let job = EmbeddingsBatchJob {
         name: generate_job_name("embeddings"),
+        display_name,
         state: BatchJobState::Pending,
         model,
         create_time: get_timestamp(),
@@ -329,13 +359,6 @@ pub async fn google_batch_create_embeddings(
         jobs.insert(job_name, job.clone());
     }
 
-    // Store display_name in metadata if provided
-    if display_name.is_some() {
-        let mut job_with_meta = job;
-        job_with_meta.results = Some(vec![]); // Initialize empty results
-        return Ok(job_with_meta);
-    }
-
     Ok(job)
 }
 
@@ -343,6 +366,8 @@ pub async fn google_batch_create_embeddings(
 /// Returns the EmbeddingsBatchJob if found
 #[tauri::command]
 pub async fn google_batch_get_embeddings(job_name: String) -> Result<EmbeddingsBatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     if let Ok(jobs) = EMBEDDINGS_JOBS.lock() {
         if let Some(job) = jobs.get(&job_name) {
             return Ok(job.clone());
@@ -359,6 +384,8 @@ pub async fn google_batch_create_images(
     model: String,
     display_name: Option<String>,
 ) -> Result<BatchJob, String> {
+    ensure_google_batch_backend_available()?;
+
     let prompt_count = prompts.len() as u32;
 
     let job = BatchJob {
@@ -401,6 +428,12 @@ pub async fn google_batch_calculate_cost(
     cached_tokens: Option<u64>,
 ) -> Result<f64, String> {
     let (input_price, output_price, cache_price) = get_model_pricing(&model);
+    if cached_tokens.unwrap_or(0) > 0 && cache_price == 0.0 {
+        return Err(
+            "Google cache-token pricing is not present in the desktop model catalog; cannot estimate cached token cost."
+                .to_string(),
+        );
+    }
 
     // Calculate costs (prices are per 1M tokens)
     let input_cost = (input_tokens as f64 / 1_000_000.0) * input_price;
@@ -421,10 +454,13 @@ pub async fn google_batch_create_jsonl(
     requests: Vec<serde_json::Value>,
     output_path: String,
 ) -> Result<(), String> {
+    let safe_output_path = crate::sys::commands::file_ops::validate_path_security(&output_path)?;
+
     use std::fs::File;
     use std::io::Write;
 
-    let file = File::create(&output_path).map_err(|e| format!("Failed to create file: {}", e))?;
+    let file =
+        File::create(&safe_output_path).map_err(|e| format!("Failed to create file: {}", e))?;
 
     let mut writer = std::io::BufWriter::new(file);
 
@@ -441,16 +477,12 @@ pub async fn google_batch_create_jsonl(
     Ok(())
 }
 
-/// FIX-028 (Sprint 5): single-source-of-truth flag the frontend can poll
-/// to render a "BETA: in-memory only" banner above the Google Batch UI.
-/// Returns `true` for as long as the implementation in this module
-/// remains a stub backed by `BATCH_JOBS` / `EMBEDDINGS_JOBS` static
-/// HashMaps. Once a real Google Cloud Batch + persistence integration
-/// lands, flip this to `false` and the banner will disappear without UI
-/// changes.
+/// Compatibility command the frontend can poll to decide whether to render a
+/// Google Batch unavailable/local-preview banner. The command name is retained
+/// for existing UI bindings.
 #[tauri::command]
 pub async fn google_batch_is_beta_stub() -> Result<bool, String> {
-    Ok(true)
+    Ok(!google_batch_local_preview_enabled())
 }
 
 #[cfg(test)]
@@ -463,16 +495,15 @@ mod tests {
         let (input, output, cache) = get_model_pricing("gemini-3.1-flash-lite");
         assert_eq!(input, 0.25);
         assert_eq!(output, 1.5);
-        assert!(cache > 0.0 && cache < input);
+        assert_eq!(cache, 0.0);
     }
 
     #[test]
     fn pricing_returns_zeros_for_unknown_model_name() {
         let (input, output, cache) = get_model_pricing("not-a-real-model-id");
-        // Falls back to provider default if catalog miss; google's defaultPricing
-        // is non-zero in models.json, so we just assert sanity rather than exact zero.
+        // Falls back to provider default if catalog miss.
         assert!(input >= 0.0);
         assert!(output >= 0.0);
-        assert!(cache >= 0.0);
+        assert_eq!(cache, 0.0);
     }
 }

@@ -2,11 +2,10 @@ use super::*;
 
 impl ToolExecutor {
     /// Normalize LLM-generated provider names to the canonical IDs expected
-    /// by the web API (e.g. "dalle3" -> "openai", "imagen" -> "google").
+    /// by the web API (e.g. "gpt-image" -> "openai", "imagen" -> "google").
     pub(super) fn normalize_media_provider(provider: &str) -> String {
         match provider.to_lowercase().trim() {
-            "dalle" | "dalle3" | "dall-e-3" | "dall-e" | "gpt-image" | "gpt-image-1"
-            | "gpt-image-1.5" => "openai".to_string(),
+            "gpt-image" | "gpt-image-2" | "openai-image" => "openai".to_string(),
             "imagen" | "imagen3" | "imagen4" | "google_imagen" | "imagen-4.0-generate-001" => {
                 "google".to_string()
             }

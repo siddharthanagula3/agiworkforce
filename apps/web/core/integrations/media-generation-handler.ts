@@ -9,11 +9,12 @@ import {
   googleVeoService,
   type VeoGenerationRequest as GoogleVeoRequest,
 } from './google-veo-service';
-import { dallEImageService, type DallEGenerationRequest } from './dalle-image-service';
+import { openAIImageService, type OpenAIImageGenerationRequest } from './openai-image-service';
 import { getModelMetadataById } from '@agiworkforce/types';
 
 /** Resolve veo-3's apiModelId from the catalog (rule-models-json.md). */
 const VEO_API_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
+const GPT_IMAGE_API_MODEL_ID = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -95,51 +96,46 @@ export class MediaGenerationService {
     return MediaGenerationService.instance;
   }
 
-  /**
-   * Generate image using OpenAI DALL-E API
-   * Uses DALL-E 3 for high-quality image generation
-   */
+  /** Generate image using OpenAI GPT Image 2 through the secure image proxy. */
   async generateImage(request: ImageGenerationRequest): Promise<MediaGenerationResult> {
     try {
-      // Map request to DALL-E format
-      const dallERequest: DallEGenerationRequest = {
+      const openAIImageRequest: OpenAIImageGenerationRequest = {
         prompt: request.prompt,
         size: request.size || '1024x1024',
         quality: request.quality || 'standard',
         style:
           request.style === 'realistic' || request.style === 'photographic' ? 'natural' : 'vivid',
-        n: 1, // DALL-E 3 only supports 1 image at a time
-        model: 'dall-e-3',
+        n: request.numberOfImages ?? 1,
+        model: GPT_IMAGE_API_MODEL_ID as 'gpt-image-2',
       };
 
-      // Generate image with DALL-E
-      const dallEResults = await dallEImageService.generateImage(dallERequest);
-      const dallEResult = dallEResults[0];
-      if (!dallEResult) {
+      const openAIImageResults = await openAIImageService.generateImage(openAIImageRequest);
+      const openAIImageResult = openAIImageResults[0];
+      if (!openAIImageResult) {
         throw new Error('Image generation returned no results');
       }
 
       // Estimate cost
-      const cost = dallEImageService.estimateCost(dallERequest);
+      const cost = openAIImageService.estimateCost(openAIImageRequest);
 
       // Convert to MediaGenerationResult
       const result: MediaGenerationResult = {
-        id: dallEResult.id,
+        id: openAIImageResult.id,
         type: 'image',
-        url: dallEResult.url,
-        prompt: dallEResult.prompt,
+        url: openAIImageResult.url,
+        prompt: openAIImageResult.prompt,
         metadata: {
-          size: dallEResult.size,
-          model: dallEResult.model,
-          style: dallEResult.style,
+          size: openAIImageResult.size,
+          model: openAIImageResult.model,
+          style: openAIImageResult.style,
         },
         cost,
-        tokensUsed: 0, // DALL-E doesn't report tokens for image generation
-        createdAt: dallEResult.createdAt,
+        tokensUsed: 0,
+        createdAt: openAIImageResult.createdAt,
         status: 'completed',
         images: [
           {
-            url: dallEResult.url,
+            url: openAIImageResult.url,
             mimeType: 'image/png',
           },
         ],

@@ -189,7 +189,7 @@ impl LLMProvider for OllamaProvider {
         // Determine which tools (if any) to inject, gated on capability detection.
         // When the model lacks native tool support we inject tool descriptions into the
         // system prompt instead and will parse tool calls from the plain-text response.
-        let mut prompt_injected_tools = false;
+        let mut prompt_injected_tool_nonce: Option<String> = None;
         let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
@@ -224,12 +224,13 @@ impl LLMProvider for OllamaProvider {
                         request.model,
                         req_tools.len(),
                     );
-                    prompt_injected_tools = true;
-                    let injected = prompt_tool_injection::inject_tools_into_system_prompt(
-                        &request.messages,
-                        req_tools,
-                    );
-                    (None, injected)
+                    let injected =
+                        prompt_tool_injection::inject_tools_into_system_prompt_with_nonce(
+                            &request.messages,
+                            req_tools,
+                        );
+                    prompt_injected_tool_nonce = Some(injected.nonce.clone());
+                    (None, injected.messages)
                 }
             } else {
                 (None, request.messages.clone())
@@ -290,9 +291,12 @@ impl LLMProvider for OllamaProvider {
         // response, (2) native tool calls returned by the Ollama API.
         let mut response_content = ollama_response.message.content;
 
-        let response_tool_calls = if prompt_injected_tools {
+        let response_tool_calls = if let Some(tool_nonce) = prompt_injected_tool_nonce.as_deref() {
             // Parse tool calls the model attempted via text output
-            let parsed = prompt_tool_injection::parse_tool_calls_from_text(&response_content);
+            let parsed = prompt_tool_injection::parse_tool_calls_from_text_with_nonce(
+                &response_content,
+                tool_nonce,
+            );
             if !parsed.is_empty() {
                 tracing::info!(
                     "[Ollama] Parsed {} prompt-injected tool call(s) from model {} text response",
@@ -412,7 +416,7 @@ impl LLMProvider for OllamaProvider {
         // Determine which tools (if any) to inject, gated on capability detection.
         // When the model lacks native tool support we inject tool descriptions into the
         // system prompt and will parse tool calls from the accumulated text on the final chunk.
-        let mut prompt_injected_tools = false;
+        let mut prompt_injected_tool_nonce: Option<String> = None;
         let (tools, effective_messages) = if let Some(req_tools) = &request.tools {
             if !req_tools.is_empty() {
                 let caps = crate::core::llm::capability_detection::detect_ollama_capabilities(
@@ -447,12 +451,13 @@ impl LLMProvider for OllamaProvider {
                         request.model,
                         req_tools.len(),
                     );
-                    prompt_injected_tools = true;
-                    let injected = prompt_tool_injection::inject_tools_into_system_prompt(
-                        &request.messages,
-                        req_tools,
-                    );
-                    (None, injected)
+                    let injected =
+                        prompt_tool_injection::inject_tools_into_system_prompt_with_nonce(
+                            &request.messages,
+                            req_tools,
+                        );
+                    prompt_injected_tool_nonce = Some(injected.nonce.clone());
+                    (None, injected.messages)
                 }
             } else {
                 (None, request.messages.clone())
@@ -506,11 +511,12 @@ impl LLMProvider for OllamaProvider {
 
         let inner_stream = parse_sse_stream(response, crate::core::llm::Provider::Ollama);
 
-        if prompt_injected_tools {
+        if let Some(tool_nonce) = prompt_injected_tool_nonce {
             // Wrap the stream to accumulate text and parse tool calls on the final chunk.
             let wrapped = PromptToolInjectionStream {
                 inner: Box::pin(inner_stream),
                 accumulated_text: String::new(),
+                tool_nonce,
             };
             Ok(Box::pin(wrapped))
         } else {
@@ -528,6 +534,7 @@ impl LLMProvider for OllamaProvider {
 struct PromptToolInjectionStream {
     inner: Pin<Box<dyn Stream<Item = Result<StreamChunk, Box<dyn Error + Send + Sync>>> + Send>>,
     accumulated_text: String,
+    tool_nonce: String,
 }
 
 impl Stream for PromptToolInjectionStream {
@@ -547,8 +554,10 @@ impl Stream for PromptToolInjectionStream {
 
                 if chunk.done {
                     // Final chunk: parse tool calls from the full accumulated text
-                    let parsed =
-                        prompt_tool_injection::parse_tool_calls_from_text(&self.accumulated_text);
+                    let parsed = prompt_tool_injection::parse_tool_calls_from_text_with_nonce(
+                        &self.accumulated_text,
+                        &self.tool_nonce,
+                    );
                     if !parsed.is_empty() {
                         tracing::info!(
                             "[Ollama] Parsed {} prompt-injected tool call(s) from streaming response",
@@ -588,9 +597,8 @@ mod tests {
     use super::*;
     use crate::core::llm::{ChatMessage, LLMRequest};
 
-    #[tokio::test]
-    #[ignore]
-    async fn test_real_ollama_connection_attempt() {
+    #[test]
+    fn test_ollama_request_shape_is_constructible_without_network() {
         let provider = OllamaProvider::new(None).expect("Failed to create provider");
 
         let request = LLMRequest {
@@ -611,20 +619,9 @@ mod tests {
             ..Default::default()
         };
 
-        let result = provider.send_message(&request).await;
-
-        match result {
-            Ok(response) => {
-                println!("Ollama connection SUCCESS");
-                println!("Response content: {}", response.content);
-                assert!(
-                    !response.content.is_empty(),
-                    "Response content should not be empty"
-                );
-            }
-            Err(e) => {
-                panic!("Ollama connection FAILED: {:?}", e);
-            }
-        }
+        assert!(provider.is_configured());
+        assert_eq!(request.model, "tinyllama");
+        assert_eq!(request.max_tokens, Some(10));
+        assert!(!request.stream);
     }
 }

@@ -7,15 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AgentCard {
-    pub id: String,
-    pub name: String,
-    pub model: String,
-    pub capabilities: Vec<String>,
-    pub tools: Vec<String>,
-    pub version: String,
-}
+pub use super::protocol::AgentCard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TaskRequest {
@@ -83,7 +75,7 @@ impl PeerRegistry {
     }
 
     pub fn register(&mut self, card: AgentCard) {
-        self.peers.insert(card.id.clone(), card);
+        self.peers.insert(card.agent_id.clone(), card);
     }
 
     pub fn unregister(&mut self, id: &str) -> Option<AgentCard> {
@@ -176,12 +168,14 @@ mod tests {
 
     fn card() -> AgentCard {
         AgentCard {
-            id: "agi-1".into(),
+            agent_id: "agi-1".into(),
             name: "AGI".into(),
-            model: "claude-opus-4-7".into(),
-            capabilities: vec!["code".into(), "search".into()],
-            tools: vec!["read_file".into(), "edit_file".into()],
             version: "1.3.0".into(),
+            capabilities: vec!["code".into(), "search".into()],
+            supported_models: vec!["claude-opus-4-8".into()],
+            endpoint: "http://127.0.0.1:7892".into(),
+            auth_required: false,
+            metadata: HashMap::new(),
         }
     }
 
@@ -201,18 +195,18 @@ mod tests {
         let resp = handle_request(req("discover", serde_json::json!({})), &reg, &me);
         assert!(resp.error.is_none());
         let parsed: AgentCard = serde_json::from_value(resp.result.unwrap()).unwrap();
-        assert_eq!(parsed.id, "agi-1");
+        assert_eq!(parsed.agent_id, "agi-1");
     }
 
     #[test]
     fn list_peers_returns_registry_contents() {
         let mut reg = PeerRegistry::new();
         reg.register(AgentCard {
-            id: "peer-1".into(),
+            agent_id: "peer-1".into(),
             ..card()
         });
         reg.register(AgentCard {
-            id: "peer-2".into(),
+            agent_id: "peer-2".into(),
             ..card()
         });
         let resp = handle_request(req("list_peers", serde_json::json!({})), &reg, &card());
@@ -268,18 +262,18 @@ mod tests {
     fn registry_find_by_capability() {
         let mut reg = PeerRegistry::new();
         reg.register(AgentCard {
-            id: "peer-coder".into(),
+            agent_id: "peer-coder".into(),
             capabilities: vec!["code".into()],
             ..card()
         });
         reg.register(AgentCard {
-            id: "peer-search".into(),
+            agent_id: "peer-search".into(),
             capabilities: vec!["search".into()],
             ..card()
         });
         let coders = reg.find_by_capability("code");
         assert_eq!(coders.len(), 1);
-        assert_eq!(coders[0].id, "peer-coder");
+        assert_eq!(coders[0].agent_id, "peer-coder");
     }
 
     #[test]

@@ -52,10 +52,9 @@ pub(super) async fn execute_run_command(
                 }
                 None => {
                     let (prompt_msg, default) = match safety {
-                        CommandSafety::Dangerous => (
-                            "This command could be destructive. Allow it?",
-                            false,
-                        ),
+                        CommandSafety::Dangerous => {
+                            ("This command could be destructive. Allow it?", false)
+                        }
                         _ => ("Allow this command?", true),
                     };
 
@@ -132,29 +131,24 @@ pub(super) async fn execute_run_command(
         }
     }
 
-    let no_sandbox_override = std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok();
-    let sandbox_supported = cfg!(any(target_os = "macos", target_os = "linux"));
-
-    if !sandbox_supported && !no_sandbox_override {
-        return Ok(ToolResult {
-            tool_name: "run_command".to_string(),
-            success: false,
-            output: "Command execution refused: sandbox not available on this platform. \
-                     Set AGIWORKFORCE_NO_SANDBOX=1 to allow unsandboxed execution."
-                .to_string(),
-        });
-    }
-
-    let use_sandbox = sandbox_supported && !no_sandbox_override;
-
     let result: std::result::Result<
         std::result::Result<std::process::Output, std::io::Error>,
         tokio::time::error::Elapsed,
-    > = if use_sandbox {
+    > = if crate::sandbox::sandbox_disabled() {
+        tokio::time::timeout(
+            COMMAND_TIMEOUT,
+            Command::new("sh").arg("-c").arg(command).output(),
+        )
+        .await
+    } else {
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
         let cmd = command.to_string();
         let sandbox_result = tokio::time::timeout(COMMAND_TIMEOUT, async move {
-            let mgr = crate::sandbox::SandboxManager::full_auto(cwd.clone());
+            let mgr = crate::sandbox::SandboxManager::for_command_execution(
+                cwd.clone(),
+                crate::sandbox::NetworkPolicy::Deny,
+            )
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
             crate::sandbox::execute_sandboxed(&mgr, &cmd, Some(&cwd))
                 .await
                 .map_err(|e| std::io::Error::other(e.to_string()))
@@ -162,26 +156,18 @@ pub(super) async fn execute_run_command(
         .await;
         if let Ok(Err(ref e)) = sandbox_result {
             let msg = e.to_string();
-            if (msg.contains("sandbox") || msg.contains("bwrap") || msg.contains("Seatbelt"))
-                && !no_sandbox_override
-            {
+            if msg.contains("sandbox") || msg.contains("bwrap") || msg.contains("Seatbelt") {
                 return Ok(ToolResult {
                     tool_name: "run_command".to_string(),
                     success: false,
                     output: format!(
-                        "Sandbox unavailable ({}). Set AGIWORKFORCE_NO_SANDBOX=1 to bypass.",
+                        "Sandbox unavailable ({}). Re-run with --no-sandbox only if you accept unrestricted command execution.",
                         msg,
                     ),
                 });
             }
         }
         sandbox_result
-    } else {
-        tokio::time::timeout(
-            COMMAND_TIMEOUT,
-            Command::new("sh").arg("-c").arg(command).output(),
-        )
-        .await
     };
 
     match result {

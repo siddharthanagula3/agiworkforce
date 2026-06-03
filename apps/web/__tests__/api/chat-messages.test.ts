@@ -79,7 +79,7 @@ describe('Chat Messages API', () => {
     conversation_id: 'conv-1',
     role: 'assistant',
     content: 'Hello! How can I help you?',
-    model: 'gpt-5.4',
+    model: 'gpt-5.5',
     provider: 'openai',
     input_tokens: 10,
     output_tokens: 8,
@@ -113,7 +113,7 @@ describe('Chat Messages API', () => {
         Promise.resolve({
           choices: [{ message: { content: 'Hello! How can I help you?' } }],
           usage: { prompt_tokens: 10, completion_tokens: 8, total_tokens: 18 },
-          model: 'gpt-5.4',
+          model: 'gpt-5.5',
           provider: 'openai',
           cost_cents: 0.001,
         }),
@@ -275,7 +275,7 @@ describe('Chat Messages API', () => {
             Authorization: 'Bearer valid-token',
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.4', skipLlm: true }),
+          body: JSON.stringify({ content: 'Hello', model: 'gpt-5.5', skipLlm: true }),
         });
         await POST(request, mockContext);
 

@@ -1,10 +1,10 @@
 pub mod analytics;
 pub mod async_sqlite;
 pub mod cache;
+pub mod cloud_sync;
 pub mod config_hierarchy;
 pub mod database;
 pub mod db;
 pub mod metrics;
 pub mod settings;
 pub mod state;
-pub mod cloud_sync;

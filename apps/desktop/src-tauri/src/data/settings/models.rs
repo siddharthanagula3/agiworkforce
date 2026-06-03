@@ -388,12 +388,12 @@ mod tests {
     #[test]
     fn model_config_serializes_with_model_id() {
         let config = ModelConfig {
-            model_name: "gpt-5.4".to_string(),
+            model_name: "gpt-5.5".to_string(),
             ..Default::default()
         };
 
         let value = serde_json::to_value(&config).expect("model config should serialize");
-        assert_eq!(value["modelId"], "gpt-5.4");
+        assert_eq!(value["modelId"], "gpt-5.5");
         assert!(value.get("modelName").is_none());
     }
 

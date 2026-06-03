@@ -28,8 +28,8 @@ vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 
 vi.mock('@agiworkforce/types', () => ({
-  getTaskModelForProvider: vi.fn().mockReturnValue('claude-haiku-4-5'),
-  getProviderDefaultModel: vi.fn().mockReturnValue('claude-haiku-4-5'),
+  getTaskModelForProvider: () => 'claude-haiku-4-5-20251001',
+  getProviderDefaultModel: () => 'claude-haiku-4-5-20251001',
 }));
 
 // ─── Capture the LLM prompt that was sent ────────────────────────────────────
@@ -113,7 +113,7 @@ const BASE_PAYLOAD = {
 // Await the fire-and-forget background task by mocking a synchronous processReview
 async function waitForProcessReview(_response?: Response): Promise<void> {
   // Allow microtasks and promises to settle
-  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  await new Promise<void>((resolve) => setTimeout(resolve, 250));
 }
 
 describe('RT-03: GitHub webhook prompt injection defense', () => {

@@ -268,7 +268,6 @@ export default function MobilePage() {
               gap: 16,
             }}
           >
-            {/* Phone mockup placeholders */}
             {[
               {
                 title: 'Chat: on-device, offline',
@@ -333,7 +332,7 @@ export default function MobilePage() {
                       margin: 0,
                     }}
                   >
-                    Screenshot
+                    Product view
                   </p>
                   <p
                     style={{

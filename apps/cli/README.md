@@ -202,7 +202,7 @@ Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`, plus
 deferred-to-Phase-2 surfaces (`cloud`, `plugin`, `sync`, `marketplace`,
 `ecosystem`) currently dispatched to gated stubs — these surfaces will be
-wired or removed per `~/.claude/plans/cli-competitive-floor.md` Sprint A2.
+wired or removed as the CLI parity work stabilizes.
 
 ```bash
 agi doctor
@@ -231,7 +231,7 @@ agi doctor --json
 ## Roadmap
 
 - **Phase 0 (Sprint A, complete)** — Decommissioned dead modules, shipped real
-  `init`. See `~/.claude/plans/cli-competitive-floor.md`.
+  `init`.
 - **Phase 1 (Sprint B, complete)** — MCP SSE + HTTP + OAuth, plugin manifest
   discovery (`.agiworkforce-plugin/`, `.claude-plugin/`, `.codex-plugin/`),
   hook event vocabulary canonicalized to 19 events, OpenAI-compatible adapter

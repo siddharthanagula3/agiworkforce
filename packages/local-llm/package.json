@@ -14,11 +14,11 @@
     "@agiworkforce/types": "workspace:*"
   },
   "peerDependencies": {
-    "react-native": "*"
+    "react-native": ">=0.83.0 <0.84.0"
   },
   "devDependencies": {
-    "@types/react-native": "*",
+    "@types/react-native": "^0.73.0",
     "typescript": "~5.9.3",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   }
 }

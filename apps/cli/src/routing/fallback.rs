@@ -2,8 +2,7 @@
 //!
 //! Solves Claude Code's "rate-limit cliff" — when the primary model 429s, we
 //! transparently rotate to the next model in a user-specified chain instead
-//! of dying. See plan: `~/.claude/plans/even-if-it-is-bubbly-octopus.md`,
-//! Day-4 Feature 3.
+//! of ending the turn on a transient provider failure.
 //!
 //! The chain is parsed once from the user's `--model` flag (comma-separated)
 //! or from `~/.agiworkforce/config.toml`'s `[routing]` section. The agent
@@ -37,7 +36,7 @@ pub struct FallbackChain {
 }
 
 impl FallbackChain {
-    /// Parse a comma-separated `--model` argument like `"claude-opus-4-6,gpt-5.4,llama3.1:8b"`.
+    /// Parse a comma-separated `--model` argument like `"claude-opus-4-8,gpt-5.5,llama3.1:8b"`.
     /// Whitespace around each entry is trimmed; empty entries are dropped.
     pub fn parse(spec: &str) -> Self {
         let primaries = spec
@@ -88,8 +87,8 @@ mod tests {
 
     #[test]
     fn parse_strips_whitespace_and_empties() {
-        let c = FallbackChain::parse(" claude-opus-4-6 , , gpt-5.4 ,  ");
-        assert_eq!(c.primaries, vec!["claude-opus-4-6", "gpt-5.4"]);
+        let c = FallbackChain::parse(" claude-opus-4-8 , , gpt-5.5 ,  ");
+        assert_eq!(c.primaries, vec!["claude-opus-4-8", "gpt-5.5"]);
     }
 
     #[test]

@@ -10,7 +10,7 @@
  * in the HTML string passed to the WebView.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { WebView } from 'react-native-webview';
@@ -45,7 +45,9 @@ function buildHtml(latex: string, display: boolean, isDark: boolean): string {
       var el = document.getElementById('math-root');
       var h = el ? el.scrollHeight : 0;
       window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'height', value: h }));
-    } catch(e) {}
+    } catch(e) {
+      console.warn('[MathBlock] Failed to post rendered height:', e);
+    }
   `;
 
   const errorHtml = (msg: string) =>
@@ -115,14 +117,21 @@ export function MathBlock({ latex, display }: MathBlockProps) {
   const systemScheme = useColorScheme();
   const isDark = systemScheme !== 'light';
   const [height, setHeight] = useState<number>(display ? 60 : 32);
+  const [webViewError, setWebViewError] = useState(false);
   const renderedRef = useRef(false);
 
   const html = buildHtml(latex, display, isDark);
 
+  useEffect(() => {
+    renderedRef.current = false;
+    setWebViewError(false);
+    setHeight(display ? 60 : 32);
+  }, [latex, display, isDark]);
+
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
       try {
-        const data = JSON.parse(event.nativeEvent.data) as { type: string; value: number };
+        const data = JSON.parse(event.nativeEvent.data) as { type?: unknown; value?: unknown };
         if (data.type === 'height' && typeof data.value === 'number' && data.value > 0) {
           // Add small vertical padding to avoid clipping descenders.
           const padded = data.value + (display ? 20 : 8);
@@ -131,14 +140,20 @@ export function MathBlock({ latex, display }: MathBlockProps) {
             setHeight(padded);
           }
         }
-      } catch {
-        // ignore non-JSON messages
+      } catch (error) {
+        console.warn('[MathBlock] Ignored invalid WebView message:', error);
       }
     },
     [display, height],
   );
 
   if (!latex.trim()) return null;
+  if (webViewError) return <MathFallback latex={latex} display={display} />;
+
+  const onWebViewError = (error: unknown) => {
+    console.warn('[MathBlock] WebView render failed:', error);
+    setWebViewError(true);
+  };
 
   if (display) {
     // Block math: full-width View with auto height, teal left border from CSS
@@ -159,6 +174,8 @@ export function MathBlock({ latex, display }: MathBlockProps) {
           showsVerticalScrollIndicator={false}
           showsHorizontalScrollIndicator={false}
           onMessage={onMessage}
+          onError={(event) => onWebViewError(event.nativeEvent)}
+          onHttpError={(event) => onWebViewError(event.nativeEvent)}
           originWhitelist={['*']}
           // Disable navigation — this WebView only renders a static page
           onShouldStartLoadWithRequest={(req) =>
@@ -191,6 +208,8 @@ export function MathBlock({ latex, display }: MathBlockProps) {
         showsVerticalScrollIndicator={false}
         showsHorizontalScrollIndicator={false}
         onMessage={onMessage}
+        onError={(event) => onWebViewError(event.nativeEvent)}
+        onHttpError={(event) => onWebViewError(event.nativeEvent)}
         originWhitelist={['*']}
         onShouldStartLoadWithRequest={(req) =>
           req.url === 'about:blank' || req.url === 'about:srcdoc'

@@ -63,7 +63,7 @@ mod tests {
     #[test]
     fn test_openai_adapter_responses_api_gpt5() {
         // Uses gpt-5.5 (catalog reasoning model with thinking support).
-        // gpt-5.4 was removed from models.json as of 2026-05-29.
+        // gpt-5.5 was removed from models.json as of 2026-05-29.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -281,7 +281,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-nano".to_string(),
+            model: "gpt-5.4-mini".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -496,7 +496,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4".to_string(),
+            model: "gpt-5.5".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -669,7 +669,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_123",
             "status": "completed",
-            "model": "gpt-5.4",
+            "model": "gpt-5.5",
             "output": [
                 {
                     "type": "function_call",
@@ -714,7 +714,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_456",
             "status": "in_progress",
-            "model": "gpt-5.4-codex",
+            "model": "gpt-5.5",
             "output": [
                 {
                     "type": "local_shell_call",
@@ -954,7 +954,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gpt-5.4".to_string(), // GPT-5.4 uses Responses API
+            model: "gpt-5.5".to_string(), // GPT-5.4 uses Responses API
             temperature: None,
             max_tokens: Some(200),
             stream: false,
@@ -984,7 +984,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.4");
+        assert_eq!(adapted["model"], "gpt-5.5");
         assert_eq!(
             adapted["instructions"],
             "You are a helpful vision assistant"
@@ -1541,7 +1541,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4-6".to_string(),
+            model: "claude-opus-4.8".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1624,7 +1624,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4-6".to_string(),
+            model: "claude-opus-4.8".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1667,7 +1667,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-4-6".to_string(),
+            model: "claude-opus-4.8".to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1784,7 +1784,7 @@ mod tests {
             "id": "msg_789",
             "type": "message",
             "role": "assistant",
-            "model": "claude-opus-4-6",
+            "model": "claude-opus-4.8",
             "content": [
                 {
                     "type": "thinking",

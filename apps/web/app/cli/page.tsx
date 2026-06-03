@@ -63,8 +63,7 @@ const FEATURES = [
   },
 ];
 
-/** Terminal-style screenshot placeholder. */
-function TerminalScreenshot({ title, description }: { title: string; description: string }) {
+function TerminalProductView({ title, description }: { title: string; description: string }) {
   return (
     <div
       style={{
@@ -144,7 +143,7 @@ function TerminalScreenshot({ title, description }: { title: string; description
             margin: 0,
           }}
         >
-          Screenshot
+          Product view
         </p>
         <p
           style={{
@@ -204,15 +203,15 @@ export default function CliPage() {
               gap: 16,
             }}
           >
-            <TerminalScreenshot
+            <TerminalProductView
               title="interactive TUI"
               description="Ratatui interactive mode with model switcher, streaming output, and tool call trace visible in the sidebar."
             />
-            <TerminalScreenshot
+            <TerminalProductView
               title="agi exec"
               description="Headless exec mode running a code review task in CI. stdin task, stdout structured diff, exit 0."
             />
-            <TerminalScreenshot
+            <TerminalProductView
               title="agi session"
               description="Session browser showing past runs with fork and resume options. Every tool call is journaled and replayable."
             />

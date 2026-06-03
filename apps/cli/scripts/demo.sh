@@ -35,7 +35,7 @@ pause
 echo "--- 3. Multi-model fallback chain ---"
 echo "Primary 429s → next model takes over, no operator action."
 echo "Using --demo to fire the rate-limit deterministically:"
-$CLI --demo --json-events exec -m claude-sonnet-4-6,gpt-5.4 "say hello" 2>&1 | grep -E 'spawning|ready|fallback_triggered|↘'
+$CLI --demo --json-events exec -m claude-sonnet-4-6,gpt-5.5 "say hello" 2>&1 | grep -E 'spawning|ready|fallback_triggered|↘'
 pause
 
 echo "--- 4. Session replay / fork ---"

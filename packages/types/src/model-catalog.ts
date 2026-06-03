@@ -116,6 +116,8 @@ export interface ModelMetadata {
   status?: ModelStatus;
   /** Cost per million cached input tokens (USD), when the provider supports prompt caching. */
   cached_input?: number;
+  /** Cost per million cache write/create tokens (USD), when reported separately. */
+  cached_write?: number;
   /** Per-image cost (USD) for image-generation models (non-token pricing). */
   imagePerImageCost?: number;
   /** Per-second cost (USD) for video-generation models (non-token pricing). */
@@ -127,7 +129,12 @@ export interface ModelMetadata {
   /** ISO timestamp after which promotional pricing reverts to post_promo_prices. */
   promo_expires_at?: string | null;
   /** Standard prices that take effect once promo_expires_at has passed. */
-  post_promo_prices?: { input: number; output: number; cached_input?: number };
+  post_promo_prices?: {
+    input: number;
+    output: number;
+    cached_input?: number;
+    cached_write?: number;
+  };
   /** Tokenizer drift multiplier vs the catalog baseline (cost/latency estimation safety). */
   tokenizer_drift_factor?: number;
   tokenizer_drift_range?: { min: number; max: number; unit: string };
@@ -398,10 +405,10 @@ export interface TierPolicy {
   // ---- Phase-3 (Pro+) spec extensions ----
 
   /**
-   * Per-day token cap for flagship slots (Opus 4.7, GPT-5.5) on Pro+.
-   * Above this cap, flagship requests fall through to non-flagship Pro slots.
-   * Enforced by `assertQuota` daily-cap check using
-   * `token_credits.daily_used_cents` (already provisioned by billing schema).
+   * Per-day token cap for Pro+ flagship routing slots. Above this cap,
+   * flagship requests fall through to the configured non-flagship Pro slots.
+   * The actual models live in `SLOT_REGISTRY`; do not duplicate their IDs here.
+   * Enforced by `assertQuota` daily-cap check using `token_credits.daily_used_cents`.
    * Pro+ default: 15_000 per spec §3 / §6.
    */
   flagshipDailyTokenCap?: number;
@@ -516,15 +523,14 @@ const MANUAL_OVERRIDE_MODEL_SET = new Set<string>(MANUAL_OVERRIDE_MODEL_IDS);
 //   Speed:           Artificial Analysis TTFT + tok/s benchmarks
 //
 // Pricing (blended $/M = weighted avg input+output):
+//   Gemini 3.5 Flash:    $1.50/$9 → $3.50 blended
 //   Gemini 3.1 Pro:      $2/$12   → $5.33 blended
-//   Claude Opus 4.7:     $5/$25   → $12.00 blended
-//   Claude Sonnet 4.6:   $3/$15   → $7.50 blended
-//   Claude Haiku 4.5:    $1/$5    → $2.50 blended
-//   GPT-5.5:             $5/$30   → $14.00 blended
-//   GPT-5.4-mini:        $0.75/$4.50 → $1.88 blended
-//   GPT-5.4-codex:       $0.40/$1.60 → $0.80 blended (specialized coding model)
+//   Anthropic flagship:  $5/$25   → $12.00 blended
+//   Anthropic balanced:  $3/$15   → $7.50 blended
+//   Anthropic economy:   $1/$5    → $2.50 blended
+//   OpenAI flagship:     $5/$30   → $14.00 blended
+//   OpenAI economy:      $0.75/$4.50 → $1.88 blended
 //   DeepSeek V3.2:       $0.27/$0.42 → $0.32 blended
-//   Gemini 3.1 Flash:    $0.50/$3 → $1.25 blended
 //   Gemini 3.1 Flash-Lite: $0.25/$1.50 → $0.56 blended
 // ============================================================================
 export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
@@ -546,27 +552,26 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     modelId: 'gpt-5.4-mini',
     provider: 'openai',
   },
-  // Gemini 3.1 Pro: 57/60 Intelligence Index — tied with Claude Opus 4.7 at 40% the cost ($2/$12 vs $5/$25).
-  // Leads GPQA Diamond (94.3%), best long-context (holds 500K–1M tokens), FACTS Grounding winner.
+  // Gemini 3.5 Flash is the current Google Flash route for fast premium chat,
+  // agentic workflows, function calling, structured output, search, and code execution.
   general_premium: {
     slot: 'general_premium',
     label: 'General Premium',
     description:
-      'Premium intelligence lane. Gemini 3.1 Pro: 57/60 Intelligence Index, $2/$12 — same quality as Claude Opus 4.7 at 40% the cost.',
-    modelId: 'gemini-3.1-pro-preview',
+      'Premium Google lane. Gemini 3.5 Flash: current Flash model, 1M input, 64K output, function calling, search, and code execution.',
+    modelId: 'gemini-3.5-flash',
     provider: 'google',
   },
 
   // -------------------------------------------------------------------------
-  // CODING — DeepSeek V3.2: ~70% SWE-bench at $0.27/$0.42 (10–25× cheaper than frontier).
-  // GPT-5.4-codex: ~85% SWE-bench at $0.40/$1.60 (specialized coding model, best value at frontier).
+  // CODING — DeepSeek V4 Flash for the budget lane; GPT-5.5 for frontier OpenAI coding.
   // -------------------------------------------------------------------------
   coding_fast: {
     slot: 'coding_fast',
     label: 'Coding Fast',
     description:
       'Budget coding lane. DeepSeek V3.2: ~70% SWE-bench Verified, $0.27/$0.42 — 10–25× cheaper than flagship.',
-    modelId: 'deepseek-chat',
+    modelId: 'deepseek-v4-flash',
     provider: 'deepseek',
   },
   coding_premium: {
@@ -579,8 +584,7 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
   },
 
   // -------------------------------------------------------------------------
-  // REASONING — Gemini 3.1 Pro wins on GPQA Diamond (94.3% vs 94.2% for Claude Opus 4.7)
-  // AND costs 60% less ($2/$12 vs $5/$25). HLE-no-tools: Claude Opus 4.7 leads (46.9%).
+  // REASONING — Gemini 3.1 Pro remains the cost-efficient premium route.
   // For complex reasoning, benchmark evidence favors Gemini 3.1 Pro on cost-efficiency.
   // -------------------------------------------------------------------------
   reasoning_premium: {
@@ -594,7 +598,7 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
 
   // -------------------------------------------------------------------------
   // CREATIVE WRITING — Claude leads unambiguously on EQ-Bench Creative Writing Elo.
-  // Sonnet 4.6: 1991 Elo (balanced). Opus 4.7: 2216 Elo (+225 pts lead over GPT-5.5 at 2024).
+  // Sonnet 4.6 for balanced creative writing; Opus 4.8 for premium creative work.
   // -------------------------------------------------------------------------
   creative_writing: {
     slot: 'creative_writing',
@@ -633,8 +637,7 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
   },
 
   // -------------------------------------------------------------------------
-  // VISION — Gemini 3.1 Pro leads FACTS Grounding (document-grounded generation) and
-  // maintains 500K–1M token retrieval quality. All frontier models converged on MMMU-Pro (~81%).
+  // VISION — Gemini 3.5 Flash is the current Google multimodal Flash route.
   // -------------------------------------------------------------------------
   vision_fast: {
     slot: 'vision_fast',
@@ -647,14 +650,13 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'vision_premium',
     label: 'Vision Premium',
     description:
-      'Premium vision + long-doc lane. Gemini 3.1 Pro: FACTS Grounding #1, holds 500K–1M token context, $2/$12.',
-    modelId: 'gemini-3.1-pro-preview',
+      'Premium vision lane. Gemini 3.5 Flash: multimodal input, 1M input context, and current Google Flash tool support.',
+    modelId: 'gemini-3.5-flash',
     provider: 'google',
   },
 
   // -------------------------------------------------------------------------
-  // BROWSER / COMPUTER USE — Claude family leads OSWorld (78% Opus 4.7, Claude Sonnet for cost).
-  // GPT-5.4-mini had no OSWorld data and is a mini model — wrong choice for GUI automation.
+  // BROWSER / COMPUTER USE — Claude family remains the preferred GUI automation lane.
   // -------------------------------------------------------------------------
   browser_dom: {
     slot: 'browser_dom',
@@ -668,7 +670,7 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'computer_use',
     label: 'Computer Use',
     description:
-      'Desktop automation lane. Claude Sonnet 4.6: Claude family leads OSWorld; Sonnet balances capability vs cost vs Opus 4.7.',
+      'Desktop automation lane. Claude Sonnet 4.6 balances capability, latency, and cost.',
     modelId: 'claude-sonnet-4.6',
     provider: 'anthropic',
   },
@@ -688,14 +690,15 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'image_generation',
     label: 'Image Generation',
     description:
-      'Pool B image gen lane (plan §4). Imagen 4 Fast: $0.02/image at 1024x1024 via Vertex AI. Half the cost of Imagen 4 standard ($0.04) — keeps Hobby image-quota economics tight.',
-    modelId: 'imagen-4-fast',
-    provider: 'google',
+      'Image generation and editing lane. GPT Image 2 is the current OpenAI GPT Image model with flexible sizes and high-fidelity inputs.',
+    modelId: 'gpt-image-2',
+    provider: 'openai',
   },
   video_generation: {
     slot: 'video_generation',
     label: 'Video Generation',
-    description: 'Video generation lane. Veo 3: Google DeepMind, state-of-the-art video quality.',
+    description:
+      'Video generation lane. Veo 3.1 is the current verified Google video route selected for AGI managed media.',
     modelId: 'veo-3',
     provider: 'google',
   },
@@ -737,14 +740,15 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'escalation_coding',
     label: 'Escalation Coding',
     description:
-      'Pool B escalation lane (12% — coding + complex). GLM-4.7: $0.30/$1.20, 256K context.',
-    modelId: 'glm-4.7',
+      'Pool B escalation lane (12% — coding + complex). GLM-5.1 is the current GLM route in the shared catalog.',
+    modelId: 'glm-5.1',
     provider: 'zhipu',
   },
 
   // ---------------------------------------------------------------------------
   // PRO TIER *_pro SLOTS (parallel-spinning-hedgehog §3-§4).
-  // Pro pool: Sonnet 4.6 + Gemini 3.1 Pro + GPT-5.4-mini + Kimi K2.6.
+  // Pro pool composition is defined by the slot entries below. Keep the model
+  // IDs in those entries so future upgrades change one catalog path, not prose.
   // Hobby slots (workhorse_general / escalation_coding / reasoning_premium)
   // remain reachable from Pro for 100% downgrade fallback paths.
   // ---------------------------------------------------------------------------
@@ -776,8 +780,8 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'multimodal_pro',
     label: 'Pro Multimodal',
     description:
-      'Pro multimodal + vision lane. Gemini 3.1 Pro: $2/$12 (≤200K), FACTS Grounding #1, holds 500K-1M tokens cleanly.',
-    modelId: 'gemini-3.1-pro-preview',
+      'Pro multimodal + vision lane. Gemini 3.5 Flash: current Google Flash model with 1M input, multimodal input, and tool support.',
+    modelId: 'gemini-3.5-flash',
     provider: 'google',
   },
   long_context_pro: {
@@ -793,17 +797,17 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
   // to coding_premium_pro / general_balanced_pro respectively.
   flagship_coding_pro_plus: {
     slot: 'flagship_coding_pro_plus',
-    label: 'Pro+ Flagship Coding (Opus 4.8, 15K/day)',
+    label: 'Pro+ Flagship Coding (15K/day)',
     description:
-      'Pro+ flagship coding lane. Claude Opus 4.8: $5/$25, 1M context (inherits the 4.7 tokenizer baseline). Daily cap 15K tokens; falls through to coding_premium_pro (Sonnet 4.6) above cap.',
+      'Pro+ flagship coding lane. Uses the current Anthropic flagship from the shared catalog. Daily cap 15K tokens; falls through to coding_premium_pro above cap.',
     modelId: 'claude-opus-4.8',
     provider: 'anthropic',
   },
   flagship_general_pro_plus: {
     slot: 'flagship_general_pro_plus',
-    label: 'Pro+ Flagship General (GPT-5.5, 15K/day)',
+    label: 'Pro+ Flagship General (15K/day)',
     description:
-      'Pro+ flagship general/agentic lane. GPT-5.5: $5/$30, top Terminal-Bench/MCP-Atlas. Daily cap 15K tokens; falls through to general_balanced_pro (GPT-5.4 mini) above cap.',
+      'Pro+ flagship general/agentic lane. Uses the current OpenAI flagship from the shared catalog. Daily cap 15K tokens; falls through to general_balanced_pro above cap.',
     modelId: 'gpt-5.5',
     provider: 'openai',
   },
@@ -811,9 +815,9 @@ export const SLOT_REGISTRY: Record<RoutingSlot, RoutingSlotDefinition> = {
     slot: 'video_generation_pro_plus',
     label: 'Pro+ Video Generation',
     description:
-      'Pro+ video lane. Runway Gen-4 at 720p — 60 sec/mo cap (~$3 COGS budget). Falls through to paywall above cap.',
-    modelId: 'runway-gen-4',
-    provider: 'runway',
+      'Pro+ video lane. Veo 3.1 is the current verified Google video route selected for AGI managed media.',
+    modelId: 'veo-3',
+    provider: 'google',
   },
 };
 
@@ -954,8 +958,8 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     tier: 'pro_plus',
     // Pro+ surfaces both Auto and the Advanced-mode manual picker (same as Pro).
     surfacedUx: 'auto_plus_manual',
-    // Pro+ pool = Pro pool + flagship_coding_pro_plus (Opus 4.7) +
-    // flagship_general_pro_plus (GPT-5.5) + video_generation_pro_plus (Runway Gen-4).
+    // Pro+ pool = Pro pool + flagship_coding_pro_plus (Opus 4.8) +
+    // flagship_general_pro_plus (GPT-5.5) + video_generation_pro_plus (Veo 3.1).
     // The flagship slots are gated by per-day token caps (15K/day each)
     // enforced by assertQuota; above-cap requests fall through to Pro slots.
     allowedSlots: [
@@ -986,14 +990,14 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowSearch: true,
     allowMediaGeneration: true,
     allowImageGeneration: true,
-    // Pro+ unlocks video gen (60 sec/mo cap; Runway Gen-4 at 720p).
+    // Pro+ unlocks video gen (60 sec/mo cap; current video route).
     allowVideoGeneration: true,
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
     // Pro+ voice budget: 1500 min/mo (25 hours).
     allowVoice: true,
     voiceMinutesPerMonth: 1500,
-    // Pro+ unlocks Opus 4.7 + GPT-5.5 with daily-token caps. The numbers
+    // Pro+ unlocks Opus 4.8 + GPT-5.5 with daily-token caps. The numbers
     // here are the canonical caps from auto-routing-spec §3 + §6.
     flagshipDailyTokenCap: 15_000,
     videoSecondsPerMonth: 60,
@@ -1052,7 +1056,7 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     voiceMinutesPerMonth: null,
     // Max also surfaces the US-only routing toggle (inherits Pro+ capability).
     usOnlyRoutingAvailable: true,
-    // Max-tier video budget: 5 min/mo at 720p (Runway Gen-4). Spec §3 + §12.
+    // Max-tier video budget: 5 min/mo through the current Pro+ video route.
     videoSecondsPerMonth: 300,
     // Max computer-use ladder: warn at 1K actions, paywall at 2.5K. Spec §3.
     computerUseSoftCap: 1_000,
@@ -1201,9 +1205,9 @@ export const modelsById: Record<string, ModelMetadata> = (() => {
   // Direct model entries from models.json. These are canonical for non-
   // deprecated models — MUST NOT be overridden by aliases — an alias is
   // a fallback for legacy IDs, not a redirect for live IDs.
-  // Pre-existing gotcha: deepseek-chat had both a direct entry and an
-  // alias pointing at deepseek-v4-flash; the alias was overwriting the
-  // canonical entry, flipping its `vision` capability.
+  // Earlier catalogs allowed provider aliases to overwrite canonical entries.
+  // Current routing uses explicit current model IDs and only accepts aliases as
+  // non-selectable compatibility lookups.
   for (const [modelId, metadata] of Object.entries(modelsCatalog.models)) {
     entries[modelId] = metadata;
   }
@@ -1600,13 +1604,13 @@ const TASK_TYPE_TO_SLOT_PRO: ReadonlyMap<RoutingTaskType, RoutingSlot> = Object.
 );
 
 // Pro+ pool — same as Pro for most tasks, but `coding` routes to flagship
-// (Opus 4.7) and `general`/`agentic`/`research` route to flagship (GPT-5.5).
+// (Opus 4.8) and `general`/`agentic`/`research` route to flagship (GPT-5.5).
 // The flagship slots are gated by `flagshipDailyTokenCap` (15K/day) enforced
 // in `assertQuota`. Above-cap requests fall through to the Pro slot via the
 // usual allowedSlots check.
 const TASK_TYPE_TO_SLOT_PRO_PLUS: ReadonlyMap<RoutingTaskType, RoutingSlot> = Object.freeze(
   new Map<RoutingTaskType, RoutingSlot>([
-    ['coding', 'flagship_coding_pro_plus'], // Opus 4.7 (15K/day)
+    ['coding', 'flagship_coding_pro_plus'], // Opus 4.8 (15K/day)
     ['reasoning', 'reasoning_premium_pro'], // Kimi K2.6 (Pro slot — Opus tokens are precious)
     ['image_generation', 'image_generation'],
     ['multimodal', 'multimodal_pro'],

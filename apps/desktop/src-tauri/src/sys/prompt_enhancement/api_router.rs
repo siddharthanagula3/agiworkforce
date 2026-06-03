@@ -69,7 +69,7 @@ impl APIRouter {
         routing_rules.insert(
             UseCase::ImageGen,
             vec![
-                APIProvider::DALLE,
+                APIProvider::GPTImage,
                 APIProvider::StableDiffusion,
                 APIProvider::Midjourney,
             ],
@@ -184,9 +184,9 @@ impl APIRouter {
                 "Perplexity is specifically designed for search queries with up-to-date web information.".to_string(),
                 perplexity_model_for_task("chat"),
             ),
-            (UseCase::ImageGen, APIProvider::DALLE) => (
-                "DALL-E 3 provides high-quality image generation with excellent prompt understanding.".to_string(),
-                gen_model_api_id("dall-e-3"),
+            (UseCase::ImageGen, APIProvider::GPTImage) => (
+                "GPT Image 2 provides high-quality image generation with strong prompt understanding.".to_string(),
+                gen_model_api_id("gpt-image-2"),
             ),
             (UseCase::ImageGen, APIProvider::StableDiffusion) => (
                 "Stable Diffusion offers flexible, cost-effective image generation.".to_string(),
@@ -218,7 +218,7 @@ impl APIRouter {
             APIProvider::Gemini => 0.00025,
             APIProvider::Perplexity => 0.001,
             APIProvider::Ollama => 0.0,
-            APIProvider::DALLE => 0.04,
+            APIProvider::GPTImage => 0.04,
             APIProvider::StableDiffusion => 0.002,
             APIProvider::Midjourney => 0.01,
             APIProvider::Veo3 => 0.1,
@@ -234,7 +234,7 @@ impl APIRouter {
             APIProvider::GPT => 1500,
             APIProvider::Claude => 1200,
             APIProvider::Perplexity => 2000,
-            APIProvider::DALLE => 5000,
+            APIProvider::GPTImage => 5000,
             APIProvider::StableDiffusion => 3000,
             APIProvider::Midjourney => 10000,
             APIProvider::Veo3 => 30000,

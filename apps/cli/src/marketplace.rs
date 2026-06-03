@@ -686,7 +686,7 @@ mod tests {
 
     #[test]
     fn search_filters_by_name_description_or_keyword() {
-        let plugins = vec![
+        let plugins = [
             MarketplacePlugin {
                 name: "rust-helper".into(),
                 version: "1.0".into(),

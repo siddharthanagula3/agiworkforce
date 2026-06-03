@@ -70,7 +70,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
       return;
     }
     if (!isValidPairingCode(trimmed)) {
-      setManualError('Invalid code format. Expected 6-12 alphanumeric characters.');
+      setManualError('Invalid pairing format. Scan the QR code or paste the full pairing payload.');
       return;
     }
     setManualError(null);
@@ -134,7 +134,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
         </View>
 
         <Text className="text-white/50 text-sm">
-          Open AGI Workforce on your desktop, go to Settings, and find your pairing code.
+          Open AGI Workforce on your desktop, go to Settings, and scan the pairing QR code.
         </Text>
 
         {/* Code input */}
@@ -145,12 +145,12 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               setManualCode(text);
               setManualError(null);
             }}
-            placeholder="e.g. agiw:ABC123"
+            placeholder="agiw:CODE:TOKEN"
             placeholderTextColor="rgba(255,255,255,0.3)"
             autoCapitalize="characters"
             autoCorrect={false}
             autoFocus
-            maxLength={20}
+            maxLength={96}
             returnKeyType="done"
             onSubmitEditing={handleManualSubmit}
             style={{

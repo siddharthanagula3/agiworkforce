@@ -30,7 +30,6 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "focus",
         "background",
         "bg",
-        "advisor",
         "team-onboarding",
         "terminal-setup",
         "shell-setup",
@@ -123,7 +122,7 @@ pub fn handle_shared_command(
         "/background" | "/bg" => ParityCommandResult::SystemMessage(
             "Current task moved to background context. Use /tasks to view active tasks.".to_string(),
         ),
-        "/advisor" => ParityCommandResult::SystemMessage(render_advisor(arg)),
+        "/advisor" => ParityCommandResult::NotHandled,
         "/team-onboarding" => ParityCommandResult::SystemMessage(render_team_onboarding()),
         "/terminal-setup" | "/shell-setup" => {
             ParityCommandResult::SystemMessage(render_terminal_setup())
@@ -541,9 +540,7 @@ pub fn render_install_app(app_name: &str) -> String {
         "GitHub" | "github" | "install-github-app" => {
             Some("https://github.com/apps/agiworkforce/installations/new")
         }
-        "Slack" | "slack" | "install-slack-app" => {
-            Some("https://api.slack.com/apps?new_app=1")
-        }
+        "Slack" | "slack" | "install-slack-app" => Some("https://api.slack.com/apps?new_app=1"),
         _ => None,
     };
 
@@ -586,14 +583,14 @@ pub fn render_vim(arg: &str) -> String {
 }
 
 pub fn review_prompt(arg: &str) -> String {
-    if arg.trim().is_empty() {
-        "Please review my current code changes. Run `git diff` to see what changed, then analyze for bugs, security issues, and improvements.".to_string()
+    let review_scope = if arg.trim().is_empty() {
+        "my current code changes. Run `git diff` to see what changed"
     } else {
-        format!(
-            "Please review the code related to: {}. Look for bugs, security issues, and improvements.",
-            arg.trim()
-        )
-    }
+        arg.trim()
+    };
+    format!(
+        "Please review {review_scope}. Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks. Return high-confidence findings with file/line evidence and proposed fixes."
+    )
 }
 
 pub fn render_copy() -> String {
@@ -700,10 +697,10 @@ pub fn render_insights(session: &AgentSession) -> String {
 
 pub fn render_advisor(arg: &str) -> String {
     if arg.trim().is_empty() {
-        return "Advisor: consult a higher-tier model without affecting context.\n  Usage: /advisor <question>\n  Default model: claude-opus-4-7. Set with AGIWORKFORCE_ADVISOR_MODEL env.".to_string();
+        return "Advisor: consult a catalog-selected higher-tier model without affecting context.\n  Usage: /advisor <question>".to_string();
     }
     format!(
-        "Advisor request captured: {}\n  Dedicated advisor routing is not enabled in this build; send this as /btw or a normal prompt.",
+        "Advisor request captured: {}\n  Dedicated advisor routing is available through the CLI slash command handler.",
         arg.trim()
     )
 }
@@ -915,7 +912,7 @@ pub fn security_review_prompt(arg: &str) -> String {
         arg.trim()
     };
     format!(
-        "Run a security-focused review of {scope}. Inspect the relevant code and git diff. Prioritize exploitable bugs, unsafe command/file handling, secret exposure, network trust boundaries, injection risks, auth bypasses, and missing tests. Return findings first with file/line references."
+        "Run a security-focused review of {scope}. Inspect the relevant code and git diff. Prioritize exploitable bugs, unsafe command/file handling, secret/PII exposure, network trust boundaries, prompt injection/tool poisoning/RAG poisoning, insecure output handling, excessive agency, auth/BOLA/IDOR/tenant isolation bypasses, webhook signature/idempotency gaps, unsafe API consumption, and platform-specific permission overreach. Return findings first with file/line references."
     )
 }
 
@@ -937,7 +934,7 @@ pub fn ultrareview_prompt(arg: &str) -> String {
         arg.trim()
     };
     format!(
-        "Run an ultrareview of {scope}: perform a deep bug-hunt across changed code and adjacent contracts. Check correctness, security, concurrency, data loss, migrations, CLI UX regressions, and missing tests. Lead with only high-confidence findings."
+        "Run an ultrareview of {scope}: perform a deep bug-hunt across changed code and adjacent contracts. Use the full AGI LLM-failure taxonomy from docs/agent-context/llm-failure-taxonomy.json when available. Check hallucination/fake APIs, AI slop/overengineering, stubs, incomplete wiring, architecture and requirement drift, unsafe assumptions, swallowed errors, races/stale state, data correctness, API auth/BOLA/IDOR, reliability limits, webhooks, database constraints/migrations, LLM/RAG/agent attack surface, security/privacy, supply chain, false-green tests, build/deploy drift, and platform-specific web/mobile/desktop/CLI/extension failures. Lead with only high-confidence findings and cite file/line evidence."
     )
 }
 
@@ -971,21 +968,25 @@ pub fn handle_debug(session: &mut AgentSession) -> String {
 pub fn handle_tui(_session: &mut AgentSession, arg: &str) -> String {
     match arg.trim() {
         "fullscreen" | "full" | "on" | "1" | "true" => {
-            "TUI renderer: fullscreen mode requested. Restart without --no-tui to apply.".to_string()
+            "TUI renderer: fullscreen mode requested. Restart without --no-tui to apply."
+                .to_string()
         }
         "default" | "off" | "0" | "false" => {
-            "TUI renderer: REPL (default) mode requested. Restart with --no-tui to apply.".to_string()
+            "TUI renderer: REPL (default) mode requested. Restart with --no-tui to apply."
+                .to_string()
         }
         "" => {
             let active = std::env::var("AGIWORKFORCE_NO_TUI").is_ok_and(|v| v == "1");
-            let current = if active { "default (REPL)" } else { "fullscreen (TUI)" };
+            let current = if active {
+                "default (REPL)"
+            } else {
+                "fullscreen (TUI)"
+            };
             format!(
                 "Current renderer: {current}\n  Use /tui fullscreen to enable the TUI renderer or /tui default to use REPL mode."
             )
         }
-        other => format!(
-            "Unknown renderer '{other}'. Valid options: default, fullscreen."
-        ),
+        other => format!("Unknown renderer '{other}'. Valid options: default, fullscreen."),
     }
 }
 
@@ -1253,6 +1254,7 @@ mod tests {
     #[test]
     fn privacy_mode_byok_blocks_direct_local_handoff() {
         let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Local);
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
         let result = handle_shared_command("/privacy-mode", "byok", &mut session);
@@ -1274,6 +1276,7 @@ mod tests {
     #[test]
     fn privacy_mode_managed_is_private_beta_not_wired() {
         let mut session = test_session();
+        session.set_privacy_mode(PrivacyMode::Local);
 
         let result = handle_shared_command("/privacy-mode", "managed", &mut session);
 

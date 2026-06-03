@@ -68,17 +68,16 @@ describe('createDatabaseClient', () => {
     await expect(db.dispose()).resolves.toBeUndefined();
   });
 
-  it('returns Postgres adapter when AGI_DATABASE_PROVIDER=postgres', () => {
+  it('rejects Postgres when AGI_DATABASE_PROVIDER=postgres', () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'postgres';
     process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@host:5432/db';
-    const db = createDatabaseClient();
-    expect(db).toBeInstanceOf(PostgresDatabaseAdapter);
+    expect(() => createDatabaseClient()).toThrow(DataLayerConfigError);
   });
 
-  it('Postgres adapter throws NotImplementedError on query', async () => {
-    process.env['AGI_DATABASE_PROVIDER'] = 'postgres';
-    process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@host:5432/db';
-    const db = createDatabaseClient();
+  it('raw Postgres skeleton remains explicitly constructible but not factory-selectable', async () => {
+    const db = new PostgresDatabaseAdapter({
+      connectionString: 'postgresql://u:p@host:5432/db',
+    });
     await expect(db.query('select 1')).rejects.toBeInstanceOf(NotImplementedError);
   });
 
@@ -87,21 +86,29 @@ describe('createDatabaseClient', () => {
     expect(() => createDatabaseClient()).toThrow(DataLayerConfigError);
   });
 
-  it('respects explicit options over env', () => {
-    process.env['AGI_DATABASE_PROVIDER'] = 'neon';
+  it('respects explicit Neon provider options over env', () => {
+    process.env['AGI_DATABASE_PROVIDER'] = 'postgres';
     process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep1.neon.tech/db';
     const db = createDatabaseClient({
-      provider: 'postgres',
-      connectionString: 'postgresql://u:p@override:5432/db',
+      provider: 'neon',
+      connectionString: 'postgresql://u:p@override.neon.tech/db',
     });
-    expect(db).toBeInstanceOf(PostgresDatabaseAdapter);
+    expect(db).toBeInstanceOf(NeonDatabaseAdapter);
   });
 
   it('falls back to DATABASE_URL when AGI_DATABASE_URL is unset', () => {
-    process.env['AGI_DATABASE_PROVIDER'] = 'postgres';
     process.env['DATABASE_URL'] = 'postgresql://u:p@fallback:5432/db';
     const db = createDatabaseClient();
-    expect(db).toBeInstanceOf(PostgresDatabaseAdapter);
+    expect(db).toBeInstanceOf(NeonDatabaseAdapter);
+  });
+
+  it('rejects explicit Postgres provider selection', () => {
+    expect(() =>
+      createDatabaseClient({
+        provider: 'postgres' as never,
+        connectionString: 'postgresql://u:p@host:5432/db',
+      }),
+    ).toThrow(DataLayerConfigError);
   });
 
   it('throws when Neon provider chosen without connection string', () => {

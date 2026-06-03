@@ -25,8 +25,8 @@ describe('isOpenAIGpt54MiniModel', () => {
   it('returns true for date-suffixed gpt-5.4-mini', () => {
     expect(isOpenAIGpt54MiniModel({ id: 'gpt-5.4-mini-2026-04-01' })).toBe(true);
   });
-  it('returns false for gpt-5.4', () => {
-    expect(isOpenAIGpt54MiniModel({ id: 'gpt-5.4' })).toBe(false);
+  it('returns false for the current OpenAI flagship', () => {
+    expect(isOpenAIGpt54MiniModel({ id: 'gpt-5.5' })).toBe(false);
   });
   it('returns false for gpt-5-mini (different family)', () => {
     expect(isOpenAIGpt54MiniModel({ id: 'gpt-5-mini' })).toBe(false);
@@ -63,7 +63,7 @@ describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
       'high',
       'xhigh',
     ]);
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.4' })).toEqual([
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.5' })).toEqual([
       'none',
       'low',
       'medium',
@@ -72,21 +72,27 @@ describe('resolveOpenAISupportedReasoningEfforts — golden snapshots', () => {
     ]);
   });
 
-  it('gpt-5-pro supports only high', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5-pro' })).toEqual(['high']);
-  });
-
-  it('gpt-5.4-pro supports medium/high/xhigh', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.4-pro' })).toEqual([
+  it('gpt-5.5 non-pro uses the general GPT-5.2+ effort set', () => {
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.5' })).toEqual([
+      'none',
+      'low',
       'medium',
       'high',
       'xhigh',
     ]);
   });
 
-  it('codex variants drop minimal in favor of low/medium/high/xhigh', () => {
-    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.4-codex' })).toEqual([
-      'low',
+  it('gpt-5.5-pro supports medium/high/xhigh', () => {
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.5-pro' })).toEqual([
+      'medium',
+      'high',
+      'xhigh',
+    ]);
+  });
+
+  it('documented codex max variant supports none/medium/high/xhigh', () => {
+    expect(resolveOpenAISupportedReasoningEfforts({ id: 'gpt-5.1-codex-max' })).toEqual([
+      'none',
       'medium',
       'high',
       'xhigh',
@@ -169,7 +175,7 @@ describe('resolveOpenAIReasoningEffortForModel — fallback ladder', () => {
   it('respects fallbackMap when the requested effort is not directly supported', () => {
     expect(
       resolveOpenAIReasoningEffortForModel({
-        model: { id: 'gpt-5-pro' }, // only supports `high`
+        model: { id: 'gpt-5.5-pro' },
         effort: 'medium',
         fallbackMap: { medium: 'high' },
       }),

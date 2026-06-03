@@ -6,20 +6,18 @@
 //!    tool names to the CLI's real executors and injects them into the
 //!    `agiworkforce-app-server` crate's `Processor`.
 //!
-//! 2. `run_mcp_server` — a CLI-local override of the crate's MCP-protocol
-//!    stdio handler.  The crate's version advertises `agiworkforce_exec` via
-//!    `tools/list` but lacks a `tools/call` arm (it would need a live model
-//!    session, which the crate cannot create).  This override adds an honest
-//!    `tools/call` arm that returns a clear "not yet available" response
-//!    instead of a silent -32601.
+//! 2. `run_mcp_server` — a CLI-local MCP-protocol stdio handler. It advertises
+//!    only tools that are actually callable from this context. Until agent exec
+//!    is wired for stdio MCP, the tool list is intentionally empty.
 //!
 //! JSON-RPC types and `run_app_server` are re-exported from the crate;
 //! `run_mcp_server` is *not* re-exported — only this local version is used.
 
+pub use agiworkforce_app_server::run_app_server;
 pub use agiworkforce_app_server::{
     AppServerConfig, AppServerTransport, JsonRpcError, JsonRpcRequest, JsonRpcResponse,
+    WebSocketSecurity,
 };
-pub use agiworkforce_app_server::run_app_server;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -28,8 +26,8 @@ use std::sync::Arc;
 
 use agiworkforce_app_server::ToolDispatch;
 
-use crate::features::exec::tools::{execute_tool_with_opts, ToolExecOptions};
 use crate::agent::ToolCall;
+use crate::features::exec::tools::{execute_tool_with_opts, ToolExecOptions};
 use crate::runtime::tool_catalog;
 
 // ---------------------------------------------------------------------------
@@ -73,45 +71,6 @@ fn cli_tool_catalog() -> Vec<serde_json::Value> {
             },
         }),
         serde_json::json!({
-            "name": "write_file",
-            "description": desc("write_file", "Write content to a file"),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": json_string_prop("File path to write"),
-                    "content": json_string_prop("Content to write"),
-                },
-                "required": ["path", "content"],
-            },
-        }),
-        serde_json::json!({
-            "name": "edit_file",
-            "description": desc("edit_file", "Edit a file using old/new string replacement"),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "path": json_string_prop("File path to edit"),
-                    "old_string": json_string_prop("Exact string to replace"),
-                    "new_string": json_string_prop("Replacement string"),
-                    "replace_all": {"type": "boolean", "description": "Replace all occurrences"},
-                },
-                "required": ["path", "old_string", "new_string"],
-            },
-        }),
-        serde_json::json!({
-            "name": "run_command",
-            "description": desc("run_command", "Run a shell command"),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "command": json_string_prop("Shell command to execute"),
-                    "working_dir": json_string_prop("Working directory (optional)"),
-                    "timeout_sec": {"type": "integer", "description": "Timeout in seconds (default 30)"},
-                },
-                "required": ["command"],
-            },
-        }),
-        serde_json::json!({
             "name": "search_files",
             "description": desc("search_files", "Search for text patterns across files"),
             "inputSchema": {
@@ -143,7 +102,7 @@ fn cli_tool_catalog() -> Vec<serde_json::Value> {
                 "type": "object",
                 "properties": {
                     "query": json_string_prop("Search query"),
-                    "num_results": {"type": "integer", "description": "Number of results (default: 5)"},
+                    "max_results": {"type": "integer", "description": "Number of results (default: 5)"},
                 },
                 "required": ["query"],
             },
@@ -155,21 +114,8 @@ fn cli_tool_catalog() -> Vec<serde_json::Value> {
                 "type": "object",
                 "properties": {
                     "url": json_string_prop("URL to fetch"),
-                    "max_length": {"type": "integer", "description": "Maximum response length in chars"},
                 },
                 "required": ["url"],
-            },
-        }),
-        serde_json::json!({
-            "name": "apply_patch",
-            "description": desc("apply_patch", "Apply a unified diff patch to a file"),
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "patch": json_string_prop("Unified diff patch text"),
-                    "path": json_string_prop("File path to apply the patch to"),
-                },
-                "required": ["patch"],
             },
         }),
         serde_json::json!({
@@ -222,10 +168,17 @@ impl Default for CliToolDispatch {
     }
 }
 
-/// Tools that are advertised by some legacy configs but cannot be dispatched
-/// through this surface.  Receiving these returns an explicit "not available"
-/// error rather than -32601 (method-not-found).
-const NOT_AVAILABLE_VIA_APP_SERVER: &[&str] = &["task"];
+/// Tools allowed through the non-interactive app-server surface. Mutating tools
+/// are deliberately unavailable because there is no user approval channel here.
+const AVAILABLE_VIA_APP_SERVER: &[&str] = &[
+    "read_file",
+    "search_files",
+    "list_directory",
+    "web_search",
+    "web_fetch",
+    "grep_files",
+    "tool_search",
+];
 
 /// Convert a JSON object of arbitrary values to `HashMap<String, String>` using
 /// the same strategy as `execute_batch` in `tools/mod.rs`: `String` values are
@@ -253,15 +206,14 @@ impl ToolDispatch for CliToolDispatch {
     }
 
     async fn call_tool(&self, name: &str, args: serde_json::Value) -> Result<serde_json::Value> {
-        // Tools that are genuinely unavailable through this surface.
-        if NOT_AVAILABLE_VIA_APP_SERVER.contains(&name) {
+        if !AVAILABLE_VIA_APP_SERVER.contains(&name) {
             return Ok(serde_json::json!({
                 "content": [{
                     "type": "text",
                     "text": format!(
                         "Tool '{}' is not available via the app-server surface. \
-                         It is an agent-runtime tool that can only be invoked inside an active \
-                         agentic session.",
+                         The app-server is a read-only, non-interactive surface; \
+                         use the TUI/REPL for mutating tools that require approval.",
                         name
                     ),
                 }],
@@ -307,11 +259,11 @@ pub fn make_dispatch() -> Arc<CliToolDispatch> {
 
 /// MCP-protocol stdio handler for `agi mcp-server`.
 ///
-/// Advertises a single `agiworkforce_exec` tool and — unlike the crate's
-/// version — responds to `tools/call` with an honest "not yet available"
-/// message instead of a silent -32601.  A full one-shot exec requires a
-/// configured API key and model at runtime; returning a clear error is the
-/// honest contract for embedded / headless callers.
+/// MCP-protocol stdio handler for `agi mcp-server`.
+///
+/// The stdio MCP server currently exposes no tools. A full one-shot agent exec
+/// requires a configured provider/model session, approval plumbing, and event
+/// streaming; advertising that tool before it is callable would be fake wiring.
 pub async fn run_mcp_server() -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
     let mut reader = BufReader::new(tokio::io::stdin());
@@ -360,44 +312,21 @@ pub async fn run_mcp_server() -> Result<()> {
                     }),
                 )
             }
-            "tools/list" if initialized => JsonRpcResponse::ok(
-                id,
-                serde_json::json!({
-                    "tools": [{
-                        "name": "agiworkforce_exec",
-                        "description": "Execute a prompt via the AGI Workforce agent. Requires a configured provider and model key at runtime.",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {"prompt": {"type": "string", "description": "Prompt to execute"}},
-                            "required": ["prompt"],
-                        },
-                    }],
-                }),
-            ),
+            "tools/list" if initialized => {
+                JsonRpcResponse::ok(id, serde_json::json!({ "tools": [] }))
+            }
             "tools/call" if initialized => {
-                // agiworkforce_exec requires an active model session (API key +
-                // model) that cannot be constructed inside the MCP-server stdio
-                // loop without blocking on user configuration.  Return a clear,
-                // actionable error rather than -32601 (method not found).
                 let name = req
                     .get("params")
                     .and_then(|p| p.get("name"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("(unknown)");
-                JsonRpcResponse::ok(
+                JsonRpcResponse::err(
                     id,
-                    serde_json::json!({
-                        "content": [{
-                            "type": "text",
-                            "text": format!(
-                                "Tool '{name}' is not yet available in this MCP-server context. \
-                                 The agiworkforce_exec tool requires a configured API key and model. \
-                                 Run `agi <prompt>` directly, or configure a provider via \
-                                 ~/.agiworkforce/config.toml before using the MCP server.",
-                            ),
-                        }],
-                        "isError": true,
-                    }),
+                    -32602,
+                    format!(
+                        "Tool '{name}' is not advertised by this MCP server. Use the CLI app-server WebSocket tool bridge for wired CLI tools, or run `agi <prompt>` directly."
+                    ),
                 )
             }
             _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {}", method)),
@@ -420,25 +349,53 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn list_tools_returns_11_wired_tools() {
+    async fn list_tools_returns_read_only_tools() {
         let d = CliToolDispatch::new();
         let tools = d.list_tools().await;
         assert_eq!(
             tools.len(),
-            11,
-            "expected 11 wired tools (task excluded), got {}",
+            7,
+            "expected 7 read-only tools, got {}",
             tools.len()
         );
-        let names: Vec<&str> = tools
-            .iter()
-            .filter_map(|t| t["name"].as_str())
-            .collect();
+        let names: Vec<&str> = tools.iter().filter_map(|t| t["name"].as_str()).collect();
         assert!(names.contains(&"read_file"), "read_file must be in catalog");
-        assert!(names.contains(&"grep_files"), "grep_files must be in catalog");
+        assert!(
+            names.contains(&"grep_files"),
+            "grep_files must be in catalog"
+        );
         assert!(
             !names.contains(&"task"),
             "task must NOT appear in app-server catalog"
         );
+        assert!(
+            !names.contains(&"write_file"),
+            "mutating tools must not appear in app-server catalog"
+        );
+        assert!(
+            !names.contains(&"run_command"),
+            "mutating tools must not appear in app-server catalog"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_tools_schema_matches_executor_contract() {
+        let d = CliToolDispatch::new();
+        let tools = d.list_tools().await;
+        let props = |name: &str| -> serde_json::Map<String, serde_json::Value> {
+            tools
+                .iter()
+                .find(|tool| tool["name"] == name)
+                .and_then(|tool| tool["inputSchema"]["properties"].as_object())
+                .cloned()
+                .unwrap_or_default()
+        };
+
+        assert!(props("web_search").contains_key("max_results"));
+        assert!(!props("web_search").contains_key("num_results"));
+        assert!(!props("web_fetch").contains_key("max_length"));
+        assert!(props("run_command").is_empty());
+        assert!(props("edit_file").is_empty());
     }
 
     #[tokio::test]
@@ -460,9 +417,7 @@ mod tests {
             "read_file should succeed: {:?}",
             result
         );
-        let text = result["content"][0]["text"]
-            .as_str()
-            .expect("text content");
+        let text = result["content"][0]["text"].as_str().expect("text content");
         assert!(
             text.contains("hello app-server"),
             "file content should appear in result: {}",
@@ -480,10 +435,8 @@ mod tests {
             .expect("write file");
 
         // Register the temp dir so path_security allows it
-        crate::path_security::register_additional_workspace_root(
-            &dir.path().to_string_lossy(),
-        )
-        .expect("register workspace root");
+        crate::path_security::register_additional_workspace_root(&dir.path().to_string_lossy())
+            .expect("register workspace root");
 
         let d = CliToolDispatch::new();
         let result = d
@@ -533,11 +486,30 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mcp_server_tools_call_returns_honest_error_not_32601() {
+    async fn call_mutating_tool_returns_read_only_surface_error() {
+        let d = CliToolDispatch::new();
+        let result = d
+            .call_tool(
+                "write_file",
+                serde_json::json!({"path": "x.txt", "content": "nope"}),
+            )
+            .await
+            .expect("call_tool should not propagate error");
+
+        assert_eq!(result["isError"], serde_json::json!(true));
+        let text = result["content"][0]["text"].as_str().expect("text content");
+        assert!(
+            text.contains("read-only"),
+            "should explain read-only surface: {}",
+            text
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_server_does_not_advertise_unwired_exec_tool() {
         // Simulate the MCP-server stdio protocol by spinning the server on a
-        // fake stdin pipe and reading its responses.  We verify that
-        // `tools/call` for `agiworkforce_exec` returns a JSON result with
-        // isError:true rather than a -32601 error object.
+        // local stdin pipe and reading its responses. The stdio MCP server must
+        // not advertise tools that cannot be executed from this context.
         use tokio::io::AsyncWriteExt;
         let (mut stdin_write, stdin_read) = tokio::io::duplex(4096);
         let (stdout_write, mut stdout_read) = tokio::io::duplex(4096);
@@ -576,11 +548,25 @@ mod tests {
                 let resp = match method {
                     "initialize" => {
                         initialized = true;
-                        JsonRpcResponse::ok(id, serde_json::json!({"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"agiworkforce","version":"0"}}))
+                        JsonRpcResponse::ok(
+                            id,
+                            serde_json::json!({"protocolVersion":"2024-11-05","capabilities":{"tools":{}},"serverInfo":{"name":"agiworkforce","version":"0"}}),
+                        )
+                    }
+                    "tools/list" if initialized => {
+                        JsonRpcResponse::ok(id, serde_json::json!({"tools": []}))
                     }
                     "tools/call" if initialized => {
-                        let name = req.get("params").and_then(|p| p.get("name")).and_then(|v| v.as_str()).unwrap_or("unknown");
-                        JsonRpcResponse::ok(id, serde_json::json!({"content":[{"type":"text","text":format!("Tool '{name}' is not yet available")}],"isError":true}))
+                        let name = req
+                            .get("params")
+                            .and_then(|p| p.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        JsonRpcResponse::err(
+                            id,
+                            -32602,
+                            format!("Tool '{name}' is not advertised by this MCP server."),
+                        )
                     }
                     _ => JsonRpcResponse::err(id, -32601, format!("Unknown: {method}")),
                 };
@@ -588,15 +574,21 @@ mod tests {
                 writer.write_all(j.as_bytes()).await.ok();
                 writer.write_all(b"\n").await.ok();
                 writer.flush().await.ok();
-                if method == "shutdown" { break; }
+                if method == "shutdown" {
+                    break;
+                }
             }
         });
 
-        // Send initialize + tools/call + shutdown
+        // Send initialize + tools/list + tools/call + shutdown
         let init = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#;
-        let call = r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"agiworkforce_exec","arguments":{"prompt":"hi"}}}"#;
-        let shutdown = r#"{"jsonrpc":"2.0","id":3,"method":"shutdown","params":{}}"#;
-        stdin_write.write_all(format!("{init}\n{call}\n{shutdown}\n").as_bytes()).await.unwrap();
+        let list = r#"{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}"#;
+        let call = r#"{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"agiworkforce_exec","arguments":{"prompt":"hi"}}}"#;
+        let shutdown = r#"{"jsonrpc":"2.0","id":4,"method":"shutdown","params":{}}"#;
+        stdin_write
+            .write_all(format!("{init}\n{list}\n{call}\n{shutdown}\n").as_bytes())
+            .await
+            .unwrap();
         drop(stdin_write);
         server_handle.await.ok();
 
@@ -605,21 +597,19 @@ mod tests {
         use tokio::io::AsyncReadExt;
         stdout_read.read_to_string(&mut buf).await.unwrap();
         let lines: Vec<&str> = buf.lines().collect();
-        assert!(lines.len() >= 2, "expected at least 2 response lines");
+        assert!(lines.len() >= 3, "expected at least 3 response lines");
 
-        // The second response (id:2, tools/call) must be a result (not error),
-        // with isError:true inside the result — meaning no -32601.
-        let call_resp: serde_json::Value = serde_json::from_str(lines[1]).expect("valid json");
-        assert!(
-            call_resp.get("error").is_none(),
-            "tools/call must not return -32601 error object: {:?}",
-            call_resp
-        );
-        let result = call_resp.get("result").expect("tools/call must have result");
+        let list_resp: serde_json::Value = serde_json::from_str(lines[1]).expect("valid json");
+        let tools = list_resp["result"]["tools"]
+            .as_array()
+            .expect("tools/list must return a tools array");
+        assert!(tools.is_empty(), "unwired exec tool must not be advertised");
+
+        let call_resp: serde_json::Value = serde_json::from_str(lines[2]).expect("valid json");
         assert_eq!(
-            result["isError"],
-            serde_json::json!(true),
-            "isError must be true (honest error, not silent -32601)"
+            call_resp["error"]["code"],
+            serde_json::json!(-32602),
+            "tools/call for an unadvertised tool must fail explicitly"
         );
     }
 

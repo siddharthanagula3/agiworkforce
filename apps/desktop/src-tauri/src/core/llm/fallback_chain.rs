@@ -24,9 +24,9 @@
 //!
 //! let chain = FallbackChain::new(FallbackConfig::default());
 //! let candidates = vec![
-//!     ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4-5"),
-//!     ModelCandidate::new(Provider::OpenAI, "gpt-5.4"),
-//!     ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
+//!     ModelCandidate::new(Provider::Anthropic, "claude-sonnet-4.6"),
+//!     ModelCandidate::new(Provider::OpenAI, "gpt-5.5"),
+//!     ModelCandidate::new(Provider::Google, "gemini-3.1-pro-preview"),
 //! ];
 //!
 //! let result = chain.run_with_fallback(&candidates, |candidate| async {
@@ -1111,9 +1111,9 @@ mod tests {
     #[test]
     fn test_model_candidate_builder() {
         let candidates = CandidateBuilder::new()
-            .add(Provider::Anthropic, "claude-sonnet-4-5")
-            .add_with_priority(Provider::OpenAI, "gpt-5.4", 1)
-            .add_with_reason(Provider::Google, "gemini-3-pro-preview", "fallback")
+            .add(Provider::Anthropic, "claude-sonnet-4.6")
+            .add_with_priority(Provider::OpenAI, "gpt-5.5", 1)
+            .add_with_reason(Provider::Google, "gemini-3.1-pro-preview", "fallback")
             .build();
 
         assert_eq!(candidates.len(), 3);

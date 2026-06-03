@@ -1844,19 +1844,10 @@ impl LLMRouter {
 
     /// Default model selection for each provider and task category.
     ///
-    /// **Reasoning Model Priority (December 2025):**
-    /// When a provider offers both reasoning and non-reasoning variants at the same price,
-    /// we prioritize the reasoning variant to get better capabilities without additional cost.
+    /// Default model selection for each provider and task category.
     ///
-    /// **Confirmed Same-Price Reasoning Variants (December 2025):**
-    /// - **xAI**: `grok-4-fast-reasoning` ($0.50/1M) prioritized over `grok-4-fast` ($0.50/1M)
-    ///
-    /// **Other Providers Checked:**
-    /// - **Qwen**: `qwen-max` has thinking mode built-in (always reasoning, no separate non-reasoning variant)
-    /// - **OpenAI**: GPT-5.4 supports effort-based reasoning controls without a separate "thinking" model ID
-    /// - **DeepSeek**: V3.2-Exp Reasoner mentioned but model ID not in current codebase
-    /// - **Anthropic**: Reasoning variants (Opus) priced higher than non-reasoning (Sonnet)
-    /// - **Google**: Reasoning variants (Deep Think) priced higher than non-reasoning (Pro/Flash)
+    /// Provider defaults are catalog-backed. Do not hardcode new model IDs here
+    /// unless the provider has no catalog route yet.
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
         match provider {
             Provider::OpenAI | Provider::Anthropic | Provider::Google | Provider::ManagedCloud => {
@@ -1867,9 +1858,8 @@ impl LLMRouter {
                 super::models_config::get_default_model(&Provider::Ollama).to_string()
             }
             Provider::XAI => match task {
-                // grok-4.3 is the current xAI flagship as of May 2026: $1.25/$2.50 per 1M, 1M context,
-                // always-on chain-of-thought. Replaces grok-4-1-fast-reasoning + siblings, all of
-                // which deprecate 2026-05-15.
+                // Current xAI default; legacy Grok aliases are handled by the
+                // shared catalog canonicalization map.
                 TaskCategory::Simple => "grok-4.3".to_string(),
                 TaskCategory::Complex => "grok-4.3".to_string(),
                 TaskCategory::Creative => "grok-4.3".to_string(),
@@ -1891,11 +1881,11 @@ impl LLMRouter {
                 TaskCategory::Complex => "kimi-k2.5".to_string(),
                 TaskCategory::Creative => "kimi-k2.5".to_string(),
             },
-            // ZhipuAI - GLM-4.7 is excellent for coding (73.8% SWE-bench)
+            // ZhipuAI - use current GLM 5.1 catalog entries.
             Provider::Zhipu => match task {
-                TaskCategory::Simple => "glm-4.6v-flash".to_string(), // Fast and free
-                TaskCategory::Complex => "glm-4.7".to_string(),       // Best for coding
-                TaskCategory::Creative => "glm-4.6v".to_string(),     // Vision for creative
+                TaskCategory::Simple => "glm-5.1".to_string(),
+                TaskCategory::Complex => "glm-5.1".to_string(),
+                TaskCategory::Creative => "glm-5.1".to_string(),
             },
             Provider::Perplexity => match task {
                 TaskCategory::Simple => "sonar".to_string(),

@@ -847,10 +847,8 @@ impl PrCreationWorkflow {
         prompt.push_str("## Diff Content (truncated)\n```diff\n");
         // Limit diff to avoid token limits
         let diff_preview = if diff_summary.diff_content.len() > 10000 {
-            &diff_summary.diff_content[..crate::core::agi::floor_char_boundary(
-                &diff_summary.diff_content,
-                10000,
-            )]
+            &diff_summary.diff_content
+                [..crate::core::agi::floor_char_boundary(&diff_summary.diff_content, 10000)]
         } else {
             &diff_summary.diff_content
         };

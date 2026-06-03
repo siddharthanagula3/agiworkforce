@@ -36,7 +36,7 @@ import { useModelStore } from '../src/features/model-picker/store';
 
 const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
 const VISION_MODEL_ID = 'qwen2.5-vl-3b-instruct';
-const CLOUD_MODEL_ID = 'gpt-5.4';
+const CLOUD_MODEL_ID = 'gpt-5.5';
 
 function getState() {
   return useModelStore.getState();

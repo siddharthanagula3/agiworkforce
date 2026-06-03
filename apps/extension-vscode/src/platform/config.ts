@@ -35,7 +35,7 @@ const DEFAULTS = {
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
   mcpEnabled: false,
-  model: 'auto-balanced',
+  model: 'auto-economy',
   streamingEnabled: true,
   contextLines: 50,
   fallbackToVscodeLm: true,

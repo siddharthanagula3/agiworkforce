@@ -37,17 +37,21 @@ export async function GET(
 
   const authHeader = request.headers.get('authorization') ?? '';
 
-  const res = await fetch(
-    `${gatewayUrl}/api/v1/providers/${encodeURIComponent(providerId)}/catalog`,
-    {
+  let res: Response;
+  try {
+    res = await fetch(`${gatewayUrl}/api/v1/providers/${encodeURIComponent(providerId)}/catalog`, {
       method: 'GET',
       headers: {
         ...(authHeader ? { authorization: authHeader } : {}),
         'x-requested-with': 'agiworkforce-web',
       },
       cache: 'no-store',
-    },
-  );
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (err) {
+    logger.error({ err, providerId }, 'Provider catalog gateway request failed');
+    return NextResponse.json({ error: 'Gateway unavailable' }, { status: 504 });
+  }
 
   const body = await res.text();
   return new NextResponse(body, {

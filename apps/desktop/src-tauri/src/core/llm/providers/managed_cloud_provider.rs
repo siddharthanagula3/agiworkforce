@@ -62,13 +62,7 @@ impl ManagedCloudProvider {
             return canonical;
         }
 
-        // Cloud-specific aliases not in models.json (pattern-based rules that
-        // cannot be expressed as simple key-value pairs in the JSON map).
-        match trimmed.as_str() {
-            m if m.starts_with("gpt-5.4-codex-") => "gpt-5.4-codex".to_string(),
-            // Keep the trimmed/lowercased model ID when no alias is needed.
-            _ => trimmed,
-        }
+        trimmed
     }
 
     fn codex_effort_override(model: &str) -> Option<&'static str> {
@@ -293,9 +287,8 @@ impl ManagedCloudProvider {
             }
         }
 
-        // Map desktop Codex quality variants to OpenAI reasoning effort.
-        // This keeps "gpt-5.4-codex-low|medium|high|xhigh" behavior after
-        // alias normalization to the canonical API model.
+        // Map local quality suffixes to OpenAI reasoning effort when callers
+        // still pass a suffix-bearing model string.
         if let Some(effort) = Self::codex_effort_override(&request.model) {
             if transformed
                 .get("effort")
@@ -835,7 +828,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.4-nano".to_string(),
+            model: "gpt-5.4-mini".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,

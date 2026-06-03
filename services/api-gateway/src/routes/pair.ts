@@ -20,6 +20,7 @@ import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 const router: Router = Router();
 
@@ -30,6 +31,7 @@ router.use(authenticateToken);
 router.use(createRateLimiter('default'));
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
+const SIGNALING_INTERNAL_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
 
 // =============================================================================
 // VALIDATION SCHEMAS
@@ -40,6 +42,7 @@ const initiateSchema = z
   .object({
     desktopId: z.string().uuid().optional(),
     ttlSeconds: z.number().int().min(30).max(900).optional(),
+    initiator: z.enum(['desktop', 'mobile']).optional(),
   })
   .strict();
 
@@ -57,7 +60,15 @@ const pairingCodeResponseSchema = z.object({
   httpUrl: z.string(),
   wsUrl: z.string(),
   qrData: z.string(),
+  pairTokens: z.object({
+    desktop: z.string(),
+    mobile: z.string(),
+  }),
 });
+
+function buildPairingQrData(code: string, pairToken: string): string {
+  return `agiw:${code}:${pairToken}`;
+}
 
 // =============================================================================
 // ROUTES
@@ -68,15 +79,14 @@ const pairingCodeResponseSchema = z.object({
  * POST /pair/initiate
  *
  * Creates a new pairing session via the signaling server and returns
- * a pairing code + QR data that the desktop app can scan.
+ * a pairing code + QR data for the opposite peer to scan.
  *
  * Flow:
- * 1. Mobile calls POST /pair/initiate -> gets pairing code + QR data
- * 2. Mobile displays QR code
- * 3. Desktop scans QR code, extracts pairing code
- * 4. Desktop calls POST /pair/confirm with the code
- * 5. Both devices connect to the signaling server WebSocket
- * 6. WebRTC connection established
+ * 1. Initiating peer calls POST /pair/initiate -> gets pairing code + QR data
+ * 2. Initiating peer displays QR code
+ * 3. Opposite peer scans QR code, extracts pairing code and role token
+ * 4. Both peers connect to the signaling server with their role-specific tokens
+ * 5. WebRTC connection established
  *
  * SECURITY: Rate limited to 10/min to prevent enumeration
  */
@@ -86,20 +96,26 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
     throw new AppError('Unauthorized', 401);
   }
 
-  const { desktopId, ttlSeconds } = initiateSchema.parse(req.body ?? {});
+  const { desktopId, ttlSeconds, initiator = 'mobile' } = initiateSchema.parse(req.body ?? {});
 
   logger.info(
     { userId: user.userId, desktopId, ttlSeconds },
     'Pairing initiation requested from mobile',
   );
 
+  if (!SIGNALING_INTERNAL_SECRET) {
+    throw new AppError('Signaling pairing is not configured', 503);
+  }
+
   // Request a pairing code from the signaling server
   let fetchResponse: globalThis.Response;
   try {
-    fetchResponse = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+    fetchResponse = await fetchWithTimeout(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
       method: 'POST',
+      timeoutMs: 10_000,
       headers: {
         'Content-Type': 'application/json',
+        Authorization: `Bearer ${SIGNALING_INTERNAL_SECRET}`,
       },
       body: JSON.stringify({
         ttlSeconds: ttlSeconds ?? 300,
@@ -107,7 +123,7 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
           userId: user.userId,
           email: user.email,
           desktopId: desktopId ?? null,
-          initiator: 'mobile',
+          initiator,
         },
       }),
     });
@@ -146,11 +162,15 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
     code: payload.code,
     expiresAt: payload.expiresAt,
     expiresIn: payload.expiresIn,
-    qrData: payload.qrData,
+    qrData: buildPairingQrData(
+      payload.code,
+      initiator === 'desktop' ? payload.pairTokens.mobile : payload.pairTokens.desktop,
+    ),
     signaling: {
       httpUrl: payload.httpUrl,
       wsUrl: payload.wsUrl,
     },
+    pairTokens: payload.pairTokens,
   });
 });
 
@@ -196,8 +216,9 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
   // Verify the pairing code exists and is valid via the signaling server
   let lookupResponse: globalThis.Response;
   try {
-    lookupResponse = await fetch(
+    lookupResponse = await fetchWithTimeout(
       `${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings/${encodeURIComponent(code)}`,
+      { timeoutMs: 8_000 },
     );
   } catch (fetchError) {
     logger.error({ error: fetchError }, 'Failed to connect to signaling server');
@@ -259,8 +280,9 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
   // Check the signaling server for live status
   let lookupResponse: globalThis.Response;
   try {
-    lookupResponse = await fetch(
+    lookupResponse = await fetchWithTimeout(
       `${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings/${encodeURIComponent(code)}`,
+      { timeoutMs: 8_000 },
     );
   } catch (fetchError) {
     logger.error({ error: fetchError }, 'Failed to connect to signaling server');
@@ -315,16 +337,30 @@ router.delete(
       throw new AppError('code query parameter is required', 400);
     }
 
+    if (!SIGNALING_INTERNAL_SECRET) {
+      throw new AppError('Signaling pairing is not configured', 503);
+    }
+
     // Delete from signaling server
+    let deleteResponse: globalThis.Response;
     try {
-      await fetch(
+      deleteResponse = await fetchWithTimeout(
         `${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings/${encodeURIComponent(code)}`,
         {
           method: 'DELETE',
+          timeoutMs: 10_000,
+          headers: {
+            Authorization: `Bearer ${SIGNALING_INTERNAL_SECRET}`,
+          },
         },
       );
     } catch (fetchError) {
-      logger.warn({ error: fetchError }, 'Failed to delete from signaling server');
+      logger.error({ error: fetchError }, 'Failed to delete from signaling server');
+      throw new AppError('Signaling server unavailable', 503);
+    }
+
+    if (!deleteResponse.ok && deleteResponse.status !== 404) {
+      throw new AppError('Failed to cancel pairing session', 502);
     }
 
     // Wave 1.5+ task #17 (2026-05-08): legacy `pairing_sessions` update

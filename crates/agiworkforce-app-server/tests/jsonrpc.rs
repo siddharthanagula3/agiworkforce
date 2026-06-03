@@ -77,11 +77,15 @@ async fn full_lifecycle_initialize_list_call_shutdown() {
     let proc = Processor::new(stub.clone());
 
     // 1. initialize
-    let init = ok(proc.process(req(1, "initialize", serde_json::json!({}))).await);
+    let init = ok(proc
+        .process(req(1, "initialize", serde_json::json!({})))
+        .await);
     assert_eq!(init["capabilities"]["tools"], serde_json::json!(true));
 
     // 2. tools/list
-    let list = ok(proc.process(req(2, "tools/list", serde_json::json!({}))).await);
+    let list = ok(proc
+        .process(req(2, "tools/list", serde_json::json!({})))
+        .await);
     let tools = list["tools"].as_array().expect("tools array");
     assert_eq!(tools.len(), 2);
     assert!(tools.iter().any(|t| t["name"] == "read_file"));
@@ -110,7 +114,9 @@ async fn full_lifecycle_initialize_list_call_shutdown() {
     );
 
     // 4. shutdown
-    let shutdown = ok(proc.process(req(4, "shutdown", serde_json::json!({}))).await);
+    let shutdown = ok(proc
+        .process(req(4, "shutdown", serde_json::json!({})))
+        .await);
     assert_eq!(shutdown, serde_json::json!({"shutdown": true}));
 }
 

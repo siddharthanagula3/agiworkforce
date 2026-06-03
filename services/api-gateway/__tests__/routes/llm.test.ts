@@ -35,18 +35,18 @@ describe('llm route — catalog-driven Hobby allow-list (P0-I)', () => {
     const reasoning = getRoutingSlotModel('reasoning_premium');
 
     expect(HOBBY_ALLOWED_MODELS.has(workhorse)).toBe(true);
-    // escalation_coding (GLM-4.7) lives under tierAllowedModels.economy.
+    // escalation_coding (GLM-5.1) lives under tierAllowedModels.economy.
     expect(HOBBY_ALLOWED_MODELS.has(escalation)).toBe(true);
     // reasoning_premium (DeepSeek V4 Flash) lives under economy.
     expect(HOBBY_ALLOWED_MODELS.has(reasoning)).toBe(true);
   });
 
   it('excludes flagship models that should be Pro-only', () => {
-    // claude-opus-4.7 + gpt-5.5 are flagship; the api-gateway must NOT
+    // claude-opus-4.8 + gpt-5.5 are flagship; the api-gateway must NOT
     // serve them on Hobby even if a malicious caller supplies the ID.
-    expect(HOBBY_ALLOWED_MODELS.has('claude-opus-4.7')).toBe(false);
+    expect(HOBBY_ALLOWED_MODELS.has('claude-opus-4.8')).toBe(false);
     expect(HOBBY_ALLOWED_MODELS.has('gpt-5.5')).toBe(false);
-    expect(HOBBY_ALLOWED_MODELS.has('gpt-5.4-pro')).toBe(false);
+    expect(HOBBY_ALLOWED_MODELS.has('gpt-5.5')).toBe(false);
   });
 
   it('every Hobby-allowed model has a known provider in the catalog', () => {

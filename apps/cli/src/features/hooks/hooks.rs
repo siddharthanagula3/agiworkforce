@@ -439,7 +439,7 @@ pub struct TriggerConfig {
     #[serde(default)]
     pub prompt: Option<String>,
 
-    /// Model to use for agent execution (e.g. "auto-balanced", "claude-opus-4-6").
+    /// Model to use for agent execution (e.g. "auto-balanced", "claude-opus-4-8").
     #[serde(default)]
     pub model: Option<String>,
 
@@ -1195,7 +1195,7 @@ mod tests {
         let input = HookInput {
             event: "AfterToolUse".to_string(),
             session_id: Some("123".to_string()),
-            model: Some("claude-opus-4-6".to_string()),
+            model: Some("claude-opus-4-8".to_string()),
             tool_name: Some("read_file".to_string()),
             tool_args: Some(serde_json::json!({"path": "/tmp/test"})),
             tool_output: Some("file contents".to_string()),
@@ -1984,7 +1984,7 @@ mod tests {
             (true, "PreToolUse", hook_val.clone()), // from_project_dir=true → blocked
         ]);
         assert!(
-            result.get("PreToolUse").is_none() || result["PreToolUse"].is_empty(),
+            !result.contains_key("PreToolUse") || result["PreToolUse"].is_empty(),
             "project-local plugin hook must be blocked"
         );
     }

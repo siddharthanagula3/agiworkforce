@@ -2,9 +2,9 @@ import {
   detectProviderFromModelId,
   getModelIdsForProvider as getCatalogModelIdsForProvider,
   getModelsForProvider as getCatalogModelsForProvider,
-  getProviderDefaultModel,
   getTaskModelForProvider,
   normalizeModelId,
+  requireProviderDefaultModel,
   type ModelType,
   type Provider,
 } from '@agiworkforce/types';
@@ -42,14 +42,13 @@ function getVisionEnabledModelIds(provider: Provider): readonly string[] {
 
 export const SUPPORTED_ANTHROPIC_MODELS = getProviderModelIds('anthropic', CHAT_MODEL_TYPES);
 export type AnthropicModel = string;
-export const DEFAULT_ANTHROPIC_MODEL: AnthropicModel =
-  getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6';
+export const DEFAULT_ANTHROPIC_MODEL: AnthropicModel = requireProviderDefaultModel('anthropic');
 export const DEFAULT_ANTHROPIC_COLLABORATION_MODEL: AnthropicModel =
   getTaskModelForProvider('anthropic', 'chat') ?? DEFAULT_ANTHROPIC_MODEL;
 
 export const SUPPORTED_OPENAI_MODELS = getProviderModelIds('openai', CHAT_MODEL_TYPES);
 export type OpenAIModel = string;
-export const DEFAULT_OPENAI_MODEL: OpenAIModel = getProviderDefaultModel('openai') ?? 'gpt-5.5';
+export const DEFAULT_OPENAI_MODEL: OpenAIModel = requireProviderDefaultModel('openai');
 export const DEFAULT_OPENAI_FAST_MODEL: OpenAIModel =
   getTaskModelForProvider('openai', 'fast_completion') ?? DEFAULT_OPENAI_MODEL;
 export const SUPPORTED_OPENAI_IMAGE_MODELS = getProviderModelIds('openai', IMAGE_MODEL_TYPES);
@@ -58,8 +57,7 @@ export const SUPPORTED_OPENAI_AUDIO_MODELS = getProviderModelIds('openai', AUDIO
 
 export const SUPPORTED_GOOGLE_MODELS = getProviderModelIds('google', CHAT_MODEL_TYPES);
 export type GoogleModel = string;
-export const DEFAULT_GOOGLE_MODEL: GoogleModel =
-  getProviderDefaultModel('google') ?? 'gemini-3.1-pro-preview';
+export const DEFAULT_GOOGLE_MODEL: GoogleModel = requireProviderDefaultModel('google');
 export const DEFAULT_GOOGLE_FAST_MODEL: GoogleModel =
   getTaskModelForProvider('google', 'chat') ?? DEFAULT_GOOGLE_MODEL;
 export const SUPPORTED_GOOGLE_IMAGE_MODELS = getProviderModelIds('google', IMAGE_MODEL_TYPES);
@@ -68,23 +66,21 @@ export const SUPPORTED_GOOGLE_AUDIO_MODELS = getProviderModelIds('google', AUDIO
 
 export const SUPPORTED_PERPLEXITY_MODELS = getProviderModelIds('perplexity', CHAT_MODEL_TYPES);
 export type PerplexityModel = string;
-export const DEFAULT_PERPLEXITY_MODEL: PerplexityModel =
-  getProviderDefaultModel('perplexity') ?? 'sonar';
+export const DEFAULT_PERPLEXITY_MODEL: PerplexityModel = requireProviderDefaultModel('perplexity');
 
 export const SUPPORTED_GROK_MODELS = getProviderModelIds('xai', CHAT_MODEL_TYPES);
 export type GrokModel = string;
-export const DEFAULT_GROK_MODEL: GrokModel = getProviderDefaultModel('xai') ?? 'grok-4';
+export const DEFAULT_GROK_MODEL: GrokModel = requireProviderDefaultModel('xai');
 export const SUPPORTED_GROK_IMAGE_MODELS = getProviderModelIds('xai', IMAGE_MODEL_TYPES);
 export const SUPPORTED_GROK_VISION_MODELS = getVisionEnabledModelIds('xai');
 
 export const SUPPORTED_DEEPSEEK_MODELS = getProviderModelIds('deepseek', CHAT_MODEL_TYPES);
 export type DeepSeekModel = string;
-export const DEFAULT_DEEPSEEK_MODEL: DeepSeekModel =
-  getProviderDefaultModel('deepseek') ?? 'deepseek-chat';
+export const DEFAULT_DEEPSEEK_MODEL: DeepSeekModel = requireProviderDefaultModel('deepseek');
 
 export const SUPPORTED_QWEN_MODELS = getProviderModelIds('qwen', CHAT_MODEL_TYPES);
 export type QwenModel = string;
-export const DEFAULT_QWEN_MODEL: QwenModel = getProviderDefaultModel('qwen') ?? 'qwen-max';
+export const DEFAULT_QWEN_MODEL: QwenModel = requireProviderDefaultModel('qwen');
 export const SUPPORTED_QWEN_IMAGE_MODELS = getProviderModelIds('qwen', IMAGE_MODEL_TYPES);
 export const SUPPORTED_QWEN_VIDEO_MODELS = getProviderModelIds('qwen', VIDEO_MODEL_TYPES);
 

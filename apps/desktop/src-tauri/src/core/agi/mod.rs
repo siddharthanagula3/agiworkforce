@@ -328,7 +328,11 @@ mod char_boundary_tests {
         let content = "👍".repeat(200); // 200 * 4 bytes = 800 bytes > 500
         assert_char_safe(&content, 500);
         let end = floor_char_boundary(&content, 500);
-        assert_eq!(end % 4, 0, "emoji is 4 bytes; boundary must be 4-byte aligned");
+        assert_eq!(
+            end % 4,
+            0,
+            "emoji is 4 bytes; boundary must be 4-byte aligned"
+        );
     }
 
     #[test]
@@ -438,11 +442,7 @@ mod char_boundary_tests {
         let mut violations: Vec<String> = Vec::new();
 
         // Walk all .rs files under src/
-        fn walk(
-            dir: &Path,
-            dangerous_re: &regex::Regex,
-            violations: &mut Vec<String>,
-        ) {
+        fn walk(dir: &Path, dangerous_re: &regex::Regex, violations: &mut Vec<String>) {
             let entries = match std::fs::read_dir(dir) {
                 Ok(e) => e,
                 Err(_) => return,

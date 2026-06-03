@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useMemo, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   ChatInterface,
   type ChatHostBridge,
@@ -26,6 +27,20 @@ export interface WebShellV3Props {
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
 }
 
+const VIEW_ROUTES: Record<string, string> = {
+  projects: '/projects',
+  artifacts: '/gallery',
+  'customize-home': '/customize',
+  'cowork-projects': '/cowork',
+  'cowork-scheduled': '/cowork',
+  'cowork-artifacts': '/gallery',
+  'cowork-dispatch': '/cowork',
+  code: '/agi-code',
+  routines: '/agi-code',
+  'voice-settings': '/settings/voice',
+  account: '/settings/account',
+};
+
 /**
  * v3 web shell.
  *
@@ -41,9 +56,13 @@ export function WebShellV3({
   onVoiceClick,
   onNavigateView,
 }: WebShellV3Props) {
+  const router = useRouter();
   const [mode, setMode] = useState<V3Mode>('chat');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const sidebarConversations = useMemo(
+    () => hostBridge?.getSnapshot().conversations ?? [],
+    [hostBridge],
+  );
 
   // Global Ctrl+K / Cmd+K to open search
   useEffect(() => {
@@ -58,16 +77,36 @@ export function WebShellV3({
   }, []);
 
   const handleNewChat = useCallback(() => {
-    // Trigger via host bridge if available; otherwise no-op (unified-chat manages it)
-  }, []);
+    void (async () => {
+      try {
+        const hostConversationId = hostBridge?.createConversation?.('New Conversation');
+        if (hostConversationId) {
+          hostBridge?.selectConversation?.(hostConversationId);
+          return;
+        }
+
+        if (!runtime) return;
+        const created = await runtime.createConversation('New Conversation');
+        const conversationId = typeof created === 'string' ? created : created.id;
+        hostBridge?.selectConversation?.(conversationId);
+      } catch (error) {
+        console.error('Failed to create a new conversation', error);
+      }
+    })();
+  }, [hostBridge, runtime]);
 
   const handleNavigateView = useCallback(
     (view: string) => {
       if (onNavigateView) {
         onNavigateView(view as Parameters<NonNullable<typeof onNavigateView>>[0]);
+        return;
+      }
+      const route = VIEW_ROUTES[view];
+      if (route) {
+        router.push(route);
       }
     },
-    [onNavigateView],
+    [onNavigateView, router],
   );
 
   const handleJumpConversation = useCallback(
@@ -90,55 +129,24 @@ export function WebShellV3({
         onOpenSearch={() => setSearchOpen(true)}
         onNavigateView={handleNavigateView}
         onJumpConversation={handleJumpConversation}
-        onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
-        accountMenuOpen={accountMenuOpen}
+        onOpenAccountMenu={() => handleNavigateView('account')}
+        conversations={sidebarConversations}
       />
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
-        {mode === 'chat' && (
-          <ChatInterface
-            runtime={runtime}
-            className="h-full w-full"
-            manageTheme={false}
-            enableShortcuts={true}
-            hostBridge={hostBridge}
-            onModelSelectorClick={onModelSelectorClick}
-            onVoiceClick={onVoiceClick}
-            onNavigateView={onNavigateView}
-            emptyStateSlot={<WebEmptyChat />}
-            showProvenanceFooter={true}
-          />
-        )}
-
-        {mode === 'cowork' && (
-          <div
-            style={{
-              display: 'flex',
-              height: '100%',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--chat-text-muted)',
-              fontSize: 14,
-            }}
-          >
-            Cowork mode coming soon
-          </div>
-        )}
-
-        {mode === 'code' && (
-          <div
-            style={{
-              display: 'flex',
-              height: '100%',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--chat-text-muted)',
-              fontSize: 14,
-            }}
-          >
-            Code mode coming soon
-          </div>
-        )}
+        <ChatInterface
+          runtime={runtime}
+          className="h-full w-full"
+          manageTheme={false}
+          enableShortcuts={true}
+          hostBridge={hostBridge}
+          onModelSelectorClick={onModelSelectorClick}
+          onVoiceClick={onVoiceClick}
+          onNavigateView={onNavigateView}
+          emptyStateSlot={<WebEmptyChat />}
+          sidebarSlot={null}
+          showProvenanceFooter={true}
+        />
       </div>
 
       {searchOpen && (

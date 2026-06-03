@@ -67,6 +67,7 @@ pub mod cloud;
 pub mod ecosystem;
 pub mod exec_policy;
 pub mod init;
+pub mod local_models;
 pub mod model_catalog;
 pub mod models_cache;
 pub mod oauth;
@@ -117,7 +118,7 @@ pub use features::a2a;
 
 // Phase 6 reorg — feature/platform/data layers.
 // features/ has a real mod.rs; submodules migrate here incrementally.
-// platform/ and data/ are placeholders (mod.rs exists, empty for now).
+// platform/ and data/ are layout anchors for future surface-specific code.
 #[allow(dead_code)]
 pub mod data;
 pub mod features;
@@ -316,10 +317,16 @@ pub struct Cli {
     #[arg(long)]
     no_sandbox: bool,
 
-    /// Input format for print/SDK mode (text or stream-json).
-    /// Hidden: stream-json NDJSON command parsing is not yet wired to stdin;
-    /// the flag parses but stdin is always consumed as plain text.
-    #[arg(long, value_name = "FORMAT", value_enum, default_value = "text", hide = true)]
+    /// Input format for print/SDK mode.
+    /// Hidden: only text is supported in this build; stream-json is rejected at
+    /// runtime until NDJSON command parsing is wired to stdin.
+    #[arg(
+        long,
+        value_name = "FORMAT",
+        value_enum,
+        default_value = "text",
+        hide = true
+    )]
     input_format: cli_options::InputFormat,
 
     /// Permission mode for tool use.
@@ -414,11 +421,8 @@ pub struct Cli {
     #[arg(long = "append-system-prompt-file", value_name = "FILE")]
     append_system_prompt_file: Option<String>,
 
-    /// Emit partial-message chunks (token deltas) as `stream_event` events
-    /// when `--output-format stream-json` is active. Off by default — final
-    /// `assistant_message` events are still emitted either way.
-    /// Hidden: per-token deltas are not yet forwarded through the NDJSON writer;
-    /// the flag parses but has no effect until that sprint lands.
+    /// Reserved for future per-token stream-json deltas. Hidden and rejected at
+    /// runtime until NDJSON forwarding is implemented.
     #[arg(long = "include-partial-messages", hide = true)]
     include_partial_messages: bool,
 
@@ -549,6 +553,12 @@ enum Command {
         listen: String,
         #[arg(long)]
         allow_public_listen: bool,
+        #[arg(long)]
+        auth_token: Option<String>,
+        #[arg(long = "allowed-origin")]
+        allowed_origin: Vec<String>,
+        #[arg(long)]
+        allow_query_token: bool,
     },
     /// Continue previous session.
     Resume { session_id: Option<String> },
@@ -559,7 +569,12 @@ enum Command {
         #[command(subcommand)]
         action: SessionAction,
     },
-    /// Cloud tasks (BYOK, top models only).
+    /// Manage and inspect model configuration.
+    Models {
+        #[command(subcommand)]
+        action: ModelsSubcommand,
+    },
+    /// Managed cloud beta status and model catalog. Execution is not wired in this build.
     Cloud {
         #[command(subcommand)]
         action: CloudSubcommand,
@@ -571,6 +586,11 @@ enum Command {
     },
     /// Inspect feature flags.
     Features,
+    /// Manage command and file-operation approvals.
+    Approvals {
+        #[command(subcommand)]
+        action: ApprovalsSubcommand,
+    },
     /// Show execution policy rules.
     Execpolicy,
     /// Scan for ecosystem tools (Claude, Codex, Cursor, Gemini) and import MCP configs.
@@ -600,7 +620,7 @@ enum Command {
     },
     /// Login to AGI cloud (or an LLM provider via OAuth).
     Login {
-        /// Provider to login with (agiworkforce, anthropic, openai). Omit for interactive menu.
+        /// Provider to login with (agiworkforce, anthropic, openai, copilot, chatgpt). Omit for AGI Workforce.
         provider: Option<String>,
     },
     /// Logout from AGI cloud.
@@ -626,19 +646,78 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum CloudSubcommand {
-    /// Submit a task (BYOK).
+    /// Attempt managed cloud execution. Currently fails closed until the backend contract is available.
     Exec {
         prompt: String,
         #[arg(short, long)]
         model: Option<String>,
     },
-    /// List cloud tasks.
+    /// List managed cloud tasks. Currently unavailable in the private beta CLI.
     List {
         #[arg(long, default_value = "10")]
         limit: usize,
     },
-    /// Show cloud models & BYOK status.
+    /// Show managed cloud model catalog and BYOK environment status.
     Models,
+}
+
+#[derive(Subcommand, Debug)]
+enum ModelsSubcommand {
+    /// List catalog models and discovered local models.
+    List {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Show local model server status.
+    Status {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Probe local model servers and list installed models.
+    Scan {
+        /// Emit JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Set the default model.
+    Set {
+        model: String,
+        /// Provider override. If omitted, AGI infers from installed local models or catalog metadata.
+        #[arg(long)]
+        provider: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum ApprovalsSubcommand {
+    /// Show saved approval rules.
+    List,
+    /// Always allow a command prefix.
+    Allow { rule: String },
+    /// Always deny a command prefix.
+    Deny { rule: String },
+    /// Allow a command prefix for this process.
+    Session { rule: String },
+    /// Remove a saved or session rule.
+    Remove {
+        /// allow, deny, or session.
+        scope: String,
+        rule: String,
+    },
+    /// Export approval rules as JSON.
+    Export,
+    /// Import approval rules from JSON exported by `agi approvals export`.
+    Import {
+        /// Path to the exported JSON file.
+        file: String,
+        /// Replace existing persistent rules instead of merging.
+        #[arg(long)]
+        replace: bool,
+    },
+    /// Reset all approval rules.
+    Reset,
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -671,7 +750,7 @@ enum PluginSubcommand {
         source: String,
         #[arg(long)]
         name: Option<String>,
-        /// `sha256:<hex>` integrity claim or path to sigstore.json sidecar. AUDIT-FIX: H-16
+        /// `sha256:<hex>` integrity claim. AUDIT-FIX: H-16
         #[arg(long)]
         integrity: Option<String>,
         /// Bypass integrity verification. AUDIT-FIX: H-16 — prints a warning to stderr every install.
@@ -802,6 +881,208 @@ fn resolve_latest_resume_payload() -> Result<Option<(String, ResumePayload)>> {
     Ok(None)
 }
 
+async fn handle_models_command(
+    action: &ModelsSubcommand,
+    config: &config::CliConfig,
+) -> Result<()> {
+    match action {
+        ModelsSubcommand::List { json } => {
+            if *json {
+                let value = models_json_with_local(config).await;
+                println!("{}", serde_json::to_string_pretty(&value)?);
+            } else {
+                println!("{}", provider::format_model_list_with_local(config).await);
+            }
+            Ok(())
+        }
+        ModelsSubcommand::Status { json } | ModelsSubcommand::Scan { json } => {
+            let probes = local_models::discover_all(config).await;
+            if *json {
+                println!("{}", serde_json::to_string_pretty(&probes)?);
+            } else {
+                println!("{}", local_models::format_probe_report(&probes));
+                if matches!(action, ModelsSubcommand::Scan { .. }) {
+                    let models = local_models::discovered_models(&probes);
+                    println!("\n{}", local_models::format_discovered_models(&models));
+                }
+            }
+            Ok(())
+        }
+        ModelsSubcommand::Set { model, provider } => {
+            let provider = match provider.as_deref() {
+                Some(provider) => provider.to_string(),
+                None => infer_provider_for_model(config, model).await?,
+            };
+            onboarding::update_config_model(model, &provider, None)?;
+            println!("Default model set to {} ({})", model, provider);
+            Ok(())
+        }
+    }
+}
+
+async fn infer_provider_for_model(config: &config::CliConfig, model: &str) -> Result<String> {
+    let probes = local_models::discover_all(config).await;
+    let matching_local: Vec<_> = local_models::discovered_models(&probes)
+        .into_iter()
+        .filter(|candidate| candidate.id == model)
+        .collect();
+
+    if matching_local.len() == 1 {
+        return Ok(matching_local[0].provider.clone());
+    }
+    if matching_local.len() > 1 {
+        anyhow::bail!(
+            "model '{}' is installed in multiple local providers; pass --provider explicitly",
+            model
+        );
+    }
+
+    if let Some(provider) = model_catalog::provider_for(model) {
+        return Ok(provider.to_string());
+    }
+    if let Some(provider) = provider::provider_for_model(model) {
+        return Ok(provider.to_string());
+    }
+
+    anyhow::bail!(
+        "could not infer provider for model '{}'. Run `agi models scan` or pass --provider",
+        model
+    )
+}
+
+async fn models_json_with_local(config: &config::CliConfig) -> serde_json::Value {
+    let catalog = provider::model_catalog();
+    let mut models: Vec<serde_json::Value> = catalog
+        .iter()
+        .map(|m| {
+            serde_json::json!({
+                "id": m.id,
+                "provider": m.provider,
+                "source": "catalog",
+                "context_window": m.context_window,
+                "max_output_tokens": m.max_output_tokens,
+                "input_price_per_1m": m.input_price_per_1m,
+                "output_price_per_1m": m.output_price_per_1m,
+                "supports_tools": m.supports_tools,
+                "supports_vision": m.supports_vision,
+                "supports_reasoning": m.supports_reasoning,
+                "status": m.status,
+            })
+        })
+        .collect();
+
+    let probes = local_models::discover_all(config).await;
+    for model in local_models::discovered_models(&probes) {
+        models.push(serde_json::json!({
+            "id": model.id,
+            "provider": model.provider,
+            "source": model.source,
+            "base_url": model.base_url,
+            "status": "installed"
+        }));
+    }
+    serde_json::Value::Array(models)
+}
+
+fn handle_approvals_command(action: &ApprovalsSubcommand) -> Result<()> {
+    let mut store = permissions::PermissionStore::load()?;
+    match action {
+        ApprovalsSubcommand::List => {
+            println!("{}", store.display_tab("allow"));
+            println!();
+            println!("{}", store.display_tab("deny"));
+            println!();
+            println!("{}", store.display_tab("ask"));
+            println!();
+            println!("{}", store.display_tab("workspace"));
+            Ok(())
+        }
+        ApprovalsSubcommand::Allow { rule } => {
+            store.allow_always(rule);
+            store.save()?;
+            println!("Always allow: {}", rule.trim());
+            Ok(())
+        }
+        ApprovalsSubcommand::Deny { rule } => {
+            store.deny_always(rule);
+            store.save()?;
+            println!("Always deny: {}", rule.trim());
+            Ok(())
+        }
+        ApprovalsSubcommand::Session { rule } => {
+            store.allow_session_for_process(rule);
+            println!("Allow for this process: {}", rule.trim());
+            Ok(())
+        }
+        ApprovalsSubcommand::Remove { scope, rule } => {
+            let removed = match scope.as_str() {
+                "allow" => store.remove_always_allow(rule),
+                "deny" => store.remove_always_deny(rule),
+                "session" => store.remove_session(rule),
+                other => {
+                    anyhow::bail!(
+                        "unknown approval scope '{}'; use allow, deny, or session",
+                        other
+                    )
+                }
+            };
+            if removed {
+                if scope != "session" {
+                    store.save()?;
+                }
+                println!("Removed {} rule: {}", scope, rule.trim());
+            } else {
+                println!("No {} rule matched: {}", scope, rule.trim());
+            }
+            Ok(())
+        }
+        ApprovalsSubcommand::Export => {
+            println!("{}", serde_json::to_string_pretty(&store)?);
+            Ok(())
+        }
+        ApprovalsSubcommand::Import { file, replace } => {
+            let contents = std::fs::read_to_string(file)
+                .with_context(|| format!("Failed to read approval import file '{}'", file))?;
+            let imported: permissions::PermissionStore = serde_json::from_str(&contents)
+                .with_context(|| format!("Failed to parse approval import JSON '{}'", file))?;
+            if *replace {
+                store.always_allow = imported.always_allow;
+                store.always_deny = imported.always_deny;
+                store.ask_list = imported.ask_list;
+                store.workspace_rules = imported.workspace_rules;
+            } else {
+                store.always_allow.extend(imported.always_allow);
+                store.always_deny.extend(imported.always_deny);
+                for rule in imported.ask_list {
+                    if !store.ask_list.contains(&rule) {
+                        store.ask_list.push(rule);
+                    }
+                }
+                for rule in imported.workspace_rules {
+                    if !store.workspace_rules.contains(&rule) {
+                        store.workspace_rules.push(rule);
+                    }
+                }
+            }
+            store.save()?;
+            println!(
+                "Imported approval rules ({} allow, {} deny, {} ask, {} workspace).",
+                store.always_allow.len(),
+                store.always_deny.len(),
+                store.ask_list.len(),
+                store.workspace_rules.len()
+            );
+            Ok(())
+        }
+        ApprovalsSubcommand::Reset => {
+            store.reset();
+            store.save()?;
+            println!("Approval rules reset.");
+            Ok(())
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Session subcommand handler — replay / branch points
 // ---------------------------------------------------------------------------
@@ -902,12 +1183,7 @@ async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
         .build()
         .ok()?;
 
-    let resp = client
-        .get(&url)
-        .bearer_auth(bearer)
-        .send()
-        .await
-        .ok()?;
+    let resp = client.get(&url).bearer_auth(bearer).send().await.ok()?;
 
     if !resp.status().is_success() {
         return None;
@@ -927,7 +1203,21 @@ async fn fetch_remaining_pct(bearer: &str, api_base: &str) -> Option<u8> {
 /// Main async entry point — called from `main.rs`.
 pub async fn run_main() -> Result<()> {
     let cli = Cli::parse();
+    if cli.include_partial_messages {
+        anyhow::bail!(
+            "--include-partial-messages is not implemented in this CLI build; use --json-events for final assistant/tool events."
+        );
+    }
+    sandbox::set_sandbox_disabled(cli.no_sandbox);
     let normalized_cli_options = cli_options::CliOptions::from_cli(&cli);
+    if matches!(
+        normalized_cli_options.input_format,
+        cli_options::InputFormat::StreamJson
+    ) {
+        anyhow::bail!(
+            "--input-format stream-json is not implemented in this CLI build; stdin is currently accepted as text only."
+        );
+    }
 
     for dir in &normalized_cli_options.additional_dirs {
         crate::path_security::register_additional_workspace_root(dir)
@@ -1019,8 +1309,17 @@ pub async fn run_main() -> Result<()> {
                     .head()
                     .map(|s| s.to_string())
                     .unwrap_or(raw_model.clone());
-                let mut session = agent::AgentSession::new(&m, &sys_ctx, None);
-                session.set_provider_override(&app_config.default.provider);
+                let mut session = agent::AgentSession::new_checked(
+                    &m,
+                    &sys_ctx,
+                    None,
+                    models::selection_provider_override(
+                        &m,
+                        &app_config.default.model,
+                        &app_config.default.provider,
+                        None,
+                    ),
+                )?;
                 session.apply_ui_config(&app_config);
                 session.apply_tool_filters(
                     &normalized_cli_options.allowed_tools,
@@ -1184,6 +1483,7 @@ pub async fn run_main() -> Result<()> {
                     false,
                     false,
                     false,
+                    None,
                     cli_options::PermissionMode::Default,
                     false,
                     normalized_cli_options.allowed_tools.clone(),
@@ -1215,6 +1515,7 @@ pub async fn run_main() -> Result<()> {
                     false,
                     false,
                     false,
+                    None,
                     cli_options::PermissionMode::Default,
                     false,
                     normalized_cli_options.allowed_tools.clone(),
@@ -1277,6 +1578,9 @@ pub async fn run_main() -> Result<()> {
             Command::AppServer {
                 listen,
                 allow_public_listen,
+                auth_token,
+                allowed_origin,
+                allow_query_token,
             } => {
                 const DEFAULT_APP_SERVER_ADDR: &str = "127.0.0.1:8787";
                 let cfg = if listen == "stdio" {
@@ -1296,8 +1600,23 @@ pub async fn run_main() -> Result<()> {
                             "app-server refuses non-loopback listen address {addr}; pass --allow-public-listen only after adding network/firewall controls"
                         );
                     }
+                    let token = auth_token
+                        .clone()
+                        .or_else(|| std::env::var("AGI_APP_SERVER_TOKEN").ok())
+                        .map(|token| token.trim().to_string())
+                        .filter(|token| !token.is_empty())
+                        .unwrap_or_else(|| {
+                            let token = uuid::Uuid::new_v4().to_string();
+                            eprintln!("Generated app-server auth token: {token}");
+                            token
+                        });
                     app_server::AppServerConfig {
                         transport: app_server::AppServerTransport::WebSocket { addr },
+                        ws_security: app_server::WebSocketSecurity {
+                            auth_token: Some(token),
+                            allowed_origins: allowed_origin.clone(),
+                            allow_query_token: *allow_query_token,
+                        },
                         ..Default::default()
                     }
                 };
@@ -1311,8 +1630,9 @@ pub async fn run_main() -> Result<()> {
                         Ok(())
                     }
                     CloudSubcommand::List { .. } => {
-                        println!("Cloud tasks: connect to cloud backend to list");
-                        Ok(())
+                        anyhow::bail!(
+                            "Managed cloud task listing is private beta and is not wired in this CLI build."
+                        )
                     }
                     CloudSubcommand::Models => {
                         println!("{}", cloud::format_cloud_models());
@@ -1321,6 +1641,7 @@ pub async fn run_main() -> Result<()> {
                     }
                 }
             }
+            Command::Models { action } => handle_models_command(action, &app_config).await,
             Command::Plugin { action } => {
                 let mut mgr = plugins::PluginsManager::new();
                 match action {
@@ -1355,9 +1676,14 @@ pub async fn run_main() -> Result<()> {
                         integrity,
                         unsafe_no_integrity,
                     } => {
-                        let pname = name.clone().unwrap_or_else(|| {
-                            source.rsplit('/').next().unwrap_or("plugin").to_string()
-                        });
+                        let pname =
+                            match plugins::derive_plugin_install_name(source, name.as_deref()) {
+                                Ok(name) => name,
+                                Err(error) => {
+                                    eprintln!("Refusing install: {error}");
+                                    return Ok(());
+                                }
+                            };
                         let psrc = if source.starts_with("http") || source.contains("git") {
                             plugins::PluginSource::Git {
                                 url: source.clone(),
@@ -1372,12 +1698,16 @@ pub async fn run_main() -> Result<()> {
                                 plugins::PluginIntegrity::PinnedSha256(s.to_string())
                             }
                             (Some(s), _) => {
-                                plugins::PluginIntegrity::Sigstore(std::path::PathBuf::from(s))
+                                eprintln!(
+                                    "Refusing install: unsupported integrity claim '{}'. Only --integrity sha256:<hex> is implemented.",
+                                    s
+                                );
+                                return Ok(());
                             }
                             (None, true) => plugins::PluginIntegrity::UnsafeSkip,
                             (None, false) => {
                                 eprintln!(
-                                    "Refusing install: pass --integrity sha256:<hex> or --integrity <sigstore.json> (or --unsafe-no-integrity)"
+                                    "Refusing install: pass --integrity sha256:<hex> (or --unsafe-no-integrity)"
                                 );
                                 return Ok(());
                             }
@@ -1413,6 +1743,7 @@ pub async fn run_main() -> Result<()> {
                 );
                 Ok(())
             }
+            Command::Approvals { action } => handle_approvals_command(action),
             Command::Execpolicy => {
                 let policy = exec_policy::ExecPolicy::load()?;
                 if policy.rules.is_empty() {
@@ -1575,35 +1906,8 @@ pub async fn run_main() -> Result<()> {
 
             // --- Login ---
             Command::Login { provider } => {
-                match provider.as_deref() {
-                    Some("agiworkforce") | Some("agi") => {
-                        let api_base = "https://api.agiworkforce.com";
-                        let entry = oauth::device_code_login(api_base).await?;
-                        let mut store = auth::AuthStore::load()?;
-                        store.entries.insert("agiworkforce".to_string(), entry);
-                        store.save()?;
-                        Ok(())
-                    }
-                    Some(pid) => {
-                        if let Some(provider_cfg) = oauth::get_provider(pid) {
-                            let entry = oauth::oauth_login(provider_cfg).await?;
-                            let mut store = auth::AuthStore::load()?;
-                            store.entries.insert(pid.to_string(), entry);
-                            store.save()?;
-                        } else {
-                            eprintln!(
-                                "Unknown provider '{}'. Available: agiworkforce, anthropic, openai",
-                                pid
-                            );
-                        }
-                        Ok(())
-                    }
-                    None => {
-                        // Interactive menu via existing auth flow
-                        auth::interactive_login().await?;
-                        Ok(())
-                    }
-                }
+                auth::interactive_login_for_provider(provider.as_deref()).await?;
+                Ok(())
             }
 
             // --- Logout ---
@@ -1730,27 +2034,15 @@ pub async fn run_main() -> Result<()> {
     // --list-models: show available models and exit
     if cli.list_models {
         if matches!(cli.output, Some(OutputFormat::Json)) {
-            let catalog = crate::provider::model_catalog();
-            let json_models: Vec<serde_json::Value> = catalog
-                .iter()
-                .map(|m| {
-                    serde_json::json!({
-                        "id": m.id,
-                        "provider": m.provider,
-                        "context_window": m.context_window,
-                        "max_output_tokens": m.max_output_tokens,
-                        "input_price_per_1m": m.input_price_per_1m,
-                        "output_price_per_1m": m.output_price_per_1m,
-                        "supports_tools": m.supports_tools,
-                        "supports_vision": m.supports_vision,
-                        "supports_reasoning": m.supports_reasoning,
-                        "status": m.status,
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&json_models)?);
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&models_json_with_local(&app_config).await)?
+            );
         } else {
-            println!("{}", crate::provider::format_model_list());
+            println!(
+                "{}",
+                crate::provider::format_model_list_with_local(&app_config).await
+            );
         }
         return Ok(());
     }
@@ -2011,16 +2303,11 @@ pub async fn run_main() -> Result<()> {
     };
 
     // --append-system-prompt-file: read append content from file.
-    let file_append_prompt: Option<String> = if let Some(ref path) = cli.append_system_prompt_file
-    {
+    let file_append_prompt: Option<String> = if let Some(ref path) = cli.append_system_prompt_file {
         match std::fs::read_to_string(path) {
             Ok(contents) => Some(contents),
             Err(e) => {
-                anyhow::bail!(
-                    "--append-system-prompt-file: cannot read '{}': {}",
-                    path,
-                    e
-                );
+                anyhow::bail!("--append-system-prompt-file: cannot read '{}': {}", path, e);
             }
         }
     } else {
@@ -2032,7 +2319,10 @@ pub async fn run_main() -> Result<()> {
     let resolved_base = file_base_prompt.as_deref().or(cli.system_prompt.as_deref());
     let resolved_append = {
         // Combine inline append and file append with a newline separator when both present.
-        match (cli.append_system_prompt.as_deref(), file_append_prompt.as_deref()) {
+        match (
+            cli.append_system_prompt.as_deref(),
+            file_append_prompt.as_deref(),
+        ) {
             (Some(inline), Some(from_file)) => Some(format!("{}\n\n{}", inline, from_file)),
             (Some(inline), None) => Some(inline.to_string()),
             (None, Some(from_file)) => Some(from_file.to_string()),
@@ -2089,6 +2379,7 @@ pub async fn run_main() -> Result<()> {
         return run_oneshot(
             &app_config,
             &model,
+            cli.provider.as_deref(),
             prompt,
             oneshot_output_mode,
             &sys_context,
@@ -2240,6 +2531,7 @@ pub async fn run_main() -> Result<()> {
             team_mode,
             effective_auto_approve_safe,
             cli.quiet,
+            cli.provider.as_deref(),
             effective_permission_mode,
             effective_auto_approve_plan,
             normalized_cli_options.allowed_tools.clone(),
@@ -2316,7 +2608,7 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
             // Read raw bytes and encode for vision
             match std::fs::read(path) {
                 Ok(bytes) => {
-                    use agiworkforce_utils_image::{PromptImageMode, load_for_prompt_bytes};
+                    use agiworkforce_utils_image::{load_for_prompt_bytes, PromptImageMode};
                     match load_for_prompt_bytes(
                         std::path::Path::new(path),
                         bytes,
@@ -2324,8 +2616,8 @@ pub fn read_file_contexts(files: &[String]) -> Result<FileContextResult> {
                     ) {
                         Ok(encoded) => {
                             use base64::Engine as _;
-                            let data_b64 = base64::engine::general_purpose::STANDARD
-                                .encode(&encoded.bytes);
+                            let data_b64 =
+                                base64::engine::general_purpose::STANDARD.encode(&encoded.bytes);
                             images.push(ImageAttachment {
                                 path: path.clone(),
                                 mime: encoded.mime,
@@ -2464,6 +2756,7 @@ pub(crate) async fn attach_mcp_manager_for_session(
 pub async fn run_oneshot(
     config: &config::CliConfig,
     model: &str,
+    provider_override: Option<&str>,
     prompt: &str,
     output_mode: OneShotOutputMode,
     sys_context: &context::SystemContext,
@@ -2482,10 +2775,17 @@ pub async fn run_oneshot(
     session_id_override: Option<String>,
     json_events: bool,
 ) -> Result<()> {
-    let mut session = agent::AgentSession::new(model, sys_context, custom_system_prompt);
-    // Apply config-based provider override (e.g. "ollama-cloud") when the
-    // configured provider differs from the model-name-based detection.
-    session.set_provider_override(&config.default.provider);
+    let mut session = agent::AgentSession::new_checked(
+        model,
+        sys_context,
+        custom_system_prompt,
+        models::selection_provider_override(
+            model,
+            &config.default.model,
+            &config.default.provider,
+            provider_override,
+        ),
+    )?;
     session.apply_ui_config(config);
     session.max_turns = max_turns;
     session.max_budget_usd = max_budget_usd;
@@ -2512,10 +2812,7 @@ pub async fn run_oneshot(
     // retry, fallback) emit MessageDelta events instead of raw print!.
     if json_events {
         session.json_events = true;
-        session.json_session_id = session
-            .managed_session_id()
-            .unwrap_or("exec")
-            .to_string();
+        session.json_session_id = session.managed_session_id().unwrap_or("exec").to_string();
     }
     // Wire --max-budget-usd: emit BudgetExhausted only when --json-events is
     // active so stdout is not polluted in text/json-pretty output modes.
@@ -2524,14 +2821,15 @@ pub async fn run_oneshot(
             .managed_session_id()
             .unwrap_or("(no session)")
             .to_string();
-        session.on_budget_exhausted = Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
-            agent_events::AgentEvent::BudgetExhausted {
-                session_id: managed_id.clone(),
-                cumulative_dollars: cumulative,
-                limit_dollars: limit,
-            }
-            .emit_stdout();
-        })));
+        session.on_budget_exhausted =
+            Some(agent::BudgetSink(Box::new(move |cumulative, limit| {
+                agent_events::AgentEvent::BudgetExhausted {
+                    session_id: managed_id.clone(),
+                    cumulative_dollars: cumulative,
+                    limit_dollars: limit,
+                }
+                .emit_stdout();
+            })));
     }
     attach_mcp_manager_for_session(&mut session, &mcp_config_options, false, false).await?;
 
@@ -2846,25 +3144,16 @@ mod tests {
 
     #[test]
     fn max_budget_usd_flag_parses() {
-        let cli =
-            Cli::try_parse_from(["agiworkforce", "--max-budget-usd", "1.50", "hello"])
-                .expect("--max-budget-usd should parse");
+        let cli = Cli::try_parse_from(["agiworkforce", "--max-budget-usd", "1.50", "hello"])
+            .expect("--max-budget-usd should parse");
         assert!((cli.max_budget_usd.unwrap() - 1.50).abs() < 1e-9);
     }
 
     #[test]
     fn session_id_flag_parses() {
-        let cli = Cli::try_parse_from([
-            "agiworkforce",
-            "--session-id",
-            "my-session-abc",
-            "hello",
-        ])
-        .expect("--session-id should parse");
-        assert_eq!(
-            cli.session_id_override.as_deref(),
-            Some("my-session-abc")
-        );
+        let cli = Cli::try_parse_from(["agiworkforce", "--session-id", "my-session-abc", "hello"])
+            .expect("--session-id should parse");
+        assert_eq!(cli.session_id_override.as_deref(), Some("my-session-abc"));
     }
 
     #[tokio::test]
@@ -2880,7 +3169,10 @@ mod tests {
             .managed_session_id()
             .expect("session should exist after enable")
             .to_string();
-        assert!(!auto_id.is_empty(), "auto-generated session id should not be empty");
+        assert!(
+            !auto_id.is_empty(),
+            "auto-generated session id should not be empty"
+        );
 
         let custom = "test-override-id-behavioral";
         session
@@ -2899,12 +3191,11 @@ mod tests {
     }
 
     #[test]
-    fn include_partial_messages_is_hidden_but_parseable() {
-        // Flag must still parse (embedders may pass it); it should not error.
-        let cli =
-            Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
-                .expect("--include-partial-messages should remain parseable");
-        // The flag value is parsed but the flag is hidden from --help.
+    fn include_partial_messages_is_hidden_and_parses_for_runtime_rejection() {
+        // The flag remains parseable so runtime validation can return the
+        // explicit "not implemented" error instead of clap's generic unknown flag.
+        let cli = Cli::try_parse_from(["agiworkforce", "--include-partial-messages", "hello"])
+            .expect("--include-partial-messages should remain parseable");
         assert!(cli.include_partial_messages);
     }
 }

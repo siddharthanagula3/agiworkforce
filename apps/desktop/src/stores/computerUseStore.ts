@@ -129,7 +129,7 @@ interface ComputerUseState {
       maxActions?: number;
       targetApplication?: string;
       successIndicators?: string[];
-      /** Stream 2: explicit catalog model id (e.g. `claude-opus-4.7`,
+      /** Stream 2: explicit catalog model id (e.g. `claude-opus-4.8`,
        *  `gpt-5.5`, `gemini-3.1-pro-preview`, `grok-4.3-vision`). */
       model?: string;
       /** Stream 2: explicit provider name override (`anthropic`, `openai`,

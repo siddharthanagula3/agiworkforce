@@ -22,6 +22,15 @@ interface AgentStatusResponse {
  */
 /** Max retries for the background fetch API call (with exponential backoff). */
 const BG_FETCH_MAX_RETRIES = 2;
+let lastApprovalNotificationKey: string | null = null;
+
+function approvalNotificationKey(approvals: AgentStatusResponse['pendingApprovals']): string {
+  return approvals
+    .map((approval) => approval.id)
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   const settings = useSettingsStore.getState?.();
@@ -44,6 +53,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       });
 
       if (result.pendingApprovals.length > 0) {
+        const notificationKey = approvalNotificationKey(result.pendingApprovals);
+        if (notificationKey && notificationKey === lastApprovalNotificationKey) {
+          return BackgroundFetch.BackgroundFetchResult.NoData;
+        }
+
         for (const approval of result.pendingApprovals) {
           // MED-MOB-08 fix (2026-05-04): the notification body previously
           // included `toolName: description`, which reveals agent task details
@@ -63,6 +77,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
             },
             trigger: null,
           });
+          lastApprovalNotificationKey = notificationKey;
           // Only send one notification per batch — the user taps through to the
           // app (behind biometric) to see per-approval detail.
           break;
@@ -70,6 +85,7 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         return BackgroundFetch.BackgroundFetchResult.NewData;
       }
 
+      lastApprovalNotificationKey = null;
       return BackgroundFetch.BackgroundFetchResult.NoData;
     } catch (err) {
       lastError = err;

@@ -54,7 +54,7 @@ describe('Chat Conversations API', () => {
     {
       id: 'conv-2',
       title: 'Test Conversation 2',
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       created_at: '2026-01-24T00:00:00Z',
       updated_at: '2026-01-24T00:00:00Z',
     },

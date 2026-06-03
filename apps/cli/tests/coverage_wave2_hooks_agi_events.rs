@@ -13,7 +13,7 @@
 /// executor fires the command.
 use std::collections::HashMap;
 
-use agiworkforce_cli::hooks::{HookEvent, HookInput, HooksConfig, Hook, run_hooks};
+use agiworkforce_cli::hooks::{run_hooks, Hook, HookEvent, HookInput, HooksConfig};
 
 // ---------------------------------------------------------------------------
 // Helper — build a HooksConfig wired to a single no-op echo hook.
@@ -72,16 +72,32 @@ macro_rules! agi_event_fires {
     };
 }
 
-agi_event_fires!(cron_triggered_fires, HookEvent::CronTriggered, "CronTriggered");
+agi_event_fires!(
+    cron_triggered_fires,
+    HookEvent::CronTriggered,
+    "CronTriggered"
+);
 agi_event_fires!(
     webhook_received_fires,
     HookEvent::WebhookReceived,
     "WebhookReceived"
 );
 agi_event_fires!(file_changed_fires, HookEvent::FileChanged, "FileChanged");
-agi_event_fires!(daemon_started_fires, HookEvent::DaemonStarted, "DaemonStarted");
-agi_event_fires!(daemon_stopped_fires, HookEvent::DaemonStopped, "DaemonStopped");
-agi_event_fires!(post_tool_batch_fires, HookEvent::PostToolBatch, "PostToolBatch");
+agi_event_fires!(
+    daemon_started_fires,
+    HookEvent::DaemonStarted,
+    "DaemonStarted"
+);
+agi_event_fires!(
+    daemon_stopped_fires,
+    HookEvent::DaemonStopped,
+    "DaemonStopped"
+);
+agi_event_fires!(
+    post_tool_batch_fires,
+    HookEvent::PostToolBatch,
+    "PostToolBatch"
+);
 agi_event_fires!(teammate_idle_fires, HookEvent::TeammateIdle, "TeammateIdle");
 agi_event_fires!(setup_fires, HookEvent::Setup, "Setup");
 agi_event_fires!(

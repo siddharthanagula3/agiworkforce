@@ -55,7 +55,7 @@ describe('resolveCacheRetention', () => {
 
   // --- OpenRouter + Anthropic-routed models ---
   it('defaults to short for openrouter + anthropic/ model', () => {
-    expect(resolveCacheRetention(undefined, 'openrouter', 'anthropic/claude-opus-4-6')).toBe(
+    expect(resolveCacheRetention(undefined, 'openrouter', 'anthropic/claude-opus-4-8')).toBe(
       'short',
     );
   });
@@ -72,7 +72,7 @@ describe('resolveCacheRetention', () => {
 
   it('honors explicit cacheRetention for openrouter + anthropic/ model', () => {
     expect(
-      resolveCacheRetention({ cacheRetention: 'long' }, 'openrouter', 'anthropic/claude-opus-4-6'),
+      resolveCacheRetention({ cacheRetention: 'long' }, 'openrouter', 'anthropic/claude-opus-4-8'),
     ).toBe('long');
   });
 

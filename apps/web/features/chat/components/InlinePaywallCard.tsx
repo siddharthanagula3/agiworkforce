@@ -11,24 +11,14 @@
  *     top-level components, not defined inside InlinePaywallCard.
  *   - rerender-memo-with-default-value: EMPTY_REASON default hoisted as a
  *     module-level constant so the string reference is stable.
- *   - bundle-dynamic-imports: Stripe Checkout link generator marked with a
- *     TODO for week 2-3 dynamic import.
  *   - bundle-analyzable-paths: lucide-react imports use named exports directly,
  *     not a barrel re-export.
  *   - rendering-conditional-render: all conditionals use ternary (? :), not &&.
  *   - server-serialization: only accepts the minimal props needed (currentTier,
  *     requiredTier, feature, reason) — no currentUser object.
- *   - rerender-derived-state-no-effect: upgradeLinkHref is computed during
- *     render from props, not in a useEffect.
- *   - bundle-conditional: Stripe SDK is NOT imported at module load. Only the
- *     /pricing route is used in the stub; real Stripe import deferred to week 2.
- *   - rendering-resource-hints: upgrade button prefetches /pricing on hover
- *     via next/link prefetch behaviour and prefetchDNS for stripe.com on hover.
  */
 
-import { memo, useCallback } from 'react';
-import Link from 'next/link';
-import { prefetchDNS } from 'react-dom';
+import { memo } from 'react';
 import {
   Video,
   Brain,
@@ -44,11 +34,6 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@shared/ui
 import { Button } from '@shared/components/ui/button';
 import { Badge } from '@shared/components/ui/badge';
 import { cn } from '@shared/lib/utils';
-
-// TODO dynamic-import-stripe: when wiring real Stripe Checkout in week 2-3,
-// replace the /pricing redirect with:
-//   const loadStripe = dynamic(() => import('@stripe/stripe-js').then(m => m.loadStripe))
-// and call it only inside the onUpgrade handler, not at module load.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -161,48 +146,26 @@ const TierBadge = memo(function TierBadge({ tier }: TierBadgeProps) {
 TierBadge.displayName = 'TierBadge';
 
 interface CtaButtonsProps {
-  upgradeLinkHref: string;
   requiredTier: RequiredTier;
   onUpgrade: () => void;
   onDismiss: () => void;
 }
 
 /**
- * Upgrade and dismiss CTAs.
- *
- * rendering-resource-hints: prefetchDNS for stripe.com on hover so that if
- * the real Stripe flow is wired later, the DNS lookup is already done.
- * next/link handles /pricing prefetch automatically when the link enters the
- * viewport or on hover.
+ * Upgrade and dismiss CTAs. The upgrade action opens the page-level Cloud
+ * waitlist modal instead of navigating away from the chat.
  */
 const CtaButtons = memo(function CtaButtons({
-  upgradeLinkHref,
   requiredTier,
   onUpgrade,
   onDismiss,
 }: CtaButtonsProps) {
-  const handleUpgradeMouseEnter = useCallback(() => {
-    // rendering-resource-hints: warm Stripe DNS when user hovers upgrade CTA.
-    prefetchDNS('https://js.stripe.com');
-    prefetchDNS('https://checkout.stripe.com');
-  }, []);
-
   return (
     <div className="flex flex-wrap gap-2">
-      {/* Primary CTA — next/link prefetches /pricing route automatically */}
-      <Button
-        asChild
-        size="sm"
-        className="font-semibold"
-        onMouseEnter={handleUpgradeMouseEnter}
-        onFocus={handleUpgradeMouseEnter}
-      >
-        <Link href={upgradeLinkHref} prefetch onClick={onUpgrade}>
-          Upgrade to {TIER_LABELS[requiredTier]}
-        </Link>
+      <Button type="button" size="sm" className="font-semibold" onClick={onUpgrade}>
+        Upgrade to {TIER_LABELS[requiredTier]}
       </Button>
 
-      {/* Secondary CTA */}
       <Button variant="ghost" size="sm" onClick={onDismiss}>
         Try later
       </Button>
@@ -223,9 +186,6 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
   onUpgrade,
   onDismiss,
 }: InlinePaywallCardProps) {
-  // rerender-derived-state-no-effect: compute href during render, not in useEffect
-  const upgradeLinkHref = `/pricing?from=paywall&tier=${requiredTier}&feature=${feature}`;
-
   const headline = `Upgrade to ${TIER_LABELS[requiredTier]} for ${FEATURE_LABELS[feature]}`;
 
   return (
@@ -256,12 +216,7 @@ const InlinePaywallCardComponent = function InlinePaywallCard({
       </CardContent>
 
       <CardFooter className="pt-4">
-        <CtaButtons
-          upgradeLinkHref={upgradeLinkHref}
-          requiredTier={requiredTier}
-          onUpgrade={onUpgrade}
-          onDismiss={onDismiss}
-        />
+        <CtaButtons requiredTier={requiredTier} onUpgrade={onUpgrade} onDismiss={onDismiss} />
       </CardFooter>
     </Card>
   );

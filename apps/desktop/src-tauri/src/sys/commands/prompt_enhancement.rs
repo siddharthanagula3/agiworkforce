@@ -195,7 +195,7 @@ pub async fn get_available_providers() -> Result<Vec<String>, String> {
         "Perplexity".to_string(),
         "Ollama".to_string(),
         "Veo3".to_string(),
-        "DALLE".to_string(),
+        "GPTImage".to_string(),
         "StableDiffusion".to_string(),
         "Midjourney".to_string(),
     ])

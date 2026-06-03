@@ -29,11 +29,38 @@ vi.mock('@/lib/security-audit', () => ({
   logSecurityEvent: vi.fn(),
 }));
 
+const mockRequireCsrfToken = vi.fn();
+
+vi.mock('@/lib/csrf', () => ({
+  requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
+}));
+
 // Mock Clerk auth — getClerkAuthUser returns { userId, email? } or throws
 const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
+}));
+
+const mockGetSubscription = vi.fn();
+const mockCheckAvailable = vi.fn();
+
+vi.mock('@/lib/services/subscription-service', () => ({
+  SubscriptionService: {
+    getSubscription: (...args: unknown[]) => mockGetSubscription(...args),
+  },
+}));
+
+vi.mock('@/lib/services/credit-service', () => ({
+  CreditService: {
+    checkAvailable: (...args: unknown[]) => mockCheckAvailable(...args),
+  },
+}));
+
+vi.mock('@/lib/services/llm-cost-calculator', () => ({
+  LLMCostCalculator: {
+    estimateCost: vi.fn(() => 0),
+  },
 }));
 
 // Capture what messages are passed to the LLM
@@ -97,6 +124,14 @@ describe('POST /api/completion — fence-strip regression', () => {
       model: 'claude-haiku-4-5',
     });
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'test-user-id', email: 'test@example.com' });
+    mockRequireCsrfToken.mockResolvedValue(null);
+    mockGetSubscription.mockResolvedValue({
+      id: 'sub_123',
+      user_id: 'test-user-id',
+      status: 'active',
+      plan_tier: 'pro',
+    });
+    mockCheckAvailable.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -140,6 +175,56 @@ describe('POST /api/completion — fence-strip regression', () => {
     // If the strip failed, the injected </untrusted_context> would be a SECOND
     // closing tag in the string, pushing count to 2.
     expect(countOccurrences(body, '</untrusted_context>')).toBe(1);
+  });
+
+  it('requires CSRF before calling the LLM provider', async () => {
+    mockRequireCsrfToken.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Invalid or missing CSRF token' }), { status: 403 }),
+    );
+
+    const request = makeRequest({
+      input: 'Continue my sentence:',
+      context: null,
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(403);
+    expect(mockRequireCsrfToken).toHaveBeenCalledWith(request, 'test-user-id');
+    expect(mockSendRequest).not.toHaveBeenCalled();
+  });
+
+  it('blocks prompt completions when subscription is missing', async () => {
+    mockGetSubscription.mockResolvedValueOnce(null);
+
+    const request = makeRequest({
+      input: 'Continue my sentence:',
+      context: null,
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(data.error.code).toBe('FORBIDDEN');
+    expect(mockSendRequest).not.toHaveBeenCalled();
+  });
+
+  it('blocks prompt completions when credits are exhausted', async () => {
+    mockCheckAvailable.mockResolvedValueOnce(false);
+
+    const request = makeRequest({
+      input: 'Continue my sentence:',
+      context: null,
+    });
+
+    const response = await POST(request);
+    const data = await response.json();
+
+    expect(response.status).toBe(402);
+    expect(data.code).toBe('MONTHLY_CREDIT_LIMIT_REACHED');
+    expect(mockCheckAvailable).toHaveBeenCalledWith('test-user-id', 1);
+    expect(mockSendRequest).not.toHaveBeenCalled();
   });
 
   it('handles benign context without mutation', async () => {

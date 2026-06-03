@@ -70,6 +70,14 @@ const VALID_CONNECTOR_IDS = new Set([
   'ollama',
 ]);
 
+const LOCAL_CONNECTOR_IDS = new Set([
+  'local-filesystem',
+  'terminal',
+  'browser-automation',
+  'screen-vision',
+  'ollama',
+]);
+
 // ─── GET: list connected services ──────────────────────────────────────────────
 
 async function handleGetConnectors(request: NextRequest) {
@@ -134,23 +142,27 @@ async function handleCreateConnector(request: NextRequest) {
     throw createError.validation('Invalid connector ID');
   }
 
-  const authType = body.authType ?? 'oauth';
-  if (!['oauth', 'api_key', 'connection_string', 'pat'].includes(authType)) {
+  const authType = body.authType ?? (LOCAL_CONNECTOR_IDS.has(body.connectorId) ? 'local' : 'oauth');
+  if (!['local', 'oauth', 'api_key', 'connection_string', 'pat'].includes(authType)) {
     throw createError.validation('Invalid auth type');
+  }
+
+  if (authType !== 'local' || !LOCAL_CONNECTOR_IDS.has(body.connectorId)) {
+    return NextResponse.json(
+      {
+        error:
+          'Connector authorization is not implemented for this provider. Start the provider-specific OAuth or credential flow instead of marking it active.',
+        connectorId: body.connectorId,
+        authType,
+      },
+      { status: 501 },
+    );
   }
 
   const db = getNeonDb();
   const now = new Date().toISOString();
 
-  // NOTE: Real OAuth integration is deferred. For connectors with authType
-  // 'oauth', this endpoint currently only records intent (is_active: true)
-  // without performing an OAuth redirect, token exchange, or storing provider
-  // credentials. The UI already gates OAuth connectors behind a "Coming Soon"
-  // state so users cannot reach this path for oauth connectors in practice.
-  // When real OAuth ships, add: redirect to provider, exchange code for token,
-  // encrypt + store credentials, then set is_active: true.
-  //
-  // Upsert: if user reconnects a previously disconnected connector, reactivate it
+  // Upsert: local connectors do not require OAuth/API credentials.
   let data: UserConnectorRow | undefined;
   try {
     [data] = await db.query<UserConnectorRow>(
@@ -227,7 +239,7 @@ async function handleDeleteConnector(request: NextRequest) {
   } catch (error) {
     if (isUndefinedTable(error)) {
       logger.warn({ userId, connectorId }, 'user_connectors table not migrated; delete ignored');
-      return NextResponse.json({ success: true });
+      throw createError.serviceUnavailable('Connectors are not available in this environment');
     }
     throw error;
   }

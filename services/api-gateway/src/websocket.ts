@@ -447,23 +447,41 @@ async function handleAuthMessage(ws: AuthenticatedWebSocket, message: AuthMessag
     // Wave 1.5+ singleton sweep: post-JWT-verification user-scoped query.
     if (typeof message.deviceId === 'string' && message.deviceId.length > 0) {
       const wsUserDb = getUserScopedClient(userId);
-      const { data: pairing } = await wsUserDb
-        .from('device_pairings')
+      const { data: desktop, error: desktopError } = await wsUserDb
+        .from('desktop_devices')
         .select('id')
+        .eq('id', message.deviceId)
         .eq('user_id', userId)
-        .eq('device_id', message.deviceId)
-        .eq('status', 'active')
-        .limit(1)
         .maybeSingle();
 
-      if (pairing) {
+      if (desktop) {
         ws.deviceId = message.deviceId;
       } else {
-        logger.warn(
-          { userId, claimedDeviceId: message.deviceId },
-          'WebSocket auth: deviceId ownership verification failed — ignoring deviceId',
-        );
-        // Do not set ws.deviceId — connection proceeds without device binding
+        if (desktopError) {
+          logger.warn(
+            { userId, claimedDeviceId: message.deviceId, error: desktopError },
+            'WebSocket auth: desktop device ownership lookup failed',
+          );
+        }
+
+        const { data: pairing } = await wsUserDb
+          .from('device_pairings')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('device_id', message.deviceId)
+          .eq('status', 'active')
+          .limit(1)
+          .maybeSingle();
+
+        if (pairing) {
+          ws.deviceId = message.deviceId;
+        } else {
+          logger.warn(
+            { userId, claimedDeviceId: message.deviceId },
+            'WebSocket auth: deviceId ownership verification failed — ignoring deviceId',
+          );
+          // Do not set ws.deviceId — connection proceeds without device binding
+        }
       }
     } else if (ws.deviceId) {
       delete ws.deviceId;

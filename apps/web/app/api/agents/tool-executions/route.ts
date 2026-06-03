@@ -30,6 +30,8 @@ const ExecuteToolSchema = z.object({
   context: z.record(z.string(), z.unknown()).optional(),
 });
 
+const WEBHOOK_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
 type ToolRow = {
   id: string;
   user_id: string | null;
@@ -119,14 +121,19 @@ async function handleExecuteTool(request: NextRequest) {
           throw new Error('webhookUrl must use http or https');
         }
         assertNonInternalHostname(webhookUrl);
+        const method = (config['method'] ?? 'POST').toUpperCase();
+        if (!WEBHOOK_METHODS.has(method)) {
+          throw new Error('webhook method must be POST, PUT, or PATCH');
+        }
         const resp = await fetch(webhookUrl, {
-          method: config['method'] ?? 'POST',
+          method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ parameters, context: context ?? {} }),
           // SSRF redirect bypass: the pre-fetch guard only validates the initial
           // URL. A 3xx Location could point at an internal host (e.g. IMDS), so
           // do not auto-follow — surface the redirect as a failed webhook.
           redirect: 'manual',
+          signal: AbortSignal.timeout(15_000),
         });
         if (resp.status >= 300 && resp.status < 400) {
           throw new Error('Webhook redirects are not allowed');

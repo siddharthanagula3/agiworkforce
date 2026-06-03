@@ -27,16 +27,54 @@ import process from 'node:process';
 
 const root = process.cwd();
 const CATALOG = path.join(root, 'packages/types/src/models.json');
+const CATALOG_INPUTS = [
+  CATALOG,
+  path.join(root, 'packages/types/src/models.curation.json'),
+  path.join(root, 'packages/types/src/models.synced.json'),
+];
+
+// Deprecated, removed, or unverified model IDs that must not appear in selectable
+// catalog structures. Notes and canonicalization aliases may mention these IDs
+// when documenting/migrating deprecations; provider defaults, task routes, tiers,
+// presets, and model entries may not.
+const REMOVED_SELECTABLE_MODEL_IDS = new Set([
+  'claude-opus-4.6',
+  'claude-opus-4-6',
+  'claude-opus-4.7',
+  'claude-opus-4-7',
+  'claude-opus-4-6-mini',
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
+  'glm-4.7',
+  'gpt-5-codex',
+  'gpt-5-pro',
+  'gpt-5-pro-2026-01',
+  'gpt-5.4',
+  'gpt-5.4-codex',
+  'gpt-5.4-codex-low',
+  'gpt-5.4-codex-medium',
+  'gpt-5.4-codex-high',
+  'gpt-5.4-codex-xhigh',
+  'gpt-5.4-nano',
+  'gpt-5.4-pro',
+  'grok-4-1-fast',
+  'grok-4-1-fast-reasoning',
+  'grok-4-1-fast-non-reasoning',
+  'sora-2',
+  'sora-2-pro',
+  'sora-2-2025-10-06',
+  'sora-2-2025-12-08',
+  'sora-2-pro-2025-10-06',
+]);
 
 // Confirmed-removed SELECTABLE model IDs that must not appear in live TS code as
 // catalog entries, defaults, or selectable-model references.
-// Source: model curation (opus-4.6/4.7 -> opus-4.8; gpt-5.4 family -> gpt-5.5 + gpt-5.4-mini).
+// Source: model curation (opus-4.6/4.7 -> opus-4.8; retired gpt-5.4
+// flagship/pro/codex ids -> gpt-5.5; gpt-5.4-mini remains current).
 //
-// SCOPE NOTE: this guard deliberately does NOT police `o3`, `dall-e-3`, `gpt-image-1.x`,
-// or `sora-2`. Those still appear in LEGITIMATE provider-API/reasoning-detection/media code
-// (e.g. `m.startsWith('o3')` o-series routing, direct DALL-E API calls) even though they are
-// not user-selectable catalog entries. Reconciling that media/reasoning drift to the catalog
-// is a separate post-launch task (tracked in reports/audit/STATE.md), not a removed-ID gate.
+// SCOPE NOTE: this guard deliberately does NOT police `o3` or `gpt-image-1.x`.
+// Those can appear in legitimate provider-API/reasoning-detection code even
+// when they are not user-selectable catalog entries.
 //
 // SUBSTRING list: ids that are NEVER a substring of a VALID catalog id -> plain match.
 const DISALLOWED_SUBSTRING = [
@@ -131,6 +169,72 @@ function isMdCommentLine(line) {
 
 if (!fs.existsSync(CATALOG)) {
   console.error(`Model-catalog integrity check: missing canonical catalog at ${CATALOG}`);
+  process.exit(1);
+}
+
+const catalogViolations = [];
+
+function recordCatalogValue(file, pathLabel, value) {
+  if (typeof value === 'string' && REMOVED_SELECTABLE_MODEL_IDS.has(value)) {
+    catalogViolations.push({
+      file: path.relative(root, file),
+      path: pathLabel,
+      id: value,
+    });
+  }
+}
+
+for (const file of CATALOG_INPUTS) {
+  if (!fs.existsSync(file)) continue;
+  const rel = path.relative(root, file);
+  let catalog;
+  try {
+    catalog = JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    console.error(`Model-catalog integrity check: failed to parse ${rel}: ${error.message}`);
+    process.exit(1);
+  }
+
+  for (const [id, model] of Object.entries(catalog.models ?? {})) {
+    recordCatalogValue(file, `models.${id}`, id);
+    recordCatalogValue(file, `models.${id}.id`, model?.id);
+    recordCatalogValue(file, `models.${id}.apiModelId`, model?.apiModelId);
+  }
+
+  for (const [providerId, provider] of Object.entries(catalog.providers ?? {})) {
+    recordCatalogValue(file, `providers.${providerId}.defaultModel`, provider?.defaultModel);
+    for (const [task, modelId] of Object.entries(provider?.taskRouting ?? {})) {
+      recordCatalogValue(file, `providers.${providerId}.taskRouting.${task}`, modelId);
+    }
+    for (const [alias, target] of Object.entries(provider?.canonicalization ?? {})) {
+      // Canonicalization keys are non-selectable legacy inputs used to migrate
+      // previous chats/config forward. Only the target must be a current,
+      // selectable-safe ID.
+      recordCatalogValue(file, `providers.${providerId}.canonicalization.${alias}`, target);
+    }
+  }
+
+  for (const [tier, modelIds] of Object.entries(catalog.tierAllowedModels ?? {})) {
+    if (!Array.isArray(modelIds)) continue;
+    for (const modelId of modelIds) recordCatalogValue(file, `tierAllowedModels.${tier}`, modelId);
+  }
+
+  for (const [providerId, presets] of Object.entries(catalog.modelPresets ?? {})) {
+    if (!Array.isArray(presets)) continue;
+    for (const preset of presets) {
+      recordCatalogValue(file, `modelPresets.${providerId}`, preset?.value);
+    }
+  }
+}
+
+if (catalogViolations.length > 0) {
+  console.error(
+    'Model-catalog integrity check FAILED — deprecated/removed IDs in selectable catalog structures:\n',
+  );
+  for (const v of catalogViolations) {
+    console.error(`- ${v.file}  ${v.path}  [${v.id}]`);
+  }
+  console.error(`\n${catalogViolations.length} catalog violation(s).`);
   process.exit(1);
 }
 

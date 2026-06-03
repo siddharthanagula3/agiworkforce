@@ -162,8 +162,8 @@ export const WS_BLACKLIST_THRESHOLD_DEFAULT = 5;
 // Input Validation
 // =============================================================================
 
-/** Valid pairing code pattern (8 alphanumeric characters) */
-export const PAIRING_CODE_PATTERN = /^[A-Z0-9]{8}$/;
+/** Valid pairing code pattern (uppercase alphanumeric, length matches PAIRING_CODE_LENGTH). */
+export const PAIRING_CODE_PATTERN = new RegExp(`^[A-Z0-9]{${PAIRING_CODE_LENGTH}}$`);
 
 /** Maximum metadata object size in bytes */
 export const MAX_METADATA_SIZE_BYTES = 4096;

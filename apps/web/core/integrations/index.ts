@@ -72,14 +72,14 @@ export {
   type SocialMediaAnalysisResult,
 } from './social-media-analyzer';
 
-// DALL-E Image Service (OpenAI)
+// GPT Image Service (OpenAI)
 export {
-  dallEImageService,
-  DallEImageService,
-  type DallEGenerationRequest,
-  type DallEGenerationResponse,
+  openAIImageService,
+  OpenAIImageService,
+  type OpenAIImageGenerationRequest,
+  type OpenAIImageGenerationResponse,
   type ImageGenerationResult,
-} from './dalle-image-service';
+} from './openai-image-service';
 
 // Google Imagen Service
 export {

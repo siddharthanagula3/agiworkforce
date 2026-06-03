@@ -648,7 +648,7 @@
         },
         "agiWorkforce.model": {
           "type": "string",
-          "default": "auto-balanced",
+          "default": "auto-economy",
           "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
         "agiWorkforce.streamingEnabled": {
@@ -955,6 +955,6 @@
     "mocha": "^11.7.5",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.8"
   }
 }

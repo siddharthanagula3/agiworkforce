@@ -1,7 +1,8 @@
 /**
  * OpenAI ChatGPT Provider
  * Official SDK integration for OpenAI GPT models
- * Updated: Jan 3rd 2026 - Updated to GPT-5.2, o3, Sora 2, gpt-image-1.5
+ * Updated: Jun 3rd 2026 - model lists are catalog-driven; current OpenAI
+ * defaults include GPT-5.5, GPT-5.5 mini, and GPT Image 2.
  */
 
 import OpenAI from 'openai';
@@ -605,8 +606,7 @@ export class OpenAIProvider {
   }
 
   /**
-   * Get available models (Jan 2026)
-   * Uses shared config from @shared/config/supported-models.ts
+   * Get available OpenAI text models from the shared catalog-backed config.
    */
   static getAvailableModels(): string[] {
     return [...SUPPORTED_OPENAI_MODELS];
@@ -620,7 +620,8 @@ export class OpenAIProvider {
   }
 
   /**
-   * Get available video models (Sora)
+   * Get configured OpenAI video models. AGI currently routes video to
+   * catalog-backed Google/Runway models, so this can be empty.
    */
   static getVideoModels(): string[] {
     return [...SUPPORTED_OPENAI_VIDEO_MODELS];

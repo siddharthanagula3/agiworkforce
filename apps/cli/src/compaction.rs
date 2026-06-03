@@ -756,7 +756,7 @@ mod tests {
 
     #[test]
     fn test_context_usage_empty() {
-        let usage = context_usage(&[], "claude-opus-4-6");
+        let usage = context_usage(&[], "claude-sonnet-4-6");
         assert_eq!(usage.used_tokens, 0);
         assert_eq!(usage.limit_tokens, 200_000);
         assert!(!usage.near_limit);
@@ -767,7 +767,7 @@ mod tests {
         // Build a fake message that consumes ~170 000 tokens out of 200 000
         let big_text = "x".repeat(170_000 * BYTES_PER_TOKEN);
         let msgs = vec![Message::text("user", big_text)];
-        let usage = context_usage(&msgs, "claude-opus-4-6");
+        let usage = context_usage(&msgs, "claude-sonnet-4-6");
         assert!(usage.near_limit);
     }
 

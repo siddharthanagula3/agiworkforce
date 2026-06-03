@@ -98,7 +98,7 @@ function makeRequest(
 }
 
 const VALID_BODY = {
-  model: 'claude-opus-4-7',
+  model: 'claude-opus-4-8',
   messages: [{ role: 'user', content: 'hello' }],
 };
 
@@ -153,7 +153,7 @@ describe('RT-01: /api/v1/providers/[providerId]/stream authentication', () => {
   it('returns 400 when body is missing messages', async () => {
     const { req, params } = makeRequest(
       'anthropic',
-      { model: 'claude-opus-4-7' },
+      { model: 'claude-opus-4-8' },
       'Bearer valid.jwt',
     );
     const res = await POST(req, { params });

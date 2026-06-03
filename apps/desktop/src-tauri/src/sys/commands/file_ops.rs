@@ -153,6 +153,17 @@ pub(crate) fn validate_path_security(path: &str) -> Result<PathBuf, String> {
     Ok(canonical_path)
 }
 
+fn validate_read_path(path: &str) -> Result<PathBuf, String> {
+    let canonical = validate_path_security(path)?;
+    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
+        return Err(format!(
+            "Access denied: path is on the blocked-paths denylist: {}",
+            path
+        ));
+    }
+    Ok(canonical)
+}
+
 // AUDIT-003-014 fix: Escape glob special characters in path strings.
 // This prevents directory names containing glob metacharacters from being
 // interpreted as patterns, which could lead to unintended file access.
@@ -267,7 +278,7 @@ pub(crate) fn is_blacklisted_path(path: &str) -> bool {
     false
 }
 
-fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
+pub(crate) fn is_path_allowed(canonical_path: &str, allowed_dirs: &[PathBuf]) -> bool {
     let canonical_normalized = canonical_path.replace('\\', "/");
     allowed_dirs.iter().any(|dir| {
         let dir_str = dir.to_string_lossy();
@@ -413,14 +424,7 @@ pub async fn file_read(
 ) -> Result<String, String> {
     debug!("Reading file: {}", path);
 
-    let canonical = validate_path_security(&path)?;
-    // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
-    if crate::sys::security::blocked_paths::is_blocked(&canonical) {
-        return Err(format!(
-            "Access denied: path is on the blocked-paths denylist: {}",
-            path
-        ));
-    }
+    let canonical = validate_read_path(&path)?;
 
     // AUDIT-FIX: H-15 — use canonical (symlink-resolved) path for all fs ops.
     match fs::symlink_metadata(&canonical) {
@@ -486,11 +490,12 @@ pub async fn file_write(
     debug!("Writing file: {}", path);
 
     let canonical = validate_path_security(&path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
     // AUDIT-FIX: CI-4 — centralized blocked-path denylist.
     if crate::sys::security::blocked_paths::is_blocked(&canonical) {
         return Err(format!(
             "Access denied: path is on the blocked-paths denylist: {}",
-            path
+            canonical_str
         ));
     }
 
@@ -508,17 +513,17 @@ pub async fn file_write(
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,
         "file_write",
-        &serde_json::json!({ "path": path, "size_bytes": content.len() }),
+        &serde_json::json!({ "path": &canonical_str, "size_bytes": content.len() }),
     )
     .await?
     {
         return Err("Operation denied by user".to_string());
     }
 
-    if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
-            &path,
+            &canonical_str,
             FileOperation::Write,
             false,
             Some(error.clone()),
@@ -570,14 +575,14 @@ pub async fn file_write(
 
     match write_result {
         Ok(_) => {
-            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully wrote file: {}", path);
+            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully wrote file: {}", canonical_str);
             Ok(())
         }
         Err(e) => {
             let error = format!("Failed to write file: {}", e);
             log_file_operation(
-                &path,
+                &canonical_str,
                 FileOperation::Write,
                 false,
                 Some(error.clone()),
@@ -597,9 +602,10 @@ pub async fn file_delete(
 ) -> Result<(), String> {
     debug!("Deleting file: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    match fs::metadata(&path) {
+    match fs::metadata(&canonical_path) {
         Ok(metadata) => {
             if !metadata.is_file() {
                 return Err(format!(
@@ -616,17 +622,17 @@ pub async fn file_delete(
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,
         "file_delete",
-        &serde_json::json!({ "path": path }),
+        &serde_json::json!({ "path": &canonical_str }),
     )
     .await?
     {
         return Err("Operation denied by user".to_string());
     }
 
-    if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Delete, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
-            &path,
+            &canonical_str,
             FileOperation::Delete,
             false,
             Some(error.clone()),
@@ -636,16 +642,16 @@ pub async fn file_delete(
         return Err(error);
     }
 
-    match fs::remove_file(&path) {
+    match fs::remove_file(&canonical_path) {
         Ok(_) => {
-            log_file_operation(&path, FileOperation::Delete, true, None, &state).await?;
-            info!("Successfully deleted file: {}", path);
+            log_file_operation(&canonical_str, FileOperation::Delete, true, None, &state).await?;
+            info!("Successfully deleted file: {}", canonical_str);
             Ok(())
         }
         Err(e) => {
             let error = format!("Failed to delete file: {}", e);
             log_file_operation(
-                &path,
+                &canonical_str,
                 FileOperation::Delete,
                 false,
                 Some(error.clone()),
@@ -666,32 +672,52 @@ pub async fn file_rename(
 ) -> Result<(), String> {
     debug!("Renaming file: {} -> {}", old_path, new_path);
 
-    let _ = validate_path_security(&old_path)?;
-    let _ = validate_path_security(&new_path)?;
+    let canonical_old_path = validate_path_security(&old_path)?;
+    let canonical_new_path = validate_path_security(&new_path)?;
+    let canonical_old_str = canonical_old_path.to_string_lossy().to_string();
+    let canonical_new_str = canonical_new_path.to_string_lossy().to_string();
 
-    if !Path::new(&old_path).exists() {
+    if !canonical_old_path.exists() {
         return Err(format!("Source file does not exist: {}", old_path));
     }
 
-    if Path::new(&new_path).exists() {
+    if canonical_new_path.exists() {
         return Err(format!(
             "Destination already exists: {}. Cannot overwrite",
             new_path
         ));
     }
 
-    if !check_file_permission(&old_path, FileOperation::Delete, &state, Some(&app)).await? {
+    if !check_file_permission(
+        &canonical_old_str,
+        FileOperation::Delete,
+        &state,
+        Some(&app),
+    )
+    .await?
+    {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&new_path, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_new_str, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied for destination file".to_string());
     }
 
-    match fs::rename(&old_path, &new_path) {
+    match fs::rename(&canonical_old_path, &canonical_new_path) {
         Ok(_) => {
-            log_file_operation(&old_path, FileOperation::Delete, true, None, &state).await?;
-            log_file_operation(&new_path, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully renamed file: {} -> {}", old_path, new_path);
+            log_file_operation(
+                &canonical_old_str,
+                FileOperation::Delete,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            log_file_operation(&canonical_new_str, FileOperation::Write, true, None, &state)
+                .await?;
+            info!(
+                "Successfully renamed file: {} -> {}",
+                canonical_old_str, canonical_new_str
+            );
             Ok(())
         }
         Err(e) => {
@@ -710,10 +736,12 @@ pub async fn file_copy(
 ) -> Result<(), String> {
     debug!("Copying file: {} -> {}", src, dest);
 
-    let _ = validate_path_security(&src)?;
-    let _ = validate_path_security(&dest)?;
+    let canonical_src = validate_path_security(&src)?;
+    let canonical_dest = validate_path_security(&dest)?;
+    let canonical_src_str = canonical_src.to_string_lossy().to_string();
+    let canonical_dest_str = canonical_dest.to_string_lossy().to_string();
 
-    match fs::metadata(&src) {
+    match fs::metadata(&canonical_src) {
         Ok(metadata) => {
             if !metadata.is_file() {
                 return Err(format!("Source is not a file: {}", src));
@@ -729,24 +757,41 @@ pub async fn file_copy(
         Err(_) => return Err(format!("Source file does not exist: {}", src)),
     }
 
-    if Path::new(&dest).exists() {
+    if canonical_dest.exists() {
         return Err(format!(
             "Destination already exists: {}. Cannot overwrite",
             dest
         ));
     }
 
-    if !check_file_permission(&src, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_src_str, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&dest, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(
+        &canonical_dest_str,
+        FileOperation::Write,
+        &state,
+        Some(&app),
+    )
+    .await?
+    {
         return Err("Permission denied for destination file".to_string());
     }
 
-    match fs::copy(&src, &dest) {
+    match fs::copy(&canonical_src, &canonical_dest) {
         Ok(_) => {
-            log_file_operation(&dest, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully copied file: {} -> {}", src, dest);
+            log_file_operation(
+                &canonical_dest_str,
+                FileOperation::Write,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            info!(
+                "Successfully copied file: {} -> {}",
+                canonical_src_str, canonical_dest_str
+            );
             Ok(())
         }
         Err(e) => {
@@ -765,10 +810,12 @@ pub async fn file_move(
 ) -> Result<(), String> {
     debug!("Moving file: {} -> {}", src, dest);
 
-    let _ = validate_path_security(&src)?;
-    let _ = validate_path_security(&dest)?;
+    let canonical_src = validate_path_security(&src)?;
+    let canonical_dest = validate_path_security(&dest)?;
+    let canonical_src_str = canonical_src.to_string_lossy().to_string();
+    let canonical_dest_str = canonical_dest.to_string_lossy().to_string();
 
-    match fs::metadata(&src) {
+    match fs::metadata(&canonical_src) {
         Ok(metadata) => {
             if !metadata.is_file() {
                 return Err(format!("Source is not a file: {}", src));
@@ -784,40 +831,90 @@ pub async fn file_move(
         Err(_) => return Err(format!("Source file does not exist: {}", src)),
     }
 
-    if Path::new(&dest).exists() {
+    if canonical_dest.exists() {
         return Err(format!(
             "Destination already exists: {}. Cannot overwrite",
             dest
         ));
     }
 
-    if !check_file_permission(&src, FileOperation::Delete, &state, Some(&app)).await? {
+    if !check_file_permission(
+        &canonical_src_str,
+        FileOperation::Delete,
+        &state,
+        Some(&app),
+    )
+    .await?
+    {
         return Err("Permission denied for source file".to_string());
     }
-    if !check_file_permission(&dest, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(
+        &canonical_dest_str,
+        FileOperation::Write,
+        &state,
+        Some(&app),
+    )
+    .await?
+    {
         return Err("Permission denied for destination file".to_string());
     }
 
-    if let Some(parent) = Path::new(&dest).parent() {
+    if let Some(parent) = canonical_dest.parent() {
         if !parent.exists() {
             fs::create_dir_all(parent)
                 .map_err(|e| format!("Failed to create destination directory: {}", e))?;
         }
     }
 
-    match fs::rename(&src, &dest) {
+    match fs::rename(&canonical_src, &canonical_dest) {
         Ok(_) => {
-            log_file_operation(&src, FileOperation::Delete, true, None, &state).await?;
-            log_file_operation(&dest, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully moved file: {} -> {}", src, dest);
+            log_file_operation(
+                &canonical_src_str,
+                FileOperation::Delete,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            log_file_operation(
+                &canonical_dest_str,
+                FileOperation::Write,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            info!(
+                "Successfully moved file: {} -> {}",
+                canonical_src_str, canonical_dest_str
+            );
             Ok(())
         }
         Err(_) => {
-            fs::copy(&src, &dest).map_err(|e| format!("Failed to copy file: {}", e))?;
-            fs::remove_file(&src).map_err(|e| format!("Failed to delete source file: {}", e))?;
-            log_file_operation(&src, FileOperation::Delete, true, None, &state).await?;
-            log_file_operation(&dest, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully moved file: {} -> {}", src, dest);
+            fs::copy(&canonical_src, &canonical_dest)
+                .map_err(|e| format!("Failed to copy file: {}", e))?;
+            fs::remove_file(&canonical_src)
+                .map_err(|e| format!("Failed to delete source file: {}", e))?;
+            log_file_operation(
+                &canonical_src_str,
+                FileOperation::Delete,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            log_file_operation(
+                &canonical_dest_str,
+                FileOperation::Write,
+                true,
+                None,
+                &state,
+            )
+            .await?;
+            info!(
+                "Successfully moved file: {} -> {}",
+                canonical_src_str, canonical_dest_str
+            );
             Ok(())
         }
     }
@@ -825,9 +922,9 @@ pub async fn file_move(
 
 #[tauri::command]
 pub async fn file_exists(path: String) -> Result<bool, String> {
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
 
-    Ok(Path::new(&path).exists())
+    Ok(canonical_path.exists())
 }
 
 #[tauri::command]
@@ -877,7 +974,7 @@ pub async fn file_open_with_default_app(
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,
         "file_open_with_default_app",
-        &serde_json::json!({ "path": canonical_str }),
+        &serde_json::json!({ "path": &canonical_str }),
     )
     .await?
     {
@@ -928,10 +1025,11 @@ pub async fn file_open_with_default_app(
 pub async fn file_metadata(path: String) -> Result<FileMetadata, String> {
     debug!("Getting metadata for: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    let metadata =
-        fs::metadata(&path).map_err(|e| format!("Failed to get metadata for '{}': {}", path, e))?;
+    let metadata = fs::metadata(&canonical_path)
+        .map_err(|e| format!("Failed to get metadata for '{}': {}", canonical_str, e))?;
 
     let created = metadata
         .created()
@@ -965,20 +1063,21 @@ pub async fn dir_create(
 ) -> Result<(), String> {
     debug!("Creating directory: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    if Path::new(&path).exists() {
+    if canonical_path.exists() {
         return Err(format!("Path already exists: {}", path));
     }
 
-    if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
-    match fs::create_dir_all(&path) {
+    match fs::create_dir_all(&canonical_path) {
         Ok(_) => {
-            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully created directory: {}", path);
+            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully created directory: {}", canonical_str);
             Ok(())
         }
         Err(e) => {
@@ -996,9 +1095,10 @@ pub async fn dir_list(
 ) -> Result<Vec<DirEntry>, String> {
     debug!("Listing directory: {}", path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    match fs::metadata(&path) {
+    match fs::metadata(&canonical_path) {
         Ok(metadata) => {
             if !metadata.is_dir() {
                 return Err(format!("Path is not a directory: {}", path));
@@ -1007,11 +1107,12 @@ pub async fn dir_list(
         Err(_) => return Err(format!("Directory does not exist: {}", path)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
-    let entries = fs::read_dir(&path).map_err(|e| format!("Failed to read directory: {}", e))?;
+    let entries =
+        fs::read_dir(&canonical_path).map_err(|e| format!("Failed to read directory: {}", e))?;
 
     let mut results = Vec::new();
 
@@ -1039,7 +1140,7 @@ pub async fn dir_list(
         });
     }
 
-    log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
+    log_file_operation(&canonical_str, FileOperation::Read, true, None, &state).await?;
     Ok(results)
 }
 
@@ -1052,9 +1153,10 @@ pub async fn dir_delete(
 ) -> Result<(), String> {
     debug!("Deleting directory: {} (recursive: {})", path, recursive);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
-    match fs::metadata(&path) {
+    match fs::metadata(&canonical_path) {
         Ok(metadata) => {
             if !metadata.is_dir() {
                 return Err(format!(
@@ -1071,7 +1173,7 @@ pub async fn dir_delete(
         if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "dir_delete",
-            &serde_json::json!({ "path": path, "recursive": true }),
+            &serde_json::json!({ "path": &canonical_str, "recursive": true }),
         )
         .await?
         {
@@ -1079,20 +1181,20 @@ pub async fn dir_delete(
         }
     }
 
-    if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Delete, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
     let result = if recursive {
-        fs::remove_dir_all(&path)
+        fs::remove_dir_all(&canonical_path)
     } else {
-        fs::remove_dir(&path)
+        fs::remove_dir(&canonical_path)
     };
 
     match result {
         Ok(_) => {
-            log_file_operation(&path, FileOperation::Delete, true, None, &state).await?;
-            info!("Successfully deleted directory: {}", path);
+            log_file_operation(&canonical_str, FileOperation::Delete, true, None, &state).await?;
+            info!("Successfully deleted directory: {}", canonical_str);
             Ok(())
         }
         Err(e) => {
@@ -1114,7 +1216,8 @@ pub async fn dir_traverse(
         path, glob_pattern
     );
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
     if glob_pattern.contains("..") {
         return Err("Glob pattern cannot contain directory traversal (..)".to_string());
@@ -1126,7 +1229,7 @@ pub async fn dir_traverse(
         ));
     }
 
-    match fs::metadata(&path) {
+    match fs::metadata(&canonical_path) {
         Ok(metadata) => {
             if !metadata.is_dir() {
                 return Err(format!("Path is not a directory: {}", path));
@@ -1135,14 +1238,14 @@ pub async fn dir_traverse(
         Err(_) => return Err(format!("Directory does not exist: {}", path)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
     // AUDIT-003-014 fix: Escape glob special characters in the base path to prevent
     // unintended pattern matching. Special characters in the base path should be
     // treated literally, not as glob metacharacters.
-    let escaped_path = escape_glob_special_chars(&path);
+    let escaped_path = escape_glob_special_chars(&canonical_str);
 
     let full_pattern = if glob_pattern.is_empty() {
         format!("{}*", escaped_path)
@@ -1221,9 +1324,10 @@ pub async fn file_read_range(
         path, offset, limit
     );
 
-    let _ = validate_path_security(&path)?;
+    let canonical = validate_read_path(&path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
-    match fs::metadata(&path) {
+    match fs::metadata(&canonical) {
         Ok(metadata) => {
             if metadata.len() > 100_000_000 {
                 return Err(format!(
@@ -1238,12 +1342,12 @@ pub async fn file_read_range(
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
     }
 
-    if !check_file_permission(&path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         return Err("Permission denied".to_string());
     }
 
     let content_str =
-        fs::read_to_string(&path).map_err(|e| format!("Failed to read file: {}", e))?;
+        fs::read_to_string(&canonical).map_err(|e| format!("Failed to read file: {}", e))?;
 
     log_file_operation(&path, FileOperation::Read, true, None, &state).await?;
 
@@ -1334,9 +1438,10 @@ pub async fn fs_read_file_content(
 ) -> Result<FileContextContent, String> {
     debug!("Reading file content for context: {}", file_path);
 
-    let _ = validate_path_security(&file_path)?;
+    let canonical = validate_read_path(&file_path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
-    match fs::metadata(&file_path) {
+    match fs::metadata(&canonical) {
         Ok(metadata) => {
             if !metadata.is_file() {
                 return Err(format!("Path is not a file: {}", file_path));
@@ -1353,7 +1458,7 @@ pub async fn fs_read_file_content(
         Err(e) => return Err(format!("Failed to access file metadata: {}", e)),
     }
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1366,7 +1471,7 @@ pub async fn fs_read_file_content(
         return Err(error);
     }
 
-    let content = match fs::read_to_string(&file_path) {
+    let content = match fs::read_to_string(&canonical) {
         Ok(content) => content,
         Err(e) => {
             let error = format!("Failed to read file: {}", e);
@@ -1383,7 +1488,7 @@ pub async fn fs_read_file_content(
     };
 
     let metadata =
-        fs::metadata(&file_path).map_err(|e| format!("Failed to get file metadata: {}", e))?;
+        fs::metadata(&canonical).map_err(|e| format!("Failed to get file metadata: {}", e))?;
     let size = metadata.len();
 
     let line_count = content.lines().count();
@@ -1558,6 +1663,27 @@ mod fix_016_blacklist_tests {
 }
 
 #[cfg(test)]
+mod blocked_read_path_tests {
+    use super::{is_blacklisted_path, validate_read_path};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn read_guard_rejects_central_blocked_paths_not_in_legacy_blacklist() {
+        let dir = tempdir().unwrap();
+        let npmrc = dir.path().join(".npmrc");
+        fs::write(&npmrc, "token").unwrap();
+
+        assert!(
+            !is_blacklisted_path(npmrc.to_str().unwrap()),
+            "legacy component blacklist intentionally does not cover .npmrc"
+        );
+        let err = validate_read_path(npmrc.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("blocked-paths denylist"));
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use tempfile::tempdir;
@@ -1658,9 +1784,10 @@ pub async fn file_read_text(
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let _ = validate_path_security(&file_path)?;
+    let canonical = validate_read_path(&file_path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1673,7 +1800,7 @@ pub async fn file_read_text(
         return Err(error);
     }
 
-    match fs::read_to_string(&file_path) {
+    match fs::read_to_string(&canonical) {
         Ok(content) => {
             log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
             Ok(content)
@@ -1766,9 +1893,10 @@ pub async fn file_read_binary(
     file_path: String,
     state: tauri::State<'_, AppDatabase>,
 ) -> Result<String, String> {
-    let _ = validate_path_security(&file_path)?;
+    let canonical = validate_read_path(&file_path)?;
+    let canonical_str = canonical.to_string_lossy().to_string();
 
-    if !check_file_permission(&file_path, FileOperation::Read, &state, Some(&app)).await? {
+    if !check_file_permission(&canonical_str, FileOperation::Read, &state, Some(&app)).await? {
         let error = "Permission denied".to_string();
         log_file_operation(
             &file_path,
@@ -1781,7 +1909,7 @@ pub async fn file_read_binary(
         return Err(error);
     }
 
-    match fs::read(&file_path) {
+    match fs::read(&canonical) {
         Ok(data) => {
             log_file_operation(&file_path, FileOperation::Read, true, None, &state).await?;
             Ok(general_purpose::STANDARD.encode(&data))
@@ -1912,7 +2040,8 @@ pub async fn undo_file_operation(
 ) -> Result<(), String> {
     info!("Undo file operation: {} on {}", operation, path);
 
-    let _ = validate_path_security(&path)?;
+    let canonical_path = validate_path_security(&path)?;
+    let canonical_str = canonical_path.to_string_lossy().to_string();
 
     match operation.as_str() {
         "restore" => {
@@ -1925,31 +2054,38 @@ pub async fn undo_file_operation(
                 ));
             }
 
-            if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
+            if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app))
+                .await?
+            {
                 return Err("Permission denied".to_string());
             }
 
-            if let Some(parent) = Path::new(&path).parent() {
+            if let Some(parent) = canonical_path.parent() {
                 if !parent.exists() {
                     fs::create_dir_all(parent)
                         .map_err(|e| format!("Failed to create parent directory: {}", e))?;
                 }
             }
 
-            fs::write(&path, content).map_err(|e| format!("Failed to restore file: {}", e))?;
-            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully restored file: {}", path);
+            fs::write(&canonical_path, content)
+                .map_err(|e| format!("Failed to restore file: {}", e))?;
+            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully restored file: {}", canonical_str);
             Ok(())
         }
         "delete" => {
-            if !check_file_permission(&path, FileOperation::Delete, &state, Some(&app)).await? {
+            if !check_file_permission(&canonical_str, FileOperation::Delete, &state, Some(&app))
+                .await?
+            {
                 return Err("Permission denied".to_string());
             }
 
-            if Path::new(&path).exists() {
-                fs::remove_file(&path).map_err(|e| format!("Failed to delete file: {}", e))?;
-                log_file_operation(&path, FileOperation::Delete, true, None, &state).await?;
-                info!("Successfully deleted file: {}", path);
+            if canonical_path.exists() {
+                fs::remove_file(&canonical_path)
+                    .map_err(|e| format!("Failed to delete file: {}", e))?;
+                log_file_operation(&canonical_str, FileOperation::Delete, true, None, &state)
+                    .await?;
+                info!("Successfully deleted file: {}", canonical_str);
             }
             Ok(())
         }
@@ -1963,20 +2099,23 @@ pub async fn undo_file_operation(
                 ));
             }
 
-            if !check_file_permission(&path, FileOperation::Write, &state, Some(&app)).await? {
+            if !check_file_permission(&canonical_str, FileOperation::Write, &state, Some(&app))
+                .await?
+            {
                 return Err("Permission denied".to_string());
             }
 
-            if let Some(parent) = Path::new(&path).parent() {
+            if let Some(parent) = canonical_path.parent() {
                 if !parent.exists() {
                     fs::create_dir_all(parent)
                         .map_err(|e| format!("Failed to create parent directory: {}", e))?;
                 }
             }
 
-            fs::write(&path, content).map_err(|e| format!("Failed to create file: {}", e))?;
-            log_file_operation(&path, FileOperation::Write, true, None, &state).await?;
-            info!("Successfully created file: {}", path);
+            fs::write(&canonical_path, content)
+                .map_err(|e| format!("Failed to create file: {}", e))?;
+            log_file_operation(&canonical_str, FileOperation::Write, true, None, &state).await?;
+            info!("Successfully created file: {}", canonical_str);
             Ok(())
         }
         _ => Err(format!("Unknown undo operation: {}", operation)),
