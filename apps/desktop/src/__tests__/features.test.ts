@@ -105,7 +105,7 @@ describe('modelStore', () => {
       expect(state.selectedProvider).toBe('managed_cloud');
     });
 
-    it('should block retired phantom Codex model ids from selection', async () => {
+    it('should block max-tier model selection for hobby plans', async () => {
       const { useModelStore } = await import('../stores/modelStore');
       const { useUnifiedAuthStore } = await import('../stores/auth');
 
@@ -121,12 +121,22 @@ describe('modelStore', () => {
   });
 
   describe('tier restrictions', () => {
-    it('should mark retired phantom Codex model ids as unavailable on every tier', async () => {
+    it('should allow the current OpenAI flagship only on max and enterprise tiers', async () => {
       const { isModelAllowedForTier } = await import('../constants/llm');
 
       expect(isModelAllowedForTier('gpt-5.5', 'hobby')).toBe(false);
       expect(isModelAllowedForTier('gpt-5.5', 'pro')).toBe(false);
-      expect(isModelAllowedForTier('gpt-5.5', 'max')).toBe(false);
+      expect(isModelAllowedForTier('gpt-5.5', 'max')).toBe(true);
+      expect(isModelAllowedForTier('gpt-5.5', 'enterprise')).toBe(true);
+    });
+
+    it('should deny unknown phantom model ids on every managed-cloud tier', async () => {
+      const { isModelAllowedForTier } = await import('../constants/llm');
+
+      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'hobby')).toBe(false);
+      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'pro')).toBe(false);
+      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'max')).toBe(false);
+      expect(isModelAllowedForTier('unknown-codex-phantom-model', 'enterprise')).toBe(false);
     });
 
     it('should resolve the best allowed auto mode when no model is selected', async () => {
