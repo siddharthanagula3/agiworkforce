@@ -113,13 +113,11 @@ jest.mock('@agiworkforce/compliance', () => ({
   DISCLOSURE_LEDGER_KEY: 'disclosure_ledger',
 }));
 
+const mockDetectCapabilities = jest.fn(() => new Promise(() => {}));
+
 // Local LLM catalog stub
 jest.mock('@agiworkforce/local-llm', () => ({
-  detectCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 4096,
-    tier1Available: false,
-    tier2Available: true,
-  }),
+  detectCapabilities: (...args: unknown[]) => mockDetectCapabilities(...args),
   getDefaultModel: jest.fn().mockReturnValue({
     id: 'qwen2.5-1.5b-instruct-q4_k_m',
     displayName: 'Qwen 2.5 1.5B',
@@ -165,6 +163,7 @@ import OnboardingScreen from '../app/(public)/onboarding';
 
 describe('Onboarding (v1 local-only)', () => {
   beforeEach(() => {
+    jest.useRealTimers();
     jest.clearAllMocks();
     mockIsDisclosureSatisfied.mockReturnValue(false);
   });
@@ -227,8 +226,7 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      // Modal becomes visible — disclosure-accept-btn is from FirstRunDisclosureModal
-      await waitFor(() => expect(getByTestId('disclosure-accept-btn')).toBeTruthy());
+      expect(getByTestId('disclosure-accept-btn')).toBeTruthy();
     });
 
     it('accepting the disclosure advances to device-tier screen', async () => {
@@ -238,7 +236,7 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      await waitFor(() => getByTestId('disclosure-accept-btn'));
+      expect(getByTestId('disclosure-accept-btn')).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByTestId('disclosure-accept-btn'));
         await Promise.resolve();
@@ -253,7 +251,7 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      await waitFor(() => getByTestId('disclosure-accept-btn'));
+      expect(getByTestId('disclosure-accept-btn')).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByTestId('disclosure-accept-btn'));
         await Promise.resolve();
@@ -268,14 +266,12 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      await waitFor(() => getByTestId('disclosure-decline-btn'));
+      expect(getByTestId('disclosure-decline-btn')).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByTestId('disclosure-decline-btn'));
       });
-      await waitFor(() => {
-        expect(getByTestId('onboarding-hero-screen')).toBeTruthy();
-        expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
-      });
+      expect(getByTestId('onboarding-hero-screen')).toBeTruthy();
+      expect(queryByTestId('onboarding-device-tier-screen')).toBeNull();
     });
 
     it('skips modal when disclosure is already satisfied', async () => {
@@ -285,7 +281,7 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
+      expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy();
     });
   });
 
@@ -301,7 +297,7 @@ describe('Onboarding (v1 local-only)', () => {
         fireEvent.press(utils.getByTestId('hero-start-chatting-btn'));
         await Promise.resolve();
       });
-      await waitFor(() => utils.getByTestId('onboarding-device-tier-screen'));
+      expect(utils.getByTestId('onboarding-device-tier-screen')).toBeTruthy();
       return utils;
     }
 
