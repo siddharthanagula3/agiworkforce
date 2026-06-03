@@ -31,6 +31,15 @@ ReactDOM.createRoot(rootElement).render(
         <TooltipProvider>
           <App />
           <Toaster />
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+            data-testid="app-status-live-region"
+          >
+            AGI is ready.
+          </div>
         </TooltipProvider>
       </ThemeProvider>
     </I18nProvider>
