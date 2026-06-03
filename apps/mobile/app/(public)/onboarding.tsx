@@ -203,7 +203,7 @@ export default function OnboardingScreen() {
   // ---------------------------------------------------------------------------
   // Hero CTA → disclosure gate
   // ---------------------------------------------------------------------------
-  const handleHeroCTA = useCallback(async () => {
+  const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
     if (alreadySatisfied) {
       setScreen('device-tier');
