@@ -317,12 +317,12 @@ mod production_parser_tests {
 
     #[test]
     fn test_deepseek_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"DeepSeek says hi"},"finish_reason":null}],"model":"deepseek-chat"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"DeepSeek says hi"},"finish_reason":null}],"model":"deepseek-v4-flash"}"#;
 
         let chunk = parse_sse_event(event, Provider::DeepSeek).unwrap();
 
         assert_eq!(chunk.content, "DeepSeek says hi");
-        assert_eq!(chunk.model.as_deref(), Some("deepseek-chat"));
+        assert_eq!(chunk.model.as_deref(), Some("deepseek-v4-flash"));
     }
 
     #[test]
@@ -354,7 +354,7 @@ mod production_parser_tests {
 
     #[test]
     fn test_moonshot_uses_openai_format() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Kimi says"},"finish_reason":null}],"model":"kimi-k2.5-thinking"}"#;
+        let event = r#"data: {"choices":[{"delta":{"content":"Kimi says"},"finish_reason":null}],"model":"kimi-k2.6"}"#;
 
         let chunk = parse_sse_event(event, Provider::Moonshot).unwrap();
 
