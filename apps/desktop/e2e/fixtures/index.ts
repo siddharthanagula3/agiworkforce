@@ -27,6 +27,15 @@ export const test = base.extend<CustomFixtures>({
 
     if (shouldMockCloudApi) {
       await context.route('**/api/**', (route) => {
+        const url = new URL(route.request().url());
+
+        // Vite source modules can legitimately live under /src/api/*.ts.
+        // The cloud API mock must only intercept app API endpoints; otherwise
+        // it serves JSON to module-script requests and leaves the app blank.
+        if (!url.pathname.startsWith('/api/')) {
+          return route.fallback();
+        }
+
         const method = route.request().method();
 
         if (method === 'GET') {

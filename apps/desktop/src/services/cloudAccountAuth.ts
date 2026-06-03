@@ -93,11 +93,45 @@ type ApiMeResponse = {
 
 const AUTH_CACHE_PREFIX = 'agiworkforce_auth_cache_';
 const AUTH_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
 
 interface CachedAuthData<T> {
   data: T;
   userId: string;
   cachedAt: number;
+}
+
+function isLocalDevBrowser(): boolean {
+  if (isTauri || typeof window === 'undefined' || !import.meta.env.DEV) return false;
+  return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+}
+
+function readDevBrowserSessionSeed(): {
+  access_token: string;
+  refresh_token?: string | null;
+} | null {
+  if (!isLocalDevBrowser()) return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(DEV_BROWSER_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    if (typeof parsed['access_token'] !== 'string' || parsed['access_token'].length === 0) {
+      return null;
+    }
+
+    return {
+      access_token: parsed['access_token'],
+      refresh_token:
+        typeof parsed['refresh_token'] === 'string' || parsed['refresh_token'] === null
+          ? parsed['refresh_token']
+          : null,
+    };
+  } catch (error) {
+    console.warn('[Auth] Ignoring invalid dev browser session seed:', error);
+    return null;
+  }
 }
 
 const authCacheMap = new Map<string, CachedAuthData<unknown>>();
@@ -252,6 +286,12 @@ class CloudAccountAuthService {
   }
 
   async checkSession(): Promise<void> {
+    const devBrowserSeed = readDevBrowserSessionSeed();
+    if (devBrowserSeed && !this.currentState.session) {
+      await this.setSession(devBrowserSeed);
+      return;
+    }
+
     this.updateState({ isLoading: false, error: null });
   }
 
