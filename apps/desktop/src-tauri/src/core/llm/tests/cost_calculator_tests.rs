@@ -133,13 +133,12 @@ mod media_pricing_tests {
     #[test]
     fn test_ollama_fallback_media_pricing() {
         let calc = CostCalculator::new();
-        // Ollama has no explicit media_pricing entry; the function falls back to
-        // the conservative default of $0.04 per standard image.
+        // Ollama has no explicit media pricing entry. Unknown local media
+        // pricing must not fabricate a cloud cost.
         let cost = calc.calculate_media_cost(Provider::Ollama, MediaType::ImageStandard, 1);
-        assert!(
-            (cost - 0.04).abs() < 1e-10,
-            "Ollama fallback should use $0.04 default, got ${}",
-            cost
+        assert_eq!(
+            cost, 0.0,
+            "Ollama media pricing must be free/unknown, got ${cost}"
         );
     }
 }
@@ -164,7 +163,7 @@ mod tests {
     #[test]
     fn test_deepseek_v4_flash_cost() {
         let calc = CostCalculator::new();
-        // deepseek-v4-flash: $0.14/M input, $0.28/M output (canonical id; "deepseek-chat" is alias)
+        // deepseek-v4-flash: $0.14/M input, $0.28/M output
         // 1_000_000 input + 1_000_000 output = $0.14 + $0.28 = $0.42
         let cost = calc.calculate(
             Provider::DeepSeek,
@@ -237,17 +236,14 @@ mod tests {
     #[test]
     fn test_google_gemini_flash_cost() {
         let calc = CostCalculator::new();
-        // gemini-3-flash-preview: $0.50/M input, $3.00/M output
-        let cost = calc.calculate(
-            Provider::Google,
-            "gemini-3-flash-preview",
-            1_000_000,
-            1_000_000,
-        );
+        let model = Provider::Google.default_model();
+        let pricing = crate::core::llm::models_config::get_pricing(&Provider::Google, model)
+            .expect("Google default model should have catalog pricing");
+        let expected = pricing.input_per_million + pricing.output_per_million;
+        let cost = calc.calculate(Provider::Google, model, 1_000_000, 1_000_000);
         assert!(
-            (cost - 3.50).abs() < 1e-9,
-            "Expected $3.50 for gemini-3-flash-preview 1M+1M tokens, got ${}",
-            cost
+            (cost - expected).abs() < 1e-9,
+            "Expected ${expected} for {model} 1M+1M tokens, got ${cost}"
         );
     }
 
@@ -260,11 +256,17 @@ mod tests {
     }
 
     #[test]
-    fn test_zhipu_free_model() {
+    fn test_zhipu_default_model_uses_catalog_pricing() {
         let calc = CostCalculator::new();
-        // glm-4.6v-flash is $0.00/M (open-source MIT)
-        let cost = calc.calculate(Provider::Zhipu, "glm-4.6v-flash", 1_000_000, 1_000_000);
-        assert_eq!(cost, 0.0, "glm-4.6v-flash must be free, got ${}", cost);
+        let model = Provider::Zhipu.default_model();
+        let pricing = crate::core::llm::models_config::get_pricing(&Provider::Zhipu, model)
+            .expect("Zhipu default model should have catalog pricing");
+        let expected = pricing.input_per_million + pricing.output_per_million;
+        let cost = calc.calculate(Provider::Zhipu, model, 1_000_000, 1_000_000);
+        assert!(
+            (cost - expected).abs() < 1e-9,
+            "Expected ${expected} for {model} 1M+1M tokens, got ${cost}"
+        );
     }
 
     #[test]
@@ -306,11 +308,11 @@ mod tests {
     #[test]
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
-        let cheap = calc.calculate(Provider::DeepSeek, "deepseek-chat", 100_000, 100_000);
+        let cheap = calc.calculate(Provider::DeepSeek, "deepseek-v4-flash", 100_000, 100_000);
         let expensive = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 100_000, 100_000);
         assert!(
             expensive > cheap,
-            "Opus-4.8 (${}) must cost more than deepseek-chat (${}) for equal tokens",
+            "Opus-4.8 (${}) must cost more than deepseek-v4-flash (${}) for equal tokens",
             expensive,
             cheap
         );
@@ -402,35 +404,45 @@ mod tests {
         );
     }
 
-    // AUDIT-FIX: bug_010 regression — alias lookup must match the canonical model's
-    // pricing, not fall through to provider-default. Before the canonicalization
-    // call was added to calculate()/calculate_with_cache(), calling with the alias
-    // returned $4.95 (Moonshot default $0.95/$4.00) while the canonical id returned
-    // $3.10 (kimi-k2.6 $0.60/$2.50). Same story for deepseek aliases.
     #[test]
-    fn test_alias_lookup_matches_canonical_kimi() {
+    fn test_unknown_moonshot_model_uses_provider_default_pricing() {
         let calc = CostCalculator::new();
-        let alias = calc.calculate(Provider::Moonshot, "kimi-k2.5", 1_000_000, 1_000_000);
-        let canonical = calc.calculate(Provider::Moonshot, "kimi-k2.6", 1_000_000, 1_000_000);
+        let unknown = calc.calculate(
+            Provider::Moonshot,
+            "unlisted-moonshot-model",
+            1_000_000,
+            1_000_000,
+        );
+        let default = calc.calculate(
+            Provider::Moonshot,
+            Provider::Moonshot.default_model(),
+            1_000_000,
+            1_000_000,
+        );
         assert!(
-            (alias - canonical).abs() < 1e-9,
-            "alias kimi-k2.5 ({alias}) should match canonical kimi-k2.6 ({canonical})"
+            (unknown - default).abs() < 1e-9,
+            "unknown Moonshot model ({unknown}) should use provider default pricing ({default})"
         );
     }
 
     #[test]
-    fn test_alias_lookup_matches_canonical_deepseek() {
+    fn test_unknown_deepseek_model_uses_provider_default_pricing() {
         let calc = CostCalculator::new();
-        let alias = calc.calculate(Provider::DeepSeek, "deepseek-chat", 1_000_000, 1_000_000);
-        let canonical = calc.calculate(
+        let unknown = calc.calculate(
             Provider::DeepSeek,
-            "deepseek-v4-flash",
+            "unlisted-deepseek-model",
+            1_000_000,
+            1_000_000,
+        );
+        let default = calc.calculate(
+            Provider::DeepSeek,
+            Provider::DeepSeek.default_model(),
             1_000_000,
             1_000_000,
         );
         assert!(
-            (alias - canonical).abs() < 1e-9,
-            "alias deepseek-chat ({alias}) should match canonical deepseek-v4-flash ({canonical})"
+            (unknown - default).abs() < 1e-9,
+            "unknown DeepSeek model ({unknown}) should use provider default pricing ({default})"
         );
     }
 }

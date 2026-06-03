@@ -398,16 +398,15 @@ pub async fn git_push(
     // But since this is a specific tool command, we can just enforce it directly
     // or use the validator if we want centralized config.
     // Let's use the validator to be consistent with terminal.rs
-    if crate::sys::security::command_validator::requires_confirmation("git push") {
-        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+    if crate::sys::security::command_validator::requires_confirmation("git push")
+        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_push",
             &confirmation_args,
         )
         .await?
-        {
-            return Err("Operation denied by user".to_string());
-        }
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     spawn_blocking(move || {
@@ -665,16 +664,15 @@ pub async fn git_delete_branch(
         "force": _force
     });
 
-    if crate::sys::security::command_validator::requires_confirmation("git branch -D") {
-        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+    if crate::sys::security::command_validator::requires_confirmation("git branch -D")
+        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_delete_branch",
             &confirmation_args,
         )
         .await?
-        {
-            return Err("Operation denied by user".to_string());
-        }
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     spawn_blocking(move || {
@@ -1000,16 +998,15 @@ pub async fn git_reset(
                 "files": file_list
             });
 
-            if crate::sys::security::command_validator::requires_confirmation("git reset") {
-                if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+            if crate::sys::security::command_validator::requires_confirmation("git reset")
+                && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
                     &app,
                     "git_reset",
                     &confirmation_args,
                 )
                 .await?
-                {
-                    return Err("Operation denied by user".to_string());
-                }
+            {
+                return Err("Operation denied by user".to_string());
             }
 
             let path_clone = path.clone();
@@ -1048,16 +1045,15 @@ pub async fn git_reset(
         "mode": mode
     });
 
-    if crate::sys::security::command_validator::requires_confirmation("git reset") {
-        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+    if crate::sys::security::command_validator::requires_confirmation("git reset")
+        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_reset",
             &confirmation_args,
         )
         .await?
-        {
-            return Err("Operation denied by user".to_string());
-        }
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     spawn_blocking(move || {
@@ -1101,16 +1097,15 @@ pub async fn git_checkout_files(
         "files": files
     });
 
-    if crate::sys::security::command_validator::requires_confirmation("git checkout") {
-        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
+    if crate::sys::security::command_validator::requires_confirmation("git checkout")
+        && !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_checkout_files",
             &confirmation_args,
         )
         .await?
-        {
-            return Err("Operation denied by user".to_string());
-        }
+    {
+        return Err("Operation denied by user".to_string());
     }
 
     let files_clone = files
