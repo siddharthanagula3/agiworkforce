@@ -326,11 +326,12 @@ fn validate_azure_base_url(url: &str) -> Result<(), String> {
     let host = parsed
         .host_str()
         .ok_or_else(|| "Azure base URL must include a host".to_string())?;
-    let lower_url = url.to_ascii_lowercase();
+    let lower_host = host.to_ascii_lowercase();
+    let lower_path = parsed.path().to_ascii_lowercase();
 
-    if lower_url.contains("resource.openai.azure.com")
-        || lower_url.contains("{resource}")
-        || lower_url.contains("{deployment}")
+    if lower_host == "resource.openai.azure.com"
+        || lower_host.contains("{resource}")
+        || lower_path.contains("{deployment}")
     {
         return Err(
             "Azure base URL still contains example resource/deployment text; configure the real Azure OpenAI deployment URL."

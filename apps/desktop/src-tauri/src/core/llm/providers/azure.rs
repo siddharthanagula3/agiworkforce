@@ -16,7 +16,7 @@ use std::error::Error;
 /// # Parameters
 /// - `api_key`: The Azure API key (sent via `api-key` header).
 /// - `resource_name`: The Azure resource name (e.g. "my-resource").
-/// - `deployment_name`: The deployment/model name (e.g. "gpt-4o").
+/// - `deployment_name`: The Azure deployment name (e.g. "agi-chat-prod").
 /// - `api_version`: Optional API version (defaults to "2024-10-21").
 ///
 /// The constructed base URL follows Azure's pattern:
@@ -58,13 +58,14 @@ mod tests {
 
     #[test]
     fn create_azure_provider_valid() {
-        let provider = create_azure_provider("test-key".to_string(), "my-resource", "gpt-4o", None);
+        let provider =
+            create_azure_provider("test-key".to_string(), "my-resource", "agi-chat-prod", None);
         assert!(provider.is_ok());
     }
 
     #[test]
     fn create_azure_provider_empty_resource() {
-        let provider = create_azure_provider("test-key".to_string(), "", "gpt-4o", None);
+        let provider = create_azure_provider("test-key".to_string(), "", "agi-chat-prod", None);
         assert!(provider.is_err());
     }
 
@@ -76,8 +77,12 @@ mod tests {
 
     #[test]
     fn create_azure_provider_invalid_resource_name() {
-        let provider =
-            create_azure_provider("test-key".to_string(), "my resource!", "gpt-4o", None);
+        let provider = create_azure_provider(
+            "test-key".to_string(),
+            "my resource!",
+            "agi-chat-prod",
+            None,
+        );
         assert!(provider.is_err());
     }
 }

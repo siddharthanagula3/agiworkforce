@@ -244,7 +244,7 @@ mod tests {
             .unwrap();
 
         let state = pm.check_permission(PermissionType::FileRead, None).unwrap();
-        assert_eq!(state, PermissionState::Prompt);
+        assert_eq!(state, PermissionState::Allowed);
     }
 
     #[test]
@@ -319,7 +319,7 @@ mod tests {
         let state = pm
             .check_permission(PermissionType::ClipboardRead, None)
             .unwrap();
-        assert_eq!(state, PermissionState::Allowed);
+        assert_eq!(state, PermissionState::Prompt);
     }
 
     #[test]

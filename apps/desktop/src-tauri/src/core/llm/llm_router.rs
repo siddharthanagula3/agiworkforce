@@ -868,7 +868,7 @@ impl LLMRouter {
 
         // If user prefers cloud credits and ManagedCloud is available, prioritize it
         // BUT skip this if we are using an Auto strategy, as the strategy itself will handle
-        // ManagedCloud selection with better model specificity (e.g. AutoEconomy -> deepseek-chat)
+        // ManagedCloud selection with better catalog-backed model specificity.
         let is_auto_strategy = matches!(
             preferences.strategy,
             RoutingStrategy::Auto
@@ -1844,139 +1844,12 @@ impl LLMRouter {
 
     /// Default model selection for each provider and task category.
     ///
-    /// Default model selection for each provider and task category.
-    ///
-    /// Provider defaults are catalog-backed. Do not hardcode new model IDs here
-    /// unless the provider has no catalog route yet.
+    /// Provider defaults are catalog-backed. Keep model upgrades in
+    /// `packages/types/src/models.curation.json` and regenerate `models.json`
+    /// instead of copying provider model IDs into router logic.
     fn default_model(&self, provider: Provider, task: TaskCategory) -> String {
-        match provider {
-            Provider::OpenAI | Provider::Anthropic | Provider::Google | Provider::ManagedCloud => {
-                super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
-                    .to_string()
-            }
-            Provider::Ollama => {
-                super::models_config::get_default_model(&Provider::Ollama).to_string()
-            }
-            Provider::XAI => match task {
-                // Current xAI default; legacy Grok aliases are handled by the
-                // shared catalog canonicalization map.
-                TaskCategory::Simple => "grok-4.3".to_string(),
-                TaskCategory::Complex => "grok-4.3".to_string(),
-                TaskCategory::Creative => "grok-4.3".to_string(),
-            },
-            Provider::DeepSeek => match task {
-                // deepseek-v4-flash is current: $0.14/$0.28, 1M context, $0.0028 cache hit, thinking
-                // mode toggle. Replaces deepseek-chat which deprecates 2026-07-24.
-                TaskCategory::Simple => "deepseek-v4-flash".to_string(),
-                TaskCategory::Complex => "deepseek-v4-flash".to_string(),
-                TaskCategory::Creative => "deepseek-v4-flash".to_string(),
-            },
-            Provider::Qwen => match task {
-                TaskCategory::Simple => "qwen-max".to_string(),
-                TaskCategory::Complex => "qwen-max".to_string(),
-                TaskCategory::Creative => "qwen-max".to_string(),
-            },
-            Provider::Moonshot => match task {
-                TaskCategory::Simple => "kimi-k2.5".to_string(),
-                TaskCategory::Complex => "kimi-k2.5".to_string(),
-                TaskCategory::Creative => "kimi-k2.5".to_string(),
-            },
-            // ZhipuAI - use current GLM 5.1 catalog entries.
-            Provider::Zhipu => match task {
-                TaskCategory::Simple => "glm-5.1".to_string(),
-                TaskCategory::Complex => "glm-5.1".to_string(),
-                TaskCategory::Creative => "glm-5.1".to_string(),
-            },
-            Provider::Perplexity => match task {
-                TaskCategory::Simple => "sonar".to_string(),
-                TaskCategory::Complex => "sonar-deep-research".to_string(),
-                TaskCategory::Creative => "sonar-pro".to_string(),
-            },
-            Provider::Mistral => match task {
-                TaskCategory::Simple => "mistral-medium-3".to_string(),
-                TaskCategory::Complex => "mistral-large-3".to_string(),
-                TaskCategory::Creative => "mistral-large-3".to_string(),
-            },
-            // New providers — use their best available models
-            Provider::Groq => match task {
-                TaskCategory::Simple => "llama-3.3-70b-versatile".to_string(),
-                TaskCategory::Complex => "llama-3.3-70b-versatile".to_string(),
-                TaskCategory::Creative => "llama-3.3-70b-versatile".to_string(),
-            },
-            Provider::Together => match task {
-                TaskCategory::Simple => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
-                TaskCategory::Complex => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
-                TaskCategory::Creative => "meta-llama/Llama-3.3-70B-Instruct-Turbo".to_string(),
-            },
-            Provider::Fireworks => match task {
-                TaskCategory::Simple => {
-                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
-                }
-                TaskCategory::Complex => {
-                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
-                }
-                TaskCategory::Creative => {
-                    "accounts/fireworks/models/llama-v3p3-70b-instruct".to_string()
-                }
-            },
-            Provider::Cerebras => match task {
-                TaskCategory::Simple => "llama-3.3-70b".to_string(),
-                TaskCategory::Complex => "llama-3.3-70b".to_string(),
-                TaskCategory::Creative => "llama-3.3-70b".to_string(),
-            },
-            Provider::DeepInfra => match task {
-                TaskCategory::Simple => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
-                TaskCategory::Complex => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
-                TaskCategory::Creative => "meta-llama/Llama-3.3-70B-Instruct".to_string(),
-            },
-            Provider::Cohere => match task {
-                TaskCategory::Simple => "command-r-plus".to_string(),
-                TaskCategory::Complex => "command-r-plus".to_string(),
-                TaskCategory::Creative => "command-r-plus".to_string(),
-            },
-            Provider::AI21 => match task {
-                TaskCategory::Simple => "jamba-1.5-mini".to_string(),
-                TaskCategory::Complex => "jamba-1.5-large".to_string(),
-                TaskCategory::Creative => "jamba-1.5-large".to_string(),
-            },
-            Provider::Sambanova => match task {
-                TaskCategory::Simple => "Meta-Llama-3.3-70B-Instruct".to_string(),
-                TaskCategory::Complex => "Meta-Llama-3.3-70B-Instruct".to_string(),
-                TaskCategory::Creative => "Meta-Llama-3.3-70B-Instruct".to_string(),
-            },
-            Provider::Azure => match task {
-                // Azure uses deployment names — fall back to models.json catalog values.
-                TaskCategory::Simple => {
-                    super::models_config::get_task_model(&Provider::Azure, "fast_completion")
-                        .to_string()
-                }
-                TaskCategory::Complex => {
-                    super::models_config::get_task_model(&Provider::Azure, "complex_reasoning")
-                        .to_string()
-                }
-                TaskCategory::Creative => {
-                    super::models_config::get_task_model(&Provider::Azure, "chat").to_string()
-                }
-            },
-            Provider::Bedrock => {
-                super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
-                    .to_string()
-            }
-            Provider::NvidiaNim => match task {
-                TaskCategory::Simple => "meta/llama-3.3-70b-instruct".to_string(),
-                TaskCategory::Complex => "meta/llama-3.3-70b-instruct".to_string(),
-                TaskCategory::Creative => "meta/llama-3.3-70b-instruct".to_string(),
-            },
-            Provider::OpenRouter => match task {
-                TaskCategory::Simple => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
-                TaskCategory::Complex => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
-                TaskCategory::Creative => "meta-llama/llama-3.3-70b-instruct:free".to_string(),
-            },
-            // Ollama Cloud uses the same models as local Ollama but served remotely.
-            Provider::OllamaCloud => {
-                super::models_config::get_default_model(&Provider::OllamaCloud).to_string()
-            }
-        }
+        super::models_config::get_task_model(&provider, task_category_to_routing_key(task))
+            .to_string()
     }
 
     /// H13 fix: shared model-resolution logic extracted from `invoke_candidate` and

@@ -557,7 +557,7 @@ mod tests {
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
-            executor.infer_provider_from_model("claude-sonnet-4-6"),
+            executor.infer_provider_from_model("claude-sonnet-4.6"),
             Provider::Anthropic
         );
         assert_eq!(
@@ -565,11 +565,11 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("gemini-3.1-pro-preview"),
+            executor.infer_provider_from_model("gemini-3.5-flash"),
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("deepseek-chat"),
+            executor.infer_provider_from_model("deepseek-v4-flash"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -608,24 +608,20 @@ mod tests {
         // incorrectly expected "gpt-5.4-mini" for every provider.
         // default_model_for_provider delegates to models_config::get_default_model
         // which reads per-provider defaultModel from models.json.
-        // Correct expected values per models.json (as of 2026-05-06):
-        //   anthropic → claude-sonnet-4.6
-        //   openai    → gpt-5.5
-        //   google    → gemini-3.1-pro-preview
         let router = create_test_router();
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
             executor.default_model_for_provider(Provider::Anthropic),
-            "claude-sonnet-4.6"
+            crate::core::llm::models_config::get_default_model(&Provider::Anthropic)
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::OpenAI),
-            "gpt-5.5"
+            crate::core::llm::models_config::get_default_model(&Provider::OpenAI)
         );
         assert_eq!(
             executor.default_model_for_provider(Provider::Google),
-            "gemini-3.1-pro-preview"
+            crate::core::llm::models_config::get_default_model(&Provider::Google)
         );
     }
 

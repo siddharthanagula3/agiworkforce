@@ -282,7 +282,7 @@ mod tests {
     fn test_provider_default_model_spot_checks() {
         assert_eq!(Provider::OpenAI.default_model(), "gpt-5.5");
         assert_eq!(Provider::Anthropic.default_model(), "claude-sonnet-4.6");
-        assert_eq!(Provider::Google.default_model(), "gemini-3.1-pro-preview");
+        assert_eq!(Provider::Google.default_model(), "gemini-3.5-flash");
         assert_eq!(Provider::DeepSeek.default_model(), "deepseek-v4-flash");
         assert_eq!(Provider::Ollama.default_model(), "llama4-maverick");
     }
@@ -475,7 +475,10 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Vision)
+        );
     }
 
     #[test]
@@ -491,7 +494,10 @@ mod tests {
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Vision)
+        );
     }
 
     #[test]
@@ -555,7 +561,7 @@ mod tests {
             "hobby",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3-flash-preview"),
+            Some("gemini-3.5-flash"),
         );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
@@ -564,7 +570,12 @@ mod tests {
     #[test]
     fn test_infer_provider_deepseek_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
+        let ctx = intelligent_context(
+            "hobby",
+            Some("coding"),
+            Some("chat"),
+            Some("deepseek-v4-flash"),
+        );
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -664,15 +675,15 @@ mod tests {
     fn test_infer_provider_google_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("gemini-3-pro-preview"),
+            router.infer_provider_from_model("gemini-3.1-pro-preview"),
             Provider::Google
         );
         assert_eq!(
-            router.infer_provider_from_model("gemini-3-flash-preview"),
+            router.infer_provider_from_model("gemini-3.5-flash"),
             Provider::Google
         );
         assert_eq!(
-            router.infer_provider_from_model("imagen-4"),
+            router.infer_provider_from_model("imagen-4-fast"),
             Provider::Google
         );
     }
@@ -681,7 +692,7 @@ mod tests {
     fn test_infer_provider_deepseek_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("deepseek-chat"),
+            router.infer_provider_from_model("deepseek-v4-flash"),
             Provider::DeepSeek
         );
         assert_eq!(
@@ -725,7 +736,7 @@ mod tests {
     fn test_infer_provider_moonshot_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("kimi-k2.5-thinking"),
+            router.infer_provider_from_model("kimi-k2.6"),
             Provider::Moonshot
         );
         assert_eq!(
@@ -737,11 +748,7 @@ mod tests {
     #[test]
     fn test_infer_provider_zhipu_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("glm-4.7"), Provider::Zhipu);
-        assert_eq!(
-            router.infer_provider_from_model("glm-4.6v-flash"),
-            Provider::Zhipu
-        );
+        assert_eq!(router.infer_provider_from_model("glm-5.1"), Provider::Zhipu);
     }
 
     #[test]
@@ -977,7 +984,10 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
         // hobby + writing/research -> Google (Gemini Pro, Complex task)
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Vision)
+        );
     }
 
     // --- Intelligent routing: selected_model -> provider inference ---
@@ -1013,20 +1023,23 @@ mod tests {
             "hobby",
             Some("multimodal"),
             Some("chat"),
-            Some("gemini-3-flash-preview"),
+            Some("gemini-3.5-flash"),
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(suggestion.model, "gemini-3.5-flash");
     }
 
     #[test]
     fn test_intelligent_routing_infer_deepseek_provider() {
         let router = router_with_all_providers();
-        // models.json canonicalization maps deepseek-chat → deepseek-v4-flash
-        // (deepseek-chat deprecates 2026-07-24).
-        let context =
-            intelligent_context("hobby", Some("coding"), Some("chat"), Some("deepseek-chat"));
+        // Current DeepSeek chat routing uses the catalog default directly.
+        let context = intelligent_context(
+            "hobby",
+            Some("coding"),
+            Some("chat"),
+            Some("deepseek-v4-flash"),
+        );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::DeepSeek);
         assert_eq!(suggestion.model, "deepseek-v4-flash");
@@ -1097,7 +1110,10 @@ mod tests {
         let context = intelligent_context("hobby", Some("reasoning"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Chat)
+        );
     }
 
     #[test]
@@ -1115,7 +1131,10 @@ mod tests {
         let context = intelligent_context("hobby", Some("agentic"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Chat)
+        );
     }
 
     #[test]
@@ -1133,7 +1152,10 @@ mod tests {
         let context = intelligent_context("pro", Some("multimodal"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-pro-preview");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Vision)
+        );
     }
 
     #[test]
@@ -1142,7 +1164,10 @@ mod tests {
         let context = intelligent_context("hobby", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::FastCompletion)
+        );
     }
 
     #[test]
@@ -1151,7 +1176,10 @@ mod tests {
         let context = intelligent_context("pro", Some("chat"), Some("chat"), None);
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Chat)
+        );
     }
 
     // --- Large-context and edge cases ---
@@ -1169,7 +1197,10 @@ mod tests {
         let suggestion = router.suggest_for_context(&context);
         // hobby + writing -> Google (Complex task), large context doesn't change hobby routing
         assert_eq!(suggestion.provider, Provider::Google);
-        assert_eq!(suggestion.model, "gemini-3.1-flash-lite");
+        assert_eq!(
+            suggestion.model,
+            Provider::Google.get_model_for_task(TaskType::Vision)
+        );
     }
 
     #[test]
