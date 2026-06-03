@@ -1599,14 +1599,15 @@ const App = () => {
     let cancelled = false;
 
     void initializeWebAuth()
-      .then((ready) => {
-        if (!cancelled && ready) {
+      .then(() => {
+        if (!cancelled) {
           setIsWebAuthReady(true);
         }
       })
       .catch((error) => {
         if (!cancelled) {
           console.error('[App] Web auth initialization failed:', error);
+          setIsWebAuthReady(true);
         }
       });
 
