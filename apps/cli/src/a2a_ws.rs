@@ -149,19 +149,21 @@ mod tests {
 
     fn card() -> AgentCard {
         AgentCard {
-            id: "agi-test".into(),
+            agent_id: "agi-test".into(),
             name: "AGI WS Test".into(),
-            model: "claude-opus-4-7".into(),
-            capabilities: vec!["code".into()],
-            tools: vec!["read_file".into()],
             version: "1.4.0".into(),
+            capabilities: vec!["code".into()],
+            supported_models: vec!["claude-opus-4-8".into()],
+            endpoint: "ws://127.0.0.1:7893".into(),
+            auth_required: false,
+            metadata: std::collections::HashMap::new(),
         }
     }
 
     fn registry() -> PeerRegistry {
         let mut r = PeerRegistry::new();
         r.register(AgentCard {
-            id: "peer-1".into(),
+            agent_id: "peer-1".into(),
             ..card()
         });
         r
@@ -236,9 +238,7 @@ mod tests {
         let (mut ws, _) = tokio_tungstenite::connect_async(url).await.unwrap();
 
         let req = r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#;
-        ws.send(Message::Text(req.to_string().into()))
-            .await
-            .unwrap();
+        ws.send(Message::Text(req.to_string())).await.unwrap();
 
         let resp = ws.next().await.unwrap().unwrap();
         let body = resp.into_text().unwrap();
@@ -295,9 +295,7 @@ mod tests {
 
         let (mut ws, _) = tokio_tungstenite::connect_async(req).await.unwrap();
         ws.send(Message::Text(
-            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#
-                .to_string()
-                .into(),
+            r#"{"jsonrpc":"2.0","id":1,"method":"discover","params":{}}"#.to_string(),
         ))
         .await
         .unwrap();

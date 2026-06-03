@@ -158,6 +158,13 @@ pub(super) fn classify_git(command: &str) -> CommandSafety {
         return CommandSafety::Dangerous;
     }
 
+    if sub_args
+        .iter()
+        .any(|arg| *arg == "--output" || arg.starts_with("--output="))
+    {
+        return CommandSafety::Unknown;
+    }
+
     // Safe read-only subcommands.
     if GIT_SAFE_SUBCOMMANDS.contains(&subcommand) {
         return CommandSafety::Safe;

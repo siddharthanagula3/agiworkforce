@@ -2,7 +2,7 @@
 //!
 //! Mirrors the pattern of `macos_sandbox.rs` (Seatbelt) and `linux_sandbox.rs`
 //! (seccomp-BPF): an allow-list builder, a one-line describe_filter, and a
-//! `install_filter` that's a stub by default. Real AppContainer installation
+//! `install_filter` that fails closed by default. Real AppContainer installation
 //! requires linking against the Windows API (CreateAppContainerProfile,
 //! DeriveAppContainerSidFromAppContainerName, etc.) which is left to the
 //! `windows-appcontainer` Cargo feature (not added in this slice).
@@ -61,16 +61,13 @@ pub fn describe_filter(opts: &WindowsSandboxOptions) -> String {
     )
 }
 
-/// Probe whether AppContainer is available. Checks Windows version >= 8.
+/// Probe whether AppContainer enforcement is available in this build.
 pub fn is_available() -> bool {
-    // On Windows the IsWindowsServer + IsWindowsVersionOrGreater APIs would
-    // be the right check. Heuristic: Cargo runtime cfg already proves we're
-    // on Windows; AppContainer ships in Windows 8+ (build 9200+). Assume yes.
-    true
+    false
 }
 
 /// Install the AppContainer profile and wrap the current process. Behind the
-/// `windows-appcontainer` feature; without it, this is a no-op stub.
+/// `windows-appcontainer` feature; without it, this fails closed.
 #[cfg(feature = "windows-appcontainer")]
 pub fn install_filter(_opts: &WindowsSandboxOptions) -> anyhow::Result<()> {
     // Real impl: CreateAppContainerProfile + assignment.
@@ -80,7 +77,9 @@ pub fn install_filter(_opts: &WindowsSandboxOptions) -> anyhow::Result<()> {
 
 #[cfg(not(feature = "windows-appcontainer"))]
 pub fn install_filter(_opts: &WindowsSandboxOptions) -> anyhow::Result<()> {
-    Ok(())
+    anyhow::bail!(
+        "Windows AppContainer sandbox is not available in this build (missing windows-appcontainer feature)"
+    )
 }
 
 #[cfg(test)]
@@ -121,14 +120,13 @@ mod tests {
     }
 
     #[test]
-    fn install_filter_default_feature_is_noop() {
+    fn install_filter_fails_closed_until_enforcement_is_wired() {
         let opts = WindowsSandboxOptions {
             preset: WindowsSandboxPreset::ReadOnly,
             allow_network: false,
             container_name: "test".into(),
         };
-        // Without the windows-appcontainer feature, install_filter is Ok stub.
-        assert!(install_filter(&opts).is_ok());
+        assert!(install_filter(&opts).is_err());
     }
 
     #[test]

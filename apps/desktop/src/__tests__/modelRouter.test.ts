@@ -22,39 +22,32 @@ import { MODEL_METADATA, getModelMetadata } from '../constants/llm';
 // ---------------------------------------------------------------------------
 
 describe('xAI model routing', () => {
-  it('grok-4 has provider=xai in MODEL_METADATA', () => {
-    const meta = getModelMetadata('grok-4');
+  it('current Grok model resolves to provider=xai metadata', () => {
+    const meta = getModelMetadata('grok-4.3');
     expect(meta).not.toBeNull();
     expect(meta?.provider).toBe('xai');
+    expect(meta?.id).toBe('grok-4.3');
   });
 
-  it('grok-4-fast-reasoning has provider=xai in MODEL_METADATA', () => {
-    const meta = getModelMetadata('grok-4-fast-reasoning');
-    expect(meta).not.toBeNull();
-    expect(meta?.provider).toBe('xai');
+  it('grok-4.3 is treated as a manual selection (not auto mode)', () => {
+    expect(isManualSelection('grok-4.3')).toBe(true);
   });
 
-  it('grok-4 is treated as a manual selection (not auto mode)', () => {
-    expect(isManualSelection('grok-4')).toBe(true);
-  });
-
-  it('getModelForRequest with grok-4 returns grok-4 unchanged', () => {
-    const result = getModelForRequest('grok-4', 'Analyze this tweet from X.com', false);
-    expect(result.modelId).toBe('grok-4');
+  it('getModelForRequest with grok-4.3 returns grok-4.3 unchanged', () => {
+    const result = getModelForRequest('grok-4.3', 'Analyze this tweet from X.com', false);
+    expect(result.modelId).toBe('grok-4.3');
     expect(result.wasRouted).toBe(false);
   });
 
-  it('grok-4 has real-time data search capability (correct for X/Twitter integration)', () => {
-    const meta = getModelMetadata('grok-4');
+  it('grok-4.3 has real-time data search capability (correct for X/Twitter integration)', () => {
+    const meta = getModelMetadata('grok-4.3');
     // Grok has built-in real-time data access
     expect(meta?.capabilities?.search).toBe(true);
   });
 
   it('Perplexity Sonar has NO vision capability (text-only research model)', () => {
-    // Note: grok-4 used to be the canary here, but grok-4 is now aliased
-    // forward to grok-4.3 which has built-in vision (Phase 3 catalog refresh).
-    // sonar (Perplexity) is a stable non-vision research model and is not
-    // aliased to anything else, so it works as a canary here.
+    // Sonar is a stable non-vision research model and is not aliased to
+    // anything else, so it works as a canary here.
     const meta = getModelMetadata('sonar');
     expect(meta?.capabilities?.vision).toBe(false);
   });
@@ -170,9 +163,9 @@ describe('isManualSelection', () => {
   });
 
   it('returns true for a specific model id', () => {
-    expect(isManualSelection('gpt-5.4')).toBe(true);
-    expect(isManualSelection('claude-opus-4.6')).toBe(true);
-    expect(isManualSelection('grok-4')).toBe(true);
+    expect(isManualSelection('gpt-5.5')).toBe(true);
+    expect(isManualSelection('claude-opus-4.8')).toBe(true);
+    expect(isManualSelection('grok-4.3')).toBe(true);
     expect(isManualSelection('mistral-large-3')).toBe(true);
   });
 

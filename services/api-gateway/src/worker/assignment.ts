@@ -39,6 +39,10 @@ import {
   paramString,
   WORK_SECRET_VERSION,
 } from './types';
+import {
+  mintSessionIngressToken,
+  verifySessionIngressToken as verifySignedSessionIngressToken,
+} from './sessionIngressToken';
 
 const router = Router();
 
@@ -48,16 +52,6 @@ function hashSecret(secret: string): string {
   return createHash('sha256')
     .update(secret + JWT_SECRET)
     .digest('hex');
-}
-
-function mintSessionIngressToken(environmentId: string, workId: string): string {
-  const payload = {
-    environment_id: environmentId,
-    work_id: workId,
-    iat: Math.floor(Date.now() / 1000),
-    exp: Math.floor(Date.now() / 1000) + 3600,
-  };
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
 }
 
 /**
@@ -83,22 +77,10 @@ async function verifyEnvironmentSecret(
 
 /**
  * Validate session_ingress JWT (Tier 3 auth).
- * The token is a base64url-encoded JSON blob minted by this gateway.
+ * The token is an HMAC-signed gateway token scoped to environment + work unit.
  */
 function verifySessionIngressToken(token: string, environmentId: string, workId: string): boolean {
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString('utf8')) as {
-      environment_id?: string;
-      work_id?: string;
-      exp?: number;
-    };
-    if (payload.environment_id !== environmentId) return false;
-    if (payload.work_id !== workId) return false;
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
-    return true;
-  } catch {
-    return false;
-  }
+  return verifySignedSessionIngressToken(token, { secret: JWT_SECRET, environmentId, workId });
 }
 
 // ---------------------------------------------------------------------------
@@ -213,7 +195,11 @@ router.get(
     }
 
     const workId = workUnit.id;
-    const sessionIngressToken = mintSessionIngressToken(environmentId, workId);
+    const sessionIngressToken = mintSessionIngressToken({
+      secret: JWT_SECRET,
+      environmentId,
+      workId,
+    });
 
     const workSecretPayload = {
       version: WORK_SECRET_VERSION,

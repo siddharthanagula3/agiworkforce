@@ -14,13 +14,13 @@
     "posttest": "pnpm build"
   },
   "dependencies": {
-    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
     "@agiworkforce/llm-runtime": "workspace:*",
     "@agiworkforce/providers-openai": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
     "openai": "^6.38.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.8"
   }
 }

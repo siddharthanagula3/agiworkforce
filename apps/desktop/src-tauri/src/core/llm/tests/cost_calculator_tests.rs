@@ -63,22 +63,14 @@ mod media_pricing_tests {
     }
 
     #[test]
-    fn test_video_per_second_cost_openai() {
+    fn test_video_per_second_cost_openai_not_configured() {
         let calc = CostCalculator::new();
-        // OpenAI Sora: $0.10/second. 10 seconds should cost $1.00.
+        // AGI does not configure an OpenAI video SKU in the catalog. Unknown
+        // media pricing must not fabricate a cost.
         let cost_1s = calc.calculate_media_cost(Provider::OpenAI, MediaType::VideoPerSecond, 1);
         let cost_10s = calc.calculate_media_cost(Provider::OpenAI, MediaType::VideoPerSecond, 10);
-        assert!(
-            (cost_1s - 0.10).abs() < 1e-10,
-            "expected $0.10/s, got ${}",
-            cost_1s
-        );
-        assert!(
-            (cost_10s - cost_1s * 10.0).abs() < 1e-9,
-            "cost should scale linearly: 10s=${}, 1s*10=${}",
-            cost_10s,
-            cost_1s * 10.0
-        );
+        assert_eq!(cost_1s, 0.0);
+        assert_eq!(cost_10s, 0.0);
     }
 
     #[test]
@@ -165,7 +157,7 @@ mod tests {
     #[test]
     fn test_zero_tokens_returns_zero() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.5", 0, 0);
         assert_eq!(cost, 0.0, "Zero tokens must produce zero cost");
     }
 
@@ -206,14 +198,14 @@ mod tests {
     }
 
     #[test]
-    fn test_anthropic_opus_4_6_cost() {
+    fn test_anthropic_opus_4_8_cost() {
         let calc = CostCalculator::new();
-        // claude-opus-4-6: $5.00/M input, $25.00/M output
+        // claude-opus-4.8: $5.00/M input, $25.00/M output
         // 1_000_000 + 1_000_000 = $30.00
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 1_000_000, 1_000_000);
+        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1_000_000, 1_000_000);
         assert!(
             (cost - 30.0).abs() < 1e-9,
-            "Expected $30.00 for opus-4-6 1M+1M tokens, got ${}",
+            "Expected $30.00 for opus-4.8 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -221,7 +213,7 @@ mod tests {
     #[test]
     fn test_openai_gpt5_cost() {
         let calc = CostCalculator::new();
-        // gpt-5.5: $5.00/M input, $30.00/M output (gpt-5.4 removed from catalog 2026-05-29)
+        // gpt-5.5: $5.00/M input, $30.00/M output
         let cost = calc.calculate(Provider::OpenAI, "gpt-5.5", 1_000_000, 1_000_000);
         assert!(
             (cost - 35.00).abs() < 1e-9,
@@ -231,10 +223,9 @@ mod tests {
     }
 
     #[test]
-    fn test_openai_gpt5_nano_cost() {
+    fn test_openai_gpt5_mini_cost() {
         let calc = CostCalculator::new();
         // gpt-5.4-mini: $0.75/M input, $4.50/M output
-        // (gpt-5.4-nano aliased to gpt-5.4-mini in catalog canonicalization)
         let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-mini", 1_000_000, 0);
         assert!(
             (cost - 0.75).abs() < 1e-9,
@@ -277,13 +268,13 @@ mod tests {
     }
 
     #[test]
-    fn test_xai_grok4_cost() {
+    fn test_xai_grok43_cost() {
         let calc = CostCalculator::new();
-        // grok-4: $3.00/M input, $15.00/M output
-        let cost = calc.calculate(Provider::XAI, "grok-4", 1_000_000, 1_000_000);
+        // grok-4.3: $1.25/M input, $2.50/M output
+        let cost = calc.calculate(Provider::XAI, "grok-4.3", 1_000_000, 1_000_000);
         assert!(
-            (cost - 18.0).abs() < 1e-9,
-            "Expected $18.00 for grok-4 1M+1M tokens, got ${}",
+            (cost - 3.75).abs() < 1e-9,
+            "Expected $3.75 for grok-4.3 1M+1M tokens, got ${}",
             cost
         );
     }
@@ -316,10 +307,10 @@ mod tests {
     fn test_more_expensive_model_costs_more() {
         let calc = CostCalculator::new();
         let cheap = calc.calculate(Provider::DeepSeek, "deepseek-chat", 100_000, 100_000);
-        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 100_000, 100_000);
+        let expensive = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 100_000, 100_000);
         assert!(
             expensive > cheap,
-            "Opus-4-6 (${}) must cost more than deepseek-chat (${}) for equal tokens",
+            "Opus-4.8 (${}) must cost more than deepseek-chat (${}) for equal tokens",
             expensive,
             cheap
         );

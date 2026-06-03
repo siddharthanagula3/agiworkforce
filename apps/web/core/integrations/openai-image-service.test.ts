@@ -1,14 +1,14 @@
 /**
- * DALL-E Image Service Tests
- * Unit tests for OpenAI DALL-E image generation integration
+ * GPT Image Service Tests
+ * Unit tests for OpenAI GPT Image generation integration
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  DallEImageService,
-  dallEImageService,
-  type DallEGenerationRequest,
-} from './dalle-image-service';
+  OpenAIImageService,
+  openAIImageService,
+  type OpenAIImageGenerationRequest,
+} from './openai-image-service';
 
 // Mock auth token (replaces former cloudDb.auth.getSession usage)
 vi.mock('@shared/lib/get-auth-token', () => ({
@@ -17,7 +17,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 
-describe('DALL-E Image Service', () => {
+describe('GPT Image Service', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
   const mockGetAuthToken = vi.mocked(getAuthToken);
 
@@ -43,25 +43,25 @@ describe('DALL-E Image Service', () => {
 
   describe('getInstance', () => {
     it('should return singleton instance', () => {
-      const instance1 = DallEImageService.getInstance();
-      const instance2 = DallEImageService.getInstance();
+      const instance1 = OpenAIImageService.getInstance();
+      const instance2 = OpenAIImageService.getInstance();
 
       expect(instance1).toBe(instance2);
     });
 
-    it('should export singleton as dallEImageService', () => {
-      expect(dallEImageService).toBeInstanceOf(DallEImageService);
+    it('should export singleton as openAIImageService', () => {
+      expect(openAIImageService).toBeInstanceOf(OpenAIImageService);
     });
   });
 
   describe('generateImage', () => {
-    const mockRequest: DallEGenerationRequest = {
+    const mockRequest: OpenAIImageGenerationRequest = {
       prompt: 'A beautiful sunset over mountains',
       size: '1024x1024',
       quality: 'standard',
       style: 'vivid',
       n: 1,
-      model: 'dall-e-3',
+      model: 'gpt-image-2',
     };
 
     it('should generate image successfully', async () => {
@@ -69,7 +69,7 @@ describe('DALL-E Image Service', () => {
         created: Math.floor(Date.now() / 1000),
         data: [
           {
-            url: 'https://dalle.openai.com/image123.png',
+            url: 'https://images.openai.com/image123.png',
             revised_prompt: 'A stunning sunset with vibrant colors',
           },
         ],
@@ -80,43 +80,53 @@ describe('DALL-E Image Service', () => {
         json: () => Promise.resolve(mockResponse),
       });
 
-      const results = await dallEImageService.generateImage(mockRequest);
+      const results = await openAIImageService.generateImage(mockRequest);
 
       expect(results.length).toBe(1);
-      expect(results![0]!.url!).toBe('https://dalle.openai.com/image123.png');
+      expect(results![0]!.url!).toBe('https://images.openai.com/image123.png');
       expect(results![0]!.prompt!).toBe(mockRequest.prompt);
       expect(results![0]!.revisedPrompt!).toBe('A stunning sunset with vibrant colors');
       expect(results![0]!.size!).toBe('1024x1024');
-      expect(results![0]!.quality!).toBe('standard');
+      expect(results![0]!.quality!).toBe('medium');
       expect(results![0]!.style!).toBe('vivid');
-      expect(results![0]!.model!).toBe('dall-e-3');
+      expect(results![0]!.model!).toBe('gpt-image-2');
       expect(results![0]!.createdAt!).toBeInstanceOf(Date);
     });
 
     it('should throw error for empty prompt', async () => {
-      await expect(dallEImageService.generateImage({ prompt: '' })).rejects.toThrow(
+      await expect(openAIImageService.generateImage({ prompt: '' })).rejects.toThrow(
         new Error('Image generation prompt is required'), // AUDIT-FIX: vitest 4.x string arg broken
       );
 
-      await expect(dallEImageService.generateImage({ prompt: '   ' })).rejects.toThrow(
+      await expect(openAIImageService.generateImage({ prompt: '   ' })).rejects.toThrow(
         new Error('Image generation prompt is required'), // AUDIT-FIX: vitest 4.x
       );
     });
 
-    it('should throw error when DALL-E 3 with n > 1', async () => {
-      await expect(
-        dallEImageService.generateImage({
-          prompt: 'Test',
-          model: 'dall-e-3',
-          n: 2,
-        }),
-      ).rejects.toThrow(new Error('DALL-E 3 only supports generating 1 image at a time')); // AUDIT-FIX: vitest 4.x
+    it('should pass multi-image requests through to the proxy', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            created: Date.now() / 1000,
+            data: [{ url: 'https://example.com/image.png' }],
+          }),
+      });
+
+      await openAIImageService.generateImage({
+        prompt: 'Test',
+        model: 'gpt-image-2',
+        n: 2,
+      });
+
+      const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
+      expect(requestBody.n).toBe(2);
     });
 
     it('should throw error when not authenticated', async () => {
       mockGetAuthToken.mockResolvedValueOnce(null);
 
-      await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toMatchObject({
+      await expect(openAIImageService.generateImage({ prompt: 'Test' })).rejects.toMatchObject({
         message: expect.stringContaining('User not authenticated'), // AUDIT-FIX: vitest 4.x; actual msg is longer
       });
     });
@@ -132,7 +142,7 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
+      await expect(openAIImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
         new Error('Content policy violation'), // AUDIT-FIX: vitest 4.x
       );
     });
@@ -145,7 +155,7 @@ describe('DALL-E Image Service', () => {
         json: () => Promise.resolve({}),
       });
 
-      await expect(dallEImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
+      await expect(openAIImageService.generateImage({ prompt: 'Test' })).rejects.toThrow(
         new Error('API error: 500 Internal Server Error'), // AUDIT-FIX: vitest 4.x
       );
     });
@@ -160,17 +170,17 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      await dallEImageService.generateImage({ prompt: 'Simple test' });
+      await openAIImageService.generateImage({ prompt: 'Simple test' });
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.size).toBe('1024x1024');
-      expect(requestBody.quality).toBe('standard');
-      expect(requestBody.style).toBe('vivid');
+      expect(requestBody.quality).toBe('medium');
+      expect(requestBody.style).toBeUndefined();
       expect(requestBody.n).toBe(1);
-      expect(requestBody.model).toBe('dall-e-3');
+      expect(requestBody.model).toBe('gpt-image-2');
     });
 
-    it('should not include style for DALL-E 2', async () => {
+    it('should not include style for GPT Image 2', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -180,9 +190,9 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      await dallEImageService.generateImage({
+      await openAIImageService.generateImage({
         prompt: 'Test',
-        model: 'dall-e-2',
+        model: 'gpt-image-2',
       });
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
@@ -199,7 +209,7 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      await dallEImageService.generateImage({ prompt: '  Test prompt  ' });
+      await openAIImageService.generateImage({ prompt: '  Test prompt  ' });
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
       expect(requestBody.prompt).toBe('Test prompt');
@@ -215,7 +225,7 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      await dallEImageService.generateImage(mockRequest);
+      await openAIImageService.generateImage(mockRequest);
 
       expect(mockFetch).toHaveBeenCalledWith(
         '/.netlify/functions/media-proxies/openai-image-proxy',
@@ -243,10 +253,10 @@ describe('DALL-E Image Service', () => {
           }),
       });
 
-      // Use DALL-E 2 which supports multiple images
-      const results = await dallEImageService.generateImage({
+      // Use GPT Image 2 which supports multiple images
+      const results = await openAIImageService.generateImage({
         prompt: 'Test',
-        model: 'dall-e-2',
+        model: 'gpt-image-2',
         n: 2,
       });
 
@@ -256,22 +266,22 @@ describe('DALL-E Image Service', () => {
   });
 
   describe('estimateCost', () => {
-    describe('DALL-E 3 pricing', () => {
+    describe('GPT Image 2 pricing', () => {
       it('should calculate standard 1024x1024 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'standard',
           size: '1024x1024',
         });
 
-        expect(cost).toBe(0.04);
+        expect(cost).toBe(0.053);
       });
 
       it('should calculate standard 1024x1792 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'standard',
           size: '1024x1792',
         });
@@ -280,9 +290,9 @@ describe('DALL-E Image Service', () => {
       });
 
       it('should calculate standard 1792x1024 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'standard',
           size: '1792x1024',
         });
@@ -291,86 +301,86 @@ describe('DALL-E Image Service', () => {
       });
 
       it('should calculate HD 1024x1024 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'hd',
           size: '1024x1024',
         });
 
-        expect(cost).toBe(0.08);
+        expect(cost).toBe(0.211);
       });
 
       it('should calculate HD 1024x1792 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'hd',
           size: '1024x1792',
         });
 
-        expect(cost).toBe(0.12);
+        expect(cost).toBe(0.317);
       });
 
       it('should calculate HD 1792x1024 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           quality: 'hd',
           size: '1792x1024',
         });
 
-        expect(cost).toBe(0.12);
+        expect(cost).toBe(0.317);
       });
     });
 
-    describe('DALL-E 2 pricing', () => {
+    describe('legacy size normalization', () => {
       it('should calculate 1024x1024 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-2',
+          model: 'gpt-image-2',
           size: '1024x1024',
         });
 
-        expect(cost).toBe(0.02);
+        expect(cost).toBe(0.053);
       });
 
       it('should calculate 512x512 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-2',
+          model: 'gpt-image-2',
           size: '512x512' as '1024x1024',
         });
 
-        expect(cost).toBe(0.018);
+        expect(cost).toBe(0.053);
       });
 
       it('should calculate 256x256 cost', () => {
-        const cost = dallEImageService.estimateCost({
+        const cost = openAIImageService.estimateCost({
           prompt: 'Test',
-          model: 'dall-e-2',
+          model: 'gpt-image-2',
           size: '256x256' as '1024x1024',
         });
 
-        expect(cost).toBe(0.016);
+        expect(cost).toBe(0.053);
       });
     });
 
     it('should use default values', () => {
-      const cost = dallEImageService.estimateCost({ prompt: 'Test' });
+      const cost = openAIImageService.estimateCost({ prompt: 'Test' });
 
-      // Default: dall-e-3, standard, 1024x1024
-      expect(cost).toBe(0.04);
+      // Default: gpt-image-2, standard/medium, 1024x1024
+      expect(cost).toBe(0.053);
     });
 
     it('should return fallback cost for unknown size', () => {
-      const cost = dallEImageService.estimateCost({
+      const cost = openAIImageService.estimateCost({
         prompt: 'Test',
-        model: 'dall-e-3',
+        model: 'gpt-image-2',
         size: 'unknown' as '1024x1024',
       });
 
-      expect(cost).toBe(0.04);
+      expect(cost).toBe(0.053);
     });
   });
 });

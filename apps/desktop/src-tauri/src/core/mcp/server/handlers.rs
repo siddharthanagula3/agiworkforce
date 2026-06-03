@@ -89,6 +89,57 @@ fn handle_tools_list(request: &JsonRpcRequest, enabled_tools: &[String]) -> Json
     JsonRpcResponse::success(request.id.clone(), json!({ "tools": tools }))
 }
 
+fn validate_tool_arguments(
+    tool_schema: &Value,
+    arguments: &HashMap<String, Value>,
+) -> Result<(), String> {
+    let input_schema = tool_schema
+        .get("inputSchema")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "Tool inputSchema is missing or invalid".to_string())?;
+    let properties = input_schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "Tool inputSchema.properties is missing or invalid".to_string())?;
+
+    if let Some(required) = input_schema.get("required").and_then(Value::as_array) {
+        for key in required.iter().filter_map(Value::as_str) {
+            if !arguments.contains_key(key) {
+                return Err(format!("Missing required argument '{}'", key));
+            }
+        }
+    }
+
+    for (key, value) in arguments {
+        let Some(property) = properties.get(key).and_then(Value::as_object) else {
+            return Err(format!("Unknown argument '{}'", key));
+        };
+        if let Some(expected_type) = property.get("type").and_then(Value::as_str) {
+            let ok = match expected_type {
+                "string" => value.is_string(),
+                "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
+                "number" => {
+                    value.as_f64().is_some() || value.as_i64().is_some() || value.as_u64().is_some()
+                }
+                "boolean" => value.is_boolean(),
+                "object" => value.is_object(),
+                "array" => value.is_array(),
+                _ => true,
+            };
+            if !ok {
+                return Err(format!("Argument '{}' must be {}", key, expected_type));
+            }
+        }
+        if let Some(enum_values) = property.get("enum").and_then(Value::as_array) {
+            if !enum_values.iter().any(|item| item == value) {
+                return Err(format!("Argument '{}' is not an allowed value", key));
+            }
+        }
+    }
+
+    Ok(())
+}
+
 async fn handle_tools_call(
     request: &JsonRpcRequest,
     enabled_tools: &[String],
@@ -131,6 +182,19 @@ async fn handle_tools_call(
     }
 
     let arguments: HashMap<String, Value> = call_params.arguments.unwrap_or_default();
+    let tool_schema = McpServerToolRegistry::list_tools(enabled_tools)
+        .into_iter()
+        .find(|tool| tool.get("name").and_then(Value::as_str) == Some(call_params.name.as_str()));
+    let Some(tool_schema) = tool_schema else {
+        return JsonRpcResponse::error(
+            request.id.clone(),
+            -32601,
+            format!("Tool '{}' is not available.", call_params.name),
+        );
+    };
+    if let Err(error) = validate_tool_arguments(&tool_schema, &arguments) {
+        return JsonRpcResponse::error(request.id.clone(), -32602, error);
+    }
 
     match executor.execute_tool(&call_params.name, arguments).await {
         Ok(outcome) => JsonRpcResponse::success(request.id.clone(), outcome.into_json()),

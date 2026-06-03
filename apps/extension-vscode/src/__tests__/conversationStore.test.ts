@@ -20,10 +20,10 @@ describe('ConversationStore', () => {
 
   describe('create', () => {
     it('creates a conversation with a unique id', () => {
-      const conv = store.create('Test Chat', 'gpt-5-pro');
+      const conv = store.create('Test Chat', 'gpt-5.5');
       expect(conv.id).toBeTruthy();
       expect(conv.title).toBe('Test Chat');
-      expect(conv.model).toBe('gpt-5-pro');
+      expect(conv.model).toBe('gpt-5.5');
       expect(conv.messages).toEqual([]);
       expect(conv.createdAt).toBeGreaterThan(0);
       expect(conv.updatedAt).toBe(conv.createdAt);
@@ -58,7 +58,7 @@ describe('ConversationStore', () => {
 
   describe('get', () => {
     it('retrieves a conversation by id', () => {
-      const created = store.create('My Chat', 'claude-opus-4.6');
+      const created = store.create('My Chat', 'claude-opus-4.8');
       const found = store.get(created.id);
       expect(found).toBeDefined();
       expect(found?.title).toBe('My Chat');
@@ -183,7 +183,7 @@ describe('ConversationStore', () => {
 
   describe('save / get persistence', () => {
     it('persists conversation via save() and retrieves it via get()', () => {
-      const conv = store.create('Persisted Chat', 'gpt-5-pro');
+      const conv = store.create('Persisted Chat', 'gpt-5.5');
       // Mutate and explicitly save
       conv.title = 'Updated Title';
       store.save(conv);

@@ -34,7 +34,6 @@ pub enum HookType {
     Command,
 }
 
-
 /// A single hook definition.
 ///
 /// Hooks execute shell commands when their associated event fires.

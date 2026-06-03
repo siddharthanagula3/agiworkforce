@@ -107,11 +107,7 @@ pub(crate) fn convert_message_to_openai(m: &Message) -> Vec<Value> {
                 /// Flush the accumulated content_parts as a single user message.
                 /// If there is exactly one text-only part, downgrade to a plain string for
                 /// API compatibility with models that expect `"content": "..."`.
-                fn flush_content_parts(
-                    parts: &mut Vec<Value>,
-                    role: &str,
-                    msgs: &mut Vec<Value>,
-                ) {
+                fn flush_content_parts(parts: &mut Vec<Value>, role: &str, msgs: &mut Vec<Value>) {
                     if parts.is_empty() {
                         return;
                     }
@@ -271,7 +267,11 @@ mod tests {
         let msg = Message::blocks("user", vec![image_block()]);
         let msgs = convert_message_to_openai(&msg);
         // Image-only: single message, content is an array with one image_url part
-        assert_eq!(msgs.len(), 1, "image-only should produce exactly one message");
+        assert_eq!(
+            msgs.len(),
+            1,
+            "image-only should produce exactly one message"
+        );
         let content = msgs[0]["content"].as_array().unwrap();
         assert_eq!(content[0]["type"], "image_url");
         assert_eq!(
@@ -323,7 +323,10 @@ mod tests {
         );
         let msgs = convert_message_to_openai(&msg);
         assert_eq!(msgs.len(), 1);
-        assert_eq!(msgs[0]["content"], "hello", "single text should be plain string");
+        assert_eq!(
+            msgs[0]["content"], "hello",
+            "single text should be plain string"
+        );
     }
 
     #[test]

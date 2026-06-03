@@ -17,6 +17,7 @@
 //! 3. Remove the duplicate types from this module.
 
 use std::collections::HashMap;
+use std::process::{Output, Stdio};
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -25,6 +26,7 @@ use cron::Schedule;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tauri::State;
+use tokio::io::AsyncReadExt;
 
 use crate::core::scheduler::types::{ExecutionStatus, JobExecutionRecord};
 use crate::sys::error::{Error, Result};
@@ -59,6 +61,89 @@ const ALLOWED_SHELL_COMMANDS: &[&str] = &[
     // Shell interpreters bypass the allowlist via -c flag (e.g., bash -c "nmap ...").
     // Scripts use the dedicated Script action type with separate validation.
 ];
+
+async fn read_process_pipe(
+    pipe: Option<impl tokio::io::AsyncRead + Unpin + Send + 'static>,
+    label: &'static str,
+) -> std::result::Result<Vec<u8>, String> {
+    let mut output = Vec::new();
+    if let Some(mut pipe) = pipe {
+        pipe.read_to_end(&mut output)
+            .await
+            .map_err(|error| format!("Failed to read process {label}: {error}"))?;
+    }
+    Ok(output)
+}
+
+async fn join_process_pipe(
+    task: tokio::task::JoinHandle<std::result::Result<Vec<u8>, String>>,
+    label: &str,
+) -> std::result::Result<Vec<u8>, String> {
+    task.await
+        .map_err(|error| format!("Failed to join process {label} reader: {error}"))?
+}
+
+async fn run_shell_with_timeout(
+    payload: &str,
+    timeout_secs: u64,
+) -> std::result::Result<Output, String> {
+    let mut command = tokio::process::Command::new(if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        "sh"
+    });
+
+    command
+        .args(if cfg!(target_os = "windows") {
+            vec!["/C", payload]
+        } else {
+            vec!["-c", payload]
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    let mut child = command
+        .spawn()
+        .map_err(|error| format!("Failed to spawn shell process: {error}"))?;
+
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+    let stdout_task = tokio::spawn(read_process_pipe(stdout, "stdout"));
+    let stderr_task = tokio::spawn(read_process_pipe(stderr, "stderr"));
+
+    match tokio::time::timeout(std::time::Duration::from_secs(timeout_secs), child.wait()).await {
+        Ok(status_result) => {
+            let status = status_result
+                .map_err(|error| format!("Failed to wait for shell process: {error}"))?;
+            let (stdout, stderr) = tokio::try_join!(
+                join_process_pipe(stdout_task, "stdout"),
+                join_process_pipe(stderr_task, "stderr"),
+            )?;
+            Ok(Output {
+                status,
+                stdout,
+                stderr,
+            })
+        }
+        Err(_) => {
+            if let Err(error) = child.kill().await {
+                tracing::warn!(
+                    "Failed to kill timed-out scheduled shell process: {}",
+                    error
+                );
+            }
+            let _ = child.wait().await;
+            let _ = tokio::try_join!(
+                join_process_pipe(stdout_task, "stdout"),
+                join_process_pipe(stderr_task, "stderr"),
+            );
+            Err(format!(
+                "shell process timed out after {timeout_secs}s and was terminated"
+            ))
+        }
+    }
+}
 
 /// The type of action a scheduled job should perform
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -1250,31 +1335,16 @@ async fn dispatch_job_action(
                 command.len()
             );
 
-            // Execute with a timeout to prevent runaway commands
-            let child_future = tokio::process::Command::new(if cfg!(target_os = "windows") {
-                "cmd"
-            } else {
-                "sh"
-            })
-            .args(if cfg!(target_os = "windows") {
-                vec!["/C", command]
-            } else {
-                vec!["-c", command]
-            })
-            .output();
-
-            let output = tokio::time::timeout(
-                std::time::Duration::from_secs(SHELL_COMMAND_TIMEOUT_SECS),
-                child_future,
-            )
-            .await
-            .map_err(|_| {
-                format!(
-                    "Shell command timed out after {}s for job '{}'. Command: {}",
-                    SHELL_COMMAND_TIMEOUT_SECS, job_name, command
-                )
-            })?
-            .map_err(|e| format!("Failed to execute command: {}", e))?;
+            let output = run_shell_with_timeout(command, SHELL_COMMAND_TIMEOUT_SECS)
+                .await
+                .map_err(|error| {
+                    format!(
+                        "Shell command failed for job '{}': {}. Command length: {} chars",
+                        job_name,
+                        error,
+                        command.len()
+                    )
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -1517,33 +1587,16 @@ async fn dispatch_job_action(
                 script.len()
             );
 
-            // Execute with a timeout to prevent runaway scripts
-            let child_future = tokio::process::Command::new(if cfg!(target_os = "windows") {
-                "cmd"
-            } else {
-                "sh"
-            })
-            .args(if cfg!(target_os = "windows") {
-                vec!["/C", script]
-            } else {
-                vec!["-c", script]
-            })
-            .output();
-
-            let output = tokio::time::timeout(
-                std::time::Duration::from_secs(SHELL_COMMAND_TIMEOUT_SECS),
-                child_future,
-            )
-            .await
-            .map_err(|_| {
-                format!(
-                    "Script timed out after {}s for job '{}'. Script length: {} chars",
-                    SHELL_COMMAND_TIMEOUT_SECS,
-                    job_name,
-                    script.len()
-                )
-            })?
-            .map_err(|e| format!("Failed to execute script: {}", e))?;
+            let output = run_shell_with_timeout(script, SHELL_COMMAND_TIMEOUT_SECS)
+                .await
+                .map_err(|error| {
+                    format!(
+                        "Script failed for job '{}': {}. Script length: {} chars",
+                        job_name,
+                        error,
+                        script.len()
+                    )
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);

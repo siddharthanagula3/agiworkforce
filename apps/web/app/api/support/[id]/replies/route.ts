@@ -6,11 +6,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { requireCsrfToken } from '@/lib/csrf';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -22,6 +24,10 @@ type ReplyRow = {
   is_staff: boolean;
   created_at: string;
 };
+
+const CreateReplySchema = z.object({
+  message: z.string().trim().min(1).max(10000),
+});
 
 async function handleGetReplies(request: NextRequest, context: RouteContext) {
   const rateLimitResponse = await withRateLimit(request, 'me');
@@ -52,4 +58,38 @@ async function handleGetReplies(request: NextRequest, context: RouteContext) {
   return NextResponse.json({ replies });
 }
 
+async function handleCreateReply(request: NextRequest, context: RouteContext) {
+  const csrfError = await requireCsrfToken(request);
+  if (csrfError) return csrfError as NextResponse;
+
+  const rateLimitResponse = await withRateLimit(request, 'me');
+  if (rateLimitResponse) return rateLimitResponse;
+
+  const { userId } = await getClerkAuthUser(request);
+  const { id: ticketId } = await context.params;
+
+  const body = await request.json();
+  const parsed = CreateReplySchema.safeParse(body);
+  if (!parsed.success) throw createError.validation('Invalid request body');
+
+  const db = getNeonDb();
+  const [ticket] = await db.query<{ id: string }>(
+    'select id from support_tickets where id = $1 and user_id = $2 limit 1',
+    [ticketId, userId],
+  );
+  if (!ticket) throw createError.notFound('Ticket not found');
+
+  const [reply] = await db.query<ReplyRow>(
+    `
+      insert into support_ticket_replies (ticket_id, user_id, message, is_staff, created_at)
+      values ($1, $2, $3, false, now())
+      returning id, ticket_id, user_id, message, is_staff, created_at
+    `,
+    [ticketId, userId, parsed.data.message],
+  );
+
+  return NextResponse.json({ reply }, { status: 201 });
+}
+
 export const GET = withErrorHandler(handleGetReplies);
+export const POST = withErrorHandler(handleCreateReply);

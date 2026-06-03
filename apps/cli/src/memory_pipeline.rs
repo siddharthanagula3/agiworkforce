@@ -116,7 +116,15 @@ impl MemoryPipeline {
         model: &str,
         config: &CliConfig,
     ) -> Result<String> {
-        let provider = models::detect_provider(model);
+        let provider = models::resolve_selected_provider(
+            model,
+            models::selection_provider_override(
+                model,
+                &config.default.model,
+                &config.default.provider,
+                None,
+            ),
+        )?;
 
         let extraction_prompt = format!(
             "Analyze this conversation and extract reusable learnings. \
@@ -252,7 +260,15 @@ impl MemoryPipeline {
         model: &str,
         config: &CliConfig,
     ) -> Result<String> {
-        let provider = models::detect_provider(model);
+        let provider = models::resolve_selected_provider(
+            model,
+            models::selection_provider_override(
+                model,
+                &config.default.model,
+                &config.default.provider,
+                None,
+            ),
+        )?;
 
         let prompt = format!(
             "Merge and deduplicate these session learnings into a concise, organized \

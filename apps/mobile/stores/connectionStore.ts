@@ -37,6 +37,7 @@ import type { Agent } from './agentStore';
 import { useDispatchStore } from './dispatchStore';
 import type { DispatchMessage, TaskStatus, TaskResult } from './dispatchStore';
 import { notifyCompanionMessage } from '@/services/companionNotifications';
+import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
 export type ConnectionStatus =
   | 'disconnected'
@@ -61,8 +62,10 @@ export interface DesktopMetadata {
 interface ConnectionState {
   /** Current connection status */
   status: ConnectionStatus;
-  /** Active pairing code (8 uppercase alphanumeric chars extracted from QR) */
+  /** Active pairing code extracted from QR */
   pairingCode: string | null;
+  /** Role token required by the signaling server for mobile registration */
+  pairToken: string | null;
   /** Desktop device name from peer metadata */
   desktopName: string | null;
   /** Full desktop metadata (version, platform, etc.) */
@@ -153,20 +156,24 @@ interface RTCSessionDescriptionInit {
 let dataChannel: RTCDataChannelType | null = null;
 
 /**
- * Parse the pairing code from a QR string.
- * Accepts raw codes or the `agiw:XXXXXXXXXXXX` format.
+ * Parse the pairing payload from a QR string.
+ * Accepts raw codes, `agiw:XXXXXXXXXXXX`, or `agiw:XXXXXXXXXXXX:<64-hex-token>`.
  *
  * AUDIT-FIX: H-12 — server now mints 12-char codes (62^12 ≈ 71 bits IKM).
  * We strip out human-readable separators (spaces or '-') that the desktop
  * UI may print to display the code as 3 groups of 4. Matches against
  * `/^[A-Z0-9]{12}$/`; 8-char codes are accepted transitionally.
  */
-function parsePairingCode(raw: string): string {
+function parsePairingPayload(raw: string): { code: string; pairToken: string | null } {
   const trimmed = raw.trim().replace(/[\s-]/g, '');
   if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5).toUpperCase();
+    const [code = '', token] = trimmed.slice(5).split(':');
+    return {
+      code: code.toUpperCase(),
+      pairToken: token && /^[a-fA-F0-9]{64}$/.test(token) ? token.toLowerCase() : null,
+    };
   }
-  return trimmed.toUpperCase();
+  return { code: trimmed.toUpperCase(), pairToken: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -185,10 +192,167 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+const RELAY_ACTION_ALIASES: Record<string, string> = {
+  dispatch_task: 'dispatch_request',
+  request_agents_refresh: 'sync_request',
+  ping: 'heartbeat',
+  pong: 'heartbeat_ack',
+};
+
+function resolveRelayAction(action: string, payload?: unknown): string {
+  if (action === 'agent_command' && isObject(payload) && payload['command'] === 'cancel') {
+    return 'cancel';
+  }
+  if (action === 'emergency_stop') return 'cancel';
+  return RELAY_ACTION_ALIASES[action] ?? action;
+}
+
+function toControlData(payload?: unknown): Record<string, unknown> {
+  if (payload === undefined || payload === null) return {};
+  if (isObject(payload)) return payload;
+  return { value: payload };
+}
+
+export interface RelayControlMessage {
+  action: string;
+  data: Record<string, unknown>;
+}
+
+export function buildRelayControlMessage(
+  action: string,
+  payload?: unknown,
+): {
+  relay: RelayControlMessage;
+  innerPayload: Record<string, unknown>;
+} {
+  const data = toControlData(payload);
+  const relayAction = resolveRelayAction(action, data);
+  const innerPayload: Record<string, unknown> = { ...data, action: relayAction };
+
+  if (action === 'emergency_stop') {
+    innerPayload['scope'] = innerPayload['scope'] ?? 'all';
+  }
+
+  return {
+    relay: {
+      action: relayAction,
+      data: innerPayload,
+    },
+    innerPayload,
+  };
+}
+
+function isSignedEnvelopeLike(value: unknown): value is Record<string, unknown> {
+  return isObject(value) && typeof value['hmac'] === 'string';
+}
+
+function getSignedEnvelopeCandidate(envelope: unknown): unknown {
+  if (!isObject(envelope)) return envelope;
+
+  const data = envelope['data'];
+  if (isSignedEnvelopeLike(data)) return data;
+
+  if (isObject(data) && isSignedEnvelopeLike(data['envelope'])) {
+    return data['envelope'];
+  }
+
+  return envelope;
+}
+
+function normalizeIncomingControlPayload(payload: unknown): Record<string, unknown> | null {
+  if (!isObject(payload)) return null;
+
+  const action = isString(payload['action']) ? payload['action'] : undefined;
+  if (!action) return payload;
+
+  const data = isObject(payload['data']) ? payload['data'] : undefined;
+  if (!data) return payload;
+
+  return {
+    ...data,
+    action,
+  };
+}
+
 const VALID_TASK_STATUSES = new Set(['pending', 'working', 'completed', 'failed']);
 
 function isTaskStatus(v: unknown): v is TaskStatus {
   return isString(v) && VALID_TASK_STATUSES.has(v);
+}
+
+const VALID_RISK_LEVELS = new Set<RiskLevel>(['low', 'medium', 'high']);
+const VALID_APPROVAL_TYPES = new Set<ApprovalRequest['type']>([
+  'file_delete',
+  'command',
+  'api_call',
+  'data_modification',
+  'other',
+]);
+
+function boundedString(v: unknown, max: number): string | undefined {
+  if (!isString(v)) return undefined;
+  const trimmed = v.trim();
+  if (!trimmed || trimmed.length > max) return undefined;
+  return trimmed;
+}
+
+function parseRiskLevel(v: unknown): RiskLevel | null {
+  if (v === undefined || v === null) return 'medium';
+  return isString(v) && VALID_RISK_LEVELS.has(v as RiskLevel) ? (v as RiskLevel) : null;
+}
+
+function parseApprovalType(v: unknown): ApprovalRequest['type'] | null {
+  if (v === undefined || v === null) return 'other';
+  return isString(v) && VALID_APPROVAL_TYPES.has(v as ApprovalRequest['type'])
+    ? (v as ApprovalRequest['type'])
+    : null;
+}
+
+export function parseApprovalRequest(payload: unknown): ApprovalRequest | null {
+  const normalized = normalizeIncomingControlPayload(payload);
+  if (!normalized) return null;
+
+  const id =
+    boundedString(normalized['id'], 128) ??
+    boundedString(normalized['requestId'], 128) ??
+    boundedString(normalized['approvalId'], 128);
+  const toolName =
+    boundedString(normalized['toolName'], 120) ??
+    boundedString(normalized['taskName'], 120) ??
+    boundedString(normalized['tool'], 120);
+  const description =
+    boundedString(normalized['description'], 1000) ??
+    boundedString(normalized['message'], 1000) ??
+    boundedString(normalized['summary'], 1000);
+  const riskLevel = parseRiskLevel(
+    normalized['riskLevel'] ?? normalized['risk_level'] ?? normalized['risk'],
+  );
+  const type = parseApprovalType(
+    normalized['type'] ?? normalized['approvalType'] ?? normalized['actionType'],
+  );
+
+  if (!id || !toolName || !description || !riskLevel || !type) return null;
+
+  const countdown = isNumber(normalized['countdown']) ? normalized['countdown'] : undefined;
+  return {
+    id,
+    toolName,
+    description,
+    riskLevel,
+    type,
+    status: 'pending',
+    ...(countdown !== undefined ? { countdown } : {}),
+  };
+}
+
+export function ingestApprovalRequestPayload(payload: unknown): boolean {
+  const normalized = normalizeIncomingControlPayload(payload);
+  const approval = parseApprovalRequest(normalized);
+  if (!normalized || !approval) return false;
+
+  useAgentStore.getState().addApproval(approval);
+  notifyCompanionMessage({ ...normalized, action: 'approval_request' });
+  return true;
 }
 
 /**
@@ -211,9 +375,10 @@ function isTaskStatus(v: unknown): v is TaskStatus {
  */
 async function handleControlMessageAsync(envelope: unknown): Promise<void> {
   let payload: unknown = envelope;
+  const envelopeToVerify = getSignedEnvelopeCandidate(envelope);
 
   if (hmacState) {
-    const result = await verifyMessage(hmacState, envelope);
+    const result = await verifyMessage(hmacState, envelopeToVerify);
     if (!result.ok) {
       console.warn('[dispatch] Message rejected:', result.reason);
       return;
@@ -222,11 +387,11 @@ async function handleControlMessageAsync(envelope: unknown): Promise<void> {
     // Unsigned transitional messages (ok=true but no hmac field) ARE the
     // payload — do not attempt to unwrap a .payload property.
     const isSignedEnvelope =
-      typeof envelope === 'object' &&
-      envelope !== null &&
-      typeof (envelope as Record<string, unknown>)['hmac'] === 'string';
+      typeof envelopeToVerify === 'object' &&
+      envelopeToVerify !== null &&
+      typeof (envelopeToVerify as Record<string, unknown>)['hmac'] === 'string';
     if (isSignedEnvelope) {
-      payload = (envelope as { payload: unknown }).payload;
+      payload = (envelopeToVerify as { payload: unknown }).payload;
     }
     // else: transitional unsigned — payload stays = envelope (the raw object)
   }
@@ -242,13 +407,14 @@ function handleControlMessage(payload: unknown): void {
 }
 
 function handleControlMessageInner(payload: unknown): void {
-  if (!isObject(payload)) return;
-  const action = isString(payload['action']) ? payload['action'] : undefined;
+  const normalizedPayload = normalizeIncomingControlPayload(payload);
+  if (!normalizedPayload) return;
+  const action = isString(normalizedPayload['action']) ? normalizedPayload['action'] : undefined;
   if (!action) return;
 
   switch (action) {
     case 'agents_update': {
-      const agents = payload['agents'];
+      const agents = normalizedPayload['agents'];
       if (Array.isArray(agents)) {
         // MED-MOB-05 fix (red-team 2026-05): per-field validation via
         // parseAgent. Cap to MAX_AGENTS_PER_UPDATE so a malicious relay
@@ -264,46 +430,69 @@ function handleControlMessageInner(payload: unknown): void {
       break;
     }
     case 'agent_update': {
-      const agentId = isString(payload['agentId']) ? payload['agentId'] : undefined;
-      const patch = isObject(payload['patch']) ? payload['patch'] : undefined;
+      const agentId = isString(normalizedPayload['agentId'])
+        ? normalizedPayload['agentId']
+        : undefined;
+      const patch = isObject(normalizedPayload['patch']) ? normalizedPayload['patch'] : undefined;
       if (agentId && patch) {
         useAgentStore.getState().updateAgent(agentId, patch as Partial<Omit<Agent, 'id'>>);
       }
       break;
     }
     case 'agent_removed': {
-      const agentId = isString(payload['agentId']) ? payload['agentId'] : undefined;
+      const agentId = isString(normalizedPayload['agentId'])
+        ? normalizedPayload['agentId']
+        : undefined;
       if (agentId) {
         useAgentStore.getState().removeAgent(agentId);
       }
       break;
     }
     case 'pong': {
-      const pingTimestamp = isNumber(payload['timestamp']) ? payload['timestamp'] : undefined;
+      const pingTimestamp = isNumber(normalizedPayload['timestamp'])
+        ? normalizedPayload['timestamp']
+        : undefined;
       const now = Date.now();
       const latencyMs =
         pingTimestamp != null && pingTimestamp <= now ? now - pingTimestamp : undefined;
       useConnectionStore.getState().recordHeartbeat(latencyMs);
       break;
     }
-    case 'approval_request':
+    case 'heartbeat_ack': {
+      const pingTimestamp = isNumber(normalizedPayload['timestamp'])
+        ? normalizedPayload['timestamp']
+        : undefined;
+      const now = Date.now();
+      const latencyMs =
+        pingTimestamp != null && pingTimestamp <= now ? now - pingTimestamp : undefined;
+      useConnectionStore.getState().recordHeartbeat(latencyMs);
+      break;
+    }
+    case 'approval_request': {
+      ingestApprovalRequestPayload(normalizedPayload);
+      break;
+    }
     case 'agent_failed':
     case 'emergency_stop':
     case 'task_completed':
     case 'agent_paused':
     case 'heartbeat_lost': {
-      notifyCompanionMessage({ action, ...payload });
+      notifyCompanionMessage({ ...normalizedPayload, action });
       break;
     }
     case 'dispatch_response': {
-      const messageId = isString(payload['messageId'])
-        ? payload['messageId']
+      const messageId = isString(normalizedPayload['messageId'])
+        ? normalizedPayload['messageId']
         : `desktop-${Date.now()}`;
-      const text = isString(payload['text']) ? payload['text'] : '';
-      const taskStatus = isTaskStatus(payload['taskStatus']) ? payload['taskStatus'] : undefined;
-      const statusDetail = isString(payload['statusDetail']) ? payload['statusDetail'] : undefined;
-      const taskResult = isObject(payload['taskResult'])
-        ? (payload['taskResult'] as TaskResult)
+      const text = isString(normalizedPayload['text']) ? normalizedPayload['text'] : '';
+      const taskStatus = isTaskStatus(normalizedPayload['taskStatus'])
+        ? normalizedPayload['taskStatus']
+        : undefined;
+      const statusDetail = isString(normalizedPayload['statusDetail'])
+        ? normalizedPayload['statusDetail']
+        : undefined;
+      const taskResult = isObject(normalizedPayload['taskResult'])
+        ? (normalizedPayload['taskResult'] as TaskResult)
         : undefined;
       const dispatchMsg: DispatchMessage = {
         id: messageId,
@@ -318,13 +507,18 @@ function handleControlMessageInner(payload: unknown): void {
       break;
     }
     case 'dispatch_status_update': {
-      const messageId = isString(payload['messageId']) ? payload['messageId'] : undefined;
+      const messageId = isString(normalizedPayload['messageId'])
+        ? normalizedPayload['messageId']
+        : undefined;
       if (messageId) {
         const patch: Partial<Omit<DispatchMessage, 'id'>> = {};
-        if (isTaskStatus(payload['taskStatus'])) patch.taskStatus = payload['taskStatus'];
-        if (isString(payload['statusDetail'])) patch.statusDetail = payload['statusDetail'];
-        if (isString(payload['text'])) patch.text = payload['text'];
-        if (isObject(payload['taskResult'])) patch.taskResult = payload['taskResult'] as TaskResult;
+        if (isTaskStatus(normalizedPayload['taskStatus']))
+          patch.taskStatus = normalizedPayload['taskStatus'];
+        if (isString(normalizedPayload['statusDetail']))
+          patch.statusDetail = normalizedPayload['statusDetail'];
+        if (isString(normalizedPayload['text'])) patch.text = normalizedPayload['text'];
+        if (isObject(normalizedPayload['taskResult']))
+          patch.taskResult = normalizedPayload['taskResult'] as TaskResult;
         useDispatchStore.getState().updateMessage(messageId, patch);
       }
       break;
@@ -491,6 +685,7 @@ export const useConnectionStore = create<ConnectionState>()(
     (set, get) => ({
       status: 'disconnected',
       pairingCode: null,
+      pairToken: null,
       desktopName: null,
       desktopMetadata: null,
       error: null,
@@ -514,10 +709,27 @@ export const useConnectionStore = create<ConnectionState>()(
           get().disconnect();
         }
 
-        const code = parsePairingCode(rawCode);
+        const parsed = parsePairingPayload(rawCode);
+        const pairToken =
+          parsed.pairToken ??
+          (parsed.code === currentState.pairingCode ? currentState.pairToken : null);
+
+        if (!pairToken) {
+          set({
+            status: 'error',
+            error:
+              'This pairing payload is missing its auth token. Generate a new QR code and scan it.',
+            pairingCode: parsed.code,
+            pairToken: null,
+            connectionQuality: 'disconnected',
+          });
+          return;
+        }
+
         set((state) => ({
           status: 'connecting',
-          pairingCode: code,
+          pairingCode: parsed.code,
+          pairToken,
           error: null,
           desktopName: null,
           desktopMetadata: null,
@@ -566,7 +778,7 @@ export const useConnectionStore = create<ConnectionState>()(
               hex += (saltBytes[i] as number).toString(16).padStart(2, '0');
             }
             sessionMetadata.dispatchSalt = hex;
-            const secret = await deriveDispatchSecret(code, hex);
+            const secret = await deriveDispatchSecret(parsed.code, hex);
             hmacState = { secret, nonceCache: new Map() };
           } catch (err) {
             console.warn('[dispatch] HMAC secret derivation failed:', err);
@@ -579,8 +791,9 @@ export const useConnectionStore = create<ConnectionState>()(
           // Create signaling client (auto-connects on construction)
           signalingClient = new SignalingClient({
             wsUrl: WS_URL,
-            code,
+            code: parsed.code,
             role: 'mobile',
+            pairToken,
             metadata: sessionMetadata,
             heartbeatIntervalMs: 25000,
             onEvent: (event: SignalingEvent) => {
@@ -662,6 +875,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   set({
                     status: 'disconnected',
                     pairingCode: null,
+                    pairToken: null,
                     desktopName: null,
                     desktopMetadata: null,
                   });
@@ -761,6 +975,7 @@ export const useConnectionStore = create<ConnectionState>()(
           status: 'session_expired',
           error: 'Pairing session expired. Please scan a new QR code.',
           pairingCode: null,
+          pairToken: null,
           connectionQuality: 'disconnected',
           reconnectStartedAt: null,
         });
@@ -781,6 +996,7 @@ export const useConnectionStore = create<ConnectionState>()(
         set({
           status: 'disconnected',
           pairingCode: null,
+          pairToken: null,
           desktopName: null,
           desktopMetadata: null,
           error: null,
@@ -798,7 +1014,7 @@ export const useConnectionStore = create<ConnectionState>()(
 
       sendControl: (action: string, payload?: unknown) => {
         const { status } = get();
-        const innerPayload = { action, ...(payload ?? {}) };
+        const controlMessage = buildRelayControlMessage(action, payload);
 
         // If disconnecting or reconnecting, queue for later delivery instead of dropping
         if (status === 'reconnecting' || status === 'stale') {
@@ -830,19 +1046,23 @@ export const useConnectionStore = create<ConnectionState>()(
             }
           }
           if (signalingClient) {
-            signalingClient.sendSignal('control', envelope);
+            const relay =
+              isSignedEnvelopeLike(envelope) || isObject(envelope)
+                ? { ...controlMessage.relay, data: envelope as Record<string, unknown> }
+                : controlMessage.relay;
+            signalingClient.sendSignal('control', relay);
           }
         };
 
         if (hmacState) {
           // New signature: signMessage(state, type, payload)
-          signMessage(hmacState, action, innerPayload)
+          signMessage(hmacState, controlMessage.relay.action, controlMessage.innerPayload)
             .then(sendRaw)
             .catch((err) => {
               console.warn('[dispatch] Failed to sign control message:', err);
             });
         } else {
-          sendRaw(innerPayload);
+          sendRaw(controlMessage.innerPayload);
         }
       },
 

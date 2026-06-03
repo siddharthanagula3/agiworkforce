@@ -50,6 +50,9 @@ export default [
       'apps/web/scripts/**',
       // CLI utility scripts (Node.js ESM, not Rust source)
       'apps/cli/scripts/**',
+      // CLI parity workflow artifacts are authored for the workflow runner, not
+      // as standalone Node/Browser source files.
+      'apps/cli/docs/parity/**',
       // VS Code extension utility scripts (Node.js CJS, not app source)
       'apps/extension-vscode/scripts/**',
       // Workspace stub for react-native-worklets (CJS, no linting needed)
@@ -346,8 +349,8 @@ export default [
   // PREVENTION LAYER — Wave 1.5 (per docs/plans/UNIFIED_LAUNCH_PLAN.md §1.5).
   //
   // Two recurring bug classes earned dedicated AST gates after the
-  // 2026-05-05 audit (CLI ghost-model `claude-opus-4-6-mini`, the
-  // `FAST_STATUS_MODEL = "gpt-5.4"` const, and web routes reusing
+  // 2026-05-05 audit (a CLI ghost-model regression, a stale hardcoded
+  // model const, and web routes reusing
   // privileged database credentials for downstream DB ops on user-scoped data):
   //
   //   1. Hardcoded model IDs anywhere except `models.json`, the catalog
@@ -397,8 +400,8 @@ export default [
           // digit (or canonical model-family word) immediately after
           // the provider prefix so substring tests like
           // `model.includes('claude-')` and tool-name strings like
-          // `'claude-code'` are NOT flagged. Matches: `'gpt-5.4'`,
-          // `"gpt-5.4-mini"`, `'claude-opus-4-7'`, `'claude-sonnet-4.6'`,
+          // `'claude-code'` are NOT flagged. Matches: `'gpt-5.5'`,
+          // `"gpt-5.4-mini"`, `'claude-opus-4-8'`, `'claude-sonnet-4.6'`,
           // `'gemini-3.1-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
           // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
           // `'claude-cookbook'` (doc reference).
@@ -509,6 +512,18 @@ export default [
         exports: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+      },
+    },
+  },
+
+  // CLI npm wrapper scripts/tests (Node.js ESM)
+  {
+    files: ['apps/cli/npm/**/*.js', 'apps/cli/npm/**/*.mjs'],
+    languageOptions: {
+      globals: {
         process: 'readonly',
         console: 'readonly',
         Buffer: 'readonly',

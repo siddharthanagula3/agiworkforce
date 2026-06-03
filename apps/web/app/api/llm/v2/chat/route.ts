@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
+import { ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 // AUDIT-FIX: C-3
 import { validateUserImageUrl, EgressPolicyError } from '@/lib/egress-policy';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -111,8 +112,8 @@ const V2ChatRequestSchema = z.object({
   max_tokens: z.number().int().positive().optional(),
   max_completion_tokens: z.number().int().positive().optional(),
   stream: z.boolean().optional().default(true),
-  tools: z.array(z.unknown()).optional(),
-  tool_choice: z.unknown().optional(),
+  tools: z.array(ToolDefinitionSchema).max(64).optional(),
+  tool_choice: ToolChoiceSchema.optional(),
   // Thinking / reasoning options
   thinking_mode: z.boolean().optional(),
   thinking: z

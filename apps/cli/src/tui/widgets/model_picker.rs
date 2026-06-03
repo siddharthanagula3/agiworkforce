@@ -7,7 +7,7 @@
 //! │ Search: █                                                                   │
 //! ├─────────────────────────────────────────────────────────────────────────────┤
 //! │ ▶ Anthropic                                                                 │
-//! │   ● claude-opus-4-7            Most capable   200K ctx  $15/$75            │
+//! │   ● claude-opus-4-8            Most capable   200K ctx  $15/$75            │
 //! │     claude-sonnet-4-6          Balanced        200K ctx  $3/$15            │
 //! │     claude-haiku-4-5           Fastest         200K ctx  $0.25/$1.25       │
 //! │                                                                             │
@@ -702,6 +702,9 @@ mod tests {
         // Navigation skips both header kinds.
         state.cursor = state.selectable_indices()[0];
         state.cursor_down();
-        assert!(matches!(state.rows[state.cursor], PickerRow::ModelRow { .. }));
+        assert!(matches!(
+            state.rows[state.cursor],
+            PickerRow::ModelRow { .. }
+        ));
     }
 }

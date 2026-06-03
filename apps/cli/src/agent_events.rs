@@ -3,14 +3,12 @@
 //! This is the machine-readable counterpart to the human-friendly TUI/REPL
 //! output. Every event is one JSON object, terminated by a newline, written to
 //! stdout. No interleaved prose, no ANSI, no timestamps in the payload —
-//! callers (CI, dashboards, claws) own time-keeping.
+//! callers (CI, dashboards, automation scripts) own time-keeping.
 //!
 //! Two strict guarantees:
 //!   1. Variant names are stable. Add fields, never rename them.
 //!   2. `kind` strings on errors come from [`crate::errors::CliError::kind`],
 //!      so a runbook can pattern-match without parsing prose.
-//!
-//! See plan: `~/.claude/plans/even-if-it-is-bubbly-octopus.md`, Day-3 Feature 2.
 
 use std::io::Write;
 
@@ -197,7 +195,10 @@ mod tests {
             json.contains(r#""event":"budget_exhausted""#),
             "missing event tag: {json}"
         );
-        assert!(json.contains(r#""session_id":"s42""#), "missing session_id: {json}");
+        assert!(
+            json.contains(r#""session_id":"s42""#),
+            "missing session_id: {json}"
+        );
         assert!(
             json.contains("cumulative_dollars"),
             "missing cumulative_dollars: {json}"

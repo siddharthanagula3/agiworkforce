@@ -78,6 +78,20 @@ vi.mock('@/hooks/useApiPromptCompletion', () => ({
     mockUseApiPromptCompletion(...args),
 }));
 
+const mockConnectConnector = vi.fn();
+const mockDisconnectConnector = vi.fn();
+
+vi.mock('@features/connectors/hooks/use-connectors', () => ({
+  useConnectors: () => ({
+    connectedIds: new Set<string>(),
+    connectedAtMap: {},
+    loading: false,
+    mutatingIds: new Set<string>(),
+    connect: mockConnectConnector,
+    disconnect: mockDisconnectConnector,
+  }),
+}));
+
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('ChatComposerNew', () => {
@@ -187,6 +201,20 @@ describe('ChatComposerNew', () => {
 
     expect(screen.getByText('Skills')).toBeInTheDocument();
     expect(screen.getByText('Connectors')).toBeInTheDocument();
+  });
+
+  it('does not allow composer OAuth toggles to create fake connector connections', () => {
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+    fireEvent.click(screen.getByText('Connectors'));
+
+    const gmailToggle = screen.getByRole('switch', { name: /toggle gmail & calendar/i });
+    expect(gmailToggle).toBeDisabled();
+
+    fireEvent.click(gmailToggle);
+    expect(mockConnectConnector).not.toHaveBeenCalled();
+    expect(mockDisconnectConnector).not.toHaveBeenCalled();
   });
 
   it('disables Send button when loading', () => {

@@ -9,8 +9,8 @@
  * Storage contract:
  * - Normalized email is persisted because launch operations must be able to
  *   send invite/release emails to waitlisted visitors.
- * - RLS posture: anon CAN insert (open signup); anon CANNOT select/update/delete
- *   (service_role only). Correct for a public-signup waitlist.
+ * - RLS posture: waitlist rows are account-bound. Public callers must be
+ *   authenticated, and durable storage includes the owning Clerk user id.
  * - Rate limit uses the dedicated 'waitlist' config (5/hour/IP), not 'default'.
  */
 
@@ -66,6 +66,11 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
+const mockRequireCurrentUserId = vi.fn().mockResolvedValue('user-test-id');
+vi.mock('@/lib/server/neon-chat', () => ({
+  requireCurrentUserId: () => mockRequireCurrentUserId(),
+}));
+
 // ─── Import route under test ──────────────────────────────────────────────────
 import { POST, OPTIONS } from '@/app/api/waitlist/cloud-managed/route';
 
@@ -104,6 +109,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
     mockExecute.mockResolvedValue(1);
+    mockRequireCurrentUserId.mockResolvedValue('user-test-id');
   });
 
   // ─── CSRF protection ────────────────────────────────────────────────────────
@@ -252,7 +258,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       expect(response.status).toBe(200);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('email, source, joined_at, updated_at'),
-        ['testuser@example.com', 'byok', expect.any(String), expect.any(String)],
+        ['user-test-id', 'testuser@example.com', 'byok', expect.any(String), expect.any(String)],
       );
       expect(mockExecute.mock.calls[0]?.[1]).not.toContain('TestUser@example.com');
     });

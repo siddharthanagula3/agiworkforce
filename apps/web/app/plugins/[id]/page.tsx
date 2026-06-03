@@ -1,23 +1,16 @@
 'use client';
 
-import { use, useState } from 'react';
+import { use } from 'react';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronLeft, Download, Layers, Link2, CheckCircle2, Circle, Puzzle } from 'lucide-react';
-import { toast } from 'sonner';
+import { ChevronLeft, Layers, Link2, CheckCircle2, Circle, Puzzle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
 import { EXAMPLE_PLUGINS } from '@/features/plugins/data/plugins';
 import type { Plugin } from '@/features/plugins/types';
-import { usePluginStore } from '@/features/plugins/stores/plugin-store';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
-
-function formatDownloadCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 function sourceBadgeClass(source: string): string {
   if (source === 'builtin') return 'bg-primary/15 text-primary border-primary/20';
@@ -34,25 +27,7 @@ function sourceLabel(source: string): string {
 // ── Inner component — only rendered once plugin is confirmed non-null ──────────
 
 function PluginDetail({ plugin }: { plugin: Plugin }) {
-  const { installPlugin, uninstallPlugin, isInstalled } = usePluginStore();
   const { connectedIds, loading: connectorsLoading } = useConnectors();
-  const [mutating, setMutating] = useState(false);
-
-  const installed = isInstalled(plugin.id);
-
-  async function handleToggleInstall() {
-    setMutating(true);
-    // Simulate async work (future: API call)
-    await new Promise((r) => setTimeout(r, 300));
-    if (installed) {
-      uninstallPlugin(plugin.id);
-      toast.success(`${plugin.name} uninstalled.`);
-    } else {
-      installPlugin(plugin);
-      toast.success(`${plugin.name} installed.`);
-    }
-    setMutating(false);
-  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6 lg:px-8">
@@ -85,19 +60,14 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
             by {plugin.author} &nbsp;&middot;&nbsp; v{plugin.version} &nbsp;&middot;&nbsp;{' '}
             {plugin.category}
           </p>
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Download className="h-3.5 w-3.5" />
-            {formatDownloadCount(plugin.downloadCount)} installs
-          </p>
         </div>
         <Button
-          onClick={handleToggleInstall}
-          disabled={mutating}
-          variant={installed ? 'outline' : 'default'}
+          disabled
+          variant="outline"
           className="shrink-0"
-          aria-label={installed ? `Uninstall ${plugin.name}` : `Install ${plugin.name}`}
+          aria-label={`${plugin.name} is preview only`}
         >
-          {mutating ? 'Working...' : installed ? 'Uninstall' : 'Install'}
+          Preview only
         </Button>
       </div>
 

@@ -137,8 +137,7 @@ mod tests {
         }
 
         fn is_complete(&self) -> Option<PaneCompletion> {
-            self.done
-                .then_some(PaneCompletion::Selected { index: 0 })
+            self.done.then_some(PaneCompletion::Selected { index: 0 })
         }
     }
 
@@ -149,7 +148,10 @@ mod tests {
 
         assert_eq!(stack.len(), 1);
         assert_eq!(stack.active().map(|view| view.view_id()), Some("stub"));
-        assert_eq!(stack.handle_key(KeyAction::Down), Some(PaneAction::Continue));
+        assert_eq!(
+            stack.handle_key(KeyAction::Down),
+            Some(PaneAction::Continue)
+        );
         assert_eq!(stack.len(), 1);
     }
 

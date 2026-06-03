@@ -1,9 +1,8 @@
 //! Real plan mode: model-driven plan -> approve -> execute flow.
 //!
-//! Sprint B4 of `~/.claude/plans/cli-competitive-floor.md`. Replaces the
-//! previous boolean toggle with a structured plan that the model writes via
-//! the `update_plan` tool. The user reviews and approves the plan before
-//! mutating tools (Bash/Edit/Write/apply_patch/MCP) are unlocked. Mirrors
+//! Replaces the previous boolean toggle with a structured plan that the model
+//! writes via the `update_plan` tool. The user reviews and approves the plan
+//! before mutating tools (Bash/Edit/Write/apply_patch/MCP) are unlocked. Mirrors
 //! the Codex `update_plan` tool surface.
 //!
 //! State lives on `AgentSession` (`current_plan`, `current_plan_path`,

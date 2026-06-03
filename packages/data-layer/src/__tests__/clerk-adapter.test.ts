@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ClerkAuthAdapter } from '../adapters/clerk';
-import { NotImplementedError } from '../types';
 
 describe('ClerkAuthAdapter', () => {
   it('normalizes verified Clerk session claims', async () => {
@@ -49,12 +48,12 @@ describe('ClerkAuthAdapter', () => {
     expect(() => new ClerkAuthAdapter({})).toThrow('Clerk auth adapter requires CLERK_JWT_KEY');
   });
 
-  it('does not fake refresh-token support', async () => {
+  it('does not advertise refresh-token support', () => {
     const auth = new ClerkAuthAdapter({
       jwtKey: 'test-jwt-key',
       verifyToken: vi.fn(),
     });
 
-    await expect(auth.refreshToken('refresh-token')).rejects.toBeInstanceOf(NotImplementedError);
+    expect(auth.refreshToken).toBeUndefined();
   });
 });

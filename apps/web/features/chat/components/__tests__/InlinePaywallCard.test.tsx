@@ -4,27 +4,6 @@ import { InlinePaywallCard } from '../InlinePaywallCard';
 import type { PaywallFeature, RequiredTier, UserTier } from '../InlinePaywallCard';
 
 // ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-vi.mock('react-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-dom')>('react-dom');
-  return {
-    ...actual,
-    prefetchDNS: vi.fn(),
-  };
-});
-
-// next/link renders a plain <a> in jsdom without the Next.js router context.
-vi.mock('next/link', () => ({
-  default: ({ href, children, onClick, ...rest }: any) => (
-    <a href={href} onClick={onClick} {...rest}>
-      {children}
-    </a>
-  ),
-}));
-
-// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
@@ -109,38 +88,22 @@ describe('InlinePaywallCard', () => {
   // -------------------------------------------------------------------------
 
   describe('onUpgrade fires on upgrade click', () => {
-    it('calls onUpgrade when upgrade link is clicked', () => {
+    it('calls onUpgrade when upgrade button is clicked', () => {
       const onUpgrade = vi.fn();
       render(<InlinePaywallCard {...makeProps({ onUpgrade })} />);
 
-      const upgradeLink = screen.getByRole('link', { name: /upgrade to hobby/i });
-      fireEvent.click(upgradeLink);
+      const upgradeButton = screen.getByRole('button', { name: /upgrade to hobby/i });
+      fireEvent.click(upgradeButton);
 
       expect(onUpgrade).toHaveBeenCalledTimes(1);
     });
 
-    it('upgrade link href routes to /pricing with correct params', () => {
+    it('does not render a pricing navigation link for the upgrade action', () => {
       render(
         <InlinePaywallCard {...makeProps({ feature: 'web_search', requiredTier: 'hobby' })} />,
       );
 
-      const upgradeLink = screen.getByRole('link', { name: /upgrade to hobby/i });
-      expect(upgradeLink).toHaveAttribute(
-        'href',
-        '/pricing?from=paywall&tier=hobby&feature=web_search',
-      );
-    });
-
-    it('upgrade link href includes correct tier and feature for max', () => {
-      render(
-        <InlinePaywallCard {...makeProps({ feature: 'video_generation', requiredTier: 'max' })} />,
-      );
-
-      const upgradeLink = screen.getByRole('link', { name: /upgrade to max/i });
-      expect(upgradeLink).toHaveAttribute(
-        'href',
-        '/pricing?from=paywall&tier=max&feature=video_generation',
-      );
+      expect(screen.queryByRole('link', { name: /upgrade/i })).not.toBeInTheDocument();
     });
   });
 

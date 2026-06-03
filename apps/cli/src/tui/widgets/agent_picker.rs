@@ -134,7 +134,12 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
     let hint = " Select Agent  (/ search  \u{2191}\u{2193} navigate  Enter invoke  Esc close)";
     let title_line = Line::from(vec![
         Span::styled(hint, Style::default()),
-        Span::styled(badge, Style::default().fg(Color::DarkGray).add_modifier(Modifier::DIM)),
+        Span::styled(
+            badge,
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::DIM),
+        ),
     ]);
     let outer_block = Block::default()
         .borders(Borders::ALL)
@@ -170,7 +175,9 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) 
 
 fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState) {
     let prompt_style = if state.search_focused {
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::DarkGray)
     };
@@ -179,7 +186,9 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
     let text = if state.search.is_empty() {
         Span::styled(
             "type to filter agents...",
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
         )
     } else {
         Span::styled(state.search.clone(), Style::default().fg(Color::White))
@@ -190,7 +199,10 @@ fn render_search(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerStat
 fn render_divider(frame: &mut ratatui::Frame, area: Rect, width: u16) {
     let line = "\u{2500}".repeat(width as usize);
     frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(line, Style::default().fg(Color::DarkGray)))),
+        Paragraph::new(Line::from(Span::styled(
+            line,
+            Style::default().fg(Color::DarkGray),
+        ))),
         area,
     );
 }
@@ -237,8 +249,7 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             let name_col = 18usize;
             let scope_col = 9usize;
             // Leave 3 for marker+space+space + name_col + 2 + scope_col + 2
-            let desc_budget = (area.width as usize)
-                .saturating_sub(name_col + scope_col + 7);
+            let desc_budget = (area.width as usize).saturating_sub(name_col + scope_col + 7);
             let desc_short = if desc.len() > desc_budget && desc_budget > 3 {
                 &desc[..desc_budget - 1]
             } else {
@@ -256,7 +267,10 @@ fn render_list(frame: &mut ratatui::Frame, area: Rect, state: &AgentPickerState)
             );
 
             let style = if is_cursor {
-                Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -524,14 +538,26 @@ mod tests {
         let agents = vec![make_agent("alpha", ""), make_agent("beta", "")];
         let mut s = picker_with_agents(agents);
         // Open search
-        handle_key(&mut s, KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+        handle_key(
+            &mut s,
+            KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE),
+        );
         assert!(s.search_focused);
-        handle_key(&mut s, KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE));
-        handle_key(&mut s, KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
+        handle_key(
+            &mut s,
+            KeyEvent::new(KeyCode::Char('b'), KeyModifiers::NONE),
+        );
+        handle_key(
+            &mut s,
+            KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE),
+        );
         assert_eq!(s.search, "be");
         assert_eq!(s.filtered.len(), 1);
         // Backspace
-        handle_key(&mut s, KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+        handle_key(
+            &mut s,
+            KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE),
+        );
         assert_eq!(s.search, "b");
     }
 }

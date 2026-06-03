@@ -69,6 +69,21 @@ impl std::fmt::Debug for ToolApprovalSink {
     }
 }
 
+/// TUI-only sink for streaming tool lifecycle events into the transcript.
+/// Like [`ToolApprovalSink`], it is `None` on every non-TUI surface (exec,
+/// REPL, app-server, a2a), so their behavior — including the existing
+/// `eprintln!` tool status lines — is unchanged.
+#[derive(Clone)]
+pub struct ToolEventSink(
+    pub std::sync::Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
+);
+
+impl std::fmt::Debug for ToolEventSink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ToolEventSink(<callback>)")
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -112,6 +127,7 @@ pub struct AgentSession {
     pub skip_permissions: bool,
     pub auto_approve_safe: bool,
     pub on_tool_approval: Option<ToolApprovalSink>,
+    pub on_tool_event: Option<ToolEventSink>,
     pub quiet: bool,
     #[allow(dead_code)]
     pub fast_mode: bool,
@@ -178,9 +194,7 @@ impl PrivacyMode {
             PrivacyMode::Byok => {
                 "selected context may be sent directly to the user's configured provider key"
             }
-            PrivacyMode::Managed => {
-                "selected context may be sent through AGI managed cloud"
-            }
+            PrivacyMode::Managed => "selected context may be sent through AGI managed cloud",
         }
     }
 
@@ -211,12 +225,42 @@ pub struct AttachFilesReport {
 
 impl AgentSession {
     /// Create a new agent session with the system prompt.
+    ///
+    /// Compatibility constructor for tests and already-validated call sites.
+    /// Production entry points should use [`AgentSession::new_checked`] so
+    /// unknown hosted model IDs fail closed instead of falling through to a
+    /// provider default.
     pub fn new(
         model: &str,
         sys_context: &SystemContext,
         custom_system_prompt: Option<&str>,
     ) -> Self {
-        let provider = models::detect_provider(model);
+        let provider =
+            models::try_detect_provider(model).unwrap_or_else(|| models::detect_provider(model));
+        Self::new_with_provider(model, sys_context, custom_system_prompt, provider)
+    }
+
+    pub fn new_checked(
+        model: &str,
+        sys_context: &SystemContext,
+        custom_system_prompt: Option<&str>,
+        provider_override: Option<&str>,
+    ) -> Result<Self> {
+        let provider = models::resolve_selected_provider(model, provider_override)?;
+        Ok(Self::new_with_provider(
+            model,
+            sys_context,
+            custom_system_prompt,
+            provider,
+        ))
+    }
+
+    pub fn new_with_provider(
+        model: &str,
+        sys_context: &SystemContext,
+        custom_system_prompt: Option<&str>,
+        provider: Provider,
+    ) -> Self {
         let hooks_config = hooks::load_hooks().unwrap_or_default();
 
         let instructions = std::env::current_dir()
@@ -320,6 +364,7 @@ impl AgentSession {
             skip_permissions: false,
             auto_approve_safe: false,
             on_tool_approval: None::<ToolApprovalSink>,
+            on_tool_event: None::<ToolEventSink>,
             quiet: false,
             fast_mode: false,
             original_model: None,
@@ -437,11 +482,17 @@ impl AgentSession {
     }
 
     /// Switch the model mid-session (keeps conversation history).
-    pub fn switch_model(&mut self, model: &str) {
-        let next_provider = models::detect_provider(model);
+    pub fn switch_model(&mut self, model: &str) -> Result<()> {
+        let next_provider = models::try_detect_provider(model).with_context(|| {
+            format!(
+                "Unknown model '{}'. Run `agi models scan` for local models or `agi models list` for catalog models, then choose a listed model.",
+                model
+            )
+        })?;
         self.model = model.to_string();
         self.provider = next_provider;
         self.adopt_provider_privacy_mode();
+        Ok(())
     }
 
     /// Add an additional directory root at runtime, mirroring Claude Code's
@@ -579,9 +630,7 @@ impl AgentSession {
 
     pub fn set_privacy_mode(&mut self, mode: PrivacyMode) {
         self.privacy_mode = mode;
-        crate::features::exec::tools::set_advisor_local_privacy_mode(
-            mode == PrivacyMode::Local,
-        );
+        crate::features::exec::tools::set_advisor_local_privacy_mode(mode == PrivacyMode::Local);
     }
 
     pub fn apply_ui_config(&mut self, config: &CliConfig) {
@@ -796,10 +845,8 @@ impl AgentSession {
         managed_session.current_plan = self.current_plan.clone();
         managed_session.fast_mode = Some(self.fast_mode);
         managed_session.output_style = Some(self.output_style.clone());
-        managed_session.fallback_model_ids = self
-            .fallback_chain
-            .as_ref()
-            .map(|fc| fc.primaries.clone());
+        managed_session.fallback_model_ids =
+            self.fallback_chain.as_ref().map(|fc| fc.primaries.clone());
         managed_session.version = crate::runtime::session::MANAGED_SESSION_VERSION;
         managed_session.touch();
         managed_session.save_to_path(path)?;
@@ -867,24 +914,42 @@ impl AgentSession {
 
     /// Toggle fast mode on/off.
     #[allow(dead_code)]
-    pub fn toggle_fast_mode(&mut self, fast_model: Option<&str>) {
+    pub fn toggle_fast_mode(&mut self, fast_model: Option<&str>) -> Result<()> {
         if self.fast_mode {
             if let Some(ref original) = self.original_model.take() {
+                let original_provider = crate::models::try_detect_provider(original).with_context(|| {
+                    format!(
+                        "Original model '{}' is no longer recognized; refusing to switch providers silently.",
+                        original
+                    )
+                })?;
                 self.model = original.clone();
-                self.provider = crate::models::detect_provider(&self.model);
+                self.provider = original_provider;
             }
             self.fast_mode = false;
         } else {
-            // Documented fast-mode fallback (rule-models-json exception): used only
-            // when the caller provides no explicit fast_model.
             let target = fast_model
-                .unwrap_or("claude-haiku-4-5-20251001")
-                .to_string();
-            self.original_model = Some(self.model.clone());
-            self.model = target.clone();
-            self.provider = crate::models::detect_provider(&target);
-            self.fast_mode = true;
+                .map(str::to_string)
+                .unwrap_or_else(|| match &self.provider {
+                    Provider::Ollama(_) | Provider::Custom { .. } => self.model.clone(),
+                    provider => {
+                        let provider_name = crate::models::provider_name(provider);
+                        crate::model_catalog::fast_completion_model(provider_name)
+                    }
+                });
+            crate::models::try_detect_provider(&target).with_context(|| {
+                format!(
+                    "Configured fast model '{}' is not recognized. Set `fast_model` to a catalog model or discovered local model.",
+                    target
+                )
+            }).map(|provider| {
+                self.original_model = Some(self.model.clone());
+                self.model = target.clone();
+                self.provider = provider;
+                self.fast_mode = true;
+            })?;
         }
+        Ok(())
     }
 }
 
@@ -1348,7 +1413,14 @@ mod tests {
         let mut session = AgentSession::new("llama3", &ctx, None);
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
-        session.switch_model("gpt-5.5");
+        let cloud_model = crate::model_catalog::models_for("openai")
+            .into_iter()
+            .next()
+            .map(|model| model.id.clone())
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+        session
+            .switch_model(&cloud_model)
+            .expect("catalog OpenAI model");
 
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
         assert!(session.validate_privacy_boundary().is_err());
@@ -1374,7 +1446,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let session = AgentSession::new("claude-sonnet-4-5", &ctx, None);
+        let session = AgentSession::new("claude-sonnet-4-6", &ctx, None);
 
         assert_eq!(session.privacy_mode, PrivacyMode::Byok);
         assert!(session.validate_privacy_boundary().is_ok());
@@ -1397,7 +1469,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-sonnet-4-5", &ctx, None);
+        let mut session = AgentSession::new("claude-sonnet-4-6", &ctx, None);
         let mut config = CliConfig::default();
         config.ui.output_style = Some("learning".to_string());
         config.ui.privacy_mode = Some("local".to_string());
@@ -1446,16 +1518,35 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-opus-4-6", &ctx, None);
+        let original = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .find(|model| {
+                crate::model_catalog::quality_tier_for_model(&model.id)
+                    .as_deref()
+                    .is_some_and(|tier| tier == "best")
+            })
+            .or_else(|| {
+                crate::model_catalog::models_for("anthropic")
+                    .into_iter()
+                    .next()
+            })
+            .map(|model| model.id.clone())
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+        let fast = crate::model_catalog::fast_completion_model("anthropic");
+        let mut session = AgentSession::new(&original, &ctx, None);
         assert!(!session.fast_mode);
 
-        session.toggle_fast_mode(Some("claude-haiku-4-5-20251001"));
+        session
+            .toggle_fast_mode(Some(&fast))
+            .expect("catalog Anthropic fast model");
         assert!(session.fast_mode);
-        assert_eq!(session.model, "claude-haiku-4-5-20251001");
+        assert_eq!(session.model, fast);
 
-        session.toggle_fast_mode(None);
+        session
+            .toggle_fast_mode(None)
+            .expect("restore original model");
         assert!(!session.fast_mode);
-        assert_eq!(session.model, "claude-opus-4-6");
+        assert_eq!(session.model, original);
     }
 
     #[test]

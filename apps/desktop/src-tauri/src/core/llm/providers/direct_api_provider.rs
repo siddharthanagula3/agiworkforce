@@ -62,13 +62,16 @@ impl DirectApiProvider {
         let streaming_client =
             create_http_client(&streaming_config).map_err(Box::<dyn Error + Send + Sync>::from)?;
 
-        let resolved_base_url = base_url
-            .filter(|u| !u.is_empty())
-            .unwrap_or_else(|| default_base_url(provider).to_string());
+        let resolved_base_url = resolve_direct_base_url(provider, base_url)
+            .map_err(Box::<dyn Error + Send + Sync>::from)?;
 
         // Validate the base URL to prevent SSRF attacks
         validate_provider_base_url(&resolved_base_url)
             .map_err(Box::<dyn Error + Send + Sync>::from)?;
+        if provider == Provider::Azure {
+            validate_azure_base_url(&resolved_base_url)
+                .map_err(Box::<dyn Error + Send + Sync>::from)?;
+        }
 
         Ok(Self {
             client,
@@ -281,41 +284,99 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Returns the default base URL for a given provider.
-fn default_base_url(provider: Provider) -> &'static str {
+fn resolve_direct_base_url(provider: Provider, base_url: Option<String>) -> Result<String, String> {
+    let configured_base_url = base_url
+        .map(|url| url.trim().to_string())
+        .filter(|url| !url.is_empty());
+
     match provider {
-        Provider::OpenAI => "https://api.openai.com/v1",
-        Provider::Anthropic => "https://api.anthropic.com/v1",
-        Provider::Google => "https://generativelanguage.googleapis.com/v1beta",
-        Provider::DeepSeek => "https://api.deepseek.com/v1",
-        Provider::XAI => "https://api.x.ai/v1",
-        Provider::Mistral => "https://api.mistral.ai/v1",
-        Provider::Perplexity => "https://api.perplexity.ai",
-        Provider::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        Provider::Moonshot => "https://api.moonshot.cn/v1",
-        Provider::Zhipu => "https://open.bigmodel.cn/api/paas/v4",
-        // New OpenAI-compatible providers
-        Provider::Groq => "https://api.groq.com/openai/v1",
-        Provider::Together => "https://api.together.xyz/v1",
-        Provider::Fireworks => "https://api.fireworks.ai/inference/v1",
-        Provider::Cerebras => "https://api.cerebras.ai/v1",
-        Provider::DeepInfra => "https://api.deepinfra.com/v1/openai",
-        Provider::Cohere => "https://api.cohere.com/v2",
-        Provider::AI21 => "https://api.ai21.com/studio/v1",
-        Provider::Sambanova => "https://api.sambanova.ai/v1",
-        // Azure uses custom URL patterns — this default is a placeholder;
-        // users must configure a proper resource-specific URL.
-        Provider::Azure => "https://RESOURCE.openai.azure.com/openai",
-        // Bedrock uses AWS SigV4 — this default is a placeholder.
-        Provider::Bedrock => "https://bedrock-runtime.us-east-1.amazonaws.com",
-        // Ollama and ManagedCloud should not use DirectApiProvider, but
-        // provide sensible defaults to avoid panics.
-        Provider::Ollama => "http://localhost:11434",
-        Provider::ManagedCloud => "https://api.agiworkforce.com",
-        Provider::NvidiaNim => "https://integrate.api.nvidia.com/v1",
-        Provider::OpenRouter => "https://openrouter.ai/api/v1",
-        // Ollama Cloud exposes an OpenAI-compatible endpoint.
-        Provider::OllamaCloud => "https://api.ollama.com/v1",
+        Provider::Azure => configured_base_url.ok_or_else(|| {
+            "Azure OpenAI requires a deployment-specific base URL, for example \
+             https://{resource}.openai.azure.com/openai/deployments/{deployment}. \
+             Configure the Azure resource and deployment instead of using a default endpoint."
+                .to_string()
+        }),
+        Provider::Bedrock => Err(
+            "AWS Bedrock requires SigV4 request signing. Use BedrockProvider with AWS access key, secret key, and region instead of DirectApiProvider."
+                .to_string(),
+        ),
+        Provider::Ollama => Err(
+            "Ollama uses the local OllamaProvider and does not accept bearer-token DirectApiProvider routing."
+                .to_string(),
+        ),
+        Provider::ManagedCloud => Err(
+            "Managed Cloud uses ManagedCloudProvider with AGI Workforce authentication, not DirectApiProvider."
+                .to_string(),
+        ),
+        _ => configured_base_url
+            .or_else(|| default_base_url(provider).map(str::to_string))
+            .ok_or_else(|| {
+                format!(
+                    "No direct API base URL is configured for provider '{}'",
+                    provider.as_string()
+                )
+            }),
+    }
+}
+
+fn validate_azure_base_url(url: &str) -> Result<(), String> {
+    let parsed = url
+        .parse::<reqwest::Url>()
+        .map_err(|e| format!("Invalid Azure base URL: {e}"))?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "Azure base URL must include a host".to_string())?;
+    let lower_url = url.to_ascii_lowercase();
+
+    if lower_url.contains("resource.openai.azure.com")
+        || lower_url.contains("{resource}")
+        || lower_url.contains("{deployment}")
+    {
+        return Err(
+            "Azure base URL still contains example resource/deployment text; configure the real Azure OpenAI deployment URL."
+                .to_string(),
+        );
+    }
+
+    if !host.ends_with(".openai.azure.com") {
+        return Err("Azure base URL host must end with .openai.azure.com".to_string());
+    }
+
+    let path = parsed.path();
+    if !path.contains("/openai/deployments/")
+        || path.trim_end_matches('/').ends_with("/openai/deployments")
+    {
+        return Err("Azure base URL must include /openai/deployments/{deployment}".to_string());
+    }
+
+    Ok(())
+}
+
+/// Returns the default base URL for direct BYOK providers with stable public API endpoints.
+fn default_base_url(provider: Provider) -> Option<&'static str> {
+    match provider {
+        Provider::OpenAI => Some("https://api.openai.com/v1"),
+        Provider::Anthropic => Some("https://api.anthropic.com/v1"),
+        Provider::Google => Some("https://generativelanguage.googleapis.com/v1beta"),
+        Provider::DeepSeek => Some("https://api.deepseek.com/v1"),
+        Provider::XAI => Some("https://api.x.ai/v1"),
+        Provider::Mistral => Some("https://api.mistral.ai/v1"),
+        Provider::Perplexity => Some("https://api.perplexity.ai"),
+        Provider::Qwen => Some("https://dashscope.aliyuncs.com/compatible-mode/v1"),
+        Provider::Moonshot => Some("https://api.moonshot.cn/v1"),
+        Provider::Zhipu => Some("https://open.bigmodel.cn/api/paas/v4"),
+        Provider::Groq => Some("https://api.groq.com/openai/v1"),
+        Provider::Together => Some("https://api.together.xyz/v1"),
+        Provider::Fireworks => Some("https://api.fireworks.ai/inference/v1"),
+        Provider::Cerebras => Some("https://api.cerebras.ai/v1"),
+        Provider::DeepInfra => Some("https://api.deepinfra.com/v1/openai"),
+        Provider::Cohere => Some("https://api.cohere.com/v2"),
+        Provider::AI21 => Some("https://api.ai21.com/studio/v1"),
+        Provider::Sambanova => Some("https://api.sambanova.ai/v1"),
+        Provider::NvidiaNim => Some("https://integrate.api.nvidia.com/v1"),
+        Provider::OpenRouter => Some("https://openrouter.ai/api/v1"),
+        Provider::OllamaCloud => Some("https://api.ollama.com/v1"),
+        Provider::Azure | Provider::Bedrock | Provider::Ollama | Provider::ManagedCloud => None,
     }
 }
 
@@ -502,7 +563,7 @@ mod tests {
             // Azure and Bedrock use placeholder URLs, tested separately
         ];
         for provider in providers {
-            let url = default_base_url(provider);
+            let url = default_base_url(provider).expect("provider should have direct default URL");
             assert!(
                 url.starts_with("https://"),
                 "Provider {:?} should have HTTPS URL",
@@ -538,6 +599,28 @@ mod tests {
         assert!(provider.is_ok());
         let p = provider.expect("should create");
         assert!(!p.is_configured());
+    }
+
+    #[test]
+    fn azure_requires_deployment_base_url() {
+        let provider = DirectApiProvider::new(Provider::Azure, "key".to_string(), None);
+        assert!(provider.is_err());
+    }
+
+    #[test]
+    fn azure_rejects_example_base_url() {
+        let provider = DirectApiProvider::new(
+            Provider::Azure,
+            "key".to_string(),
+            Some("https://RESOURCE.openai.azure.com/openai".to_string()),
+        );
+        assert!(provider.is_err());
+    }
+
+    #[test]
+    fn bedrock_rejects_direct_provider() {
+        let provider = DirectApiProvider::new(Provider::Bedrock, "key".to_string(), None);
+        assert!(provider.is_err());
     }
 
     #[test]

@@ -9,7 +9,7 @@ use git2::{
     StatusOptions,
 };
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::async_runtime::spawn_blocking;
 use tauri::State;
@@ -103,6 +103,44 @@ pub struct GitDiff {
 fn validate_git_path(path: &str) -> Result<String, String> {
     let canonical = crate::sys::commands::file_ops::validate_path_security(path)?;
     Ok(canonical.to_string_lossy().to_string())
+}
+
+fn canonicalize_existing_or_new(path: &Path) -> Result<PathBuf, String> {
+    let path_str = path
+        .to_str()
+        .ok_or_else(|| "Path contains invalid UTF-8".to_string())?;
+    crate::sys::commands::file_ops::validate_path_security(path_str)
+}
+
+fn validate_git_relative_path(repo_path: &str, relative_path: &str) -> Result<String, String> {
+    if relative_path.is_empty() {
+        return Err("Git file path cannot be empty".to_string());
+    }
+    if relative_path.contains('\0') {
+        return Err("Git file path contains null bytes".to_string());
+    }
+
+    let repo = Path::new(repo_path);
+    let candidate = repo.join(relative_path);
+    let canonical = canonicalize_existing_or_new(&candidate)?;
+    let repo_canonical = PathBuf::from(repo_path);
+
+    if !canonical.starts_with(&repo_canonical) {
+        return Err(format!(
+            "Git file path escapes repository: {}",
+            relative_path
+        ));
+    }
+
+    let relative = canonical
+        .strip_prefix(&repo_canonical)
+        .map_err(|_| format!("Git file path escapes repository: {}", relative_path))?;
+
+    let normalized = relative.to_string_lossy().replace('\\', "/");
+    if normalized.is_empty() {
+        return Err("Git file path resolves to repository root".to_string());
+    }
+    Ok(normalized)
 }
 
 const MAX_COMMIT_MESSAGE_BYTES: usize = 10 * 1024;
@@ -248,9 +286,10 @@ pub async fn git_add(path: String, files: Vec<String>) -> Result<String, String>
         if file == "." {
             validated_files.push(file.clone());
         } else {
-            let _canonical = crate::sys::commands::file_ops::validate_path_security(file)
-                .map_err(|e| format!("git_add path '{file}' rejected: {e}"))?;
-            validated_files.push(file.clone());
+            validated_files.push(
+                validate_git_relative_path(&path, file)
+                    .map_err(|e| format!("git_add path '{file}' rejected: {e}"))?,
+            );
         }
     }
 
@@ -341,6 +380,7 @@ pub async fn git_push(
     branch: Option<String>,
     force: bool,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Pushing to {}", remote_name);
 
@@ -359,12 +399,15 @@ pub async fn git_push(
     // or use the validator if we want centralized config.
     // Let's use the validator to be consistent with terminal.rs
     if crate::sys::security::command_validator::requires_confirmation("git push") {
-        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_push",
             &confirmation_args,
         )
-        .await?;
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
+        }
     }
 
     spawn_blocking(move || {
@@ -409,6 +452,7 @@ pub async fn git_pull(
     remote: Option<String>,
     branch: Option<String>,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Pulling from {}", remote_name);
 
@@ -501,6 +545,7 @@ pub async fn git_pull(
 
 #[tauri::command]
 pub async fn git_create_branch(path: String, branch_name: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Creating branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -519,6 +564,7 @@ pub async fn git_create_branch(path: String, branch_name: String) -> Result<Stri
 
 #[tauri::command]
 pub async fn git_checkout(path: String, branch_name: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Switching to branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -538,6 +584,7 @@ pub async fn git_checkout(path: String, branch_name: String) -> Result<String, S
 
 #[tauri::command]
 pub async fn git_checkout_new_branch(path: String, branch_name: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Creating and switching to branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -562,6 +609,7 @@ pub async fn git_checkout_new_branch(path: String, branch_name: String) -> Resul
 
 #[tauri::command]
 pub async fn git_list_branches(path: String) -> Result<Vec<GitBranch>, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Listing branches");
 
     spawn_blocking(move || {
@@ -607,6 +655,7 @@ pub async fn git_delete_branch(
     branch_name: String,
     _force: bool,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Deleting branch: {}", branch_name);
 
     // AUDIT-FIX: Enforce user confirmation for branch deletion
@@ -617,12 +666,15 @@ pub async fn git_delete_branch(
     });
 
     if crate::sys::security::command_validator::requires_confirmation("git branch -D") {
-        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_delete_branch",
             &confirmation_args,
         )
-        .await?;
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
+        }
     }
 
     spawn_blocking(move || {
@@ -641,6 +693,7 @@ pub async fn git_delete_branch(
 
 #[tauri::command]
 pub async fn git_merge(path: String, branch_name: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Merging branch: {}", branch_name);
 
     spawn_blocking(move || {
@@ -726,6 +779,7 @@ pub async fn git_merge(path: String, branch_name: String) -> Result<String, Stri
 
 #[tauri::command]
 pub async fn git_log(path: String, limit: Option<usize>) -> Result<Vec<GitCommit>, String> {
+    let path = validate_git_path(&path)?;
     let max_count = limit.unwrap_or(50);
     tracing::info!("Getting commit log (limit: {})", max_count);
 
@@ -761,6 +815,11 @@ pub async fn git_diff(
     file_path: Option<String>,
     staged: bool,
 ) -> Result<Vec<GitDiff>, String> {
+    let path = validate_git_path(&path)?;
+    let file_path = file_path
+        .as_deref()
+        .map(|pathspec| validate_git_relative_path(&path, pathspec))
+        .transpose()?;
     tracing::info!("Getting diff{}", if staged { " (staged)" } else { "" });
 
     spawn_blocking(move || {
@@ -835,6 +894,7 @@ pub async fn git_diff(
 
 #[tauri::command]
 pub async fn git_clone(url: String, destination: String) -> Result<String, String> {
+    let destination = validate_git_path(&destination)?;
     tracing::info!("Cloning repository from: {}", url);
 
     spawn_blocking(move || {
@@ -858,6 +918,7 @@ pub async fn git_clone(url: String, destination: String) -> Result<String, Strin
 
 #[tauri::command]
 pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     let remote_name = remote.unwrap_or_else(|| "origin".to_string());
     tracing::info!("Fetching from: {}", remote_name);
 
@@ -884,6 +945,7 @@ pub async fn git_fetch(path: String, remote: Option<String>) -> Result<String, S
 
 #[tauri::command]
 pub async fn git_stash(path: String, message: Option<String>) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Stashing changes");
 
     spawn_blocking(move || {
@@ -904,6 +966,7 @@ pub async fn git_stash(path: String, message: Option<String>) -> Result<String, 
 
 #[tauri::command]
 pub async fn git_stash_pop(path: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Popping stash");
 
     spawn_blocking(move || {
@@ -924,6 +987,7 @@ pub async fn git_reset(
     mode: String,
     files: Option<Vec<String>>,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Resetting to {} ({})", commit, mode);
 
     // If files specified, reset only those files (git reset HEAD -- <files>)
@@ -937,16 +1001,22 @@ pub async fn git_reset(
             });
 
             if crate::sys::security::command_validator::requires_confirmation("git reset") {
-                crate::sys::commands::tool_confirmation::request_confirmation_simple(
+                if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
                     &app,
                     "git_reset",
                     &confirmation_args,
                 )
-                .await?;
+                .await?
+                {
+                    return Err("Operation denied by user".to_string());
+                }
             }
 
             let path_clone = path.clone();
-            let file_list_clone = file_list.clone();
+            let file_list_clone = file_list
+                .iter()
+                .map(|file| validate_git_relative_path(&path, file))
+                .collect::<Result<Vec<_>, _>>()?;
             return spawn_blocking(move || {
                 let mut cmd = std::process::Command::new("git");
                 cmd.current_dir(&path_clone)
@@ -979,12 +1049,15 @@ pub async fn git_reset(
     });
 
     if crate::sys::security::command_validator::requires_confirmation("git reset") {
-        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_reset",
             &confirmation_args,
         )
-        .await?;
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
+        }
     }
 
     spawn_blocking(move || {
@@ -1015,6 +1088,7 @@ pub async fn git_checkout_files(
     path: String,
     files: Vec<String>,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Checking out {} files to discard changes", files.len());
 
     if files.is_empty() {
@@ -1028,15 +1102,21 @@ pub async fn git_checkout_files(
     });
 
     if crate::sys::security::command_validator::requires_confirmation("git checkout") {
-        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "git_checkout_files",
             &confirmation_args,
         )
-        .await?;
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
+        }
     }
 
-    let files_clone = files.clone();
+    let files_clone = files
+        .iter()
+        .map(|file| validate_git_relative_path(&path, file))
+        .collect::<Result<Vec<_>, _>>()?;
     spawn_blocking(move || {
         let mut cmd = std::process::Command::new("git");
         cmd.current_dir(&path).arg("checkout").arg("--");
@@ -1059,6 +1139,7 @@ pub async fn git_checkout_files(
 
 #[tauri::command]
 pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Listing remotes");
 
     spawn_blocking(move || {
@@ -1081,6 +1162,7 @@ pub async fn git_list_remotes(path: String) -> Result<Vec<(String, String)>, Str
 
 #[tauri::command]
 pub async fn git_add_remote(path: String, name: String, url: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Adding remote {} -> {}", name, url);
 
     spawn_blocking(move || {
@@ -1115,6 +1197,7 @@ pub struct GitConflictDetails {
 /// Returns a list of file paths that have unresolved conflicts.
 #[tauri::command]
 pub async fn git_list_conflicts(path: String) -> Result<Vec<String>, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Listing conflicts in: {}", path);
 
     spawn_blocking(move || {
@@ -1174,6 +1257,8 @@ pub async fn git_get_conflict_details(
     path: String,
     file_path: String,
 ) -> Result<GitConflictDetails, String> {
+    let path = validate_git_path(&path)?;
+    let file_path = validate_git_relative_path(&path, &file_path)?;
     tracing::info!("Getting conflict details for: {}/{}", path, file_path);
 
     spawn_blocking(move || {
@@ -1229,6 +1314,8 @@ pub async fn git_resolve_conflict(
     file_path: String,
     resolutions: Vec<ConflictResolutionRequest>,
 ) -> Result<ResolutionResult, String> {
+    let path = validate_git_path(&path)?;
+    let file_path = validate_git_relative_path(&path, &file_path)?;
     tracing::info!(
         "Resolving {} conflicts in: {}/{}",
         resolutions.len(),
@@ -1320,6 +1407,8 @@ pub async fn git_resolve_conflict(
 /// This should be called after all conflicts in a file have been resolved.
 #[tauri::command]
 pub async fn git_mark_resolved(path: String, file_path: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
+    let file_path = validate_git_relative_path(&path, &file_path)?;
     tracing::info!("Marking {} as resolved", file_path);
 
     spawn_blocking(move || {
@@ -1365,6 +1454,8 @@ pub async fn git_get_conflict_suggestion_prompt(
     file_path: String,
     hunk_index: usize,
 ) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
+    let file_path = validate_git_relative_path(&path, &file_path)?;
     tracing::info!(
         "Getting conflict suggestion prompt for: {}/{} hunk {}",
         path,
@@ -1404,6 +1495,7 @@ pub async fn git_get_conflict_suggestion_prompt(
 /// Check if the repository is in a conflicted state (e.g., during merge/rebase).
 #[tauri::command]
 pub async fn git_has_conflicts(path: String) -> Result<bool, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Checking for conflicts in: {}", path);
 
     spawn_blocking(move || {
@@ -1475,6 +1567,7 @@ pub async fn git_has_conflicts(path: String) -> Result<bool, String> {
 /// Abort an in-progress merge operation.
 #[tauri::command]
 pub async fn git_abort_merge(path: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Aborting merge in: {}", path);
 
     spawn_blocking(move || {
@@ -1508,6 +1601,7 @@ pub async fn git_abort_merge(path: String) -> Result<String, String> {
 /// Complete a merge after all conflicts have been resolved.
 #[tauri::command]
 pub async fn git_complete_merge(path: String, message: Option<String>) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!("Completing merge in: {}", path);
 
     spawn_blocking(move || {
@@ -1632,6 +1726,7 @@ pub async fn git_get_branch_diff_summary(
     base_branch: String,
     head_branch: String,
 ) -> Result<BranchDiffSummary, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!(
         "Getting branch diff summary: {} -> {} in {}",
         head_branch,
@@ -1658,6 +1753,7 @@ pub async fn git_generate_pr_description(
     head_branch: String,
     state: State<'_, Arc<RwLock<LLMRouter>>>,
 ) -> Result<GeneratedPrContent, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!(
         "Generating PR description: {} -> {} in {}",
         head_branch,
@@ -1706,6 +1802,7 @@ pub async fn git_create_pr(
     config: PrCreationConfig,
     state: State<'_, Arc<RwLock<LLMRouter>>>,
 ) -> Result<PrCreationResult, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!(
         "Creating PR: {} -> {} in {}",
         config.head_branch,
@@ -1741,6 +1838,7 @@ pub async fn git_check_pr_readiness(
     base_branch: String,
     head_branch: String,
 ) -> Result<PrReadinessResult, String> {
+    let path = validate_git_path(&path)?;
     tracing::info!(
         "Checking PR readiness: {} -> {} in {}",
         head_branch,
@@ -1874,6 +1972,7 @@ pub struct PrReadinessResult {
 /// Get the current branch name.
 #[tauri::command]
 pub async fn git_current_branch(path: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
         let head = repo.head().map_err(|e| e.message().to_string())?;
@@ -1894,6 +1993,7 @@ pub async fn git_current_branch(path: String) -> Result<String, String> {
 /// Get default branch name (main or master).
 #[tauri::command]
 pub async fn git_default_branch(path: String) -> Result<String, String> {
+    let path = validate_git_path(&path)?;
     spawn_blocking(move || {
         let repo = Repository::open(&path).map_err(|e| e.message().to_string())?;
 
@@ -1926,4 +2026,32 @@ pub async fn git_default_branch(path: String) -> Result<String, String> {
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::{validate_git_path, validate_git_relative_path};
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[test]
+    fn git_relative_paths_must_stay_inside_repo() {
+        let repo_dir = tempdir().unwrap();
+        let repo = validate_git_path(repo_dir.path().to_str().unwrap()).unwrap();
+
+        fs::write(repo_dir.path().join("tracked.txt"), "ok").unwrap();
+        assert_eq!(
+            validate_git_relative_path(&repo, "tracked.txt").unwrap(),
+            "tracked.txt"
+        );
+
+        let inside_absolute = repo_dir.path().join("tracked.txt");
+        assert_eq!(
+            validate_git_relative_path(&repo, inside_absolute.to_str().unwrap()).unwrap(),
+            "tracked.txt"
+        );
+
+        let escaped = validate_git_relative_path(&repo, "../outside.txt").unwrap_err();
+        assert!(escaped.contains("escapes repository"));
+    }
 }

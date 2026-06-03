@@ -21,13 +21,10 @@
 //! └───────────────────────────────────────────────────────────────────────────────┘
 //! ```
 //!
-//! The overlay is a pure state machine exercised under unit tests;
-//! `#[allow(dead_code)]` covers the public ratatui render path until the
-//! event-loop slot lands in `TuiApp`.
+//! The overlay is a pure state machine exercised under unit tests and by the
+//! TUI event loop.
 
-#![allow(dead_code)]
-
-use crate::mcp::elicitation::{ElicitationRequest, ElicitationResponse};
+use crate::mcp::elicitation::{ElicitationMode, ElicitationRequest, ElicitationResponse};
 use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
 // ---------------------------------------------------------------------------
@@ -43,6 +40,12 @@ pub enum FieldKind {
     Enum {
         options: Vec<String>,
         selected: usize,
+    },
+    /// Enumerated multi-select backed by an array schema.
+    MultiEnum {
+        options: Vec<String>,
+        selected: Vec<bool>,
+        cursor: usize,
     },
     /// Boolean toggle (true / false).
     Bool { value: bool },
@@ -64,6 +67,16 @@ impl FormField {
             FieldKind::Enum { options, selected } => {
                 serde_json::Value::String(options[*selected].clone())
             }
+            FieldKind::MultiEnum {
+                options, selected, ..
+            } => serde_json::Value::Array(
+                options
+                    .iter()
+                    .zip(selected.iter())
+                    .filter(|(_, is_selected)| **is_selected)
+                    .map(|(option, _)| serde_json::Value::String(option.clone()))
+                    .collect(),
+            ),
             FieldKind::Bool { value } => serde_json::Value::Bool(*value),
         }
     }
@@ -79,6 +92,24 @@ impl FormField {
                 }
             }
             FieldKind::Enum { options, selected } => options[*selected].clone(),
+            FieldKind::MultiEnum {
+                options,
+                selected,
+                cursor,
+            } => options
+                .iter()
+                .enumerate()
+                .map(|(idx, option)| {
+                    let focus = if idx == *cursor { ">" } else { " " };
+                    let check = if selected.get(idx).copied().unwrap_or(false) {
+                        "x"
+                    } else {
+                        " "
+                    };
+                    format!("{focus}[{check}] {option}")
+                })
+                .collect::<Vec<_>>()
+                .join(" "),
             FieldKind::Bool { value } => if *value { "true" } else { "false" }.to_string(),
         }
     }
@@ -87,6 +118,78 @@ impl FormField {
 // ---------------------------------------------------------------------------
 // Parse requestedSchema into FormFields
 // ---------------------------------------------------------------------------
+
+fn schema_value_to_string(value: &serde_json::Value) -> Option<String> {
+    if let Some(value) = value.as_str() {
+        Some(value.to_string())
+    } else if value.is_number() || value.is_boolean() {
+        Some(value.to_string())
+    } else {
+        None
+    }
+}
+
+fn default_text(prop: &serde_json::Value) -> String {
+    prop.get("default")
+        .and_then(schema_value_to_string)
+        .unwrap_or_default()
+}
+
+fn enum_options(prop: &serde_json::Value) -> Vec<String> {
+    if let Some(enum_vals) = prop.get("enum").and_then(|e| e.as_array()) {
+        return enum_vals
+            .iter()
+            .filter_map(schema_value_to_string)
+            .collect();
+    }
+
+    for key in ["oneOf", "anyOf"] {
+        if let Some(values) = prop.get(key).and_then(|v| v.as_array()) {
+            let options = values
+                .iter()
+                .filter_map(|entry| {
+                    entry
+                        .get("const")
+                        .and_then(schema_value_to_string)
+                        .or_else(|| entry.get("title").and_then(schema_value_to_string))
+                })
+                .collect::<Vec<_>>();
+            if !options.is_empty() {
+                return options;
+            }
+        }
+    }
+
+    Vec::new()
+}
+
+fn selected_index(options: &[String], prop: &serde_json::Value) -> usize {
+    let Some(default) = prop.get("default").and_then(schema_value_to_string) else {
+        return 0;
+    };
+    options
+        .iter()
+        .position(|option| option == &default)
+        .unwrap_or(0)
+}
+
+fn selected_flags(options: &[String], prop: &serde_json::Value) -> Vec<bool> {
+    let defaults = prop
+        .get("default")
+        .and_then(|value| value.as_array())
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(schema_value_to_string)
+                .collect::<std::collections::HashSet<_>>()
+        })
+        .unwrap_or_default();
+
+    options
+        .iter()
+        .map(|option| defaults.contains(option))
+        .collect()
+}
 
 fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
     let mut fields = Vec::new();
@@ -105,27 +208,38 @@ fn parse_schema(schema: &serde_json::Value) -> Vec<FormField> {
     for (name, prop) in properties {
         let required = required_set.contains(name.as_str());
 
-        let kind = if let Some(enum_vals) = prop.get("enum").and_then(|e| e.as_array()) {
-            let options: Vec<String> = enum_vals
-                .iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect();
+        let kind = {
+            let options = enum_options(prop);
             if options.is_empty() {
-                FieldKind::Text {
-                    value: String::new(),
+                match prop.get("type").and_then(|t| t.as_str()) {
+                    Some("boolean") => FieldKind::Bool {
+                        value: prop
+                            .get("default")
+                            .and_then(|value| value.as_bool())
+                            .unwrap_or(false),
+                    },
+                    Some("array") => {
+                        let item_options = prop.get("items").map(enum_options).unwrap_or_default();
+                        if item_options.is_empty() {
+                            FieldKind::Text {
+                                value: default_text(prop),
+                            }
+                        } else {
+                            let selected = selected_flags(&item_options, prop);
+                            FieldKind::MultiEnum {
+                                options: item_options,
+                                selected,
+                                cursor: 0,
+                            }
+                        }
+                    }
+                    _ => FieldKind::Text {
+                        value: default_text(prop),
+                    },
                 }
             } else {
-                FieldKind::Enum {
-                    options,
-                    selected: 0,
-                }
-            }
-        } else {
-            match prop.get("type").and_then(|t| t.as_str()) {
-                Some("boolean") => FieldKind::Bool { value: false },
-                _ => FieldKind::Text {
-                    value: String::new(),
-                },
+                let selected = selected_index(&options, prop);
+                FieldKind::Enum { options, selected }
             }
         };
 
@@ -167,6 +281,12 @@ pub struct ElicitationOverlayState {
     pub server_name: String,
     /// Human-readable message from the server.
     pub message: String,
+    /// Requested completion mode.
+    pub mode: ElicitationMode,
+    /// URL shown for URL-mode requests.
+    pub url: Option<String>,
+    /// Server-supplied correlation identifier.
+    pub elicitation_id: Option<String>,
     /// Parsed form fields derived from `requestedSchema`.
     pub fields: Vec<FormField>,
     /// Current keyboard focus.
@@ -180,7 +300,14 @@ impl ElicitationOverlayState {
     pub fn open(&mut self, server_name: impl Into<String>, request: ElicitationRequest) {
         self.server_name = server_name.into();
         self.message = request.message;
-        self.fields = parse_schema(&request.requested_schema);
+        self.mode = request.mode;
+        self.url = request.url;
+        self.elicitation_id = request.elicitation_id;
+        self.fields = if self.mode == ElicitationMode::Url {
+            Vec::new()
+        } else {
+            parse_schema(&request.requested_schema)
+        };
         self.focus = if self.fields.is_empty() {
             Focus::Button(BUTTON_ACCEPT)
         } else {
@@ -256,8 +383,12 @@ impl ElicitationOverlayState {
 
     fn resolve_button(&mut self, button_idx: usize) -> ViewAction {
         let response = match button_idx {
+            BUTTON_ACCEPT if self.mode == ElicitationMode::Url => {
+                ElicitationResponse::accept_without_content()
+            }
             BUTTON_ACCEPT => ElicitationResponse::accept(self.collect_content()),
             BUTTON_DECLINE => ElicitationResponse::decline(),
+            BUTTON_CANCEL => ElicitationResponse::cancel(),
             _ => ElicitationResponse::cancel(),
         };
         self.result = Some(response);
@@ -291,6 +422,14 @@ impl ElicitationOverlayState {
         for line in self.message.lines() {
             out.push_str(&format!("│  {:<inner$}│\n", line, inner = inner - 2));
         }
+        if let Some(url) = self
+            .url
+            .as_deref()
+            .filter(|_| self.mode == ElicitationMode::Url)
+        {
+            out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
+            out.push_str(&format!("│  {:<inner$}│\n", url, inner = inner - 2));
+        }
         out.push_str(&format!("│  {:<inner$}│\n", "", inner = inner - 2));
 
         // Fields
@@ -299,6 +438,7 @@ impl ElicitationOverlayState {
             let prefix = if focused { "> " } else { "  " };
             let suffix = match &field.kind {
                 FieldKind::Enum { .. } => "  ← / → to cycle",
+                FieldKind::MultiEnum { .. } => "  ← / → move, Space toggle",
                 FieldKind::Bool { .. } => "  Space to toggle",
                 FieldKind::Text { .. } => "",
             };
@@ -344,6 +484,9 @@ impl Default for ElicitationOverlayState {
             visible: false,
             server_name: String::new(),
             message: String::new(),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
             fields: Vec::new(),
             focus: Focus::Button(BUTTON_ACCEPT),
             result: None,
@@ -382,6 +525,11 @@ impl InteractiveView for ElicitationOverlayState {
                                     *selected -= 1;
                                 }
                             }
+                            FieldKind::MultiEnum { cursor, .. } => {
+                                if *cursor > 0 {
+                                    *cursor -= 1;
+                                }
+                            }
                             FieldKind::Bool { value } => {
                                 *value = !*value;
                             }
@@ -401,6 +549,12 @@ impl InteractiveView for ElicitationOverlayState {
                                 *selected += 1;
                             }
                             FieldKind::Enum { .. } => {}
+                            FieldKind::MultiEnum {
+                                options, cursor, ..
+                            } if *cursor + 1 < options.len() => {
+                                *cursor += 1;
+                            }
+                            FieldKind::MultiEnum { .. } => {}
                             FieldKind::Bool { value } => {
                                 *value = !*value;
                             }
@@ -415,8 +569,16 @@ impl InteractiveView for ElicitationOverlayState {
             KeyAction::Char(c) => {
                 if let Focus::Field(i) = self.focus {
                     if i < self.fields.len() {
-                        if let FieldKind::Text { value } = &mut self.fields[i].kind {
-                            value.push(c);
+                        match &mut self.fields[i].kind {
+                            FieldKind::Text { value } => value.push(c),
+                            FieldKind::MultiEnum {
+                                selected, cursor, ..
+                            } if c == ' ' => {
+                                if let Some(slot) = selected.get_mut(*cursor) {
+                                    *slot = !*slot;
+                                }
+                            }
+                            _ => {}
                         }
                     }
                 }
@@ -490,6 +652,9 @@ mod tests {
                 },
                 "required": ["api_key"]
             }),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
         }
     }
 
@@ -503,6 +668,9 @@ mod tests {
                     "verbose": {"type": "boolean"}
                 }
             }),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
         }
     }
 
@@ -561,7 +729,7 @@ mod tests {
         s.open("test", bool_request());
         assert_eq!(s.fields.len(), 2);
         for f in &s.fields {
-            assert!(matches!(f.kind, FieldKind::Bool { .. }));
+            assert!(matches!(&f.kind, FieldKind::Bool { .. }));
         }
     }
 
@@ -716,6 +884,143 @@ mod tests {
     }
 
     #[test]
+    fn schema_defaults_initialize_field_values() {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Defaults".into(),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "default": "octo"},
+                        "enabled": {"type": "boolean", "default": true},
+                        "region": {
+                            "type": "string",
+                            "enum": ["us-east", "us-west"],
+                            "default": "us-west"
+                        }
+                    }
+                }),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+
+        let name = s.fields.iter().find(|field| field.name == "name").unwrap();
+        assert!(matches!(&name.kind, FieldKind::Text { value } if value == "octo"));
+        let enabled = s
+            .fields
+            .iter()
+            .find(|field| field.name == "enabled")
+            .unwrap();
+        assert!(matches!(&enabled.kind, FieldKind::Bool { value: true }));
+        let region = s
+            .fields
+            .iter()
+            .find(|field| field.name == "region")
+            .unwrap();
+        assert!(matches!(&region.kind, FieldKind::Enum { selected, .. } if *selected == 1));
+    }
+
+    #[test]
+    fn one_of_const_schema_becomes_enum_field() {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Choose".into(),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "visibility": {
+                            "oneOf": [
+                                {"const": "private", "title": "Private"},
+                                {"const": "public", "title": "Public"}
+                            ],
+                            "default": "public"
+                        }
+                    }
+                }),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+
+        let visibility = s
+            .fields
+            .iter()
+            .find(|field| field.name == "visibility")
+            .unwrap();
+        match &visibility.kind {
+            FieldKind::Enum { options, selected } => {
+                assert_eq!(options, &vec!["private".to_string(), "public".to_string()]);
+                assert_eq!(*selected, 1);
+            }
+            _ => panic!("expected enum field"),
+        }
+    }
+
+    #[test]
+    fn array_enum_collects_selected_values_as_array() {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "srv",
+            ElicitationRequest {
+                message: "Scopes".into(),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "scopes": {
+                            "type": "array",
+                            "items": {"type": "string", "enum": ["repo", "user", "admin"]},
+                            "default": ["repo", "admin"]
+                        }
+                    }
+                }),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
+            },
+        );
+
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        s.handle_key(KeyAction::Enter);
+
+        let content = s.result.as_ref().unwrap().content.as_ref().unwrap();
+        assert_eq!(content["scopes"], serde_json::json!(["repo", "admin"]));
+    }
+
+    #[test]
+    fn url_mode_accepts_without_fabricated_form_content() {
+        let mut s = ElicitationOverlayState::default();
+        s.open(
+            "oauth",
+            ElicitationRequest {
+                message: "Authorize the server".into(),
+                requested_schema: serde_json::json!({
+                    "type": "object",
+                    "properties": {"ignored": {"type": "string"}}
+                }),
+                mode: ElicitationMode::Url,
+                url: Some("https://example.com/oauth".into()),
+                elicitation_id: Some("abc".into()),
+            },
+        );
+
+        assert!(s.fields.is_empty());
+        assert!(s.render_text().contains("https://example.com/oauth"));
+        s.focus = Focus::Button(BUTTON_ACCEPT);
+        s.handle_key(KeyAction::Enter);
+
+        let response = s.result.as_ref().unwrap();
+        assert_eq!(response.action, ElicitationAction::Accept);
+        assert!(response.content.is_none());
+    }
+
+    #[test]
     fn interactive_view_render_delegates_to_render_text() {
         let s = open_text_overlay();
         assert_eq!(s.render(), s.render_text());
@@ -753,6 +1058,9 @@ mod tests {
             ElicitationRequest {
                 message: "Confirm?".into(),
                 requested_schema: serde_json::json!({"type": "object", "properties": {}}),
+                mode: ElicitationMode::Form,
+                url: None,
+                elicitation_id: None,
             },
         );
         assert_eq!(s.focus, Focus::Button(BUTTON_ACCEPT));

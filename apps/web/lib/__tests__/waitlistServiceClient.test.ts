@@ -99,6 +99,13 @@ describe('joinWaitlist', () => {
     expect(result).toEqual({ success: true });
   });
 
+  it('returns rank when the waitlist endpoint provides one', async () => {
+    mockFetch.mockResolvedValue(makeJsonResponse({ ok: true, joined: true, rank: 12 }));
+
+    const result = await joinWaitlist({ email: 'test@example.com' });
+    expect(result).toEqual({ success: true, rank: 12 });
+  });
+
   it('normalizes email to lowercase in POST body', async () => {
     mockFetch.mockResolvedValue(makeJsonResponse({ success: true }));
 

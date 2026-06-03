@@ -67,7 +67,7 @@ describe('Single Conversation API', () => {
       id: 'msg-2',
       role: 'assistant',
       content: 'Hi there!',
-      model: 'gpt-5.4',
+      model: 'gpt-5.5',
       provider: 'openai',
       input_tokens: 10,
       output_tokens: 5,

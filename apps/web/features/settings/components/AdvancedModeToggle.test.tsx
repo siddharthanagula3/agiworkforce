@@ -110,7 +110,7 @@ vi.mock('@agiworkforce/types', () => {
     general_premium: {
       slot: 'general_premium',
       label: 'General premium',
-      modelId: 'claude-opus-4.7',
+      modelId: 'claude-opus-4.8',
     },
     image_generation: {
       slot: 'image_generation',
@@ -131,7 +131,7 @@ vi.mock('@/constants/llm', () => ({
     const names: Record<string, string> = {
       'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
       'claude-sonnet-4.6': 'Claude Sonnet 4.6',
-      'claude-opus-4.7': 'Claude Opus 4.7',
+      'claude-opus-4.8': 'Claude Opus 4.7',
       'imagen-4-fast': 'Imagen 4 Fast',
     };
     return names[modelId] ? { name: names[modelId] } : null;
@@ -402,7 +402,7 @@ describe('AdvancedModeToggle', () => {
     // Other slots should be present (deduped by modelId)
     expect(screen.getByTestId('select-item-gemini-3.1-flash-lite')).toBeDefined();
     expect(screen.getByTestId('select-item-claude-sonnet-4.6')).toBeDefined();
-    expect(screen.getByTestId('select-item-claude-opus-4.7')).toBeDefined();
+    expect(screen.getByTestId('select-item-claude-opus-4.8')).toBeDefined();
   });
 
   it('shows model friendly names for max tier', () => {

@@ -38,7 +38,8 @@ pub enum APIProvider {
     Perplexity,
     Ollama,
     Veo3,
-    DALLE,
+    #[serde(rename = "GPTImage")]
+    GPTImage,
     StableDiffusion,
     Midjourney,
 }
@@ -52,7 +53,7 @@ impl APIProvider {
             APIProvider::Perplexity => "Perplexity",
             APIProvider::Ollama => "Ollama",
             APIProvider::Veo3 => "Veo3",
-            APIProvider::DALLE => "DALLE",
+            APIProvider::GPTImage => "GPTImage",
             APIProvider::StableDiffusion => "StableDiffusion",
             APIProvider::Midjourney => "Midjourney",
         }

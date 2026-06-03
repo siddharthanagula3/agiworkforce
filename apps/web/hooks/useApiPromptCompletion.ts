@@ -12,6 +12,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 
 // Constants similar to Gemini CLI
 const PROMPT_COMPLETION_DEBOUNCE_MS = 250;
@@ -160,11 +161,9 @@ export function useApiPromptCompletion(
           return;
         }
 
-        // TODO: Implement /api/completion route in apps/web/app/api/completion/route.ts
-        // that proxies to the LLM router or handles prompt completion server-side.
         const fetchResponse = await fetch('/api/completion', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
           signal: abortController.signal,
           body: JSON.stringify({
             input: inputText,

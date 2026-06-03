@@ -1,532 +1,26 @@
 /**
  * @file Model Catalog API Routes
- * @security
- * - Rate limiting: 100 req/min per user for all endpoints
- * - Input validation: Model IDs are validated against the catalog
- * - No user input is reflected in error responses
  *
- * Provides a canonical model catalog API that all surfaces (desktop, web,
- * mobile, CLI, extensions) can consume. Includes provider health status
- * alongside model metadata.
- *
- * Routes:
- *   GET /api/models              — Full catalog with provider health
- *   GET /api/models/recommended  — Top recommended models per use case
- *   GET /api/models/:modelId     — Single model with provider health
+ * The API gateway serves the shared catalog from `@agiworkforce/types`.
+ * Do not duplicate provider/model tables here; stale local copies have caused
+ * deprecated or nonexistent IDs to leak into public API responses.
  */
 
 import { Router, type Request, type Response } from 'express';
-import type { Provider } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getModelMetadataById,
+  getModels,
+  type ModelMetadata,
+  type ModelQualityTier,
+  type ModelStatus,
+  type Provider,
+} from '@agiworkforce/types';
 import { createRateLimiter } from '../middleware/rateLimit';
-import { checkAllProviders } from '../services/providerHealth';
 import { logger } from '../lib/logger';
+import { checkAllProviders } from '../services/providerHealth';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-type ModelSpeed = 'very-fast' | 'fast' | 'medium' | 'slow';
-type ModelQuality = 'excellent' | 'good' | 'fair';
-type ModelQualityTier = 'fast' | 'balanced' | 'best';
-
-interface ModelCapabilities {
-  streaming: boolean;
-  tools: boolean;
-  vision: boolean;
-  json: boolean;
-  thinking: boolean;
-  computerUse: boolean;
-  agentic: boolean;
-  imageGen: boolean;
-  videoGen: boolean;
-  search: boolean;
-  research: boolean;
-  codeExecution: boolean;
-}
-
-interface CatalogModel {
-  id: string;
-  name: string;
-  provider: Provider;
-  contextWindow: number;
-  maxOutputTokens: number;
-  inputCost: number;
-  outputCost: number;
-  capabilities: ModelCapabilities;
-  speed: ModelSpeed;
-  quality: ModelQuality;
-  qualityTier: ModelQualityTier;
-  bestFor: string[];
-  status: 'active' | 'beta' | 'deprecated';
-}
-
-/** Use-case categories for recommendations. */
 type UseCase = 'chat' | 'coding' | 'research' | 'creative';
-
-// ---------------------------------------------------------------------------
-// Static model catalog (hardcoded, later migrated to database)
-// ---------------------------------------------------------------------------
-
-function defaultCapabilities(overrides: Partial<ModelCapabilities> = {}): ModelCapabilities {
-  return {
-    streaming: true,
-    tools: true,
-    vision: false,
-    json: true,
-    thinking: false,
-    computerUse: false,
-    agentic: false,
-    imageGen: false,
-    videoGen: false,
-    search: false,
-    research: false,
-    codeExecution: false,
-    ...overrides,
-  };
-}
-
-const MODEL_CATALOG: CatalogModel[] = [
-  // ---- OpenAI ----
-  {
-    id: 'gpt-5.5',
-    name: 'GPT-5.5',
-    provider: 'openai',
-    contextWindow: 1_050_000,
-    maxOutputTokens: 16_384,
-    inputCost: 5,
-    outputCost: 30,
-    capabilities: defaultCapabilities({
-      vision: true,
-      thinking: true,
-      agentic: true,
-      codeExecution: true,
-    }),
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['complex reasoning', 'coding', 'analysis'],
-    status: 'active',
-  },
-  {
-    id: 'gpt-5.4-mini',
-    name: 'GPT-5.4 Mini',
-    provider: 'openai',
-    contextWindow: 400_000,
-    maxOutputTokens: 16_384,
-    inputCost: 5,
-    outputCost: 15,
-    capabilities: defaultCapabilities({ vision: true, thinking: true, codeExecution: true }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['code generation', 'refactoring', 'debugging'],
-    status: 'active',
-  },
-  {
-    id: 'o3',
-    name: 'OpenAI o3',
-    provider: 'openai',
-    contextWindow: 200_000,
-    maxOutputTokens: 100_000,
-    inputCost: 15,
-    outputCost: 60,
-    capabilities: defaultCapabilities({ vision: true, thinking: true, agentic: true }),
-    speed: 'slow',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['deep reasoning', 'math', 'research'],
-    status: 'active',
-  },
-
-  // ---- Anthropic ----
-  {
-    id: 'claude-opus-4.8',
-    name: 'Claude 4.8 Opus',
-    provider: 'anthropic',
-    contextWindow: 1_000_000,
-    maxOutputTokens: 64_000,
-    inputCost: 5,
-    outputCost: 25,
-    capabilities: defaultCapabilities({
-      vision: true,
-      thinking: true,
-      agentic: true,
-      computerUse: true,
-      codeExecution: true,
-    }),
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['agentic tasks', 'complex coding', 'analysis'],
-    status: 'active',
-  },
-  {
-    id: 'claude-sonnet-4.6',
-    name: 'Claude 4.6 Sonnet',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    maxOutputTokens: 16_384,
-    inputCost: 3,
-    outputCost: 15,
-    capabilities: defaultCapabilities({
-      vision: true,
-      thinking: true,
-      agentic: true,
-      computerUse: true,
-    }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['chat', 'coding', 'writing'],
-    status: 'active',
-  },
-  {
-    id: 'claude-haiku-4.5',
-    name: 'Claude 4.5 Haiku',
-    provider: 'anthropic',
-    contextWindow: 200_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.8,
-    outputCost: 4,
-    capabilities: defaultCapabilities({ vision: true }),
-    speed: 'very-fast',
-    quality: 'good',
-    qualityTier: 'fast',
-    bestFor: ['quick chat', 'classification', 'extraction'],
-    status: 'active',
-  },
-
-  // ---- Google ----
-  {
-    id: 'gemini-3-pro-preview',
-    name: 'Gemini 3 Pro',
-    provider: 'google',
-    contextWindow: 2_000_000,
-    maxOutputTokens: 8_192,
-    inputCost: 2.5,
-    outputCost: 10,
-    capabilities: defaultCapabilities({ vision: true, thinking: true, search: true }),
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['long context', 'multimodal', 'research'],
-    status: 'active',
-  },
-  {
-    id: 'gemini-3-flash-preview',
-    name: 'Gemini 3 Flash',
-    provider: 'google',
-    contextWindow: 1_000_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.15,
-    outputCost: 0.6,
-    capabilities: defaultCapabilities({ vision: true }),
-    speed: 'very-fast',
-    quality: 'good',
-    qualityTier: 'fast',
-    bestFor: ['fast queries', 'summarization', 'classification'],
-    status: 'active',
-  },
-
-  // ---- xAI ----
-  {
-    id: 'grok-4',
-    name: 'Grok 4',
-    provider: 'xai',
-    contextWindow: 256_000,
-    maxOutputTokens: 16_384,
-    inputCost: 5,
-    outputCost: 15,
-    capabilities: defaultCapabilities({ thinking: true, agentic: true }),
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['reasoning', 'coding', 'analysis'],
-    status: 'active',
-  },
-  {
-    id: 'grok-4-fast-reasoning',
-    name: 'Grok 4 Fast Reasoning',
-    provider: 'xai',
-    contextWindow: 2_000_000,
-    maxOutputTokens: 16_384,
-    inputCost: 1,
-    outputCost: 4,
-    capabilities: defaultCapabilities({ thinking: true }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'fast',
-    bestFor: ['quick reasoning', 'long context'],
-    status: 'active',
-  },
-
-  // ---- DeepSeek ----
-  {
-    id: 'deepseek-chat',
-    name: 'DeepSeek Chat (V3)',
-    provider: 'deepseek',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.27,
-    outputCost: 1.1,
-    capabilities: defaultCapabilities({ thinking: true }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['chat', 'coding', 'general tasks'],
-    status: 'active',
-  },
-  {
-    id: 'deepseek-r1',
-    name: 'DeepSeek R1',
-    provider: 'deepseek',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.55,
-    outputCost: 2.19,
-    capabilities: defaultCapabilities({ thinking: true, research: true }),
-    speed: 'medium',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['deep reasoning', 'math', 'research'],
-    status: 'active',
-  },
-
-  // ---- Moonshot ----
-  {
-    id: 'kimi-k2.5',
-    name: 'Kimi K2.5',
-    provider: 'moonshot',
-    contextWindow: 256_000,
-    maxOutputTokens: 8_192,
-    inputCost: 2,
-    outputCost: 8,
-    capabilities: defaultCapabilities({ vision: true, thinking: true }),
-    speed: 'medium',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['long documents', 'multilingual', 'analysis'],
-    status: 'active',
-  },
-
-  // ---- Qwen ----
-  {
-    id: 'qwen-max',
-    name: 'Qwen Max',
-    provider: 'qwen',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 2,
-    outputCost: 6,
-    capabilities: defaultCapabilities({ thinking: true }),
-    speed: 'medium',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['coding', 'math', 'multilingual'],
-    status: 'active',
-  },
-  {
-    id: 'qwen-flash',
-    name: 'Qwen Flash',
-    provider: 'qwen',
-    contextWindow: 1_000_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0,
-    outputCost: 0,
-    capabilities: defaultCapabilities(),
-    speed: 'very-fast',
-    quality: 'fair',
-    qualityTier: 'fast',
-    bestFor: ['free queries', 'quick answers'],
-    status: 'active',
-  },
-
-  // ---- Perplexity ----
-  {
-    id: 'sonar-pro',
-    name: 'Sonar Pro',
-    provider: 'perplexity',
-    contextWindow: 200_000,
-    maxOutputTokens: 4_096,
-    inputCost: 3,
-    outputCost: 15,
-    capabilities: defaultCapabilities({ search: true, research: true }),
-    speed: 'medium',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['web search', 'fact checking', 'research'],
-    status: 'active',
-  },
-  {
-    id: 'sonar-deep-research',
-    name: 'Sonar Deep Research',
-    provider: 'perplexity',
-    contextWindow: 128_000,
-    maxOutputTokens: 4_096,
-    inputCost: 5,
-    outputCost: 20,
-    capabilities: defaultCapabilities({ thinking: true, search: true, research: true }),
-    speed: 'slow',
-    quality: 'excellent',
-    qualityTier: 'best',
-    bestFor: ['deep research', 'comprehensive analysis'],
-    status: 'active',
-  },
-
-  // ---- Mistral ----
-  {
-    id: 'mistral-large',
-    name: 'Mistral Large',
-    provider: 'mistral',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 2,
-    outputCost: 6,
-    capabilities: defaultCapabilities({ vision: true }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'balanced',
-    bestFor: ['multilingual', 'coding', 'enterprise'],
-    status: 'active',
-  },
-
-  // ---- ZhipuAI ----
-  {
-    id: 'glm-4.7',
-    name: 'GLM-4.7',
-    provider: 'zhipu',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.5,
-    outputCost: 1,
-    capabilities: defaultCapabilities({ thinking: true }),
-    speed: 'fast',
-    quality: 'good',
-    qualityTier: 'fast',
-    bestFor: ['chinese language', 'general chat'],
-    status: 'active',
-  },
-
-  // ---- Groq ----
-  {
-    id: 'groq-llama-3.3-70b',
-    name: 'Llama 3.3 70B (Groq)',
-    provider: 'groq',
-    contextWindow: 128_000,
-    maxOutputTokens: 8_192,
-    inputCost: 0.59,
-    outputCost: 0.79,
-    capabilities: defaultCapabilities(),
-    speed: 'very-fast',
-    quality: 'good',
-    qualityTier: 'fast',
-    bestFor: ['fast inference', 'prototyping', 'batch processing'],
-    status: 'active',
-  },
-];
-
-// Lookup indices
-const modelById = new Map<string, CatalogModel>(MODEL_CATALOG.map((m) => [m.id, m]));
-
-const modelsByProvider = new Map<string, CatalogModel[]>();
-for (const model of MODEL_CATALOG) {
-  const list = modelsByProvider.get(model.provider) ?? [];
-  list.push(model);
-  modelsByProvider.set(model.provider, list);
-}
-
-// ---------------------------------------------------------------------------
-// Recommendation engine
-// ---------------------------------------------------------------------------
-
-/**
- * Use-case to capability/quality mapping for recommendations.
- * Each use case defines which model traits matter most.
- */
-const USE_CASE_CONFIG: Record<
-  UseCase,
-  {
-    label: string;
-    filter: (m: CatalogModel) => boolean;
-    sort: (a: CatalogModel, b: CatalogModel) => number;
-    maxResults: number;
-  }
-> = {
-  chat: {
-    label: 'General Chat',
-    filter: (m) => m.status === 'active',
-    sort: (a, b) => {
-      // Prefer balanced quality tier for chat, then speed
-      const tierOrder: Record<string, number> = { balanced: 0, fast: 1, best: 2 };
-      const tierDiff = (tierOrder[a.qualityTier] ?? 3) - (tierOrder[b.qualityTier] ?? 3);
-      if (tierDiff !== 0) return tierDiff;
-      const speedOrder: Record<string, number> = { 'very-fast': 0, fast: 1, medium: 2, slow: 3 };
-      return (speedOrder[a.speed] ?? 4) - (speedOrder[b.speed] ?? 4);
-    },
-    maxResults: 5,
-  },
-  coding: {
-    label: 'Coding & Development',
-    filter: (m) =>
-      m.status === 'active' &&
-      (m.capabilities.codeExecution ||
-        m.bestFor.some((b) => b.includes('cod') || b.includes('debug') || b.includes('refactor'))),
-    sort: (a, b) => {
-      const qualityOrder: Record<string, number> = { excellent: 0, good: 1, fair: 2 };
-      return (qualityOrder[a.quality] ?? 3) - (qualityOrder[b.quality] ?? 3);
-    },
-    maxResults: 5,
-  },
-  research: {
-    label: 'Research & Analysis',
-    filter: (m) =>
-      m.status === 'active' &&
-      (m.capabilities.research ||
-        m.capabilities.search ||
-        m.capabilities.thinking ||
-        m.bestFor.some(
-          (b) => b.includes('research') || b.includes('analysis') || b.includes('reasoning'),
-        )),
-    sort: (a, b) => {
-      // Prefer models with both thinking and research
-      const scoreA =
-        (a.capabilities.thinking ? 2 : 0) +
-        (a.capabilities.research ? 2 : 0) +
-        (a.capabilities.search ? 1 : 0);
-      const scoreB =
-        (b.capabilities.thinking ? 2 : 0) +
-        (b.capabilities.research ? 2 : 0) +
-        (b.capabilities.search ? 1 : 0);
-      return scoreB - scoreA;
-    },
-    maxResults: 5,
-  },
-  creative: {
-    label: 'Creative Writing',
-    filter: (m) =>
-      m.status === 'active' &&
-      (m.quality === 'excellent' || m.quality === 'good') &&
-      m.bestFor.some(
-        (b) =>
-          b.includes('writ') ||
-          b.includes('chat') ||
-          b.includes('creative') ||
-          b.includes('multilingual'),
-      ),
-    sort: (a, b) => {
-      const qualityOrder: Record<string, number> = { excellent: 0, good: 1, fair: 2 };
-      const diff = (qualityOrder[a.quality] ?? 3) - (qualityOrder[b.quality] ?? 3);
-      if (diff !== 0) return diff;
-      // Prefer larger output tokens for creative writing
-      return b.maxOutputTokens - a.maxOutputTokens;
-    },
-    maxResults: 5,
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Response helpers
-// ---------------------------------------------------------------------------
 
 interface ProviderHealthInfo {
   available: boolean;
@@ -534,9 +28,149 @@ interface ProviderHealthInfo {
   checkedAt?: number;
 }
 
+type CatalogModel = ModelMetadata & {
+  status: ModelStatus;
+};
+
 interface ModelResponse extends CatalogModel {
   providerHealth: ProviderHealthInfo;
 }
+
+function statusFor(model: ModelMetadata): ModelStatus {
+  if (model.deprecated) return 'deprecated';
+  return model.status ?? 'active';
+}
+
+function isActiveModel(model: ModelMetadata): boolean {
+  return statusFor(model) !== 'deprecated';
+}
+
+function toCatalogModel(model: ModelMetadata): CatalogModel {
+  return {
+    ...model,
+    status: statusFor(model),
+  };
+}
+
+function getActiveCatalogModels(): CatalogModel[] {
+  return getModels({ includeDeprecated: false }).filter(isActiveModel).map(toCatalogModel);
+}
+
+function parsePlanTier(raw: unknown): 'pro' | 'pro_plus' | 'max' | undefined | null {
+  if (raw === undefined) return undefined;
+  if (raw !== 'pro' && raw !== 'pro_plus' && raw !== 'max') return null;
+  return raw;
+}
+
+function allowedIdsForPlanTier(planTier: 'pro' | 'pro_plus' | 'max'): Set<string> {
+  const ids = new Set<string>(getAllowedModelsForTier('economy'));
+
+  if (planTier === 'pro' || planTier === 'pro_plus' || planTier === 'max') {
+    for (const id of getAllowedModelsForTier('pro_additions')) ids.add(id);
+  }
+
+  if (planTier === 'pro_plus' || planTier === 'max') {
+    for (const id of getAllowedModelsForTier('flagship_additions')) ids.add(id);
+  }
+
+  return ids;
+}
+
+function matchesStatus(model: CatalogModel, statusFilter: string): boolean {
+  if (statusFilter === 'active') return model.status === 'active' || model.status === 'beta';
+  if (statusFilter === 'beta' || statusFilter === 'deprecated')
+    return model.status === statusFilter;
+  return true;
+}
+
+function speedRank(speed: ModelMetadata['speed']): number {
+  const order: Record<ModelMetadata['speed'], number> = {
+    'very-fast': 0,
+    fast: 1,
+    medium: 2,
+    slow: 3,
+  };
+  return order[speed] ?? 4;
+}
+
+function qualityRank(quality: ModelMetadata['quality']): number {
+  const order: Record<ModelMetadata['quality'], number> = {
+    excellent: 0,
+    good: 1,
+    fair: 2,
+  };
+  return order[quality] ?? 3;
+}
+
+function tierRank(tier: ModelQualityTier): number {
+  const order: Record<ModelQualityTier, number> = {
+    balanced: 0,
+    fast: 1,
+    best: 2,
+  };
+  return order[tier] ?? 3;
+}
+
+const USE_CASE_CONFIG: Record<
+  UseCase,
+  {
+    label: string;
+    filter: (model: CatalogModel) => boolean;
+    sort: (a: CatalogModel, b: CatalogModel) => number;
+    maxResults: number;
+  }
+> = {
+  chat: {
+    label: 'General Chat',
+    filter: (model) => model.status === 'active',
+    sort: (a, b) => {
+      const tierDiff = tierRank(a.qualityTier) - tierRank(b.qualityTier);
+      if (tierDiff !== 0) return tierDiff;
+      return speedRank(a.speed) - speedRank(b.speed);
+    },
+    maxResults: 5,
+  },
+  coding: {
+    label: 'Coding & Development',
+    filter: (model) =>
+      model.status === 'active' &&
+      (model.capabilities.codeExecution ||
+        model.modelType === 'code' ||
+        model.bestFor.some((item) => /cod|debug|refactor/i.test(item))),
+    sort: (a, b) => qualityRank(a.quality) - qualityRank(b.quality),
+    maxResults: 5,
+  },
+  research: {
+    label: 'Research & Analysis',
+    filter: (model) =>
+      model.status === 'active' &&
+      (model.capabilities.research ||
+        model.capabilities.search ||
+        model.capabilities.thinking ||
+        model.bestFor.some((item) => /research|analysis|reasoning/i.test(item))),
+    sort: (a, b) => {
+      const score = (model: CatalogModel) =>
+        (model.capabilities.thinking ? 2 : 0) +
+        (model.capabilities.research ? 2 : 0) +
+        (model.capabilities.search ? 1 : 0);
+      return score(b) - score(a);
+    },
+    maxResults: 5,
+  },
+  creative: {
+    label: 'Creative Writing',
+    filter: (model) =>
+      model.status === 'active' &&
+      (model.quality === 'excellent' || model.quality === 'good') &&
+      model.bestFor.some((item) => /writ|chat|creative|multilingual/i.test(item)),
+    sort: (a, b) => {
+      const qualityDiff = qualityRank(a.quality) - qualityRank(b.quality);
+      if (qualityDiff !== 0) return qualityDiff;
+      return (b.maxOutputTokens ?? 0) - (a.maxOutputTokens ?? 0);
+    },
+    maxResults: 5,
+  },
+};
 
 function enrichModelWithHealth(
   model: CatalogModel,
@@ -553,11 +187,11 @@ async function buildHealthMap(): Promise<Map<string, ProviderHealthInfo>> {
   const healthMap = new Map<string, ProviderHealthInfo>();
   try {
     const providers = await checkAllProviders();
-    for (const p of providers) {
-      healthMap.set(p.provider, {
-        available: p.available,
-        error: p.error,
-        checkedAt: p.healthCheckedAt,
+    for (const provider of providers) {
+      healthMap.set(provider.provider, {
+        available: provider.available,
+        error: provider.error,
+        checkedAt: provider.healthCheckedAt,
       });
     }
   } catch (err) {
@@ -566,144 +200,51 @@ async function buildHealthMap(): Promise<Map<string, ProviderHealthInfo>> {
   return healthMap;
 }
 
-// ---------------------------------------------------------------------------
-// Express Router
-// ---------------------------------------------------------------------------
-
 const router = Router();
 
-/**
- * GET /api/models
- *
- * Returns the full model catalog with provider health status.
- * Optional query params:
- *   ?provider=openai    — filter by provider
- *   ?tier=fast          — filter by quality tier (fast, balanced, best)
- *   ?status=active      — filter by status (default: active only)
- *   ?planTier=pro       — filter by plan tier (pro, max) — shows models available for that subscription tier
- *
- * Plan tier mapping:
- *   - pro: economy models + pro_additions (standard tier models)
- *   - max: economy + pro_additions + flagship_additions (all models including expensive)
- *   - If planTier not provided, returns full catalog (for admins/internal use)
- */
 router.get('/', createRateLimiter('default'), async (req: Request, res: Response) => {
   const providerFilter =
-    typeof req.query['provider'] === 'string' ? req.query['provider'] : undefined;
-  const tierFilter = typeof req.query['tier'] === 'string' ? req.query['tier'] : undefined;
+    typeof req.query['provider'] === 'string' ? (req.query['provider'] as Provider) : undefined;
+  const tierFilter =
+    typeof req.query['tier'] === 'string' ? (req.query['tier'] as ModelQualityTier) : undefined;
   const statusFilter = typeof req.query['status'] === 'string' ? req.query['status'] : 'active';
-  const planTierFilter =
-    typeof req.query['planTier'] === 'string' ? req.query['planTier'] : undefined;
+  const planTierFilter = parsePlanTier(req.query['planTier']);
 
-  let models = MODEL_CATALOG;
-
-  if (providerFilter) {
-    models = models.filter((m) => m.provider === providerFilter);
-  }
-  if (tierFilter) {
-    models = models.filter((m) => m.qualityTier === tierFilter);
-  }
-  if (statusFilter) {
-    models = models.filter((m) => m.status === statusFilter);
-  }
-
-  // Plan tier filtering: pro gets standard models, max gets all
-  if (planTierFilter === 'pro') {
-    const allowedModelIds = new Set<string>([
-      // Economy models available to all tiers
-      'gemini-3.1-flash-lite',
-      'glm-4.7',
-      'deepseek-chat',
-      'glm-4.6v',
-      'glm-4.6v-flash',
-      'grok-4-1-fast-reasoning',
-      'grok-4-fast-reasoning',
-      'claude-haiku-4.5',
-      'grok-4-fast-non-reasoning',
-      'qwen-flash',
-      'qwen-turbo',
-      'qwen-coder-flash',
-      'grok-4-mini',
-      'sonar',
-      'codestral-2',
-      // Pro tier additions
-      'gpt-5.5',
-      'claude-sonnet-4.6',
-      'claude-sonnet-4.5',
-      'gemini-3.1-pro-preview',
-      'qwen-max',
-      'kimi-k2.5',
-      'sonar-pro',
-      'sonar-reasoning',
-      'sonar-deep-research',
-      'mistral-large-3',
-      'mistral-medium-3',
-    ]);
-    models = models.filter((m) => allowedModelIds.has(m.id));
-  } else if (planTierFilter === 'max') {
-    const allowedModelIds = new Set<string>([
-      // Economy models
-      'gemini-3.1-flash-lite',
-      'glm-4.7',
-      'deepseek-chat',
-      'glm-4.6v',
-      'glm-4.6v-flash',
-      'grok-4-1-fast-reasoning',
-      'grok-4-fast-reasoning',
-      'claude-haiku-4.5',
-      'grok-4-fast-non-reasoning',
-      'qwen-flash',
-      'qwen-turbo',
-      'qwen-coder-flash',
-      'grok-4-mini',
-      'sonar',
-      'codestral-2',
-      // Pro additions
-      'gpt-5.5',
-      'claude-sonnet-4.6',
-      'claude-sonnet-4.5',
-      'gemini-3.1-pro-preview',
-      'qwen-max',
-      'kimi-k2.5',
-      'sonar-pro',
-      'sonar-reasoning',
-      'sonar-deep-research',
-      'mistral-large-3',
-      'mistral-medium-3',
-      // Flagship additions (Max tier only)
-      'claude-opus-4.8',
-      'o3',
-      'grok-4',
-      'deepseek-r1',
-      'kimi-k2.5-thinking',
-    ]);
-    models = models.filter((m) => allowedModelIds.has(m.id));
-  } else if (planTierFilter && planTierFilter !== 'pro' && planTierFilter !== 'max') {
-    // Invalid plan tier value
-    res.status(400).json({ error: 'Invalid planTier value; must be "pro" or "max"' });
+  if (planTierFilter === null) {
+    res.status(400).json({ error: 'Invalid planTier value; must be "pro", "pro_plus", or "max"' });
     return;
   }
 
+  let models = getActiveCatalogModels();
+
+  if (providerFilter) {
+    models = models.filter((model) => model.provider === providerFilter);
+  }
+  if (tierFilter) {
+    models = models.filter((model) => model.qualityTier === tierFilter);
+  }
+  if (statusFilter) {
+    models = models.filter((model) => matchesStatus(model, statusFilter));
+  }
+  if (planTierFilter) {
+    const allowed = allowedIdsForPlanTier(planTierFilter);
+    models = models.filter((model) => allowed.has(model.id));
+  }
+
   const healthMap = await buildHealthMap();
-  const enriched = models.map((m) => enrichModelWithHealth(m, healthMap));
+  const enriched = models.map((model) => enrichModelWithHealth(model, healthMap));
 
   res.json({
     models: enriched,
     total: enriched.length,
-    providers: Array.from(new Set(enriched.map((m) => m.provider))),
+    providers: Array.from(new Set(enriched.map((model) => model.provider))),
   });
 });
 
-/**
- * GET /api/models/recommended
- *
- * Returns top recommended models for different use cases.
- * Optional query: ?useCase=coding — return only one category.
- */
 router.get('/recommended', createRateLimiter('default'), async (req: Request, res: Response) => {
   const useCaseFilter = typeof req.query['useCase'] === 'string' ? req.query['useCase'] : undefined;
-
   const healthMap = await buildHealthMap();
+  const models = getActiveCatalogModels();
 
   const categories = useCaseFilter
     ? { [useCaseFilter]: USE_CASE_CONFIG[useCaseFilter as UseCase] }
@@ -713,42 +254,35 @@ router.get('/recommended', createRateLimiter('default'), async (req: Request, re
 
   for (const [key, config] of Object.entries(categories)) {
     if (!config) continue;
-
-    const filtered = MODEL_CATALOG.filter(config.filter);
-    filtered.sort(config.sort);
-    const top = filtered.slice(0, config.maxResults);
-
+    const top = models.filter(config.filter).sort(config.sort).slice(0, config.maxResults);
     recommendations[key] = {
       label: config.label,
-      models: top.map((m) => enrichModelWithHealth(m, healthMap)),
+      models: top.map((model) => enrichModelWithHealth(model, healthMap)),
     };
   }
 
   res.json({ recommendations });
 });
 
-/**
- * GET /api/models/:modelId
- *
- * Returns a single model with provider health status.
- */
 router.get('/:modelId', createRateLimiter('default'), async (req: Request, res: Response) => {
   const modelId = typeof req.params['modelId'] === 'string' ? req.params['modelId'] : '';
+  const metadata = getModelMetadataById(modelId);
 
-  const model = modelById.get(modelId);
-  if (!model) {
-    // SECURITY: Do not reflect user input in error responses
+  if (!metadata || !isActiveModel(metadata)) {
     res.status(404).json({ error: 'Model not found' });
     return;
   }
 
+  const model = toCatalogModel(metadata);
   const healthMap = await buildHealthMap();
   const enriched = enrichModelWithHealth(model, healthMap);
-
-  // Include sibling models from the same provider
-  const siblings = (modelsByProvider.get(model.provider) ?? [])
-    .filter((m) => m.id !== model.id)
-    .map((m) => ({ id: m.id, name: m.name, qualityTier: m.qualityTier }));
+  const siblings = getActiveCatalogModels()
+    .filter((candidate) => candidate.provider === model.provider && candidate.id !== model.id)
+    .map((candidate) => ({
+      id: candidate.id,
+      name: candidate.name,
+      qualityTier: candidate.qualityTier,
+    }));
 
   res.json({
     model: enriched,

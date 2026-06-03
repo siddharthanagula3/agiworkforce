@@ -238,7 +238,20 @@ impl SandboxFileSystemPermissions {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum MacOsPreferencesPermission {
     None,
@@ -247,7 +260,20 @@ pub enum MacOsPreferencesPermission {
     ReadWrite,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default, Hash, Serialize, Deserialize, JsonSchema, TS)]
+#[derive(
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Default,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    TS,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum MacOsContactsPermission {
     #[default]
@@ -343,7 +369,8 @@ impl SimplePermissionProfile {
 impl From<AdditionalPermissionProfile> for SimplePermissionProfile {
     fn from(value: AdditionalPermissionProfile) -> Self {
         let file_system = value.file_system.and_then(|fs| {
-            fs.legacy_read_write_roots().map(|(read, write)| SandboxFileSystemPermissions { read, write })
+            fs.legacy_read_write_roots()
+                .map(|(read, write)| SandboxFileSystemPermissions { read, write })
         });
         Self {
             network: value.network,
@@ -355,9 +382,9 @@ impl From<AdditionalPermissionProfile> for SimplePermissionProfile {
 
 impl From<SimplePermissionProfile> for AdditionalPermissionProfile {
     fn from(value: SimplePermissionProfile) -> Self {
-        let file_system = value.file_system.map(|fs| {
-            FileSystemPermissions::from_read_write_roots(fs.read, fs.write)
-        });
+        let file_system = value
+            .file_system
+            .map(|fs| FileSystemPermissions::from_read_write_roots(fs.read, fs.write));
         Self {
             network: value.network,
             file_system,
@@ -1724,8 +1751,8 @@ impl std::fmt::Display for FunctionCallOutputPayload {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anyhow::Result;
     use agiworkforce_execpolicy::Policy;
+    use anyhow::Result;
     use pretty_assertions::assert_eq;
     use std::path::PathBuf;
     use tempfile::tempdir;

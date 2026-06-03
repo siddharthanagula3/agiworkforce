@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Puzzle, Download, ArrowRight, Layers, Link2, Bell } from 'lucide-react';
+import { Puzzle, ArrowRight, Layers, Link2, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@shared/ui/card';
 import { Button } from '@shared/ui/button';
@@ -10,11 +10,6 @@ import { Badge } from '@shared/ui/badge';
 import { Input } from '@shared/ui/input';
 import { cn } from '@shared/lib/utils';
 import { EXAMPLE_PLUGINS } from '@/features/plugins/data/plugins';
-
-function formatDownloadCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 function sourceBadgeClass(source: string): string {
   if (source === 'builtin') return 'bg-primary/15 text-primary border-primary/20';
@@ -62,8 +57,8 @@ export default function PluginsPage() {
           Plugin Marketplace
         </h1>
         <p className="mx-auto max-w-xl text-base text-muted-foreground">
-          Coming soon. Plugins bundle skills and connectors into one-click workflow packs. Install a
-          plugin and your AI agent gains new capabilities instantly.
+          Coming soon. Plugins will bundle skills and connectors into workflow packs. This preview
+          shows the planned catalogue shape before installation is available.
         </p>
       </div>
 
@@ -85,9 +80,9 @@ export default function PluginsPage() {
         </div>
         <div className="rounded-xl border border-border/60 bg-card p-5">
           <ArrowRight className="mb-3 h-5 w-5 text-primary" />
-          <h2 className="mb-1 text-sm font-semibold text-foreground">One-Click Install</h2>
+          <h2 className="mb-1 text-sm font-semibold text-foreground">Launch Preview</h2>
           <p className="text-xs text-muted-foreground">
-            Install or uninstall any plugin in a single click. No configuration required.
+            Browse upcoming packs while marketplace installation and enforcement are finalized.
           </p>
         </div>
       </div>
@@ -122,10 +117,6 @@ export default function PluginsPage() {
                 </CardHeader>
                 <CardContent className="pt-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Download className="h-3 w-3" />
-                      {formatDownloadCount(plugin.downloadCount)} installs
-                    </span>
                     <span>{plugin.category}</span>
                     <span>by {plugin.author}</span>
                   </div>

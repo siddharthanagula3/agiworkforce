@@ -29,6 +29,8 @@ interface BackendVideoResponse {
   duration_secs?: number;
   cost_estimate?: number;
   latency_ms: number;
+  provider?: string;
+  model?: string;
 }
 
 function toDataUrl(base64: string) {
@@ -90,6 +92,7 @@ export async function generateVideo(
       resolution: payload.resolution,
       style: payload.style,
       model: payload.model,
+      provider: payload.provider,
       plan: payload.plan,
     },
   });
@@ -102,7 +105,9 @@ export async function generateVideo(
     durationSecs: response.duration_secs,
     costEstimate: response.cost_estimate,
     latencyMs: response.latency_ms,
-    provider: 'veo-3.1',
-    model: payload.model,
+    provider:
+      response.provider ??
+      (payload.provider === 'veo3' ? 'google' : (payload.provider ?? 'google')),
+    model: response.model ?? payload.model,
   };
 }

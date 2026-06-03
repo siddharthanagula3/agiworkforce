@@ -180,7 +180,10 @@ impl TaskRegistry {
     pub async fn stop(&self, id: &TaskId) -> Result<(), TaskError> {
         let mut guard = self.inner.write().await;
         let task = guard.get_mut(id).ok_or(TaskError::NotFound(*id))?;
-        if matches!(task.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Stopped) {
+        if matches!(
+            task.status,
+            TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Stopped
+        ) {
             return Err(TaskError::InvalidTransition {
                 from: task.status,
                 to: TaskStatus::Stopped,
@@ -218,7 +221,9 @@ pub struct StallWatchdog {
 
 impl StallWatchdog {
     pub fn spawn(registry: TaskRegistry, task_id: TaskId, timeout: Duration) -> Self {
-        let poll_interval = Duration::from_millis(500).min(timeout / 4).max(Duration::from_millis(100));
+        let poll_interval = Duration::from_millis(500)
+            .min(timeout / 4)
+            .max(Duration::from_millis(100));
         let handle = tokio::spawn(async move {
             let output_path = {
                 match registry.get(&task_id).await {
@@ -236,7 +241,14 @@ impl StallWatchdog {
 
                 // Bail if task is terminal
                 match registry.get(&task_id).await {
-                    Some(t) if matches!(t.status, TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Stopped) => return,
+                    Some(t)
+                        if matches!(
+                            t.status,
+                            TaskStatus::Completed | TaskStatus::Failed | TaskStatus::Stopped
+                        ) =>
+                    {
+                        return
+                    }
                     None => return,
                     _ => {}
                 }
@@ -289,7 +301,10 @@ mod tests {
     #[tokio::test]
     async fn test_create_and_get() {
         let (reg, _dir) = make_registry();
-        let id = reg.create(TaskKind::LocalShell, Some("echo hi".into())).await.unwrap();
+        let id = reg
+            .create(TaskKind::LocalShell, Some("echo hi".into()))
+            .await
+            .unwrap();
         let task = reg.get(&id).await.unwrap();
         assert_eq!(task.status, TaskStatus::Pending);
         assert_eq!(task.kind, TaskKind::LocalShell);
@@ -306,7 +321,9 @@ mod tests {
     async fn test_update_status_pending_to_running() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalAgent, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
         let task = reg.get(&id).await.unwrap();
         assert_eq!(task.status, TaskStatus::Running);
         assert!(task.started_at.is_some());
@@ -316,8 +333,12 @@ mod tests {
     async fn test_update_status_running_to_completed() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Completed, Some(0), None).await.unwrap();
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
+        reg.update_status(&id, TaskStatus::Completed, Some(0), None)
+            .await
+            .unwrap();
         let task = reg.get(&id).await.unwrap();
         assert_eq!(task.status, TaskStatus::Completed);
         assert_eq!(task.exit_code, Some(0));
@@ -328,8 +349,17 @@ mod tests {
     async fn test_update_status_running_to_failed() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::RemoteAgent, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Failed, Some(1), Some("process died".into())).await.unwrap();
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
+        reg.update_status(
+            &id,
+            TaskStatus::Failed,
+            Some(1),
+            Some("process died".into()),
+        )
+        .await
+        .unwrap();
         let task = reg.get(&id).await.unwrap();
         assert_eq!(task.status, TaskStatus::Failed);
         assert_eq!(task.error.as_deref(), Some("process died"));
@@ -339,9 +369,15 @@ mod tests {
     async fn test_invalid_transition_completed_to_running() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Completed, Some(0), None).await.unwrap();
-        let result = reg.update_status(&id, TaskStatus::Running, None, None).await;
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
+        reg.update_status(&id, TaskStatus::Completed, Some(0), None)
+            .await
+            .unwrap();
+        let result = reg
+            .update_status(&id, TaskStatus::Running, None, None)
+            .await;
         assert!(matches!(result, Err(TaskError::InvalidTransition { .. })));
     }
 
@@ -349,9 +385,15 @@ mod tests {
     async fn test_invalid_transition_failed_to_running() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Failed, None, None).await.unwrap();
-        let result = reg.update_status(&id, TaskStatus::Running, None, None).await;
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
+        reg.update_status(&id, TaskStatus::Failed, None, None)
+            .await
+            .unwrap();
+        let result = reg
+            .update_status(&id, TaskStatus::Running, None, None)
+            .await;
         assert!(matches!(result, Err(TaskError::InvalidTransition { .. })));
     }
 
@@ -402,7 +444,9 @@ mod tests {
     async fn test_stop_running_task() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
         reg.stop(&id).await.unwrap();
         let task = reg.get(&id).await.unwrap();
         assert_eq!(task.status, TaskStatus::Stopped);
@@ -421,8 +465,12 @@ mod tests {
     async fn test_stop_completed_task_fails() {
         let (reg, _dir) = make_registry();
         let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-        reg.update_status(&id, TaskStatus::Completed, Some(0), None).await.unwrap();
+        reg.update_status(&id, TaskStatus::Running, None, None)
+            .await
+            .unwrap();
+        reg.update_status(&id, TaskStatus::Completed, Some(0), None)
+            .await
+            .unwrap();
         let result = reg.stop(&id).await;
         assert!(matches!(result, Err(TaskError::InvalidTransition { .. })));
     }

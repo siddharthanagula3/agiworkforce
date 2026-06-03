@@ -19,4 +19,12 @@ export function requireEnv(name: string): string {
 export function validateStartupEnv(): void {
   requireEnv('JWT_SECRET');
   requireEnv('NEON_DATABASE_URL');
+
+  const pairingConfigured =
+    process.env['NODE_ENV'] === 'production' ||
+    Boolean(process.env['SIGNALING_HTTP_URL']) ||
+    process.env['ENABLE_MOBILE_PAIRING'] === 'true';
+  if (pairingConfigured) {
+    requireEnv('SIGNALING_INTERNAL_SECRET');
+  }
 }

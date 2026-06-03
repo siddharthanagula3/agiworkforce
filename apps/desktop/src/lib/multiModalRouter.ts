@@ -1,9 +1,9 @@
 /**
- * Multi-Modal Model Router (January 2026)
+ * Multi-Modal Model Router
  *
  * This module handles routing for non-chat models:
- * - Image generation models (DALL-E 3, GPT Image, Imagen 4, Flux, Ideogram)
- * - Video generation models (Sora 2, Veo 3)
+ * - Image generation models (GPT Image 2, Imagen 4, Stable Diffusion, Ideogram)
+ * - Video generation models (Veo 3.1 and configured third-party providers)
  * - Text-to-speech models (TTS-1, TTS-1-HD)
  * - Speech-to-text models (Whisper-1)
  * - Music generation models (Suno, Udio)
@@ -20,8 +20,13 @@ import type { IntentType } from './intentClassifier';
 
 // Sourced from the canonical model catalog (packages/types/src/models.json).
 // Using getModelMetadataById ensures the ID is never stale relative to the catalog.
-const GPT_IMAGE_1_ID = getModelMetadataById('gpt-image-1')?.id ?? 'gpt-image-1';
-const GPT_IMAGE_1_5_ID = getModelMetadataById('gpt-image-1.5')?.id ?? 'gpt-image-1.5';
+const GPT_IMAGE_2_ID = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
+const IMAGEN_4_ID = getModelMetadataById('imagen-4')?.apiModelId ?? 'imagen-4.0-generate-001';
+const IMAGEN_4_FAST_ID =
+  getModelMetadataById('imagen-4-fast')?.apiModelId ?? 'imagen-4.0-fast-generate-001';
+const IMAGEN_4_ULTRA_ID =
+  getModelMetadataById('imagen-4-ultra')?.apiModelId ?? 'imagen-4.0-ultra-generate-001';
+const VEO_3_1_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
 
 // ============================================
 // TYPES
@@ -62,27 +67,34 @@ export interface MultiModalRoutingResult {
 // ============================================
 
 /**
- * Image Generation Models (January 2026)
- *
- * Based on public opinion research:
- * - Midjourney v7: Best for artistic/creative (most artistic versatility)
- * - Ideogram 3: Best for text rendering (logos, typography)
- * - DALL-E 3: Good all-rounder, best OpenAI integration
- * - Imagen 4: Best for Google ecosystem users
+ * Image generation models from the canonical catalog.
  */
 export const IMAGE_MODELS: ModalityModel[] = [
   // === BUDGET TIER (Hobby) ===
   {
-    id: 'dall-e-3',
-    name: 'DALL-E 3',
-    provider: 'openai',
+    id: IMAGEN_4_FAST_ID,
+    name: 'Imagen 4 Fast',
+    provider: 'google',
     tier: 'hobby',
-    costPerUnit: 0.04, // $0.04 per image (standard)
+    costPerUnit: 0.02,
     quality: 'standard',
-    speed: 'normal',
+    speed: 'fast',
     capabilities: {
       maxResolution: '1024x1024',
-      styles: ['natural', 'vivid'],
+      styles: ['natural', 'artistic'],
+    },
+  },
+  {
+    id: GPT_IMAGE_2_ID,
+    name: 'GPT Image 2',
+    provider: 'openai',
+    tier: 'hobby',
+    costPerUnit: 0.053,
+    quality: 'hd',
+    speed: 'normal',
+    capabilities: {
+      maxResolution: '1536x1024',
+      styles: ['natural', 'photorealistic', 'design', 'typography'],
     },
   },
   // === PRO TIER ===
@@ -100,7 +112,7 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: 'imagen-4.0-generate-001',
+    id: IMAGEN_4_ID,
     name: 'Imagen 4',
     provider: 'google',
     tier: 'pro',
@@ -112,20 +124,6 @@ export const IMAGE_MODELS: ModalityModel[] = [
       styles: ['natural', 'artistic'],
     },
   },
-  {
-    id: GPT_IMAGE_1_ID,
-    name: 'GPT Image 1',
-    provider: 'openai',
-    tier: 'pro',
-    costPerUnit: 0.04,
-    quality: 'hd',
-    speed: 'normal',
-    capabilities: {
-      maxResolution: '1024x1024',
-      styles: ['natural', 'vivid', 'artistic'],
-    },
-  },
-  // === MAX/ENTERPRISE TIER ===
   {
     id: 'midjourney-v7',
     name: 'Midjourney v7',
@@ -141,20 +139,20 @@ export const IMAGE_MODELS: ModalityModel[] = [
     },
   },
   {
-    id: GPT_IMAGE_1_5_ID,
-    name: 'GPT Image 1.5',
+    id: GPT_IMAGE_2_ID,
+    name: 'GPT Image 2 High',
     provider: 'openai',
     tier: 'max',
-    costPerUnit: 0.08,
+    costPerUnit: 0.211,
     quality: 'ultra',
-    speed: 'slow',
+    speed: 'normal',
     capabilities: {
       maxResolution: '2048x2048',
-      styles: ['natural', 'vivid', 'artistic', 'photorealistic'],
+      styles: ['natural', 'artistic', 'photorealistic', 'typography'],
     },
   },
   {
-    id: 'imagen-4.0-ultra-generate-001',
+    id: IMAGEN_4_ULTRA_ID,
     name: 'Imagen 4 Ultra',
     provider: 'google',
     tier: 'max',
@@ -169,13 +167,8 @@ export const IMAGE_MODELS: ModalityModel[] = [
 ];
 
 /**
- * Video Generation Models (January 2026)
- *
- * Based on public opinion research:
- * - Veo 3.1: Best for 4K quality (Google's flagship, highest resolution)
- * - Sora 2: Best for photorealistic human motion and faces
- * - Runway Gen-4: Best for professional workflows (editor integration)
- * - Kling 2: Best for budget video generation
+ * Video generation models. AGI currently uses catalog-backed non-OpenAI video
+ * providers for this surface.
  */
 export const VIDEO_MODELS: ModalityModel[] = [
   // === PRO TIER ===
@@ -209,7 +202,7 @@ export const VIDEO_MODELS: ModalityModel[] = [
   },
   // === MAX/ENTERPRISE TIER ===
   {
-    id: 'veo-3.1-generate-preview',
+    id: VEO_3_1_ID,
     name: 'Veo 3.1',
     provider: 'google',
     tier: 'max',
@@ -220,20 +213,6 @@ export const VIDEO_MODELS: ModalityModel[] = [
       maxResolution: '4K',
       maxDuration: 120,
       styles: ['cinematic', 'animated', 'documentary', 'photorealistic'],
-    },
-  },
-  {
-    id: 'sora-2',
-    name: 'Sora 2',
-    provider: 'openai',
-    tier: 'max',
-    costPerUnit: 0.1, // Per second of video
-    quality: 'ultra',
-    speed: 'slow',
-    capabilities: {
-      maxResolution: '1920x1080',
-      maxDuration: 60,
-      styles: ['cinematic', 'animated', 'realistic', 'human-motion'],
     },
   },
   {

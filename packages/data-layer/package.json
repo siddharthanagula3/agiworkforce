@@ -31,6 +31,6 @@
   "devDependencies": {
     "@clerk/backend": "^3.4.13",
     "@neondatabase/serverless": "^1.1.0",
-    "vitest": "^3.0.0"
+    "vitest": "^4.1.8"
   }
 }

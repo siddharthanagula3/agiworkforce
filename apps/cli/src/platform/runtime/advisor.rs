@@ -22,19 +22,78 @@ pub struct AdvisorResponse {
     pub tokens: u32,
 }
 
-/// Pick the best available advisor model by checking env-var availability.
-fn pick_default_advisor_model() -> (String, Provider) {
-    // Prefer claude-opus-4-7 if Anthropic key is present.
-    if std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.is_empty()) {
-        return ("claude-opus-4-7".to_string(), Provider::Anthropic);
+/// Pick the best available advisor model from the shared model catalog.
+fn pick_default_advisor_model() -> Result<(String, Provider)> {
+    for provider_name in keyed_provider_preference() {
+        if !provider_has_key(provider_name) {
+            continue;
+        }
+        if let Some(model) = best_catalog_model_for_provider(provider_name) {
+            let provider = models::provider_from_name(provider_name)
+                .or_else(|| models::try_detect_provider(&model))
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "advisor: catalog model '{}' has no supported provider mapping",
+                        model
+                    )
+                })?;
+            return Ok((model, provider));
+        }
     }
-    // Fall back to gpt-5.5 if OpenAI key is present.
-    if std::env::var("OPENAI_API_KEY").is_ok_and(|k| !k.is_empty()) {
-        return ("gpt-5.5".to_string(), models::openai_provider());
+
+    bail!(
+        "advisor: no catalog-backed advisor model is available for the configured providers. \
+         Set a provider API key or pass an explicit catalog model."
+    )
+}
+
+fn keyed_provider_preference() -> &'static [&'static str] {
+    &[
+        "anthropic",
+        "openai",
+        "google",
+        "xai",
+        "deepseek",
+        "qwen",
+        "mistral",
+        "openrouter",
+        "nvidia",
+    ]
+}
+
+fn provider_has_key(provider_name: &str) -> bool {
+    match provider_name {
+        "anthropic" => std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "openai" => std::env::var("OPENAI_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "google" => {
+            std::env::var("GOOGLE_API_KEY").is_ok_and(|k| !k.is_empty())
+                || std::env::var("GEMINI_API_KEY").is_ok_and(|k| !k.is_empty())
+        }
+        "xai" => std::env::var("XAI_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "deepseek" => std::env::var("DEEPSEEK_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "qwen" => std::env::var("DASHSCOPE_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "mistral" => std::env::var("MISTRAL_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "openrouter" => std::env::var("OPENROUTER_API_KEY").is_ok_and(|k| !k.is_empty()),
+        "nvidia" => std::env::var("NVIDIA_API_KEY").is_ok_and(|k| !k.is_empty()),
+        _ => false,
     }
-    // Last resort: return Anthropic anyway (will fail with a clear error at
-    // call time if the key is missing).
-    ("claude-opus-4-7".to_string(), Provider::Anthropic)
+}
+
+fn best_catalog_model_for_provider(provider_name: &str) -> Option<String> {
+    crate::model_catalog::models_for(provider_name)
+        .into_iter()
+        .filter(|model| model.status == "active")
+        .max_by_key(|model| {
+            let tier_rank = match crate::model_catalog::quality_tier_for_model(&model.id).as_deref()
+            {
+                Some("best") => 3,
+                Some("balanced") => 2,
+                Some("fast") => 1,
+                _ => 0,
+            };
+            (tier_rank, model.context_window, model.max_output_tokens)
+        })
+        .map(|model| model.id.clone())
 }
 
 /// Consult a higher-tier model with a one-shot question.
@@ -45,19 +104,21 @@ pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
 
     let (model, provider) = if let Some(m) = req.model.filter(|m| !m.is_empty()) {
         // Detect the provider from the explicitly requested model.
-        let prov = models::detect_provider(&m);
+        let prov = models::try_detect_provider(&m).ok_or_else(|| {
+            anyhow::anyhow!(
+                "advisor: model '{}' is not recognized. Use a catalog model from `agi models list`.",
+                m
+            )
+        })?;
         (m, prov)
     } else {
-        pick_default_advisor_model()
+        pick_default_advisor_model()?
     };
 
     // Validate the chosen provider has credentials before attempting a call.
     let has_key = match &provider {
-        Provider::Anthropic => std::env::var("ANTHROPIC_API_KEY").is_ok_and(|k| !k.is_empty()),
-        Provider::Google => {
-            std::env::var("GOOGLE_API_KEY").is_ok_and(|k| !k.is_empty())
-                || std::env::var("GEMINI_API_KEY").is_ok_and(|k| !k.is_empty())
-        }
+        Provider::Anthropic => provider_has_key("anthropic"),
+        Provider::Google => provider_has_key("google"),
         Provider::Ollama(_) => true, // keyless
         Provider::OpenAICompatible { api_key_env, .. } => api_key_env
             .map(|env| std::env::var(env).is_ok_and(|k| !k.is_empty()))
@@ -121,8 +182,15 @@ mod tests {
 
     #[test]
     fn pick_default_model_returns_string() {
-        let (model, _provider) = pick_default_advisor_model();
-        assert!(!model.is_empty());
+        if keyed_provider_preference()
+            .iter()
+            .any(|provider| provider_has_key(provider))
+        {
+            let (model, _provider) = pick_default_advisor_model().expect("keyed provider model");
+            assert!(!model.is_empty());
+        } else {
+            assert!(pick_default_advisor_model().is_err());
+        }
     }
 
     #[tokio::test]
@@ -133,9 +201,11 @@ mod tests {
         std::env::remove_var("ANTHROPIC_API_KEY");
         std::env::remove_var("OPENAI_API_KEY");
 
+        let model = best_catalog_model_for_provider("anthropic")
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
         let req = AdvisorRequest {
             question: "test question".to_string(),
-            model: Some("claude-opus-4-7".to_string()),
+            model: Some(model),
         };
         let result = consult(req).await;
         assert!(result.is_err(), "expected error when no API key configured");

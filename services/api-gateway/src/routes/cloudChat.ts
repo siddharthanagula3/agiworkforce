@@ -26,6 +26,7 @@ import { AppError } from '../middleware/errorHandler';
 import { getUserScopedClient } from '../lib/neonClients';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 const router: Router = Router();
 
@@ -151,8 +152,9 @@ async function callUpstreamLLM(
         body['system'] = systemMsg.content;
       }
 
-      return fetch('https://api.anthropic.com/v1/messages', {
+      return fetchWithTimeout('https://api.anthropic.com/v1/messages', {
         method: 'POST',
+        timeoutMs: 30_000,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
@@ -166,8 +168,9 @@ async function callUpstreamLLM(
       const apiKey = process.env['OPENAI_API_KEY'];
       if (!apiKey) throw new AppError('OpenAI API key not configured', 500);
 
-      return fetch('https://api.openai.com/v1/chat/completions', {
+      return fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
+        timeoutMs: 30_000,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
@@ -200,7 +203,7 @@ async function callUpstreamLLM(
       }
 
       const request = buildGoogleStreamRequest(model, body, apiKey);
-      return fetch(request.url, request.init);
+      return fetchWithTimeout(request.url, { ...request.init, timeoutMs: 30_000 });
     }
   }
 }

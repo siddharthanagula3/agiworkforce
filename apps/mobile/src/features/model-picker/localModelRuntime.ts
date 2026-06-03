@@ -3,7 +3,7 @@ import {
   getInstalledModel,
   listInstalledModels,
   markInstalledModelUsed,
-} from '@/storage/installedModels';
+} from '../../../storage/installedModels';
 import {
   DEFAULT_LOCAL_MODEL_ID,
   getSelectableModelById,

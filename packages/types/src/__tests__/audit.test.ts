@@ -226,14 +226,14 @@ describe('metadata field', () => {
 
   it('handles deeply nested metadata', () => {
     const metadata = {
-      agent: { id: 'agent-1', model: 'claude-opus-4.6', iterations: 5 },
+      agent: { id: 'agent-1', model: 'claude-opus-4.8', iterations: 5 },
       context: { path: '/home/user', filesChanged: ['a.ts', 'b.ts'] },
     };
 
     const event = createAuditEvent({ ...makeMinimalParams(), metadata });
 
     expect((event.metadata?.['agent'] as Record<string, unknown>)?.['model']).toBe(
-      'claude-opus-4.6',
+      'claude-opus-4.8',
     );
     expect(event.metadata?.['context']).toBeDefined();
   });

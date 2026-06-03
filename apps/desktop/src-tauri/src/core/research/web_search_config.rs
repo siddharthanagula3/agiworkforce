@@ -19,7 +19,6 @@ pub enum WebSearchProvider {
     Perplexity,
 }
 
-
 /// Configuration for web search integration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebSearchConfig {

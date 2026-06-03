@@ -56,14 +56,14 @@ What it controls:
 - The "Generate image" option in the composer action sheet is hidden.
 - Any model response that returns an `image_gen` tool call is silently
   rejected (the tool call is dropped from the message renderer).
-- No request to any image generation API (DALL-E, Ideogram, Stable
+- No request to any image generation API (GPT Image, Ideogram, Stable
   Diffusion endpoint) can be initiated.
 
 How to flip on for v1.1:
 
 1. Set `imageGen: true` in `v1FeatureFlags.ts`.
 2. Ensure provider-side content filters are wired for every image gen
-   provider (OpenAI DALL-E's built-in classifier is the minimum bar).
+   provider (OpenAI GPT Image built-in classifier is the minimum bar).
 3. Add the content-policy pre-screen step required by Apple 1.1.1 and
    Google Play Inappropriate Content policy before shipping.
 4. Update the App Store / Play Store listing to disclose image

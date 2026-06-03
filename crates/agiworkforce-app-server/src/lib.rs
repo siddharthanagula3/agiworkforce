@@ -21,6 +21,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::WebSocketUpgrade;
+use axum::http::header::{AUTHORIZATION, ORIGIN};
+use axum::http::{HeaderMap, StatusCode, Uri};
+use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Router;
 use serde::{Deserialize, Serialize};
@@ -41,11 +44,7 @@ pub trait ToolDispatch: Send + Sync {
     async fn list_tools(&self) -> Vec<serde_json::Value>;
 
     /// Invoke a tool by name with arbitrary JSON arguments.
-    async fn call_tool(
-        &self,
-        name: &str,
-        args: serde_json::Value,
-    ) -> Result<serde_json::Value>;
+    async fn call_tool(&self, name: &str, args: serde_json::Value) -> Result<serde_json::Value>;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +55,9 @@ pub trait ToolDispatch: Send + Sync {
 pub enum AppServerTransport {
     #[default]
     Stdio,
-    WebSocket { addr: SocketAddr },
+    WebSocket {
+        addr: SocketAddr,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -64,13 +65,25 @@ pub struct AppServerConfig {
     pub transport: AppServerTransport,
     pub max_sessions: usize,
     pub session_timeout_secs: u64,
+    pub ws_security: WebSocketSecurity,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct WebSocketSecurity {
+    pub auth_token: Option<String>,
+    pub allowed_origins: Vec<String>,
+    /// Accept `?token=` during the WebSocket upgrade. Disabled by default
+    /// because URL tokens are commonly captured by logs and browser history.
+    pub allow_query_token: bool,
+}
+
 impl Default for AppServerConfig {
     fn default() -> Self {
         Self {
             transport: AppServerTransport::default(),
             max_sessions: 10,
             session_timeout_secs: 3600,
+            ws_security: WebSocketSecurity::default(),
         }
     }
 }
@@ -175,17 +188,11 @@ impl Processor {
                     .unwrap_or(serde_json::Value::Null);
                 match self.dispatch.call_tool(&name, args).await {
                     Ok(result) => JsonRpcResponse::ok(req.id, result),
-                    Err(e) => {
-                        JsonRpcResponse::err(req.id, -32603, format!("Tool error: {e}"))
-                    }
+                    Err(e) => JsonRpcResponse::err(req.id, -32603, format!("Tool error: {e}")),
                 }
             }
             "shutdown" => JsonRpcResponse::ok(req.id, serde_json::json!({ "shutdown": true })),
-            _ => JsonRpcResponse::err(
-                req.id,
-                -32601,
-                format!("Method not found: {}", req.method),
-            ),
+            _ => JsonRpcResponse::err(req.id, -32601, format!("Method not found: {}", req.method)),
         }
     }
 }
@@ -200,20 +207,47 @@ pub async fn run_app_server(
     config: AppServerConfig,
     dispatch: Arc<dyn ToolDispatch>,
 ) -> Result<()> {
-    match config.transport {
+    let AppServerConfig {
+        transport,
+        ws_security,
+        ..
+    } = config;
+    match transport {
         AppServerTransport::Stdio => run_stdio(dispatch).await,
-        AppServerTransport::WebSocket { addr } => run_ws(addr, dispatch).await,
+        AppServerTransport::WebSocket { addr } => run_ws(addr, ws_security, dispatch).await,
     }
 }
 
-async fn run_ws(addr: SocketAddr, dispatch: Arc<dyn ToolDispatch>) -> Result<()> {
+async fn run_ws(
+    addr: SocketAddr,
+    security: WebSocketSecurity,
+    dispatch: Arc<dyn ToolDispatch>,
+) -> Result<()> {
+    if security
+        .auth_token
+        .as_deref()
+        .is_none_or(|token| token.trim().is_empty())
+    {
+        anyhow::bail!("WebSocket app-server requires a non-empty auth token");
+    }
     let proc = Arc::new(Processor::new(dispatch));
+    let listen_addr = addr;
     let app = Router::new()
         .route(
             "/ws",
             get({
                 let p = Arc::clone(&proc);
-                move |ws: WebSocketUpgrade| async move { ws.on_upgrade(move |s| handle_ws(s, p)) }
+                let security = security.clone();
+                move |ws: WebSocketUpgrade, headers: HeaderMap, uri: Uri| {
+                    let p = Arc::clone(&p);
+                    let security = security.clone();
+                    async move {
+                        match validate_ws_request(&headers, &uri, listen_addr, &security) {
+                            Ok(()) => ws.on_upgrade(move |s| handle_ws(s, p)).into_response(),
+                            Err(status) => status.into_response(),
+                        }
+                    }
+                }
             }),
         )
         .route("/health", get(|| async { "ok" }));
@@ -221,6 +255,87 @@ async fn run_ws(addr: SocketAddr, dispatch: Arc<dyn ToolDispatch>) -> Result<()>
     eprintln!("App server on ws://{}", addr);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+fn validate_ws_request(
+    headers: &HeaderMap,
+    uri: &Uri,
+    addr: SocketAddr,
+    security: &WebSocketSecurity,
+) -> std::result::Result<(), StatusCode> {
+    let expected_token = security
+        .auth_token
+        .as_deref()
+        .filter(|token| !token.trim().is_empty())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    if request_token(headers, uri, security.allow_query_token).as_deref() != Some(expected_token) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    if !origin_allowed(headers, addr, &security.allowed_origins) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
+    Ok(())
+}
+
+fn request_token(headers: &HeaderMap, uri: &Uri, allow_query_token: bool) -> Option<String> {
+    if let Some(value) = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok()) {
+        if let Some(token) = value.strip_prefix("Bearer ") {
+            return Some(token.to_string());
+        }
+    }
+
+    if let Some(value) = headers
+        .get("x-agi-app-server-token")
+        .and_then(|v| v.to_str().ok())
+    {
+        return Some(value.to_string());
+    }
+
+    if allow_query_token {
+        uri.query()?.split('&').find_map(|pair| {
+            let (key, value) = pair.split_once('=')?;
+            (key == "token").then(|| value.to_string())
+        })
+    } else {
+        None
+    }
+}
+
+fn origin_allowed(headers: &HeaderMap, addr: SocketAddr, configured: &[String]) -> bool {
+    let Some(origin) = headers.get(ORIGIN).and_then(|v| v.to_str().ok()) else {
+        return true;
+    };
+    let origin = normalize_origin(origin);
+    let allowed = if configured.is_empty() {
+        default_allowed_origins(addr)
+    } else {
+        configured.to_vec()
+    };
+
+    allowed
+        .iter()
+        .map(|candidate| normalize_origin(candidate))
+        .any(|candidate| candidate == origin)
+}
+
+fn normalize_origin(origin: &str) -> String {
+    origin.trim().trim_end_matches('/').to_ascii_lowercase()
+}
+
+fn default_allowed_origins(addr: SocketAddr) -> Vec<String> {
+    let port = addr.port();
+    [
+        format!("http://localhost:{port}"),
+        format!("https://localhost:{port}"),
+        format!("http://127.0.0.1:{port}"),
+        format!("https://127.0.0.1:{port}"),
+        format!("http://[::1]:{port}"),
+        format!("https://[::1]:{port}"),
+    ]
+    .into()
 }
 
 async fn handle_ws(mut socket: WebSocket, proc: Arc<Processor>) {
@@ -409,6 +524,85 @@ mod tests {
         }
     }
 
+    fn ws_security() -> WebSocketSecurity {
+        WebSocketSecurity {
+            auth_token: Some("secret-token".into()),
+            allowed_origins: Vec::new(),
+            allow_query_token: false,
+        }
+    }
+
+    #[test]
+    fn ws_security_rejects_missing_token() {
+        let headers = HeaderMap::new();
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    #[test]
+    fn ws_security_accepts_bearer_token_and_loopback_origin() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+        headers.insert(ORIGIN, "http://localhost:8787".parse().unwrap());
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn ws_security_accepts_custom_header_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-agi-app-server-token", "secret-token".parse().unwrap());
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn ws_security_rejects_query_token_by_default() {
+        let headers = HeaderMap::new();
+        let uri: Uri = "/ws?token=secret-token".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Err(StatusCode::UNAUTHORIZED)
+        );
+    }
+
+    #[test]
+    fn ws_security_accepts_query_token_when_explicitly_enabled() {
+        let headers = HeaderMap::new();
+        let uri: Uri = "/ws?token=secret-token".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        let mut security = ws_security();
+        security.allow_query_token = true;
+
+        assert_eq!(validate_ws_request(&headers, &uri, addr, &security), Ok(()));
+    }
+
+    #[test]
+    fn ws_security_rejects_untrusted_origin() {
+        let mut headers = HeaderMap::new();
+        headers.insert(AUTHORIZATION, "Bearer secret-token".parse().unwrap());
+        headers.insert(ORIGIN, "https://evil.example".parse().unwrap());
+        let uri: Uri = "/ws".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8787".parse().unwrap();
+        assert_eq!(
+            validate_ws_request(&headers, &uri, addr, &ws_security()),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
     #[tokio::test]
     async fn initialize_returns_capabilities() {
         let p = Processor::new(Arc::new(MockDispatch::new()));
@@ -445,10 +639,7 @@ mod tests {
             .await;
         let result = resp.result.expect("tools/call should succeed");
         assert_eq!(result["isError"], serde_json::json!(false));
-        assert_eq!(
-            result["content"][0]["text"],
-            serde_json::json!("hello")
-        );
+        assert_eq!(result["content"][0]["text"], serde_json::json!("hello"));
 
         let last = mock.last_call.lock().await;
         assert_eq!(
@@ -496,9 +687,6 @@ mod tests {
     async fn shutdown_acknowledged() {
         let p = Processor::new(Arc::new(MockDispatch::new()));
         let resp = p.process(req(7, "shutdown", serde_json::json!({}))).await;
-        assert_eq!(
-            resp.result,
-            Some(serde_json::json!({"shutdown": true}))
-        );
+        assert_eq!(resp.result, Some(serde_json::json!({"shutdown": true})));
     }
 }

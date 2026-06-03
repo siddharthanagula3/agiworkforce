@@ -818,7 +818,10 @@ async fn run_execution_loop(
                         Err(_) => return, // semaphore closed
                     };
 
-                    execute_trigger(event, &config, &hooks_config, &log_dir).await;
+                    if let Err(err) = execute_trigger(event, &config, &hooks_config, &log_dir).await
+                    {
+                        eprintln!("{} Trigger execution failed: {:#}", "daemon:".bright_red(), err);
+                    }
                 });
                 // Detach but log panic: spawn a watcher that awaits the handle.
                 tokio::spawn(async move {
@@ -840,7 +843,7 @@ async fn execute_trigger(
     config: &CliConfig,
     hooks_config: &HooksConfig,
     log_dir: &std::path::Path,
-) {
+) -> Result<()> {
     let start = std::time::Instant::now();
     let timestamp = Local::now().format("%Y%m%d_%H%M%S").to_string();
 
@@ -871,7 +874,17 @@ async fn execute_trigger(
     hooks::run_hooks(hooks_config, hook_event, &hook_input).await;
 
     // Create a non-interactive agent session
-    let mut session = AgentSession::new(model, &sys_context, None);
+    let mut session = AgentSession::new_checked(
+        model,
+        &sys_context,
+        None,
+        crate::models::selection_provider_override(
+            model,
+            &config.default.model,
+            &config.default.provider,
+            None,
+        ),
+    )?;
     session.skip_permissions = true; // daemon runs unattended
     session.max_turns = Some(25);
 
@@ -946,6 +959,7 @@ async fn execute_trigger(
         duration.as_secs_f64(),
         status
     );
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

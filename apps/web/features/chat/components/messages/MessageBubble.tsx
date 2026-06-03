@@ -57,7 +57,7 @@ import { InlineArtifactCards } from '../artifacts/InlineArtifactCards';
 import { extractArtifacts, removeArtifactBlocks } from '../../utils/artifact-detector';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
-import type { SearchResponse } from '@core/integrations/web-search-handler';
+import type { SearchResponse, SearchResult } from '@core/integrations/web-search-handler';
 import type { MediaGenerationResult } from '@core/integrations/media-generation-handler';
 import type { GeneratedDocument } from '../../services/document-generation-service';
 import { ThinkingBlock } from '../ThinkingBlock';
@@ -158,7 +158,7 @@ interface Message {
     isMultiAgent?: boolean;
     employeesInvolved?: string[];
     isSynthesis?: boolean;
-    searchResults?: SearchResponse;
+    searchResults?: SearchResponse | SearchResult[];
     isSearching?: boolean;
     tools?: ToolEntry[];
     toolResult?: boolean;
@@ -655,8 +655,9 @@ const MessageBubbleComponent = function MessageBubble({
 
               const sr = message.metadata?.searchResults;
               if (sr) {
-                const query = sr.query;
-                (sr.results ?? []).forEach((r, i) => {
+                const query = Array.isArray(sr) ? undefined : sr.query;
+                const searchResults = Array.isArray(sr) ? sr : (sr.results ?? []);
+                searchResults.forEach((r, i) => {
                   if (r.url) {
                     sources.push({
                       url: r.url,
@@ -668,11 +669,13 @@ const MessageBubbleComponent = function MessageBubble({
                   }
                 });
                 // Sources array from Perplexity answer
-                (sr.sources ?? []).forEach((url) => {
-                  if (url && !sources.some((s) => s.url === url)) {
-                    sources.push({ url, title: '', citationIndex: sources.length + 1 });
-                  }
-                });
+                if (!Array.isArray(sr)) {
+                  (sr.sources ?? []).forEach((url) => {
+                    if (url && !sources.some((s) => s.url === url)) {
+                      sources.push({ url, title: '', citationIndex: sources.length + 1 });
+                    }
+                  });
+                }
 
                 if (sources.length > 0) {
                   return <InlineSourcesList sources={sources} query={query} />;

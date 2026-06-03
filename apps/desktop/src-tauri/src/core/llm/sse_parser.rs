@@ -1369,11 +1369,11 @@ mod stream_tests {
 
     #[test]
     fn test_parse_anthropic_sse_message_start_with_usage() {
-        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4-6\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":472,\"output_tokens\":2}}}";
+        let event = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_01\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-opus-4.8\",\"content\":[],\"stop_reason\":null,\"usage\":{\"input_tokens\":472,\"output_tokens\":2}}}";
 
         let chunk = parse_sse_event(event, crate::core::llm::Provider::Anthropic).unwrap();
 
-        assert_eq!(chunk.model.as_deref(), Some("claude-opus-4-6"));
+        assert_eq!(chunk.model.as_deref(), Some("claude-opus-4.8"));
         assert!(chunk.usage.is_some());
         let usage = chunk.usage.unwrap();
         assert_eq!(usage.prompt_tokens, Some(472));

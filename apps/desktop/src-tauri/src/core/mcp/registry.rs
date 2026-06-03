@@ -463,13 +463,15 @@ impl McpToolRegistry {
         server_name: &str,
         mcp_tool: &McpTool,
     ) -> crate::core::llm::ToolDefinition {
+        let raw_desc = mcp_tool
+            .description
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("(no description)");
         crate::core::llm::ToolDefinition {
             // HIGH-004 fix: Use helper for safe tool ID creation
             name: create_safe_tool_id(server_name, &mcp_tool.name),
-            description: mcp_tool
-                .description
-                .clone()
-                .unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
+            description: sanitize_mcp_description(raw_desc, server_name),
             parameters: mcp_tool.input_schema.clone(),
             strict: None,
         }
@@ -484,12 +486,17 @@ impl McpToolRegistry {
     }
 
     pub fn to_openai_function(&self, server_name: &str, mcp_tool: &McpTool) -> Value {
+        let raw_desc = mcp_tool
+            .description
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or("(no description)");
         serde_json::json!({
             "type": "function",
             "function": {
                 // HIGH-004 fix: Use helper for safe tool ID creation
                 "name": create_safe_tool_id(server_name, &mcp_tool.name),
-                "description": mcp_tool.description.clone().unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
+                "description": sanitize_mcp_description(raw_desc, server_name),
                 "parameters": mcp_tool.input_schema
             }
         })
@@ -673,20 +680,13 @@ mod tests {
         assert_eq!(tool, "my_tool");
     }
 
-    /// Benchmark: compare indexed lookup vs simulated linear scan for hashed IDs.
+    /// Verifies indexed lookup resolves every hashed ID inserted into the registry.
     ///
-    /// Marked `#[ignore]` because absolute wall-clock comparisons flake on
-    /// shared CI runners. With only 100 entries and 1000 iters per side the
-    /// dominant cost can shift to allocator noise, rwlock acquisition, or
-    /// process scheduling. Run locally with `cargo test --lib
-    /// test_benchmark_index_vs_linear_scan -- --ignored --nocapture` when
-    /// validating the index path's micro-perf.
     #[test]
-    #[ignore = "timing-sensitive benchmark; run with --ignored for local perf checks"]
-    fn test_benchmark_index_vs_linear_scan() {
+    fn test_index_resolves_hashed_ids() {
         let registry = McpToolRegistry::new(Arc::new(McpClient::new()));
 
-        // Populate the index with 100 hashed-style entries
+        // Populate the index with 100 hashed-style entries.
         let mut tool_ids = Vec::with_capacity(100);
         {
             let mut index = registry.id_index.write();
@@ -700,43 +700,15 @@ mod tests {
             }
         }
 
-        // Benchmark O(1) HashMap lookup
-        let start_indexed = std::time::Instant::now();
-        for _ in 0..1_000 {
-            for tool_id in &tool_ids {
-                let _result = registry.id_index.read().get(tool_id).cloned();
-            }
+        for (i, tool_id) in tool_ids.iter().enumerate() {
+            let result = registry
+                .id_index
+                .read()
+                .get(tool_id)
+                .cloned()
+                .expect("hashed tool ID should resolve from index");
+            assert_eq!(result.0, format!("server_{}", i));
+            assert_eq!(result.1, format!("tool_{}", i));
         }
-        let elapsed_indexed = start_indexed.elapsed();
-
-        // Benchmark O(N) simulated linear scan (Vec of the same entries)
-        let entries: Vec<(String, String, String)> = tool_ids
-            .iter()
-            .enumerate()
-            .map(|(i, id)| (id.clone(), format!("server_{}", i), format!("tool_{}", i)))
-            .collect();
-
-        let start_linear = std::time::Instant::now();
-        for _ in 0..1_000 {
-            for tool_id in &tool_ids {
-                let _result = entries.iter().find(|(id, _, _)| id == tool_id);
-            }
-        }
-        let elapsed_linear = start_linear.elapsed();
-
-        eprintln!(
-            "100 tools x 1000 iters: indexed={:?}, linear={:?}, speedup={:.1}x",
-            elapsed_indexed,
-            elapsed_linear,
-            elapsed_linear.as_nanos() as f64 / elapsed_indexed.as_nanos().max(1) as f64
-        );
-
-        // The indexed path should be meaningfully faster
-        assert!(
-            elapsed_indexed < elapsed_linear,
-            "indexed lookup ({:?}) should be faster than linear scan ({:?})",
-            elapsed_indexed,
-            elapsed_linear
-        );
     }
 }

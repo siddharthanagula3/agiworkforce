@@ -20,6 +20,12 @@ export interface WaitlistEntry {
   referralSource?: string;
 }
 
+export interface JoinWaitlistResult {
+  success: boolean;
+  error?: string;
+  rank?: number;
+}
+
 function toInviteCodeError(value: unknown): InviteCodeError {
   if (
     value === 'invalid_code' ||
@@ -84,9 +90,7 @@ export async function redeemInviteCode(code: string, source: string): Promise<Re
 /**
  * Waitlist signup via /api/waitlist/cloud-managed.
  */
-export async function joinWaitlist(
-  entry: WaitlistEntry,
-): Promise<{ success: boolean; error?: string }> {
+export async function joinWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
   try {
     const allowedSources = new Set(['byok', 'sync', 'billing', 'other']);
     const source =
@@ -108,7 +112,11 @@ export async function joinWaitlist(
       return { success: false, error: 'Failed to join waitlist. Please try again.' };
     }
 
-    return { success: true };
+    const data = (await res.json().catch(() => ({}))) as { rank?: unknown };
+    const rank =
+      typeof data.rank === 'number' && Number.isFinite(data.rank) ? data.rank : undefined;
+
+    return rank === undefined ? { success: true } : { success: true, rank };
   } catch {
     return { success: false, error: 'Failed to join waitlist. Please try again.' };
   }

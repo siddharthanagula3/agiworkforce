@@ -150,10 +150,9 @@ impl McpClient {
         } else if arguments.is_null() {
             HashMap::new()
         } else {
-            let mut wrapped = HashMap::new();
-            // Preserve non-object payloads instead of silently dropping them.
-            wrapped.insert("input".to_string(), arguments);
-            wrapped
+            return Err(McpError::ToolExecutionError(
+                "MCP tool arguments must be a JSON object".to_string(),
+            ));
         };
 
         let result = session_arc.call_tool(tool_name, args_map).await?;

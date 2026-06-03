@@ -117,12 +117,15 @@ pub async fn execute_terminal_command(
             "shell": shell,
         });
 
-        crate::sys::commands::tool_confirmation::request_confirmation_simple(
+        if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
             &app,
             "terminal_execute",
             &confirmation_args,
         )
-        .await?;
+        .await?
+        {
+            return Err("Operation denied by user".to_string());
+        }
     }
 
     let mut cwd = cwd;

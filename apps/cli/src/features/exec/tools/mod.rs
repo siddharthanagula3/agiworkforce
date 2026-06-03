@@ -4,10 +4,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use anyhow::Result;
+use dialoguer::Confirm;
 use serde::Deserialize;
 use serde_json::Value;
 
 use crate::agent::ToolCall;
+use crate::tui::approval_broker::ApprovalRequestKind;
 
 mod bash;
 mod common;
@@ -21,13 +23,13 @@ pub use task_registry::session_task_summaries;
 pub(crate) use task_registry::set_advisor_local_privacy_mode;
 
 use bash::execute_run_command;
+use common::{describe_command, print_tool_status, truncate_output_with_save};
 #[cfg(test)]
 use common::{
     format_size, generate_simple_diff, is_dangerous_command, tool_size_cap, truncate_by_lines,
     truncate_line, MAX_FILE_LINES, MAX_LINE_LENGTH, MAX_OUTPUT_BYTES, MAX_OUTPUT_LINES,
     TRUNCATION_HEAD_LINES, TRUNCATION_TAIL_LINES,
 };
-use common::{print_tool_status, truncate_output_with_save};
 use dir_ops::{execute_glob, execute_grep_files, execute_list_directory, execute_search_files};
 use file_ops::{
     execute_apply_patch, execute_multiedit, execute_read_file, execute_read_many_files,
@@ -70,9 +72,7 @@ impl ToolResult {
 }
 
 pub type ApprovalCallback = Arc<
-    dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ApprovalDecision> + Send>>
-        + Send
-        + Sync,
+    dyn Fn(ApprovalRequest) -> Pin<Box<dyn Future<Output = ApprovalDecision> + Send>> + Send + Sync,
 >;
 
 #[derive(Clone)]
@@ -114,8 +114,12 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "search_files" => execute_search_files_with_opts(&call.args, opts.quiet).await,
         "list_directory" => execute_list_directory_with_opts(&call.args, opts.quiet).await,
         "edit_file" => {
-            file_ops::execute_edit_file(&call.args, require_confirm, opts.approval_callback.as_ref())
-                .await
+            file_ops::execute_edit_file(
+                &call.args,
+                require_confirm,
+                opts.approval_callback.as_ref(),
+            )
+            .await
         }
         "web_search" => execute_web_search_with_opts(&call.args, opts.quiet).await,
         "web_fetch" => execute_web_fetch_with_opts(&call.args, opts.quiet).await,
@@ -129,7 +133,9 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "multiedit" => {
             execute_multiedit(&call.args, require_confirm, opts.approval_callback.as_ref()).await
         }
-        "powershell" => execute_powershell(&call.args).await,
+        "powershell" => {
+            execute_powershell(&call.args, require_confirm, opts.approval_callback.as_ref()).await
+        }
         "notebook_edit" => execute_notebook_edit(&call.args, require_confirm).await,
         "todo_read" => execute_todo_read().await,
         "todo_write" => execute_todo_write(&call.args).await,
@@ -147,8 +153,14 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "cron_delete" => execute_cron_delete(&call.args).await,
         "cron_list" => execute_cron_list(&call.args).await,
         "advisor" => execute_advisor(&call.args).await,
-        "enter_worktree" => execute_enter_worktree(&call.args).await,
-        "exit_worktree" => execute_exit_worktree(&call.args).await,
+        "enter_worktree" => {
+            execute_enter_worktree(&call.args, require_confirm, opts.approval_callback.as_ref())
+                .await
+        }
+        "exit_worktree" => {
+            execute_exit_worktree(&call.args, require_confirm, opts.approval_callback.as_ref())
+                .await
+        }
         "list_worktrees" => execute_list_worktrees(&call.args).await,
         "lsp_definition" => execute_lsp_definition(&call.args).await,
         "lsp_hover" => execute_lsp_hover(&call.args).await,
@@ -156,11 +168,7 @@ pub async fn execute_tool_with_opts(call: &ToolCall, opts: &ToolExecOptions) -> 
         "lsp_completion" => execute_lsp_completion(&call.args).await,
         "lsp_document_symbols" => execute_lsp_document_symbols(&call.args).await,
         "lsp_format" => execute_lsp_format(&call.args).await,
-        _ => Ok(ToolResult {
-            tool_name: call.name.clone(),
-            success: false,
-            output: format!("Unknown tool: {}", call.name),
-        }),
+        _ => Ok(unknown_tool_result(&call.name)),
     };
 
     result
@@ -192,6 +200,48 @@ fn is_catalog_read_only_tool(tool_name: &str) -> bool {
     crate::runtime::tool_catalog::all_builtin_tool_definitions()
         .into_iter()
         .any(|tool| tool.name == canonical_name && tool.is_read_only)
+}
+
+fn unknown_tool_result(requested: &str) -> ToolResult {
+    let mut known: Vec<String> = crate::runtime::tool_catalog::all_builtin_tool_definitions()
+        .into_iter()
+        .chain(crate::runtime::tool_catalog::team_tool_definitions())
+        .map(|tool| tool.name)
+        .collect();
+    known.sort();
+    known.dedup();
+
+    let needle = requested.to_lowercase();
+    let suggestions: Vec<&str> = known
+        .iter()
+        .map(String::as_str)
+        .filter(|name| {
+            let lower = name.to_lowercase();
+            lower.contains(&needle) || needle.contains(&lower)
+        })
+        .take(5)
+        .collect();
+
+    let available = known
+        .iter()
+        .take(24)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let mut output = format!("Unknown tool: {requested}");
+    if !suggestions.is_empty() {
+        output.push_str(&format!("\nDid you mean: {}?", suggestions.join(", ")));
+    }
+    output.push_str(&format!("\nAvailable tools include: {available}"));
+    if known.len() > 24 {
+        output.push_str(&format!(" (+{} more; use tool_search)", known.len() - 24));
+    }
+
+    ToolResult {
+        tool_name: requested.to_string(),
+        success: false,
+        output,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +396,11 @@ async fn execute_batch(call: &ToolCall, opts: &ToolExecOptions) -> Result<ToolRe
     })
 }
 
-async fn execute_powershell(args: &HashMap<String, String>) -> Result<ToolResult> {
+async fn execute_powershell(
+    args: &HashMap<String, String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
     let command = match args.get("command") {
         Some(command) => command.clone(),
         None => {
@@ -373,6 +427,75 @@ async fn execute_powershell(args: &HashMap<String, String>) -> Result<ToolResult
         .unwrap_or(true);
 
     print_tool_status("powershell", &format!("PowerShell({})", command));
+    let permission_command = format!("powershell -NoProfile -NonInteractive -Command {}", command);
+
+    if require_confirmation {
+        let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+        match perms.check_command(&permission_command) {
+            Some(true) => {}
+            Some(false) => {
+                return Ok(ToolResult {
+                    tool_name: "powershell".into(),
+                    success: false,
+                    output: format!(
+                        "PowerShell command is denied by saved permissions. Use /permissions reset to clear.\n{}",
+                        describe_command(&permission_command)
+                    ),
+                });
+            }
+            None => {
+                if let Some(decision) = request_approval(
+                    approval_callback,
+                    ApprovalRequest::new(
+                        ApprovalRequestKind::Exec {
+                            command: permission_command.clone(),
+                        },
+                        "Allow this PowerShell command?",
+                        vec![describe_command(&permission_command)],
+                    ),
+                )
+                .await
+                {
+                    if !approval_allows(decision) {
+                        return Ok(ToolResult {
+                            tool_name: "powershell".into(),
+                            success: false,
+                            output: "User denied PowerShell command execution".into(),
+                        });
+                    }
+
+                    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                    match decision {
+                        ApprovalDecision::AllowSession => {
+                            perms.allow_session_for_process(&permission_command);
+                        }
+                        ApprovalDecision::AlwaysAllow => {
+                            perms.allow_always(&permission_command);
+                            let _ = perms.save();
+                        }
+                        _ => {}
+                    }
+                } else {
+                    let confirmed = Confirm::new()
+                        .with_prompt("Allow this PowerShell command?")
+                        .default(false)
+                        .interact()
+                        .unwrap_or(false);
+
+                    if !confirmed {
+                        return Ok(ToolResult {
+                            tool_name: "powershell".into(),
+                            success: false,
+                            output: "User denied PowerShell command execution".into(),
+                        });
+                    }
+
+                    let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                    perms.allow_session_for_process(&permission_command);
+                }
+            }
+        }
+    }
 
     let request = crate::powershell_tool::PowerShellRequest {
         command,
@@ -590,7 +713,7 @@ mod tests {
             .expect("execute_tool_with_opts dispatch match should exist");
         let body = &source[start..];
         let end = body
-            .find("_ => Ok(ToolResult")
+            .find("_ => Ok(unknown_tool_result")
             .expect("execute_tool_with_opts dispatch fallback should exist");
 
         body[..end]

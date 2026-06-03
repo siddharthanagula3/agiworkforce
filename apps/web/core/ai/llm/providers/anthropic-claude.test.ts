@@ -79,7 +79,7 @@ describe('AnthropicProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new AnthropicProvider({
-        model: 'claude-opus-4.6',
+        model: 'claude-opus-4.8',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -89,7 +89,7 @@ describe('AnthropicProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('claude-opus-4.6');
+      expect(config.model).toBe('claude-opus-4.8');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -129,7 +129,7 @@ describe('AnthropicProvider', () => {
     it('should return available models', () => {
       const models = AnthropicProvider.getAvailableModels();
 
-      // claude-opus-4.6 was retired; the canonical flagship is now claude-opus-4.8
+      // claude-opus-4.8 was retired; the canonical flagship is now claude-opus-4.8
       expect(models).toContain('claude-opus-4.8');
       expect(models).toContain('claude-sonnet-4.6');
       expect(models).toContain('claude-haiku-4.5');
@@ -142,7 +142,7 @@ describe('AnthropicProvider', () => {
       // claude-opus-4.8 and claude-sonnet-4.6 have computerUse=true in the catalog
       expect(models).toContain('claude-opus-4.8');
       expect(models).toContain('claude-sonnet-4.6');
-      // claude-sonnet-4.5 is deprecated and no longer in the non-deprecated list
+      // Haiku is not a computer-use model in the non-deprecated catalog list.
       expect(models).not.toContain('claude-haiku-4.5');
     });
 
@@ -150,16 +150,14 @@ describe('AnthropicProvider', () => {
       const aliases = AnthropicProvider.getModelAliases();
 
       // api-model-id mirrors map to their current canonical dot-form ids.
-      // claude-opus-4-6 (dash form) now canonicalizes to claude-opus-4.8
-      // because claude-opus-4.6 was retired; the chain is captured in
-      // anthropic.canonicalization in models.json.
-      expect(aliases['claude-opus-4-6']).toBe('claude-opus-4.8');
+      // claude-opus-4-8 (dash API form) maps to the canonical dot-form ID.
+      expect(aliases['claude-opus-4-8']).toBe('claude-opus-4.8');
       expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4.6');
       expect(aliases['claude-haiku-4-5']).toBe('claude-haiku-4.5');
 
       // canonicalization redirects retired model ids forward to the current
       // generation (anthropic.canonicalization in models.json)
-      expect(aliases['claude-sonnet-4-5']).toBe('claude-sonnet-4.6');
+      expect(aliases['claude-sonnet-4-6']).toBe('claude-sonnet-4.6');
     });
   });
 

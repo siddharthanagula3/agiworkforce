@@ -9,7 +9,7 @@ import { logger } from '@/lib/logger';
  * API Documentation: https://docs.bigmodel.cn/cn/guide/develop/http/introduction
  *
  * Models:
- * - glm-4.7: Latest GLM model, excellent for coding (67% SWE-bench)
+ * - glm-5.1: Current GLM default in the shared catalog
  * - glm-4.6v: Vision-capable model
  * - glm-4-plus: Enhanced model
  * - glm-4-flash: Fast, cost-effective model
@@ -44,7 +44,7 @@ export class ZhipuProvider extends BaseLLMProvider {
       body['tool_choice'] = request.tool_choice;
     }
 
-    // Enable thinking mode if requested (for glm-4.7 deep thinking)
+    // Enable thinking mode if requested by the selected GLM model.
     if (request.thinking_mode) {
       body['thinking'] = { type: 'enabled' };
     }

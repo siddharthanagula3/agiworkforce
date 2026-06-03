@@ -355,31 +355,31 @@ mod tests {
     fn compile_globset_normalizes_trailing_dots() {
         let set = compile_denylist_globset(&["Example.COM.".to_string()]).unwrap();
 
-        assert_eq!(true, set.is_match("example.com"));
-        assert_eq!(false, set.is_match("api.example.com"));
+        assert!(set.is_match("example.com"));
+        assert!(!set.is_match("api.example.com"));
     }
 
     #[test]
     fn compile_globset_normalizes_wildcards() {
         let set = compile_denylist_globset(&["*.Example.COM.".to_string()]).unwrap();
 
-        assert_eq!(true, set.is_match("api.example.com"));
-        assert_eq!(false, set.is_match("example.com"));
+        assert!(set.is_match("api.example.com"));
+        assert!(!set.is_match("example.com"));
     }
 
     #[test]
     fn compile_globset_normalizes_apex_and_subdomains() {
         let set = compile_denylist_globset(&["**.Example.COM.".to_string()]).unwrap();
 
-        assert_eq!(true, set.is_match("example.com"));
-        assert_eq!(true, set.is_match("api.example.com"));
+        assert!(set.is_match("example.com"));
+        assert!(set.is_match("api.example.com"));
     }
 
     #[test]
     fn compile_globset_normalizes_bracketed_ipv6_literals() {
         let set = compile_denylist_globset(&["[::1]".to_string()]).unwrap();
 
-        assert_eq!(true, set.is_match("::1"));
+        assert!(set.is_match("::1"));
     }
 
     #[test]

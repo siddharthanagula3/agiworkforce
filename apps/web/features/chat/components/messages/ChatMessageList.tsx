@@ -49,8 +49,8 @@ export interface ChatMessageListProps {
   className?: string;
   /**
    * Called when the user clicks the Upgrade CTA on an inline paywall card.
-   * Receives the message ID of the paywall slot. The handler should route to
-   * /pricing with the appropriate params (already embedded in the card's href).
+   * Receives the message ID of the paywall slot. The handler opens the
+   * Cloud Managed waitlist modal without navigating away from the chat.
    */
   onPaywallUpgrade?: (messageId: string) => void;
   /**

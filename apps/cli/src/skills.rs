@@ -107,9 +107,14 @@ pub fn discover_skills() -> Vec<Skill> {
         .load_all(std::env::current_dir().ok().as_deref())
         .is_ok()
     {
-        for skill_path in plugins_mgr.skill_paths() {
+        for entry in plugins_mgr.skill_path_entries() {
+            let plugin_root = entry.plugin_root;
+            let skill_path = entry.path;
+            if !crate::plugins::plugin_path_stays_within_root(&plugin_root, &skill_path) {
+                continue;
+            }
             if skill_path.is_dir() {
-                load_skills_from_dir(&skill_path, &mut skills);
+                load_skills_from_plugin_dir(&skill_path, &plugin_root, &mut skills);
             } else if skill_path.is_file()
                 && skill_path.extension().and_then(|e| e.to_str()) == Some("md")
             {
@@ -175,6 +180,28 @@ fn load_skills_from_dir(dir: &Path, skills: &mut Vec<Skill>) {
 
     for entry in entries.flatten() {
         let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("md") {
+            if let Ok(skill) = load_skill(&path) {
+                skills.push(skill);
+            }
+        }
+    }
+}
+
+fn load_skills_from_plugin_dir(dir: &Path, plugin_root: &Path, skills: &mut Vec<Skill>) {
+    if !crate::plugins::plugin_path_stays_within_root(plugin_root, dir) {
+        return;
+    }
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !crate::plugins::plugin_path_stays_within_root(plugin_root, &path) {
+            continue;
+        }
         if path.extension().and_then(|e| e.to_str()) == Some("md") {
             if let Ok(skill) = load_skill(&path) {
                 skills.push(skill);

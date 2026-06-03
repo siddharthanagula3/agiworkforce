@@ -484,16 +484,27 @@ export function checkForInjection(input: string): { safe: boolean; type?: string
 
 export const CSP_CONFIG = {
   'default-src': ["'self'"],
-  // SECURITY: 'unsafe-inline' is required for React inline styles
-  // 'wasm-unsafe-eval' allows WebAssembly without full 'unsafe-eval'
-  'script-src': ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'"],
+  // 'wasm-unsafe-eval' allows WebAssembly without full 'unsafe-eval'.
+  'script-src': ["'self'", "'wasm-unsafe-eval'"],
   'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
   'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
-  'img-src': ["'self'", 'data:', 'https:', 'blob:'],
+  'img-src': [
+    "'self'",
+    'data:',
+    'blob:',
+    'https://agiworkforce.com',
+    'https://www.agiworkforce.com',
+    'https://avatars.githubusercontent.com',
+    'https://lh3.googleusercontent.com',
+  ],
   'connect-src': [
     "'self'",
     'https://agiworkforce.com',
-    'https://*.agiworkforce.com',
+    'https://www.agiworkforce.com',
+    'https://api.agiworkforce.com',
+    'https://api.stripe.com',
+    'https://agiworkforce-signaling.fly.dev',
+    'wss://agiworkforce-signaling.fly.dev',
     'http://localhost:11434',
     'http://127.0.0.1:11434',
   ],

@@ -357,14 +357,22 @@ describe('ConnectorsPage', () => {
     expect(screen.getByText('105+ Connectors Planned')).toBeDefined();
   });
 
-  // 15. Roadmap callout is hidden when Exclusive category is active
-  it('hides the roadmap callout when Exclusive category is selected', async () => {
+  // 15. Exclusive/local connectors are hidden until enforcement exists
+  it('does not show the AGI Exclusive category', async () => {
     await renderConnectorsPage();
 
-    // The Exclusive category label is 'AGI Exclusive' (no emoji in source)
-    const exclusiveTab = screen.getByText('AGI Exclusive');
-    fireEvent.click(exclusiveTab);
+    expect(screen.queryByText('AGI Exclusive')).toBeNull();
+    expect(screen.queryByText('Local Filesystem')).toBeNull();
+    expect(screen.queryByText('Terminal / Shell')).toBeNull();
+  });
 
-    expect(screen.queryByText('105+ Connectors Planned')).toBeNull();
+  it('labels the custom MCP flow as inspection only', async () => {
+    await renderConnectorsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /inspect mcp server/i }));
+
+    expect(screen.getAllByText('Inspect MCP server').length).toBeGreaterThan(0);
+    expect(screen.getByText(/review its advertised tools/i)).toBeDefined();
+    expect(screen.queryByText('Add custom connector')).toBeNull();
   });
 });

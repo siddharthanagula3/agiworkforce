@@ -522,31 +522,29 @@ mod tests {
     }
 
     #[test]
-    fn get_canonicalized_id_resolves_provider_aliases_and_api_ids() {
+    fn get_canonicalized_id_keeps_unlisted_aliases_unchanged() {
         assert_eq!(
             get_canonicalized_id("claude-sonnet-4-6"),
             "claude-sonnet-4.6"
         );
-        // claude-opus-4-6 is a legacy dash-form alias; catalog maps it to claude-opus-4.8.
-        assert_eq!(get_canonicalized_id("claude-opus-4-6"), "claude-opus-4.8");
+        assert_eq!(get_canonicalized_id("claude-opus-4.8"), "claude-opus-4.8");
+        assert_eq!(get_canonicalized_id("claude-opus-4-8"), "claude-opus-4.8");
         assert_eq!(
-            get_canonicalized_id("gemini-3-pro-preview"),
+            get_canonicalized_id("gemini-3.1-pro-preview"),
             "gemini-3.1-pro-preview"
         );
-        // claude-sonnet-4.5 is deprecated; the dash form forwards to current Sonnet.
+        assert_eq!(get_canonicalized_id("gpt-5.4-mini"), "gpt-5.4-mini");
         assert_eq!(
-            get_canonicalized_id("claude-sonnet-4-5"),
-            "claude-sonnet-4.6"
+            get_canonicalized_id("unlisted-model-id"),
+            "unlisted-model-id"
         );
-        // gpt-5.4-nano is aliased to gpt-5.4-mini in the catalog canonicalization map.
-        assert_eq!(get_canonicalized_id("gpt-5.4-nano"), "gpt-5.4-mini");
     }
 
     #[test]
     fn get_provider_for_model_returns_some_for_known_prefix() {
         // gpt- prefix maps to OpenAI
-        let provider = get_provider_for_model("gpt-5.4");
-        assert!(provider.is_some(), "gpt-5.4 should resolve to a provider");
+        let provider = get_provider_for_model("gpt-5.5");
+        assert!(provider.is_some(), "gpt-5.5 should resolve to a provider");
         assert_eq!(provider.unwrap(), Provider::OpenAI);
     }
 
@@ -559,8 +557,8 @@ mod tests {
     #[test]
     fn model_uses_responses_api_for_gpt5_models() {
         // GPT-5 series
-        assert!(model_uses_responses_api("gpt-5.4"));
-        assert!(model_uses_responses_api("gpt-5.4-nano"));
+        assert!(model_uses_responses_api("gpt-5.5"));
+        assert!(model_uses_responses_api("gpt-5.4-mini"));
         assert!(model_uses_responses_api("gpt-5-turbo"));
         assert!(model_uses_responses_api("gpt-5"));
         // Future GPT versions
@@ -577,7 +575,7 @@ mod tests {
         assert!(!model_uses_responses_api("gpt-4o"));
         assert!(!model_uses_responses_api("gpt-4-turbo"));
         assert!(!model_uses_responses_api("gpt-3.5-turbo"));
-        assert!(!model_uses_responses_api("claude-opus-4.6"));
+        assert!(!model_uses_responses_api("claude-opus-4.8"));
         assert!(!model_uses_responses_api("gemini-2.5-pro"));
     }
 
@@ -585,7 +583,7 @@ mod tests {
     fn model_supports_gemini_thinking_for_pro_models() {
         assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
         assert!(!model_supports_gemini_thinking("gemini-3-flash"));
-        assert!(!model_supports_gemini_thinking("claude-opus-4.6"));
+        assert!(!model_supports_gemini_thinking("claude-opus-4.8"));
     }
 
     #[test]
@@ -594,19 +592,19 @@ mod tests {
         assert!(!models.is_empty(), "model entries must not be empty");
         // Spot-check a well-known model exists
         assert!(
-            models.contains_key("claude-opus-4.6") || models.contains_key("claude-sonnet-4.6"),
+            models.contains_key("claude-opus-4.8") || models.contains_key("claude-sonnet-4.6"),
             "At least one claude model must be in the catalog"
         );
     }
 
     #[test]
     fn get_pricing_returns_some_for_known_model() {
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.6");
-        assert!(pricing.is_some(), "claude-opus-4.6 must have pricing");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.8");
+        assert!(pricing.is_some(), "claude-opus-4.8 must have pricing");
         let p = pricing.unwrap();
         assert!(
             p.input_per_million > 0.0 || p.output_per_million > 0.0,
-            "claude-opus-4.6 pricing must be non-zero"
+            "claude-opus-4.8 pricing must be non-zero"
         );
     }
 
@@ -632,7 +630,7 @@ mod tests {
         // models get provider-level default pricing. The None path is a safety
         // net for future changes when providers might be added to the enum
         // before models.json is updated.
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.6");
+        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-4.8");
         assert!(pricing.is_some(), "known model must have pricing");
 
         // Verify provider fallback works for all providers

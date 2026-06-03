@@ -1,16 +1,17 @@
-//! 3-tier model catalog: bundled defaults → disk cache → remote fetch.
+//! Shared-first model catalog: bundled shared catalog → disk cache → remote fetch.
 //!
 //! Architecture (inspired by Aider + models.dev):
 //!
-//! Tier 1 — BUNDLED:  Compiled into binary. Always available offline.
+//! Tier 1 — SHARED:   `packages/types/src/models.json`, compiled into binary.
 //! Tier 2 — CACHE:    ~/.agiworkforce/cache/models.json (5-min TTL, version-aware)
 //! Tier 3 — REMOTE:   models.dev/api.json (104 providers, free, open-source)
 //! Tier 4 — USER:     config.toml [[models]] overrides (always win)
 //!
-//! To add/update models: edit BUNDLED_MODELS below. Remote fetch auto-discovers new
-//! models from providers; bundled list is the offline fallback.
+//! To add/update models: edit `packages/types/src/models.curation.json`, run
+//! `node scripts/sync-models.mjs`, then the CLI picks up the generated shared
+//! catalog through `include_str!`. Do not maintain a separate CLI model table.
 //!
-//! Last updated: 2026-03-20
+//! Last updated: 2026-06-03
 
 #![allow(dead_code, unused_imports)]
 
@@ -37,43 +38,152 @@ const SUPPORTED_SHARED_PROVIDERS: &[&str] = &[
     "mistral",
     "xai",
     "deepseek",
+    "perplexity",
+    "qwen",
+    "moonshot",
+    "zhipu",
+    "open_router",
+    "nvidia_nim",
 ];
 
 const FALLBACK_DEFAULT_PROVIDER: &str = "anthropic";
 
-/// Pick the last-resort default model ID from the bundled catalog without
-/// relying on a hardcoded literal.  Resolution order:
-///   1. First model in the bundled catalog whose provider is "anthropic".
-///   2. First model in the bundled catalog whose provider is "openai".
-///   3. First model in the bundled catalog (any provider).
-///
-/// This function only fires when `shared_catalog()` returns None (i.e.
-/// models.json fails to parse at startup — very unlikely given include_str!).
-/// It is NOT a user-visible model selection; it is purely a last-resort guard.
+fn canonical_cli_provider(provider: &str) -> &str {
+    match provider {
+        "open_router" | "openrouter" | "open-router" => "openrouter",
+        "nvidia_nim" | "nvidia-nim" | "nvidia" | "nim" => "nvidia",
+        other => other,
+    }
+}
+
 fn pick_fallback_default_model() -> String {
-    let candidates = legacy_bundled_models();
-    // v1 local-only: prefer local providers, then cloud as fallback
-    for preferred_provider in &["ollama", "lmstudio", "anthropic", "openai"] {
-        if let Some(m) = candidates
-            .iter()
-            .find(|m| m.provider == *preferred_provider)
-        {
-            return m.id.clone();
+    if let Ok(model) = std::env::var("AGIWORKFORCE_DEFAULT_MODEL") {
+        let model = model.trim();
+        if !model.is_empty() {
+            return model.to_string();
         }
     }
-    candidates
-        .into_iter()
-        .next()
-        .map(|m| m.id)
-        .unwrap_or_else(|| {
-            // compile_error! equivalent at runtime: this path means legacy_bundled_models
-            // is empty, which is a programmer error.
-            panic!(
-                "rule-models-json: legacy_bundled_models() is empty — \
-                 cannot derive a last-resort default model. \
-                 Add at least one entry to legacy_bundled_models()."
-            )
+    if let Some(model) = raw_catalog_default_model() {
+        return model;
+    }
+    panic!(
+        "rule-models-json: packages/types/src/models.json failed to parse; \
+         cannot derive a default model without hardcoded model IDs"
+    )
+}
+
+fn raw_catalog_default_model() -> Option<String> {
+    let root: serde_json::Value = serde_json::from_str(SHARED_MODELS_JSON).ok()?;
+    let provider = root
+        .get("providers")
+        .and_then(|providers| providers.get(FALLBACK_DEFAULT_PROVIDER));
+
+    for canonical in [
+        provider
+            .and_then(|p| p.get("taskRouting"))
+            .and_then(|routing| routing.get("complex_reasoning"))
+            .and_then(|value| value.as_str()),
+        provider
+            .and_then(|p| p.get("defaultModel"))
+            .and_then(|value| value.as_str()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Some(model) = raw_api_model_id_for(&root, canonical) {
+            return Some(model);
+        }
+    }
+
+    raw_best_model_for_provider(&root, FALLBACK_DEFAULT_PROVIDER)
+        .or_else(|| raw_first_supported_model(&root))
+}
+
+fn raw_api_model_id_for(root: &serde_json::Value, canonical_id: &str) -> Option<String> {
+    root.get("models")
+        .and_then(|models| models.get(canonical_id))
+        .and_then(raw_model_id)
+}
+
+fn raw_best_model_for_provider(root: &serde_json::Value, provider: &str) -> Option<String> {
+    root.get("models")
+        .and_then(|models| models.as_object())
+        .and_then(|models| {
+            models
+                .values()
+                .filter(|model| raw_model_provider(model) == Some(provider))
+                .filter(|model| !raw_model_deprecated(model))
+                .filter(|model| {
+                    model
+                        .get("modelType")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(supports_cli_model_type)
+                })
+                .max_by_key(|model| {
+                    (
+                        raw_quality_rank(model),
+                        model
+                            .get("contextWindow")
+                            .and_then(|value| value.as_u64())
+                            .unwrap_or(0),
+                    )
+                })
+                .and_then(raw_model_id)
         })
+}
+
+fn raw_first_supported_model(root: &serde_json::Value) -> Option<String> {
+    root.get("models")
+        .and_then(|models| models.as_object())
+        .and_then(|models| {
+            models
+                .values()
+                .filter(|model| !raw_model_deprecated(model))
+                .filter(|model| {
+                    model
+                        .get("modelType")
+                        .and_then(|value| value.as_str())
+                        .is_some_and(supports_cli_model_type)
+                })
+                .max_by_key(|model| {
+                    (
+                        raw_quality_rank(model),
+                        model
+                            .get("contextWindow")
+                            .and_then(|value| value.as_u64())
+                            .unwrap_or(0),
+                    )
+                })
+                .and_then(raw_model_id)
+        })
+}
+
+fn raw_model_id(model: &serde_json::Value) -> Option<String> {
+    model
+        .get("apiModelId")
+        .and_then(|value| value.as_str())
+        .or_else(|| model.get("id").and_then(|value| value.as_str()))
+        .map(str::to_string)
+}
+
+fn raw_model_provider(model: &serde_json::Value) -> Option<&str> {
+    model.get("provider").and_then(|value| value.as_str())
+}
+
+fn raw_model_deprecated(model: &serde_json::Value) -> bool {
+    model
+        .get("deprecated")
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false)
+}
+
+fn raw_quality_rank(model: &serde_json::Value) -> u8 {
+    match model.get("qualityTier").and_then(|value| value.as_str()) {
+        Some("best") => 3,
+        Some("balanced") => 2,
+        Some("fast") => 1,
+        _ => 0,
+    }
 }
 
 /// Fallback defaults for model metadata when upstream data is missing.
@@ -94,6 +204,10 @@ pub struct Model {
     pub max_output_tokens: usize,
     pub input_price_per_1m: f64,
     pub output_price_per_1m: f64,
+    #[serde(default)]
+    pub cache_read_price_per_1m: f64,
+    #[serde(default)]
+    pub cache_write_price_per_1m: f64,
     pub supports_tools: bool,
     pub supports_vision: bool,
     pub supports_reasoning: bool,
@@ -129,6 +243,8 @@ struct SharedProviderConfig {
     default_model: Option<String>,
     #[serde(default, rename = "taskRouting")]
     task_routing: Option<SharedTaskRouting>,
+    #[serde(default)]
+    canonicalization: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -163,6 +279,17 @@ struct SharedModelMetadata {
     input_cost: f64,
     #[serde(rename = "outputCost")]
     output_cost: f64,
+    #[serde(default, rename = "cached_input")]
+    cached_input: Option<f64>,
+    #[serde(
+        default,
+        rename = "cached_write",
+        alias = "cache_write",
+        alias = "cacheWrite",
+        alias = "cache_creation",
+        alias = "cacheCreation"
+    )]
+    cache_write: Option<f64>,
     capabilities: SharedModelCapabilities,
     #[serde(default)]
     released: Option<String>,
@@ -199,6 +326,71 @@ fn api_model_id_for(catalog: &SharedModelsCatalog, canonical_id: &str) -> Option
             .clone()
             .unwrap_or_else(|| model.id.clone())
     })
+}
+
+fn api_model_id_for_any(catalog: &SharedModelsCatalog, model_id: &str) -> Option<String> {
+    if let Some(api_id) = api_model_id_for(catalog, model_id) {
+        return Some(api_id);
+    }
+
+    catalog.models.values().find_map(|model| {
+        let api_id = model.api_model_id.as_deref().unwrap_or(&model.id);
+        if api_id.eq_ignore_ascii_case(model_id) || model.id.eq_ignore_ascii_case(model_id) {
+            Some(api_id.to_string())
+        } else {
+            None
+        }
+    })
+}
+
+fn shared_catalog_lookup_aliases() -> Vec<(String, String)> {
+    let Some(catalog) = shared_catalog() else {
+        return Vec::new();
+    };
+
+    let mut aliases = Vec::new();
+
+    for model in catalog.models.values() {
+        if let Some(api_id) = model.api_model_id.as_deref() {
+            aliases.push((model.id.clone(), api_id.to_string()));
+            aliases.push((api_id.to_string(), api_id.to_string()));
+        } else {
+            aliases.push((model.id.clone(), model.id.clone()));
+        }
+    }
+
+    for provider in catalog.providers.values() {
+        for (alias, target) in &provider.canonicalization {
+            if let Some(api_id) = api_model_id_for_any(catalog, target) {
+                aliases.push((alias.clone(), api_id));
+            }
+        }
+    }
+
+    aliases
+}
+
+fn cache_read_price(provider: &str, input_price_per_1m: f64, explicit: Option<f64>) -> f64 {
+    if let Some(price) = explicit {
+        return price;
+    }
+    if matches!(provider, "anthropic" | "openai") && input_price_per_1m > DEFAULT_PRICE {
+        return input_price_per_1m * 0.1;
+    }
+    DEFAULT_PRICE
+}
+
+fn cache_write_price(provider: &str, input_price_per_1m: f64, explicit: Option<f64>) -> f64 {
+    if let Some(price) = explicit {
+        return price;
+    }
+    if input_price_per_1m <= DEFAULT_PRICE {
+        return DEFAULT_PRICE;
+    }
+    if provider == "anthropic" {
+        return input_price_per_1m * 1.25;
+    }
+    input_price_per_1m
 }
 
 pub fn default_model() -> &'static str {
@@ -244,20 +436,13 @@ pub fn default_provider() -> &'static str {
 /// Resolution order:
 ///   1. `taskRouting.fast_completion` canonical id → resolve to `apiModelId` if present.
 ///   2. Provider `defaultModel` → resolve to `apiModelId`.
-///   3. Per-provider fallback constant (last resort, only fires if models.json is
-///      unparseable at startup — not a rule-models-json violation because the
-///      fallback is never the source of truth for user-visible model selection).
+///   3. Fail loudly if models.json is unavailable; callers must not hardcode
+///      model IDs as a fallback.
 ///
 /// Do NOT hardcode model ID strings in callers — call this function instead.
 pub fn fast_completion_model(provider: &str) -> String {
     let Some(catalog) = shared_catalog() else {
-        // models.json failed to parse (should never happen with include_str!).
-        // Pick the first model for the requested provider from the legacy bundled list.
-        return legacy_bundled_models()
-            .into_iter()
-            .find(|m| m.provider == provider)
-            .map(|m| m.id)
-            .unwrap_or_else(pick_fallback_default_model);
+        return pick_fallback_default_model();
     };
     catalog
         .providers
@@ -285,19 +470,14 @@ pub fn fast_completion_model(provider: &str) -> String {
 /// simply the first entry of the economy bucket so CLI users get a cheap,
 /// capable model by default without touching the TS type catalog.
 ///
-/// Falls back to the first fast model in the legacy bundled list if the
-/// shared catalog is unavailable (should never happen with include_str!).
+/// Fails loudly if the shared catalog is unavailable; hardcoded model fallbacks
+/// would drift from the source of truth.
 pub fn economy_default_model() -> &'static str {
     static ECONOMY_MODEL_ID: OnceLock<String> = OnceLock::new();
     ECONOMY_MODEL_ID
         .get_or_init(|| {
             let Some(catalog) = shared_catalog() else {
-                // models.json unparseable — pick first fast-tier model from legacy list.
-                return legacy_bundled_models()
-                    .into_iter()
-                    .next()
-                    .map(|m| m.id)
-                    .unwrap_or_else(pick_fallback_default_model);
+                return pick_fallback_default_model();
             };
             let first = catalog.tier_allowed_models.economy.first().cloned();
             // Resolve the canonical id to an apiModelId if one is specified.
@@ -330,13 +510,17 @@ pub fn tier_allowed_models(tier_slot: &str) -> Vec<String> {
 // ─────────────────────────────────────────────────────────────────────────────
 // Tier 1 — BUNDLED DEFAULTS (compiled into binary, works offline)
 // ─────────────────────────────────────────────────────────────────────────────
-// Edit this list when models change. This is the offline fallback.
+// The embedded shared JSON catalog is the only source of model IDs. Do not add
+// Rust-side model ID fallbacks.
 
 fn bundled_models() -> Vec<Model> {
     if let Some(shared_models) = shared_bundled_models() {
         return shared_models;
     }
-    legacy_bundled_models()
+    panic!(
+        "rule-models-json: packages/types/src/models.json failed to parse; \
+         cannot build model catalog without hardcoded model IDs"
+    )
 }
 
 fn shared_bundled_models() -> Option<Vec<Model>> {
@@ -364,12 +548,22 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
                 .unwrap_or_else(|| model.id.clone());
             Model {
                 id: api_id.clone(),
-                provider: model.provider.clone(),
+                provider: canonical_cli_provider(&model.provider).to_string(),
                 display_name: model.name.clone(),
                 context_window: model.context_window,
                 max_output_tokens: model.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
                 input_price_per_1m: model.input_cost,
                 output_price_per_1m: model.output_cost,
+                cache_read_price_per_1m: cache_read_price(
+                    &model.provider,
+                    model.input_cost,
+                    model.cached_input,
+                ),
+                cache_write_price_per_1m: cache_write_price(
+                    &model.provider,
+                    model.input_cost,
+                    model.cache_write,
+                ),
                 supports_tools: model.capabilities.tools,
                 supports_vision: model.capabilities.vision,
                 supports_reasoning: model.capabilities.thinking,
@@ -384,7 +578,6 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
         })
         .collect();
 
-    models.extend(local_ollama_models());
     models.sort_by(|left, right| {
         left.provider
             .cmp(&right.provider)
@@ -394,293 +587,6 @@ fn shared_bundled_models() -> Option<Vec<Model>> {
     let mut seen = HashSet::new();
     models.retain(|model| seen.insert(model.id.clone()));
     Some(models)
-}
-
-fn legacy_bundled_models() -> Vec<Model> {
-    vec![
-        // ── Anthropic ── docs.anthropic.com/en/docs/about-claude/models
-        m(
-            "claude-opus-4-7",
-            "anthropic",
-            "Claude Opus 4.7",
-            200_000,
-            32_000,
-            15.0,
-            75.0,
-            true,
-            true,
-            true,
-            "2026-02-05",
-            true,
-        ),
-        m(
-            "claude-sonnet-4-6",
-            "anthropic",
-            "Claude Sonnet 4.6",
-            200_000,
-            16_000,
-            3.0,
-            15.0,
-            true,
-            true,
-            true,
-            "2026-02-17",
-            true,
-        ),
-        m(
-            "claude-haiku-4-5",
-            "anthropic",
-            "Claude Haiku 4.5",
-            200_000,
-            8_192,
-            0.25,
-            1.25,
-            true,
-            true,
-            false,
-            "2025-04-01",
-            false,
-        ),
-        // ── OpenAI ── platform.openai.com/docs/models
-        m(
-            "gpt-5.4",
-            "openai",
-            "GPT-5.4",
-            1_050_000,
-            128_000,
-            2.50,
-            10.0,
-            true,
-            true,
-            false,
-            "2026-03-05",
-            true,
-        ),
-        m(
-            "gpt-5.4-mini",
-            "openai",
-            "GPT-5.4 Mini",
-            400_000,
-            128_000,
-            0.15,
-            0.60,
-            true,
-            true,
-            false,
-            "2026-03-17",
-            false,
-        ),
-        m(
-            "gpt-4.1",
-            "openai",
-            "GPT-4.1",
-            1_047_576,
-            32_768,
-            2.0,
-            8.0,
-            true,
-            true,
-            false,
-            "2025-04-01",
-            false,
-        ),
-        m(
-            "o3-mini",
-            "openai",
-            "o3-mini",
-            200_000,
-            100_000,
-            1.10,
-            4.40,
-            true,
-            false,
-            true,
-            "2025-01-01",
-            false,
-        ),
-        // ── Google ── ai.google.dev/gemini-api/docs/models
-        m(
-            "gemini-3.1-pro-preview",
-            "google",
-            "Gemini 3.1 Pro",
-            1_048_576,
-            65_536,
-            1.25,
-            10.0,
-            true,
-            true,
-            true,
-            "2026-02-19",
-            true,
-        ),
-        m(
-            "gemini-3-flash-preview",
-            "google",
-            "Gemini 3 Flash",
-            1_048_576,
-            8_192,
-            0.10,
-            0.40,
-            true,
-            true,
-            false,
-            "2026-01-01",
-            false,
-        ),
-        // ── Mistral ── docs.mistral.ai/models
-        m(
-            "mistral-large-2512",
-            "mistral",
-            "Mistral Large 3",
-            256_000,
-            65_536,
-            2.0,
-            6.0,
-            true,
-            false,
-            false,
-            "2025-12-01",
-            true,
-        ),
-        m(
-            "codestral-latest",
-            "mistral",
-            "Codestral",
-            32_000,
-            8_192,
-            0.3,
-            0.9,
-            true,
-            false,
-            false,
-            "2024-05-01",
-            false,
-        ),
-        // ── xAI ── docs.x.ai/developers/models
-        m(
-            "grok-4.1",
-            "xai",
-            "Grok 4.1",
-            2_000_000,
-            128_000,
-            2.0,
-            10.0,
-            true,
-            true,
-            false,
-            "2025-11-17",
-            true,
-        ),
-        m(
-            "grok-4-1-fast-non-reasoning",
-            "xai",
-            "Grok 4.1 Fast",
-            2_000_000,
-            128_000,
-            0.60,
-            4.0,
-            true,
-            true,
-            false,
-            "2025-11-20",
-            false,
-        ),
-        // ── DeepSeek ── api-docs.deepseek.com (V3.2 shipping, V4 not yet released)
-        m(
-            "deepseek-chat",
-            "deepseek",
-            "DeepSeek V3.2",
-            128_000,
-            8_000,
-            0.14,
-            0.28,
-            true,
-            false,
-            false,
-            "2025-12-01",
-            true,
-        ),
-        m(
-            "deepseek-reasoner",
-            "deepseek",
-            "DeepSeek V3.2 Reasoner",
-            128_000,
-            64_000,
-            0.55,
-            2.19,
-            false,
-            false,
-            true,
-            "2025-12-01",
-            false,
-        ),
-        // ── Ollama (local, free) ──
-        m(
-            "llama3.1",
-            "ollama",
-            "Llama 3.1",
-            128_000,
-            8_192,
-            0.0,
-            0.0,
-            false,
-            false,
-            false,
-            "2024-07-01",
-            false,
-        ),
-        m(
-            "mistral-7b",
-            "ollama",
-            "Mistral 7B",
-            32_000,
-            4_096,
-            0.0,
-            0.0,
-            false,
-            false,
-            false,
-            "2023-09-01",
-            false,
-        ),
-        m(
-            "codellama",
-            "ollama",
-            "Code Llama",
-            16_000,
-            4_096,
-            0.0,
-            0.0,
-            false,
-            false,
-            false,
-            "2023-08-01",
-            false,
-        ),
-    ]
-}
-
-fn local_ollama_models() -> Vec<Model> {
-    vec![
-        m(
-            "llama3.1",
-            "ollama",
-            "Llama 3.1",
-            128_000,
-            8_192,
-            0.0,
-            0.0,
-            false,
-            false,
-            false,
-            "2024-07",
-            false,
-        ),
-        m(
-            "qwen2.5", "ollama", "Qwen 2.5", 32_000, 4_096, 0.0, 0.0, false, false, false,
-            "2024-09", false,
-        ),
-    ]
 }
 
 fn supports_cli_model_type(model_type: &str) -> bool {
@@ -699,6 +605,9 @@ fn normalize_release_date(released: Option<&str>) -> String {
         && released.as_bytes().get(4) == Some(&b'-')
     {
         return released[..7].to_string();
+    }
+    if released.len() == 4 && released.chars().all(|c| c.is_ascii_digit()) {
+        return format!("{released}-01");
     }
     let mut parts = released.split_whitespace();
     let month = parts.next().unwrap_or_default();
@@ -724,42 +633,6 @@ fn normalize_release_date(released: Option<&str>) -> String {
     ) {
         (Some(month), true) => format!("{year}-{month}"),
         _ => released.to_string(),
-    }
-}
-
-/// Shorthand constructor to keep the bundled table compact.
-#[allow(clippy::too_many_arguments)]
-fn m(
-    id: &str,
-    provider: &str,
-    name: &str,
-    ctx: usize,
-    out: usize,
-    price_in: f64,
-    price_out: f64,
-    tools: bool,
-    vision: bool,
-    reasoning: bool,
-    date: &str,
-    cloud: bool,
-) -> Model {
-    Model {
-        id: id.into(),
-        provider: provider.into(),
-        display_name: name.into(),
-        context_window: ctx,
-        max_output_tokens: out,
-        input_price_per_1m: price_in,
-        output_price_per_1m: price_out,
-        supports_tools: tools,
-        supports_vision: vision,
-        supports_reasoning: reasoning,
-        supports_audio_input: false,
-        supports_audio_output: false,
-        supports_pdf: false,
-        release_date: date.into(),
-        status: "active".into(),
-        cloud_eligible: cloud,
     }
 }
 
@@ -803,7 +676,16 @@ fn read_cache() -> Option<Vec<Model>> {
         return None;
     }
 
-    Some(envelope.models)
+    Some(
+        envelope
+            .models
+            .into_iter()
+            .map(|mut model| {
+                model.provider = canonical_cli_provider(&model.provider).to_string();
+                model
+            })
+            .collect(),
+    )
 }
 
 fn write_cache(models: &[Model]) {
@@ -826,6 +708,12 @@ fn write_cache(models: &[Model]) {
         Ok(json) => {
             if let Err(e) = std::fs::write(&path, json) {
                 eprintln!("[model_catalog] cache write error: {e}");
+            } else {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+                }
             }
         }
         Err(e) => eprintln!("[model_catalog] cache serialize error: {e}"),
@@ -875,6 +763,24 @@ struct ModelsDevCost {
     input: Option<f64>,
     #[serde(default)]
     output: Option<f64>,
+    #[serde(
+        default,
+        alias = "cache_read",
+        alias = "cacheRead",
+        alias = "cached_input",
+        alias = "cachedInput"
+    )]
+    cached_input: Option<f64>,
+    #[serde(
+        default,
+        alias = "cache_write",
+        alias = "cacheWrite",
+        alias = "cached_write",
+        alias = "cachedWrite",
+        alias = "cache_creation",
+        alias = "cacheCreation"
+    )]
+    cache_write: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -907,6 +813,14 @@ async fn fetch_remote() -> Option<Vec<Model>> {
         ("mistral", "mistral"),
         ("xai", "xai"),
         ("deepseek", "deepseek"),
+        ("perplexity", "perplexity"),
+        ("qwen", "qwen"),
+        ("moonshot", "moonshot"),
+        ("zhipu", "zhipu"),
+        ("open_router", "openrouter"),
+        ("openrouter", "openrouter"),
+        ("nvidia_nim", "nvidia"),
+        ("nvidia", "nvidia"),
         ("groq", "groq"),
         ("cohere", "cohere"),
         ("together", "together"),
@@ -950,15 +864,27 @@ async fn fetch_remote() -> Option<Vec<Model>> {
                     .as_ref()
                     .and_then(|c| c.output)
                     .unwrap_or(DEFAULT_PRICE);
+                let cache_read_price = cache_read_price(
+                    our_provider,
+                    price_in,
+                    md.cost.as_ref().and_then(|c| c.cached_input),
+                );
+                let cache_write_price = cache_write_price(
+                    our_provider,
+                    price_in,
+                    md.cost.as_ref().and_then(|c| c.cache_write),
+                );
 
                 models.push(Model {
                     id: model_id.clone(),
-                    provider: our_provider.to_string(),
+                    provider: canonical_cli_provider(our_provider).to_string(),
                     display_name: md.name.unwrap_or_else(|| model_id.clone()),
                     context_window: ctx,
                     max_output_tokens: out,
                     input_price_per_1m: price_in,
                     output_price_per_1m: price_out,
+                    cache_read_price_per_1m: cache_read_price,
+                    cache_write_price_per_1m: cache_write_price,
                     supports_tools: md.tool_call.unwrap_or(false),
                     supports_vision: md.attachment.unwrap_or(false),
                     supports_reasoning: md.reasoning.unwrap_or(false),
@@ -1000,6 +926,10 @@ pub struct UserModelOverride {
     #[serde(default)]
     pub output_price_per_1m: Option<f64>,
     #[serde(default)]
+    pub cache_read_price_per_1m: Option<f64>,
+    #[serde(default)]
+    pub cache_write_price_per_1m: Option<f64>,
+    #[serde(default)]
     pub supports_tools: Option<bool>,
     #[serde(default)]
     pub supports_vision: Option<bool>,
@@ -1018,6 +948,8 @@ impl UserModelOverride {
             max_output_tokens: self.max_output_tokens.unwrap_or(DEFAULT_MAX_OUTPUT),
             input_price_per_1m: self.input_price_per_1m.unwrap_or(DEFAULT_PRICE),
             output_price_per_1m: self.output_price_per_1m.unwrap_or(DEFAULT_PRICE),
+            cache_read_price_per_1m: self.cache_read_price_per_1m.unwrap_or(DEFAULT_PRICE),
+            cache_write_price_per_1m: self.cache_write_price_per_1m.unwrap_or(DEFAULT_PRICE),
             supports_tools: self.supports_tools.unwrap_or(true),
             supports_vision: self.supports_vision.unwrap_or(false),
             supports_reasoning: self.supports_reasoning.unwrap_or(false),
@@ -1121,6 +1053,11 @@ impl Catalog {
         for (i, m) in models.iter().enumerate() {
             index.insert(m.id.to_lowercase(), i);
         }
+        for (alias, target) in shared_catalog_lookup_aliases() {
+            if let Some(&idx) = index.get(&target.to_lowercase()) {
+                index.insert(alias.to_lowercase(), idx);
+            }
+        }
         Self { models, index }
     }
 
@@ -1175,27 +1112,7 @@ impl Catalog {
         if let Some(m) = self.find(model_id) {
             return m.context_window;
         }
-        // Provider-level prefix fallback for unknown models
-        let lower = model_id.to_lowercase();
-        if lower.starts_with("claude") {
-            return 200_000;
-        }
-        if lower.starts_with("gpt") {
-            return 128_000;
-        }
-        if lower.starts_with("gemini") {
-            return 1_048_576;
-        }
-        if lower.starts_with("grok") {
-            return 2_000_000;
-        }
-        if lower.starts_with("mistral") || lower.starts_with("codestral") {
-            return 256_000;
-        }
-        if lower.starts_with("deepseek") {
-            return 128_000;
-        }
-        128_000
+        DEFAULT_CONTEXT_WINDOW
     }
 
     pub fn pricing(&self, model_id: &str) -> (f64, f64) {
@@ -1208,25 +1125,6 @@ impl Catalog {
     pub fn provider_for(&self, model_id: &str) -> Option<&str> {
         if let Some(m) = self.find(model_id) {
             return Some(&m.provider);
-        }
-        let lower = model_id.to_lowercase();
-        if lower.starts_with("claude") {
-            return Some("anthropic");
-        }
-        if lower.starts_with("gpt") || lower.starts_with("o1") || lower.starts_with("o3") {
-            return Some("openai");
-        }
-        if lower.starts_with("gemini") {
-            return Some("google");
-        }
-        if lower.starts_with("mistral") || lower.starts_with("codestral") {
-            return Some("mistral");
-        }
-        if lower.starts_with("grok") {
-            return Some("xai");
-        }
-        if lower.starts_with("deepseek") {
-            return Some("deepseek");
         }
         None
     }
@@ -1290,8 +1188,8 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
     let Some(catalog) = shared_catalog() else {
         return None;
     };
-    // The shared catalog is keyed by canonical ID (e.g. "claude-opus-4.7"),
-    // but model_id may be an apiModelId (e.g. "claude-opus-4-7").  Try both.
+    // The shared catalog is keyed by canonical ID (e.g. "claude-opus-4.8"),
+    // but model_id may be an apiModelId (e.g. "claude-opus-4-8").  Try both.
     let canonical = catalog
         .models
         .iter()
@@ -1314,15 +1212,10 @@ pub fn quality_tier_for_model(model_id: &str) -> Option<String> {
 ///
 /// Resolution: reads `taskRouting.complex_reasoning`, the default model, and
 /// `taskRouting.fast_completion` from the shared catalog's anthropic provider
-/// block.  Falls back to the legacy bundled list if models.json is unavailable.
+/// block. Returns no entries if models.json is unavailable.
 pub fn anthropic_primary_models() -> Vec<(String, String, String)> {
     let Some(catalog) = shared_catalog() else {
-        return legacy_bundled_models()
-            .into_iter()
-            .filter(|m| m.provider == "anthropic")
-            .take(3)
-            .map(|m| (m.id.clone(), m.display_name.clone(), "balanced".to_string()))
-            .collect();
+        return Vec::new();
     };
 
     let anthropic = match catalog.providers.get("anthropic") {
@@ -1384,9 +1277,14 @@ pub fn is_known_model(model_id: &str) -> bool {
         // Can't verify without the catalog — treat as unknown.
         return false;
     };
+    let resolved = api_model_id_for_any(catalog, model_id);
     catalog.models.values().any(|meta| {
         let api_id = meta.api_model_id.as_deref().unwrap_or(&meta.id);
-        api_id.eq_ignore_ascii_case(model_id) || meta.id.eq_ignore_ascii_case(model_id)
+        api_id.eq_ignore_ascii_case(model_id)
+            || meta.id.eq_ignore_ascii_case(model_id)
+            || resolved.as_deref().is_some_and(|id| {
+                api_id.eq_ignore_ascii_case(id) || meta.id.eq_ignore_ascii_case(id)
+            })
     })
 }
 
@@ -1420,7 +1318,12 @@ mod tests {
             "mistral",
             "xai",
             "deepseek",
-            "ollama",
+            "perplexity",
+            "qwen",
+            "moonshot",
+            "zhipu",
+            "openrouter",
+            "nvidia",
         ] {
             assert!(!cat.models_for(p).is_empty(), "Missing: {}", p);
         }
@@ -1442,11 +1345,22 @@ mod tests {
         // window — no hardcoded ids, so it never goes stale and it catches
         // id-form regressions across the whole catalog.
         for m in cat.cloud_models() {
-            assert!(m.context_window > 0, "{} should declare a positive context window", m.id);
-            assert_eq!(cat.context_window(&m.id), m.context_window, "{} window lookup", m.id);
+            assert!(
+                m.context_window > 0,
+                "{} should declare a positive context window",
+                m.id
+            );
+            assert_eq!(
+                cat.context_window(&m.id),
+                m.context_window,
+                "{} window lookup",
+                m.id
+            );
         }
-        // Unknown model falls back to the provider-prefix default.
-        assert_eq!(cat.context_window("claude-does-not-exist"), 200_000);
+        assert_eq!(
+            cat.context_window("claude-does-not-exist"),
+            DEFAULT_CONTEXT_WINDOW
+        );
     }
 
     #[test]
@@ -1461,7 +1375,11 @@ mod tests {
                 "{} pricing lookup",
                 m.id
             );
-            assert!(m.input_price_per_1m > 0.0, "{} should not be free (input)", m.id);
+            assert!(
+                m.input_price_per_1m > 0.0,
+                "{} should not be free (input)",
+                m.id
+            );
         }
         // Unknown model → no pricing.
         assert_eq!(cat.pricing("totally-unknown-model"), (0.0, 0.0));
@@ -1470,14 +1388,25 @@ mod tests {
     #[test]
     fn provider_detection() {
         let cat = Catalog::bundled();
-        assert_eq!(cat.provider_for("claude-opus-4-7"), Some("anthropic"));
-        assert_eq!(cat.provider_for("gpt-5.4"), Some("openai"));
-        assert_eq!(cat.provider_for("gemini-3.1-pro-preview"), Some("google"));
-        assert_eq!(cat.provider_for("grok-4.1"), Some("xai"));
-        assert_eq!(cat.provider_for("deepseek-chat"), Some("deepseek"));
-        // Prefix fallback
-        assert_eq!(cat.provider_for("claude-future"), Some("anthropic"));
-        assert_eq!(cat.provider_for("gemini-99"), Some("google"));
+        for provider in [
+            "anthropic",
+            "openai",
+            "google",
+            "xai",
+            "deepseek",
+            "qwen",
+            "nvidia",
+            "openrouter",
+        ] {
+            let model = cat
+                .models_for(provider)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| panic!("expected {provider} model in bundled catalog"));
+            assert_eq!(cat.provider_for(&model.id), Some(provider), "{}", model.id);
+        }
+        assert_eq!(cat.provider_for("claude-future"), None);
+        assert_eq!(cat.provider_for("gemini-99"), None);
     }
 
     #[test]
@@ -1501,6 +1430,8 @@ mod tests {
             max_output_tokens: None,
             input_price_per_1m: None,
             output_price_per_1m: None,
+            cache_read_price_per_1m: None,
+            cache_write_price_per_1m: None,
             supports_tools: Some(true),
             supports_vision: None,
             supports_reasoning: None,
@@ -1515,19 +1446,21 @@ mod tests {
     fn user_override_replaces_existing() {
         let mut cat = Catalog::bundled();
         let ov = UserModelOverride {
-            id: "claude-opus-4-7".into(),
+            id: "claude-opus-4-8".into(),
             provider: "anthropic".into(),
             display_name: Some("Custom Opus".into()),
             context_window: Some(500_000),
             max_output_tokens: None,
             input_price_per_1m: None,
             output_price_per_1m: None,
+            cache_read_price_per_1m: None,
+            cache_write_price_per_1m: None,
             supports_tools: None,
             supports_vision: None,
             supports_reasoning: None,
         };
         cat.apply_overrides(&[ov]);
-        let found = cat.find("claude-opus-4-7").unwrap();
+        let found = cat.find("claude-opus-4-8").unwrap();
         assert_eq!(found.context_window, 500_000);
         assert_eq!(found.display_name, "Custom Opus");
     }
@@ -1598,7 +1531,7 @@ mod tests {
 
         // Patterns that would indicate a hardcoded model literal (not inside a comment).
         let forbidden: &[&str] = &[
-            "\"gpt-5.4\"",
+            "\"gpt-5.5\"",
             "\"gpt-5.5\"",
             "\"claude-opus-4-6-mini\"",
             "\"claude-haiku-4-5\"", // must come from catalog, not hardcoded
@@ -1691,7 +1624,7 @@ mod tests {
     }
 
     /// Site 4 fix: pick_fallback_default_model() returns a non-empty model ID
-    /// that is present in the legacy bundled list (not a hardcoded literal).
+    /// derived from the embedded catalog or explicit env, not a hardcoded literal.
     #[test]
     fn fallback_default_model_is_derivable() {
         let fallback = pick_fallback_default_model();
@@ -1699,11 +1632,9 @@ mod tests {
             !fallback.is_empty(),
             "pick_fallback_default_model() must not return an empty string"
         );
-        // The fallback must come from the legacy bundled list.
-        let legacy = legacy_bundled_models();
         assert!(
-            legacy.iter().any(|m| m.id == fallback),
-            "pick_fallback_default_model() = \"{fallback}\" is not in legacy_bundled_models()"
+            is_known_model(&fallback),
+            "pick_fallback_default_model() = \"{fallback}\" is not in the shared catalog"
         );
     }
 
@@ -1717,9 +1648,9 @@ mod tests {
             "\"claude-opus-4-6\"",
             "\"claude-sonnet-4-6\"",
             "\"claude-haiku-4-5-20251001\"",
-            "\"gpt-5.4\"",
+            "\"gpt-5.5\"",
             "\"gpt-5.4-mini\"",
-            "\"gpt-5.4-pro\"",
+            "\"gpt-5.5-pro\"",
             "\"gemini-3.1-pro-preview\"",
             "\"gemini-3.1-flash-lite\"",
         ];

@@ -9,13 +9,13 @@ use crate::protocol::AgiworkforceErrorInfo;
 use crate::protocol::ErrorEvent;
 use crate::protocol::RateLimitSnapshot;
 use crate::protocol::TruncationPolicy;
+use agiworkforce_async_utils::CancelErr;
+use agiworkforce_utils_string::truncate_middle_chars;
+use agiworkforce_utils_string::truncate_middle_with_token_budget;
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Local;
 use chrono::Utc;
-use agiworkforce_async_utils::CancelErr;
-use agiworkforce_utils_string::truncate_middle_chars;
-use agiworkforce_utils_string::truncate_middle_with_token_budget;
 use reqwest::StatusCode;
 use serde_json;
 use std::io;
@@ -221,15 +221,19 @@ impl AgiworkforceErr {
             | AgiworkforceErr::UsageNotIncluded => AgiworkforceErrorInfo::UsageLimitExceeded,
             AgiworkforceErr::ServerOverloaded => AgiworkforceErrorInfo::ServerOverloaded,
             AgiworkforceErr::CyberPolicy { .. } => AgiworkforceErrorInfo::CyberPolicy,
-            AgiworkforceErr::RetryLimit(_) => AgiworkforceErrorInfo::ResponseTooManyFailedAttempts {
-                http_status_code: self.http_status_code_value(),
-            },
+            AgiworkforceErr::RetryLimit(_) => {
+                AgiworkforceErrorInfo::ResponseTooManyFailedAttempts {
+                    http_status_code: self.http_status_code_value(),
+                }
+            }
             AgiworkforceErr::ConnectionFailed(_) => AgiworkforceErrorInfo::HttpConnectionFailed {
                 http_status_code: self.http_status_code_value(),
             },
-            AgiworkforceErr::ResponseStreamFailed(_) => AgiworkforceErrorInfo::ResponseStreamConnectionFailed {
-                http_status_code: self.http_status_code_value(),
-            },
+            AgiworkforceErr::ResponseStreamFailed(_) => {
+                AgiworkforceErrorInfo::ResponseStreamConnectionFailed {
+                    http_status_code: self.http_status_code_value(),
+                }
+            }
             AgiworkforceErr::RefreshTokenFailed(_) => AgiworkforceErrorInfo::Unauthorized,
             AgiworkforceErr::SessionConfiguredNotFirstEvent
             | AgiworkforceErr::InternalServerError

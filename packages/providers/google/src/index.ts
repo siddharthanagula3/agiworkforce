@@ -64,16 +64,16 @@ export interface GoogleAdapterConfig extends ProviderAdapterConfig {
 
 export function createGoogleAdapter(config: GoogleAdapterConfig = {}): ProviderAdapter {
   // FIX (audit 2026-05-20, §8): fail-fast on Vertex/gcp-adc requests until
-  // that path is implemented. Catches the case where a future caller
+  // that path has a real adapter. Catches the case where a future caller
   // surfaces gcp-adc selection via authMethod or vertex-style config.
   if (
     (config as { authMethod?: string }).authMethod === 'gcp-adc' ||
     (config as { useVertex?: boolean }).useVertex === true
   ) {
     throw new Error(
-      'Google Vertex AI / gcp-adc adapter is not implemented yet. ' +
+      'Google Vertex AI / gcp-adc is unavailable in this adapter. ' +
         'Pass an api-key (GOOGLE_API_KEY) via createGoogleAdapter({ apiKey }) ' +
-        'or switch to the OpenAI / Anthropic adapter while Vertex support lands.',
+        'or switch to another configured adapter.',
     );
   }
   const baseUrl = config.baseUrl ?? DEFAULT_BASE_URL;

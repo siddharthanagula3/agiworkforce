@@ -75,6 +75,8 @@ export interface ChatSidebarProps {
   onDuplicateSession?: (sessionId: string) => void;
   /** Move a session to a project. Called with (sessionId, projectId). */
   onMoveToProjectSession?: (sessionId: string, projectId: string) => void;
+  /** Opens the Cloud Managed waitlist modal from upgrade affordances. */
+  onUpgradeRequest?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -254,7 +256,11 @@ const SessionItem = React.memo(function SessionItem({
 // User Profile (bottom)
 // ---------------------------------------------------------------------------
 
-const UserProfileArea = React.memo(function UserProfileArea() {
+const UserProfileArea = React.memo(function UserProfileArea({
+  onUpgradeRequest,
+}: {
+  onUpgradeRequest?: () => void;
+}) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { signOut: clerkSignOut } = useClerk();
@@ -300,13 +306,9 @@ const UserProfileArea = React.memo(function UserProfileArea() {
               <div className="flex items-center gap-1.5">
                 <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
                 {tierLabel && tier === 'free' ? (
-                  <a
-                    href="/pricing"
-                    onClick={(e) => e.stopPropagation()}
-                    className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20"
-                  >
+                  <span className="shrink-0 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-primary hover:bg-primary/20">
                     Upgrade
-                  </a>
+                  </span>
                 ) : tierLabel ? (
                   <span className="shrink-0 rounded-full bg-muted/60 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
                     {tierLabel}
@@ -343,9 +345,9 @@ const UserProfileArea = React.memo(function UserProfileArea() {
             Get help
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => router.push('/pricing')}>
+          <DropdownMenuItem onClick={onUpgradeRequest}>
             <CreditCard className="mr-2 h-4 w-4" />
-            View all plans
+            Join cloud waitlist
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/download')}>
             <Download className="mr-2 h-4 w-4" />
@@ -384,9 +386,11 @@ const RAIL_BTN =
 function CollapsedSidebar({
   onNewChat,
   onToggleSidebar,
+  onOpenSearch,
 }: {
   onNewChat: () => void;
   onToggleSidebar?: () => void;
+  onOpenSearch: () => void;
 }) {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -415,7 +419,7 @@ function CollapsedSidebar({
         <Plus className="h-[18px] w-[18px]" />
       </button>
 
-      <button className={RAIL_BTN} title="Search" aria-label="Search">
+      <button onClick={onOpenSearch} className={RAIL_BTN} title="Search" aria-label="Search">
         <Search className="h-[18px] w-[18px]" />
       </button>
 
@@ -481,7 +485,11 @@ function CollapsedSidebar({
 // Free Plan Nudge — only shown when user is on the free tier
 // ---------------------------------------------------------------------------
 
-const FreePlanNudge = React.memo(function FreePlanNudge() {
+const FreePlanNudge = React.memo(function FreePlanNudge({
+  onUpgradeRequest,
+}: {
+  onUpgradeRequest?: () => void;
+}) {
   const subscription = useBillingStore((s) => s.subscription);
   const tier = subscription?.tier ?? 'free';
   if (tier !== 'free') return null;
@@ -489,9 +497,13 @@ const FreePlanNudge = React.memo(function FreePlanNudge() {
     <div className="px-3 pb-2">
       <div className="flex items-center justify-between rounded-full bg-black/[0.04] dark:bg-white/[0.04] px-3 py-1.5 text-xs text-muted-foreground">
         <span>Free plan</span>
-        <a href="/pricing" className="font-medium text-primary hover:underline">
+        <button
+          type="button"
+          onClick={onUpgradeRequest}
+          className="font-medium text-primary hover:underline"
+        >
           Upgrade
-        </a>
+        </button>
       </div>
     </div>
   );
@@ -516,6 +528,7 @@ function ChatSidebarContent({
   onShareSession,
   onDuplicateSession,
   onMoveToProjectSession,
+  onUpgradeRequest,
 }: ChatSidebarProps) {
   const router = useRouter();
   const openDirectory = useDirectoryStore((s) => s.setOpen);
@@ -647,7 +660,13 @@ function ChatSidebarContent({
   const grouped = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
 
   if (collapsed) {
-    return <CollapsedSidebar onNewChat={onNewChat} onToggleSidebar={onToggleSidebar} />;
+    return (
+      <CollapsedSidebar
+        onNewChat={onNewChat}
+        onToggleSidebar={onToggleSidebar}
+        onOpenSearch={() => setSearchDialogOpen(true)}
+      />
+    );
   }
 
   return (
@@ -813,10 +832,10 @@ function ChatSidebarContent({
       </ScrollArea>
 
       {/* Free plan upgrade pill per design-spec §6.4 */}
-      <FreePlanNudge />
+      <FreePlanNudge onUpgradeRequest={onUpgradeRequest} />
 
       {/* User profile */}
-      <UserProfileArea />
+      <UserProfileArea onUpgradeRequest={onUpgradeRequest} />
 
       {/* Global search dialog */}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />

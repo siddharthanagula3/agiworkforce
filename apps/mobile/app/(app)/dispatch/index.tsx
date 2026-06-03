@@ -175,33 +175,7 @@ function TaskResultCard({ message }: { message: DispatchMessage }) {
         </Text>
       )}
 
-      {/* Action buttons for completed tasks */}
-      {taskStatus === 'completed' && result && (
-        <View className="flex-row gap-2 mt-2 ml-5">
-          {result.previewUrl && (
-            <Pressable
-              className="px-3 py-1.5 rounded-md active:opacity-70"
-              style={{ backgroundColor: `${colors.teal}20` }}
-              accessibilityLabel="Preview result"
-              accessibilityRole="button"
-            >
-              <Text className="text-[11px] font-medium" style={{ color: colors.teal }}>
-                Preview
-              </Text>
-            </Pressable>
-          )}
-          <Pressable
-            className="px-3 py-1.5 rounded-md active:opacity-70"
-            style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}
-            accessibilityLabel="Open on desktop"
-            accessibilityRole="button"
-          >
-            <Text className="text-[11px] font-medium" style={{ color: colors.textSecondary }}>
-              Open on Mac
-            </Text>
-          </Pressable>
-        </View>
-      )}
+      {/* Preview/open controls stay hidden until desktop actions are wired. */}
     </View>
   );
 }

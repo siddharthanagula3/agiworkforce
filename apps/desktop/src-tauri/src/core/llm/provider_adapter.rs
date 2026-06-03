@@ -48,7 +48,7 @@ pub enum OpenAIServerTool {
     FileSearch,
     /// MCP (Model Context Protocol) for external integrations
     Mcp,
-    /// Image generation tool (DALL-E)
+    /// Image generation tool (GPT Image)
     ImageGeneration,
     /// Computer use for desktop automation
     ComputerUsePreview,
@@ -143,11 +143,11 @@ pub enum OpenAIToolParams {
     /// Image generation configuration
     ImageGeneration {
         #[serde(skip_serializing_if = "Option::is_none")]
-        model: Option<String>, // "dall-e-2" or "dall-e-3"
+        model: Option<String>, // e.g. "gpt-image-2"
         #[serde(skip_serializing_if = "Option::is_none")]
-        quality: Option<String>, // "standard" or "hd"
+        quality: Option<String>, // "medium" or "high"
         #[serde(skip_serializing_if = "Option::is_none")]
-        size: Option<String>, // "1024x1024", "1792x1024", etc.
+        size: Option<String>, // "1024x1024", "1536x1024", etc.
     },
     /// Computer use configuration
     ComputerUse {

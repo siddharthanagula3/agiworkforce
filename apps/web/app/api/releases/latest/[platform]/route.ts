@@ -127,6 +127,7 @@ async function getReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord |
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
       headers,
       next: { revalidate: 300 }, // Cache for 5 minutes
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {
@@ -157,7 +158,10 @@ async function getReleaseFromGitHub(platform: Platform): Promise<ReleaseRecord |
     }
 
     // Fetch signature content
-    const sigResponse = await fetch(sigAsset.browser_download_url, { headers });
+    const sigResponse = await fetch(sigAsset.browser_download_url, {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    });
     if (!sigResponse.ok) {
       logger.warn({ status: sigResponse.status }, 'Failed to fetch signature');
       return null;

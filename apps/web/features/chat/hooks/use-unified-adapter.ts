@@ -14,6 +14,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '@agiworkforce/unified-chat';
 import type { ChatMessage, Conversation } from '@agiworkforce/unified-chat';
 import type { ToolExecution } from '@/stores/unified/chat/toolStore';
+import { useModelStore } from '@shared/stores/model-store';
 
 // ============================================================================
 // Adapter Types
@@ -208,18 +209,18 @@ export function useAdaptedToolEvents(executions: ToolExecution[]): AdaptedToolEv
 }
 
 /**
- * Returns a minimal model state shape.
- * The web app uses a stub modelStore; this hook provides a stable interface
- * so downstream components don't need to branch on platform.
+ * Returns the selected model state in the adapter shape expected by
+ * desktop-parity components.
  */
 export function useAdaptedModelState(): AdaptedModelState {
-  // Web stub - modelStore is a no-op on web (see stores/unified/modelStore.ts stub).
-  // Callers can replace this with a real implementation once modelStore is ported.
+  const selectedModelId = useModelStore((s) => s.selectedModelId);
+  const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+
   return useMemo(
     () => ({
-      selectedModelId: '',
-      updateModel: (_id: string) => {},
+      selectedModelId,
+      updateModel: setSelectedModelId,
     }),
-    [],
+    [selectedModelId, setSelectedModelId],
   );
 }

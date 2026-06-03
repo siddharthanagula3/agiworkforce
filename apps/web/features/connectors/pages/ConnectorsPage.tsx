@@ -12,7 +12,6 @@ import {
   Loader2,
   Link2,
   BookOpen,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
@@ -27,7 +26,6 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
-import { ToolPermissionsPanel } from '../components/ToolPermissionsPanel';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { getCsrfToken } from '@/lib/client/csrf';
 import Image from 'next/image';
@@ -405,7 +403,6 @@ const CONNECTORS: Connector[] = [
     iconEmoji: '🎙️',
   },
 
-  // AGI Exclusive
   {
     id: 'local-filesystem',
     name: 'Local Filesystem',
@@ -1186,8 +1183,9 @@ const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
   { label: 'Storage', value: 'Storage' },
   { label: 'AI', value: 'AI' },
   { label: 'Healthcare', value: 'Healthcare' },
-  { label: 'AGI Exclusive', value: 'Exclusive' },
 ];
+
+const VISIBLE_CONNECTORS = CONNECTORS.filter((connector) => !connector.exclusive);
 
 // ─── Connection status filter ──────────────────────────────────────────────────
 
@@ -1199,53 +1197,117 @@ const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'Available', value: 'available' },
 ];
 
-// ─── AddCustomConnectorDialog ─────────────────────────────────────────────────
+// ─── InspectMcpServerDialog ───────────────────────────────────────────────────
 
-interface AddCustomConnectorDialogProps {
+interface InspectMcpServerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDialogProps) {
+type McpInspectResult = {
+  serverName: string;
+  tools: Array<{
+    name: string;
+    description: string;
+  }>;
+};
+
+function InspectMcpServerDialog({ open, onOpenChange }: InspectMcpServerDialogProps) {
   const [mcpUrl, setMcpUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isInspecting, setIsInspecting] = useState(false);
+  const [inspectResult, setInspectResult] = useState<McpInspectResult | null>(null);
 
-  // MCP server registration is coming soon. For now, save the URL to
-  // localStorage so we can pre-populate when the backend ships, and
-  // open the MCP docs so the user can verify their server URL format.
-  const handleRegister = useCallback(() => {
-    if (!mcpUrl.trim()) {
+  const handleInspect = useCallback(async () => {
+    const trimmedUrl = mcpUrl.trim();
+    if (!trimmedUrl) {
       setError('MCP server URL is required.');
       return;
     }
-    setError(null);
+
+    let parsedUrl: URL;
     try {
-      const pending = JSON.parse(
-        localStorage.getItem('agi.mcp.pendingServers') ?? '[]',
-      ) as string[];
-      if (!pending.includes(mcpUrl.trim())) {
-        pending.push(mcpUrl.trim());
-        localStorage.setItem('agi.mcp.pendingServers', JSON.stringify(pending));
-      }
+      parsedUrl = new URL(trimmedUrl);
     } catch {
-      // localStorage unavailable; proceed without saving
+      setError('Enter a valid HTTP or HTTPS URL.');
+      return;
     }
-    window.open('https://modelcontextprotocol.io', '_blank', 'noopener,noreferrer');
-    setMcpUrl('');
-    setAuthToken('');
-    onOpenChange(false);
-  }, [mcpUrl, onOpenChange]);
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      setError('MCP server URL must use HTTP or HTTPS.');
+      return;
+    }
+
+    setError(null);
+    setInspectResult(null);
+    setIsInspecting(true);
+    try {
+      const csrfToken = await getCsrfToken();
+      const response = await fetch('/api/mcp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken,
+        },
+        body: JSON.stringify({
+          serverName: parsedUrl.hostname.replace(/^www\./, '').slice(0, 100),
+          config: {
+            url: trimmedUrl,
+            transport: parsedUrl.pathname.endsWith('/sse') ? 'sse' : 'streamable-http',
+            ...(authToken.trim()
+              ? {
+                  headers: {
+                    Authorization: `Bearer ${authToken.trim()}`,
+                  },
+                }
+              : {}),
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+        };
+        throw new Error(body.message ?? body.error ?? `HTTP ${response.status}`);
+      }
+
+      const body = (await response.json()) as {
+        server?: {
+          serverName?: string;
+          tools?: Array<{
+            toolName?: string;
+            title?: string;
+            description?: string;
+            fallbackDescription?: string;
+          }>;
+        };
+      };
+      const tools = body.server?.tools ?? [];
+      setInspectResult({
+        serverName: body.server?.serverName ?? parsedUrl.hostname,
+        tools: tools.map((tool) => ({
+          name: tool.title ?? tool.toolName ?? 'Unnamed tool',
+          description: tool.description ?? tool.fallbackDescription ?? 'No description.',
+        })),
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to inspect MCP server.');
+    } finally {
+      setIsInspecting(false);
+    }
+  }, [authToken, mcpUrl]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base font-semibold text-foreground">
-            Add custom connector
+            Inspect MCP server
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Connect any MCP-compatible server or browse the public directory.
+            Inspect an HTTP MCP-compatible server and review its advertised tools.
           </DialogDescription>
         </DialogHeader>
 
@@ -1254,17 +1316,17 @@ function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDial
           <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <div className="mb-3 flex items-center gap-2">
               <Link2 className="h-4 w-4 text-primary" aria-hidden="true" />
-              <span className="text-sm font-medium text-foreground">
-                Connect via MCP server URL
-              </span>
+              <span className="text-sm font-medium text-foreground">MCP server URL</span>
             </div>
             <div className="space-y-2">
               <Input
                 placeholder="https://mcp.example.com/sse"
+                type="url"
                 value={mcpUrl}
                 onChange={(e) => {
                   setMcpUrl(e.target.value);
                   setError(null);
+                  setInspectResult(null);
                 }}
                 className="h-9 border-white/[0.08] bg-white/[0.04] text-sm placeholder:text-muted-foreground/60"
                 aria-label="MCP server URL"
@@ -1281,11 +1343,34 @@ function AddCustomConnectorDialog({ open, onOpenChange }: AddCustomConnectorDial
               <Button
                 size="sm"
                 className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                onClick={handleRegister}
+                onClick={() => void handleInspect()}
+                disabled={isInspecting}
               >
-                <Plus className="mr-1.5 h-3 w-3" />
-                Connect server
+                {isInspecting ? (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                ) : (
+                  <Plus className="mr-1.5 h-3 w-3" />
+                )}
+                Inspect tools
               </Button>
+              {inspectResult && (
+                <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+                    <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                    Found {inspectResult.tools.length} tools on {inspectResult.serverName}
+                  </div>
+                  {inspectResult.tools.length > 0 && (
+                    <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                      {inspectResult.tools.slice(0, 5).map((tool) => (
+                        <li key={tool.name}>
+                          <span className="text-foreground">{tool.name}</span>
+                          <span className="ml-1">{tool.description}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1409,11 +1494,7 @@ const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
   >
     <ConnectorLogo connector={connector} />
     <span className="min-w-0 flex-1 truncate text-xs font-medium">{connector.name}</span>
-    {connected ? (
-      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-    ) : connector.exclusive ? (
-      <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/60" />
-    ) : null}
+    {connected ? <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" /> : null}
   </button>
 );
 
@@ -1428,7 +1509,6 @@ interface ConnectorDetailPanelProps {
   onBack: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
-  onOpenPermissions: () => void;
 }
 
 // Inline tool lookup — avoids a second import statement at top-level that
@@ -1451,11 +1531,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   onBack,
   onConnect,
   onDisconnect,
-  onOpenPermissions,
 }) => {
   const isComingSoon = connector.phase > 1;
   const isOAuth = connector.authType === 'oauth';
-  const hasRealCredentials = connected && !isOAuth;
+  const isAvailable = !isComingSoon && !isOAuth && !connector.exclusive;
+  const hasRealCredentials = connected && isAvailable;
   const tools = useConnectorTools(connector.id);
 
   return (
@@ -1475,12 +1555,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-foreground">{connector.name}</h2>
-            {connector.exclusive && (
-              <Badge className="border-0 bg-amber-500/20 px-1.5 py-0 text-[10px] font-semibold text-amber-400">
-                EXCLUSIVE
-              </Badge>
-            )}
-            {isComingSoon && !connector.exclusive && (
+            {isComingSoon && (
               <Badge
                 variant="outline"
                 className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
@@ -1488,7 +1563,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 Phase {connector.phase}
               </Badge>
             )}
-            {!isComingSoon && isOAuth && !connector.exclusive && (
+            {!isComingSoon && isOAuth && (
               <Badge
                 variant="outline"
                 className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
@@ -1516,15 +1591,6 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                onClick={onOpenPermissions}
-                aria-label="Tool permissions"
-              >
-                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                 onClick={onDisconnect}
                 disabled={mutating}
@@ -1532,7 +1598,7 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
                 {mutating ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
               </Button>
             </div>
-          ) : (isComingSoon && !connector.exclusive) || isOAuth ? (
+          ) : !isAvailable ? (
             <Button
               variant="ghost"
               size="sm"
@@ -1545,22 +1611,12 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
           ) : (
             <Button
               size="sm"
-              className={cn(
-                'h-7 px-3 text-xs',
-                connector.exclusive
-                  ? 'bg-amber-500 text-black hover:bg-amber-400'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
-              )}
+              className="h-7 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
               onClick={onConnect}
               disabled={mutating}
             >
               {mutating ? (
                 <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-              ) : connector.exclusive ? (
-                <>
-                  <Zap className="mr-1.5 h-3 w-3" />
-                  Enable
-                </>
               ) : (
                 <>
                   <Plus className="mr-1.5 h-3 w-3" />
@@ -1586,17 +1642,6 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-xs font-semibold text-foreground">Tools ({tools.length})</span>
-            {hasRealCredentials && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 gap-1 px-2 text-[11px] text-muted-foreground hover:text-foreground"
-                onClick={onOpenPermissions}
-              >
-                <SlidersHorizontal className="h-3 w-3" aria-hidden="true" />
-                Permissions
-              </Button>
-            )}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {tools.map((tool) => (
@@ -1628,8 +1673,7 @@ export function ConnectorsPage() {
   const [connectedAtMap, setConnectedAtMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [mutatingIds, setMutatingIds] = useState<Set<string>>(new Set());
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [permissionsConnector, setPermissionsConnector] = useState<Connector | null>(null);
+  const [showInspectDialog, setShowInspectDialog] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   // Master-detail: which connector row is selected in the left list
   const [selectedConnector, setSelectedConnector] = useState<Connector | null>(null);
@@ -1705,7 +1749,7 @@ export function ConnectorsPage() {
   }, [searchQuery, activeCategory, activeStatus]);
 
   const filteredConnectors = useMemo(() => {
-    return CONNECTORS.filter((c) => {
+    return VISIBLE_CONNECTORS.filter((c) => {
       const matchesCategory = activeCategory === 'All' || c.category === activeCategory;
       const matchesSearch =
         !searchQuery ||
@@ -1721,6 +1765,10 @@ export function ConnectorsPage() {
 
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
   const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
+  const visibleConnectedCount = useMemo(
+    () => VISIBLE_CONNECTORS.filter((connector) => connectedIds.has(connector.id)).length,
+    [connectedIds],
+  );
 
   const totalAvailablePages = Math.ceil(availableConnectors.length / ITEMS_PER_PAGE);
   const pagedAvailableConnectors = availableConnectors.slice(
@@ -1729,7 +1777,7 @@ export function ConnectorsPage() {
   );
 
   const handleConnect = useCallback(async (id: string) => {
-    const connector = CONNECTORS.find((c) => c.id === id);
+    const connector = VISIBLE_CONNECTORS.find((c) => c.id === id);
     if (!connector) return;
 
     // Optimistic update
@@ -1813,18 +1861,18 @@ export function ConnectorsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
-                  {connectedIds.size} connected
+                  {visibleConnectedCount} connected
                 </Badge>
                 <Badge variant="outline" className="border-white/10 text-xs text-muted-foreground">
-                  {CONNECTORS.length} total
+                  {VISIBLE_CONNECTORS.length} total
                 </Badge>
                 <Button
                   size="sm"
                   className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
-                  onClick={() => setShowAddDialog(true)}
+                  onClick={() => setShowInspectDialog(true)}
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                  Add custom connector
+                  Inspect MCP server
                 </Button>
               </div>
             </div>
@@ -2002,7 +2050,6 @@ export function ConnectorsPage() {
                     onBack={() => setSelectedConnector(null)}
                     onConnect={() => setOverviewConnector(selectedConnector)}
                     onDisconnect={() => void handleDisconnect(selectedConnector.id)}
-                    onOpenPermissions={() => setPermissionsConnector(selectedConnector)}
                   />
                 ) : (
                   /* Placeholder shown on desktop when nothing is selected */
@@ -2022,7 +2069,7 @@ export function ConnectorsPage() {
           )}
 
           {/* Roadmap Callout - shown below master-detail */}
-          {!loading && (activeCategory === 'All' || activeCategory !== 'Exclusive') && (
+          {!loading && (
             <div className="mt-6 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
@@ -2071,7 +2118,7 @@ export function ConnectorsPage() {
         </div>
       </div>
 
-      <AddCustomConnectorDialog open={showAddDialog} onOpenChange={setShowAddDialog} />
+      <InspectMcpServerDialog open={showInspectDialog} onOpenChange={setShowInspectDialog} />
 
       <ConnectorOverviewDialog
         connector={overviewConnector}
@@ -2081,14 +2128,6 @@ export function ConnectorsPage() {
         }}
         onConnect={() => {
           if (overviewConnector) void handleConnect(overviewConnector.id);
-        }}
-      />
-
-      <ToolPermissionsPanel
-        connector={permissionsConnector}
-        open={permissionsConnector !== null}
-        onOpenChange={(open) => {
-          if (!open) setPermissionsConnector(null);
         }}
       />
     </ErrorBoundary>

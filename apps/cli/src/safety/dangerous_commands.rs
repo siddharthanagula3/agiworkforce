@@ -27,10 +27,8 @@ pub(super) const SAFE_COMMANDS: &[&str] = &[
     "uniq",
     "cut",
     "tr",
-    "tee",
     // Data inspection
     "jq",
-    "awk",
     "od",
     "hexdump",
     "strings",
@@ -57,14 +55,11 @@ pub(super) const SAFE_COMMANDS: &[&str] = &[
     "netstat",
 ];
 
-/// Multi-word command prefixes that are safe (e.g. "cargo check").
-pub(super) const SAFE_PREFIXES: &[&str] = &[
-    "cargo check",
-    "cargo test",
-    "npm test",
-    "python -c",
-    "node -e",
-];
+/// Multi-word command prefixes that are safe.
+///
+/// Build/test runners and inline interpreters intentionally stay out of this
+/// list: they execute project or user-supplied code and may write artifacts.
+pub(super) const SAFE_PREFIXES: &[&str] = &[];
 
 /// Standalone commands that are dangerous (destructive, privileged).
 pub const DANGEROUS_COMMANDS: &[&str] = &[

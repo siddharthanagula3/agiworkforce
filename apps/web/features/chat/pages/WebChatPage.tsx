@@ -8,13 +8,14 @@ import { useConversations } from '@/lib/hooks/useConversations';
 import { useChatStore } from '@/stores/chatStore';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
+import { useBillingStore } from '@/stores/unified/auth';
+import { getBestAutoModeForTier } from '@/constants/llm';
 import { SendPreview } from '@agiworkforce/unified-chat';
 import {
   summarizeSendPreview,
   type ProviderMode,
   type SendPreviewPresentation,
 } from '@agiworkforce/types';
-import { refreshSubscriptionStatus, isSubscriptionValid } from '@/utils/subscription-client';
 import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
@@ -25,6 +26,7 @@ import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
 import { ResearchPanel, ResearchToggleButton } from '../components/research/ResearchPanel';
 import { DirectoryModal } from '../components/dialogs/DirectoryModal';
+import { CloudUpgradeWaitlistDialog } from '../components/dialogs/CloudUpgradeWaitlistDialog';
 import { LocalByokHandoffDialog } from '../components/dialogs/LocalByokHandoffDialog';
 import {
   buildAcceptedHandoffSystemMessage,
@@ -38,6 +40,10 @@ import type { Message, MessageMetadata } from '@/stores/chatStore';
 import { useChatStore as useUnifiedChatStore } from '@agiworkforce/unified-chat';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { WebChatMessageMetadata } from '../types/message-metadata';
+import {
+  getAutoEconomyTrialRemaining,
+  useAutoEconomyTrialStore,
+} from '../stores/autoEconomyTrialStore';
 import { cn } from '@shared/lib/utils';
 
 type SendMeta = {
@@ -137,29 +143,25 @@ export default function WebChatPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Model from the model store — needed by the access gate below before the composer hooks.
+  const availableModels = useModelStore((s) => s.availableModels);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
-  const selectedModel = useModelStore((s) =>
-    s.availableModels.find((m) => m.id === s.selectedModelId),
-  );
+  const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
+  const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
+  const isWebsiteFreeTrial = subscriptionTier === 'free';
+  const freeTrialModelId = getBestAutoModeForTier('free');
+  const activeModelId = isWebsiteFreeTrial ? freeTrialModelId : selectedModelId;
+  const selectedModel = availableModels.find((m) => m.id === activeModelId);
+  const trialPromptsUsed = useAutoEconomyTrialStore((s) => s.promptsUsed);
+  const trialPromptLimit = useAutoEconomyTrialStore((s) => s.promptLimit);
+  const trialPromptsRemaining = getAutoEconomyTrialRemaining(trialPromptsUsed, trialPromptLimit);
+  const isTrialExhausted = isWebsiteFreeTrial && trialPromptsRemaining <= 0;
 
-  // Web chat is subscription-backed managed gateway only. Local and BYOK are
-  // desktop/developer-surface trust boundaries, not Web chat modes.
   useEffect(() => {
-    let cancelled = false;
-
-    async function checkAccess() {
-      const sub = await refreshSubscriptionStatus();
-
-      if (!cancelled && !isSubscriptionValid(sub)) {
-        router.replace('/pricing?from=web-chat');
-      }
+    if (!isWebsiteFreeTrial) return;
+    if (selectedModelId !== freeTrialModelId) {
+      setSelectedModelId(freeTrialModelId);
     }
-
-    void checkAccess();
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+  }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
 
   const [composerPrefill, setComposerPrefill] = useState<string | undefined>(undefined);
 
@@ -187,6 +189,7 @@ export default function WebChatPage() {
   const [handoffError, setHandoffError] = useState<string | null>(null);
   const [isBuildingHandoff, setIsBuildingHandoff] = useState(false);
   const [isConfirmingHandoff, setIsConfirmingHandoff] = useState(false);
+  const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
 
   // Streaming send + store state
   const { sendMessage, stopGeneration, isStreaming } = useChatStream();
@@ -236,6 +239,11 @@ export default function WebChatPage() {
     notifBannerDismissedRef.current = true;
     setShowNotifBanner(false);
   }, []);
+
+  const handleOpenCloudWaitlist = useCallback(() => {
+    setCloudWaitlistOpen(true);
+  }, []);
+
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const addMessage = useChatStore((s) => s.addMessage);
@@ -250,10 +258,10 @@ export default function WebChatPage() {
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
-      modelId: selectedModelId,
+      modelId: activeModelId,
       destinationHost: 'gateway.agiworkforce.com',
     });
-  }, [selectedModel, selectedModelId]);
+  }, [activeModelId, selectedModel]);
 
   // Conversation CRUD
   const {
@@ -320,7 +328,7 @@ export default function WebChatPage() {
         options.conversationId ||
         urlConversationId ||
         bareChatSessionId ||
-        (await createConversation('New Chat', selectedModelId).then((c) => {
+        (await createConversation('New Chat', activeModelId).then((c) => {
           if (c) {
             if (!urlConversationId) setBareChatSessionId(c.id);
             return c.id;
@@ -357,7 +365,7 @@ export default function WebChatPage() {
         : undefined;
 
       await sendMessage(content, {
-        model: selectedModelId,
+        model: activeModelId,
         conversationId: convId,
         attachments: resolvedAttachments,
         webSearch: options.meta?.webSearchEnabled,
@@ -367,7 +375,7 @@ export default function WebChatPage() {
         skillBody: options.meta?.skillBody,
       });
     },
-    [urlConversationId, bareChatSessionId, createConversation, sendMessage, selectedModelId],
+    [urlConversationId, bareChatSessionId, createConversation, sendMessage, activeModelId],
   );
 
   const handleSend = useCallback(
@@ -383,7 +391,7 @@ export default function WebChatPage() {
         shouldForkLocalToByok({
           conversation,
           messages: displayedMessages,
-          targetModelId: selectedModelId,
+          targetModelId: activeModelId,
         })
       ) {
         const candidates = buildHandoffContextCandidates({
@@ -405,13 +413,19 @@ export default function WebChatPage() {
         return false;
       }
 
+      if (attachments?.some((file) => !file.type.startsWith('image/'))) {
+        handleOpenCloudWaitlist();
+        return false;
+      }
+
       void sendContent(content, { attachments, meta });
     },
     [
       displayedConversation,
       displayedConversationId,
       displayedMessages,
-      selectedModelId,
+      activeModelId,
+      handleOpenCloudWaitlist,
       sendContent,
     ],
   );
@@ -477,7 +491,7 @@ export default function WebChatPage() {
     try {
       const fork = await createConversation(
         `${pendingByokHandoff.conversationTitle} (BYOK fork)`,
-        selectedModelId,
+        activeModelId,
       );
       if (!fork) throw new Error('Could not create BYOK fork conversation.');
 
@@ -524,7 +538,7 @@ export default function WebChatPage() {
     handoffPreview,
     pendingByokHandoff,
     router,
-    selectedModelId,
+    activeModelId,
     sendContent,
   ]);
 
@@ -604,10 +618,21 @@ export default function WebChatPage() {
       if (!displayedConversationId || isStreaming) return;
       const msg = displayedMessages.find((m) => m.id === id);
       if (!msg || msg.role !== 'user') return;
+      if (isTrialExhausted) {
+        handleOpenCloudWaitlist();
+        return;
+      }
       setComposerPrefill(msg.content);
       deleteMessage(id);
     },
-    [displayedConversationId, displayedMessages, isStreaming, deleteMessage],
+    [
+      displayedConversationId,
+      displayedMessages,
+      isStreaming,
+      deleteMessage,
+      isTrialExhausted,
+      handleOpenCloudWaitlist,
+    ],
   );
 
   const handleRegenerateMessage = useCallback(
@@ -624,11 +649,16 @@ export default function WebChatPage() {
         }
       }
       if (!userMsg) return;
+      if (isTrialExhausted) {
+        handleOpenCloudWaitlist();
+        return;
+      }
       // Remove the assistant message being regenerated, then resend
       deleteMessage(id);
       sendMessage(userMsg.content, {
-        model: selectedModelId,
+        model: activeModelId,
         conversationId: displayedConversationId,
+        attachments: userMsg.attachments,
       });
     },
     [
@@ -637,7 +667,9 @@ export default function WebChatPage() {
       isStreaming,
       deleteMessage,
       sendMessage,
-      selectedModelId,
+      activeModelId,
+      isTrialExhausted,
+      handleOpenCloudWaitlist,
     ],
   );
 
@@ -677,6 +709,7 @@ export default function WebChatPage() {
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         collapsed={sidebarCollapsed}
         onMoveToProjectSession={handleMoveToProjectSession}
+        onUpgradeRequest={handleOpenCloudWaitlist}
       />
 
       {/* Main area + artifact workbench */}
@@ -759,6 +792,12 @@ export default function WebChatPage() {
                     clearSignal={composerClearSignal}
                     emptyState
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                    onUpgradeRequest={handleOpenCloudWaitlist}
+                    freeTrial={{
+                      enabled: isWebsiteFreeTrial,
+                      promptsUsed: trialPromptsUsed,
+                      promptLimit: trialPromptLimit,
+                    }}
                   />
                 </div>
               </div>
@@ -773,6 +812,7 @@ export default function WebChatPage() {
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
                   onSendMessage={(text) => setComposerPrefill(text)}
+                  onPaywallUpgrade={handleOpenCloudWaitlist}
                 />
               </div>
 
@@ -796,6 +836,12 @@ export default function WebChatPage() {
                   onPrefillConsumed={() => setComposerPrefill(undefined)}
                   clearSignal={composerClearSignal}
                   attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                  onUpgradeRequest={handleOpenCloudWaitlist}
+                  freeTrial={{
+                    enabled: isWebsiteFreeTrial,
+                    promptsUsed: trialPromptsUsed,
+                    promptLimit: trialPromptLimit,
+                  }}
                 />
               </div>
             </>
@@ -805,6 +851,7 @@ export default function WebChatPage() {
         <ArtifactsPanel />
       </div>
       <DirectoryModal />
+      <CloudUpgradeWaitlistDialog open={cloudWaitlistOpen} onOpenChange={setCloudWaitlistOpen} />
       {pendingByokHandoff && (
         <LocalByokHandoffDialog
           open={Boolean(pendingByokHandoff)}

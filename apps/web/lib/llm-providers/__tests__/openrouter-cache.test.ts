@@ -18,7 +18,7 @@ function okOpenRouterJson(usage?: AnyObj) {
       choices: [
         { message: { content: 'Routed response', tool_calls: null }, finish_reason: 'stop' },
       ],
-      model: 'anthropic/claude-opus-4-6',
+      model: 'anthropic/claude-opus-4-8',
       usage: {
         prompt_tokens: 100,
         completion_tokens: 50,
@@ -52,7 +52,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
       await provider.sendRequest({
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-8',
         messages: [
           { role: 'system', content: 'You are a helpful assistant.' },
           { role: 'user', content: 'Hello' },
@@ -75,7 +75,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
       await provider.sendRequest({
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-8',
         messages: [
           { role: 'system', content: 'System prompt.' },
           { role: 'user', content: 'User message' },
@@ -148,7 +148,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
       const result = await provider.sendRequest({
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-8',
         messages: [{ role: 'user', content: 'Hello' }],
       });
 
@@ -159,7 +159,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
       mockFetch.mockResolvedValueOnce(okOpenRouterJson());
 
       const result = await provider.sendRequest({
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-8',
         messages: [{ role: 'user', content: 'Hello' }],
       });
 
@@ -193,7 +193,7 @@ describe('OpenRouterProvider cache_control for Anthropic-routed models', () => {
       mockFetch.mockResolvedValueOnce({ ok: true, body: mockBody });
 
       await provider.streamRequest({
-        model: 'anthropic/claude-opus-4-6',
+        model: 'anthropic/claude-opus-4-8',
         messages: [
           { role: 'system', content: 'System prompt.' },
           { role: 'user', content: 'Hello' },

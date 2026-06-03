@@ -101,8 +101,8 @@ describe('canAccessModel — pro tier', () => {
     expect(canAccessModel('claude-sonnet-4.6', 'pro')).toBe(true);
   });
 
-  it('denies claude-opus-4.6 (max/enterprise only) for pro users', () => {
-    expect(canAccessModel('claude-opus-4.6', 'pro')).toBe(false);
+  it('denies claude-opus-4.8 (max/enterprise only) for pro users', () => {
+    expect(canAccessModel('claude-opus-4.8', 'pro')).toBe(false);
   });
 });
 
@@ -201,7 +201,7 @@ describe('canAccessModel — case insensitivity', () => {
   it('handles uppercase tier names correctly', () => {
     expect(canAccessModel('gpt-5.4-mini', 'HOBBY')).toBe(true);
     expect(canAccessModel('claude-sonnet-4.6', 'PRO')).toBe(true);
-    // Use the current flagship; claude-opus-4.6/4.7 are retired; 4.8 is canonical.
+    // Use the current flagship; claude-opus-4.8/4.7 are retired; 4.8 is canonical.
     expect(canAccessModel('claude-opus-4.8', 'MAX')).toBe(true);
   });
 });

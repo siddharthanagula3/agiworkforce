@@ -19,11 +19,11 @@ impl Pricing {
 /// Media type for per-unit pricing (images and video).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MediaType {
-    /// Standard-quality image generation (e.g., DALL-E 3, Imagen 4)
+    /// Standard-quality image generation (e.g., GPT Image 2, Imagen 4)
     ImageStandard,
-    /// High-quality / HD image generation (e.g., Imagen 4 Ultra, gpt-image-1.5)
+    /// High-quality / HD image generation (e.g., Imagen 4 Ultra, GPT Image 2)
     ImageHD,
-    /// Video generation priced per second (e.g., Runway, Sora, Veo 3)
+    /// Video generation priced per second (e.g., Runway, Veo 3)
     VideoPerSecond,
 }
 
@@ -115,14 +115,6 @@ impl CostCalculator {
                 cost_per_unit: 0.08,
             },
         );
-        // OpenAI Sora video (~$0.10 per second)
-        media_pricing.insert(
-            (Provider::OpenAI, MediaType::VideoPerSecond),
-            MediaPricing {
-                cost_per_unit: 0.10,
-            },
-        );
-
         // Google image generation (Imagen 4)
         media_pricing.insert(
             (Provider::Google, MediaType::ImageStandard),
@@ -154,8 +146,8 @@ impl CostCalculator {
     }
 
     /// Providers whose pricing entries ManagedCloud may proxy through.
-    /// ManagedCloud routes to models like `gpt-5.4-nano` (OpenAI), `deepseek-reasoner`
-    /// (DeepSeek), `gemini-3-flash-preview` (Google), etc. -- instead of duplicating every
+    /// ManagedCloud routes to models like `gpt-5.4-mini` (OpenAI), `deepseek-v4-flash`
+    /// (DeepSeek), current Gemini models, etc. -- instead of duplicating every
     /// pricing entry, we look up the model under its original provider.
     const MANAGED_CLOUD_ORIGIN_PROVIDERS: &'static [Provider] = &[
         Provider::OpenAI,
@@ -332,13 +324,13 @@ impl CostCalculator {
         match media_price {
             Some(pricing) => pricing.cost_per_unit * units as f64,
             None => {
-                // Fallback: use conservative defaults
-                let default_cost = match media_type {
-                    MediaType::ImageStandard => 0.04,
-                    MediaType::ImageHD => 0.08,
-                    MediaType::VideoPerSecond => 0.08,
-                };
-                default_cost * units as f64
+                tracing::warn!(
+                    provider = ?provider,
+                    media_type = ?media_type,
+                    units,
+                    "no media pricing found for provider/media type; returning 0.0 cost"
+                );
+                0.0
             }
         }
     }
@@ -351,7 +343,7 @@ mod tests {
     #[test]
     fn calculate_returns_positive_for_known_model() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 1000, 500);
+        let cost = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1000, 500);
         assert!(
             cost > 0.0,
             "known model cost must be positive, got {}",
@@ -362,7 +354,7 @@ mod tests {
     #[test]
     fn calculate_returns_zero_for_zero_tokens() {
         let calc = CostCalculator::new();
-        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 0, 0);
+        let cost = calc.calculate(Provider::OpenAI, "gpt-5.4-mini", 0, 0);
         assert!(
             (cost - 0.0).abs() < f64::EPSILON,
             "zero tokens must produce zero cost"
@@ -425,11 +417,11 @@ mod tests {
     #[test]
     fn calculate_with_cache_anthropic_applies_cache_discount() {
         let calc = CostCalculator::new();
-        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-4-6", 1000, 500);
+        let cost_no_cache = calc.calculate(Provider::Anthropic, "claude-opus-4.8", 1000, 500);
         // With cache: 500 cache_read tokens billed at 0.1x should be cheaper
         let cost_cached = calc.calculate_with_cache(
             Provider::Anthropic,
-            "claude-opus-4-6",
+            "claude-opus-4.8",
             1000,
             500,
             500, // cache_read_tokens
@@ -446,9 +438,9 @@ mod tests {
     #[test]
     fn managed_cloud_looks_up_origin_provider_pricing() {
         let calc = CostCalculator::new();
-        // ManagedCloud should find gpt-5.4-nano pricing via OpenAI origin
-        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5.4-nano", 1_000_000, 1_000_000);
-        let direct_cost = calc.calculate(Provider::OpenAI, "gpt-5.4-nano", 1_000_000, 1_000_000);
+        // ManagedCloud should find gpt-5.4-mini pricing via OpenAI origin
+        let cost = calc.calculate(Provider::ManagedCloud, "gpt-5.4-mini", 1_000_000, 1_000_000);
+        let direct_cost = calc.calculate(Provider::OpenAI, "gpt-5.4-mini", 1_000_000, 1_000_000);
         assert!(
             (cost - direct_cost).abs() < f64::EPSILON,
             "ManagedCloud cost ({}) must equal direct provider cost ({})",

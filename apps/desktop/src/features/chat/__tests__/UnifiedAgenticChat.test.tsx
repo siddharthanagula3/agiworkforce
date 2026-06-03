@@ -150,7 +150,7 @@ vi.mock('../../../lib/taskMetadata', () => ({
 // Mock modelRouter utility
 vi.mock('../../../lib/modelRouter', () => ({
   getModelForRequest: vi.fn(() => ({
-    modelId: 'gpt-5.4',
+    modelId: 'gpt-5.5',
     wasRouted: false,
     reason: 'Manual selection',
   })),
@@ -322,7 +322,7 @@ vi.mock('../../../stores/settingsStore', () => {
       temperature: 0.7,
       maxTokens: 4096,
       defaultModels: {
-        managed_cloud: 'gpt-5.4',
+        managed_cloud: 'gpt-5.5',
         ollama: 'llama3',
       },
       taskRouting: {},
@@ -352,10 +352,10 @@ vi.mock('../../../stores/settingsStore', () => {
 // Mock model store
 vi.mock('../../../stores/modelStore', () => {
   const state = {
-    selectedModel: 'gpt-5.4',
+    selectedModel: 'gpt-5.5',
     selectedProvider: 'managed_cloud',
     thinkingModeEnabled: false,
-    availableModels: ['gpt-5.4', 'claude-sonnet-4-5'],
+    availableModels: ['gpt-5.5', 'claude-sonnet-4-6'],
   };
 
   const useModelStore = vi.fn((selector?: (s: typeof state) => unknown) => {
@@ -712,7 +712,7 @@ describe('UnifiedAgenticChat', () => {
     const modelStore = await import('../../../stores/modelStore');
 
     settingsStore.useSettingsStore().chatPreferences.alwaysUseAgentMode = true;
-    modelStore.useModelStore().selectedModel = 'gpt-5.4';
+    modelStore.useModelStore().selectedModel = 'gpt-5.5';
 
     await renderChat();
 
@@ -726,7 +726,7 @@ describe('UnifiedAgenticChat', () => {
       'chat_send_message',
       expect.objectContaining({
         request: expect.objectContaining({
-          modelOverride: 'gpt-5.4',
+          modelOverride: 'gpt-5.5',
           enableAgentMode: undefined,
         }),
       }),

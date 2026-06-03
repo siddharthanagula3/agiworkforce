@@ -2,12 +2,9 @@
 
 > **Multi-provider AI agent for your terminal.** Switch between 10+ Providers (cloud + local) mid-conversation. BYOK. No vendor lock.
 
-```bash
-npm install -g @agiworkforce/cli
-agi login
-agi            # interactive TUI
-agi exec "..."  # one-shot
-```
+The npm wrapper is release-gated until `@agiworkforce/cli` and its platform
+binary packages are published. Until then, use the universal installer or build
+from source.
 
 `agi` is the primary command. `agiworkforce` remains available as a backward-compatible alias.
 
@@ -38,13 +35,11 @@ The unique slice: **multi-provider + BYOK + local LLM**. No competitor offers al
 
 ## Installation
 
-### npm (recommended)
+### Universal installer
 
 ```bash
-npm install -g @agiworkforce/cli
+curl -fsSL https://agiworkforce.com/install.sh | bash
 ```
-
-This installs a thin Node.js wrapper that resolves the right native Rust binary for your platform (darwin-arm64/x64, linux-arm64/x64, win32-arm64/x64) via npm `optionalDependencies`.
 
 ### Homebrew (macOS / Linux)
 
@@ -52,11 +47,16 @@ This installs a thin Node.js wrapper that resolves the right native Rust binary 
 brew install agiworkforce/tap/agiworkforce
 ```
 
-### Universal installer
+### npm
 
 ```bash
-curl -fsSL https://agiworkforce.com/install.sh | bash
+npm install -g @agiworkforce/cli
 ```
+
+This command is valid only after the public npm release publishes the wrapper
+and all platform packages (`@agiworkforce/cli-darwin-arm64`, etc.). The wrapper
+does not fall back to a random `agi` on `PATH`; it runs only the matching
+platform package, bundled `vendor/` binary, or `AGI_CLI_BINARY_PATH`.
 
 ### From source (Rust 1.94+)
 

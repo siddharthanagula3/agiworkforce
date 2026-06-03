@@ -26,6 +26,10 @@
     "readmeOwnership": "pnpm check:readme-ownership",
     "docStatus": "pnpm check:doc-status",
     "hooks": "pnpm check:hooks",
+    "llmFailures": "pnpm check:llm-failures",
+    "llmFailuresStaged": "pnpm check:llm-failures:staged",
+    "llmFailuresChanged": "pnpm check:llm-failures:changed",
+    "llmFailuresStrict": "pnpm check:llm-failures:strict",
     "llmOperability": "pnpm check:llm-operability",
     "docsCheck": "pnpm docs:check"
   },

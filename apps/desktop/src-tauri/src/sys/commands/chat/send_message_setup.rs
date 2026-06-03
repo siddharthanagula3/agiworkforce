@@ -691,7 +691,7 @@ mod tests {
             RoutingStrategy::AutoPremium
         ));
         assert!(matches!(
-            resolve_routing_strategy("gpt-5.4"),
+            resolve_routing_strategy("gpt-5.5"),
             RoutingStrategy::Auto
         ));
     }
@@ -699,21 +699,21 @@ mod tests {
     #[test]
     fn opus_tool_workflows_default_to_adaptive_thinking() {
         let thinking =
-            resolve_thinking_parameter("claude-opus-4.6", None, None, true, "hello world");
+            resolve_thinking_parameter("claude-opus-4.8", None, None, true, "hello world");
         assert!(matches!(thinking, Some(ThinkingParameter::Adaptive { .. })));
     }
 
     #[test]
     fn explicit_thinking_mode_true_returns_enabled() {
         let thinking =
-            resolve_thinking_parameter("claude-sonnet-4-5", Some(true), None, false, "write code");
+            resolve_thinking_parameter("claude-sonnet-4-6", Some(true), None, false, "write code");
         assert!(matches!(thinking, Some(ThinkingParameter::Enabled(true))));
     }
 
     #[test]
     fn explicit_thinking_mode_true_with_budget_returns_budget() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             Some(true),
             Some(32_000),
             false,
@@ -731,7 +731,7 @@ mod tests {
     fn explicit_thinking_mode_false_disables_even_with_trigger() {
         // User explicitly turned off thinking in UI, message has "ultrathink"
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             Some(false),
             None,
             false,
@@ -743,7 +743,7 @@ mod tests {
     #[test]
     fn auto_detect_ultrathink_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             None,
             None,
             false,
@@ -760,7 +760,7 @@ mod tests {
     #[test]
     fn auto_detect_think_hard_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             None,
             None,
             false,
@@ -777,7 +777,7 @@ mod tests {
     #[test]
     fn auto_detect_think_on_supported_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             None,
             None,
             false,
@@ -802,7 +802,7 @@ mod tests {
     #[test]
     fn no_trigger_no_thinking_on_non_opus_model() {
         let thinking = resolve_thinking_parameter(
-            "claude-sonnet-4-5",
+            "claude-sonnet-4-6",
             None,
             None,
             false,

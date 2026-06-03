@@ -6,8 +6,7 @@
 //!               requests. Sprint B1.
 //!   * `http`  — Streamable HTTP per the MCP 2025-06-18 spec: POST per
 //!               request, body returned as JSON or SSE-upgrade response,
-//!               sticky `Mcp-Session-Id`, optional GET to subscribe to
-//!               server-pushed notifications. Sprint B2.
+//!               sticky `Mcp-Session-Id`. Sprint B2.
 //!
 //! Servers are configured in ~/.agiworkforce/config.toml or .mcp.json.
 //! Sprint B3 will add OAuth on top of the `http` transport.
@@ -408,17 +407,10 @@ pub(super) enum McpTransportConn {
         session_id: Option<String>,
     },
     Http {
-        /// Endpoint URL — used as both POST target and (optional) GET
-        /// target for the server-push notification stream.
+        /// Endpoint URL for JSON-RPC POSTs.
         url: String,
         headers: HashMap<String, String>,
         client: reqwest::Client,
-        /// Receiver for server-pushed notifications (only populated if the
-        /// server returned `text/event-stream` on the GET). `None` means
-        /// pure request/response mode (POST + JSON body or POST +
-        /// SSE-upgrade body).
-        #[allow(dead_code)]
-        notification_rx: Option<mpsc::Receiver<serde_json::Value>>,
         /// Sticky session id from `Mcp-Session-Id` header — captured on
         /// every response and echoed on every subsequent request.
         session_id: Option<String>,
@@ -662,15 +654,33 @@ impl McpConnection {
             let name = tool
                 .get("name")
                 .and_then(|n| n.as_str())
-                .unwrap_or_default();
+                .filter(|name| !name.trim().is_empty())
+                .with_context(|| {
+                    format!("[{}] MCP tool missing non-empty name", self.server_name)
+                })?;
             let description = tool
                 .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or_default();
-            let input_schema = tool
-                .get("inputSchema")
-                .cloned()
-                .unwrap_or(serde_json::json!({"type": "object"}));
+            let input_schema = tool.get("inputSchema").cloned().with_context(|| {
+                format!(
+                    "[{}] MCP tool '{}' missing inputSchema",
+                    self.server_name, name
+                )
+            })?;
+            let schema_object = input_schema.as_object().with_context(|| {
+                format!(
+                    "[{}] MCP tool '{}' inputSchema must be a JSON object",
+                    self.server_name, name
+                )
+            })?;
+            if schema_object.get("type").and_then(|v| v.as_str()) != Some("object") {
+                bail!(
+                    "[{}] MCP tool '{}' inputSchema.type must be \"object\"",
+                    self.server_name,
+                    name
+                );
+            }
 
             tools.push(McpTool {
                 namespaced_name: format!("mcp_{}_{}", self.server_name, name),
@@ -996,18 +1006,8 @@ impl McpConnection {
                 let mut reader = BufReader::new(stdout);
                 let mut line = String::new();
 
-                // Channel to send elicitation replies back to the server.
-                // The async block below sends the frame JSON; the loop outside
-                // writes it to stdin after the borrow on stdout is released.
-                let (elicit_tx, mut elicit_rx) = mpsc::channel::<String>(4);
-
                 let result = match tokio::time::timeout(timeout, async {
                     loop {
-                        // Check for pending elicitation replies first (non-blocking).
-                        // These were produced in previous iterations by the handler.
-                        // We can't write them here (stdout borrow), so they queue up
-                        // in the channel and get drained below.
-
                         line.clear();
                         let bytes_read = reader
                             .read_line(&mut line)
@@ -1079,7 +1079,8 @@ impl McpConnection {
                                     });
                                     if let Ok(mut json) = serde_json::to_string(&reply) {
                                         json.push('\n');
-                                        let _ = elicit_tx.try_send(json);
+                                        stdin.write_all(json.as_bytes()).await?;
+                                        stdin.flush().await?;
                                     }
                                     continue;
                                 }
@@ -1115,18 +1116,6 @@ impl McpConnection {
                         method_name,
                     )),
                 };
-
-                // Drain any pending elicitation replies. The read loop above
-                // queued them via the channel; now that the stdout borrow is
-                // released we can write them to stdin.
-                // Note: in the normal case the server won't send elicitations
-                // simultaneously with the response so this drain is usually empty.
-                while let Ok(reply_json) = elicit_rx.try_recv() {
-                    if let Some(stdin) = child.stdin.as_mut() {
-                        let _ = stdin.write_all(reply_json.as_bytes()).await;
-                        let _ = stdin.flush().await;
-                    }
-                }
 
                 result
             }
@@ -1381,9 +1370,8 @@ impl McpConnection {
                 // McpConnection is dropped or `inner` is overwritten).
             }
             McpTransportConn::Http { .. } => {
-                // Same as SSE: the optional notification forwarding task
-                // (if any) exits when its mpsc sender is dropped. There's
-                // no long-lived process or socket to tear down.
+                // No long-lived notification subscription is opened for HTTP
+                // unless a consumer is added for it.
             }
         }
     }
@@ -1424,8 +1412,8 @@ impl Drop for McpConnection {
                 // dropped here.
             }
             McpTransportConn::Http { .. } => {
-                // Same as SSE — the (optional) notification forwarding task
-                // exits when its sender is dropped along with this conn.
+                // No long-lived notification subscription is opened for HTTP
+                // unless a consumer is added for it.
             }
         }
     }
@@ -1557,46 +1545,68 @@ fn parse_mcp_config_contents(
 ) -> Result<HashMap<String, McpServerConfig>> {
     let mut configs = HashMap::new();
 
-    // Flat format: { "server_name": { "command": "...", ... } }
-    if let Ok(parsed) = serde_json::from_str::<HashMap<String, McpServerConfig>>(contents) {
-        for (name, config) in parsed {
-            configs.insert(name, config);
-        }
-    }
-
-    // Nested format: { "mcpServers": { ... } }
-    match serde_json::from_str::<serde_json::Value>(contents) {
-        Ok(parsed) => {
-            if let Some(servers) = parsed.get("mcpServers").and_then(|s| s.as_object()) {
-                for (name, config) in servers {
-                    match serde_json::from_value::<McpServerConfig>(config.clone()) {
-                        Ok(server_config) => {
-                            configs.insert(name.clone(), server_config);
-                        }
-                        Err(err) if strict => {
-                            return Err(err).with_context(|| {
-                                format!(
-                                    "Invalid MCP server '{}' in explicit config {}",
-                                    name,
-                                    path.display()
-                                )
-                            });
-                        }
-                        Err(_) => {}
-                    }
-                }
-            } else if strict && configs.is_empty() {
-                bail!(
-                    "Explicit MCP config {} must be a flat server map or contain mcpServers",
-                    path.display()
-                );
-            }
-        }
+    let parsed = match serde_json::from_str::<serde_json::Value>(contents) {
+        Ok(value) => value,
         Err(err) if strict => {
             return Err(err)
                 .with_context(|| format!("Invalid MCP config JSON in {}", path.display()));
         }
-        Err(_) => {}
+        Err(_) => return Ok(configs),
+    };
+
+    let Some(root) = parsed.as_object() else {
+        if strict {
+            bail!(
+                "Explicit MCP config {} must be a JSON object",
+                path.display()
+            );
+        }
+        return Ok(configs);
+    };
+
+    if let Some(servers_value) = root.get("mcpServers") {
+        if strict && root.keys().any(|key| key != "mcpServers") {
+            bail!(
+                "Explicit MCP config {} mixes mcpServers with flat server entries",
+                path.display()
+            );
+        }
+        let Some(servers) = servers_value.as_object() else {
+            if strict {
+                bail!("mcpServers in {} must be an object", path.display());
+            }
+            return Ok(configs);
+        };
+        for (name, config) in servers {
+            match serde_json::from_value::<McpServerConfig>(config.clone()) {
+                Ok(server_config) => {
+                    configs.insert(name.clone(), server_config);
+                }
+                Err(err) if strict => {
+                    return Err(err).with_context(|| {
+                        format!(
+                            "Invalid MCP server '{}' in explicit config {}",
+                            name,
+                            path.display()
+                        )
+                    });
+                }
+                Err(_) => {}
+            }
+        }
+    } else {
+        match serde_json::from_value::<HashMap<String, McpServerConfig>>(parsed) {
+            Ok(parsed_configs) => configs.extend(parsed_configs),
+            Err(err) if strict => {
+                return Err(err).with_context(|| {
+                    format!(
+                        "Explicit MCP config {} must be a flat server map or contain mcpServers",
+                        path.display()
+                    )
+                });
+            }
+            Err(_) => {}
+        }
     }
 
     Ok(configs)
@@ -1777,7 +1787,7 @@ impl McpManager {
             Some(prompt) => prompt.clone(),
             None => return Ok(None),
         };
-        let args = mcp_prompt_arguments_from_text(&prompt, arg_text);
+        let args = mcp_prompt_arguments_from_text(&prompt, arg_text)?;
         let conn = self
             .connections
             .get_mut(&prompt.server_name)
@@ -1902,52 +1912,21 @@ fn parse_mcp_prompt_invocation(input: &str) -> Option<(&str, &str)> {
 }
 
 fn mcp_prompt_arguments_from_text(
-    prompt: &McpPrompt,
+    _prompt: &McpPrompt,
     arg_text: &str,
-) -> serde_json::Map<String, serde_json::Value> {
-    let mut out = serde_json::Map::new();
+) -> Result<serde_json::Map<String, serde_json::Value>> {
     let trimmed = arg_text.trim();
     if trimmed.is_empty() {
-        return out;
+        return Ok(serde_json::Map::new());
     }
 
-    let mut all_key_values = true;
-    for token in trimmed.split_whitespace() {
-        let Some((key, value)) = token.split_once('=') else {
-            all_key_values = false;
-            break;
-        };
-        if key.trim().is_empty() {
-            all_key_values = false;
-            break;
-        }
-        out.insert(
-            key.trim().to_string(),
-            serde_json::Value::String(value.trim().to_string()),
-        );
-    }
-    if all_key_values && !out.is_empty() {
-        return out;
-    }
-
-    out.clear();
-    if let Some(arg) = prompt
-        .arguments
-        .iter()
-        .find(|arg| arg.required)
-        .or_else(|| prompt.arguments.first())
-    {
-        out.insert(
-            arg.name.clone(),
-            serde_json::Value::String(trimmed.to_string()),
-        );
-    } else {
-        out.insert(
-            "input".to_string(),
-            serde_json::Value::String(trimmed.to_string()),
-        );
-    }
-    out
+    let value: serde_json::Value =
+        serde_json::from_str(trimmed).context("MCP prompt arguments must be a JSON object")?;
+    let object = value
+        .as_object()
+        .cloned()
+        .context("MCP prompt arguments must be a JSON object")?;
+    Ok(object)
 }
 
 fn extract_prompt_text(response: Option<&serde_json::Value>) -> Result<String> {
@@ -2124,6 +2103,71 @@ mod tests {
             .contains("Failed to read explicit MCP config"));
     }
 
+    #[tokio::test]
+    async fn stdio_elicitation_reply_is_written_before_waiting_for_response() {
+        let python_available = std::process::Command::new("python3")
+            .arg("--version")
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .map(|status| status.success())
+            .unwrap_or(false);
+        if !python_available {
+            return;
+        }
+
+        let script = r#"
+import json
+import sys
+
+def read_frame():
+    line = sys.stdin.readline()
+    if not line:
+        sys.exit(2)
+    return json.loads(line)
+
+def write_frame(frame):
+    print(json.dumps(frame), flush=True)
+
+init = read_frame()
+write_frame({"jsonrpc": "2.0", "id": init["id"], "result": {"serverInfo": {"name": "test"}}})
+read_frame()  # notifications/initialized
+tools = read_frame()
+write_frame({
+    "jsonrpc": "2.0",
+    "id": "elicit-1",
+    "method": "elicitation/create",
+    "params": {
+        "message": "confirm",
+        "requestedSchema": {"type": "object"}
+    }
+})
+reply = read_frame()
+if reply.get("id") != "elicit-1" or reply.get("result", {}).get("action") != "decline":
+    sys.exit(3)
+write_frame({"jsonrpc": "2.0", "id": tools["id"], "result": {"tools": []}})
+"#;
+
+        let config = McpServerConfig::Tagged(McpTransport::Stdio {
+            command: "python3".to_string(),
+            args: vec!["-u".to_string(), "-c".to_string(), script.to_string()],
+            env: HashMap::new(),
+        });
+        let timeouts = McpTimeouts {
+            initialize: Duration::from_secs(2),
+            list_tools: Duration::from_millis(500),
+            call_tool: Duration::from_secs(2),
+            health_check: Duration::from_millis(500),
+        };
+
+        let mut conn = McpConnection::connect_with_timeouts("stdio-elicit", &config, timeouts)
+            .await
+            .expect("connect");
+        let tools = conn.list_tools().await.expect("list tools");
+        assert!(tools.is_empty());
+        let _ = conn.shutdown().await;
+    }
+
     #[test]
     fn test_mcp_manager_new() {
         let manager = McpManager::new();
@@ -2169,15 +2213,13 @@ mod tests {
             }],
         };
 
-        let keyed = mcp_prompt_arguments_from_text(&prompt, "base=main depth=high");
+        let keyed = mcp_prompt_arguments_from_text(&prompt, r#"{"base":"main","depth":"high"}"#)
+            .expect("valid JSON object args");
         assert_eq!(keyed.get("base").and_then(|v| v.as_str()), Some("main"));
         assert_eq!(keyed.get("depth").and_then(|v| v.as_str()), Some("high"));
 
         let positional = mcp_prompt_arguments_from_text(&prompt, "release branch");
-        assert_eq!(
-            positional.get("base").and_then(|v| v.as_str()),
-            Some("release branch")
-        );
+        assert!(positional.is_err());
     }
 
     #[test]
@@ -2385,7 +2427,7 @@ mod tests {
     fn mcp_env_blocks_dyld_insert_libraries() {
         let env = manifest_env(&[("DYLD_INSERT_LIBRARIES", "~/.config/evil.dylib")]);
         let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(allowed.get("DYLD_INSERT_LIBRARIES").is_none());
+        assert!(!allowed.contains_key("DYLD_INSERT_LIBRARIES"));
         assert!(blocked.contains(&"DYLD_INSERT_LIBRARIES".to_string()));
     }
 
@@ -2393,7 +2435,7 @@ mod tests {
     fn mcp_env_blocks_ld_preload() {
         let env = manifest_env(&[("LD_PRELOAD", "/tmp/evil.so")]);
         let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(allowed.get("LD_PRELOAD").is_none());
+        assert!(!allowed.contains_key("LD_PRELOAD"));
         assert!(blocked.contains(&"LD_PRELOAD".to_string()));
     }
 
@@ -2401,7 +2443,7 @@ mod tests {
     fn mcp_env_blocks_node_options() {
         let env = manifest_env(&[("NODE_OPTIONS", "--require ./malicious.js")]);
         let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(allowed.get("NODE_OPTIONS").is_none());
+        assert!(!allowed.contains_key("NODE_OPTIONS"));
         assert!(blocked.contains(&"NODE_OPTIONS".to_string()));
     }
 
@@ -2416,7 +2458,7 @@ mod tests {
         ] {
             let env = manifest_env(&[(var, "http://attacker.com")]);
             let (allowed, blocked) = filter_manifest_env(&env);
-            assert!(allowed.get(*var).is_none(), "{var} should be blocked");
+            assert!(!allowed.contains_key(*var), "{var} should be blocked");
             assert!(
                 blocked.iter().any(|k| k.eq_ignore_ascii_case(var)),
                 "{var} not in blocked list"
@@ -2429,7 +2471,7 @@ mod tests {
         // Any *_PROXY var — even one not in the explicit list.
         let env = manifest_env(&[("MY_CUSTOM_PROXY", "http://attacker.com")]);
         let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(allowed.get("MY_CUSTOM_PROXY").is_none());
+        assert!(!allowed.contains_key("MY_CUSTOM_PROXY"));
         assert!(blocked.contains(&"MY_CUSTOM_PROXY".to_string()));
     }
 
@@ -2492,7 +2534,7 @@ mod tests {
             ("MY_SERVER_VAR", "ok"),
         ]);
         let (allowed, blocked) = filter_manifest_env(&env);
-        assert!(allowed.get("DYLD_INSERT_LIBRARIES").is_none());
+        assert!(!allowed.contains_key("DYLD_INSERT_LIBRARIES"));
         assert_eq!(allowed.get("MY_SERVER_VAR").map(String::as_str), Some("ok"));
         assert!(blocked.contains(&"DYLD_INSERT_LIBRARIES".to_string()));
     }

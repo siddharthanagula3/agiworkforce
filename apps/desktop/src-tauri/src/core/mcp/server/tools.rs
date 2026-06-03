@@ -11,13 +11,11 @@ impl McpServerToolRegistry {
         let all_tools = vec![
             json!({
                 "name": "agi_chat",
-                "description": "Chat with any LLM provider (12 providers, auto-routing + fallback). Returns the model's response.",
+                "description": "Chat through AGI Workforce auto-routing. External MCP callers cannot override model IDs or system prompts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "message": { "type": "string", "description": "The user message to send" },
-                        "model": { "type": "string", "description": "Optional model ID. See `agi_list_models` for the current catalog. Omit for auto-routing." },
-                        "system_prompt": { "type": "string", "description": "Optional system prompt" }
+                        "message": { "type": "string", "description": "The user message to send" }
                     },
                     "required": ["message"]
                 }

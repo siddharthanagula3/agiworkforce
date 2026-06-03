@@ -445,8 +445,10 @@ export class McpProxy {
               method: 'notifications/initialized',
               params: {},
             }),
+            signal: AbortSignal.timeout(5_000),
           });
-        } catch {
+        } catch (error) {
+          logger.warn({ serverId, error }, 'MCP initialized notification failed');
           // Notifications are best-effort
         }
       }

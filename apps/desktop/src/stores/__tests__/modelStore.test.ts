@@ -90,13 +90,13 @@ describe('modelStore', () => {
     });
 
     it('removes a model from favorites when already present', () => {
-      useModelStore.setState({ favorites: ['claude-sonnet-4.6', 'gpt-5.4'] });
+      useModelStore.setState({ favorites: ['claude-sonnet-4.6', 'gpt-5.5'] });
 
       useModelStore.getState().toggleFavorite('claude-sonnet-4.6');
 
       const state = useModelStore.getState();
       expect(state.favorites).not.toContain('claude-sonnet-4.6');
-      expect(state.favorites).toContain('gpt-5.4');
+      expect(state.favorites).toContain('gpt-5.5');
     });
   });
 
@@ -196,7 +196,7 @@ describe('modelStore', () => {
   describe('reset', () => {
     it('resets all state to defaults', () => {
       useModelStore.setState({
-        selectedModel: 'gpt-5.4',
+        selectedModel: 'gpt-5.5',
         selectedProvider: 'openai',
         favorites: ['model-a', 'model-b'],
         recentModels: ['model-a'],

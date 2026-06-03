@@ -53,9 +53,9 @@ apps/cli/src/
 3. Never change external subcommand names or the `cargo run -p agiworkforce-cli` interface.
 4. Each move is its own commit: `refactor(cli): move plan_mode → features/plan`.
 
-## Pre-existing baseline (2026-05-18)
+## Verification Snapshot (2026-06-02)
 
-- cargo check: PASS
-- cargo clippy --lib -D warnings -D unsafe-code: PASS
-- cargo test --lib: 1331 pass / 6 fail (pre-existing, model catalog data gaps)
-- Files: 289 .rs, ~155K LOC
+- `cargo fmt --package agiworkforce-cli --package agiworkforce-app-server`: PASS
+- `cargo test -p agiworkforce-app-server`: PASS
+- `cargo check -p agiworkforce-cli -p agiworkforce-app-server`: PASS
+- `cargo test -p agiworkforce-cli --lib`: PASS (1594 passed / 0 failed)

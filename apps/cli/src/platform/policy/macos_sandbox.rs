@@ -162,17 +162,13 @@ mod tests {
         let p = build_profile(&opts(SandboxPreset::ReadOnly)).unwrap();
         assert!(p.contains("(deny default)"));
         assert!(p.contains("file-read*"));
-        assert!(!p.contains(&format!(
-            "(allow file-write* (subpath \"/Users/test/work\"))"
-        )));
+        assert!(!p.contains("(allow file-write* (subpath \"/Users/test/work\"))"));
     }
 
     #[test]
     fn contained_allows_workspace_writes() {
         let p = build_profile(&opts(SandboxPreset::Contained)).unwrap();
-        assert!(p.contains(&format!(
-            "(allow file-write* (subpath \"/Users/test/work\"))"
-        )));
+        assert!(p.contains("(allow file-write* (subpath \"/Users/test/work\"))"));
     }
 
     #[test]

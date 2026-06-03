@@ -55,9 +55,9 @@
  *   - sendApprovalResponse is a no-op when status !== 'connected'
  *   - sendApprovalResponse calls sendControl with approval_response when connected
  *   - sendAgentCommand is a no-op when not connected
- *   - sendAgentCommand sends agent_command control message when connected
+ *   - sendAgentCommand sends relay-safe control message when connected
  *   - requestAgentRefresh is a no-op when not connected
- *   - requestAgentRefresh sends request_agents_refresh when connected
+ *   - requestAgentRefresh sends sync_request when connected
  *   - sendEmergencyStop fires when status is 'connected'
  *   - sendEmergencyStop fires when status is 'stale' (still responsive)
  *   - sendEmergencyStop is a no-op when 'disconnected' or 'error'
@@ -109,8 +109,8 @@
  *   - startMobileHeartbeat returns a cleanup function
  *   - startMobileHeartbeat fires immediately then repeats at 60s intervals
  *   - cleanup cancels the interval
- *   - logApprovalDecision calls writeAuditEvent with correct action + outcome
- *   - logEmergencyStop writes a 'critical' severity audit event
+ *   - logApprovalDecision stays local/no-op while cloud companion is disabled
+ *   - logEmergencyStop stays local/no-op while cloud companion is disabled
  *
  *  Notification preferences store
  *   - shouldNotify returns true when category is enabled and not in quiet hours
@@ -492,7 +492,7 @@ function makeAgent(overrides: Record<string, unknown> = {}): Record<string, unkn
   return {
     id: `agent-${Math.random().toString(36).slice(2)}`,
     name: 'Test Agent',
-    model: 'claude-opus-4.6',
+    model: 'claude-opus-4.8',
     status: 'running',
     currentStep: 'Processing files',
     progress: 50,
@@ -549,6 +549,11 @@ describe('QR Pairing — isValidPairingCode', () => {
     expect(isValidPairingCode('agiw:ABCDEF123456')).toBe(true);
   });
 
+  it('accepts a secure QR payload with role token', () => {
+    const token = 'a'.repeat(64);
+    expect(isValidPairingCode(`agiw:ABCDEF123456:${token}`)).toBe(true);
+  });
+
   it('accepts a raw 8-character alphanumeric code without prefix', () => {
     expect(isValidPairingCode('ABC12345')).toBe(true);
   });
@@ -602,11 +607,20 @@ describe('QR Pairing — isValidPairingCode', () => {
   it('rejects a QR string with invalid prefix', () => {
     expect(isValidPairingCode('qr:ABC12345')).toBe(false);
   });
+
+  it('rejects a QR payload with malformed role token', () => {
+    expect(isValidPairingCode('agiw:ABCDEF123456:not-a-token')).toBe(false);
+  });
 });
 
 describe('QR Pairing — extractPairingCode', () => {
   it('strips the agiw: prefix and returns the raw code', () => {
     expect(extractPairingCode('agiw:ABC123')).toBe('ABC123');
+  });
+
+  it('strips the role token from secure QR payloads', () => {
+    const token = 'f'.repeat(64);
+    expect(extractPairingCode(`agiw:ABCDEF123456:${token}`)).toBe('ABCDEF123456');
   });
 
   it('returns the raw code unchanged when no prefix is present', () => {
@@ -679,10 +693,13 @@ describe('Connection Store — sendControl delegation', () => {
     expect(() => new Date(respondedAt).toISOString()).not.toThrow();
   });
 
-  it('requestAgentRefresh sends request_agents_refresh when connected', () => {
+  it('requestAgentRefresh sends sync_request when connected', () => {
     setConnectionStatus('connected');
     requestAgentRefresh();
-    expect(mockSendControl).toHaveBeenCalledWith('request_agents_refresh');
+    expect(mockSendControl).toHaveBeenCalledWith(
+      'sync_request',
+      expect.objectContaining({ reason: 'agent_refresh' }),
+    );
   });
 
   it('requestAgentRefresh is a no-op when not connected', () => {
@@ -691,29 +708,33 @@ describe('Connection Store — sendControl delegation', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendAgentCommand sends agent_command control message when connected', () => {
+  it('sendAgentCommand sends relay-safe agent command payload when connected', () => {
     setConnectionStatus('connected');
     sendAgentCommand('agent-xyz', 'pause');
-    expect(mockSendControl).toHaveBeenCalledWith('agent_command', {
-      agentId: 'agent-xyz',
-      command: 'pause',
-      sentAt: expect.any(String),
-    });
+    expect(mockSendControl).toHaveBeenCalledWith(
+      'dispatch_request',
+      expect.objectContaining({
+        kind: 'agent_command',
+        agentId: 'agent-xyz',
+        command: 'pause',
+        sentAt: expect.any(String),
+      }),
+    );
   });
 
   it('sendAgentCommand supports resume and cancel commands', () => {
     setConnectionStatus('connected');
     sendAgentCommand('agent-xyz', 'resume');
     expect(mockSendControl).toHaveBeenCalledWith(
-      'agent_command',
-      expect.objectContaining({ command: 'resume' }),
+      'dispatch_request',
+      expect.objectContaining({ kind: 'agent_command', command: 'resume' }),
     );
 
     mockSendControl.mockClear();
     sendAgentCommand('agent-xyz', 'cancel');
     expect(mockSendControl).toHaveBeenCalledWith(
-      'agent_command',
-      expect.objectContaining({ command: 'cancel' }),
+      'cancel',
+      expect.objectContaining({ kind: 'agent_command', command: 'cancel' }),
     );
   });
 
@@ -729,10 +750,10 @@ describe('Connection Store — sendControl delegation', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendHeartbeatPing sends a ping control message when connected', () => {
+  it('sendHeartbeatPing sends a heartbeat control message when connected', () => {
     setConnectionStatus('connected');
     sendHeartbeatPing();
-    expect(mockSendControl).toHaveBeenCalledWith('ping', {
+    expect(mockSendControl).toHaveBeenCalledWith('heartbeat', {
       timestamp: expect.any(Number),
     });
   });
@@ -746,15 +767,16 @@ describe('Connection Store — sendControl delegation', () => {
   it('sendEmergencyStop fires when connected', () => {
     setConnectionStatus('connected');
     sendEmergencyStop();
-    expect(mockSendControl).toHaveBeenCalledWith('emergency_stop', {
-      sentAt: expect.any(String),
-    });
+    expect(mockSendControl).toHaveBeenCalledWith(
+      'cancel',
+      expect.objectContaining({ scope: 'all', sentAt: expect.any(String) }),
+    );
   });
 
   it('sendEmergencyStop fires when status is stale (partial connectivity)', () => {
     setConnectionStatus('stale');
     sendEmergencyStop();
-    expect(mockSendControl).toHaveBeenCalledWith('emergency_stop', expect.any(Object));
+    expect(mockSendControl).toHaveBeenCalledWith('cancel', expect.any(Object));
   });
 
   it('sendEmergencyStop is a no-op when disconnected', () => {
@@ -1405,19 +1427,38 @@ describe('startMobileHeartbeat', () => {
 });
 
 describe('logApprovalDecision', () => {
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
   it('does not write cloud audit events for an approved action in mobile v1', async () => {
-    await logApprovalDecision('user-1', 'delete_file', true);
-    expect(true).toBe(true);
+    await expect(logApprovalDecision('user-1', 'delete_file', true)).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('does not write cloud audit events for a denied action in mobile v1', async () => {
-    await logApprovalDecision('user-1', 'run_command', false, 'Too dangerous');
-    expect(true).toBe(true);
+    await expect(
+      logApprovalDecision('user-1', 'run_command', false, 'Too dangerous'),
+    ).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('does not include metadata when reason is undefined', async () => {
-    await logApprovalDecision('user-1', 'view_file', true, undefined);
-    expect(true).toBe(true);
+    await expect(
+      logApprovalDecision('user-1', 'view_file', true, undefined),
+    ).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('does not throw when cloud audit logging is disabled', async () => {
@@ -1426,14 +1467,28 @@ describe('logApprovalDecision', () => {
 });
 
 describe('logEmergencyStop', () => {
+  let warnSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+    jest.useRealTimers();
+  });
+
   it('does not write cloud emergency-stop audit events in mobile v1', async () => {
-    await logEmergencyStop('user-1', 'all_agents');
-    expect(true).toBe(true);
+    await expect(logEmergencyStop('user-1', 'all_agents')).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('records the correct resource (specific agent session ID)', async () => {
-    await logEmergencyStop('user-1', 'session-abc-123');
-    expect(true).toBe(true);
+    await expect(logEmergencyStop('user-1', 'session-abc-123')).resolves.toBeUndefined();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 
   it('does not throw when cloud audit logging is disabled', async () => {
@@ -1632,7 +1687,7 @@ describe('startHealthChecks / stopHealthChecks', () => {
     startHealthChecks();
 
     // Before any tick — no pings yet
-    expect(mockSendControl).not.toHaveBeenCalledWith('ping', expect.any(Object));
+    expect(mockSendControl).not.toHaveBeenCalledWith('heartbeat', expect.any(Object));
 
     // Advance past the 30s heartbeat interval
     jest.advanceTimersByTime(30_001);
@@ -1645,13 +1700,13 @@ describe('startHealthChecks / stopHealthChecks', () => {
     stopHealthChecks();
   });
 
-  it('does not send a ping when disconnected even after 30 seconds', () => {
+  it('does not send a heartbeat when disconnected even after 30 seconds', () => {
     setConnectionStatus('disconnected');
     startHealthChecks();
 
     jest.advanceTimersByTime(30_001);
 
-    expect(mockSendControl).not.toHaveBeenCalledWith('ping', expect.any(Object));
+    expect(mockSendControl).not.toHaveBeenCalledWith('heartbeat', expect.any(Object));
 
     stopHealthChecks();
   });

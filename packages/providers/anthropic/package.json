@@ -14,12 +14,12 @@
     "posttest": "pnpm build"
   },
   "dependencies": {
-    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
     "@agiworkforce/llm-runtime": "workspace:*",
+    "@agiworkforce/types": "workspace:*",
     "@anthropic-ai/sdk": "^0.91.1"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.8"
   }
 }

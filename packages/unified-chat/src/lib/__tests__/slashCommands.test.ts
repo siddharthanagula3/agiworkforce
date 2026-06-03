@@ -129,10 +129,10 @@ describe('registerBuiltinSlashCommands', () => {
     const setModel = vi.fn();
     getSlashCommand('model')!.handler!('', { conversationId: null, host: { setModel } });
     expect(setModel).not.toHaveBeenCalled();
-    getSlashCommand('model')!.handler!('claude-opus-4-7', {
+    getSlashCommand('model')!.handler!('claude-opus-4-8', {
       conversationId: null,
       host: { setModel },
     });
-    expect(setModel).toHaveBeenCalledWith('claude-opus-4-7');
+    expect(setModel).toHaveBeenCalledWith('claude-opus-4-8');
   });
 });

@@ -87,7 +87,7 @@ export class GoogleProvider {
 
   constructor(config?: Partial<GoogleConfig>) {
     this.config = {
-      model: (getProviderDefaultModel('google') ?? 'gemini-3.1-pro-preview') as GoogleModel,
+      model: (getProviderDefaultModel('google') ?? 'gemini-3.5-flash') as GoogleModel,
       maxTokens: 4096,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',

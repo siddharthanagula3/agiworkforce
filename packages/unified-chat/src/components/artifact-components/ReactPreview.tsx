@@ -25,6 +25,10 @@ function escapeCodeForTemplateLiteral(code: string): string {
   return code.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$/g, '\\$');
 }
 
+function previewErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 /**
  * Builds the sandboxed HTML document that loads React + Babel from CDN and
  * renders the user's component code. Exported for unit-testing the document shape.
@@ -86,7 +90,9 @@ export function buildReactPreviewDocument(
       function sendMsg(type, payload) {
         try {
           window.parent.postMessage({ channelId, type, ...payload }, parentOrigin);
-        } catch (_) {}
+        } catch (err) {
+          console.warn('[ReactPreview] Failed to post iframe message:', err);
+        }
       }
 
       window.__REACT_PREVIEW__ = { channelId, displayError, sendMsg };
@@ -184,21 +190,27 @@ export function ReactPreview({ code, className }: ReactPreviewProps) {
     return buildReactPreviewDocument(userCode, channelId.current, parentOrigin);
   }, []);
 
-  // Reset loading/error state whenever code or reloadKey changes
-  useEffect(() => {
-    setError(null);
-    setIsLoading(true);
-  }, [code, reloadKey]);
-
-  const srcDoc = useMemo(() => {
+  const previewDocument = useMemo(() => {
     try {
-      return buildDocument(code);
-    } catch {
-      return '';
+      return { srcDoc: buildDocument(code), buildError: null };
+    } catch (err) {
+      return { srcDoc: '', buildError: previewErrorMessage(err) };
     }
     // reloadKey intentionally included so manual reload rebuilds the srcdoc
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code, buildDocument, reloadKey]);
+  const { srcDoc, buildError } = previewDocument;
+
+  // Reset loading/error state whenever code or reloadKey changes.
+  useEffect(() => {
+    if (buildError) {
+      setError(buildError);
+      setIsLoading(false);
+      return;
+    }
+    setError(null);
+    setIsLoading(true);
+  }, [code, reloadKey, buildError]);
 
   // Listen for messages from the iframe
   useEffect(() => {

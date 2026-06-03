@@ -21,9 +21,7 @@ use ts_rs::TS;
 /// Bounded accent color palette for project visual identity. Mirrors
 /// `ProjectAccentColor` in `packages/types/src/suite-contracts.ts`.
 /// Default is `Zinc`, mirroring the TS `PROJECT_ACCENT_FALLBACK`.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS,
-)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(rename_all = "lowercase")]
 pub enum ProjectAccentColor {
@@ -276,17 +274,35 @@ mod tests {
 
     #[test]
     fn normalize_accent_color_round_trips_known_values() {
-        assert_eq!(normalize_accent_color(Some("emerald")), ProjectAccentColor::Emerald);
+        assert_eq!(
+            normalize_accent_color(Some("emerald")),
+            ProjectAccentColor::Emerald
+        );
         assert_eq!(normalize_accent_color(Some("sky")), ProjectAccentColor::Sky);
-        assert_eq!(normalize_accent_color(Some("amber")), ProjectAccentColor::Amber);
-        assert_eq!(normalize_accent_color(Some("rose")), ProjectAccentColor::Rose);
-        assert_eq!(normalize_accent_color(Some("violet")), ProjectAccentColor::Violet);
-        assert_eq!(normalize_accent_color(Some("zinc")), ProjectAccentColor::Zinc);
+        assert_eq!(
+            normalize_accent_color(Some("amber")),
+            ProjectAccentColor::Amber
+        );
+        assert_eq!(
+            normalize_accent_color(Some("rose")),
+            ProjectAccentColor::Rose
+        );
+        assert_eq!(
+            normalize_accent_color(Some("violet")),
+            ProjectAccentColor::Violet
+        );
+        assert_eq!(
+            normalize_accent_color(Some("zinc")),
+            ProjectAccentColor::Zinc
+        );
     }
 
     #[test]
     fn normalize_accent_color_falls_back_for_unknown_and_none() {
-        assert_eq!(normalize_accent_color(Some("teal")), ProjectAccentColor::Zinc);
+        assert_eq!(
+            normalize_accent_color(Some("teal")),
+            ProjectAccentColor::Zinc
+        );
         assert_eq!(normalize_accent_color(None), ProjectAccentColor::Zinc);
     }
 

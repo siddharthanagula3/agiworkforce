@@ -90,18 +90,22 @@ export class WebSocketRateLimiter {
    * Extract client IP from request, handling proxies
    */
   getClientIp(req: IncomingMessage): string {
-    // Check X-Forwarded-For header (from reverse proxy)
-    const forwardedFor = req.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-      const ip = ips?.trim();
-      if (ip) return ip;
-    }
+    const trustProxy = process.env['TRUST_PROXY'] === 'true' || process.env['TRUST_PROXY'] === '1';
 
-    // Check X-Real-IP header (from nginx)
-    const realIp = req.headers['x-real-ip'];
-    if (realIp) {
-      return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
+    if (trustProxy) {
+      // Check X-Forwarded-For header from a trusted reverse proxy.
+      const forwardedFor = req.headers['x-forwarded-for'];
+      if (forwardedFor) {
+        const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
+        const ip = ips?.trim();
+        if (ip) return ip;
+      }
+
+      // Check X-Real-IP header from a trusted reverse proxy.
+      const realIp = req.headers['x-real-ip'];
+      if (realIp) {
+        return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
+      }
     }
 
     // Fall back to socket address

@@ -15,6 +15,9 @@ import type {
   ChatMessage,
 } from '@agiworkforce/unified-chat';
 import { getAuthToken as getClerkToken } from '@shared/lib/get-auth-token';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+
+const DEFAULT_WEB_CHAT_MODEL = 'auto-economy';
 
 async function getAuthToken(): Promise<string> {
   const token = await getClerkToken();
@@ -22,8 +25,11 @@ async function getAuthToken(): Promise<string> {
   return token;
 }
 
-function authHeaders(token: string): Record<string, string> {
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+async function authHeaders(token: string): Promise<HeadersInit> {
+  return addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  });
 }
 
 interface ApiConversation {
@@ -113,9 +119,9 @@ export class WebChatRuntime implements ChatRuntime {
 
     const response = await fetch('/api/llm/v1/chat/completions', {
       method: 'POST',
-      headers: authHeaders(token),
+      headers: await authHeaders(token),
       body: JSON.stringify({
-        model: options?.model ?? undefined,
+        model: options?.model ?? DEFAULT_WEB_CHAT_MODEL,
         messages: history,
         stream: true,
         thinking_mode: options?.thinkingEnabled ?? undefined,
@@ -213,7 +219,7 @@ export class WebChatRuntime implements ChatRuntime {
     const token = await getAuthToken();
     const res = await fetch('/api/chat/conversations', {
       method: 'POST',
-      headers: authHeaders(token),
+      headers: await authHeaders(token),
       body: JSON.stringify({ title }),
     });
     if (!res.ok) throw new Error(`createConversation failed: ${res.status}`);
@@ -226,7 +232,7 @@ export class WebChatRuntime implements ChatRuntime {
     const token = await getAuthToken();
     await fetch(`/api/chat/conversations/${conversationId}`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: await authHeaders(token),
     });
   }
 
@@ -234,7 +240,7 @@ export class WebChatRuntime implements ChatRuntime {
     const token = await getAuthToken();
     await fetch(`/api/chat/conversations/${conversationId}`, {
       method: 'PATCH',
-      headers: authHeaders(token),
+      headers: await authHeaders(token),
       body: JSON.stringify({ title }),
     });
   }

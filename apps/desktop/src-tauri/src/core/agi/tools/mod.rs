@@ -1649,7 +1649,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "image_generate".to_string(),
             name: "Generate Image".to_string(),
-            description: "Generate an image using AI (DALL-E 3, Imagen 3, SDXL)".to_string(),
+            description: "Generate an image using AI (GPT Image 2, Imagen 4, SDXL)".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::APICall],
             parameters: vec![
                 ToolParameter {
@@ -1663,7 +1663,7 @@ impl ToolRegistry {
                     name: "provider".to_string(),
                     parameter_type: ParameterType::String,
                     required: false,
-                    description: "Provider to use: 'dalle3', 'imagen', 'sdxl' (default: auto)"
+                    description: "Provider to use: 'openai', 'imagen', 'sdxl' (default: auto)"
                         .to_string(),
                     default: Some(serde_json::Value::String("auto".to_string())),
                 },
@@ -2714,7 +2714,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "media_generate_image".to_string(),
             name: "Generate Image".to_string(),
-            description: "Generate images using AI (DALL-E 3, Imagen 3, SDXL)".to_string(),
+            description: "Generate images using AI (GPT Image 2, Imagen 4, SDXL)".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
             parameters: vec![
                 ToolParameter {

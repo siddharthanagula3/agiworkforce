@@ -55,6 +55,14 @@ function isValidSignalKind(value: unknown): value is SignalKind {
   return value === 'offer' || value === 'answer' || value === 'ice' || value === 'control';
 }
 
+function isValidPeerLeftReason(
+  value: unknown,
+): value is 'disconnect' | 'error' | 'timeout' | 'terminated' {
+  return (
+    value === 'disconnect' || value === 'error' || value === 'timeout' || value === 'terminated'
+  );
+}
+
 /**
  * Safely extract a SignalingRole from a message, with fallback
  */
@@ -67,6 +75,12 @@ function safeToSignalingRole(value: unknown, fallback: SignalingRole): Signaling
  */
 function safeToSignalKind(value: unknown, fallback: SignalKind): SignalKind {
   return isValidSignalKind(value) ? value : fallback;
+}
+
+function safeToPeerLeftReason(
+  value: unknown,
+): 'disconnect' | 'error' | 'timeout' | 'terminated' | undefined {
+  return isValidPeerLeftReason(value) ? value : undefined;
 }
 
 /**
@@ -125,6 +139,7 @@ export class SignalingClient {
         type: 'register',
         code: this.options.code,
         role: this.options.role,
+        pairToken: this.options.pairToken,
         metadata: this.options.metadata,
       });
       const heartbeatEvery = this.options.heartbeatIntervalMs ?? 25000;
@@ -201,9 +216,11 @@ export class SignalingClient {
         break;
       }
       case 'peer_left': {
+        const reason = safeToPeerLeftReason(message['reason']);
         this.options.onEvent({
           type: 'peer_left',
           role: safeToSignalingRole(message['role'], 'mobile'),
+          ...(reason ? { reason } : {}),
         });
         break;
       }
@@ -224,8 +241,13 @@ export class SignalingClient {
         });
         break;
       }
-      case 'heartbeat_ack':
+      case 'heartbeat_ack': {
+        this.options.onEvent({
+          type: 'heartbeat_ack',
+          timestamp: safeToNumber(message['timestamp'], Date.now()),
+        });
         break;
+      }
       default:
         console.warn('[signaling] unknown message type received', message);
         break;

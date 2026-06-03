@@ -37,6 +37,7 @@ import {
   WORK_SECRET_VERSION,
   type WorkerType,
 } from './types';
+import { mintSessionIngressToken as mintSignedSessionIngressToken } from './sessionIngressToken';
 
 const router = Router();
 
@@ -76,15 +77,8 @@ function mintEnvironmentSecret(): string {
   return randomBytes(32).toString('base64url');
 }
 
-/**
- * Mint a session_ingress_token (opaque-ish JWT-like blob).
- * In production this would be a short-lived signed JWT; here we use a
- * base64url random to keep this layer thin.  The assignment module issues
- * real WorkSecret envelopes that carry this token.
- */
 function mintSessionIngressToken(environmentId: string): string {
-  const payload = { environment_id: environmentId, iat: Math.floor(Date.now() / 1000) };
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  return mintSignedSessionIngressToken({ secret: JWT_SECRET, environmentId });
 }
 
 // ---------------------------------------------------------------------------

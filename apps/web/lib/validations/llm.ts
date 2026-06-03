@@ -30,7 +30,7 @@ export const MAX_MESSAGE_LENGTH = 100_000;
  *  callers forward arbitrary JSON to upstream APIs, including
  *  pathological JSON Schema (deep $ref recursion) that triggered
  *  quadratic parse times in the upstream validator. */
-const ToolDefinitionSchema = z.object({
+export const ToolDefinitionSchema = z.object({
   type: z.literal('function'),
   function: z.object({
     name: z
@@ -44,7 +44,7 @@ const ToolDefinitionSchema = z.object({
   }),
 });
 
-const ToolChoiceSchema = z.union([
+export const ToolChoiceSchema = z.union([
   z.enum(['auto', 'none', 'required']),
   z.object({
     type: z.literal('function'),

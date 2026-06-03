@@ -156,6 +156,9 @@ pub fn describe_filter(opts: &LinuxSandboxOptions) -> String {
 /// Probe whether seccomp filters can be installed in this environment.
 /// Returns false in seccomp-disabled containers / WSL1 / older kernels.
 pub fn is_available() -> bool {
+    if !cfg!(feature = "linux-seccomp") {
+        return false;
+    }
     // Check /proc/self/status for Seccomp: 0/1/2 lines.
     let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
     status.lines().any(|line| line.starts_with("Seccomp:"))
@@ -256,10 +259,12 @@ fn syscall_number_for(name: &str) -> i64 {
     }
 }
 
-// Stub: install_filter is a no-op on Linux when the feature is disabled.
+// Fail closed when seccomp support is not compiled in.
 #[cfg(all(target_os = "linux", not(feature = "linux-seccomp")))]
 pub fn install_filter(_opts: &LinuxSandboxOptions) -> anyhow::Result<()> {
-    Ok(())
+    anyhow::bail!(
+        "Linux seccomp sandbox is not available in this build (missing linux-seccomp feature)"
+    )
 }
 
 #[cfg(all(target_os = "linux", not(feature = "linux-seccomp")))]

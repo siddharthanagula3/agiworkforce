@@ -38,8 +38,7 @@ const FEATURES = [
   },
 ];
 
-/** Inline screenshot placeholder — styled to look like a code editor panel. */
-function EditorScreenshot({ label, description }: { label: string; description: string }) {
+function EditorProductView({ label, description }: { label: string; description: string }) {
   return (
     <div
       style={{
@@ -107,7 +106,7 @@ function EditorScreenshot({ label, description }: { label: string; description: 
             margin: 0,
           }}
         >
-          Screenshot
+          Product view
         </p>
         <p
           style={{
@@ -169,11 +168,11 @@ export default function VscodeExtensionPage() {
               gap: 16,
             }}
           >
-            <EditorScreenshot
+            <EditorProductView
               label="AGI chat panel"
               description="Standalone AGI sidebar panel answering a question about the open file. Runs independently without Copilot or other extensions."
             />
-            <EditorScreenshot
+            <EditorProductView
               label="Provider switcher"
               description="Status-bar model picker showing available providers. Switch mid-session without leaving the editor or touching a config file."
             />

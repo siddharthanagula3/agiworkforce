@@ -68,7 +68,7 @@ export interface C2paStyleClaim {
   readonly generated_at: string;
   /** Provider that produced the artefact (anthropic / openai / google / ...). */
   readonly provider: string;
-  /** Model id from `models.json` (e.g. "claude-opus-4.7"). */
+  /** Model id from `models.json` (e.g. "claude-opus-4.8"). */
   readonly model: string;
   /** SHA-256 of the artefact bytes (hex). Empty string when payload not hashable. */
   readonly content_hash_sha256: string;

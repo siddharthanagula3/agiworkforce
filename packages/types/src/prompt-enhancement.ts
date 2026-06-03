@@ -59,7 +59,7 @@ export enum UseCase {
   DocumentCreation = 'DocumentCreation',
   /** Web search and information retrieval */
   Search = 'Search',
-  /** Image generation (DALL-E, Stable Diffusion, etc.) */
+  /** Image generation (GPT Image, Stable Diffusion, etc.) */
   ImageGen = 'ImageGen',
   /** Video generation (Veo3, etc.) */
   VideoGen = 'VideoGen',
@@ -92,8 +92,8 @@ export enum APIProvider {
   Ollama = 'Ollama',
   /** Google Veo for video generation */
   Veo3 = 'Veo3',
-  /** OpenAI DALL-E for image generation */
-  DALLE = 'DALLE',
+  /** OpenAI GPT Image for image generation */
+  GPTImage = 'GPTImage',
   /** Stable Diffusion for image generation */
   StableDiffusion = 'StableDiffusion',
   /** Midjourney for high-quality image generation */
@@ -180,7 +180,7 @@ export interface EnhancedPrompt {
  *   estimatedCost: 0.015,
  *   estimatedLatency: 2500,
  *   fallbacks: [APIProvider.GPT, APIProvider.Gemini],
- *   model: 'claude-sonnet-4-5',
+ *   model: 'claude-sonnet-4-6',
  *   config: {
  *     temperature: 0.7,
  *     maxTokens: 4096
@@ -350,7 +350,7 @@ export interface ProviderCapabilities {
  *   maxLatency: 5000,
  *   providerPreferences: {
  *     [UseCase.Coding]: [APIProvider.Claude, APIProvider.GPT],
- *     [UseCase.ImageGen]: [APIProvider.DALLE, APIProvider.StableDiffusion]
+ *     [UseCase.ImageGen]: [APIProvider.GPTImage, APIProvider.StableDiffusion]
  *   }
  * };
  * ```

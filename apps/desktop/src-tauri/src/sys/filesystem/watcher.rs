@@ -69,7 +69,7 @@ impl FileWatcher {
     }
 
     pub fn watch(&mut self, path: &str, recursive: bool) -> Result<(), String> {
-        let path_buf = PathBuf::from(path);
+        let path_buf = crate::sys::commands::file_ops::validate_path_security(path)?;
 
         if !path_buf.exists() {
             return Err(format!("Path does not exist: {}", path));
@@ -91,12 +91,17 @@ impl FileWatcher {
             .map_err(|e| format!("Failed to lock watched paths: {}", e))?;
         watched.insert(path_buf.clone(), mode);
 
-        info!("Started watching: {} (recursive: {})", path, recursive);
+        info!(
+            "Started watching: {} (recursive: {})",
+            path_buf.display(),
+            recursive
+        );
         Ok(())
     }
 
     pub fn unwatch(&mut self, path: &str) -> Result<(), String> {
-        let path_buf = PathBuf::from(path);
+        let path_buf = crate::sys::commands::file_ops::validate_path_security(path)
+            .unwrap_or_else(|_| PathBuf::from(path));
 
         self.watcher
             .unwatch(&path_buf)
@@ -108,7 +113,7 @@ impl FileWatcher {
             .map_err(|e| format!("Failed to lock watched paths: {}", e))?;
         watched.remove(&path_buf);
 
-        info!("Stopped watching: {}", path);
+        info!("Stopped watching: {}", path_buf.display());
         Ok(())
     }
 

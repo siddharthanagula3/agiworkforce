@@ -4,9 +4,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
+import { refundAutoEconomyTrialPrompt } from '@/lib/services/auto-economy-trial-service';
 import { handleCorsPreflightRequest, getSecurityHeaders } from '@/lib/cors';
 import { runAuthGate } from './lib/auth-gate';
-import { processRequest } from './lib/request-processor';
+import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildStreamResponse } from './lib/stream-transform';
 import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/response-builder';
 
@@ -17,6 +18,30 @@ import { buildNonStreamResponse, buildUpstreamErrorResponse } from './lib/respon
  * Routes to 10+ LLM providers based on model. Auth: Clerk JWT. Billing: cloud credits.
  * Service modules: auth-gate | request-processor | stream-transform | response-builder
  */
+async function refundFailedReservation(
+  userId: string,
+  processed: ProcessedRequest,
+  reason: 'streaming_failure' | 'request_failure',
+): Promise<void> {
+  if (processed.autoEconomyTrial) {
+    await refundAutoEconomyTrialPrompt({
+      userId,
+      requestId: processed.requestId,
+      reason,
+    });
+    return;
+  }
+
+  const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
+  await CreditService.deductCredits(
+    userId,
+    -processed.estimatedCostCents,
+    `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
+    { type: 'refund', reason, requestId: processed.requestId },
+    refundKey,
+  );
+}
+
 async function handleChatCompletions(request: NextRequest) {
   // 1. Auth + rate-limit + CSRF + subscription gate
   const authResult = await runAuthGate(request);
@@ -36,15 +61,7 @@ async function handleChatCompletions(request: NextRequest) {
     try {
       stream = await LLMProviderFactory.streamRequest(processed.provider, processed.llmRequest);
     } catch (error) {
-      // Refund reservation on upstream failure
-      const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
-      await CreditService.deductCredits(
-        userId,
-        -processed.estimatedCostCents,
-        `Refund for failed streaming request: ${processed.provider}/${processed.chatRequest.model}`,
-        { type: 'refund', reason: 'streaming_failure', requestId: processed.requestId },
-        refundKey,
-      );
+      await refundFailedReservation(userId, processed, 'streaming_failure');
       return buildUpstreamErrorResponse(
         error,
         processed.provider,
@@ -64,14 +81,7 @@ async function handleChatCompletions(request: NextRequest) {
   try {
     llmResponse = await LLMProviderFactory.sendRequest(processed.provider, processed.llmRequest);
   } catch (error) {
-    const refundKey = CreditService.generateIdempotencyKey(userId, 'refund', processed.requestId);
-    await CreditService.deductCredits(
-      userId,
-      -processed.estimatedCostCents,
-      `Refund for failed request: ${processed.provider}/${processed.chatRequest.model}`,
-      { type: 'refund', reason: 'request_failure', requestId: processed.requestId },
-      refundKey,
-    );
+    await refundFailedReservation(userId, processed, 'request_failure');
     return buildUpstreamErrorResponse(
       error,
       processed.provider,

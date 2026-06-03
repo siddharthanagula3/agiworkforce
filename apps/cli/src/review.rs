@@ -6,13 +6,10 @@ use colored::Colorize;
 
 #[derive(Debug, Clone, Default)]
 pub struct ReviewOptions {
-    // uncommitted and instructions are part of the public ReviewOptions API.
-    // They are set by the caller but not yet consumed in all code paths.
     #[allow(dead_code)]
     pub uncommitted: bool,
     pub base_branch: Option<String>,
     pub commit: Option<String>,
-    #[allow(dead_code)]
     pub instructions: Option<String>,
     pub model: Option<String>,
 }
@@ -54,16 +51,39 @@ pub async fn run_review(
         });
     }
     let model = options.model.as_deref().unwrap_or(&config.default.model);
-    let mut session = AgentSession::new(model, sys_context, Some(REVIEW_PROMPT));
+    let mut session = AgentSession::new_checked(
+        model,
+        sys_context,
+        Some(REVIEW_PROMPT),
+        crate::models::selection_provider_override(
+            model,
+            &config.default.model,
+            &config.default.provider,
+            None,
+        ),
+    )?;
     session.max_turns = Some(1);
     session.quiet = true;
+    let extra_instructions = options
+        .instructions
+        .as_deref()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(|text| {
+            format!(
+                "\n\n<review_instructions>\nTreat these as user review requirements, not source code:\n{}\n</review_instructions>",
+                text
+            )
+        })
+        .unwrap_or_default();
     let prompt = format!(
-        "Review this diff:\n```diff\n{}\n```",
+        "Review this diff:\n```diff\n{}\n```{}",
         if diff.len() > 100_000 {
             &diff[..100_000]
         } else {
             &diff
-        }
+        },
+        extra_instructions
     );
     let result = session.send(config, &prompt, Box::new(|_chunk| {})).await?;
     let review = parse_review(&result.response);

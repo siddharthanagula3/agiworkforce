@@ -157,46 +157,151 @@ class SupportService {
   }
 
   /**
-   * Get a specific ticket with replies
-   * TODO: Implement /api/support/[id] route to support individual ticket fetch + replies
+   * Get a specific ticket with replies.
    */
-  async getTicket(_ticketId: string): Promise<{
+  async getTicket(ticketId: string): Promise<{
     ticket: SupportTicket | null;
     replies: TicketReply[];
     error?: string;
   }> {
-    return {
-      ticket: null,
-      replies: [],
-      error: 'Not implemented: individual ticket API route pending',
-    };
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { ticket: null, replies: [], error: 'User not authenticated' };
+      }
+
+      const encodedId = encodeURIComponent(ticketId);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [ticketResponse, repliesResponse] = await Promise.all([
+        fetch(`/api/support/${encodedId}`, { headers }),
+        fetch(`/api/support/${encodedId}/replies`, { headers }),
+      ]);
+
+      if (!ticketResponse.ok) {
+        const errorData = await ticketResponse.json().catch(() => ({}));
+        return {
+          ticket: null,
+          replies: [],
+          error: (errorData as { error?: string }).error ?? `HTTP ${ticketResponse.status}`,
+        };
+      }
+
+      if (!repliesResponse.ok) {
+        const errorData = await repliesResponse.json().catch(() => ({}));
+        return {
+          ticket: null,
+          replies: [],
+          error: (errorData as { error?: string }).error ?? `HTTP ${repliesResponse.status}`,
+        };
+      }
+
+      const ticketResult = (await ticketResponse.json()) as { ticket: SupportTicket };
+      const repliesResult = (await repliesResponse.json()) as { replies: TicketReply[] };
+      return {
+        ticket: ticketResult.ticket,
+        replies: repliesResult.replies ?? [],
+      };
+    } catch (error) {
+      console.error('Error getting ticket:', error);
+      return {
+        ticket: null,
+        replies: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Add a reply to a ticket
-   * TODO: Implement /api/support/[id]/replies route
+   * Add a reply to a ticket.
    */
   async addReply(
-    _ticketId: string,
-    _message: string,
+    ticketId: string,
+    message: string,
   ): Promise<{ data: TicketReply | null; error?: string }> {
-    return { data: null, error: 'Not implemented: ticket reply API route pending' };
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        return { data: null, error: 'User not authenticated' };
+      }
+
+      const response = await fetch(`/api/support/${encodeURIComponent(ticketId)}/replies`, {
+        method: 'POST',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }),
+        body: JSON.stringify({ message }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          data: null,
+          error: (errorData as { error?: string }).error ?? `HTTP ${response.status}`,
+        };
+      }
+
+      const result = (await response.json()) as { reply: TicketReply };
+      return { data: result.reply };
+    } catch (error) {
+      console.error('Error adding ticket reply:', error);
+      return {
+        data: null,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Get all FAQs
-   * TODO: Implement /api/support/faqs route
+   * Get all FAQs.
    */
   async getFAQs(): Promise<{ data: FAQ[]; error?: string }> {
-    return { data: [] };
+    try {
+      const response = await fetch('/api/support/faqs');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          data: [],
+          error: (errorData as { error?: string }).error ?? `HTTP ${response.status}`,
+        };
+      }
+
+      const result = (await response.json()) as { faqs: FAQ[] };
+      return { data: result.faqs ?? [] };
+    } catch (error) {
+      console.error('Error getting FAQs:', error);
+      return {
+        data: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
-   * Search FAQs
-   * TODO: Implement /api/support/faqs route with search param
+   * Search FAQs.
    */
-  async searchFAQs(_query: string): Promise<{ data: FAQ[]; error?: string }> {
-    return { data: [] };
+  async searchFAQs(query: string): Promise<{ data: FAQ[]; error?: string }> {
+    try {
+      const response = await fetch(
+        `/api/support/faqs/search?q=${encodeURIComponent(query.trim())}`,
+      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        return {
+          data: [],
+          error: (errorData as { error?: string }).error ?? `HTTP ${response.status}`,
+        };
+      }
+
+      const result = (await response.json()) as { faqs: FAQ[] };
+      return { data: result.faqs ?? [] };
+    } catch (error) {
+      console.error('Error searching FAQs:', error);
+      return {
+        data: [],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
@@ -225,50 +330,14 @@ class SupportService {
     messageId?: string;
     error?: string;
   }> {
-    try {
-      // Get the current auth token
-      const token = await getAuthToken();
-
-      if (!token) {
-        console.warn('[Support Service] No session for email notification, skipping');
-        return { success: false, error: 'Not authenticated' };
-      }
-
-      // Call the Netlify function
-      const response = await fetch('/.netlify/functions/notifications/send-email', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[Support Service] Email notification failed:', response.status, errorData);
-        return {
-          success: false,
-          error: (errorData as { error?: string }).error || `HTTP ${response.status}`,
-        };
-      }
-
-      const result = (await response.json()) as { messageId?: string };
-      if (process.env.NODE_ENV === 'development') {
-        console.debug('[Support Service] Email notification sent:', result.messageId);
-      }
-
-      return {
-        success: true,
-        messageId: result.messageId,
-      };
-    } catch (error) {
-      console.error('[Support Service] Error sending email notification:', error);
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      };
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[Support Service] Email notification skipped:', data.type);
     }
+
+    return {
+      success: false,
+      error: 'Email notification delivery is not configured in the web client',
+    };
   }
 
   /**

@@ -38,15 +38,13 @@ import { subscribeToDispatch, unsubscribeFromDispatch } from '@/services/dispatc
 import { startDesktopStatusPolling } from '@/services/desktopStatus';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
-import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 
 export default function RootLayout() {
   const [isMmkvReady, setIsMmkvReady] = useState(false);
   const { session, isLoading, isInitialized, initialize } = useAuthStore();
-  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  const authEnabled = FEATURES.auth || cloudUnlocked;
+  const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
   const router = useRouter();

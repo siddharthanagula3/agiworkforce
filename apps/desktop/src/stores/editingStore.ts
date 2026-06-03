@@ -996,7 +996,7 @@ export const useMediaGenerationStore = create<MediaGenerationState>()(
           {
             id: jobId,
             prompt: payload.prompt,
-            provider: 'veo-3.1',
+            provider: 'google',
             model: payload.model,
             status: 'running',
             createdAt: startedAt,

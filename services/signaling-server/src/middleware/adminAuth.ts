@@ -54,19 +54,26 @@ const authFailures = new Map<string, AuthFailureEntry>();
  * Extract client IP from request
  */
 function getClientIp(req: Request): string {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  if (forwardedFor) {
-    const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
-    const ip = ips?.trim();
-    if (ip) return ip;
+  const trustProxy =
+    req.app.get('trust proxy') === true ||
+    process.env['TRUST_PROXY'] === 'true' ||
+    process.env['TRUST_PROXY'] === '1';
+
+  if (trustProxy) {
+    const forwardedFor = req.headers['x-forwarded-for'];
+    if (forwardedFor) {
+      const ips = Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor.split(',')[0];
+      const ip = ips?.trim();
+      if (ip) return ip;
+    }
+
+    const realIp = req.headers['x-real-ip'];
+    if (realIp) {
+      return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
+    }
   }
 
-  const realIp = req.headers['x-real-ip'];
-  if (realIp) {
-    return Array.isArray(realIp) ? (realIp[0] ?? 'unknown') : realIp;
-  }
-
-  return req.socket.remoteAddress ?? 'unknown';
+  return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
 /**

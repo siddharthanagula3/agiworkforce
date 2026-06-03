@@ -89,7 +89,9 @@ export const useAgentStore = create<AgentState>()(
 
       addApproval: (approval) =>
         set((state) => ({
-          pendingApprovals: [...state.pendingApprovals, approval],
+          pendingApprovals: state.pendingApprovals.some((r) => r.id === approval.id)
+            ? state.pendingApprovals.map((r) => (r.id === approval.id ? approval : r))
+            : [...state.pendingApprovals, approval],
         })),
 
       approveRequest: (id) => {
@@ -100,11 +102,8 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        void import('@/stores/connectionStore').then(({ useConnectionStore }) => {
-          useConnectionStore.getState().sendControl('approval_response', {
-            approvalId: id,
-            decision: 'approved',
-          });
+        void import('@/services/companion').then(({ sendApprovalResponse }) => {
+          sendApprovalResponse(id, true);
         });
       },
 
@@ -116,12 +115,8 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        void import('@/stores/connectionStore').then(({ useConnectionStore }) => {
-          useConnectionStore.getState().sendControl('approval_response', {
-            approvalId: id,
-            decision: 'rejected',
-            reason,
-          });
+        void import('@/services/companion').then(({ sendApprovalResponse }) => {
+          sendApprovalResponse(id, false, reason);
         });
       },
     }),

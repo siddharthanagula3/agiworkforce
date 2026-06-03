@@ -15,6 +15,8 @@ pub(super) enum SlashResult {
     Logout,
     /// Side query — carries the question text for async execution.
     Btw(String),
+    /// Advisor side query — carries the question text for async execution.
+    Advisor(String),
     /// Enter voice mode with the given language code.
     Voice(String),
     /// A2A command — carries (subcommand, args) for async execution.
@@ -77,9 +79,13 @@ pub(super) fn handle_slash_command(
                      interactive model picker (search + provider sections + effort selector).",
                 );
             } else {
-                session.switch_model(arg);
-                let provider = format!("{:?}", session.provider).to_lowercase();
-                output::print_info(&format!("Switched to {} ({})", arg, provider));
+                match session.switch_model(arg) {
+                    Ok(()) => {
+                        let provider = format!("{:?}", session.provider).to_lowercase();
+                        output::print_info(&format!("Switched to {} ({})", arg, provider));
+                    }
+                    Err(err) => output::print_warn(&err.to_string()),
+                }
             }
         }
         "/clear" => {
@@ -128,6 +134,7 @@ pub(super) fn handle_slash_command(
         }
         "/models" => {
             eprintln!("{}", crate::provider::format_model_list());
+            eprintln!("Live local discovery: run `agi models scan` or `agi models status`.");
         }
         "/skills" => {
             let all = crate::skills::discover_skills();
@@ -139,9 +146,22 @@ pub(super) fn handle_slash_command(
             let is_quick_invoke = !arg.is_empty()
                 && !matches!(
                     arg.split_whitespace().next().unwrap_or(""),
-                    "list" | "ls" | "show" | "view" | "inspect" | "path" | "where"
-                        | "new" | "create" | "init" | "validate" | "doctor" | "check"
-                        | "help" | "-h" | "--help"
+                    "list"
+                        | "ls"
+                        | "show"
+                        | "view"
+                        | "inspect"
+                        | "path"
+                        | "where"
+                        | "new"
+                        | "create"
+                        | "init"
+                        | "validate"
+                        | "doctor"
+                        | "check"
+                        | "help"
+                        | "-h"
+                        | "--help"
                 );
             if is_quick_invoke {
                 return SlashResult::AgentInvoke(arg.to_string());
@@ -196,6 +216,15 @@ pub(super) fn handle_slash_command(
                 output::print_warn("Usage: /btw <question>");
             } else {
                 return SlashResult::Btw(arg.to_string());
+            }
+        }
+        "/advisor" => {
+            if arg.is_empty() {
+                output::print_warn(
+                    "Usage: /advisor <question> — consult a catalog-selected advisor model",
+                );
+            } else {
+                return SlashResult::Advisor(arg.to_string());
             }
         }
         "/plan" if arg.is_empty() || arg == "on" => {
@@ -266,18 +295,27 @@ pub(super) fn handle_slash_command(
             match arg {
                 "on" => {
                     if !session.fast_mode {
-                        session.toggle_fast_mode(fast_model);
+                        if let Err(err) = session.toggle_fast_mode(fast_model) {
+                            output::print_warn(&err.to_string());
+                            return SlashResult::Handled;
+                        }
                     }
                     output::print_info(&format!("Fast mode ON — using {}", session.model));
                 }
                 "off" => {
                     if session.fast_mode {
-                        session.toggle_fast_mode(None);
+                        if let Err(err) = session.toggle_fast_mode(None) {
+                            output::print_warn(&err.to_string());
+                            return SlashResult::Handled;
+                        }
                     }
                     output::print_info(&format!("Fast mode OFF — using {}", session.model));
                 }
                 _ => {
-                    session.toggle_fast_mode(fast_model);
+                    if let Err(err) = session.toggle_fast_mode(fast_model) {
+                        output::print_warn(&err.to_string());
+                        return SlashResult::Handled;
+                    }
                     let status = if session.fast_mode { "ON" } else { "OFF" };
                     output::print_info(&format!("Fast mode {} — using {}", status, session.model));
                 }
@@ -461,6 +499,7 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "migrate",
         "compact",
         "btw",
+        "advisor",
         "plan",
         "fast",
         "rewind",
@@ -515,6 +554,18 @@ fn persist_shared_ui_config(cmd: &str, arg: &str, session: &AgentSession, config
     }
 }
 
+pub(super) fn print_help() {
+    let skills = crate::skills::discover_skills();
+    let registry = crate::command_registry::registry_from_builtins_and_skills(&skills);
+    eprintln!(
+        "{}",
+        crate::command_registry::format_command_help(
+            &registry,
+            crate::command_registry::ShortcutHelp::Repl,
+        )
+    );
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -537,16 +588,4 @@ mod tests {
             }
         }
     }
-}
-
-pub(super) fn print_help() {
-    let skills = crate::skills::discover_skills();
-    let registry = crate::command_registry::registry_from_builtins_and_skills(&skills);
-    eprintln!(
-        "{}",
-        crate::command_registry::format_command_help(
-            &registry,
-            crate::command_registry::ShortcutHelp::Repl,
-        )
-    );
 }

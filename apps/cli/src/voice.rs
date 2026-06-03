@@ -197,7 +197,14 @@ pub async fn run_voice_mode(
 
         // Transcribe
         let spinner = output::create_spinner("Transcribing...");
-        let transcript = transcribe(&backend, &recording, voice_lang, &privacy_mode, voice_cloud_opt_in).await;
+        let transcript = transcribe(
+            &backend,
+            &recording,
+            voice_lang,
+            &privacy_mode,
+            voice_cloud_opt_in,
+        )
+        .await;
         spinner.finish_and_clear();
 
         let text = match transcript {
@@ -395,9 +402,7 @@ fn gate_backend(
     opt_in: bool,
 ) -> TranscriptionBackend {
     match raw {
-        TranscriptionBackend::OpenAiApi
-            if *privacy_mode == PrivacyMode::Local && !opt_in =>
-        {
+        TranscriptionBackend::OpenAiApi if *privacy_mode == PrivacyMode::Local && !opt_in => {
             // Suppress cloud backend: look for a local fallback instead.
             find_local_binary_backend()
         }
@@ -996,11 +1001,7 @@ mod tests {
     /// already in a cloud-egress mode).
     #[test]
     fn byok_session_cloud_backend_is_allowed() {
-        let result = gate_cloud_egress(
-            &TranscriptionBackend::OpenAiApi,
-            &PrivacyMode::Byok,
-            false,
-        );
+        let result = gate_cloud_egress(&TranscriptionBackend::OpenAiApi, &PrivacyMode::Byok, false);
         assert!(
             result.is_ok(),
             "gate_cloud_egress must allow OpenAiApi in Byok mode"
@@ -1080,7 +1081,9 @@ mod tests {
     /// confirm gate_cloud_egress is not blocking a LocalBinary backend.
     #[tokio::test]
     async fn transcribe_gate_passes_for_local_binary() {
-        let recording = AudioRecording { samples: vec![0i16; 10] };
+        let recording = AudioRecording {
+            samples: vec![0i16; 10],
+        };
         // Use a path that doesn't exist — we only care that the gate does NOT
         // block (it will fail later at the subprocess call, not at the gate).
         let result = transcribe(
@@ -1111,11 +1114,7 @@ mod tests {
     /// we assert the output is either None or LocalBinary — never OpenAiApi.
     #[test]
     fn gate_backend_suppresses_openai_for_local_no_opt_in() {
-        let effective = gate_backend(
-            TranscriptionBackend::OpenAiApi,
-            &PrivacyMode::Local,
-            false,
-        );
+        let effective = gate_backend(TranscriptionBackend::OpenAiApi, &PrivacyMode::Local, false);
         // Must NOT be OpenAiApi — any other variant is acceptable.
         assert!(
             !matches!(effective, TranscriptionBackend::OpenAiApi),
@@ -1126,11 +1125,7 @@ mod tests {
     /// gate_backend must pass OpenAiApi through unchanged when opt-in is true.
     #[test]
     fn gate_backend_passes_openai_for_local_with_opt_in() {
-        let effective = gate_backend(
-            TranscriptionBackend::OpenAiApi,
-            &PrivacyMode::Local,
-            true,
-        );
+        let effective = gate_backend(TranscriptionBackend::OpenAiApi, &PrivacyMode::Local, true);
         assert!(
             matches!(effective, TranscriptionBackend::OpenAiApi),
             "gate_backend must return OpenAiApi when opt_in=true"
@@ -1140,11 +1135,7 @@ mod tests {
     /// gate_backend must pass OpenAiApi through unchanged for non-Local modes.
     #[test]
     fn gate_backend_passes_openai_for_byok() {
-        let effective = gate_backend(
-            TranscriptionBackend::OpenAiApi,
-            &PrivacyMode::Byok,
-            false,
-        );
+        let effective = gate_backend(TranscriptionBackend::OpenAiApi, &PrivacyMode::Byok, false);
         assert!(
             matches!(effective, TranscriptionBackend::OpenAiApi),
             "gate_backend must return OpenAiApi for Byok mode (already cloud-egress mode)"
