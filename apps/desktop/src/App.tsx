@@ -172,8 +172,16 @@ const LoadingFallback = () => (
   <div className="flex items-center justify-center h-full w-full bg-background">
     <div className="animate-pulse flex flex-col items-center gap-4">
       <Bot className="h-12 w-12 text-blue-500" />
-      <span className="text-2xl font-bold tracking-tighter text-foreground">AGI Workforce</span>
+      <span className="text-2xl font-bold tracking-tighter text-foreground">AGI</span>
       <span className="text-sm text-muted-foreground">Loading your workspace...</span>
+      <button
+        type="button"
+        onClick={() => window.location.reload()}
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <RefreshCcw className="h-4 w-4" />
+        Retry
+      </button>
     </div>
   </div>
 );
