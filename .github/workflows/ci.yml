@@ -211,7 +211,18 @@ jobs:
           # the tests pass. Lint cleanliness is enforced separately by the
           # Clippy step below; keep the Test step focused on test outcomes.
           RUSTFLAGS: ''
+          CARGO_INCREMENTAL: '0'
         run: xvfb-run --auto-servernum cargo test -p agiworkforce-desktop -p agiworkforce-cli --lib
+
+      - name: Free Rust test artifacts before clippy
+        # The native-host build plus full Rust lib tests can leave enough
+        # transient target artifacts to exhaust GitHub's ephemeral runner disk
+        # before clippy writes final rmeta files. Tests have already passed at
+        # this point, so clean build products and let clippy rebuild what it
+        # needs without weakening validation.
+        run: |
+          rm -rf target/debug
+          df -h .
 
       - name: Clippy (apps/desktop + apps/cli, default features)
         # Scope clippy to the binaries we actually ship. The 100+ ported
@@ -220,6 +231,8 @@ jobs:
         # they're well-vetted upstream. M28: -D warnings matches the
         # apps/desktop/src-tauri/Cargo.toml [lints] table; keeps CI and
         # local linting consistent for the surface that actually runs.
+        env:
+          CARGO_INCREMENTAL: '0'
         run: cargo clippy -p agiworkforce-desktop -p agiworkforce-cli --lib -- -D warnings -D unsafe-code
 
       - name: Tauri IPC wiring (FIX-023)
