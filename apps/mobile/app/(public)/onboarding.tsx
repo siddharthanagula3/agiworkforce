@@ -157,8 +157,12 @@ export default function OnboardingScreen() {
 
   // Detect device capabilities once on mount
   useEffect(() => {
+    let isMounted = true;
+
     detectCapabilities()
       .then((caps) => {
+        if (!isMounted) return;
+
         const tier = tierFromCapabilities(
           caps.totalRAMMB,
           caps.tier1Available,
@@ -178,6 +182,10 @@ export default function OnboardingScreen() {
       .catch(() => {
         // Keep defaults on capability detection failure
       });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
