@@ -1,89 +1,18 @@
 import { test, expect } from '../fixtures';
-
-async function injectMockAuth(page: import('@playwright/test').Page) {
-  const mockUser = {
-    id: 'e2e-mock-user-id',
-    email: 'e2e@test.local',
-    role: 'authenticated',
-    aud: 'authenticated',
-    app_metadata: {},
-    user_metadata: { full_name: 'E2E Test User' },
-    created_at: new Date().toISOString(),
-  };
-  await page.addInitScript(
-    ({ user }) => {
-      const mockAuthState = {
-        state: {
-          user: {
-            id: user.id,
-            email: user.email,
-            name: 'E2E Test User',
-            avatar: null,
-          },
-          isAuthenticated: true,
-          sessionValidated: true,
-          _hasHydrated: true,
-          plan: 'max',
-          planDisplayName: 'Max',
-          subscriptionStatus: 'active',
-          subscriptionFetchStatus: 'succeeded',
-          isPro: true,
-          isEnterprise: false,
-          featureFlags: {},
-          lastSyncedAt: Date.now(),
-          creditBalance_cents: 100000,
-        },
-        version: 1,
-      };
-
-      localStorage.setItem('unified-auth-storage', JSON.stringify(mockAuthState));
-    },
-    { user: mockUser },
-  );
-}
-
-function mockCloudAuthEndpoints(page: import('@playwright/test').Page) {
-  const mockUser = {
-    id: 'e2e-mock-user-id',
-    email: 'e2e@test.local',
-    role: 'authenticated',
-    aud: 'authenticated',
-    app_metadata: {},
-    user_metadata: { full_name: 'E2E Test User' },
-    created_at: new Date().toISOString(),
-  };
-  return page.route('**/api/me', (route) => {
-    route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({
-        id: mockUser.id,
-        email: mockUser.email,
-        name: 'E2E Test User',
-        plan: { tier: 'max', status: 'active' },
-        feature_flags: {},
-      }),
-    });
-  });
-}
-
-async function ensureAuthenticated(page: import('@playwright/test').Page) {
-  const emailInput = page.getByRole('textbox', { name: /email address/i });
-  if (await emailInput.isVisible().catch(() => false)) {
-    await emailInput.fill('e2e@test.local');
-    await page.getByRole('textbox', { name: /password/i }).fill('e2e-password');
-    await page.getByRole('button', { name: /^sign in$/i }).click();
-  }
-}
+import {
+  dismissOnboarding,
+  injectMockCloudAuth,
+  mockCloudAccountEndpoints,
+} from '../utils/mock-cloud-auth';
 
 test.describe('Self-Healing Agent', () => {
-  test.beforeEach(async ({ page }) => {
-    await injectMockAuth(page);
-    await mockCloudAuthEndpoints(page);
+  test.beforeEach(async ({ page, mockLLM: _mockLLM }) => {
+    await injectMockCloudAuth(page);
+    await mockCloudAccountEndpoints(page);
 
     await page.goto('/');
     await page.waitForLoadState('networkidle');
-    await ensureAuthenticated(page);
+    await dismissOnboarding(page);
     await page.waitForLoadState('networkidle');
   });
 
@@ -111,30 +40,31 @@ test.describe('Self-Healing Agent', () => {
     await chatInput.fill(prompt);
 
     // In web-mode CI the Send button can stay disabled when the chat pipeline
-    // is gated behind a desktop runtime or subscription requirement. Treat
-    // "button never becomes actionable" the same as the explicit gate text:
-    // skip the test rather than fail it, since the self-healing recovery
-    // flow only exercises useful logic when send is fully wired.
+    // is gated behind a desktop runtime or subscription requirement. The test
+    // still asserts that the UI reaches a clear gated state instead of hanging
+    // on startup or silently swallowing the request.
     const desktopRuntimeGate = page.getByText(
       /This feature requires the AGI Workforce desktop application/i,
     );
     const subscriptionDialog = page.getByRole('dialog', { name: /Subscription Required/i });
+    const sendButton = page.getByRole('button', { name: /send/i }).first();
 
-    const sendClickResult = await page
-      .getByRole('button', { name: /send/i })
+    const sendClickResult = await sendButton
       .click({ timeout: 5000 })
       .then(() => 'sent' as const)
       .catch(() => 'gated' as const);
 
-    if (
-      sendClickResult === 'gated' ||
+    const gateVisible =
       (await desktopRuntimeGate.isVisible().catch(() => false)) ||
-      (await subscriptionDialog.isVisible().catch(() => false))
-    ) {
-      test.skip(
-        true,
-        'Self-healing flow requires desktop runtime and an eligible plan; web-mode CI validates fallback behavior.',
-      );
+      (await subscriptionDialog.isVisible().catch(() => false));
+
+    if (sendClickResult === 'gated' || gateVisible) {
+      const sendDisabled = await sendButton.isDisabled().catch(() => false);
+      expect(
+        gateVisible || sendDisabled,
+        'web-mode CI should either show the explicit desktop/subscription gate or keep Send disabled',
+      ).toBe(true);
+      return;
     }
 
     const assistantMessage = page.locator('[data-role="assistant"]').last();

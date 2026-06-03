@@ -269,37 +269,7 @@ export class MockLLMProvider {
         localStorage.setItem('unified-chat-store', JSON.stringify(chatStoreState));
       });
 
-      await this.page.addInitScript(() => {
-        if (!window.__TAURI__) {
-          window.__TAURI__ = {} as any;
-        }
-
-        window.__TAURI__!.invoke = async (cmd: string, args?: any) => {
-          try {
-            console.log('[Mock] Tauri command:', cmd, args);
-
-            if (cmd === 'send_message') {
-              return {
-                success: true,
-                message: 'This is a mock response from the LLM provider.',
-              };
-            }
-
-            if (cmd === 'get_provider_status') {
-              return {
-                provider: 'ollama',
-                available: true,
-              };
-            }
-
-            return { success: true };
-          } catch (error) {
-            console.error('[Mock] Error in Tauri invoke:', error);
-            return { success: false, error: String(error) };
-          }
-        };
-      });
-      this.initScriptId = 'tauri-mock-llm-provider';
+      this.initScriptId = 'browser-llm-provider';
     } catch (error) {
       throw new Error(
         `Failed to setup MockLLMProvider: ${error instanceof Error ? error.message : String(error)}`,
