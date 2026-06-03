@@ -31,6 +31,10 @@ import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
 import { useChatStore } from '@shared/stores/chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
+import {
+  AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS,
+  getAutoEconomyTrialRemaining,
+} from '../../stores/autoEconomyTrialStore';
 import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { Switch } from '@shared/ui/switch';
@@ -88,6 +92,14 @@ interface ChatComposerProps {
    * presentation. PLAN.md section 5: "Add per-file privacy labels".
    */
   attachmentPrivacyShortLabel?: string;
+  /** Opens the Cloud Managed waitlist modal from locked model/usage upgrade affordances. */
+  onUpgradeRequest?: () => void;
+  /** Website free trial state. When enabled, the composer is text-only Auto Economy. */
+  freeTrial?: {
+    enabled: boolean;
+    promptsUsed: number | null;
+    promptLimit: number;
+  };
 }
 
 const CONNECTOR_PHASE1 = CONNECTORS.filter((c) => c.phase === 1).slice(0, 8);
@@ -155,6 +167,8 @@ const ChatComposerNewComponent = ({
   clearSignal,
   emptyState = false,
   attachmentPrivacyShortLabel,
+  onUpgradeRequest,
+  freeTrial,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
   const {
@@ -191,6 +205,14 @@ const ChatComposerNewComponent = ({
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
+  const isFreeAutoEconomyTrial = freeTrial?.enabled ?? false;
+  const trialPromptLimit = freeTrial?.promptLimit ?? 3;
+  const trialPromptsRemaining = getAutoEconomyTrialRemaining(
+    freeTrial?.promptsUsed ?? null,
+    trialPromptLimit,
+  );
+  const trialExhausted = isFreeAutoEconomyTrial && trialPromptsRemaining <= 0;
 
   // Incognito / temporary chat
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -203,6 +225,7 @@ const ChatComposerNewComponent = ({
   const handleIncognitoToggle = useCallback(() => {
     if (activeConversationId) toggleTemporary(activeConversationId);
   }, [activeConversationId, toggleTemporary]);
+  const canToggleIncognito = Boolean(activeConversationId) && !isLoading && !disabled;
 
   // Thinking / effort store
   const thinkingEnabled = useThinkingStore((s) => s.enabled);
@@ -294,12 +317,29 @@ const ChatComposerNewComponent = ({
     setStyleMode('normal');
     setShowStyleSubmenu(false);
     setActiveTags([]);
+    setLocalNotice(null);
     clearSuggestion();
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
   }, [clearAttachments, clearSuggestion]);
+
+  useEffect(() => {
+    if (!isFreeAutoEconomyTrial) return;
+    setSelectedSkill(null);
+    setSkillBody(null);
+    setWebSearchEnabled(false);
+    setResearchEnabled(false);
+    setStyleMode('normal');
+    setShowOverflowMenu(false);
+    setShowSkillsSubmenu(false);
+    setShowConnectorsSubmenu(false);
+    setShowStyleSubmenu(false);
+    if (attachments.length > 0) {
+      clearAttachments();
+    }
+  }, [attachments.length, clearAttachments, isFreeAutoEconomyTrial]);
 
   useEffect(() => {
     if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
@@ -347,7 +387,13 @@ const ChatComposerNewComponent = ({
   const [prevDroppedFiles, setPrevDroppedFiles] = useState(droppedFiles);
   if (droppedFiles && droppedFiles.length > 0 && droppedFiles !== prevDroppedFiles) {
     setPrevDroppedFiles(droppedFiles);
-    addFiles(droppedFiles);
+    if (isFreeAutoEconomyTrial) {
+      setLocalNotice(
+        'File upload is waitlisted for hosted cloud. Free web chat accepts text prompts only.',
+      );
+    } else {
+      addFiles(droppedFiles);
+    }
     onDroppedFilesConsumed?.();
   }
 
@@ -437,6 +483,15 @@ const ChatComposerNewComponent = ({
         clearSuggestion();
       }
 
+      if (isFreeAutoEconomyTrial && value.startsWith('/')) {
+        setShowSlashMenu(false);
+        setShowMentions(false);
+        setLocalNotice(
+          'Slash commands are waitlisted for hosted cloud. Free web chat accepts plain text prompts.',
+        );
+        return;
+      }
+
       // Slash command detection: only when message starts with /
       if (value.startsWith('/') && !value.includes(' ')) {
         setShowSlashMenu(true);
@@ -460,7 +515,7 @@ const ChatComposerNewComponent = ({
       }
       setShowMentions(false);
     },
-    [suggestion, clearSuggestion],
+    [isFreeAutoEconomyTrial, suggestion, clearSuggestion],
   );
 
   const filteredSkills = availableSkills
@@ -487,19 +542,43 @@ const ChatComposerNewComponent = ({
     [message, mentionStartIndex],
   );
 
-  const handleSlashSelect = useCallback((commandId: string) => {
-    setMessage('');
-    setShowSlashMenu(false);
-    if (commandId === 'search') setWebSearchEnabled(true);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
+  const handleSlashSelect = useCallback(
+    (commandId: string) => {
+      if (isFreeAutoEconomyTrial) {
+        setMessage('');
+        setShowSlashMenu(false);
+        setLocalNotice(
+          'Slash commands are part of hosted cloud upgrades. Free web chat is text-only Auto Economy.',
+        );
+        setTimeout(() => textareaRef.current?.focus(), 0);
+        return;
+      }
+      setMessage('');
+      setShowSlashMenu(false);
+      if (commandId === 'search') setWebSearchEnabled(true);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [isFreeAutoEconomyTrial],
+  );
 
-  const handleSkillSelect = useCallback((skillName: string) => {
-    setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
-    setMessage('');
-    setShowSlashMenu(false);
-    setTimeout(() => textareaRef.current?.focus(), 0);
-  }, []);
+  const handleSkillSelect = useCallback(
+    (skillName: string) => {
+      if (isFreeAutoEconomyTrial) {
+        setMessage('');
+        setShowSlashMenu(false);
+        setLocalNotice(
+          'Skills are waitlisted for hosted cloud. Use plain text prompts in the free web trial.',
+        );
+        setTimeout(() => textareaRef.current?.focus(), 0);
+        return;
+      }
+      setSelectedSkill({ id: skillName, name: skillName, description: '', category: 'Skill' });
+      setMessage('');
+      setShowSlashMenu(false);
+      setTimeout(() => textareaRef.current?.focus(), 0);
+    },
+    [isFreeAutoEconomyTrial],
+  );
 
   const handleStop = useCallback(() => {
     if (onStop) {
@@ -513,6 +592,22 @@ const ChatComposerNewComponent = ({
     () => {
       if (!message.trim() && attachments.length === 0) return;
       if (isLoading || disabled) return;
+      if (trialExhausted) {
+        onUpgradeRequest?.();
+        return;
+      }
+      if (isFreeAutoEconomyTrial && attachments.length > 0) {
+        setLocalNotice(
+          'The website free trial is text-only. Join the cloud waitlist for file and image uploads.',
+        );
+        return;
+      }
+      if (isFreeAutoEconomyTrial && message.trim().length > AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS) {
+        setLocalNotice(
+          'This prompt is too large for the website free trial. Shorten it or join the cloud waitlist.',
+        );
+        return;
+      }
 
       const result = onSend(
         message,
@@ -537,6 +632,9 @@ const ChatComposerNewComponent = ({
       skillBody,
       isLoading,
       disabled,
+      trialExhausted,
+      isFreeAutoEconomyTrial,
+      onUpgradeRequest,
       agentMode,
       selectedFolderId,
       onSend,
@@ -583,6 +681,7 @@ const ChatComposerNewComponent = ({
   );
 
   const hasContent = Boolean(message.trim() || attachments.length > 0);
+  const composerDisabled = disabled || trialExhausted;
 
   /**
    * Derive the 3-state mode for SendButton:
@@ -592,17 +691,27 @@ const ChatComposerNewComponent = ({
    */
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
-  const footerHint = showSlashMenu
-    ? 'Tab to accept · Esc to dismiss'
-    : suggestion
-      ? 'Tab to accept suggestion · Cmd+Enter to send'
-      : 'Cmd+Enter to send · Enter for newline';
+  const footerHint = trialExhausted
+    ? 'Free web prompts used · Join the cloud waitlist for more'
+    : isFreeAutoEconomyTrial
+      ? `${trialPromptsRemaining} of ${trialPromptLimit} Auto Economy prompts remaining`
+      : showSlashMenu
+        ? 'Tab to accept · Esc to dismiss'
+        : suggestion
+          ? 'Tab to accept suggestion · Cmd+Enter to send'
+          : 'Cmd+Enter to send · Enter for newline';
 
   const handleFileDrop = useCallback(
     (files: File[]) => {
+      if (isFreeAutoEconomyTrial) {
+        setLocalNotice(
+          'File upload is waitlisted for hosted cloud. Free web chat accepts text prompts only.',
+        );
+        return;
+      }
       addFiles(files);
     },
-    [addFiles],
+    [addFiles, isFreeAutoEconomyTrial],
   );
 
   // + button indicator: amber tint when any feature is active
@@ -611,13 +720,34 @@ const ChatComposerNewComponent = ({
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
-      <DragDropOverlay onDrop={handleFileDrop} />
+      {!isFreeAutoEconomyTrial && <DragDropOverlay onDrop={handleFileDrop} />}
+
+      {isFreeAutoEconomyTrial && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--chat-glass-border)] bg-[var(--chat-bg-elevated)]/90 px-3 py-2 text-xs text-[var(--chat-text-secondary)] shadow-sm">
+          <span>
+            Auto Economy web trial · {trialPromptsRemaining}/{trialPromptLimit} prompts left
+          </span>
+          <button
+            type="button"
+            onClick={onUpgradeRequest}
+            className="font-medium text-[var(--chat-accent-primary)] hover:underline"
+          >
+            Join cloud waitlist
+          </button>
+        </div>
+      )}
+
+      {localNotice && (
+        <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {localNotice}
+        </div>
+      )}
 
       {/* Active Mode Tags */}
       <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
-      {selectedSkill && (
+      {selectedSkill && !isFreeAutoEconomyTrial && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
             /{selectedSkill.name}
@@ -652,7 +782,7 @@ const ChatComposerNewComponent = ({
         )}
       >
         {/* Slash Command Menu */}
-        {showSlashMenu && (
+        {showSlashMenu && !isFreeAutoEconomyTrial && (
           <SlashCommandMenu
             ref={slashMenuRef}
             query={slashQuery}
@@ -663,7 +793,7 @@ const ChatComposerNewComponent = ({
         )}
 
         {/* @Mention Dropdown */}
-        {showMentions && filteredSkills.length > 0 && (
+        {showMentions && filteredSkills.length > 0 && !isFreeAutoEconomyTrial && (
           <div
             ref={mentionsRef}
             className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
@@ -722,13 +852,13 @@ const ChatComposerNewComponent = ({
                   setShowConnectorsSubmenu(false);
                 }
               }}
-              disabled={isLoading || disabled}
+              disabled={isLoading || composerDisabled}
               className={cn(
                 'flex h-9 w-9 items-center justify-center rounded-full transition-colors',
                 hasOverflowActive
                   ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)]'
                   : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+                (isLoading || composerDisabled) && 'cursor-not-allowed opacity-50',
               )}
               aria-label="More options"
               aria-expanded={showOverflowMenu}
@@ -739,366 +869,364 @@ const ChatComposerNewComponent = ({
             {/* + Menu Popover */}
             {showOverflowMenu && (
               <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                {/* 1. Add files or photos */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                    closeMenu();
-                  }}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                >
-                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                  <span className="flex-1 text-left">Add files or photos</span>
-                </button>
-
-                {/* 2. Take a screenshot */}
-                <button
-                  type="button"
-                  disabled
-                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
-                  aria-disabled="true"
-                >
-                  <Camera className="h-4 w-4" />
-                  <span className="flex-1 text-left">Take a screenshot</span>
-                  <span className="text-[10px]">Desktop only</span>
-                </button>
-
-                {/* Divider */}
-                <div className="my-1 border-t border-border/30" />
-
-                {/* 5. Skills -- right flyout */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowSkillsSubmenu((prev) => !prev);
-                      setShowConnectorsSubmenu(false);
-                      setShowStyleSubmenu(false);
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                      selectedSkill && 'text-primary',
-                    )}
-                  >
-                    <Sparkles
-                      className={cn(
-                        'h-4 w-4',
-                        selectedSkill ? 'text-primary' : 'text-muted-foreground',
-                      )}
-                    />
-                    <span className="flex-1 text-left">
-                      {selectedSkill ? selectedSkill.name : 'Skills'}
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-
-                  {showSkillsSubmenu && (
-                    <div className="absolute left-full top-0 z-50 ml-1 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl">
-                      <SkillsMenu
-                        query=""
-                        onSelect={(skill) => {
-                          setSelectedSkill({
-                            id: skill.name,
-                            name: skill.name,
-                            description: skill.description,
-                            category: skill.source,
-                          });
-                          closeMenu();
-                        }}
-                        onClose={() => setShowSkillsSubmenu(false)}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                {/* 6. Connectors -- right flyout */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowConnectorsSubmenu((prev) => !prev);
-                      setShowSkillsSubmenu(false);
-                      setShowStyleSubmenu(false);
-                    }}
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                  >
-                    {/* Simple connector icon */}
-                    <svg
-                      className="h-4 w-4 text-muted-foreground"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      aria-hidden="true"
+                {isFreeAutoEconomyTrial ? (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    Free web chat is text-only Auto Economy. Search, files, tools, connectors, and
+                    styles are part of the hosted cloud waitlist.
+                  </div>
+                ) : (
+                  <>
+                    {/* 1. Add files or photos */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                        closeMenu();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                     >
-                      <circle cx="3.5" cy="8" r="2" />
-                      <circle cx="12.5" cy="8" r="2" />
-                      <path d="M5.5 8h5" />
-                    </svg>
-                    <span className="flex-1 text-left">Connectors</span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
+                      <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="flex-1 text-left">Add files or photos</span>
+                    </button>
 
-                  {showConnectorsSubmenu && (
-                    <div className="absolute left-full top-0 z-50 ml-1 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                      {connectorMenuList.map((connector) => {
-                        const isConnected = connectors.connectedIds.has(connector.id);
-                        const isMutating = connectors.mutatingIds.has(connector.id);
-                        return (
-                          <div
-                            key={connector.id}
-                            className="flex items-center gap-2.5 rounded-lg px-3 py-2"
-                          >
-                            <span className="text-base" aria-hidden="true">
-                              {connector.iconEmoji ?? connector.iconText}
-                            </span>
-                            <span className="flex-1 truncate text-sm">{connector.name}</span>
-                            <Switch
-                              checked={isConnected}
-                              disabled={isMutating || connectors.loading}
-                              aria-label={`Toggle ${connector.name}`}
-                              onCheckedChange={(checked) => {
-                                if (checked) {
-                                  void connectors.connect(connector.id, connector.authType);
-                                } else {
-                                  void connectors.disconnect(connector.id);
-                                }
-                              }}
-                              className="h-5 w-9 data-[state=checked]:bg-[var(--chat-accent-primary)]"
-                            />
-                          </div>
-                        );
-                      })}
+                    {/* 2. Take a screenshot */}
+                    <button
+                      type="button"
+                      disabled
+                      className="flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground/60"
+                      aria-disabled="true"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span className="flex-1 text-left">Take a screenshot</span>
+                      <span className="text-[10px]">Desktop only</span>
+                    </button>
 
-                      {/* Connector footer */}
-                      <div className="mt-1 border-t border-border/30 pt-1">
-                        <a
-                          href="/connectors"
-                          onClick={closeMenu}
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        >
-                          Manage connectors
-                        </a>
-                        <a
-                          href="/connectors"
-                          onClick={closeMenu}
-                          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        >
-                          + Add connector
-                        </a>
-                        <a
-                          href="/settings/capabilities"
-                          onClick={closeMenu}
-                          className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                        >
-                          <span>Tool access</span>
-                          <span className="text-xs text-muted-foreground/60">
-                            Load tools when needed
-                          </span>
-                        </a>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    {/* Divider */}
+                    <div className="my-1 border-t border-border/30" />
 
-                {/* 7. Plugins */}
-                <a
-                  href="/plugins"
-                  onClick={closeMenu}
-                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-                >
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    aria-hidden="true"
-                  >
-                    <rect x="2" y="2" width="5" height="5" rx="1" />
-                    <rect x="9" y="2" width="5" height="5" rx="1" />
-                    <rect x="2" y="9" width="5" height="5" rx="1" />
-                    <path d="M11.5 9v6M9 11.5h6" />
-                  </svg>
-                  <span className="flex-1 text-left">Plugins</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </a>
-
-                {/* Divider */}
-                <div className="my-1 border-t border-border/30" />
-
-                {/* 8. Research toggle */}
-                <MenuToggleRow
-                  icon={BookOpen}
-                  label="Research"
-                  checked={researchEnabled}
-                  onToggle={() => {
-                    handleResearchToggle();
-                    closeMenu();
-                  }}
-                  disabled={isLoading || disabled}
-                />
-
-                {/* 9. Web search toggle */}
-                <MenuToggleRow
-                  icon={Globe}
-                  label="Web search"
-                  checked={webSearchEnabled}
-                  onToggle={() => {
-                    handleWebSearchToggle();
-                    closeMenu();
-                  }}
-                  disabled={isLoading || disabled}
-                />
-
-                {/* 10. Use style -- right flyout */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowStyleSubmenu((prev) => !prev);
-                      setShowSkillsSubmenu(false);
-                      setShowConnectorsSubmenu(false);
-                    }}
-                    className={cn(
-                      'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                      styleMode !== 'normal' && 'text-primary',
-                    )}
-                  >
-                    <Wand2
-                      className={cn(
-                        'h-4 w-4',
-                        styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
-                      )}
-                    />
-                    <span className="flex-1 text-left">
-                      {styleMode === 'normal'
-                        ? 'Use style'
-                        : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use style')}
-                    </span>
-                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-
-                  {showStyleSubmenu && (
-                    <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                      {STYLE_OPTIONS.map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setStyleMode(option.id);
-                            closeMenu();
-                          }}
+                    {/* 5. Skills -- right flyout */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowSkillsSubmenu((prev) => !prev);
+                          setShowConnectorsSubmenu(false);
+                          setShowStyleSubmenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          selectedSkill && 'text-primary',
+                        )}
+                      >
+                        <Sparkles
                           className={cn(
-                            'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
-                            styleMode === option.id
-                              ? 'bg-primary/10 text-primary'
-                              : 'hover:bg-muted/60',
+                            'h-4 w-4',
+                            selectedSkill ? 'text-primary' : 'text-muted-foreground',
                           )}
-                        >
-                          <span className="flex-1 text-left">{option.label}</span>
-                          <span className="text-[11px] text-muted-foreground">
-                            {option.description}
-                          </span>
-                          {styleMode === option.id && (
-                            <Check className="h-3 w-3 shrink-0 text-primary" />
-                          )}
-                        </button>
-                      ))}
+                        />
+                        <span className="flex-1 text-left">
+                          {selectedSkill ? selectedSkill.name : 'Skills'}
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+
+                      {showSkillsSubmenu && (
+                        <div className="absolute left-full top-0 z-50 ml-1 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl">
+                          <SkillsMenu
+                            query=""
+                            onSelect={(skill) => {
+                              setSelectedSkill({
+                                id: skill.name,
+                                name: skill.name,
+                                description: skill.description,
+                                category: skill.source,
+                              });
+                              closeMenu();
+                            }}
+                            onClose={() => setShowSkillsSubmenu(false)}
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+
+                    {/* 6. Connectors -- right flyout */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConnectorsSubmenu((prev) => !prev);
+                          setShowSkillsSubmenu(false);
+                          setShowStyleSubmenu(false);
+                        }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      >
+                        {/* Simple connector icon */}
+                        <svg
+                          className="h-4 w-4 text-muted-foreground"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          aria-hidden="true"
+                        >
+                          <circle cx="3.5" cy="8" r="2" />
+                          <circle cx="12.5" cy="8" r="2" />
+                          <path d="M5.5 8h5" />
+                        </svg>
+                        <span className="flex-1 text-left">Connectors</span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+
+                      {showConnectorsSubmenu && (
+                        <div className="absolute left-full top-0 z-50 ml-1 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                          {connectorMenuList.map((connector) => {
+                            const isConnected = connectors.connectedIds.has(connector.id);
+                            const isMutating = connectors.mutatingIds.has(connector.id);
+                            const canToggle = isConnected || connector.authType !== 'oauth';
+                            return (
+                              <div
+                                key={connector.id}
+                                className="flex items-center gap-2.5 rounded-lg px-3 py-2"
+                              >
+                                <span className="text-base" aria-hidden="true">
+                                  {connector.iconEmoji ?? connector.iconText}
+                                </span>
+                                <span className="flex-1 truncate text-sm">{connector.name}</span>
+                                <Switch
+                                  checked={isConnected}
+                                  disabled={isMutating || connectors.loading || !canToggle}
+                                  aria-label={`Toggle ${connector.name}`}
+                                  onCheckedChange={(checked) => {
+                                    if (checked && connector.authType === 'oauth') return;
+                                    if (checked) {
+                                      void connectors.connect(connector.id, connector.authType);
+                                    } else {
+                                      void connectors.disconnect(connector.id);
+                                    }
+                                  }}
+                                  className="h-5 w-9 data-[state=checked]:bg-[var(--chat-accent-primary)]"
+                                />
+                              </div>
+                            );
+                          })}
+
+                          {/* Connector footer */}
+                          <div className="mt-1 border-t border-border/30 pt-1">
+                            <a
+                              href="/connectors"
+                              onClick={closeMenu}
+                              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                            >
+                              Manage connectors
+                            </a>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 7. Plugins */}
+                    <a
+                      href="/plugins"
+                      onClick={closeMenu}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        aria-hidden="true"
+                      >
+                        <rect x="2" y="2" width="5" height="5" rx="1" />
+                        <rect x="9" y="2" width="5" height="5" rx="1" />
+                        <rect x="2" y="9" width="5" height="5" rx="1" />
+                        <path d="M11.5 9v6M9 11.5h6" />
+                      </svg>
+                      <span className="flex-1 text-left">Plugins</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </a>
+
+                    {/* Divider */}
+                    <div className="my-1 border-t border-border/30" />
+
+                    {/* 8. Research toggle */}
+                    <MenuToggleRow
+                      icon={BookOpen}
+                      label="Research"
+                      checked={researchEnabled}
+                      onToggle={() => {
+                        handleResearchToggle();
+                        closeMenu();
+                      }}
+                      disabled={isLoading || disabled}
+                    />
+
+                    {/* 9. Web search toggle */}
+                    <MenuToggleRow
+                      icon={Globe}
+                      label="Web search"
+                      checked={webSearchEnabled}
+                      onToggle={() => {
+                        handleWebSearchToggle();
+                        closeMenu();
+                      }}
+                      disabled={isLoading || disabled}
+                    />
+
+                    {/* 10. Use style -- right flyout */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowStyleSubmenu((prev) => !prev);
+                          setShowSkillsSubmenu(false);
+                          setShowConnectorsSubmenu(false);
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          styleMode !== 'normal' && 'text-primary',
+                        )}
+                      >
+                        <Wand2
+                          className={cn(
+                            'h-4 w-4',
+                            styleMode !== 'normal' ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span className="flex-1 text-left">
+                          {styleMode === 'normal'
+                            ? 'Use style'
+                            : (STYLE_OPTIONS.find((s) => s.id === styleMode)?.label ?? 'Use style')}
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+
+                      {showStyleSubmenu && (
+                        <div className="absolute left-full top-0 z-50 ml-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
+                          {STYLE_OPTIONS.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => {
+                                setStyleMode(option.id);
+                                closeMenu();
+                              }}
+                              className={cn(
+                                'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors',
+                                styleMode === option.id
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'hover:bg-muted/60',
+                              )}
+                            >
+                              <span className="flex-1 text-left">{option.label}</span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {option.description}
+                              </span>
+                              {styleMode === option.id && (
+                                <Check className="h-3 w-3 shrink-0 text-primary" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
 
           {/* Quick Toggle Pills -- preserved for direct access */}
-          <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
-            <button
-              onClick={handleWebSearchToggle}
-              disabled={isLoading || disabled || researchEnabled}
-              className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                webSearchEnabled
-                  ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled || researchEnabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label="Toggle web search"
-              aria-pressed={webSearchEnabled}
-            >
-              <Globe className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Search</span>
-            </button>
+          {!isFreeAutoEconomyTrial && (
+            <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
+              <button
+                onClick={handleWebSearchToggle}
+                disabled={isLoading || disabled || researchEnabled}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  webSearchEnabled
+                    ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || disabled || researchEnabled) && 'cursor-not-allowed opacity-50',
+                )}
+                aria-label="Toggle web search"
+                aria-pressed={webSearchEnabled}
+              >
+                <Globe className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Search</span>
+              </button>
 
-            <button
-              onClick={handleResearchToggle}
-              disabled={isLoading || disabled}
-              className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                researchEnabled
-                  ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label="Toggle research mode"
-              aria-pressed={researchEnabled}
-            >
-              <BookOpen className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Research</span>
-            </button>
+              <button
+                onClick={handleResearchToggle}
+                disabled={isLoading || disabled}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  researchEnabled
+                    ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+                )}
+                aria-label="Toggle research mode"
+                aria-pressed={researchEnabled}
+              >
+                <BookOpen className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Research</span>
+              </button>
 
-            <button
-              onClick={handleThinkingClick}
-              disabled={isLoading || disabled}
-              className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                thinkingEnabled
-                  ? 'bg-muted/60 text-[var(--chat-accent-primary)] ring-1 ring-border'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label={
-                thinkingEnabled
-                  ? `Effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle.`
-                  : 'Enable thinking effort'
-              }
-              aria-pressed={thinkingEnabled}
-              title={
-                thinkingEnabled
-                  ? `Thinking effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle levels.`
-                  : 'Enable extended thinking with effort control'
-              }
-            >
-              <Brain className="h-3.5 w-3.5" />
-              {thinkingEnabled && (
-                <span className="hidden sm:inline">{EFFORT_LABEL[thinkingEffort]}</span>
-              )}
-            </button>
+              <button
+                onClick={handleThinkingClick}
+                disabled={isLoading || disabled}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  thinkingEnabled
+                    ? 'bg-muted/60 text-[var(--chat-accent-primary)] ring-1 ring-border'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+                )}
+                aria-label={
+                  thinkingEnabled
+                    ? `Effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle.`
+                    : 'Enable thinking effort'
+                }
+                aria-pressed={thinkingEnabled}
+                title={
+                  thinkingEnabled
+                    ? `Thinking effort: ${EFFORT_LABEL[thinkingEffort]}. Click to cycle levels.`
+                    : 'Enable extended thinking with effort control'
+                }
+              >
+                <Brain className="h-3.5 w-3.5" />
+                {thinkingEnabled && (
+                  <span className="hidden sm:inline">{EFFORT_LABEL[thinkingEffort]}</span>
+                )}
+              </button>
 
-            <button
-              onClick={handleIncognitoToggle}
-              disabled={isLoading || disabled}
-              className={cn(
-                'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                isIncognito
-                  ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
-                  : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
-              aria-pressed={isIncognito}
-              title={
-                isIncognito
-                  ? 'Incognito mode: conversation not saved. Click to disable.'
-                  : 'Start an incognito conversation (not saved to history)'
-              }
-            >
-              <EyeOff className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Incognito</span>
-            </button>
-          </div>
+              <button
+                onClick={handleIncognitoToggle}
+                disabled={!canToggleIncognito}
+                className={cn(
+                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                  isIncognito
+                    ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  !canToggleIncognito && 'cursor-not-allowed opacity-50',
+                )}
+                aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
+                aria-pressed={isIncognito}
+                title={
+                  !activeConversationId
+                    ? 'Incognito can be toggled after the first message creates a conversation.'
+                    : isIncognito
+                      ? 'Incognito mode: conversation not saved. Click to disable.'
+                      : 'Start an incognito conversation (not saved to history)'
+                }
+              >
+                <EyeOff className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Incognito</span>
+              </button>
+            </div>
+          )}
 
           {/* Textarea + Ghost-text overlay wrapper */}
           <div
@@ -1121,7 +1249,7 @@ const ChatComposerNewComponent = ({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
-              disabled={isLoading || disabled}
+              disabled={isLoading || composerDisabled}
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
@@ -1141,23 +1269,25 @@ const ChatComposerNewComponent = ({
           </div>
 
           {/* Voice Input Button */}
-          <VoiceInputButton
-            onTranscript={(text) => {
-              setMessage((prev) => {
-                const separator = prev.trim() ? ' ' : '';
-                return prev + separator + text;
-              });
-              setTimeout(() => textareaRef.current?.focus(), 50);
-            }}
-            disabled={isLoading || disabled}
-            className={emptyState ? 'order-4 ml-auto' : undefined}
-          />
+          {!isFreeAutoEconomyTrial && (
+            <VoiceInputButton
+              onTranscript={(text) => {
+                setMessage((prev) => {
+                  const separator = prev.trim() ? ' ' : '';
+                  return prev + separator + text;
+                });
+                setTimeout(() => textareaRef.current?.focus(), 50);
+              }}
+              disabled={isLoading || composerDisabled}
+              className={emptyState ? 'order-4 ml-auto' : undefined}
+            />
+          )}
 
           {/* Send / Stop Button */}
           <SendButton
             mode={sendButtonMode}
             hasContent={hasContent}
-            disabled={disabled}
+            disabled={composerDisabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
             className={emptyState ? 'order-5' : undefined}
           />
@@ -1168,17 +1298,29 @@ const ChatComposerNewComponent = ({
           ref={fileInputRef}
           type="file"
           multiple
+          disabled={isFreeAutoEconomyTrial}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
-            addFiles(files);
+            handleFileDrop(files);
             e.target.value = '';
           }}
           aria-label="File upload"
         />
       </div>
 
-      <ComposerFooter hint={footerHint} showModelSelector />
+      <ComposerFooter
+        hint={footerHint}
+        showModelSelector
+        lockModelSelector={isFreeAutoEconomyTrial}
+        showStyleSelector={!isFreeAutoEconomyTrial}
+        trialUsageLabel={
+          isFreeAutoEconomyTrial
+            ? `${trialPromptsRemaining}/${trialPromptLimit} prompts left`
+            : undefined
+        }
+        onUpgradeRequest={onUpgradeRequest}
+      />
     </div>
   );
 };
@@ -1187,9 +1329,8 @@ const ChatComposerNewComponent = ({
  * ChatComposerNew with memoization optimization.
  *
  * + menu matches Claude's structure:
- *   Add files/photos, Take screenshot (stub), Add to project (stub),
- *   Add from GitHub (stub), Skills flyout, Connectors flyout (real toggles),
- *   Plugins link, Research toggle, Web search toggle, Use style flyout.
+ *   Add files/photos, Skills flyout, Connectors flyout, Research toggle,
+ *   Web search toggle, Use style flyout.
  *
  * Removed from + menu: Focus Mode, Agent Mode, Project Context, Tools group,
  * Browse Directory. State kept with safe defaults so onSend meta is unchanged.
@@ -1211,7 +1352,11 @@ export const ChatComposerNew = memo(ChatComposerNewComponent, (prev, next) => {
     prev.onStop === next.onStop &&
     prev.clearSignal === next.clearSignal &&
     prev.emptyState === next.emptyState &&
-    prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel
+    prev.attachmentPrivacyShortLabel === next.attachmentPrivacyShortLabel &&
+    prev.onUpgradeRequest === next.onUpgradeRequest &&
+    prev.freeTrial?.enabled === next.freeTrial?.enabled &&
+    prev.freeTrial?.promptsUsed === next.freeTrial?.promptsUsed &&
+    prev.freeTrial?.promptLimit === next.freeTrial?.promptLimit
   );
 });
 

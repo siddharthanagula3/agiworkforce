@@ -11,6 +11,7 @@ import {
   markLocalModelRefUsed,
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
+import { isSelectableModelId } from '@/src/features/model-picker/service';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -297,7 +298,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
     let uploadedAttachments: MessageAttachment[] | undefined;
     const remoteDisabledReason = getRemoteChatDisabledReason();
-    if (remoteDisabledReason && attachments && attachments.length > 0) {
+    const shouldUseLocalRuntime = isSelectableModelId(model) || Boolean(remoteDisabledReason);
+    if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
     } else if (attachments && attachments.length > 0) {
       try {
@@ -469,7 +471,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     streamingConversations.add(conversationId);
 
     try {
-      if (remoteDisabledReason) {
+      if (shouldUseLocalRuntime) {
         const localMessages: LocalLlmMessage[] = ensureLocalSystemPrompt(
           historyMessages.slice(0, -1).map((message) => ({
             role:
@@ -572,7 +574,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             : m,
         );
 
-        void markLocalModelRefUsed(localRef);
+        try {
+          await markLocalModelRefUsed(localRef);
+        } catch (err) {
+          console.warn('[chatExecutionStore] Failed to record local model usage:', err);
+        }
 
         abortControllers.delete(conversationId);
         streamingConversations.delete(conversationId);
@@ -775,7 +781,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
       const currentContent = get().streamingContent;
 
-      if (remoteDisabledReason) {
+      if (shouldUseLocalRuntime) {
         const message = localSetupMessage(caughtErr);
         const updatedMsgs = msgs.map((m) =>
           m.id === assistantMessageId ? { ...m, content: message, isStreaming: false } : m,

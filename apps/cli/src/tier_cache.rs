@@ -11,7 +11,8 @@
 //! 3. Write result to cache.  On any error, return `None` (caller uses config default).
 //!
 //! ## Security
-//! - JWT is read from `AGIWORKFORCE_JWT` env var or `~/.agiworkforce/auth.toml`.
+//! - JWT is read from `AGIWORKFORCE_JWT`, then `~/.agiworkforce/auth.json`
+//!   written by `agi login`, then the legacy `~/.agiworkforce/auth.toml`.
 //! - Request always uses HTTPS.
 //! - Cache file is written atomically via temp-file + rename.
 //! - Timeout: 3 seconds — never blocks interactive startup visibly.
@@ -377,29 +378,27 @@ fn tier_to_str(t: &UserTier) -> String {
     .to_string()
 }
 
-/// Load the user's JWT from `AGIWORKFORCE_JWT` env var or from the auth store
-/// (`~/.agiworkforce/auth.toml`).  Returns `None` if no credential is found.
-pub fn load_jwt() -> Option<String> {
-    // Env var takes priority.
-    if let Ok(jwt) = std::env::var("AGIWORKFORCE_JWT") {
-        if !jwt.is_empty() {
-            return Some(jwt);
+fn jwt_from_auth_store(store: &crate::auth::AuthStore) -> Option<String> {
+    for key in ["managed_cloud", "agiworkforce"] {
+        let Some(entry) = store.entries.get(key) else {
+            continue;
+        };
+        let token = match entry {
+            crate::auth::AuthEntry::OAuth { access, .. } => access,
+            crate::auth::AuthEntry::ApiKey { key } => key,
+        };
+        if !token.is_empty() {
+            return Some(token.clone());
         }
     }
+    None
+}
 
-    // Fall back to auth store — look for a `managed_cloud` or `agiworkforce` entry.
-    let auth_path = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".agiworkforce")
-        .join("auth.toml");
-    let content = std::fs::read_to_string(&auth_path).ok()?;
-    let table: toml::Value = toml::from_str(&content).ok()?;
-
-    // Auth store shape: [entries.managed_cloud] / [entries.agiworkforce]
-    // We look for a `token` key.
+fn jwt_from_legacy_auth_toml(content: &str) -> Option<String> {
+    let table: toml::Value = toml::from_str(content).ok()?;
     let entries = table.get("entries")?.as_table()?;
-    for key in &["managed_cloud", "agiworkforce"] {
-        if let Some(entry) = entries.get(*key) {
+    for key in ["managed_cloud", "agiworkforce"] {
+        if let Some(entry) = entries.get(key) {
             if let Some(token) = entry.get("token").and_then(|t| t.as_str()) {
                 if !token.is_empty() {
                     return Some(token.to_string());
@@ -408,6 +407,32 @@ pub fn load_jwt() -> Option<String> {
         }
     }
     None
+}
+
+/// Load the user's JWT from `AGIWORKFORCE_JWT` env var or from the auth store.
+/// Returns `None` if no credential is found.
+pub fn load_jwt() -> Option<String> {
+    // Env var takes priority.
+    if let Ok(jwt) = std::env::var("AGIWORKFORCE_JWT") {
+        if !jwt.is_empty() {
+            return Some(jwt);
+        }
+    }
+
+    // Primary CLI auth store written by `agi login`.
+    if let Ok(store) = crate::auth::load_auth() {
+        if let Some(token) = jwt_from_auth_store(&store) {
+            return Some(token);
+        }
+    }
+
+    // Legacy auth store — look for a `managed_cloud` or `agiworkforce` token.
+    let auth_path = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".agiworkforce")
+        .join("auth.toml");
+    let content = std::fs::read_to_string(&auth_path).ok()?;
+    jwt_from_legacy_auth_toml(&content)
 }
 
 // ---------------------------------------------------------------------------
@@ -487,6 +512,35 @@ mod tests {
         assert_eq!(format_token_count(1_500), "2K");
         assert_eq!(format_token_count(1_000_000), "1.0M");
         assert_eq!(format_token_count(2_100_000), "2.1M");
+    }
+
+    #[test]
+    fn jwt_from_auth_store_reads_agiworkforce_oauth_access_token() {
+        let mut store = crate::auth::AuthStore::default();
+        store.entries.insert(
+            "agiworkforce".to_string(),
+            crate::auth::AuthEntry::OAuth {
+                refresh: "refresh-token".to_string(),
+                access: "access-token".to_string(),
+                expires: 0,
+                account_id: None,
+            },
+        );
+
+        assert_eq!(jwt_from_auth_store(&store).as_deref(), Some("access-token"));
+    }
+
+    #[test]
+    fn jwt_from_legacy_auth_toml_reads_managed_cloud_token() {
+        let content = r#"
+            [entries.managed_cloud]
+            token = "legacy-token"
+        "#;
+
+        assert_eq!(
+            jwt_from_legacy_auth_toml(content).as_deref(),
+            Some("legacy-token")
+        );
     }
 
     #[test]

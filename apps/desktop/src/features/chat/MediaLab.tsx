@@ -24,6 +24,14 @@ import { useBillingStore } from '../../stores/auth';
 import { toast } from 'sonner';
 import { MediaGenerationProgress } from '@/features/media/MediaGenerationProgress';
 import type { MediaGenProvider } from '@/features/media/MediaGenerationProgress';
+import { getModelMetadataById } from '@agiworkforce/types';
+
+const GPT_IMAGE_MODEL_ID = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
+const IMAGEN_MODEL_ID = getModelMetadataById('imagen-4')?.apiModelId ?? 'imagen-4.0-generate-001';
+const IMAGEN_FAST_MODEL_ID =
+  getModelMetadataById('imagen-4-fast')?.apiModelId ?? 'imagen-4.0-fast-generate-001';
+const VEO_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
+const VEO_DISPLAY_NAME = 'Veo 3.1';
 
 const imageProviders: Array<{
   id: ImageProviderId;
@@ -34,23 +42,23 @@ const imageProviders: Array<{
 }> = [
   {
     id: 'google_imagen',
-    label: 'Imagen 3.1 Pro (Google)',
-    description: 'Photoreal + design quality, best default',
-    model: 'imagen-3.1-pro',
+    label: 'Imagen 4 (Google)',
+    description: 'Photoreal and design-quality Google image generation',
+    model: IMAGEN_MODEL_ID,
     badge: 'Recommended',
   },
   {
     id: 'google_imagen_lite',
-    label: 'Nano Banana Pro (Google)',
-    description: '4K resolution, perfect text rendering - #1 Quality',
-    model: 'imagen-3.2-flash-image',
-    badge: 'Best Quality',
+    label: 'Imagen 4 Fast (Google)',
+    description: 'Fast Google image generation with current Imagen 4 routing',
+    model: IMAGEN_FAST_MODEL_ID,
+    badge: 'Fast',
   },
   {
     id: 'dalle',
-    label: 'DALL·E 3 (OpenAI)',
-    description: 'Strong compositional control and text rendering',
-    model: 'dall-e-3',
+    label: 'GPT Image 2 (OpenAI)',
+    description: 'Current OpenAI image generation and editing model',
+    model: GPT_IMAGE_MODEL_ID,
   },
   {
     id: 'stable_diffusion',
@@ -173,7 +181,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       durationSecs: videoDuration,
       resolution: videoResolution,
       style: videoStyle,
-      model: 'veo-3.1',
+      model: VEO_MODEL_ID,
+      provider: 'veo3',
       plan,
     });
   };
@@ -187,7 +196,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             Media Lab
           </div>
           <p className="text-sm text-slate-400">
-            Imagen, Nano Banana, DALL·E, SDXL, and Veo 3.1 with cost + quality hints.
+            GPT Image 2, Imagen 4, SDXL, and {VEO_DISPLAY_NAME} with cost + quality hints.
           </p>
         </div>
         <Button
@@ -221,7 +230,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           onClick={() => setTab('video')}
         >
           <Clapperboard className="h-4 w-4" />
-          Video (Veo 3.1)
+          Video ({VEO_DISPLAY_NAME})
           {!videoAllowed && (
             <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-300">
               Pro+
@@ -346,7 +355,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   (imageProvider === 'google_imagen' || imageProvider === 'google_imagen_lite'
                     ? 'google'
                     : imageProvider === 'dalle'
-                      ? 'dall-e-3'
+                      ? 'gpt-image-2'
                       : imageProvider === 'stable_diffusion'
                         ? 'stability'
                         : undefined) as MediaGenProvider | undefined
@@ -440,7 +449,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           >
             <div className="flex items-center gap-2 text-sm text-slate-300">
               <Clapperboard className="h-4 w-4 text-purple-300" />
-              Veo 3.1 prompt
+              {VEO_DISPLAY_NAME} prompt
             </div>
             <textarea
               className="min-h-[120px] w-full rounded-xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-hidden focus:border-purple-400"
@@ -531,8 +540,8 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               {loadingVideo ? 'Rendering…' : 'Render video'}
             </Button>
             <p className="text-xs text-slate-400">
-              Veo 3.1 uses the best available LLM + vision chain; auto-routes to Google for video
-              and Perplexity/Claude for planning if needed.
+              {VEO_DISPLAY_NAME} uses the best available LLM + vision chain; auto-routes to Google
+              for video and Perplexity/Claude for planning if needed.
             </p>
           </form>
 
@@ -546,7 +555,7 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {latestVideos.length === 0 && (
                 <div className="col-span-full rounded-xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-slate-400">
-                  Kick off a Veo 3.1 render to see previews and download links.
+                  Kick off a {VEO_DISPLAY_NAME} render to see previews and download links.
                 </div>
               )}
               {latestVideos.map((job) => (
@@ -555,7 +564,9 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/30 p-3"
                 >
                   <div className="flex items-center justify-between text-xs text-slate-300">
-                    <span className="rounded-full bg-white/10 px-2 py-0.5">veo-3.1</span>
+                    <span className="rounded-full bg-white/10 px-2 py-0.5">
+                      {job.model ?? VEO_DISPLAY_NAME}
+                    </span>
                     <div className="flex items-center gap-2">
                       {job.latencyMs && (
                         <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5">

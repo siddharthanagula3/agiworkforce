@@ -1,4 +1,4 @@
-# react-native-worklets Stub
+# @agiworkforce/react-native-worklets-stub
 
 Status: Current
 Owner role: Mobile lead
@@ -8,11 +8,11 @@ Criticality: low
 
 ## Purpose
 
-Local stub for `react-native-worklets` so Expo/Jest tests can run without the real native module.
+Scoped local stub for `react-native-worklets` compatibility so Expo/Jest tests can run without the real native module. It intentionally does not use the public package name.
 
 ## Consumers
 
-Mobile tests and build tooling that resolve `react-native-worklets`.
+Mobile tests and build tooling that explicitly opt into the scoped stub.
 
 ## Public API / Exports
 

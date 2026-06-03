@@ -43,7 +43,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat },
@@ -71,7 +71,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat, provider: 'openai' },
@@ -84,7 +84,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         thinking: { type: 'enabled', budgetTokens: Number.MAX_SAFE_INTEGER },
       },
       { compat, provider: 'openai' },

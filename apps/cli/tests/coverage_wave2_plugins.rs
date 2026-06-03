@@ -75,7 +75,11 @@ fn load_manifest_claude_format() {
     let result = load_manifest_for(dir.path());
     assert!(result.is_some(), "expected a manifest to load");
     let (manifest, format) = result.unwrap();
-    assert_eq!(format, ManifestFormat::ClaudeCode, "expected ClaudeCode format");
+    assert_eq!(
+        format,
+        ManifestFormat::ClaudeCode,
+        "expected ClaudeCode format"
+    );
     assert_eq!(manifest.name.as_deref(), Some("test-plugin"));
     assert_eq!(format.short_tag(), "claude");
 }
@@ -100,7 +104,11 @@ fn load_manifest_legacy_app_format() {
     let dir = tempfile::tempdir().unwrap();
     write_manifest(dir.path(), ".app.json", MINIMAL_MANIFEST);
     let (_, format) = load_manifest_for(dir.path()).expect("manifest should load");
-    assert_eq!(format, ManifestFormat::LegacyApp, "expected LegacyApp format");
+    assert_eq!(
+        format,
+        ManifestFormat::LegacyApp,
+        "expected LegacyApp format"
+    );
     assert_eq!(format.short_tag(), "legacy");
 }
 
@@ -112,7 +120,11 @@ fn load_manifest_legacy_mcp_format() {
     let dir = tempfile::tempdir().unwrap();
     write_manifest(dir.path(), ".mcp.json", MINIMAL_MANIFEST);
     let (_, format) = load_manifest_for(dir.path()).expect("manifest should load");
-    assert_eq!(format, ManifestFormat::LegacyMcp, "expected LegacyMcp format");
+    assert_eq!(
+        format,
+        ManifestFormat::LegacyMcp,
+        "expected LegacyMcp format"
+    );
     assert_eq!(format.short_tag(), "legacy");
 }
 

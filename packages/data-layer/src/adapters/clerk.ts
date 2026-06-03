@@ -10,13 +10,7 @@
  * vendor-neutral `VerifiedJwt.userId` contract.
  */
 
-import {
-  type AuthAdapter,
-  type RefreshedTokens,
-  type VerifiedJwt,
-  DataLayerConfigError,
-  NotImplementedError,
-} from '../types';
+import { type AuthAdapter, type VerifiedJwt, DataLayerConfigError } from '../types';
 
 type ClerkBackendModule = typeof import('@clerk/backend');
 type VerifyTokenFn = ClerkBackendModule['verifyToken'];
@@ -94,14 +88,5 @@ export class ClerkAuthAdapter implements AuthAdapter {
     } catch {
       return null;
     }
-  }
-
-  async refreshToken(_refreshToken: string): Promise<RefreshedTokens | null> {
-    throw new NotImplementedError(
-      'Clerk',
-      'refreshToken',
-      'Clerk session refresh is handled by Clerk middleware/cookies or native SDK session APIs. ' +
-        'Server API routes should verify the current session JWT with verifyJwt().',
-    );
   }
 }

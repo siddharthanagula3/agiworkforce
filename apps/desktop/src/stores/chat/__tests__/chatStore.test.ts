@@ -385,7 +385,7 @@ describe('chatStore action basics (H15)', () => {
 
       const forkId = forkConversationForByok(sourceId, {
         title: 'Local thread (BYOK fork)',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         provider: 'openai',
       });
       const state = useChatStore.getState();
@@ -397,7 +397,7 @@ describe('chatStore action basics (H15)', () => {
       expect(state.messagesByConversation[forkId]).toHaveLength(2);
       expect(state.messagesByConversation[forkId]?.[0]?.pending).toBeUndefined();
       expect(state.messagesByConversation[forkId]?.[0]?.streaming).toBeUndefined();
-      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe('gpt-5.4');
+      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe('gpt-5.5');
       expect(state.messagesByConversation[forkId]?.[1]?.metadata?.provider).toBe('openai');
     });
 

@@ -369,7 +369,6 @@ export const CONNECTORS: Connector[] = [
     iconEmoji: '🎙️',
   },
 
-  // AGI Exclusive
   {
     id: 'local-filesystem',
     name: 'Local Filesystem',
@@ -446,5 +445,4 @@ export const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] =
   { label: 'Finance', value: 'Finance' },
   { label: 'Social', value: 'Social' },
   { label: 'AI', value: 'AI' },
-  { label: 'AGI Exclusive', value: 'Exclusive' },
 ];

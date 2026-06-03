@@ -1,3 +1,4 @@
 pnpm exec lint-staged
 pnpm check:structure-conventions
 pnpm check:agent-context
+pnpm check:llm-failures:staged

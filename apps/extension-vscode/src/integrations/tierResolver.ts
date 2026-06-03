@@ -3,7 +3,7 @@
  *
  * Priority chain:
  *   1. agi-workforce.tier setting (explicit override — useful for testing)
- *   2. desktopBridge GET /billing/tier (real-time from desktop if connected)
+ *   2. desktopBridge tier capability, when explicitly supported
  *   3. Cached value from globalState (populated by fetchTierInfo on activation)
  *   4. 'byok' fallback (safe default — never over-gates)
  *
@@ -13,7 +13,7 @@
 
 import * as vscode from 'vscode';
 import { type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
-import { getBridgeAuthHeaders, getDesktopBridge } from '../features/desktop-bridge';
+import { getDesktopBridge } from '../features/desktop-bridge';
 
 // ─── Tier type ────────────────────────────────────────────────────────────────
 
@@ -56,40 +56,17 @@ function coerceTier(raw: string | undefined): Tier | undefined {
 
 // ─── Bridge fetch ─────────────────────────────────────────────────────────────
 
-const BRIDGE_TIER_TIMEOUT_MS = 2_000;
-
 /**
- * Attempt to fetch tier from desktopBridge GET /billing/tier.
- * Returns undefined if the bridge is not connected or the call fails.
- * Never throws.
+ * Attempt to fetch tier from the desktop bridge.
+ *
+ * Wave 1: the VS Code bridge does not have a supported HTTP `/billing/tier`
+ * route. Return undefined instead of probing a nonexistent endpoint; callers
+ * fall back to the cached cloud tier or BYOK.
  */
 export async function fetchTierFromBridge(): Promise<Tier | undefined> {
   const bridge = getDesktopBridge();
   if (bridge === undefined || !bridge.isConnected) return undefined;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BRIDGE_TIER_TIMEOUT_MS);
-
-  try {
-    const authHeaders = getBridgeAuthHeaders();
-    if (authHeaders === undefined) return undefined;
-
-    const res = await fetch(`${bridge.baseUrl}/billing/tier`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json', ...authHeaders },
-      signal: controller.signal,
-    });
-
-    if (!res.ok) return undefined;
-
-    const json = (await res.json()) as Record<string, unknown>;
-    const raw = typeof json['tier'] === 'string' ? json['tier'] : undefined;
-    return coerceTier(raw);
-  } catch {
-    return undefined;
-  } finally {
-    clearTimeout(timeout);
-  }
+  return undefined;
 }
 
 // ─── Main resolver ────────────────────────────────────────────────────────────

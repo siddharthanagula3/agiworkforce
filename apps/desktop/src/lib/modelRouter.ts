@@ -383,9 +383,9 @@ export function estimateComplexity(
  * Used by selectModelFromPool to prioritize highest quality within each tier
  *
  * Based on January 2026 benchmarks:
- * - Coding: Claude Opus 4.6 (80.9% SWE-bench), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
+ * - Coding: Claude Opus 4.8 (80.9% SWE-bench), GPT-5.2 (80.0%), GLM-4.7 (73.8%)
  * - General: GPT-5.2 (93.2% MMLU), Gemini 3 (88.6% MMLU), GLM-4.7 (88% MMLU)
- * - Agentic: GPT-5.2 (97% τ²-bench), Claude Opus 4.6 for orchestration
+ * - Agentic: GPT-5.2 (97% τ²-bench), Claude Opus 4.8 for orchestration
  * - Reasoning: GPT-5.2 (100% AIME), GLM-4.7 (95.7% AIME)
  */
 export const COMPLEXITY_MODEL_PREFERENCES: Record<ComplexityLevel, string[]> = {
@@ -653,7 +653,7 @@ function hasRequiredCapabilities(model: ModelMetadata, taskType: TaskType): bool
   switch (taskType) {
     case 'multimodal':
       // HARD REQUIREMENT: Model must support vision for image tasks
-      // Models without vision: DeepSeek Chat, Grok 4, Qwen 3
+      // Models without vision: DeepSeek Chat, Grok 4.3, Qwen 3
       return model.capabilities.vision === true;
 
     case 'agentic':
@@ -992,8 +992,8 @@ export function routeMessage(
  * Check if the selected model is a manual selection (bypass auto routing)
  * Returns true if the model was manually selected from QuickModelSelector
  *
- * A manual selection is when the user explicitly chose a specific model
- * (like 'claude-sonnet-4.5' or 'gpt-5.4'), NOT an auto mode.
+ * A manual selection is when the user explicitly chose a concrete catalog
+ * model ID, NOT an auto mode.
  *
  * Auto modes that trigger routing:
  * - 'auto' (legacy)
@@ -1080,7 +1080,7 @@ export function getModelForRequest(
  * Async version of routeMessage that uses LLM classification for Pro+ tiers.
  * When local classification has low confidence and an llmClassify callback is
  * provided, it sends the ambiguous message to a fast/cheap model (e.g. Gemini
- * Flash Lite, GPT-5.4 Mini) for more accurate task type classification.
+ * Flash Lite, GPT-5.5 Mini) for more accurate task type classification.
  *
  * Economy tier always uses local-only classification (no extra LLM call cost).
  *

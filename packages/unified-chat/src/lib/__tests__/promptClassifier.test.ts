@@ -38,8 +38,8 @@ describe('classifyPrompt', () => {
     expect(r.task).toBe('image_generation');
   });
 
-  it('detects image generation — DALL-E reference', () => {
-    const r = classifyPrompt('use DALL-E to make a picture of a robot');
+  it('detects image generation — GPT Image reference', () => {
+    const r = classifyPrompt('use GPT Image to make a picture of a robot');
     expect(r.task).toBe('image_generation');
   });
 

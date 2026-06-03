@@ -13,7 +13,7 @@ describe('XAI_MODEL_CATALOG', () => {
     }
   });
 
-  it('contains a Grok 4 family entry', () => {
+  it('contains a Grok 4.3 family entry', () => {
     const ids = XAI_MODEL_CATALOG.map((m) => m.id).join(' ');
     expect(ids.toLowerCase()).toMatch(/grok/);
   });

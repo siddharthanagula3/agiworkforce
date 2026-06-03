@@ -1,5 +1,5 @@
 /**
- * features/desktop-bridge/ — Port 8787 WebSocket + HTTP bridge to the AGI Workforce desktop app.
+ * features/desktop-bridge/ — Port 8787 WebSocket bridge to the AGI Workforce desktop app.
  * Handles auth handshake, exponential backoff reconnect, allowlisted message types,
  * and graceful degradation when the desktop app is not running.
  */

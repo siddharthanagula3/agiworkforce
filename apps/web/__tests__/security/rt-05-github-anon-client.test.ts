@@ -24,8 +24,8 @@ const { mockLogger } = vi.hoisted(() => ({
 vi.mock('@/lib/logger', () => ({ logger: mockLogger }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@agiworkforce/types', () => ({
-  getTaskModelForProvider: vi.fn().mockReturnValue('claude-haiku-4-5'),
-  getProviderDefaultModel: vi.fn().mockReturnValue('claude-haiku-4-5'),
+  getTaskModelForProvider: () => 'claude-haiku-4-5-20251001',
+  getProviderDefaultModel: () => 'claude-haiku-4-5-20251001',
 }));
 
 process.env['ANTHROPIC_API_KEY'] = 'sk-ant-test';
@@ -98,7 +98,7 @@ const VALID_PAYLOAD = {
 };
 
 async function waitForBackground(): Promise<void> {
-  await new Promise<void>((resolve) => setTimeout(resolve, 50));
+  await new Promise<void>((resolve) => setTimeout(resolve, 250));
 }
 
 describe('RT-05: GitHub webhook uses Neon DB in background task', () => {

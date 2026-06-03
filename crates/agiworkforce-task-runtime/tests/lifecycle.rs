@@ -12,18 +12,25 @@ fn make_registry() -> (TaskRegistry, tempfile::TempDir) {
 #[tokio::test]
 async fn test_lifecycle_pending_running_completed() {
     let (reg, _dir) = make_registry();
-    let id = reg.create(TaskKind::LocalShell, Some("ls".into())).await.unwrap();
+    let id = reg
+        .create(TaskKind::LocalShell, Some("ls".into()))
+        .await
+        .unwrap();
 
     let task = reg.get(&id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Pending);
     assert!(task.started_at.is_none());
 
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
     let task = reg.get(&id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Running);
     assert!(task.started_at.is_some());
 
-    reg.update_status(&id, TaskStatus::Completed, Some(0), None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Completed, Some(0), None)
+        .await
+        .unwrap();
     let task = reg.get(&id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Completed);
     assert_eq!(task.exit_code, Some(0));
@@ -59,7 +66,9 @@ async fn test_append_read_truncation_at_max_bytes() {
 async fn test_stop_transitions_running_to_stopped() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
 
     reg.stop(&id).await.unwrap();
 
@@ -72,10 +81,16 @@ async fn test_stop_transitions_running_to_stopped() {
 async fn test_invalid_transition_completed_to_running() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Completed, Some(0), None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
+    reg.update_status(&id, TaskStatus::Completed, Some(0), None)
+        .await
+        .unwrap();
 
-    let err = reg.update_status(&id, TaskStatus::Running, None, None).await;
+    let err = reg
+        .update_status(&id, TaskStatus::Running, None, None)
+        .await;
     assert!(err.is_err(), "should reject Completed → Running");
 }
 
@@ -83,18 +98,29 @@ async fn test_invalid_transition_completed_to_running() {
 async fn test_invalid_transition_failed_to_completed() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Failed, Some(1), None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
+    reg.update_status(&id, TaskStatus::Failed, Some(1), None)
+        .await
+        .unwrap();
 
-    let err = reg.update_status(&id, TaskStatus::Completed, Some(0), None).await;
+    let err = reg
+        .update_status(&id, TaskStatus::Completed, Some(0), None)
+        .await;
     assert!(err.is_err(), "should reject Failed → Completed");
 }
 
 #[tokio::test]
 async fn test_stall_watchdog_marks_idle_task_as_failed() {
     let (reg, _dir) = make_registry();
-    let id = reg.create(TaskKind::LocalShell, Some("sleep 999".into())).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+    let id = reg
+        .create(TaskKind::LocalShell, Some("sleep 999".into()))
+        .await
+        .unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
 
     // Write initial output so watchdog doesn't trigger immediately on empty file
     reg.append_output(&id, "starting...\n").await.unwrap();
@@ -113,7 +139,9 @@ async fn test_stall_watchdog_marks_idle_task_as_failed() {
 async fn test_stall_watchdog_does_not_fire_when_output_grows() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
 
     let reg_clone = reg.clone();
     let _watchdog = StallWatchdog::spawn(reg.clone(), id, Duration::from_millis(300));
@@ -121,18 +149,27 @@ async fn test_stall_watchdog_does_not_fire_when_output_grows() {
     // Keep writing output to prevent stall
     for i in 0..6 {
         tokio::time::sleep(Duration::from_millis(80)).await;
-        reg_clone.append_output(&id, &format!("tick {}\n", i)).await.unwrap();
+        reg_clone
+            .append_output(&id, &format!("tick {}\n", i))
+            .await
+            .unwrap();
     }
 
     let task = reg.get(&id).await.unwrap();
-    assert_eq!(task.status, TaskStatus::Running, "watchdog should not fire when output is growing");
+    assert_eq!(
+        task.status,
+        TaskStatus::Running,
+        "watchdog should not fire when output is growing"
+    );
 }
 
 #[tokio::test]
 async fn test_watchdog_aborts_on_drop() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
+    reg.update_status(&id, TaskStatus::Running, None, None)
+        .await
+        .unwrap();
 
     {
         let _watchdog = StallWatchdog::spawn(reg.clone(), id, Duration::from_millis(200));
@@ -190,7 +227,9 @@ async fn test_file_backed_output_persists_across_registry_instances() {
 #[tokio::test]
 async fn test_invalid_task_id_for_update_status() {
     let (reg, _dir) = make_registry();
-    let err = reg.update_status(&Uuid::new_v4(), TaskStatus::Running, None, None).await;
+    let err = reg
+        .update_status(&Uuid::new_v4(), TaskStatus::Running, None, None)
+        .await;
     assert!(err.is_err());
 }
 
@@ -227,7 +266,10 @@ async fn test_stop_already_stopped_is_error() {
 #[tokio::test]
 async fn test_task_kind_monitor_mcp() {
     let (reg, _dir) = make_registry();
-    let id = reg.create(TaskKind::MonitorMcp, Some("tail logs".into())).await.unwrap();
+    let id = reg
+        .create(TaskKind::MonitorMcp, Some("tail logs".into()))
+        .await
+        .unwrap();
     let task = reg.get(&id).await.unwrap();
     assert_eq!(task.kind, TaskKind::MonitorMcp);
     assert_eq!(task.command.as_deref(), Some("tail logs"));
@@ -247,7 +289,9 @@ async fn test_multiple_output_appends_accumulate() {
     let id = reg.create(TaskKind::LocalShell, None).await.unwrap();
 
     for i in 0..10 {
-        reg.append_output(&id, &format!("chunk{}\n", i)).await.unwrap();
+        reg.append_output(&id, &format!("chunk{}\n", i))
+            .await
+            .unwrap();
     }
 
     let out = reg.read_output(&id, usize::MAX).await.unwrap();
@@ -260,10 +304,17 @@ async fn test_multiple_output_appends_accumulate() {
 async fn test_running_to_failed_with_error_message() {
     let (reg, _dir) = make_registry();
     let id = reg.create(TaskKind::LocalWorkflow, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Running, None, None).await.unwrap();
-    reg.update_status(&id, TaskStatus::Failed, Some(127), Some("command not found".into()))
+    reg.update_status(&id, TaskStatus::Running, None, None)
         .await
         .unwrap();
+    reg.update_status(
+        &id,
+        TaskStatus::Failed,
+        Some(127),
+        Some("command not found".into()),
+    )
+    .await
+    .unwrap();
     let task = reg.get(&id).await.unwrap();
     assert_eq!(task.status, TaskStatus::Failed);
     assert_eq!(task.exit_code, Some(127));
@@ -278,7 +329,9 @@ async fn test_concurrent_creates() {
     for i in 0..10 {
         let r = reg.clone();
         handles.push(tokio::spawn(async move {
-            r.create(TaskKind::LocalShell, Some(format!("cmd {}", i))).await.unwrap()
+            r.create(TaskKind::LocalShell, Some(format!("cmd {}", i)))
+                .await
+                .unwrap()
         }));
     }
     let mut ids = Vec::new();

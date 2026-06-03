@@ -761,7 +761,7 @@ pub fn computer_use_suggest_zoom_level(width: u32, height: u32) -> f32 {
 /// Executes an OPA (Observe-Plan-Act) computer use task.
 ///
 /// Stream 2 params:
-/// - `model`: explicit model id from the catalog (e.g. `claude-opus-4.7`,
+/// - `model`: explicit model id from the catalog (e.g. `claude-opus-4.8`,
 ///   `gpt-5.5`, `gemini-3.1-pro`, `grok-4.3-vision`). `None` lets the
 ///   router pick the user's default vision model.
 /// - `provider`: explicit provider name (`anthropic`, `openai`, `google`,

@@ -398,7 +398,15 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().join("session.jsonl");
         let source_path = temp_dir.path().join("source.jsonl");
-        let (permission_mode, plan_mode, plan_approved, current_plan, fast_mode, output_style, fallback_model_ids) = null_state_fields();
+        let (
+            permission_mode,
+            plan_mode,
+            plan_approved,
+            current_plan,
+            fast_mode,
+            output_style,
+            fallback_model_ids,
+        ) = null_state_fields();
         let session = ManagedSession {
             version: super::MANAGED_SESSION_VERSION,
             session_id: "session-123".to_string(),
@@ -434,7 +442,15 @@ mod tests {
     fn json_fallback_round_trip_preserves_session_snapshot() {
         let temp_dir = tempdir().unwrap();
         let path = temp_dir.path().join("session.json");
-        let (permission_mode, plan_mode, plan_approved, current_plan, fast_mode, output_style, fallback_model_ids) = null_state_fields();
+        let (
+            permission_mode,
+            plan_mode,
+            plan_approved,
+            current_plan,
+            fast_mode,
+            output_style,
+            fallback_model_ids,
+        ) = null_state_fields();
         let session = ManagedSession {
             version: super::MANAGED_SESSION_VERSION,
             session_id: "session-456".to_string(),

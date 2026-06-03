@@ -8,7 +8,7 @@
  * - registerBridgeHandlers wires up expected message types
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { DesktopBridge, getBridgeAuthHeaders } from '../features/desktop-bridge';
 import type { BridgeMessage } from '../features/desktop-bridge';
 
@@ -25,6 +25,11 @@ describe('DesktopBridge', () => {
 
   beforeEach(() => {
     bridge = new DesktopBridge(8787);
+  });
+
+  afterEach(() => {
+    bridge.dispose();
+    vi.unstubAllGlobals();
   });
 
   it('starts with disconnected status', () => {
@@ -150,6 +155,71 @@ describe('DesktopBridge', () => {
       }).not.toThrow();
     });
   });
+
+  describe('WebSocket protocol fallback', () => {
+    it('healthCheck uses authenticated WebSocket state instead of HTTP fetch', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const send = vi.fn();
+      const bridgeAny = bridge as unknown as {
+        _setStatus: (s: string) => void;
+        _authOk: boolean;
+        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
+      };
+      bridgeAny._setStatus('connected');
+      bridgeAny._authOk = true;
+      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
+
+      await expect(bridge.healthCheck()).resolves.toBe(true);
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(send).toHaveBeenCalledOnce();
+      expect(JSON.parse(send.mock.calls[0]?.[0] as string)).toMatchObject({
+        type: 'vscode:ping',
+      });
+    });
+
+    it('sendToDesktop sends supported commands over WebSocket without HTTP POST', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const send = vi.fn();
+      const bridgeAny = bridge as unknown as {
+        _setStatus: (s: string) => void;
+        _authOk: boolean;
+        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
+      };
+      bridgeAny._setStatus('connected');
+      bridgeAny._authOk = true;
+      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
+
+      await expect(bridge.sendToDesktop('code-snippet', { code: 'x' })).resolves.toEqual({
+        ok: true,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      const sent = JSON.parse(send.mock.calls[0]?.[0] as string) as BridgeMessage;
+      expect(sent.type).toBe('vscode:code-snippet');
+      expect(sent.payload).toEqual({ code: 'x' });
+    });
+
+    it('sendToDesktop fails closed for unsupported HTTP-only commands', async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal('fetch', fetchMock);
+      const send = vi.fn();
+      const bridgeAny = bridge as unknown as {
+        _setStatus: (s: string) => void;
+        _authOk: boolean;
+        _ws: { readyState: number; send: (payload: string) => void; close: () => void };
+      };
+      bridgeAny._setStatus('connected');
+      bridgeAny._authOk = true;
+      bridgeAny._ws = { readyState: 1, send, close: vi.fn() };
+
+      const result = await bridge.sendToDesktop('feedback', { message: 'hello' });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('not supported');
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('bridge HTTP auth headers', () => {
@@ -157,6 +227,7 @@ describe('bridge HTTP auth headers', () => {
     expect(getBridgeAuthHeaders(' test-token ')).toEqual({
       Authorization: 'Bearer test-token',
       'X-AGI-Bridge-Token': 'test-token',
+      'X-AGI-App-Server-Token': 'test-token',
     });
   });
 

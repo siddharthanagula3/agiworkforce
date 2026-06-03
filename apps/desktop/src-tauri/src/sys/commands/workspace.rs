@@ -125,21 +125,34 @@ pub async fn workspace_index(
 ) -> Result<WorkspaceIndex, String> {
     tracing::info!("Indexing workspace: {:?}", workspace_path);
 
-    let workspace_state = state.lock().await;
+    let (index_handle, indexing_handle) = {
+        let workspace_state = state.lock().await;
+        (
+            Arc::clone(&workspace_state.index),
+            Arc::clone(&workspace_state.indexing),
+        )
+    };
 
-    let mut indexing = workspace_state.indexing.lock().await;
+    let mut indexing = indexing_handle.lock().await;
     if *indexing {
         return Err("Workspace indexing already in progress".to_string());
     }
     *indexing = true;
     drop(indexing);
 
-    let index = build_workspace_index(&workspace_path).await?;
+    let index = match build_workspace_index(&workspace_path).await {
+        Ok(index) => index,
+        Err(error) => {
+            let mut indexing = indexing_handle.lock().await;
+            *indexing = false;
+            return Err(error);
+        }
+    };
 
-    let mut current_index = workspace_state.index.lock().await;
+    let mut current_index = index_handle.lock().await;
     *current_index = Some(index.clone());
 
-    let mut indexing = workspace_state.indexing.lock().await;
+    let mut indexing = indexing_handle.lock().await;
     *indexing = false;
 
     Ok(index)

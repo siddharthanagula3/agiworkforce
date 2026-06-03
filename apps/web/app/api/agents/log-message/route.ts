@@ -31,9 +31,12 @@ async function handlePost(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   }
 
-  // Agent message persistence table dropped in migration 20260525200001.
-  // This endpoint is retained as a no-op stub for backward compatibility.
-  return NextResponse.json({ ok: true });
+  // Agent message persistence table was removed. Do not return a fake success:
+  // callers must use the active conversation persistence path instead.
+  return NextResponse.json(
+    { error: 'Agent message logging endpoint is no longer available' },
+    { status: 410 },
+  );
 }
 
 export const POST = withErrorHandler(handlePost);

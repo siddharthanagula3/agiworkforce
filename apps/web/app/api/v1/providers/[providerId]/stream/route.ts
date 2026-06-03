@@ -146,6 +146,8 @@ export async function POST(
   const upstreamBody = JSON.stringify(parsedBody);
 
   let upstream: Response;
+  const connectController = new AbortController();
+  const connectTimeout = setTimeout(() => connectController.abort(), 30_000);
   try {
     upstream = await fetch(
       `${gatewayUrl}/api/v1/providers/${encodeURIComponent(providerId)}/stream`,
@@ -157,6 +159,7 @@ export async function POST(
           ...(authHeader ? { authorization: authHeader } : {}),
         },
         body: upstreamBody,
+        signal: connectController.signal,
         // @ts-expect-error — Next.js Node runtime accepts duplex on streamed bodies.
         duplex: 'half',
       },
@@ -172,6 +175,8 @@ export async function POST(
       { idempotencyKey },
     );
     return NextResponse.json({ error: 'Upstream unavailable' }, { status: 502 });
+  } finally {
+    clearTimeout(connectTimeout);
   }
 
   if (!upstream.ok || !upstream.body) {

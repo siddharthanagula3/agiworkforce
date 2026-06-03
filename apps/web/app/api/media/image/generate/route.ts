@@ -12,6 +12,7 @@ import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { randomUUID } from 'crypto';
+import { getModelMetadataById } from '@agiworkforce/types';
 
 /**
  * Image Generation API
@@ -19,7 +20,7 @@ import { randomUUID } from 'crypto';
  *
  * This provides a unified interface for image generation using multiple providers:
  * - Google Imagen 4 (default if GOOGLE_API_KEY is set)
- * - OpenAI DALL-E 3
+ * - OpenAI GPT Image 2
  * - Stability AI Stable Image Core (v2beta)
  *
  * Users authenticate with Clerk and must have an active subscription.
@@ -43,7 +44,7 @@ const ImageGenerationRequestSchema = z.object({
       '1024x1024',
       '1792x1024',
       '1024x1792',
-      // DALL-E sizes
+      // GPT Image sizes
       '512x512',
       '256x256',
       // Stability/Imagen additional sizes
@@ -80,8 +81,8 @@ interface ImageGenerationResponse {
 // Cost estimates in cents (rough estimates based on public pricing)
 const COST_ESTIMATES: Record<ImageProvider, Record<string, number>> = {
   openai: {
-    'dall-e-3': 4, // $0.04 per image (1024x1024 standard)
-    'dall-e-3-hd': 8, // $0.08 per image (1024x1024 HD)
+    'gpt-image-2-medium': 5, // ~$0.053/image from OpenAI pricing calculator examples
+    'gpt-image-2-high': 21, // ~$0.211/image from OpenAI pricing calculator examples
   },
   google: {
     // Imagen 4 pricing (estimated, similar to Imagen 3)
@@ -141,65 +142,54 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 }
 
 /**
- * Generate image using OpenAI DALL-E 3
+ * Generate image using OpenAI GPT Image 2
  * Endpoint: POST https://api.openai.com/v1/images/generations
- * DALL-E 3 only supports n=1 per call; we loop for multiple images.
  */
-async function generateWithDallE(
+async function generateWithOpenAIImage(
   prompt: string,
   size: string,
-  style: string | undefined,
   quality: string,
   n: number,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('openai');
+  const model = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
+  const validSizes = ['1024x1024', '1536x1024', '1024x1536', 'auto'];
+  const imageSize = validSizes.includes(size) ? size : '1024x1024';
+  const imageQuality = quality === 'hd' ? 'high' : 'medium';
 
-  // DALL-E 3 only supports 1024x1024, 1792x1024, or 1024x1792
-  const validSizes = ['1024x1024', '1792x1024', '1024x1792'];
-  const dalleSize = validSizes.includes(size) ? size : '1024x1024';
+  const response = await fetch('https://api.openai.com/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size: imageSize,
+      quality: imageQuality,
+      n: Math.min(n, 4),
+    }),
+    signal: AbortSignal.timeout(55_000),
+  });
 
-  // DALL-E 3 only supports n=1 per request; loop for more images
-  const images: GeneratedImage[] = [];
-  const requestCount = Math.min(n, 4);
-
-  for (let i = 0; i < requestCount; i++) {
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'dall-e-3',
-        prompt,
-        size: dalleSize,
-        quality,
-        style: style === 'vivid' ? 'vivid' : 'natural',
-        n: 1,
-        response_format: 'url',
-      }),
-      // Node.js fetch signal for per-request timeout (55s to stay inside maxDuration)
-      signal: AbortSignal.timeout(55_000),
-    });
-
-    if (!response.ok) {
-      const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-      const errorObj = errorData['error'] as Record<string, unknown> | undefined;
-      const errorMessage =
-        (errorObj?.['message'] as string) ||
-        `DALL-E API error: ${response.status} ${response.statusText}`;
-      throw new Error(errorMessage);
-    }
-
-    const data = (await response.json()) as { data?: Array<{ url?: string }> };
-    if (data.data && data.data.length > 0) {
-      images.push({ url: data.data[0]?.url });
-    }
+  if (!response.ok) {
+    const errorData = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    const errorObj = errorData['error'] as Record<string, unknown> | undefined;
+    const errorMessage =
+      (errorObj?.['message'] as string) ||
+      `OpenAI image API error: ${response.status} ${response.statusText}`;
+    throw new Error(errorMessage);
   }
+
+  const data = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> };
+  const images = (data.data ?? [])
+    .map((item) => ({ b64_json: item.b64_json, url: item.url }))
+    .filter((item) => item.b64_json || item.url);
 
   return {
     images,
-    model: quality === 'hd' ? 'dall-e-3-hd' : 'dall-e-3',
+    model: `${model}-${imageQuality}`,
   };
 }
 
@@ -672,7 +662,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
 
     switch (provider) {
       case 'openai':
-        result = await generateWithDallE(prompt, size, style, quality, n);
+        result = await generateWithOpenAIImage(prompt, size, quality, n);
         break;
       case 'google':
         result = await generateWithImagen(prompt, size, style, n, negative_prompt);

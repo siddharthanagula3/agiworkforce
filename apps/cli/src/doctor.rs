@@ -564,9 +564,21 @@ fn model_access_checks(config: &CliConfig) -> Vec<DoctorCheck> {
             if let Some(env_name) = &provider_config.api_key_env {
                 if std::env::var_os(env_name).is_some() {
                     details.push(format!("api key env `{env_name}` is set"));
+                } else if crate::auth::load_auth()
+                    .ok()
+                    .and_then(|store| {
+                        crate::models::provider_dispatch::api_key_from_auth_store(&store, provider)
+                    })
+                    .is_some()
+                {
+                    details.push(format!(
+                        "api key env `{env_name}` is not set; auth.json has a saved {provider} API key"
+                    ));
                 } else {
                     status = DoctorStatus::Warn;
-                    details.push(format!("api key env `{env_name}` is not set"));
+                    details.push(format!(
+                        "api key env `{env_name}` is not set and auth.json has no {provider} API key"
+                    ));
                 }
             } else if provider_config.base_url.is_some() {
                 details.push("provider has no API-key env requirement".into());

@@ -1,6 +1,8 @@
-//! Per-turn cost ledger sourced from models.json pricing constants.
+//! Per-turn cost ledger sourced from the shared model catalog.
 
 use std::collections::HashMap;
+
+use crate::model_catalog;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PricingRates {
@@ -14,116 +16,21 @@ pub struct PricingRates {
     pub cache_write_per_mtok: f64,
 }
 
-/// Built-in pricing table sourced from models.json provider defaultPricing fields.
-/// Update when providers publish new pricing.
+/// Pricing table sourced from the shared model catalog.
+///
+/// Unknown or user-defined models without explicit pricing are recorded as
+/// zero-cost rather than estimated from provider/model-name strings. This avoids
+/// stale or fictional billing numbers when providers rename models.
 pub fn rates_for(model: &str) -> PricingRates {
-    let m = model.to_lowercase();
-    match m.as_str() {
-        // Claude family — per models.json anthropic defaultPricing and tier tiers
-        x if x.contains("claude") && x.contains("opus") => PricingRates {
-            input_per_mtok: 15.0,
-            output_per_mtok: 75.0,
-            cache_read_per_mtok: 1.5,
-            cache_write_per_mtok: 18.75,
-        },
-        x if x.contains("claude") && x.contains("sonnet") => PricingRates {
-            input_per_mtok: 3.0,
-            output_per_mtok: 15.0,
-            cache_read_per_mtok: 0.3,
-            cache_write_per_mtok: 3.75,
-        },
-        x if x.contains("claude") && x.contains("haiku") => PricingRates {
-            input_per_mtok: 0.8,
-            output_per_mtok: 4.0,
-            cache_read_per_mtok: 0.08,
-            cache_write_per_mtok: 1.0,
-        },
-        // OpenAI GPT-5.x family — per models.json openai defaultPricing
-        x if x.starts_with("gpt-5.5") => PricingRates {
-            input_per_mtok: 1.5,
-            output_per_mtok: 6.0,
-            cache_read_per_mtok: 0.15,
-            cache_write_per_mtok: 0.0,
-        },
-        x if x.starts_with("gpt-5.4") => PricingRates {
-            input_per_mtok: 2.5,
-            output_per_mtok: 10.0,
-            cache_read_per_mtok: 0.25,
-            cache_write_per_mtok: 0.0,
-        },
-        x if x.starts_with("gpt-5") => PricingRates {
-            input_per_mtok: 1.5,
-            output_per_mtok: 6.0,
-            cache_read_per_mtok: 0.15,
-            cache_write_per_mtok: 0.0,
-        },
-        // Google Gemini — per models.json google defaultPricing
-        x if x.starts_with("gemini") => PricingRates {
-            input_per_mtok: 1.0,
-            output_per_mtok: 5.0,
-            cache_read_per_mtok: 0.1,
-            cache_write_per_mtok: 0.0,
-        },
-        // xAI Grok — per models.json xai defaultPricing
-        x if x.starts_with("grok") => PricingRates {
-            input_per_mtok: 0.2,
-            output_per_mtok: 0.5,
-            cache_read_per_mtok: 0.02,
-            cache_write_per_mtok: 0.0,
-        },
-        // DeepSeek — per models.json deepseek defaultPricing
-        x if x.starts_with("deepseek") => PricingRates {
-            input_per_mtok: 0.14,
-            output_per_mtok: 0.28,
-            cache_read_per_mtok: 0.014,
-            cache_write_per_mtok: 0.0,
-        },
-        // Qwen — per models.json qwen defaultPricing
-        x if x.starts_with("qwen") => PricingRates {
-            input_per_mtok: 0.5,
-            output_per_mtok: 2.0,
-            cache_read_per_mtok: 0.05,
-            cache_write_per_mtok: 0.0,
-        },
-        // Moonshot / Kimi — per models.json moonshot defaultPricing
-        x if x.starts_with("kimi") || x.starts_with("moonshot") => PricingRates {
-            input_per_mtok: 0.95,
-            output_per_mtok: 4.0,
-            cache_read_per_mtok: 0.095,
-            cache_write_per_mtok: 0.0,
-        },
-        // Perplexity Sonar — per models.json perplexity defaultPricing
-        x if x.starts_with("sonar") => PricingRates {
-            input_per_mtok: 1.0,
-            output_per_mtok: 1.0,
-            cache_read_per_mtok: 0.1,
-            cache_write_per_mtok: 0.0,
-        },
-        // ZhipuAI GLM — per models.json zhipu defaultPricing
-        x if x.starts_with("glm") => PricingRates {
-            input_per_mtok: 1.4,
-            output_per_mtok: 4.4,
-            cache_read_per_mtok: 0.14,
-            cache_write_per_mtok: 0.0,
-        },
-        // Local — free
-        x if x.starts_with("ollama") || x.starts_with("lmstudio") => PricingRates::default(),
-        // Mistral / Codestral — per models.json mistral defaultPricing
-        x if x.starts_with("mistral") || x.starts_with("codestral") || x.starts_with("pixtral") => {
-            PricingRates {
-                input_per_mtok: 0.5,
-                output_per_mtok: 1.5,
-                cache_read_per_mtok: 0.05,
-                cache_write_per_mtok: 0.0,
-            }
-        }
-        // Conservative default for unknown models
-        _ => PricingRates {
-            input_per_mtok: 3.0,
-            output_per_mtok: 15.0,
-            cache_read_per_mtok: 0.3,
-            cache_write_per_mtok: 0.0,
-        },
+    let Some(entry) = model_catalog::find(model) else {
+        return PricingRates::default();
+    };
+
+    PricingRates {
+        input_per_mtok: entry.input_price_per_1m,
+        output_per_mtok: entry.output_price_per_1m,
+        cache_read_per_mtok: entry.cache_read_price_per_1m,
+        cache_write_per_mtok: entry.cache_write_price_per_1m,
     }
 }
 
@@ -179,12 +86,35 @@ impl CostLedger {
 mod tests {
     use super::*;
 
+    fn first_paid_catalog_model() -> String {
+        model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0 && model.output_price_per_1m > 0.0)
+            .expect("catalog should include at least one paid model")
+            .id
+            .clone()
+    }
+
     #[test]
     fn rates_for_known_models_are_nonzero() {
-        for m in ["claude-opus-4-7", "claude-sonnet-4-6", "gpt-5.4", "gpt-5.5"] {
-            let r = rates_for(m);
-            assert!(r.input_per_mtok > 0.0, "input rate missing for {m}");
-            assert!(r.output_per_mtok > 0.0, "output rate missing for {m}");
+        for model in model_catalog::catalog()
+            .all()
+            .iter()
+            .filter(|model| model.input_price_per_1m > 0.0)
+            .take(4)
+        {
+            let r = rates_for(&model.id);
+            assert!(
+                r.input_per_mtok > 0.0,
+                "input rate missing for {}",
+                model.id
+            );
+            assert!(
+                r.output_per_mtok > 0.0,
+                "output rate missing for {}",
+                model.id
+            );
         }
     }
 
@@ -196,32 +126,43 @@ mod tests {
     }
 
     #[test]
-    fn dollars_for_opus_one_million_tokens() {
-        let d = dollars_for("claude-opus-4-7", 1_000_000, 0, 0, 0);
-        assert!((d - 15.0).abs() < 1e-6);
+    fn dollars_for_one_million_input_tokens_uses_catalog_rate() {
+        let model = first_paid_catalog_model();
+        let rate = rates_for(&model).input_per_mtok;
+        let d = dollars_for(&model, 1_000_000, 0, 0, 0);
+        assert!((d - rate).abs() < 1e-6);
     }
 
     #[test]
     fn dollars_accumulate_via_record_turn() {
         let mut ledger = CostLedger::default();
-        let d1 = ledger.record_turn("claude-sonnet-4-6", 100_000, 50_000, 0, 0);
-        let d2 = ledger.record_turn("claude-sonnet-4-6", 50_000, 25_000, 0, 0);
+        let model = first_paid_catalog_model();
+        let d1 = ledger.record_turn(&model, 100_000, 50_000, 0, 0);
+        let d2 = ledger.record_turn(&model, 50_000, 25_000, 0, 0);
         assert!(d1 > 0.0 && d2 > 0.0);
         assert!((ledger.total_usd - (d1 + d2)).abs() < 1e-6);
         assert_eq!(ledger.turns, 2);
-        assert!(ledger.by_model.contains_key("claude-sonnet-4-6"));
+        assert!(ledger.by_model.contains_key(&model));
     }
 
     #[test]
-    fn cache_read_is_cheaper_than_input() {
-        let r = rates_for("claude-opus-4-7");
+    fn cache_read_is_not_more_expensive_than_input_when_present() {
+        let model = model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.cache_read_price_per_1m > 0.0)
+            .expect("catalog should include at least one cache-read price")
+            .id
+            .clone();
+        let r = rates_for(&model);
         assert!(r.cache_read_per_mtok < r.input_per_mtok);
     }
 
     #[test]
     fn unknown_model_uses_default_rate() {
         let r = rates_for("some-weird-model-name");
-        assert!(r.input_per_mtok > 0.0);
+        assert_eq!(r.input_per_mtok, 0.0);
+        assert_eq!(r.output_per_mtok, 0.0);
     }
 
     #[test]
@@ -234,10 +175,22 @@ mod tests {
     #[test]
     fn by_model_breakdown_is_tracked() {
         let mut ledger = CostLedger::default();
-        ledger.record_turn("claude-opus-4-7", 100_000, 0, 0, 0);
-        ledger.record_turn("gpt-5.5", 100_000, 0, 0, 0);
+        let models: Vec<String> = model_catalog::catalog()
+            .all()
+            .iter()
+            .filter(|model| model.input_price_per_1m > 0.0)
+            .take(2)
+            .map(|model| model.id.clone())
+            .collect();
+        assert_eq!(models.len(), 2);
+
+        for model in &models {
+            ledger.record_turn(model, 100_000, 0, 0, 0);
+        }
+
         assert_eq!(ledger.by_model.len(), 2);
-        assert!(ledger.by_model["claude-opus-4-7"] > 0.0);
-        assert!(ledger.by_model["gpt-5.5"] > 0.0);
+        for model in &models {
+            assert!(ledger.by_model[model] > 0.0);
+        }
     }
 }

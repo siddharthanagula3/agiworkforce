@@ -77,7 +77,7 @@ describe('OpenAIProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new OpenAIProvider({
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -85,7 +85,7 @@ describe('OpenAIProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('gpt-5.4');
+      expect(config.model).toBe('gpt-5.5');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -123,7 +123,8 @@ describe('OpenAIProvider', () => {
     it('should return available models', () => {
       const models = OpenAIProvider.getAvailableModels();
 
-      // gpt-5.4 and o3 were removed from the catalog; current models are gpt-5.5 + gpt-5.4-mini
+      // OpenAI text models are catalog-backed and currently include the
+      // flagship plus the latest mini variant.
       expect(models).toContain('gpt-5.5');
       expect(models).toContain('gpt-5.4-mini');
       expect(models.length).toBeGreaterThan(0);
@@ -132,7 +133,7 @@ describe('OpenAIProvider', () => {
     it('should return image models', () => {
       const models = OpenAIProvider.getImageModels();
 
-      // gpt-image-1.5 and dall-e-3 were removed; current image model is gpt-image-2
+      // OpenAI image generation uses the current GPT Image model.
       expect(models).toContain('gpt-image-2');
       expect(models.length).toBeGreaterThan(0);
     });
@@ -140,7 +141,8 @@ describe('OpenAIProvider', () => {
     it('should return video models', () => {
       const models = OpenAIProvider.getVideoModels();
 
-      // sora-2 was removed from the catalog; OpenAI video models list is now empty
+      // AGI does not configure OpenAI video models; video routes use other
+      // catalog-backed providers.
       expect(models).toEqual([]);
     });
 

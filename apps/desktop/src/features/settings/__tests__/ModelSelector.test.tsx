@@ -39,7 +39,7 @@ describe('ModelSelector', () => {
 
     expect(screen.getByText('Auto (Economy)')).toBeInTheDocument();
     expect(screen.queryByText('Auto Balanced')).not.toBeInTheDocument();
-    expect(screen.queryByText('GPT-5.4 Codex (Low)')).not.toBeInTheDocument();
+    expect(screen.queryByText('GPT-5.5 Codex (Low)')).not.toBeInTheDocument();
   });
 
   it('shows pro-tier managed cloud models for pro users', () => {

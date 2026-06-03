@@ -141,7 +141,7 @@ export function calculateEstimatedCost(
 ): number {
   // Pricing per 1M tokens (simplified)
   const pricing: Record<string, { input: number; output: number }> = {
-    'gpt-5.4': { input: 1.75, output: 14.0 },
+    'gpt-5.5': { input: 5.0, output: 30.0 },
     'gpt-4': { input: 0.03, output: 0.06 },
     'gpt-3.5': { input: 0.0005, output: 0.0015 },
     'claude-opus': { input: 5.0, output: 25.0 },
@@ -220,30 +220,30 @@ export interface ModelInfo {
 
 export const MOCK_MODELS: ModelInfo[] = [
   {
-    id: 'gpt-5.4',
-    name: 'GPT-5.2',
+    id: 'gpt-5.5',
+    name: 'GPT-5.5',
     provider: 'openai',
-    contextWindow: 400000,
-    inputCost: 1.75,
-    outputCost: 14.0,
+    contextWindow: 1050000,
+    inputCost: 5.0,
+    outputCost: 30.0,
     capabilities: ['chat', 'code', 'vision', 'tools'],
   },
   {
-    id: 'claude-opus-4.6',
-    name: 'Claude Opus 4.6',
+    id: 'claude-opus-4.8',
+    name: 'Claude 4.8 Opus',
     provider: 'anthropic',
-    contextWindow: 200000,
+    contextWindow: 1000000,
     inputCost: 5.0,
     outputCost: 25.0,
     capabilities: ['chat', 'code', 'vision', 'thinking'],
   },
   {
-    id: 'gemini-3-pro-preview',
-    name: 'Gemini 3 Pro',
+    id: 'gemini-3.1-pro-preview',
+    name: 'Gemini 3.1 Pro',
     provider: 'google',
-    contextWindow: 1000000,
-    inputCost: 0.5,
-    outputCost: 3.0,
+    contextWindow: 2000000,
+    inputCost: 2.0,
+    outputCost: 12.0,
     capabilities: ['chat', 'code', 'vision'],
   },
   {

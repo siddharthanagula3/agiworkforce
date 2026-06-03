@@ -27,11 +27,11 @@
   "dependencies": {
     "@agiworkforce/api": "workspace:*",
     "@agiworkforce/apply-patch": "workspace:*",
-    "@agiworkforce/services": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
     "@agiworkforce/mcp": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/runtime": "workspace:*",
+    "@agiworkforce/services": "workspace:*",
     "@agiworkforce/skills": "workspace:*",
     "@agiworkforce/stores": "workspace:*",
     "@agiworkforce/types": "workspace:*",
@@ -127,8 +127,8 @@
     "@typescript-eslint/parser": "^8.59.1",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitejs/plugin-react-swc": "^4.2.3",
-    "@vitest/coverage-v8": "^4.1.5",
-    "@vitest/ui": "^4.1.5",
+    "@vitest/coverage-v8": "^4.1.8",
+    "@vitest/ui": "^4.1.8",
     "better-sqlite3": "^12.9.0",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.1.1",
@@ -144,6 +144,6 @@
     "tailwindcss-animate": "^1.0.7",
     "typescript": "6.0.3",
     "vite": "^7.3.1",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.8"
   }
 }

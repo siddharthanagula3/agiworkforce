@@ -60,6 +60,12 @@ export interface MessageMetadata {
   documentData?: { title?: string; content?: string; [key: string]: unknown };
   /** Persisted user reaction (stored in cloud messages.metadata) */
   reaction?: 'thumbsUp' | 'thumbsDown' | null;
+  /** Inline paywall rendered in place of an assistant message when a gated feature is requested. */
+  paywall?: {
+    feature: string;
+    requiredTier: string;
+    reason?: string;
+  };
 }
 
 export interface MessageToolEntry {

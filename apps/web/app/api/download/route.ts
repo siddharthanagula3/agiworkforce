@@ -9,6 +9,43 @@ import { logger } from '@/lib/logger';
 const REPO_OWNER = process.env['DESKTOP_GITHUB_OWNER'] || 'siddharthanagula3';
 const REPO_NAME = process.env['DESKTOP_GITHUB_REPO'] || 'agiworkforce-desktop-app';
 
+const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
+  'downloads.agiworkforce.com',
+  'cdn.agiworkforce.com',
+  'github.com',
+  'objects.githubusercontent.com',
+]);
+
+const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = [
+  { owner: 'siddharthanagula3', repo: 'agiworkforce' },
+  { owner: REPO_OWNER, repo: REPO_NAME },
+];
+
+function isExternalRedirectAllowed(rawUrl: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  if (!EXTERNAL_URL_ALLOWED_HOSTS.has(parsed.hostname)) return false;
+
+  if (parsed.hostname === 'github.com') {
+    const segments = parsed.pathname.split('/').filter(Boolean);
+    if (segments.length < 4) return false;
+    const [owner, repo, kind] = segments;
+    if (kind !== 'releases') return false;
+    const ownerLower = owner?.toLowerCase() ?? '';
+    const repoLower = repo?.toLowerCase() ?? '';
+    return TRUSTED_GITHUB_RELEASES.some(
+      (pair) => pair.owner.toLowerCase() === ownerLower && pair.repo.toLowerCase() === repoLower,
+    );
+  }
+
+  return true;
+}
+
 /**
  * PUBLIC ENDPOINT: Download route for desktop application installers.
  *
@@ -64,6 +101,7 @@ async function handleDownload(request: NextRequest) {
           : {}),
       },
       next: { revalidate: 0 }, // No cache - always fetch latest release
+      signal: AbortSignal.timeout(10_000),
     },
   );
 
@@ -107,10 +145,15 @@ async function handleDownload(request: NextRequest) {
     };
 
     const downloadUrl = asset.browser_download_url;
+    if (!isExternalRedirectAllowed(downloadUrl)) {
+      throw createError.serviceUnavailable('Release asset URL is not trusted');
+    }
     const filename = cleanFilenames[platform] || asset.name;
 
     // Fetch the file from GitHub and stream it back with custom filename
-    const fileResponse = await fetch(downloadUrl);
+    const fileResponse = await fetch(downloadUrl, {
+      signal: AbortSignal.timeout(30_000),
+    });
 
     if (!fileResponse.ok) {
       throw createError.serviceUnavailable('Failed to fetch installer from GitHub');
@@ -163,6 +206,12 @@ function fallbackToStatic(platform: string, request: Request) {
       return NextResponse.json({ error: 'Coming soon', platform }, { status: 503 });
     }
     throw createError.notFound(`Download for ${platform} is currently unavailable.`);
+  }
+
+  if (!url.startsWith('/') && !isExternalRedirectAllowed(url)) {
+    throw createError.validation(
+      'Download redirect target is not on the allowlist. Set NEXT_PUBLIC_DOWNLOAD_URL_* to an https URL on our download host or trusted GitHub release.',
+    );
   }
 
   const resolvedUrl = url.startsWith('/') ? `${new URL(request.url).origin}${url}` : url;

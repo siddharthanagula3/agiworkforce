@@ -64,7 +64,7 @@ describe('GrokProvider', () => {
 
     it('should create provider with custom configuration', () => {
       const customProvider = new GrokProvider({
-        model: 'grok-4-1-fast-reasoning',
+        model: 'grok-4.3',
         maxTokens: 8000,
         temperature: 0.5,
         systemPrompt: 'Custom prompt',
@@ -74,7 +74,7 @@ describe('GrokProvider', () => {
 
       const config = customProvider.getConfig();
 
-      expect(config.model).toBe('grok-4-1-fast-reasoning');
+      expect(config.model).toBe('grok-4.3');
       expect(config.maxTokens).toBe(8000);
       expect(config.temperature).toBe(0.5);
       expect(config.systemPrompt).toBe('Custom prompt');
@@ -83,14 +83,14 @@ describe('GrokProvider', () => {
 
     it('should update configuration', () => {
       provider.updateConfig({
-        model: 'grok-4-fast',
+        model: 'grok-4.3',
         temperature: 0.9,
         includeRealTimeData: false,
       });
 
       const config = provider.getConfig();
 
-      expect(config.model).toBe('grok-4-fast');
+      expect(config.model).toBe('grok-4.3');
       expect(config.temperature).toBe(0.9);
       expect(config.includeRealTimeData).toBe(false);
       expect(config.maxTokens).toBe(4000); // Unchanged
@@ -130,14 +130,12 @@ describe('GrokProvider', () => {
       expect(models).toEqual([...SUPPORTED_GROK_IMAGE_MODELS]);
     });
 
-    it('should return agent models (post grok-4.x deprecation, 2026-05-15)', () => {
+    it('should return only current catalog agent models', () => {
       const models = GrokProvider.getAgentModels();
 
-      // Legacy IDs (grok-4-1-fast-*, grok-4-fast-*, grok-4) all deprecate
-      // 2026-05-15. Replacement: grok-4.3.
       expect(models).toContain('grok-4.3');
-      expect(models).not.toContain('grok-4-1-fast-reasoning');
-      expect(models).not.toContain('grok-4-fast-non-reasoning');
+      expect(models).not.toContain('grok-4-fast');
+      expect(models).not.toContain('grok-4-fast-reasoning');
       expect(models.length).toBeGreaterThan(0);
     });
   });

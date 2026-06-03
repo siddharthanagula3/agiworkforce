@@ -3,7 +3,11 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { SubscriptionService } from '@/lib/services/subscription-service';
+import { SubscriptionService, type SubscriptionInfo } from '@/lib/services/subscription-service';
+import {
+  buildFreeWebsiteSubscription,
+  isFreePlanTier,
+} from '@/lib/services/auto-economy-trial-service';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
@@ -11,7 +15,7 @@ export type AuthGateSuccess = {
   ok: true;
   userId: string;
   token: string;
-  subscription: Awaited<ReturnType<typeof SubscriptionService.getSubscription>> & object;
+  subscription: SubscriptionInfo;
 };
 
 type AuthGateFailure = {
@@ -81,23 +85,23 @@ export async function runAuthGate(request: NextRequest): Promise<AuthGateResult>
   const subscription = await SubscriptionService.getSubscription(userId);
 
   if (!subscription) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          error: {
-            message: 'No active subscription found',
-            type: 'invalid_request_error',
-            code: 'subscription_required',
-          },
-        },
-        { status: 403 },
-      ),
-    };
+    return { ok: true, userId, token, subscription: buildFreeWebsiteSubscription(userId) };
   }
 
   const activeStatuses = ['active', 'trialing'];
   if (!activeStatuses.includes(subscription.status)) {
+    if (isFreePlanTier(subscription.plan_tier)) {
+      return {
+        ok: true,
+        userId,
+        token,
+        subscription: {
+          ...subscription,
+          status: 'active',
+        },
+      };
+    }
+
     return {
       ok: false,
       response: NextResponse.json(

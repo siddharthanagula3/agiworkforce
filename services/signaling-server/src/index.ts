@@ -167,7 +167,7 @@ function constantTimeCompare(a: string, b: string): boolean {
 // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication tokens
 // =============================================================================
 //
-// Knowledge of the 8-char pairing code alone is insufficient to register as a
+// Knowledge of the pairing code alone is insufficient to register as a
 // peer. The signaling-server issues a short-lived HMAC token for each role at
 // pairing-creation time; the legitimate clients receive these tokens through
 // the gateway's authenticated channel and present them on `register`.
@@ -430,7 +430,7 @@ const registerMessageSchema = z.object({
   metadata: metadataSchema,
   // SECURITY (C2, redteam-services 2026-05-04): per-pair authentication token.
   // The signaling-server returns this as part of POST /pairings; the legitimate
-  // peer presents it on register. An attacker who learns only the 8-char code
+  // peer presents it on register. An attacker who learns only the pairing code
   // (e.g., shoulder-surfing the QR display) cannot forge it without the server
   // secret. The token is an HMAC over (code, role, expiresAt, nonce) so it also
   // binds the connection to the role the requester intended.

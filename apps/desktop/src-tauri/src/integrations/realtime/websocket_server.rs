@@ -111,6 +111,32 @@ fn parse_pair_extension_id(raw_request: &str) -> Result<Option<String>, String> 
     Ok(Some(extension_id))
 }
 
+fn request_header<'a>(raw_request: &'a str, header_name: &str) -> Option<&'a str> {
+    let headers = raw_request
+        .split_once("\r\n\r\n")
+        .map(|(headers, _)| headers)
+        .unwrap_or(raw_request);
+
+    headers.lines().skip(1).find_map(|line| {
+        let (name, value) = line.split_once(':')?;
+        if name.eq_ignore_ascii_case(header_name) {
+            Some(value.trim())
+        } else {
+            None
+        }
+    })
+}
+
+fn is_pair_manifest_install_authorized(raw_request: &str, existing_pair_token: &str) -> bool {
+    let Some(sent_token) = request_header(raw_request, "x-bridge-token") else {
+        return false;
+    };
+
+    !existing_pair_token.is_empty()
+        && sent_token.len() == existing_pair_token.len()
+        && bool::from(sent_token.as_bytes().ct_eq(existing_pair_token.as_bytes()))
+}
+
 // ── RT-04: WebSocket Origin allow-list ───────────────────────────────────────
 //
 // Any WebSocket from a non-allowed origin is rejected at the HTTP-upgrade
@@ -448,6 +474,12 @@ impl RealtimeServer {
     // path, generates a 32-byte random token, stores it in the shared pair_token
     // lock, and returns {"token":"…","fingerprint":"…"} as JSON.
     //
+    // If the request asks to install/refresh a native messaging manifest for
+    // an extension ID, it must include X-Bridge-Token matching the currently
+    // stored pair token. This keeps first-time unauthenticated token pairing
+    // available while preventing any local webpage/process from adding an
+    // attacker-controlled extension ID to the native host manifest.
+    //
     // Calling /pair a second time ROTATES the token (idempotent success, new value).
     // Non-loopback source IPs and wrong paths both receive 403 / 404 respectively.
 
@@ -517,6 +549,21 @@ impl RealtimeServer {
                 return;
             }
         };
+
+        if extension_id.is_some() {
+            let existing_pair_token = pair_token.read().await.clone();
+            if !is_pair_manifest_install_authorized(header_section, &existing_pair_token) {
+                let body = "Unauthorized manifest install";
+                let response = format!(
+                    "HTTP/1.1 401 Unauthorized\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+                return;
+            }
+        }
 
         let native_host_manifest_installed = if let Some(extension_id) = extension_id.as_deref() {
             match install_manifests(Some(extension_id)) {
@@ -1964,7 +2011,7 @@ mod tests {
         assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
         // fingerprint is first 8 chars of token (all ASCII hex)
         assert_eq!(fingerprint, &token[..8]); // utf8-safe: hex token
-        // pair_token shared state updated
+                                              // pair_token shared state updated
         assert_eq!(*pair_token.read().await, token);
     }
 
@@ -2050,6 +2097,37 @@ mod tests {
             resp.starts_with("HTTP/1.1 404"),
             "expected 404, got: {resp}"
         );
+    }
+
+    #[tokio::test]
+    async fn pair_extension_manifest_install_requires_bridge_token() {
+        let (addr, pair_token) = spawn_pair_handler().await;
+        let body = r#"{"extensionId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}"#;
+        let request = format!(
+            "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        );
+
+        let resp_bytes = send_http(addr, &request).await;
+        let resp = String::from_utf8_lossy(&resp_bytes);
+        assert!(
+            resp.starts_with("HTTP/1.1 401"),
+            "expected 401, got: {resp}"
+        );
+        assert!(
+            pair_token.read().await.is_empty(),
+            "unauthorized manifest install must not rotate pair token"
+        );
+    }
+
+    #[test]
+    fn pair_manifest_install_auth_accepts_matching_bridge_token() {
+        let request = "POST /pair HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bridge-Token: secret-token\r\nContent-Length: 0\r\n\r\n";
+
+        assert!(is_pair_manifest_install_authorized(request, "secret-token"));
+        assert!(!is_pair_manifest_install_authorized(request, "other-token"));
+        assert!(!is_pair_manifest_install_authorized(request, ""));
     }
 
     #[tokio::test]

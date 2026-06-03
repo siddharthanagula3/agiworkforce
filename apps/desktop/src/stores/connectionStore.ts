@@ -1,4 +1,3 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 import {
   SignalingClient,
   type SignalingClientOptions,
@@ -10,10 +9,13 @@ import {
   initDispatchSession,
   resetDispatchSession,
   extractDispatchSalt,
+  signOutbound,
+  verifyInbound,
 } from '../services/dispatch';
+import { API_BASE_URL } from '../api/config';
+import { cloudAccountAuth } from '../services/cloudAccountAuth';
 
-const SIGNALING_HTTP_URL =
-  (import.meta.env?.['VITE_SIGNALING_HTTP_URL'] as string | undefined) ?? 'http://localhost:4000';
+const MAX_CONTROL_MESSAGE_BYTES = 64 * 1024;
 
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.cloudflare.com:3478' },
@@ -45,12 +47,134 @@ interface PairingResponse {
     httpUrl: string;
     wsUrl: string;
   };
+  pairTokens: {
+    desktop: string;
+    mobile: string;
+  };
 }
 
 let signalingClient: SignalingClient | null = null;
 let peerConnection: RTCPeerConnection | null = null;
 let localStream: MediaStream | null = null;
 let controlChannel: RTCDataChannel | null = null;
+
+interface MobileControlMessage {
+  action: string;
+  payload: Record<string, unknown>;
+  rawJson: string;
+  id?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSignedEnvelope(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && typeof value['hmac'] === 'string';
+}
+
+function safeControlJson(input: unknown): string | null {
+  if (typeof input === 'string') {
+    return input.length <= MAX_CONTROL_MESSAGE_BYTES ? input : null;
+  }
+
+  try {
+    const json = JSON.stringify(input);
+    return json.length <= MAX_CONTROL_MESSAGE_BYTES ? json : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonObject(rawJson: string): Record<string, unknown> | null {
+  try {
+    const parsed = JSON.parse(rawJson);
+    return isRecord(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function extractMobileControlMessage(input: unknown): MobileControlMessage | null {
+  const outerJson = safeControlJson(input);
+  if (!outerJson) return null;
+
+  const outer = parseJsonObject(outerJson);
+  if (!outer) return null;
+
+  const candidate =
+    isRecord(outer['data']) && isSignedEnvelope(outer['data']) ? outer['data'] : outer;
+  const rawJson = safeControlJson(candidate);
+  if (!rawJson) return null;
+
+  const signed = isSignedEnvelope(candidate);
+  const payload = signed && isRecord(candidate['payload']) ? candidate['payload'] : candidate;
+  const action =
+    (typeof payload['action'] === 'string' && payload['action']) ||
+    (typeof candidate['type'] === 'string' && candidate['type']) ||
+    (typeof outer['action'] === 'string' && outer['action']);
+
+  if (!action || !isRecord(payload)) return null;
+
+  const id =
+    (typeof payload['id'] === 'string' && payload['id']) ||
+    (typeof payload['requestId'] === 'string' && payload['requestId']) ||
+    (typeof candidate['nonce'] === 'string' && candidate['nonce']) ||
+    undefined;
+
+  return { action, payload, rawJson, id };
+}
+
+async function sendControlToMobile(action: string, payload: Record<string, unknown>) {
+  try {
+    const signedJson = await signOutbound({ ...payload, action }, action);
+    if (controlChannel?.readyState === 'open') {
+      controlChannel.send(signedJson);
+      return;
+    }
+
+    const signedPayload = parseJsonObject(signedJson);
+    if (signedPayload && signalingClient) {
+      signalingClient.sendSignal('control', signedPayload);
+    }
+  } catch (error) {
+    console.warn('[mobile-companion] failed to send signed control response:', error);
+  }
+}
+
+async function handleMobileControlPayload(input: unknown) {
+  const message = extractMobileControlMessage(input);
+  if (!message) {
+    console.warn('[mobile-companion] ignored malformed control message');
+    return;
+  }
+
+  const verifyResult = await verifyInbound({ rawJson: message.rawJson, id: message.id });
+  if (!verifyResult.ok) {
+    console.warn('[mobile-companion] rejected control message:', verifyResult.reason);
+    return;
+  }
+
+  if (message.action === 'heartbeat') {
+    await sendControlToMobile('heartbeat_ack', {
+      timestamp:
+        typeof message.payload['timestamp'] === 'number'
+          ? message.payload['timestamp']
+          : Date.now(),
+      receivedAt: Date.now(),
+    });
+    return;
+  }
+
+  window.dispatchEvent(
+    new CustomEvent('mobile-companion:control', {
+      detail: {
+        action: message.action,
+        payload: message.payload,
+      },
+    }),
+  );
+}
 
 const IDLE_CONNECTION_STATE: Partial<MobileCompanionState> = {
   status: 'idle',
@@ -113,8 +237,10 @@ export const useConnectionStore = create<MobileCompanionState>()(
         }
       };
 
-      const handleControlEvent = (_message: MessageEvent<string>) => {
-        // Control event handling not yet implemented
+      const handleControlEvent = (message: MessageEvent<string>) => {
+        handleMobileControlPayload(message.data).catch((error) => {
+          console.warn('[mobile-companion] control message handling failed:', error);
+        });
       };
 
       const handleSignalingEvent = async (event: SignalingEvent) => {
@@ -164,7 +290,9 @@ export const useConnectionStore = create<MobileCompanionState>()(
               const candidate = new RTCIceCandidate(event.payload as RTCIceCandidateInit);
               await peerConnection.addIceCandidate(candidate);
             } else if (event.kind === 'control') {
-              // handle control events
+              handleMobileControlPayload(event.payload).catch((error) => {
+                console.warn('[mobile-companion] relayed control handling failed:', error);
+              });
             }
             break;
           case 'peer_left':
@@ -288,16 +416,20 @@ export const useConnectionStore = create<MobileCompanionState>()(
           wsUrl: null,
         });
         try {
-          const response = await fetch(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
+          const session = cloudAccountAuth.getSession();
+          if (!session?.access_token) {
+            throw new Error('Sign in to pair a mobile companion.');
+          }
+
+          const response = await fetch(`${API_BASE_URL.replace(/\/+$/, '')}/api/pair/initiate`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              Authorization: `Bearer ${session.access_token}`,
+              'X-Requested-With': 'XMLHttpRequest',
             },
             body: JSON.stringify({
-              metadata: {
-                platform: 'desktop',
-                requestedAt: Date.now(),
-              },
+              initiator: 'desktop',
             }),
           });
           if (!response.ok) {
@@ -308,6 +440,7 @@ export const useConnectionStore = create<MobileCompanionState>()(
             wsUrl: payload.signaling.wsUrl,
             code: payload.code,
             role: 'desktop',
+            pairToken: payload.pairTokens.desktop,
             metadata: {
               platform: 'desktop',
             },

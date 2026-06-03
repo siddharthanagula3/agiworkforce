@@ -4,7 +4,7 @@ use std::env;
 use std::time::Duration;
 
 use crate::markdown::MarkdownRenderer;
-use crate::provider;
+use crate::model_catalog;
 
 // ---------------------------------------------------------------------------
 // Color depth detection
@@ -126,7 +126,7 @@ pub fn create_progress_bar(total: u64, message: &str) -> ProgressBar {
 /// ```text
 /// Model             Provider   Cost
 /// ─────────────────────────────────
-/// claude-opus-4-6   anthropic  $15.00
+/// claude-opus-4-8   anthropic  $15.00
 /// gpt-5.5           openai     $1.25
 /// ```
 #[allow(dead_code)]
@@ -239,12 +239,10 @@ pub fn print_error(message: &str) {
 // Cost display
 // ---------------------------------------------------------------------------
 
-/// Rough cost estimation per 1M tokens (USD) for well-known models.
+/// Catalog cost per 1M tokens (USD) for known models.
 /// Returns (input_cost_per_1m, output_cost_per_1m).
 pub fn model_pricing(model: &str) -> (f64, f64) {
-    provider::find_model(model)
-        .map(|info| (info.input_price_per_1m, info.output_price_per_1m))
-        .unwrap_or((0.0, 0.0))
+    model_catalog::pricing(model)
 }
 
 /// Format a cost summary string.
@@ -520,8 +518,8 @@ mod tests {
     }
 
     #[test]
-    fn test_model_pricing_openai_gpt54() {
-        // gpt-5.4 is not in models.json; use gpt-5.5 (the flagship OpenAI model, input $5/output $30)
+    fn test_model_pricing_openai_flagship() {
+        // Current OpenAI flagship pricing comes from models.json.
         let (i, o) = model_pricing("gpt-5.5");
         assert_eq!(i, 5.0);
         assert_eq!(o, 30.0);
@@ -529,14 +527,6 @@ mod tests {
 
     #[test]
     fn test_model_pricing_openai_gpt54_mini() {
-        let (i, o) = model_pricing("gpt-5.4-mini");
-        assert_eq!(i, 0.75);
-        assert_eq!(o, 4.50);
-    }
-
-    #[test]
-    fn test_model_pricing_openai_gpt54_pro() {
-        // gpt-5.4-pro is not in models.json; use gpt-5.4-mini (balanced OpenAI model, input $0.75/output $4.50)
         let (i, o) = model_pricing("gpt-5.4-mini");
         assert_eq!(i, 0.75);
         assert_eq!(o, 4.50);
@@ -561,7 +551,7 @@ mod tests {
     #[test]
     fn test_model_pricing_case_insensitive() {
         let (i1, o1) = model_pricing("Claude-Opus-4-6");
-        let (i2, o2) = model_pricing("claude-opus-4-6");
+        let (i2, o2) = model_pricing("claude-opus-4-8");
         assert_eq!(i1, i2);
         assert_eq!(o1, o2);
     }
@@ -592,7 +582,7 @@ mod tests {
 
     #[test]
     fn test_format_cost_zero_tokens() {
-        let result = format_cost("gpt-5.4", 0, 0);
+        let result = format_cost("unknown-local-model", 0, 0);
         // 0 tokens of anything is $0.00 — treated as local/zero
         assert!(result.contains("no cost"));
     }
@@ -633,17 +623,16 @@ mod tests {
     #[test]
     fn test_all_pricing_branches_non_negative() {
         let models = [
-            "claude-opus-4-6",
+            "claude-opus-4-8",
             "claude-sonnet-4-6",
             "claude-haiku-4-5-20251001",
             "gpt-5.4-mini",
-            "gpt-5.4",
-            "gpt-5.4-pro",
+            "gpt-5.5",
             "gemini-3.1-flash-lite",
             "gemini-3.1-pro-preview",
             "mistral-large-2512",
             "mistral-medium-2508",
-            "grok-4-0709",
+            "grok-4.3",
             "deepseek-v4-pro",
             "deepseek-v4-flash",
             "unknown-local-model",
@@ -875,7 +864,7 @@ mod tests {
     fn test_format_table_alignment() {
         let headers = &["Model", "Cost"];
         let rows = vec![
-            vec!["gpt-5.4".to_string(), "$2.50".to_string()],
+            vec!["gpt-5.5".to_string(), "$2.50".to_string()],
             vec!["claude-opus-4".to_string(), "$15.00".to_string()],
         ];
         let result = format_table(headers, &rows);
@@ -885,7 +874,7 @@ mod tests {
         // Widest cell in col 0 is "claude-opus-4" (13 chars), so all rows
         // in col 0 should be padded to at least that width.
         assert!(lines[0].starts_with("Model"));
-        assert!(lines[2].starts_with("gpt-5.4"));
+        assert!(lines[2].starts_with("gpt-5.5"));
         assert!(lines[3].starts_with("claude-opus-4"));
     }
 

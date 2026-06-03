@@ -65,7 +65,10 @@ impl ManifestFormat {
 /// Priority-ordered list of manifest paths to probe inside a plugin
 /// directory. The first path that exists + parses wins.
 pub const MANIFEST_PATHS: &[(ManifestFormat, &str)] = &[
-    (ManifestFormat::Agiworkforce, ".agiworkforce-plugin/plugin.json"),
+    (
+        ManifestFormat::Agiworkforce,
+        ".agiworkforce-plugin/plugin.json",
+    ),
     (ManifestFormat::ClaudeCode, ".claude-plugin/plugin.json"),
     (ManifestFormat::Codex, ".codex-plugin/plugin.json"),
     (ManifestFormat::LegacyApp, ".app.json"),

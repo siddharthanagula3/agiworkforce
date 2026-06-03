@@ -8,6 +8,20 @@ static TEMPLATE_PLACEHOLDER_RE: LazyLock<regex::Regex> = LazyLock::new(|| {
     regex::Regex::new(r"\{\{(\w+)\}\}").expect("valid regex for template placeholders")
 });
 
+fn escape_template_value(raw: &str) -> String {
+    raw.chars()
+        .filter(|&c| c == '\t' || c == '\n' || c == '\r' || !c.is_control())
+        .collect::<String>()
+        .replace("{{", "{ {")
+        .replace("}}", "} }")
+        .replace("<system>", "[removed]")
+        .replace("</system>", "[removed]")
+        .replace("<developer>", "[removed]")
+        .replace("</developer>", "[removed]")
+        .replace("ignore previous instructions", "[removed]")
+        .replace("ignore all previous instructions", "[removed]")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptTemplate {
     pub id: String,
@@ -294,8 +308,11 @@ Generate unit tests, integration tests, and edge case tests."#
         let mut prompt = template.template.clone();
 
         for (key, value) in variables {
+            if !template.variables.iter().any(|expected| expected == &key) {
+                return Err(format!("Unknown template variable: {}", key));
+            }
             let placeholder = format!("{{{{{}}}}}", key);
-            prompt = prompt.replace(&placeholder, &value);
+            prompt = prompt.replace(&placeholder, &escape_template_value(&value));
         }
 
         prompt = TEMPLATE_PLACEHOLDER_RE

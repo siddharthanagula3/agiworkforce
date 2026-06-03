@@ -13,20 +13,12 @@
 //! `screen_renderers.rs` (the text-only path) and a future `screen_views.rs`
 //! (the stateful path).
 //!
-//! Wiring into `tui::tui_app::run` is the next step (the event loop needs
-//! a `Option<Box<dyn InteractiveView>>` slot that intercepts key events
-//! before the regular input handler). Until that lands the module is a
-//! pure-Rust state-machine library locked under unit tests; the
-//! `#![allow(dead_code)]` covers the public surface.
-
-#![allow(dead_code)]
+//! The TUI event loop owns a `Option<Box<dyn InteractiveView>>` slot that
+//! intercepts key events before the regular input handler.
 
 /// Keys this layer cares about. We map from `crossterm::event::KeyEvent` at
 /// the event-loop boundary so views stay test-friendly without a crossterm
-/// dep in this module. Several variants are surface-only until the event
-/// loop wiring lands in a follow-up — `#[allow(dead_code)]` lets the trait
-/// stay forward-compatible.
-#[allow(dead_code)]
+/// dep in this module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyAction {
     Up,
@@ -46,8 +38,7 @@ pub enum KeyAction {
 }
 
 /// What the view wants the event loop to do after handling a key.
-/// `SideAction` is surface-only until views start producing them.
-#[allow(dead_code)]
+/// `SideAction` lets views request a host-owned operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewAction {
     /// Keep the view open; rerender on next frame.

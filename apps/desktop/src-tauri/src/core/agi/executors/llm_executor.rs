@@ -25,7 +25,7 @@
 //!     "prompt": "Analyze this code for potential security issues...",
 //!     "temperature": 0.3,
 //!     "max_tokens": 4000,
-//!     "model": "claude-sonnet-4-5"
+//!     "model": "claude-sonnet-4-6"
 //! }
 //! ```
 
@@ -557,15 +557,15 @@ mod tests {
         let executor = LlmExecutor::new(router);
 
         assert_eq!(
-            executor.infer_provider_from_model("claude-sonnet-4-5"),
+            executor.infer_provider_from_model("claude-sonnet-4-6"),
             Provider::Anthropic
         );
         assert_eq!(
-            executor.infer_provider_from_model("gpt-5.4-nano"),
+            executor.infer_provider_from_model("gpt-5.4-mini"),
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("gemini-3-pro-preview"),
+            executor.infer_provider_from_model("gemini-3.1-pro-preview"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -573,7 +573,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("grok-4"),
+            executor.infer_provider_from_model("grok-4.3"),
             Provider::ManagedCloud
         );
         assert_eq!(
@@ -585,7 +585,7 @@ mod tests {
             Provider::ManagedCloud
         );
         assert_eq!(
-            executor.infer_provider_from_model("glm-4.7"),
+            executor.infer_provider_from_model("glm-5.1"),
             Provider::ManagedCloud
         );
         assert_eq!(

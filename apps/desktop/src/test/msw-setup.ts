@@ -40,7 +40,7 @@ export const handlers = [
           text: 'This is a test response from Anthropic',
         },
       ],
-      model: 'claude-opus-4-6',
+      model: 'claude-opus-4-8',
       stop_reason: 'end_turn',
       usage: {
         input_tokens: 10,

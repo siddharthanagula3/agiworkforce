@@ -16,6 +16,76 @@ use super::history::build_assistant_message;
 use super::tools::{execute_mcp_tool, execute_team_tool, is_team_tool};
 use super::{AgentSession, TurnResult};
 
+/// Build a short, single-line summary of a tool call for the TUI tool cell
+/// (e.g. the command for `run_command`, the path for file tools). Carries no
+/// full output — capped to one line of <=80 chars.
+fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
+    let pick = |k: &str| args.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    let raw = match name {
+        "run_command" | "powershell" => pick("command"),
+        "read_file" | "write_file" | "edit_file" | "multiedit" | "list_directory"
+        | "notebook_edit" => pick("path"),
+        "search_files" | "grep_files" | "glob" => pick("pattern").or_else(|| pick("query")),
+        "web_search" => pick("query"),
+        "web_fetch" => pick("url"),
+        _ => None,
+    }
+    .unwrap_or_default();
+    let one_line = raw.replace('\n', " ");
+    if one_line.chars().count() > 80 {
+        format!("{}…", one_line.chars().take(79).collect::<String>())
+    } else {
+        one_line
+    }
+}
+
+/// Fire a tool lifecycle event to the TUI sink, if one is installed. A no-op on
+/// non-TUI surfaces (the `eprintln!` status lines remain the channel there), so
+/// exec/REPL/app-server/a2a output is unchanged.
+fn emit_tool_event(sink: Option<&super::ToolEventSink>, ev: crate::tui::app_event::TuiAppEvent) {
+    if let Some(sink) = sink {
+        (sink.0)(ev);
+    }
+}
+
+fn invalid_tool_arguments_block(tool_call: &ToolCallResponse) -> Option<ContentBlock> {
+    let is_invalid = tool_call
+        .arguments
+        .get(models::INVALID_TOOL_ARGS_MARKER)
+        .and_then(|value| value.as_bool())
+        .unwrap_or(false);
+    if !is_invalid {
+        return None;
+    }
+
+    let error = tool_call
+        .arguments
+        .get("error")
+        .and_then(|value| value.as_str())
+        .unwrap_or("malformed JSON arguments");
+    let raw = tool_call
+        .arguments
+        .get("raw")
+        .and_then(|value| value.as_str())
+        .unwrap_or("");
+
+    Some(ContentBlock::ToolResult {
+        tool_use_id: tool_call.id.clone(),
+        content: serde_json::json!({
+            "ok": false,
+            "error": "invalid_tool_arguments",
+            "tool": tool_call.name.as_str(),
+            "message": format!(
+                "Model produced invalid JSON arguments for tool `{}`: {}",
+                tool_call.name, error
+            ),
+            "raw": raw,
+        })
+        .to_string(),
+        is_error: true,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum PreToolUseOutcome {
     Proceed(serde_json::Value),
@@ -336,8 +406,17 @@ message -- revise and call `update_plan` again.\n\n",
                                 // If the session is Local and the fallback is a cloud provider,
                                 // restore state and break fail-closed — never egress Local
                                 // session history to the network silently.
+                                let Some(fallback_provider) =
+                                    crate::models::try_detect_provider(fallback_model)
+                                else {
+                                    last_err = anyhow::anyhow!(
+                                        "Fallback model '{}' is not recognized; refusing silent provider routing.",
+                                        fallback_model
+                                    );
+                                    continue;
+                                };
                                 self.model = fallback_model.clone();
-                                self.provider = crate::models::detect_provider(fallback_model);
+                                self.provider = fallback_provider;
                                 if let Err(boundary_err) = self.validate_privacy_boundary() {
                                     // Restore state so the session remains coherent.
                                     self.model = prev_model;
@@ -533,7 +612,9 @@ message -- revise and call `update_plan` again.\n\n",
                                     .first()
                                     .map(|tc| tc.arguments.clone()),
                                 tool_output: None,
-                                message: Some("user rejected loop-detection confirmation".to_string()),
+                                message: Some(
+                                    "user rejected loop-detection confirmation".to_string(),
+                                ),
                                 tool_execution: None,
                             },
                         )
@@ -608,6 +689,10 @@ message -- revise and call `update_plan` again.\n\n",
                         content: format!("Tool '{}' is not available in this session.", tc.name),
                         is_error: true,
                     });
+                    continue;
+                }
+                if let Some(block) = invalid_tool_arguments_block(tc) {
+                    result_blocks.push(block);
                     continue;
                 }
 
@@ -893,6 +978,10 @@ message -- revise and call `update_plan` again.\n\n",
                         });
                         continue;
                     }
+                    if let Some(block) = invalid_tool_arguments_block(tc) {
+                        result_blocks.push(block);
+                        continue;
+                    }
 
                     let effective_args = match run_pre_tool_use_hooks(&hcfg, &self.model, tc).await
                     {
@@ -946,6 +1035,14 @@ message -- revise and call `update_plan` again.\n\n",
                         });
                         continue;
                     }
+                    emit_tool_event(
+                        self.on_tool_event.as_ref(),
+                        crate::tui::app_event::TuiAppEvent::ToolStarted {
+                            call_id: tc.id.clone(),
+                            name: tc.name.clone(),
+                            summary: tool_event_summary(&tc.name, &effective_args),
+                        },
+                    );
                     runnable.push((tc.id.clone(), tc.name.clone(), effective_args));
                 }
 
@@ -953,10 +1050,7 @@ message -- revise and call `update_plan` again.\n\n",
                     require_confirmation: !self.skip_permissions,
                     auto_approve_safe: self.auto_approve_safe,
                     quiet: self.quiet,
-                    approval_callback: self
-                        .on_tool_approval
-                        .as_ref()
-                        .map(|sink| sink.0.clone()),
+                    approval_callback: self.on_tool_approval.as_ref().map(|sink| sink.0.clone()),
                 };
                 let futures = runnable.iter().map(|tc| {
                     let legacy = super::executor::ToolCall {
@@ -992,6 +1086,19 @@ message -- revise and call `update_plan` again.\n\n",
                         };
                         eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
                     }
+
+                    emit_tool_event(
+                        self.on_tool_event.as_ref(),
+                        crate::tui::app_event::TuiAppEvent::ToolCompleted {
+                            call_id: tool_use_id.clone(),
+                            status: if tool_result.success {
+                                crate::tui::app_event::ToolStatus::Succeeded
+                            } else {
+                                crate::tui::app_event::ToolStatus::Failed
+                            },
+                            output: tool_result.output.chars().take(200).collect::<String>(),
+                        },
+                    );
 
                     hooks::run_hooks(
                         &hcfg,
@@ -1043,6 +1150,10 @@ message -- revise and call `update_plan` again.\n\n",
                         content: format!("Tool '{}' is not available in this session.", tc.name),
                         is_error: true,
                     });
+                    continue;
+                }
+                if let Some(block) = invalid_tool_arguments_block(tc) {
+                    result_blocks.push(block);
                     continue;
                 }
 
@@ -1121,6 +1232,15 @@ message -- revise and call `update_plan` again.\n\n",
                     continue;
                 }
 
+                emit_tool_event(
+                    self.on_tool_event.as_ref(),
+                    crate::tui::app_event::TuiAppEvent::ToolStarted {
+                        call_id: tc.id.clone(),
+                        name: tc.name.clone(),
+                        summary: tool_event_summary(&tc.name, &effective_args),
+                    },
+                );
+
                 let tool_result = if tc.name == "update_plan" {
                     let payload = self.handle_update_plan(&effective_args);
                     let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1178,6 +1298,19 @@ message -- revise and call `update_plan` again.\n\n",
                     };
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
                 }
+
+                emit_tool_event(
+                    self.on_tool_event.as_ref(),
+                    crate::tui::app_event::TuiAppEvent::ToolCompleted {
+                        call_id: tc.id.clone(),
+                        status: if tool_result.success {
+                            crate::tui::app_event::ToolStatus::Succeeded
+                        } else {
+                            crate::tui::app_event::ToolStatus::Failed
+                        },
+                        output: tool_result.output.chars().take(200).collect::<String>(),
+                    },
+                );
 
                 let post_results = hooks::run_hooks(
                     &hcfg,
@@ -1580,8 +1713,8 @@ mod tests {
         assert!(session.validate_privacy_boundary().is_ok());
 
         // Simulate the pre-fix fallback loop mutation: set provider to cloud.
-        let cloud_provider = crate::models::detect_provider("claude-sonnet-4-5");
-        session.model = "claude-sonnet-4-5".to_string();
+        let cloud_provider = crate::models::detect_provider("claude-sonnet-4-6");
+        session.model = "claude-sonnet-4-6".to_string();
         session.provider = cloud_provider;
 
         // The guard must catch this — stream_completion must never be reached.
@@ -1598,7 +1731,7 @@ mod tests {
             "error must identify the boundary violation; got: {err_msg}"
         );
         assert!(
-            err_msg.contains("claude-sonnet-4-5"),
+            err_msg.contains("claude-sonnet-4-6"),
             "error must name the offending model; got: {err_msg}"
         );
     }

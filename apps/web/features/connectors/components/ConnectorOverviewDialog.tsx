@@ -179,15 +179,10 @@ export function ConnectorOverviewDialog({
             </Button>
             <Button
               size="sm"
-              className={cn(
-                'h-8 px-4 text-xs',
-                connector.exclusive
-                  ? 'bg-amber-500 text-black hover:bg-amber-400'
-                  : 'bg-primary text-primary-foreground hover:bg-primary/90',
-              )}
+              className="h-8 bg-primary px-4 text-xs text-primary-foreground hover:bg-primary/90"
               onClick={handleConnect}
             >
-              {connector.exclusive ? 'Enable' : 'Connect'}
+              Connect
             </Button>
           </div>
         </div>

@@ -65,8 +65,10 @@ describe('model catalog helpers', () => {
     const costRates = getModelCostRates([openaiModel, 'claude-sonnet-4-6']);
 
     expect(aliasId).toBe('claude-sonnet-4.6');
-    // legacy codex alias resolves to a current catalog model (not pinned to an id)
-    expect(getModelMetadataById(codexId)).not.toBeNull();
+    // Legacy phantom Codex selections are non-selectable, but saved chats/config
+    // migrate forward to the current OpenAI flagship.
+    expect(codexId).toBe(requireProviderDefaultModel('openai'));
+    expect(getModelMetadataById(codexId)).toMatchObject({ provider: 'openai' });
     expect(contextLimits[openaiModel]).toBeGreaterThan(0);
     expect(contextLimits['claude-sonnet-4.6']).toBeGreaterThan(0);
     expect(costRates[openaiModel]).toMatchObject({ provider: 'openai' });
@@ -87,7 +89,7 @@ describe('model catalog helpers', () => {
     expect(detectProviderFromModelId('claude-sonnet-4-6')).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'hobby')).toBe('gemini-3.1-flash-lite');
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe('gpt-5.4-mini');
-    expect(resolveAutoModeModel('auto-premium', 'max')).toBe('gemini-3.1-pro-preview');
+    expect(resolveAutoModeModel('auto-premium', 'max')).toBe('gemini-3.5-flash');
     expect(resolveAutoModeModel('auto-premium', 'hobby')).toBe('gemini-3.1-flash-lite');
   });
 
@@ -109,19 +111,18 @@ describe('model catalog helpers', () => {
     expect(coreOptions.some((entry) => entry.id === requireProviderDefaultModel('openai'))).toBe(
       true,
     );
-    // gpt-5.4-codex was a phantom (never a real OpenAI model) — must stay absent.
+    // gpt-5.4-codex was a phantom (never a real OpenAI model) — it may be a
+    // migration alias, but must stay absent from picker options.
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-codex')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'kimi-k2.6')).toBe(true);
     expect(coreOptions.some((entry) => entry.id === 'gpt-5.4-nano')).toBe(false);
     expect(coreOptions.some((entry) => entry.id === 'sonar-pro')).toBe(false);
   });
 
-  it('canonicalizes legacy nano aliases onto the current small model (nano removed)', () => {
-    // gpt-5.4-nano was removed from the catalog; legacy nano ids now resolve to
-    // the kept small model so existing configs keep working.
-    const target = normalizeModelId('gpt-5-nano');
-    expect(getModelMetadataById(target)).not.toBeNull();
-    expect(normalizeModelId('gpt-5.4-nano')).toBe(target);
+  it('migrates legacy removed aliases without making them selectable', () => {
+    expect(getModelMetadataById('gpt-5-nano')).toBeNull();
+    expect(getModelMetadataById('gpt-5.4-nano')).toMatchObject({ id: 'gpt-5.4-mini' });
+    expect(normalizeModelId('gpt-5.4-codex-high')).toBe(requireProviderDefaultModel('openai'));
   });
 
   it('classifies provider surfaces and managed cloud provider visibility', () => {
@@ -158,7 +159,7 @@ describe('model catalog helpers', () => {
   it('defines tier policy and slot routing from one shared source', () => {
     expect(getRoutingSlotModel('general_fast')).toBe('gemini-3.1-flash-lite');
     expect(getRoutingSlotModel('general_balanced')).toBe('gpt-5.4-mini');
-    expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-chat');
+    expect(getRoutingSlotModel('coding_fast')).toBe('deepseek-v4-flash');
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
     expect(getRoutingSlotModel('search_fast')).toBe('sonar');
     expect(getRoutingSlotModel('search_premium')).toBe('sonar-deep-research');
@@ -221,10 +222,8 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     it('reasoning task → reasoning_premium_pro slot (Kimi K2.6)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning')).toBe('kimi-k2.6');
     });
-    it('multimodal task → multimodal_pro slot (Gemini 3.1 Pro)', () => {
-      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe(
-        'gemini-3.1-pro-preview',
-      );
+    it('multimodal task → multimodal_pro slot (Gemini 3.5 Flash)', () => {
+      expect(resolveAutoModeModel('auto-balanced', 'pro', 'multimodal')).toBe('gemini-3.5-flash');
     });
     it('long_context task → long_context_pro slot (Gemini 3.1 Pro)', () => {
       expect(resolveAutoModeModel('auto-balanced', 'pro', 'long_context')).toBe(
@@ -257,9 +256,9 @@ describe('resolveAutoModeModel — task-aware routing', () => {
   });
 
   describe('Hobby tier task-aware routing (separate from Pro map)', () => {
-    it('coding → escalation_coding slot (GLM-4.7), NOT coding_premium_pro', () => {
+    it('coding → escalation_coding slot (GLM-5.1), NOT coding_premium_pro', () => {
       const result = resolveAutoModeModel('auto-balanced', 'hobby', 'coding');
-      expect(result).toBe('glm-4.7');
+      expect(result).toBe('glm-5.1');
       expect(result).not.toBe('claude-sonnet-4.6');
     });
     it('reasoning → reasoning_premium slot (DeepSeek V4 Flash), NOT reasoning_premium_pro', () => {

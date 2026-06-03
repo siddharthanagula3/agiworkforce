@@ -32,9 +32,15 @@ pub enum ToolStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TuiAppEvent {
-    InputSubmitted { text: String },
-    InputQueued { text: String },
-    AgentDelta { text: String },
+    InputSubmitted {
+        text: String,
+    },
+    InputQueued {
+        text: String,
+    },
+    AgentDelta {
+        text: String,
+    },
     ToolStarted {
         call_id: String,
         name: String,
@@ -55,16 +61,28 @@ pub enum TuiAppEvent {
         request_id: Uuid,
         decision: ApprovalDecision,
     },
-    PanelOpened { view_id: String },
-    PanelClosed { view_id: String },
-    SessionChanged { session_id: Option<String> },
-    SettingsChanged { key: String },
-    FileReferenceInserted { path: PathBuf },
+    PanelOpened {
+        view_id: String,
+    },
+    PanelClosed {
+        view_id: String,
+    },
+    SessionChanged {
+        session_id: Option<String>,
+    },
+    SettingsChanged {
+        key: String,
+    },
+    FileReferenceInserted {
+        path: PathBuf,
+    },
     Notification {
         level: NoticeLevel,
         message: String,
     },
-    FatalError { message: String },
+    FatalError {
+        message: String,
+    },
     RequestFrame,
 }
 
@@ -98,10 +116,7 @@ impl TuiAppEventSender {
     }
 }
 
-pub fn channel() -> (
-    TuiAppEventSender,
-    mpsc::UnboundedReceiver<TuiAppEvent>,
-) {
+pub fn channel() -> (TuiAppEventSender, mpsc::UnboundedReceiver<TuiAppEvent>) {
     let (tx, rx) = mpsc::unbounded_channel();
     (TuiAppEventSender::new(tx), rx)
 }

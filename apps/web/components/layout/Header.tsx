@@ -67,9 +67,14 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="agi-top-link">
-              {t('navSignIn')}
-            </Link>
+            <>
+              <Link href="/chat" className="agi-top-link">
+                Try AGI
+              </Link>
+              <Link href="/login" className="agi-top-link">
+                {t('navSignIn')}
+              </Link>
+            </>
           )}
           <Link href="/download" className="agi-top-cta">
             {t('navInstall')}
@@ -127,9 +132,14 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
-              {t('navSignIn')}
-            </Link>
+            <>
+              <Link href="/chat" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
+                Try AGI
+              </Link>
+              <Link href="/login" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
+                {t('navSignIn')}
+              </Link>
+            </>
           )}
           <Link href="/download" className="agi-top-cta" onClick={() => setIsMenuOpen(false)}>
             {t('navInstall')}

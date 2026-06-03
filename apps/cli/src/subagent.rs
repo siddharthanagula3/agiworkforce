@@ -388,7 +388,17 @@ async fn run_subagent(
     prompt: &str,
     skip_permissions: bool,
 ) -> Result<String> {
-    let mut session = crate::agent::AgentSession::new(model, sys_context, None);
+    let mut session = crate::agent::AgentSession::new_checked(
+        model,
+        sys_context,
+        None,
+        crate::models::selection_provider_override(
+            model,
+            &config.default.model,
+            &config.default.provider,
+            None,
+        ),
+    )?;
     session.skip_permissions = skip_permissions;
     // Subagents get a reasonable max turns to avoid runaway loops
     session.max_turns = Some(15);

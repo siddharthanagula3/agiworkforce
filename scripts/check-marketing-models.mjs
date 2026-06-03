@@ -43,8 +43,9 @@ function normalize(id) {
   return id.replace(/(?<=\d)-(?=\d)/g, '.');
 }
 
-// All IDs that are known to the catalog (models section = primary, plus
-// aliases from canonicalization maps and modelPresets values).
+// All IDs that are known to the catalog for public/marketing copy. Legacy
+// canonicalization aliases are intentionally excluded: they are accepted only
+// as backend migration inputs, never as current public model names.
 const validIdsRaw = new Set();
 
 // models section (primary definitions)
@@ -52,12 +53,11 @@ for (const key of Object.keys(catalog.models ?? {})) {
   validIdsRaw.add(key);
 }
 
-// providers: defaultModel, taskRouting values, canonicalization keys+values
+// providers: defaultModel, taskRouting values, canonicalization targets
 for (const provider of Object.values(catalog.providers ?? {})) {
   if (provider.defaultModel) validIdsRaw.add(provider.defaultModel);
   for (const mid of Object.values(provider.taskRouting ?? {})) validIdsRaw.add(mid);
-  for (const [alias, canonical] of Object.entries(provider.canonicalization ?? {})) {
-    validIdsRaw.add(alias);
+  for (const canonical of Object.values(provider.canonicalization ?? {})) {
     validIdsRaw.add(canonical);
   }
 }

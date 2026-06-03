@@ -494,7 +494,7 @@ mod tests {
         // Write files on source
         fs::write(
             src.path().join("config.toml"),
-            "[default]\nmodel = \"claude-opus-4-6\"\n",
+            "[default]\nmodel = \"claude-opus-4-8\"\n",
         )
         .unwrap();
         fs::write(src.path().join("INSTRUCTIONS.md"), "# Source instructions").unwrap();
@@ -510,7 +510,7 @@ mod tests {
 
         // Verify files exist on destination
         let dst_config = fs::read_to_string(dst.path().join("config.toml")).unwrap();
-        assert!(dst_config.contains("claude-opus-4-6"));
+        assert!(dst_config.contains("claude-opus-4-8"));
     }
 
     #[test]
@@ -656,7 +656,7 @@ mod tests {
     #[test]
     fn test_merge_toml_adds_new_keys() {
         let local = b"[default]\nmodel = \"gpt-5.5\"\n";
-        let remote = "[default]\nmodel = \"claude-opus-4-6\"\nstream = true\n\n[providers.new]\napi_key_env = \"NEW_KEY\"\n";
+        let remote = "[default]\nmodel = \"claude-opus-4-8\"\nstream = true\n\n[providers.new]\napi_key_env = \"NEW_KEY\"\n";
         let merged = ConfigSync::merge_toml(local, remote).unwrap();
         // Local model should be preserved
         assert!(merged.contains("gpt-5.5"));

@@ -8,11 +8,12 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { requireCurrentUserId } from '@/lib/server/neon-chat';
 
 /**
  * POST /api/waitlist/cloud-managed
  *
- * Unauthenticated waitlist signup for the Cloud Managed private beta.
+ * Account-bound waitlist signup for the Cloud Managed private beta.
  * Persists to the `cloud_managed_waitlist` table (see apps/web/db/neon/).
  * Fails closed if persistence is unavailable; waitlist signups must never be
  * acknowledged without durable storage.
@@ -32,6 +33,10 @@ type WaitlistSource = 'byok' | 'sync' | 'billing' | 'mobile' | 'other';
 
 const VALID_SOURCES = new Set<WaitlistSource>(['byok', 'sync', 'billing', 'mobile', 'other']);
 
+interface WaitlistRankRow {
+  rank: number | string | null;
+}
+
 function isValidSource(value: unknown): value is WaitlistSource {
   return typeof value === 'string' && VALID_SOURCES.has(value as WaitlistSource);
 }
@@ -50,6 +55,8 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   // The unauthenticated PII intake warrants a tighter limit than 'default'.
   const rateLimitResponse = await withRateLimit(request, 'waitlist');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const userId = await requireCurrentUserId();
 
   let body: unknown;
   try {
@@ -71,12 +78,24 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
 
   try {
     await db.execute(
-      `insert into cloud_managed_waitlist (email, source, joined_at, updated_at)
-       values ($1, $2, $3, $4)
+      `insert into cloud_managed_waitlist (user_id, email, source, joined_at, updated_at)
+       values ($1, $2, $3, $4, $5)
        on conflict (email, source)
-       do update set updated_at = excluded.updated_at`,
-      [email, source, now, now],
+       do update set
+         user_id = excluded.user_id,
+         updated_at = excluded.updated_at`,
+      [userId, email, source, now, now],
     );
+    const rankRows = await db.query<WaitlistRankRow>(
+      'select greatest(count(*) - 1, 0)::int as rank from cloud_managed_waitlist',
+      [],
+    );
+    const rank = Number(rankRows[0]?.rank ?? 0);
+    return NextResponse.json({
+      ok: true,
+      joined: true,
+      rank: Number.isFinite(rank) ? rank : 0,
+    });
   } catch (err) {
     const pgErr = err as { code?: string };
     if (pgErr?.code === '42P01') {
@@ -88,8 +107,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     console.warn('[waitlist/cloud-managed] DB unreachable; refusing signup.', { source });
     throw createError.internal('Cloud waitlist storage is unavailable');
   }
-
-  return NextResponse.json({ ok: true, joined: true });
 }
 
 export const POST = withErrorHandler(handlePost);

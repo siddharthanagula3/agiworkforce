@@ -11,6 +11,11 @@
   "engines": {
     "node": ">=18"
   },
+  "scripts": {
+    "test": "node --test",
+    "audit": "npm audit --omit=dev --omit=optional",
+    "package-check": "node scripts/package-check.mjs"
+  },
   "files": [
     "bin",
     "vendor",

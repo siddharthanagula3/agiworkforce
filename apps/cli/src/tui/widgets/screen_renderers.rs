@@ -316,8 +316,7 @@ pub fn render_skills(skills: &[SkillSummary]) -> String {
     let body = if skills.is_empty() {
         vec![
             "  No skills found.".to_string(),
-            "  Create skills in .agiworkforce/skills/ or ~/.agiworkforce/skills/."
-                .to_string(),
+            "  Create skills in .agiworkforce/skills/ or ~/.agiworkforce/skills/.".to_string(),
         ]
     } else {
         let mut b = vec![
@@ -579,8 +578,7 @@ pub fn render_ide(available_ides: &[String]) -> String {
         vec![
             "  Connect to an IDE for integrated development features.".to_string(),
             String::new(),
-            "  No available IDEs detected. Make sure your IDE has the AGI extension or"
-                .to_string(),
+            "  No available IDEs detected. Make sure your IDE has the AGI extension or".to_string(),
             "  plugin installed and is running.".to_string(),
         ]
     } else {

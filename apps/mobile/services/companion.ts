@@ -29,8 +29,8 @@ const RECONNECT_COUNTDOWN_SECONDS = 15;
 // QR Code Helpers
 // ---------------------------------------------------------------------------
 
-/** Pattern for valid pairing codes: `agiw:` prefix + 6-12 alphanumeric chars (case-insensitive input accepted) */
-const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{6,12}$/;
+/** Pattern for valid pairing QR payloads: `agiw:<code>` or `agiw:<code>:<64-hex-role-token>`. */
+const PAIRING_CODE_PATTERN = /^agiw:[A-Za-z0-9]{6,12}(?::[a-fA-F0-9]{64})?$/;
 
 /** Pattern for raw codes without prefix: 6-12 alphanumeric chars (case-insensitive input accepted) */
 const RAW_CODE_PATTERN = /^[A-Za-z0-9]{6,12}$/;
@@ -50,7 +50,7 @@ export function isValidPairingCode(code: string): boolean {
 export function extractPairingCode(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('agiw:')) {
-    return trimmed.slice(5);
+    return trimmed.slice(5).split(':')[0] ?? '';
   }
   return trimmed;
 }
@@ -59,19 +59,35 @@ export function extractPairingCode(raw: string): string {
 // Control Message Builders
 // ---------------------------------------------------------------------------
 
+export interface ApprovalResponsePayload {
+  requestId: string;
+  approved: boolean;
+  respondedAt: string;
+  reason?: string;
+}
+
+export function buildApprovalResponsePayload(
+  requestId: string,
+  approved: boolean,
+  reason?: string,
+): ApprovalResponsePayload {
+  return {
+    requestId,
+    approved,
+    respondedAt: new Date().toISOString(),
+    ...(reason ? { reason } : {}),
+  };
+}
+
 /**
  * Send an approval response back to the desktop.
  * This approves or rejects a pending tool execution.
  */
-export function sendApprovalResponse(requestId: string, approved: boolean): void {
+export function sendApprovalResponse(requestId: string, approved: boolean, reason?: string): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('approval_response', {
-    requestId,
-    approved,
-    respondedAt: new Date().toISOString(),
-  });
+  sendControl('approval_response', buildApprovalResponsePayload(requestId, approved, reason));
 }
 
 /**
@@ -82,7 +98,10 @@ export function requestAgentRefresh(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('request_agents_refresh');
+  sendControl('sync_request', {
+    reason: 'agent_refresh',
+    requestedAt: new Date().toISOString(),
+  });
 }
 
 /**
@@ -92,7 +111,8 @@ export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('agent_command', {
+  sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
+    kind: 'agent_command',
     agentId,
     command,
     sentAt: new Date().toISOString(),
@@ -107,7 +127,7 @@ export function sendHeartbeatPing(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('ping', {
+  sendControl('heartbeat', {
     timestamp: Date.now(),
   });
 }
@@ -290,7 +310,8 @@ export function sendEmergencyStop(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected' && status !== 'stale') return;
 
-  sendControl('emergency_stop', {
+  sendControl('cancel', {
+    scope: 'all',
     sentAt: new Date().toISOString(),
   });
 }

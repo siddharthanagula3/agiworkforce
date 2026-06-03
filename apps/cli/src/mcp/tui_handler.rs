@@ -10,8 +10,6 @@
 //!
 //! M-FINAL-B of v1.2.
 
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -120,11 +118,15 @@ impl ElicitationHandler for TuiElicitationHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp::elicitation::ElicitationMode;
 
     fn dummy_request() -> ElicitationRequest {
         ElicitationRequest {
             message: "Please confirm".into(),
             requested_schema: serde_json::json!({"type": "object"}),
+            mode: ElicitationMode::Form,
+            url: None,
+            elicitation_id: None,
         }
     }
 

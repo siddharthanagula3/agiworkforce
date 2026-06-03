@@ -15,7 +15,7 @@ import { tierAtLeast, TIER_ORDER } from '../integrations/tierResolver';
 
 describe('extractProvider', () => {
   it('identifies Anthropic models by claude- prefix', () => {
-    expect(extractProvider('claude-opus-4-6')).toBe('anthropic');
+    expect(extractProvider('claude-opus-4.8')).toBe('anthropic');
     expect(extractProvider('claude-sonnet-4.6')).toBe('anthropic');
     expect(extractProvider('claude-haiku-4.5')).toBe('anthropic');
   });
@@ -38,7 +38,7 @@ describe('extractProvider', () => {
   });
 
   it('identifies xAI models by grok- prefix', () => {
-    expect(extractProvider('grok-4')).toBe('xai');
+    expect(extractProvider('grok-4.3')).toBe('xai');
   });
 
   it('identifies DeepSeek models by deepseek- prefix', () => {
@@ -80,7 +80,7 @@ describe('guardProviderSwitch — same-provider switches are always allowed', ()
 
   for (const tier of TIERS) {
     it(`allows claude→claude on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4-6', 'claude-sonnet-4.6', tier)).toBe('allow');
+      expect(guardProviderSwitch('claude-opus-4.8', 'claude-sonnet-4.6', tier)).toBe('allow');
     });
 
     it(`allows gpt→gpt on tier=${tier}`, () => {
@@ -94,7 +94,7 @@ describe('guardProviderSwitch — auto-mode switches are always allowed', () => 
 
   for (const tier of TIERS) {
     it(`allows claude→auto-balanced on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4-6', 'auto-balanced', tier)).toBe('allow');
+      expect(guardProviderSwitch('claude-opus-4.8', 'auto-balanced', tier)).toBe('allow');
     });
 
     it(`allows auto-balanced→gpt on tier=${tier}`, () => {
@@ -109,7 +109,7 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
 
   for (const tier of BLOCKED_TIERS) {
     it(`blocks claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4-6', 'gpt-5.5', tier)).toBe('upgrade-required');
+      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier)).toBe('upgrade-required');
     });
 
     it(`blocks gpt→gemini on tier=${tier}`, () => {
@@ -119,13 +119,13 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
     });
 
     it(`blocks claude→grok on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4-6', 'grok-4', tier)).toBe('upgrade-required');
+      expect(guardProviderSwitch('claude-opus-4.8', 'grok-4.3', tier)).toBe('upgrade-required');
     });
   }
 
   for (const tier of ALLOWED_TIERS) {
     it(`allows claude→gpt on tier=${tier}`, () => {
-      expect(guardProviderSwitch('claude-opus-4-6', 'gpt-5.5', tier)).toBe('allow');
+      expect(guardProviderSwitch('claude-opus-4.8', 'gpt-5.5', tier)).toBe('allow');
     });
 
     it(`allows gpt→gemini on tier=${tier}`, () => {
@@ -136,11 +136,11 @@ describe('guardProviderSwitch — cross-provider switch gating', () => {
 
 describe('guardProviderSwitch — unknown provider does not trigger gate', () => {
   it('allows unknown→claude (unknown side is never gated)', () => {
-    expect(guardProviderSwitch('llama3', 'claude-opus-4-6', 'byok')).toBe('allow');
+    expect(guardProviderSwitch('llama3', 'claude-opus-4.8', 'byok')).toBe('allow');
   });
 
   it('allows claude→unknown on byok', () => {
-    expect(guardProviderSwitch('claude-opus-4-6', 'llama3', 'byok')).toBe('allow');
+    expect(guardProviderSwitch('claude-opus-4.8', 'llama3', 'byok')).toBe('allow');
   });
 });
 

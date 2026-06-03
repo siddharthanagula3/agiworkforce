@@ -2,7 +2,7 @@
  * Image Generation Service
  *
  * Handles image generation requests to the API gateway.
- * Supports multiple models (DALL-E 3, GPT Image 1, Stable Diffusion XL).
+ * Supports multiple models (GPT Image 2, GPT Image 1, Stable Diffusion XL).
  */
 
 import { api } from '@/services/api';

@@ -228,11 +228,13 @@ function ModelRow({
   isSelected,
   isLocked,
   onSelect,
+  onUpgradeRequest,
 }: {
   model: AIModel;
   isSelected: boolean;
   isLocked: boolean;
   onSelect?: () => void;
+  onUpgradeRequest?: () => void;
 }) {
   const rowContent = (
     <div
@@ -267,14 +269,17 @@ function ModelRow({
         )}
       </span>
       {isLocked && (
-        <a
-          href="/pricing"
-          onClick={(e) => e.stopPropagation()}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onUpgradeRequest?.();
+          }}
           className="ml-auto shrink-0 text-xs text-primary hover:underline"
           aria-label="Upgrade to unlock this model"
         >
           Upgrade
-        </a>
+        </button>
       )}
       {isSelected && !isLocked && (
         <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
@@ -305,12 +310,23 @@ interface ComposerFooterProps {
   showModelSelector?: boolean;
   /** When true, shows a search input inside the model dropdown (code surface only). */
   showModelSearch?: boolean;
+  onUpgradeRequest?: () => void;
+  /** When true, render the selected model as a locked status pill instead of a dropdown. */
+  lockModelSelector?: boolean;
+  /** Controls whether the response style selector is visible. */
+  showStyleSelector?: boolean;
+  /** Free-trial prompt usage label, e.g. "2/3 prompts left". */
+  trialUsageLabel?: string | null;
 }
 
 export function ComposerFooter({
   hint = 'Cmd+Enter to send · Enter for newline',
   showModelSelector = true,
   showModelSearch = false,
+  onUpgradeRequest,
+  lockModelSelector = false,
+  showStyleSelector = true,
+  trialUsageLabel,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -326,7 +342,10 @@ export function ComposerFooter({
   const tier = subscription?.tier ?? 'free';
 
   const selectedModel = getSelectedModel();
+  const lockedDisplayModel =
+    AVAILABLE_MODELS.find((model) => model.id === getBestAutoModeForTier('free')) ?? selectedModel;
   const dailyUsageLabel = useDailyUsageLabel();
+  const usageLabel = trialUsageLabel ?? dailyUsageLabel;
 
   // Partition into recommended / more, respecting current tier and search
   const { recommended, more, isSearching } = partitionModels(AVAILABLE_MODELS, tier, searchQuery);
@@ -335,7 +354,7 @@ export function ComposerFooter({
   const selectedInMore = more.some((m) => m.id === selectedModelId);
   const showMore = moreExpanded || selectedInMore || isSearching;
 
-  const selectedProviderKey = selectedModel.providerKey;
+  const selectedProviderKey = (lockModelSelector ? lockedDisplayModel : selectedModel).providerKey;
   const supportsAdaptive = modelSupportsThinking(selectedModel);
   const currentEffortDisabledReason = effortDisabledReason(selectedModel, thinkingEffort);
 
@@ -369,24 +388,25 @@ export function ComposerFooter({
       {/* Budget display — renders only when tokens have been used */}
       <BudgetTrackerDisplay className="mx-1" />
 
-      {/* Daily usage label — shown only for free tier when approaching limit */}
-      {dailyUsageLabel && (
+      {/* Usage label — trial prompt count takes precedence over daily-cost hints. */}
+      {usageLabel && (
         <div className="flex items-center gap-1.5 px-1">
           <span
             className={[
               'text-xs font-medium',
-              dailyUsageLabel === 'Daily limit reached' ? 'text-rose-400' : 'text-amber-400',
+              usageLabel === 'Daily limit reached' ? 'text-rose-400' : 'text-amber-400',
             ].join(' ')}
           >
-            {dailyUsageLabel}
+            {usageLabel}
           </span>
-          {dailyUsageLabel === 'Daily limit reached' && (
-            <a
-              href="/pricing"
+          {usageLabel === 'Daily limit reached' && (
+            <button
+              type="button"
+              onClick={onUpgradeRequest}
               className="text-xs text-amber-400 underline underline-offset-2 hover:text-amber-300"
             >
               Upgrade
-            </a>
+            </button>
           )}
         </div>
       )}
@@ -397,10 +417,22 @@ export function ComposerFooter({
 
         <div className="flex items-center gap-2">
           {/* Response style selector */}
-          <StyleSelector />
+          {showStyleSelector && <StyleSelector />}
 
           {/* Model selector */}
-          {showModelSelector && (
+          {showModelSelector && lockModelSelector && (
+            <button
+              type="button"
+              onClick={onUpgradeRequest}
+              className="flex items-center gap-1.5 rounded-md border border-border/50 bg-muted/35 px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/55 hover:text-foreground"
+              aria-label="Auto Economy is selected for the free web trial"
+            >
+              <ProviderLogo providerKey={selectedProviderKey} size={12} />
+              <span className="max-w-[150px] truncate">{lockedDisplayModel.name}</span>
+            </button>
+          )}
+
+          {showModelSelector && !lockModelSelector && (
             <Popover
               open={open}
               onOpenChange={(o) => {
@@ -461,6 +493,7 @@ export function ComposerFooter({
                         model={model}
                         isSelected={isSelected}
                         isLocked={model.isLocked}
+                        onUpgradeRequest={onUpgradeRequest}
                         onSelect={
                           model.isLocked
                             ? undefined
@@ -572,6 +605,7 @@ export function ComposerFooter({
                               model={model}
                               isSelected={isSelected}
                               isLocked={locked}
+                              onUpgradeRequest={onUpgradeRequest}
                               onSelect={
                                 locked
                                   ? undefined

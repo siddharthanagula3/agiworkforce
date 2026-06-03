@@ -133,7 +133,11 @@ async function request<T>(
   init: RequestInit = {},
   options: RequestOptions = {},
 ): Promise<T> {
-  const headers = { 'Content-Type': 'application/json', ...(await getAuthHeaders()) };
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Requested-With': 'XMLHttpRequest',
+    ...(await getAuthHeaders()),
+  };
   const controller = new AbortController();
   const timeout = options.timeout ?? TIMEOUTS.DEFAULT;
 

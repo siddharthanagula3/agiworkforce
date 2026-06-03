@@ -14,11 +14,11 @@
     "posttest": "pnpm build"
   },
   "dependencies": {
-    "@agiworkforce/types": "workspace:*",
     "@agiworkforce/llm-normalize": "workspace:*",
-    "@agiworkforce/llm-runtime": "workspace:*"
+    "@agiworkforce/llm-runtime": "workspace:*",
+    "@agiworkforce/types": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.8"
   }
 }

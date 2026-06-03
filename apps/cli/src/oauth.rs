@@ -427,10 +427,7 @@ pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry>
                 .map(|s| chrono::Utc::now().timestamp_millis() + (s as i64 * 1000))
                 .unwrap_or(0);
 
-            eprintln!(
-                "\n  {} Authenticated with AGI!",
-                "✓".green().bold()
-            );
+            eprintln!("\n  {} Authenticated with AGI!", "✓".green().bold());
 
             return Ok(crate::auth::AuthEntry::OAuth {
                 refresh: tokens.refresh_token.unwrap_or_default(),
@@ -575,7 +572,10 @@ mod open_chokepoint_tests {
             UserActionContext::non_user_initiated(),
         );
         external_open_spy::disable();
-        assert!(!opened, "non-user-initiated context must not open a browser");
+        assert!(
+            !opened,
+            "non-user-initiated context must not open a browser"
+        );
         assert_eq!(
             external_open_spy::open_count(),
             0,
@@ -592,7 +592,10 @@ mod open_chokepoint_tests {
             UserActionContext::user_initiated(),
         );
         external_open_spy::disable();
-        assert!(opened, "user-initiated open should reach the (spied) launcher");
+        assert!(
+            opened,
+            "user-initiated open should reach the (spied) launcher"
+        );
         assert_eq!(external_open_spy::open_count(), 1);
     }
 

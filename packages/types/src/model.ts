@@ -31,7 +31,7 @@ import type { Provider } from './model-catalog';
  *   enabled: true,
  *   apiKeyConfigured: true,
  *   baseUrl: 'https://api.anthropic.com',
- *   models: ['claude-opus-4-6', 'claude-sonnet-4-5'],
+ *   models: ['claude-opus-4.8', 'claude-sonnet-4.6'],
  * };
  * ```
  */
@@ -74,7 +74,7 @@ export interface ModelProvider {
  * @example
  * ```typescript
  * const config: ModelConfig = {
- *   modelId: 'claude-opus-4-6',
+ *   modelId: 'claude-opus-4.8',
  *   provider: 'anthropic',
  *   temperature: 0.7,
  *   maxTokens: 4096,
@@ -83,7 +83,7 @@ export interface ModelProvider {
  * ```
  */
 export interface ModelConfig {
-  /** Model identifier (e.g., `"claude-opus-4-6"`, `"gpt-5.4"`). */
+  /** Model identifier (e.g., `"claude-opus-4.8"`, `"gpt-5.5"`). */
   modelId: string;
 
   /** Provider identifier. */
@@ -132,10 +132,11 @@ export interface ModelConfig {
  * @example
  * ```typescript
  * const pricing: ModelPricing = {
- *   modelId: 'claude-opus-4-6',
+ *   modelId: 'claude-opus-4.8',
  *   inputCostPerMillion: 15.0,
  *   outputCostPerMillion: 75.0,
  *   cachedInputCostPerMillion: 1.5,
+ *   cacheWriteCostPerMillion: 18.75,
  *   currency: 'USD',
  * };
  * ```
@@ -152,6 +153,9 @@ export interface ModelPricing {
 
   /** Cost per million cached input tokens in USD (if supported). */
   cachedInputCostPerMillion?: number;
+
+  /** Cost per million cache write/create tokens in USD (if reported separately). */
+  cacheWriteCostPerMillion?: number;
 
   /** Currency code (default: `"USD"`). */
   currency?: string;

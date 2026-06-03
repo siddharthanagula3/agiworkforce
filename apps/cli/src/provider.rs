@@ -85,40 +85,41 @@ pub fn models_for_provider(provider: &str) -> Vec<ModelInfo> {
         .collect()
 }
 
+fn looks_like_local_ollama_model(model_id: &str) -> bool {
+    let lower = model_id.to_lowercase();
+    lower.starts_with("ollama:")
+        || (lower.contains(':') && !lower.contains('/'))
+        || lower.starts_with("llama")
+        || lower.starts_with("codellama")
+        || lower.starts_with("qwen2")
+        || lower.starts_with("qwen3")
+        || lower.starts_with("gemma")
+        || lower.starts_with("phi")
+        || lower.starts_with("deepseek-r1")
+        || lower.starts_with("nomic-embed")
+        || lower.contains("command-r")
+}
+
 /// Auto-detect the provider name from a model ID string.
 ///
-/// Uses prefix heuristics: "claude" -> anthropic, "gpt"/"o3"/"o1" -> openai,
-/// "gemini" -> google, "mistral"/"codestral" -> mistral, "grok" -> xai,
-/// "deepseek" -> deepseek. Falls back to the catalog for exact matches.
-/// Returns `None` for unrecognized models.
+/// Hosted model IDs must be known to the catalog. This deliberately avoids
+/// prefix-only guesses like `claude-*` or `gpt-*`, which made typoed or
+/// invented cloud model IDs look valid. Local Ollama-style names are accepted
+/// and then verified by the local provider at request time.
 pub fn provider_for_model(model_id: &str) -> Option<&'static str> {
     let lower = model_id.to_lowercase();
 
-    // Prefix-based detection (fast path, no catalog scan)
-    let prefix_match = if lower.starts_with("claude") {
-        Some("anthropic")
-    } else if lower.starts_with("gpt") || lower.starts_with("o3") || lower.starts_with("o1") {
-        Some("openai")
-    } else if lower.starts_with("gemini") {
-        Some("google")
-    } else if lower.starts_with("mistral") || lower.starts_with("codestral") {
-        Some("mistral")
-    } else if lower.starts_with("grok") {
-        Some("xai")
-    } else if lower.starts_with("deepseek") {
-        Some("deepseek")
-    } else if lower.starts_with("llama") || lower.starts_with("qwen") {
+    if let Some(model) = model_catalog::find(model_id) {
+        return Some(model.provider.as_str());
+    }
+    if let Some(model) = lower.strip_prefix("models/").and_then(model_catalog::find) {
+        return Some(model.provider.as_str());
+    }
+    if looks_like_local_ollama_model(&lower) {
         Some("ollama")
     } else {
         None
-    };
-
-    if prefix_match.is_some() {
-        return prefix_match;
     }
-
-    // Fall back to catalog lookup for non-standard names
-    model_catalog::provider_for(model_id)
 }
 
 /// Check whether a model supports tool use (function calling).
@@ -171,7 +172,7 @@ pub fn is_deprecated(model_id: &str) -> bool {
 ///
 /// Example output:
 /// ```text
-/// claude-opus-4-6  (anthropic)  [active]
+/// claude-opus-4-8  (anthropic)  [active]
 ///   Context window:  200K tokens
 ///   Max output:      32K tokens
 ///   Pricing:         $15.00 / $75.00 per 1M tokens (input/output)
@@ -255,6 +256,24 @@ pub fn format_model_list() -> String {
         "\nFlags: T=tools, V=vision, R=reasoning. !=deprecated, B=beta.\n\
          Prices per 1M tokens (input/output).\n",
     );
+    out
+}
+
+/// Format static catalog models plus live local models discovered at runtime.
+pub async fn format_model_list_with_local(config: &crate::config::CliConfig) -> String {
+    let mut out = format_model_list();
+    let probes = crate::local_models::discover_all(config).await;
+    let discovered = crate::local_models::discovered_models(&probes);
+    if !discovered.is_empty() {
+        out.push('\n');
+        out.push_str("INSTALLED LOCAL MODELS:\n");
+        for model in discovered {
+            out.push_str(&format!(
+                "  {:<12} {:<34} {}\n",
+                model.provider, model.id, model.base_url
+            ));
+        }
+    }
     out
 }
 
@@ -345,21 +364,19 @@ mod tests {
         // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json
         assert!(ids.contains(&"claude-opus-4-8"));
         assert!(ids.contains(&"claude-sonnet-4-6"));
-        // gpt-5.4 / gpt-5.4-pro are not in models.json; the live OpenAI models are gpt-5.5 and gpt-5.4-mini
+        // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(ids.contains(&"gpt-5.5"));
         assert!(ids.contains(&"gpt-5.4-mini"));
+        assert!(ids.contains(&"gemini-3.5-flash"));
         assert!(ids.contains(&"gemini-3.1-pro-preview"));
         assert!(ids.contains(&"gemini-3.1-flash-lite"));
-        // grok-4-0709 (apiModelId for grok-4) and grok-4-1-fast-reasoning are
-        // deprecated as of the Phase 3 catalog refresh; the live xAI flagship
-        // is grok-4.3. Catalog filters out deprecated entries by design.
+        // xAI flagship is sourced from models.json.
         assert!(ids.contains(&"grok-4.3"));
         assert!(ids.contains(&"mistral-large-2512"));
         assert!(ids.contains(&"mistral-medium-2508"));
         assert!(ids.contains(&"deepseek-v4-flash"));
         assert!(ids.contains(&"deepseek-v4-pro"));
-        assert!(ids.contains(&"llama3.1"));
-        assert!(ids.contains(&"qwen2.5"));
+        assert!(ids.contains(&"glm-5.1"));
     }
 
     #[test]
@@ -455,12 +472,11 @@ mod tests {
         // claude-opus-4.8 apiModelId = "claude-opus-4-8" per models.json (thinking=true)
         assert!(reasoning_ids.contains(&"claude-opus-4-8"));
         assert!(reasoning_ids.contains(&"claude-sonnet-4-6"));
-        // gpt-5.4 / gpt-5.4-pro removed from models.json; use gpt-5.5 and gpt-5.4-mini
+        // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(reasoning_ids.contains(&"gpt-5.5"));
         assert!(reasoning_ids.contains(&"gpt-5.4-mini"));
         assert!(reasoning_ids.contains(&"gemini-3.1-pro-preview"));
-        // grok-4-0709 was deprecated in the Phase 3 catalog refresh; the live
-        // xAI flagship is grok-4.3 which has reasoning enabled.
+        // xAI flagship has reasoning enabled.
         assert!(reasoning_ids.contains(&"grok-4.3"));
         assert!(reasoning_ids.contains(&"deepseek-v4-pro"));
     }
@@ -470,8 +486,6 @@ mod tests {
         let model = find_model("claude-haiku-4-5-20251001").unwrap();
         assert!(!model.supports_reasoning);
         let model = find_model("gemini-3.1-flash-lite").unwrap();
-        assert!(!model.supports_reasoning);
-        let model = find_model("llama3.1").unwrap();
         assert!(!model.supports_reasoning);
     }
 
@@ -510,7 +524,7 @@ mod tests {
 
     #[test]
     fn test_find_model_exact() {
-        let model = find_model("gpt-5.4");
+        let model = find_model("gpt-5.5");
         assert!(model.is_some());
         assert_eq!(model.unwrap().provider, "openai");
     }
@@ -532,16 +546,16 @@ mod tests {
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
         assert!(find_model("claude-opus-4-8").is_some());
         assert!(find_model("claude-sonnet-4-6").is_some());
-        // gpt-5.4 / gpt-5.4-pro are not in models.json; use gpt-5.5 and gpt-5.4-mini
+        // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(find_model("gpt-5.5").is_some());
         assert!(find_model("gpt-5.4-mini").is_some());
+        assert!(find_model("gemini-3.5-flash").is_some());
         assert!(find_model("gemini-3.1-pro-preview").is_some());
         assert!(find_model("gemini-3.1-flash-lite").is_some());
-        // grok-4-0709 was deprecated in Phase 3 — use grok-4.3 (live xAI flagship).
+        // xAI flagship is sourced from models.json.
         assert!(find_model("grok-4.3").is_some());
         assert!(find_model("mistral-large-2512").is_some());
-        assert!(find_model("llama3.1").is_some());
-        assert!(find_model("qwen2.5").is_some());
+        assert!(find_model("glm-5.1").is_some());
     }
 
     // ── models_for_provider ────────────────────────────────────
@@ -554,12 +568,12 @@ mod tests {
     }
 
     #[test]
-    fn test_models_for_provider_ollama() {
+    fn test_models_for_provider_ollama_is_live_discovery_only() {
         let ollama = models_for_provider("ollama");
-        assert_eq!(ollama.len(), 2);
-        let ids: Vec<&str> = ollama.iter().map(|m| m.id.as_str()).collect();
-        assert!(ids.contains(&"llama3.1"));
-        assert!(ids.contains(&"qwen2.5"));
+        assert!(
+            ollama.is_empty(),
+            "local Ollama models are discovered live by local_models.rs, not hardcoded in the cloud catalog"
+        );
     }
 
     #[test]
@@ -569,60 +583,66 @@ mod tests {
 
     // ── provider_for_model ─────────────────────────────────────
 
-    #[test]
-    fn test_provider_for_model_prefix_anthropic() {
-        assert_eq!(provider_for_model("claude-opus-4-6"), Some("anthropic"));
-        assert_eq!(provider_for_model("claude-sonnet-4-6"), Some("anthropic"));
-        assert_eq!(provider_for_model("claude-anything"), Some("anthropic"));
+    fn first_model_id_for(provider: &str) -> String {
+        models_for_provider(provider)
+            .first()
+            .unwrap_or_else(|| panic!("expected at least one {provider} model"))
+            .id
+            .clone()
     }
 
     #[test]
-    fn test_provider_for_model_prefix_openai() {
-        assert_eq!(provider_for_model("gpt-5.4"), Some("openai"));
-        assert_eq!(provider_for_model("gpt-5.4-mini"), Some("openai"));
-        assert_eq!(provider_for_model("gpt-5.4-pro"), Some("openai"));
-        assert_eq!(provider_for_model("o3"), Some("openai"));
-        assert_eq!(provider_for_model("o1-preview"), Some("openai"));
+    fn test_provider_for_model_catalog_anthropic() {
+        let model = first_model_id_for("anthropic");
+        assert_eq!(provider_for_model(&model), Some("anthropic"));
+        assert_eq!(provider_for_model("claude-anything"), None);
     }
 
     #[test]
-    fn test_provider_for_model_prefix_google() {
-        assert_eq!(provider_for_model("gemini-3.1-pro-preview"), Some("google"));
-        assert_eq!(provider_for_model("gemini-3.1-flash-lite"), Some("google"));
-        assert_eq!(provider_for_model("gemini-future"), Some("google"));
+    fn test_provider_for_model_catalog_openai() {
+        let model = first_model_id_for("openai");
+        assert_eq!(provider_for_model(&model), Some("openai"));
+        assert_eq!(provider_for_model("gpt-future"), None);
     }
 
     #[test]
-    fn test_provider_for_model_prefix_mistral() {
-        assert_eq!(provider_for_model("mistral-large-2512"), Some("mistral"));
-        assert_eq!(provider_for_model("mistral-large-latest"), Some("mistral"));
-        assert_eq!(provider_for_model("mistral-medium-2508"), Some("mistral"));
+    fn test_provider_for_model_catalog_google() {
+        let model = first_model_id_for("google");
+        assert_eq!(provider_for_model(&model), Some("google"));
+        assert_eq!(provider_for_model("gemini-future"), None);
     }
 
     #[test]
-    fn test_provider_for_model_prefix_xai() {
-        assert_eq!(provider_for_model("grok-4-0709"), Some("xai"));
-        assert_eq!(provider_for_model("grok-4-1-fast-reasoning"), Some("xai"));
-        assert_eq!(provider_for_model("grok-future"), Some("xai"));
+    fn test_provider_for_model_catalog_mistral() {
+        let model = first_model_id_for("mistral");
+        assert_eq!(provider_for_model(&model), Some("mistral"));
+        assert_eq!(provider_for_model("mistral-future"), None);
     }
 
     #[test]
-    fn test_provider_for_model_prefix_deepseek() {
-        assert_eq!(provider_for_model("deepseek-chat"), Some("deepseek"));
-        assert_eq!(provider_for_model("deepseek-reasoner"), Some("deepseek"));
+    fn test_provider_for_model_catalog_xai() {
+        let model = first_model_id_for("xai");
+        assert_eq!(provider_for_model(&model), Some("xai"));
+        assert_eq!(provider_for_model("grok-future"), None);
     }
 
     #[test]
-    fn test_provider_for_model_prefix_ollama() {
+    fn test_provider_for_model_catalog_deepseek() {
+        let model = first_model_id_for("deepseek");
+        assert_eq!(provider_for_model(&model), Some("deepseek"));
+        assert_eq!(provider_for_model("deepseek-future"), None);
+    }
+
+    #[test]
+    fn test_provider_for_model_local_ollama_names() {
         assert_eq!(provider_for_model("llama3.1"), Some("ollama"));
         assert_eq!(provider_for_model("qwen2.5"), Some("ollama"));
     }
 
     #[test]
     fn test_provider_for_model_case_insensitive() {
-        assert_eq!(provider_for_model("CLAUDE-OPUS-4-6"), Some("anthropic"));
-        assert_eq!(provider_for_model("GPT-5.4"), Some("openai"));
-        assert_eq!(provider_for_model("Gemini-3.1-Flash-Lite"), Some("google"));
+        let model = first_model_id_for("anthropic").to_uppercase();
+        assert_eq!(provider_for_model(&model), Some("anthropic"));
     }
 
     #[test]
@@ -639,7 +659,7 @@ mod tests {
         // gpt-5.5 is the current OpenAI flagship (tools=true)
         assert!(supports_tool_use("gpt-5.5"));
         assert!(supports_tool_use("gemini-3.1-pro-preview"));
-        // grok-4-0709 deprecated; use grok-4.3 (live xAI flagship).
+        // grok-4.3 deprecated; use grok-4.3 (live xAI flagship).
         assert!(supports_tool_use("grok-4.3"));
         assert!(supports_tool_use("deepseek-v4-pro"));
     }
@@ -672,13 +692,13 @@ mod tests {
 
     #[test]
     fn test_default_temperature_claude_none() {
-        assert_eq!(default_temperature("claude-opus-4-6"), None);
+        assert_eq!(default_temperature("claude-opus-4-8"), None);
         assert_eq!(default_temperature("claude-sonnet-4-6"), None);
     }
 
     #[test]
     fn test_default_temperature_openai_non_reasoning_none() {
-        assert_eq!(default_temperature("gpt-5.4"), None);
+        assert_eq!(default_temperature("gpt-5.5"), None);
         assert_eq!(default_temperature("gpt-5.4-mini"), None);
     }
 
@@ -700,7 +720,7 @@ mod tests {
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json (thinking=true)
         assert!(supports_reasoning("claude-opus-4-8"));
         assert!(supports_reasoning("claude-sonnet-4-6"));
-        // gpt-5.4 / gpt-5.4-pro not in models.json; gpt-5.5 and gpt-5.4-mini are current
+        // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(supports_reasoning("gpt-5.5"));
         assert!(supports_reasoning("gpt-5.4-mini"));
         assert!(supports_reasoning("gemini-3.1-pro-preview"));
@@ -722,10 +742,10 @@ mod tests {
 
     #[test]
     fn test_is_deprecated_false() {
-        assert!(!is_deprecated("claude-opus-4-6"));
-        assert!(!is_deprecated("gpt-5.4"));
+        assert!(!is_deprecated("claude-opus-4-8"));
+        assert!(!is_deprecated("gpt-5.5"));
         assert!(!is_deprecated("gemini-3.1-pro-preview"));
-        assert!(!is_deprecated("grok-4-0709"));
+        assert!(!is_deprecated("grok-4.3"));
         assert!(!is_deprecated("mistral-large-2512"));
     }
 
@@ -755,9 +775,24 @@ mod tests {
 
     #[test]
     fn test_format_model_detail_free_model() {
-        let model = find_model("llama3.1").unwrap();
+        let model = ModelInfo {
+            id: "local-ollama-model".to_string(),
+            provider: "ollama".to_string(),
+            context_window: 128_000,
+            input_price_per_1m: 0.0,
+            output_price_per_1m: 0.0,
+            supports_tools: false,
+            supports_vision: false,
+            supports_reasoning: false,
+            supports_audio_input: false,
+            supports_audio_output: false,
+            supports_pdf: false,
+            max_output_tokens: 4_096,
+            status: "active".to_string(),
+            release_date: "local".to_string(),
+        };
         let detail = format_model_detail(&model);
-        assert!(detail.contains("llama3.1"));
+        assert!(detail.contains("local-ollama-model"));
         assert!(detail.contains("(ollama)"));
         assert!(detail.contains("[active]"));
         assert!(detail.contains("128K tokens"));
@@ -788,7 +823,7 @@ mod tests {
         assert!(list.contains("ANTHROPIC:"));
         assert!(list.contains("OPENAI:"));
         assert!(list.contains("GOOGLE:"));
-        assert!(list.contains("OLLAMA:"));
+        assert!(!list.contains("OLLAMA:"));
     }
 
     #[test]
@@ -796,23 +831,25 @@ mod tests {
         let list = format_model_list();
         // claude-opus-4-8 is the apiModelId for claude-opus-4.8 per models.json
         assert!(list.contains("claude-opus-4-8"));
-        // gpt-5.4 / gpt-5.4-pro removed from models.json; gpt-5.5 and gpt-5.4-mini are current
+        // OpenAI flagship + mini entries are both sourced from models.json.
         assert!(list.contains("gpt-5.5"));
         assert!(list.contains("gpt-5.4-mini"));
+        assert!(list.contains("gemini-3.5-flash"));
         assert!(list.contains("gemini-3.1-pro-preview"));
         assert!(list.contains("gemini-3.1-flash-lite"));
-        // grok-4-0709 deprecated; grok-4.3 is the live xAI flagship.
+        // xAI flagship is sourced from models.json.
         assert!(list.contains("grok-4.3"));
         assert!(list.contains("mistral-large-2512"));
-        assert!(list.contains("llama3.1"));
-        assert!(list.contains("qwen2.5"));
+        assert!(list.contains("glm-5.1"));
     }
 
     #[test]
     fn test_format_model_list_free_label() {
         let list = format_model_list();
-        // Ollama models should show "free"
-        assert!(list.contains("free"));
+        assert!(
+            !list.contains("OLLAMA:"),
+            "Ollama is discovered live; the static cloud catalog should not hardcode local models"
+        );
     }
 
     #[test]

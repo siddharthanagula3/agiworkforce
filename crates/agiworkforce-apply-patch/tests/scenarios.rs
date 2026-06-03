@@ -5,10 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use tempfile::tempdir;
 
-const SCENARIOS_DIR: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/tests/fixtures/scenarios"
-);
+const SCENARIOS_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/scenarios");
 
 #[test]
 fn test_all_scenarios() {
@@ -66,22 +63,18 @@ fn run_scenario(dir: &Path) -> Result<(), String> {
         for (p, v) in &expected {
             match v {
                 Entry::Dir => msg.push_str(&format!("    DIR  {}\n", p.display())),
-                Entry::File(b) => msg.push_str(&format!(
-                    "    FILE {}  ({} bytes)\n",
-                    p.display(),
-                    b.len()
-                )),
+                Entry::File(b) => {
+                    msg.push_str(&format!("    FILE {}  ({} bytes)\n", p.display(), b.len()))
+                }
             }
         }
         msg.push_str("  actual:\n");
         for (p, v) in &actual {
             match v {
                 Entry::Dir => msg.push_str(&format!("    DIR  {}\n", p.display())),
-                Entry::File(b) => msg.push_str(&format!(
-                    "    FILE {}  ({} bytes)\n",
-                    p.display(),
-                    b.len()
-                )),
+                Entry::File(b) => {
+                    msg.push_str(&format!("    FILE {}  ({} bytes)\n", p.display(), b.len()))
+                }
             }
         }
         return Err(msg);

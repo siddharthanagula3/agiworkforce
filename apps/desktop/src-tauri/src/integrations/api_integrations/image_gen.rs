@@ -19,7 +19,8 @@ fn resolve_image_model(canonical_id: &str, hardcoded_fallback: &str) -> String {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ImageProvider {
-    DALLE,
+    #[serde(rename = "OpenAIGPTImage")]
+    OpenAIGPTImage,
     StableDiffusion,
     Midjourney,
 
@@ -111,7 +112,7 @@ impl ImageGenerationClient {
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
         match self.provider {
-            ImageProvider::DALLE => self.generate_with_dalle(request).await,
+            ImageProvider::OpenAIGPTImage => self.generate_with_openai_image(request).await,
             ImageProvider::StableDiffusion => self.generate_with_stable_diffusion(request).await,
             ImageProvider::Midjourney => self.generate_with_midjourney(request).await,
             ImageProvider::GoogleImagen => self.generate_with_google_imagen(request, false).await,
@@ -121,14 +122,14 @@ impl ImageGenerationClient {
         }
     }
 
-    async fn generate_with_dalle(
+    async fn generate_with_openai_image(
         &self,
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
         let url = "https://api.openai.com/v1/images/generations";
 
         #[derive(Serialize)]
-        struct DALLERequest {
+        struct OpenAIImageRequest {
             prompt: String,
             #[serde(skip_serializing_if = "Option::is_none")]
             model: Option<String>,
@@ -140,22 +141,24 @@ impl ImageGenerationClient {
             n: Option<u32>,
         }
 
-        let dalle_request = DALLERequest {
+        let openai_image_request = OpenAIImageRequest {
             prompt: request.prompt.clone(),
             model: Some(
                 request
                     .model
                     .clone()
-                    .unwrap_or_else(|| resolve_image_model("dall-e-3", "dall-e-3")),
+                    .unwrap_or_else(|| resolve_image_model("gpt-image-2", "gpt-image-2")),
             ),
             size: request.size.map(|s| match s {
                 ImageSize::Small => "256x256".to_string(),
                 ImageSize::Medium => "512x512".to_string(),
-                _ => "1024x1024".to_string(),
+                ImageSize::Large => "1024x1024".to_string(),
+                ImageSize::Wide => "1536x1024".to_string(),
+                ImageSize::Portrait => "1024x1536".to_string(),
             }),
             quality: request.quality.map(|q| match q {
-                ImageQuality::Standard => "standard".to_string(),
-                ImageQuality::HD => "hd".to_string(),
+                ImageQuality::Standard => "medium".to_string(),
+                ImageQuality::HD => "high".to_string(),
             }),
             n: request.n,
         };
@@ -165,27 +168,27 @@ impl ImageGenerationClient {
             .post(url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&dalle_request)
+            .json(&openai_image_request)
             .send()
             .await
             .map_err(APIError::HttpError)?;
 
-        self.parse_dalle_response(response).await
+        self.parse_openai_image_response(response).await
     }
 
-    async fn parse_dalle_response(
+    async fn parse_openai_image_response(
         &self,
         response: reqwest::Response,
     ) -> Result<ImageGenerationResponse> {
         if response.status().is_success() {
             #[derive(Deserialize)]
-            struct DALLEResponse {
+            struct OpenAIImageResponse {
                 created: u64,
-                data: Vec<DALLEImage>,
+                data: Vec<OpenAIImage>,
             }
 
             #[derive(Deserialize)]
-            struct DALLEImage {
+            struct OpenAIImage {
                 #[serde(skip_serializing_if = "Option::is_none")]
                 url: Option<String>,
                 #[serde(skip_serializing_if = "Option::is_none")]
@@ -194,11 +197,11 @@ impl ImageGenerationClient {
                 revised_prompt: Option<String>,
             }
 
-            let dalle_response: DALLEResponse =
+            let openai_image_response: OpenAIImageResponse =
                 response.json().await.map_err(APIError::HttpError)?;
 
             let mut revised_prompt = None;
-            let images = dalle_response
+            let images = openai_image_response
                 .data
                 .into_iter()
                 .map(|img| {
@@ -214,18 +217,18 @@ impl ImageGenerationClient {
 
             Ok(ImageGenerationResponse {
                 images,
-                created_at: dalle_response.created,
+                created_at: openai_image_response.created,
                 revised_prompt,
             })
         } else if response.status().as_u16() == 429 {
-            Err(APIError::RateLimitExceeded("DALL-E".to_string()))
+            Err(APIError::RateLimitExceeded("OpenAI GPT Image".to_string()))
         } else {
             let error_text = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             Err(APIError::APIError(format!(
-                "DALL-E API error: {}",
+                "OpenAI GPT Image API error: {}",
                 error_text
             )))
         }
@@ -355,7 +358,7 @@ impl ImageGenerationClient {
         _request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
         Err(APIError::APIError(
-            "Midjourney API integration not yet available. Use DALL-E or Stable Diffusion instead."
+            "Midjourney API integration not yet available. Use OpenAI GPT Image or Stable Diffusion instead."
                 .to_string(),
         ))
     }
@@ -366,16 +369,15 @@ impl ImageGenerationClient {
         use_lite: bool,
     ) -> Result<ImageGenerationResponse> {
         let default_model = if use_lite {
-            // Try Nano Banana Pro first (imagen-3.2-flash-image), fallback to imagen-3.1-nano
-            request.model.as_deref().unwrap_or("imagen-3.2-flash-image")
+            resolve_image_model("imagen-4-fast", "imagen-4.0-fast-generate-001")
         } else {
-            "imagen-3.1-pro"
+            resolve_image_model("imagen-4", "imagen-4.0-generate-001")
         };
 
         let model = request
             .model
             .as_deref()
-            .unwrap_or(default_model)
+            .unwrap_or(default_model.as_str())
             .to_string();
 
         let url = format!(
@@ -549,7 +551,7 @@ mod tests {
         let request = ImageGenerationRequest {
             prompt: "A beautiful landscape".to_string(),
             negative_prompt: Some("blurry, low quality".to_string()),
-            model: Some("imagen-3.1-pro".to_string()),
+            model: Some("imagen-4.0-generate-001".to_string()),
             size: Some(ImageSize::Large),
             style: Some("photorealistic".to_string()),
             quality: Some(ImageQuality::HD),

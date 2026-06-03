@@ -39,11 +39,7 @@ pub struct ApprovalRequest {
 }
 
 impl ApprovalRequest {
-    pub fn new(
-        kind: ApprovalRequestKind,
-        summary: impl Into<String>,
-        detail: Vec<String>,
-    ) -> Self {
+    pub fn new(kind: ApprovalRequestKind, summary: impl Into<String>, detail: Vec<String>) -> Self {
         Self {
             id: Uuid::new_v4(),
             kind,
@@ -199,9 +195,11 @@ mod tests {
 
         let pending = broker.drain_pending().await.expect("pending request");
         assert_eq!(pending.summary, "Allow command?");
-        assert!(broker
-            .complete(pending.id, ApprovalDecision::AllowOnce)
-            .await);
+        assert!(
+            broker
+                .complete(pending.id, ApprovalDecision::AllowOnce)
+                .await
+        );
 
         assert_eq!(task.await.expect("join"), ApprovalDecision::AllowOnce);
         assert_eq!(broker.pending_count().await, 0);
@@ -223,7 +221,9 @@ mod tests {
         assert_eq!(second.detail, vec!["two"]);
 
         broker.complete(first.id, ApprovalDecision::Deny).await;
-        broker.complete(second.id, ApprovalDecision::AllowSession).await;
+        broker
+            .complete(second.id, ApprovalDecision::AllowSession)
+            .await;
 
         assert_eq!(task_a.await.expect("join"), ApprovalDecision::Deny);
         assert_eq!(task_b.await.expect("join"), ApprovalDecision::AllowSession);
@@ -263,7 +263,9 @@ mod tests {
             .expect("notified should fire once a request is enqueued");
 
         let pending = broker.drain_pending().await.expect("pending request");
-        broker.complete(pending.id, ApprovalDecision::AllowOnce).await;
+        broker
+            .complete(pending.id, ApprovalDecision::AllowOnce)
+            .await;
     }
 
     #[tokio::test]

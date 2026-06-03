@@ -1,5 +1,5 @@
 {
-  "name": "react-native-worklets",
+  "name": "@agiworkforce/react-native-worklets-stub",
   "version": "0.0.1",
   "description": "Stub package for react-native-worklets — provides an empty Babel plugin so jest-expo tests work without the real native module",
   "main": "index.js",

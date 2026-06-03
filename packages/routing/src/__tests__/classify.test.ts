@@ -857,9 +857,9 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a'.repeat(35))).toBe(10);
   });
 
-  it('uses GPT tokenizer for gpt-5.4', () => {
+  it('uses GPT tokenizer for gpt-5.5', () => {
     // 38 chars / 3.8 = 10 tokens.
-    expect(estimateTokens('a'.repeat(38), 'gpt-5.4')).toBe(10);
+    expect(estimateTokens('a'.repeat(38), 'gpt-5.5')).toBe(10);
   });
 
   it('uses GPT tokenizer for gpt-5.5', () => {
@@ -906,7 +906,7 @@ describe('estimateTokens — provider multipliers', () => {
   });
 
   it('matches case-insensitively on model id', () => {
-    expect(estimateTokens('a'.repeat(38), 'GPT-5.4')).toBe(10);
+    expect(estimateTokens('a'.repeat(38), 'GPT-5.5')).toBe(10);
     expect(estimateTokens('a'.repeat(34), 'DeepSeek-V4-Flash')).toBe(10);
   });
 
@@ -925,7 +925,7 @@ describe('estimateTokens — provider multipliers', () => {
   it('Gemini is the lightest tokenizer per char', () => {
     const txt = 'a'.repeat(1000);
     const gemini = estimateTokens(txt, 'gemini-3.1-flash-lite-preview');
-    const gpt = estimateTokens(txt, 'gpt-5.4');
+    const gpt = estimateTokens(txt, 'gpt-5.5');
     const claude = estimateTokens(txt, 'claude-sonnet-4.6');
     expect(gemini).toBeLessThanOrEqual(gpt);
     expect(gemini).toBeLessThanOrEqual(claude);
@@ -935,13 +935,13 @@ describe('estimateTokens — provider multipliers', () => {
     const txt = 'a'.repeat(1000);
     const deepseek = estimateTokens(txt, 'deepseek-v4-flash');
     const claude = estimateTokens(txt, 'claude-sonnet-4.6');
-    const gpt = estimateTokens(txt, 'gpt-5.4');
+    const gpt = estimateTokens(txt, 'gpt-5.5');
     expect(deepseek).toBeGreaterThanOrEqual(claude);
     expect(deepseek).toBeGreaterThan(gpt);
   });
 
   it('handles long input deterministically', () => {
-    expect(estimateTokens('a'.repeat(10_000), 'gpt-5.4')).toBe(Math.ceil(10_000 / 3.8));
+    expect(estimateTokens('a'.repeat(10_000), 'gpt-5.5')).toBe(Math.ceil(10_000 / 3.8));
   });
 
   it('handles unicode content (counts code units, not codepoints)', () => {

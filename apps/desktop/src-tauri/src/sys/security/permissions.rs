@@ -158,9 +158,9 @@ impl PermissionManager {
             (PermissionType::CommandExecute, PermissionState::Prompt),
             (PermissionType::AppLaunch, PermissionState::Prompt),
             (PermissionType::AppTerminate, PermissionState::Prompt),
-            (PermissionType::ClipboardRead, PermissionState::Allowed),
-            (PermissionType::ClipboardWrite, PermissionState::Allowed),
-            (PermissionType::ProcessList, PermissionState::Allowed),
+            (PermissionType::ClipboardRead, PermissionState::Prompt),
+            (PermissionType::ClipboardWrite, PermissionState::Prompt),
+            (PermissionType::ProcessList, PermissionState::Prompt),
             (PermissionType::ProcessTerminate, PermissionState::Prompt),
         ];
 
@@ -244,7 +244,7 @@ mod tests {
             .unwrap();
 
         let state = pm.check_permission(PermissionType::FileRead, None).unwrap();
-        assert_eq!(state, PermissionState::Allowed);
+        assert_eq!(state, PermissionState::Prompt);
     }
 
     #[test]

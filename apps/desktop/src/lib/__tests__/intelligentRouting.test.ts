@@ -112,7 +112,7 @@ describe('MultiModalRouter', () => {
     it('should return image models for hobby tier', () => {
       const models = getAvailableModels('image', 'hobby');
       expect(models.length).toBeGreaterThan(0);
-      expect(models.some((m) => m.id === 'dall-e-3')).toBe(true);
+      expect(models.some((m) => m.id === 'imagen-4.0-fast-generate-001')).toBe(true);
     });
 
     it('should return more models for pro tier', () => {
@@ -144,13 +144,13 @@ describe('MultiModalRouter', () => {
     it('should select an image model for hobby tier image generation', () => {
       const result = selectModalityModel('image', 'hobby');
       // Hobby tier gets access to economy image models
-      expect(result.selectedModel).toBe('dall-e-3');
+      expect(result.selectedModel).toBe('imagen-4.0-fast-generate-001');
       expect(result.modality).toBe('image');
     });
 
     it('should prefer quality when specified', () => {
       const result = selectModalityModel('image', 'max', { preferQuality: true });
-      expect(['gpt-image-1.5', 'imagen-4.0-ultra-generate-001']).toContain(result.selectedModel);
+      expect(['gpt-image-2', 'imagen-4.0-ultra-generate-001']).toContain(result.selectedModel);
     });
 
     it('should select sonar for hobby search', () => {
@@ -262,8 +262,8 @@ describe('Intelligent Routing Integration', () => {
     it('should route image generation to image model', () => {
       const result = routeIntelligentlySync('Generate an image of a mountain', 'auto-economy');
       expect(result.modelCategory).toBe('image');
-      // Economy mode routes to dall-e-3 (the hobby-tier image model)
-      expect(result.selectedModel).toBe('dall-e-3');
+      // Economy mode routes to the current hobby-tier image model.
+      expect(result.selectedModel).toBe('imagen-4.0-fast-generate-001');
       expect(result.intent.primary).toBe('image-gen');
     });
 

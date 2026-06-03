@@ -10,8 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: 'https://agiworkforce.com/chrome-extension' },
 };
 
-/** Inline screenshot placeholder card — no images needed at launch. */
-function ScreenshotPlaceholder({ label, description }: { label: string; description: string }) {
+function ExtensionProductView({ label, description }: { label: string; description: string }) {
   return (
     <div
       style={{
@@ -21,7 +20,7 @@ function ScreenshotPlaceholder({ label, description }: { label: string; descript
         overflow: 'hidden',
       }}
     >
-      {/* Mock browser chrome bar */}
+      {/* Browser chrome bar */}
       <div
         style={{
           background: 'var(--agi-bg-3)',
@@ -70,7 +69,6 @@ function ScreenshotPlaceholder({ label, description }: { label: string; descript
           {label}
         </span>
       </div>
-      {/* Placeholder body */}
       <div
         style={{
           padding: '32px 24px',
@@ -93,7 +91,7 @@ function ScreenshotPlaceholder({ label, description }: { label: string; descript
             margin: 0,
           }}
         >
-          Screenshot
+          Product view
         </p>
         <p
           style={{
@@ -171,11 +169,11 @@ export default function ChromeExtensionPage() {
               gap: 16,
             }}
           >
-            <ScreenshotPlaceholder
+            <ExtensionProductView
               label="Side panel: chat alongside any tab"
               description="AGI side panel open next to a GitHub pull request. Ask about the diff, request a summary, or run a slash command."
             />
-            <ScreenshotPlaceholder
+            <ExtensionProductView
               label="Page reader"
               description="Content scripts extract structured text from articles, docs, and tickets. No copy-paste needed."
             />

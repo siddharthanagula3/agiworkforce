@@ -70,7 +70,7 @@ describe('withRetry', () => {
 
   it('throws FallbackTriggeredError after MAX_OVERLOAD_RETRIES consecutive 529s', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-4.6',
+      model: 'claude-opus-4.8',
       fallbackModel: 'claude-sonnet-4.6',
     });
     await expect(
@@ -85,7 +85,7 @@ describe('withRetry', () => {
   });
 
   it('does NOT throw FallbackTriggeredError when no fallbackModel set', async () => {
-    const ctx = createRetryContext({ model: 'claude-opus-4.6' });
+    const ctx = createRetryContext({ model: 'claude-opus-4.8' });
     await expect(
       withRetry(
         async () => {
@@ -107,7 +107,7 @@ describe('withRetry', () => {
   });
 
   it('shrinks maxTokensOverride on context_overflow', async () => {
-    const ctx = createRetryContext({ model: 'claude-opus-4.6' });
+    const ctx = createRetryContext({ model: 'claude-opus-4.8' });
     let calls = 0;
     let observedOverride: number | undefined;
     await withRetry(
@@ -131,7 +131,7 @@ describe('withRetry', () => {
 
   it('triggers fallback when context_overflow has zero headroom', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-4.6',
+      model: 'claude-opus-4.8',
       fallbackModel: 'claude-sonnet-4.6',
     });
     await expect(
@@ -150,7 +150,7 @@ describe('withRetry', () => {
 
   it('respects shouldFallback hook returning false', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-4.6',
+      model: 'claude-opus-4.8',
       fallbackModel: 'claude-sonnet-4.6',
     });
     await expect(
@@ -170,7 +170,7 @@ describe('withRetry', () => {
 
   it('respects disableFallback flag', async () => {
     const ctx = createRetryContext({
-      model: 'claude-opus-4.6',
+      model: 'claude-opus-4.8',
       fallbackModel: 'claude-sonnet-4.6',
     });
     await expect(
@@ -238,7 +238,7 @@ describe('withRetry', () => {
       // Randomise per-iteration: model, fallback, picked error, retries.
       const errIdx = Math.floor(Math.random() * fakeErrors.length);
       const ctx = createRetryContext({
-        model: 'claude-opus-4.6',
+        model: 'claude-opus-4.8',
         fallbackModel: i % 2 === 0 ? 'claude-sonnet-4.6' : undefined,
       });
       const errSpec = fakeErrors[errIdx]!;

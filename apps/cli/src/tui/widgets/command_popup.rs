@@ -1,10 +1,8 @@
 //! `CommandPopup` — fuzzy slash-command picker overlay.
 //!
 //! Char keys append to an inline filter; Backspace removes the last char;
-//! ↑↓ navigate the filtered set; Enter submits the canonical slash command name.
+//! ↑↓ navigate the filtered set; Enter fills the canonical slash command name.
 //! The render shows `/name — description` rows with `❯ ` bolding the cursor row.
-
-#![allow(dead_code)]
 
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
 
@@ -109,9 +107,10 @@ impl InteractiveView for CommandPopup {
             KeyAction::Enter => {
                 let items = self.filtered();
                 if let Some(cmd) = items.get(self.state.cursor()) {
-                    self.selected_command = Some(cmd.name.clone());
+                    let name = cmd.name.clone();
+                    self.selected_command = Some(name.clone());
                     self.done = true;
-                    ViewAction::Submit(self.state.cursor())
+                    ViewAction::SideAction(format!("slash:{name}"))
                 } else {
                     ViewAction::Continue
                 }
@@ -199,7 +198,7 @@ mod tests {
         let mut popup = make_popup();
         popup.handle_key(KeyAction::Down); // move to "exec"
         let action = popup.handle_key(KeyAction::Enter);
-        assert!(matches!(action, ViewAction::Submit(_)));
+        assert_eq!(action, ViewAction::SideAction("slash:exec".to_string()));
         assert_eq!(popup.selected_command.as_deref(), Some("exec"));
         assert!(popup.is_done());
     }

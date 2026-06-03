@@ -208,10 +208,10 @@ describe('FallbackTriggeredError', () => {
       fallbackable: true,
       message: '529',
     };
-    const err = new FallbackTriggeredError('claude-opus-4.6', 'claude-sonnet-4.6', c, new Error());
-    expect(err.message).toContain('claude-opus-4.6');
+    const err = new FallbackTriggeredError('claude-opus-4.8', 'claude-sonnet-4.6', c, new Error());
+    expect(err.message).toContain('claude-opus-4.8');
     expect(err.message).toContain('claude-sonnet-4.6');
-    expect(err.originalModel).toBe('claude-opus-4.6');
+    expect(err.originalModel).toBe('claude-opus-4.8');
     expect(err.fallbackModel).toBe('claude-sonnet-4.6');
   });
 });

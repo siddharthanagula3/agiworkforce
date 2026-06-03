@@ -226,8 +226,8 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
 const MODEL_PICKER_OPTION_IDS = new Set(MODEL_PICKER_OPTIONS.map((option) => option.id));
 
 export function normalizeConfiguredModelId(modelId: string | null | undefined): string {
-  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto-balanced';
-  return MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-balanced';
+  const normalized = normalizeModelId(modelId) ?? modelId ?? 'auto-economy';
+  return MODEL_PICKER_OPTION_IDS.has(normalized) ? normalized : 'auto-economy';
 }
 
 export const MODEL_CONTEXT_LIMITS: Record<string, number> = {

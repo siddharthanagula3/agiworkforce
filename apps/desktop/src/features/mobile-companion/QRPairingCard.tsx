@@ -62,8 +62,6 @@ export function QRPairingCard() {
     return formatDistanceToNow(expiresAt, { addSuffix: true });
   }, [expiresAt]);
 
-  const deepLink = pairingCode ? `agiworkforce://pair/${pairingCode}` : null;
-
   const isLoading = status === 'requesting';
   const hasCode = !!pairingCode;
 
@@ -81,7 +79,7 @@ export function QRPairingCard() {
       <ol className="text-xs text-slate-600 space-y-1 list-decimal list-inside">
         <li>Open AGI Workforce on your phone</li>
         <li>Tap Menu &rarr; Pair with Desktop</li>
-        <li>Scan this QR code or enter the code manually</li>
+        <li>Scan this QR code</li>
       </ol>
 
       {/* QR code display */}
@@ -114,7 +112,6 @@ export function QRPairingCard() {
           {expiresMessage && (
             <p className="mt-1 text-xs text-slate-500">Expires {expiresMessage}</p>
           )}
-          {deepLink && <p className="mt-2 text-xs text-slate-400 truncate font-mono">{deepLink}</p>}
         </div>
       )}
 

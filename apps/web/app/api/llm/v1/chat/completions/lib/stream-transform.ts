@@ -30,6 +30,7 @@ export async function buildStreamResponse(
     quotaFeature,
     isFlagshipRequest,
     usedFallback,
+    autoEconomyTrial,
   } = processed;
 
   const modelUsed = chatRequest.model;
@@ -398,7 +399,7 @@ export async function buildStreamResponse(
 
         const totalTokens = inputTokens + outputTokens;
 
-        if (totalTokens > 0) {
+        if (!autoEconomyTrial && totalTokens > 0) {
           const actualCostCents = LLMCostCalculator.calculateCost(providerUsed, modelUsed, {
             promptTokens: inputTokens,
             completionTokens: outputTokens,
@@ -449,7 +450,7 @@ export async function buildStreamResponse(
       }
 
       const finalTotalTokens = inputTokens + outputTokens;
-      if (finalTotalTokens > 0) {
+      if (!autoEconomyTrial && finalTotalTokens > 0) {
         void reconcileUsage({
           userId,
           token,
@@ -500,6 +501,10 @@ export async function buildStreamResponse(
   };
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
+  }
+  if (autoEconomyTrial) {
+    streamHeaders['X-AGI-Trial-Prompts-Used'] = String(autoEconomyTrial.promptCount);
+    streamHeaders['X-AGI-Trial-Prompts-Limit'] = String(autoEconomyTrial.promptLimit);
   }
 
   return new NextResponse(reconciledStream, { headers: streamHeaders });

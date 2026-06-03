@@ -14,11 +14,11 @@ import {
 vi.mock('@core/ai/llm/providers/grok-ai', () => ({
   grokProvider: {
     sendMessage: vi.fn(),
-    getConfig: vi.fn().mockReturnValue({ model: 'grok-4' }),
+    getConfig: vi.fn().mockReturnValue({ model: 'grok-4.3' }),
   },
   GrokProvider: vi.fn().mockImplementation(() => ({
     sendMessage: vi.fn(),
-    getConfig: vi.fn().mockReturnValue({ model: 'grok-4' }),
+    getConfig: vi.fn().mockReturnValue({ model: 'grok-4.3' }),
   })),
 }));
 
@@ -37,7 +37,7 @@ describe('Social Media Analyzer', () => {
       sendMessage: ReturnType<typeof vi.fn>;
       getConfig: ReturnType<typeof vi.fn>;
     };
-    mockGrokProvider.getConfig.mockReturnValue({ model: 'grok-4' });
+    mockGrokProvider.getConfig.mockReturnValue({ model: 'grok-4.3' });
 
     // Cast to unknown first, then to the expected type to avoid direct any cast
     analyzer = new SocialMediaAnalyzer(

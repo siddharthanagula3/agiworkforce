@@ -32,6 +32,7 @@ export interface GeneratedImageResult {
 }
 
 export type VideoResolutionId = '720p' | '1080p' | '4k';
+export type VideoProviderId = 'veo3' | 'google' | 'runway';
 
 export interface VideoGenerationPayload {
   prompt: string;
@@ -40,6 +41,7 @@ export interface VideoGenerationPayload {
   resolution?: VideoResolutionId;
   style?: string;
   model?: string;
+  provider?: VideoProviderId;
   plan?: string;
 }
 

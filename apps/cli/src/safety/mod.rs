@@ -104,11 +104,11 @@ pub fn classify_command(command: &str) -> CommandSafety {
 fn split_segments(command: &str) -> Vec<String> {
     let mut segments = Vec::new();
     let mut current = String::new();
-    let mut chars = command.chars().peekable();
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     let mut escaped = false;
 
+    let mut chars = command.chars().peekable();
     while let Some(ch) = chars.next() {
         if escaped {
             current.push(ch);
@@ -173,6 +173,49 @@ fn split_segments(command: &str) -> Vec<String> {
     segments
 }
 
+/// Detect shell redirection operators outside quotes.
+///
+/// Any redirection/heredoc prevents a command from being auto-classified as
+/// safe because it can write files, feed hidden input, or alter stderr/stdout
+/// flow in ways the base command allowlist does not capture.
+fn contains_unquoted_shell_redirection(command: &str) -> bool {
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
+    let mut escaped = false;
+
+    for ch in command.chars() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+
+        if ch == '\\' && !in_single_quote {
+            escaped = true;
+            continue;
+        }
+
+        if ch == '\'' && !in_double_quote {
+            in_single_quote = !in_single_quote;
+            continue;
+        }
+
+        if ch == '"' && !in_single_quote {
+            in_double_quote = !in_double_quote;
+            continue;
+        }
+
+        if in_single_quote || in_double_quote {
+            continue;
+        }
+
+        if ch == '<' || ch == '>' {
+            return true;
+        }
+    }
+
+    false
+}
+
 /// Classify a single command segment (no pipes/chains).
 fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety {
     let trimmed = segment.trim();
@@ -219,6 +262,19 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
         return classify_base64(trimmed);
     }
 
+    // `sort` — safe unless it writes through output options.
+    if base_cmd == "sort" {
+        return classify_sort(trimmed);
+    }
+
+    // Network inspection commands can also mutate network interfaces/routes.
+    if base_cmd == "ifconfig" {
+        return classify_ifconfig(trimmed);
+    }
+    if base_cmd == "ip" {
+        return classify_ip(trimmed);
+    }
+
     // `git` — enhanced subcommand validation.
     if base_cmd == "git" {
         return classify_git(trimmed);
@@ -237,6 +293,10 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
         return CommandSafety::Dangerous;
     }
 
+    if contains_unquoted_shell_redirection(trimmed) {
+        return CommandSafety::Unknown;
+    }
+
     // Check safe multi-word prefixes.
     for prefix in SAFE_PREFIXES {
         if normalized_segment.starts_with(prefix) {
@@ -249,12 +309,114 @@ fn classify_single_segment(segment: &str, prev_was_safe: bool) -> CommandSafety 
         return CommandSafety::Safe;
     }
 
-    // xargs is safe only when piped from a safe command.
-    if base_cmd == "xargs" && prev_was_safe {
-        return CommandSafety::Safe;
+    // xargs is safe only when piped from a safe command and its payload is
+    // also safe. Standalone xargs or mutating payloads require a prompt.
+    if base_cmd == "xargs" {
+        return classify_xargs(trimmed, prev_was_safe);
     }
 
     CommandSafety::Unknown
+}
+
+fn classify_sort(command: &str) -> CommandSafety {
+    let args: Vec<&str> = command.split_whitespace().collect();
+    for arg in &args[1..] {
+        if *arg == "-o" || *arg == "--output" || arg.starts_with("--output=") {
+            return CommandSafety::Unknown;
+        }
+        if arg.starts_with("-o") && arg.len() > 2 {
+            return CommandSafety::Unknown;
+        }
+    }
+    CommandSafety::Safe
+}
+
+fn classify_ifconfig(command: &str) -> CommandSafety {
+    let args: Vec<&str> = command.split_whitespace().collect();
+    match args.as_slice() {
+        [_] => CommandSafety::Safe,
+        [_, "-a"] => CommandSafety::Safe,
+        _ => CommandSafety::Unknown,
+    }
+}
+
+fn classify_ip(command: &str) -> CommandSafety {
+    let args: Vec<&str> = command.split_whitespace().collect();
+    if args.len() < 2 {
+        return CommandSafety::Unknown;
+    }
+
+    const SAFE_OBJECTS: &[&str] = &["addr", "address", "route", "link", "neigh", "neighbor"];
+    const MUTATING_VERBS: &[&str] = &[
+        "add", "change", "del", "delete", "flush", "replace", "restore", "set",
+    ];
+
+    if args[1] == "netns" {
+        return match args.as_slice() {
+            [_, "netns"] | [_, "netns", "list"] | [_, "netns", "show"] => CommandSafety::Safe,
+            _ => CommandSafety::Unknown,
+        };
+    }
+
+    if !SAFE_OBJECTS.contains(&args[1]) {
+        return CommandSafety::Unknown;
+    }
+    if args[2..].iter().any(|arg| MUTATING_VERBS.contains(arg)) {
+        return CommandSafety::Unknown;
+    }
+
+    CommandSafety::Safe
+}
+
+fn classify_xargs(segment: &str, prev_was_safe: bool) -> CommandSafety {
+    if !prev_was_safe {
+        return CommandSafety::Unknown;
+    }
+    if contains_unquoted_shell_redirection(segment) {
+        return CommandSafety::Unknown;
+    }
+
+    let args: Vec<&str> = segment.split_whitespace().collect();
+    let mut i = 1;
+    while i < args.len() {
+        let arg = args[i];
+        if arg == "--" {
+            i += 1;
+            break;
+        }
+        if !arg.starts_with('-') {
+            break;
+        }
+        if matches!(
+            arg,
+            "-a" | "--arg-file"
+                | "-d"
+                | "--delimiter"
+                | "-E"
+                | "-e"
+                | "--eof"
+                | "-I"
+                | "--replace"
+                | "-L"
+                | "--max-lines"
+                | "-n"
+                | "--max-args"
+                | "-P"
+                | "--max-procs"
+                | "-s"
+                | "--max-chars"
+        ) {
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+
+    if i >= args.len() {
+        return CommandSafety::Safe;
+    }
+
+    classify_single_segment(&args[i..].join(" "), false)
 }
 
 // ---------------------------------------------------------------------------
@@ -312,6 +474,18 @@ mod tests {
     }
 
     #[test]
+    fn sort_output_option_requires_prompt() {
+        assert_eq!(
+            classify_command("sort -o names.txt names.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("sort --output=names.txt input.txt"),
+            CommandSafety::Unknown
+        );
+    }
+
+    #[test]
     fn env_commands_require_prompt() {
         // SEV-CLI-LOW-1: `env` and `printenv` dump every environment variable
         // (including ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) into the tool
@@ -334,20 +508,20 @@ mod tests {
     }
 
     #[test]
-    fn safe_build_and_test_commands() {
-        assert_eq!(classify_command("cargo check"), CommandSafety::Safe);
+    fn code_and_build_commands_require_prompt() {
+        assert_eq!(classify_command("cargo check"), CommandSafety::Unknown);
         assert_eq!(
             classify_command("cargo test -- module::test_name"),
-            CommandSafety::Safe
+            CommandSafety::Unknown
         );
-        assert_eq!(classify_command("npm test"), CommandSafety::Safe);
+        assert_eq!(classify_command("npm test"), CommandSafety::Unknown);
         assert_eq!(
             classify_command("python -c 'print(1+1)'"),
-            CommandSafety::Safe
+            CommandSafety::Unknown
         );
         assert_eq!(
             classify_command("node -e 'console.log(42)'"),
-            CommandSafety::Safe
+            CommandSafety::Unknown
         );
     }
 
@@ -376,6 +550,18 @@ mod tests {
     }
 
     #[test]
+    fn xargs_mutating_payload_is_not_safe() {
+        assert_eq!(
+            classify_command("find . -name '*.tmp' | xargs rm -f"),
+            CommandSafety::Dangerous
+        );
+        assert_eq!(
+            classify_command("find . -name '*.tmp' | xargs rm"),
+            CommandSafety::Unknown
+        );
+    }
+
+    #[test]
     fn safe_chained_commands() {
         assert_eq!(classify_command("pwd && ls -la"), CommandSafety::Safe);
         assert_eq!(classify_command("echo hello; date"), CommandSafety::Safe);
@@ -398,13 +584,18 @@ mod tests {
             classify_command("jq '.name' package.json"),
             CommandSafety::Safe
         );
-        assert_eq!(
-            classify_command("awk '{print $1}' file.txt"),
-            CommandSafety::Safe
-        );
         assert_eq!(classify_command("od -x binary.bin"), CommandSafety::Safe);
         assert_eq!(classify_command("hexdump -C file.bin"), CommandSafety::Safe);
         assert_eq!(classify_command("strings /usr/bin/ls"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn write_capable_safe_entries_require_prompt() {
+        assert_eq!(classify_command("tee output.txt"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("awk '{print $1}' file.txt"),
+            CommandSafety::Unknown
+        );
     }
 
     #[test]
@@ -426,6 +617,7 @@ mod tests {
     fn safe_new_network_info_commands() {
         assert_eq!(classify_command("ifconfig"), CommandSafety::Safe);
         assert_eq!(classify_command("ip addr"), CommandSafety::Safe);
+        assert_eq!(classify_command("ip netns list"), CommandSafety::Safe);
         assert_eq!(classify_command("dig example.com"), CommandSafety::Safe);
         assert_eq!(
             classify_command("nslookup example.com"),
@@ -438,6 +630,26 @@ mod tests {
         assert_eq!(classify_command("ss -tlnp"), CommandSafety::Safe);
         assert_eq!(classify_command("lsof -i :8080"), CommandSafety::Safe);
         assert_eq!(classify_command("netstat -an"), CommandSafety::Safe);
+    }
+
+    #[test]
+    fn mutating_network_commands_require_prompt() {
+        assert_eq!(
+            classify_command("ifconfig en0 down"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("ip addr add 127.0.0.2/8 dev lo"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("ip link set lo down"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("ip netns exec testns sh -c 'id'"),
+            CommandSafety::Unknown
+        );
     }
 
     // -- Dangerous commands --
@@ -851,6 +1063,18 @@ mod tests {
     }
 
     #[test]
+    fn git_output_file_options_require_prompt() {
+        assert_eq!(
+            classify_command("git diff --output=patch.diff"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("git show HEAD --output patch.txt"),
+            CommandSafety::Unknown
+        );
+    }
+
+    #[test]
     fn git_branch_safe_readonly() {
         assert_eq!(classify_command("git branch"), CommandSafety::Safe);
         assert_eq!(classify_command("git branch --list"), CommandSafety::Safe);
@@ -992,6 +1216,29 @@ mod tests {
     fn unknown_xargs_standalone() {
         // xargs without a safe pipe predecessor is unknown
         assert_eq!(classify_command("xargs rm"), CommandSafety::Unknown);
+    }
+
+    #[test]
+    fn shell_redirection_and_heredocs_require_prompt() {
+        assert_eq!(
+            classify_command("echo hello > out.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(
+            classify_command("echo hello >> out.txt"),
+            CommandSafety::Unknown
+        );
+        assert_eq!(classify_command("cat <<EOF"), CommandSafety::Unknown);
+        assert_eq!(classify_command("cat <<< hello"), CommandSafety::Unknown);
+        assert_eq!(classify_command("ls 2>&1"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("grep 'a > b' notes.txt"),
+            CommandSafety::Safe
+        );
+        assert_eq!(
+            classify_command("grep \"a >> b\" notes.txt"),
+            CommandSafety::Safe
+        );
     }
 
     #[test]

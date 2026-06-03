@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { ExternalLink, Loader2, Lock, MoreHorizontal, Plus, Zap } from 'lucide-react';
+import { ExternalLink, Loader2, Lock, MoreHorizontal, Plus } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
@@ -86,7 +86,8 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
 }) => {
   const isComingSoon = connector.phase > 1;
   const isOAuth = connector.authType === 'oauth';
-  const hasRealCredentials = connected && !isOAuth;
+  const isAvailable = !isComingSoon && !isOAuth && !connector.exclusive;
+  const hasRealCredentials = connected && isAvailable;
 
   return (
     <div
@@ -95,20 +96,10 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         hasRealCredentials
           ? 'border-primary/30 bg-primary/5'
           : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]',
-        connector.exclusive && 'border-amber-500/20 bg-amber-500/5 hover:border-amber-500/30',
       )}
     >
-      {/* Exclusive badge */}
-      {connector.exclusive && (
-        <div className="absolute right-3 top-3">
-          <Badge className="border-0 bg-amber-500/20 px-1.5 py-0 text-[10px] font-semibold text-amber-400">
-            EXCLUSIVE
-          </Badge>
-        </div>
-      )}
-
-      {/* Coming Soon badge for phase > 1 non-exclusive connectors */}
-      {isComingSoon && !connector.exclusive && (
+      {/* Coming Soon badge for future connectors */}
+      {isComingSoon && (
         <div className="absolute right-3 top-3">
           <Badge
             variant="outline"
@@ -120,7 +111,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       )}
 
       {/* Coming Soon badge for phase-1 OAuth connectors */}
-      {!isComingSoon && isOAuth && !connector.exclusive && (
+      {!isComingSoon && isOAuth && (
         <div className="absolute right-3 top-3">
           <Badge
             variant="outline"
@@ -185,7 +176,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               </Button>
             </div>
           </>
-        ) : (isComingSoon && !connector.exclusive) || isOAuth ? (
+        ) : !isAvailable ? (
           <Button
             variant="ghost"
             size="sm"
@@ -198,22 +189,12 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         ) : (
           <Button
             size="sm"
-            className={cn(
-              'h-7 w-full text-xs',
-              connector.exclusive
-                ? 'bg-amber-500 text-black hover:bg-amber-400'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90',
-            )}
+            className="h-7 w-full bg-primary text-xs text-primary-foreground hover:bg-primary/90"
             onClick={onConnect}
             disabled={mutating}
           >
             {mutating ? (
               <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
-            ) : connector.exclusive ? (
-              <>
-                <Zap className="mr-1.5 h-3 w-3" />
-                Enable
-              </>
             ) : (
               <>
                 <Plus className="mr-1.5 h-3 w-3" />

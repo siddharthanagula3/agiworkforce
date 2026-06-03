@@ -18,10 +18,6 @@
 //! ```
 //!
 //! Slash command: `/output-style [name]` lists or switches.
-//!
-//! See plan: `~/.claude/plans/even-if-it-is-bubbly-octopus.md`, Day-6.
-
-#![allow(dead_code)]
 
 use std::path::PathBuf;
 
@@ -54,7 +50,8 @@ impl OutputStyle {
     pub fn learning() -> Self {
         Self {
             name: "learning".into(),
-            description: "Interactive. Leaves TODO(human) blocks for you to fill in.".into(),
+            description: "Interactive. Completes changes and adds one optional learning exercise."
+                .into(),
             system_prompt: include_str!("output_styles/learning.md").to_string(),
         }
     }

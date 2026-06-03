@@ -215,16 +215,16 @@ mod xai_sse_tests {
     /// xAI (Grok) uses the OpenAI-compatible SSE format.
     #[test]
     fn test_xai_stream_start() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","created":1720000000,"model":"grok-4","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","created":1720000000,"model":"grok-4.3","choices":[{"delta":{"role":"assistant","content":""},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
-        assert_eq!(parsed["model"], "grok-4");
+        assert_eq!(parsed["model"], "grok-4.3");
         assert_eq!(parsed["choices"][0]["delta"]["role"], "assistant");
     }
 
     #[test]
     fn test_xai_content_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4","choices":[{"delta":{"content":"Grok answer here."},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.3","choices":[{"delta":{"content":"Grok answer here."},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(
@@ -235,7 +235,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_tool_call_chunk() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_grok_1","type":"function","function":{"name":"search_web","arguments":"{\"q\":"}}]},"index":0,"finish_reason":null}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.3","choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_grok_1","type":"function","function":{"name":"search_web","arguments":"{\"q\":"}}]},"index":0,"finish_reason":null}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         let tool_calls = &parsed["choices"][0]["delta"]["tool_calls"];
@@ -244,7 +244,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_stream_end_finish_reason() {
-        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
+        let sse = r#"data: {"id":"chatcmpl-xai-xyz","object":"chat.completion.chunk","model":"grok-4.3","choices":[{"delta":{},"index":0,"finish_reason":"stop"}]}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["choices"][0]["finish_reason"], "stop");
@@ -264,7 +264,7 @@ mod xai_sse_tests {
 
     #[test]
     fn test_xai_usage_in_final_chunk() {
-        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"grok-4","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":8,"completion_tokens":25,"total_tokens":33}}"#;
+        let sse = r#"data: {"id":"c","object":"chat.completion.chunk","model":"grok-4.3","choices":[{"delta":{},"finish_reason":"stop","index":0}],"usage":{"prompt_tokens":8,"completion_tokens":25,"total_tokens":33}}"#;
         let json_part = sse.strip_prefix("data: ").unwrap();
         let parsed: serde_json::Value = serde_json::from_str(json_part).unwrap();
         assert_eq!(parsed["usage"]["total_tokens"], 33);

@@ -1,4 +1,4 @@
-//! A2A client: fetch cards, delegate tasks, handoff conversations.
+//! A2A client: fetch cards and delegate tasks.
 
 use std::time::Instant;
 
@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 
 use crate::models::Message;
 
-use super::protocol::{AgentCard, HandoffRequest, TaskRequest, TaskResponse, TaskResponseStatus};
+use super::protocol::{AgentCard, TaskRequest, TaskResponse, TaskResponseStatus};
 use super::security::validate_a2a_endpoint;
 use super::server::DEFAULT_TASK_TIMEOUT_SECONDS;
 
@@ -87,14 +87,24 @@ pub async fn delegate_task(
         .unwrap_or(DEFAULT_TASK_TIMEOUT_SECONDS);
     let deadline = Instant::now() + std::time::Duration::from_secs(timeout_secs);
     let poll_url = format!("{}/a2a/task/{}", base, request.request_id);
+    validate_a2a_endpoint(&poll_url)?;
+    let mut last_poll_error: Option<String> = None;
 
     loop {
         if Instant::now() > deadline {
-            bail!(
-                "Task {} timed out after {}s",
-                request.request_id,
-                timeout_secs
-            );
+            match last_poll_error {
+                Some(error) => bail!(
+                    "Task {} timed out after {}s; last poll error: {}",
+                    request.request_id,
+                    timeout_secs,
+                    error
+                ),
+                None => bail!(
+                    "Task {} timed out after {}s",
+                    request.request_id,
+                    timeout_secs
+                ),
+            }
         }
 
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -106,16 +116,25 @@ pub async fn delegate_task(
 
         let poll_resp = match poll_req.send().await {
             Ok(r) => r,
-            Err(_) => continue,
+            Err(error) => {
+                last_poll_error = Some(format!("request failed: {error}"));
+                continue;
+            }
         };
 
         if !poll_resp.status().is_success() {
+            let status = poll_resp.status();
+            let body = poll_resp.text().await.unwrap_or_default();
+            last_poll_error = Some(format!("HTTP {}: {}", status.as_u16(), body));
             continue;
         }
 
         let task_resp: TaskResponse = match poll_resp.json().await {
             Ok(r) => r,
-            Err(_) => continue,
+            Err(error) => {
+                last_poll_error = Some(format!("invalid task response JSON: {error}"));
+                continue;
+            }
         };
 
         if task_resp.status != TaskResponseStatus::Accepted {
@@ -132,35 +151,8 @@ pub async fn handoff_conversation(
     instructions: Option<String>,
     auth_token: Option<&str>,
 ) -> Result<()> {
-    let base = target.endpoint.trim_end_matches('/');
-    let url = format!("{}/a2a/handoff", base);
-    validate_a2a_endpoint(&url)?;
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .build()?;
-
-    let handoff = HandoffRequest {
-        from_agent: "self".to_string(),
-        messages,
-        instructions,
-    };
-
-    let mut req = client.post(&url).json(&handoff);
-    if let Some(token) = auth_token {
-        req = req.bearer_auth(token);
-    }
-
-    let resp = req
-        .send()
-        .await
-        .context("Failed to send handoff to remote agent")?;
-
-    if !resp.status().is_success() {
-        let status = resp.status().as_u16();
-        let body = resp.text().await.unwrap_or_default();
-        bail!("Handoff failed (HTTP {}): {}", status, body);
-    }
-
-    Ok(())
+    let _ = (target, messages, instructions, auth_token);
+    bail!(
+        "A2A conversation handoff is not supported in this CLI build; use task delegation instead"
+    )
 }

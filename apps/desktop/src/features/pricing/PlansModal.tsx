@@ -8,9 +8,8 @@
  *   2. Settings → Billing tab (future — wire via openPlansModal() helper below)
  *
  * CTA routing:
- *   - Local / BYOK users: "Upgrade to Hobby" → opens https://agiworkforce.com/pricing via shell
- *   - Hobby (active): "Manage in Stripe portal" → openPricingPage('upgrade_required')
- *   - Pro / Max: "Join waitlist" → opens https://agiworkforce.com/waitlist via shell
+ *   - Paid/cloud tiers are v1 waitlist-gated.
+ *   - "Upgrade" / "Join waitlist" opens the in-app Cloud Bridge invite/waitlist modal.
  */
 import { X } from 'lucide-react';
 import {
@@ -22,7 +21,6 @@ import {
 } from '@/components/ui/Dialog';
 import { PlanCard } from './PlanCard';
 import { isFreePlan, type UIPlanTier } from '@agiworkforce/types';
-import { openExternalUrl, openPricingPage } from '../../utils/navigation';
 import { useAppModeStore } from '../../stores/appModeStore';
 
 // ---------------------------------------------------------------------------
@@ -32,6 +30,7 @@ import { useAppModeStore } from '../../stores/appModeStore';
 export interface PlansModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onOpenCloudWaitlist?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,11 +58,11 @@ function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier {
 // PlansModal
 // ---------------------------------------------------------------------------
 
-export function PlansModal({ open, onOpenChange }: PlansModalProps) {
+export function PlansModal({ open, onOpenChange, onOpenCloudWaitlist }: PlansModalProps) {
   const rawPlan = useAppModeStore((s) => s.planTier);
   const currentTier = legacyToUIPlanTier(rawPlan);
 
-  async function handleCtaClick(tier: UIPlanTier) {
+  function handleCtaClick(tier: UIPlanTier) {
     if (tier === 'local' || tier === 'byok') {
       // Already free — nothing to do (CTA should be disabled/current)
       return;
@@ -71,15 +70,12 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
 
     if (tier === 'hobby') {
       if (isFreePlan(currentTier)) {
-        // Upgrade path: open pricing page
-        await openPricingPage('upgrade_required');
+        onOpenCloudWaitlist?.();
       } else {
-        // Active Hobby user: send to Stripe portal
-        await openPricingPage('upgrade_required');
+        onOpenCloudWaitlist?.();
       }
     } else if (tier === 'pro' || tier === 'max') {
-      // Waitlist
-      await openExternalUrl('https://agiworkforce.com/waitlist');
+      onOpenCloudWaitlist?.();
     }
 
     onOpenChange(false);
@@ -124,16 +120,15 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
                 key={tier}
                 tier={tier}
                 isCurrentPlan={tier === currentTier}
-                onCtaClick={(t) => void handleCtaClick(t)}
+                onCtaClick={handleCtaClick}
               />
             ))}
           </div>
 
           {/* Footer note */}
           <p className="mt-6 text-center text-[11px] text-muted-foreground">
-            Pro and Max are on the waitlist — join early to lock in launch pricing. All prices in
-            USD. Subject to change before GA.
-            {/* TODO(billing): replace above with real pricing once Stripe products are finalized */}
+            Managed cloud is private beta. Join the waitlist or enter an invitation code to unlock
+            cloud routing when your workspace is approved.
           </p>
         </div>
       </DialogContent>

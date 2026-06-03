@@ -7,7 +7,7 @@ vi.mock('@agiworkforce/types', () => ({
   getModelMetadataById: vi.fn((id: string) => {
     const catalog: Record<string, Record<string, unknown>> = {
       'claude-sonnet-4-6': { inputCost: 3.0, outputCost: 15.0 },
-      'claude-opus-4.7': { inputCost: 5.0, outputCost: 25.0, cached_input: 0.3 },
+      'claude-opus-4.8': { inputCost: 5.0, outputCost: 25.0, cached_input: 0.3 },
       'gpt-5.5': { inputCost: 5.0, outputCost: 30.0 },
       'deepseek-v4-flash': { inputCost: 0.14, outputCost: 0.28, cached_input: 0.0028 },
     };
@@ -102,16 +102,16 @@ describe('cost calculation', () => {
   });
 
   it('uses catalog cached_input price when present', () => {
-    // claude-opus-4.7: inputCost=$5, cached_input=$0.3
+    // claude-opus-4.8: inputCost=$5, cached_input=$0.3
     // 1M input + 1M cache_read = $5 + $0.3 = $5.3
-    recordModelUsage(SESSION_A, 'claude-opus-4.7', {
+    recordModelUsage(SESSION_A, 'claude-opus-4.8', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-opus-4.7')!.costUsd;
+    const cost = report.get('claude-opus-4.8')!.costUsd;
     expect(cost).toBeCloseTo(5.3, 4);
   });
 

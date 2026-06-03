@@ -12,6 +12,11 @@ import {
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { Effort } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import {
+  buildAutoEconomyTrialPaywallSlot,
+  isAutoEconomyTrialErrorCode,
+  useAutoEconomyTrialStore,
+} from '@/features/chat/stores/autoEconomyTrialStore';
 
 interface SendMessageOptions {
   model?: string;
@@ -40,6 +45,18 @@ interface UseChatStreamReturn {
   sendMessage: (content: string, options?: SendMessageOptions) => Promise<void>;
   stopGeneration: () => void;
   isStreaming: boolean;
+}
+
+class ChatApiError extends Error {
+  code: string | undefined;
+  status: number | undefined;
+
+  constructor(message: string, options: { code?: string; status?: number } = {}) {
+    super(message);
+    this.name = 'ChatApiError';
+    this.code = options.code;
+    this.status = options.status;
+  }
 }
 
 /**
@@ -360,9 +377,15 @@ export function useChatStream(): UseChatStreamReturn {
           signal: abortControllerRef.current.signal,
         });
 
+        useAutoEconomyTrialStore.getState().applyHeaders(response.headers);
+
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || `Request failed: ${response.status}`);
+          const serverError = (errorData as { error?: { code?: string; message?: string } }).error;
+          throw new ChatApiError(serverError?.message || `Request failed: ${response.status}`, {
+            code: serverError?.code,
+            status: response.status,
+          });
         }
 
         if (!response.body) {
@@ -631,6 +654,26 @@ export function useChatStream(): UseChatStreamReturn {
         } else {
           // Real error - show the actual error message to help with debugging
           const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+          const errorCode = error instanceof ChatApiError ? error.code : undefined;
+          if (isAutoEconomyTrialErrorCode(errorCode)) {
+            if (errorCode === 'website_trial_prompt_limit_reached') {
+              useAutoEconomyTrialStore.getState().markExhausted();
+            }
+            finishRunningTools('failed', errorMessage);
+            updateMessage(assistantMessageId, {
+              isStreaming: false,
+              content: '',
+              error: false,
+              metadata: {
+                paywall: buildAutoEconomyTrialPaywallSlot(errorCode, errorMessage),
+              },
+            });
+            setError(errorMessage);
+            stopStreaming();
+            setLoading(false);
+            return;
+          }
+
           console.error('[useChatStream] API Error:', errorMessage, error);
           finishRunningTools('failed', errorMessage);
 

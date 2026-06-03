@@ -123,7 +123,17 @@ async function handleReleaseCheck(
 
   const GITHUB_API_URL = `https://api.github.com/repos/${OWNER}/${REPO}/releases/latest`;
 
-  const response = await fetch(GITHUB_API_URL, { headers, next: { revalidate: 300 } });
+  let response: Response;
+  try {
+    response = await fetch(GITHUB_API_URL, {
+      headers,
+      next: { revalidate: 300 },
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    logger.warn({ error }, 'GitHub API request failed during release check');
+    return noUpdateResponse();
+  }
 
   if (!response.ok) {
     logger.warn({ status: response.status }, 'GitHub API error during release check');
@@ -159,7 +169,16 @@ async function handleReleaseCheck(
   }
 
   // 5. Fetch signature content
-  const sigResponse = await fetch(signatureAsset.browser_download_url, { headers });
+  let sigResponse: Response;
+  try {
+    sigResponse = await fetch(signatureAsset.browser_download_url, {
+      headers,
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    logger.warn({ error, assetName: signatureAsset.name }, 'Release signature fetch failed');
+    return noUpdateResponse();
+  }
   if (!sigResponse.ok) {
     return noUpdateResponse();
   }

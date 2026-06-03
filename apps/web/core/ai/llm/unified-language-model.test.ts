@@ -32,9 +32,7 @@ vi.mock('./providers/anthropic-claude', () => {
   const stream = vi.fn();
   const update = vi.fn();
   const configured = vi.fn().mockReturnValue(true);
-  const getModels = vi
-    .fn()
-    .mockReturnValue(['claude-opus-4-5-20251101', 'claude-sonnet-4-5-20250929']);
+  const getModels = vi.fn().mockReturnValue(['claude-opus-4-5-20251101', 'claude-sonnet-4-6']);
   class AnthropicProvider {
     sendMessage = send;
     streamMessage = stream;
@@ -50,7 +48,7 @@ vi.mock('./providers/openai-gpt', () => {
   const stream = vi.fn();
   const update = vi.fn();
   const configured = vi.fn().mockReturnValue(true);
-  const getModels = vi.fn().mockReturnValue(['gpt-5.4', 'gpt-5.4', 'o3']);
+  const getModels = vi.fn().mockReturnValue(['gpt-5.5', 'gpt-5.5', 'o3']);
   class OpenAIProvider {
     sendMessage = send;
     streamMessage = stream;
@@ -98,7 +96,7 @@ vi.mock('./providers/grok-ai', () => {
   const stream = vi.fn();
   const update = vi.fn();
   const configured = vi.fn().mockReturnValue(true);
-  const getModels = vi.fn().mockReturnValue(['grok-4', 'grok-3']);
+  const getModels = vi.fn().mockReturnValue(['grok-4.3', 'grok-3']);
   class GrokProvider {
     sendMessage = send;
     streamMessage = stream;
@@ -212,11 +210,11 @@ describe('UnifiedLLMService', () => {
     vi.mocked(qwenProvider.isConfigured).mockReturnValue(true);
     vi.mocked(AnthropicProvider.getAvailableModels).mockReturnValue([
       'claude-opus-4-5-20251101',
-      'claude-sonnet-4-5-20250929',
+      'claude-sonnet-4-6',
     ] as never);
     vi.mocked(OpenAIProvider.getAvailableModels).mockReturnValue([
-      'gpt-5.4',
-      'gpt-5.4',
+      'gpt-5.5',
+      'gpt-5.5',
       'o3',
     ] as never);
     vi.mocked(GoogleProvider.getAvailableModels).mockReturnValue([
@@ -227,7 +225,7 @@ describe('UnifiedLLMService', () => {
       'sonar',
       'sonar-pro',
     ] as never);
-    vi.mocked(GrokProvider.getAvailableModels).mockReturnValue(['grok-4', 'grok-3'] as never);
+    vi.mocked(GrokProvider.getAvailableModels).mockReturnValue(['grok-4.3', 'grok-3'] as never);
     vi.mocked(DeepSeekProvider.getAvailableModels).mockReturnValue([
       'deepseek-chat',
       'deepseek-reasoner',
@@ -254,7 +252,7 @@ describe('UnifiedLLMService', () => {
     it('should create service with custom configuration', () => {
       const customService = new UnifiedLLMService({
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         maxTokens: 8000,
         temperature: 0.5,
       });
@@ -262,7 +260,7 @@ describe('UnifiedLLMService', () => {
       const config = customService.getConfig();
 
       expect(config.provider).toBe('anthropic');
-      expect(config.model).toBe('claude-sonnet-4-5-20250929');
+      expect(config.model).toBe('claude-sonnet-4-6');
       expect(config.maxTokens).toBe(8000);
     });
 
@@ -300,8 +298,8 @@ describe('UnifiedLLMService', () => {
 
     it('should get available models for provider', () => {
       const openaiModels = service.getAvailableModels('openai');
-      expect(openaiModels).toContain('gpt-5.4');
-      expect(openaiModels).toContain('gpt-5.4');
+      expect(openaiModels).toContain('gpt-5.5');
+      expect(openaiModels).toContain('gpt-5.5');
 
       const anthropicModels = service.getAvailableModels('anthropic');
       expect(anthropicModels).toContain('claude-opus-4-5-20251101');
@@ -342,7 +340,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Hello from OpenAI!',
         usage: { promptTokens: 5, completionTokens: 10, totalTokens: 15 },
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       });
 
       const response = await service.sendMessage(mockMessages);
@@ -356,7 +354,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(anthropicProvider.sendMessage).mockResolvedValueOnce({
         content: 'Hello from Anthropic!',
         usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
       });
 
       const response = await service.sendMessage(mockMessages, undefined, undefined, 'anthropic');
@@ -397,13 +395,13 @@ describe('UnifiedLLMService', () => {
       vi.mocked(anthropicProvider.sendMessage).mockResolvedValueOnce({
         content: 'Object API response',
         usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
       });
 
       const response = await service.sendMessage({
         provider: 'anthropic',
         messages: [{ role: 'user', content: 'Test' }],
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         sessionId: 'session-123',
         userId: 'user-456',
       });
@@ -416,18 +414,18 @@ describe('UnifiedLLMService', () => {
       // factory-created service with custom params
       const client = LLMClientFactory.create({
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         temperature: 0.3,
         maxTokens: 2000,
       });
 
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       });
 
       const config = client.getConfig();
-      expect(config.model).toBe('gpt-5.4');
+      expect(config.model).toBe('gpt-5.5');
       expect(config.temperature).toBe(0.3);
       expect(config.maxTokens).toBe(2000);
     });
@@ -565,7 +563,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
         usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       });
 
       await service.sendMessage(mockMessages, 'session-123', 'user-456', 'openai');
@@ -712,7 +710,7 @@ describe('UnifiedLLMService', () => {
       };
       const ctxB: RequestContext = {
         provider: 'openai',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
         temperature: 0.9,
         maxTokens: 8000,
       };
@@ -730,7 +728,7 @@ describe('UnifiedLLMService', () => {
       expect(configA.maxTokens).toBe(1000);
 
       expect(configB.provider).toBe('openai');
-      expect(configB.model).toBe('gpt-5.4');
+      expect(configB.model).toBe('gpt-5.5');
       expect(configB.temperature).toBe(0.9);
       expect(configB.maxTokens).toBe(8000);
 
@@ -739,7 +737,7 @@ describe('UnifiedLLMService', () => {
     });
 
     it('frozen instance throws on mutation attempt in strict mode', () => {
-      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.4' };
+      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.5' };
       const client = LLMClientFactory.create(ctx);
 
       // Attempting to set a property on a frozen object throws TypeError.
@@ -772,7 +770,7 @@ describe('UnifiedLLMService', () => {
     });
 
     it('factory-created instance is frozen', () => {
-      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.4' };
+      const ctx: RequestContext = { provider: 'openai', model: 'gpt-5.5' };
       const client = LLMClientFactory.create(ctx);
 
       expect(Object.isFrozen(client)).toBe(true);
@@ -786,7 +784,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(anthropicProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
         usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
       });
 
       const response = await service.sendMessage(mockMessages, undefined, undefined, 'anthropic');
@@ -800,7 +798,7 @@ describe('UnifiedLLMService', () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
         usage: { promptTokens: 15, completionTokens: 25, totalTokens: 40 },
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       });
 
       const response = await service.sendMessage(mockMessages, undefined, undefined, 'openai');
@@ -813,7 +811,7 @@ describe('UnifiedLLMService', () => {
     it('should handle response without usage', async () => {
       vi.mocked(openaiProvider.sendMessage).mockResolvedValueOnce({
         content: 'Response',
-        model: 'gpt-5.4',
+        model: 'gpt-5.5',
       });
 
       const response = await service.sendMessage(mockMessages);

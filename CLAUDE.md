@@ -12,7 +12,7 @@ The repo is a pnpm + cargo monorepo with seven surfaces under `apps/` (cli, desk
 
 ## Claude-Specific Notes
 
-- Follow `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/current/agi-product-requirements.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/byok-open-model-provider-strategy.md` for model/provider/BYOK work, `docs/agent-context/README.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
+- Follow `AGENTS.md`, `docs/current/source-of-truth.md`, `docs/current/agi-product-requirements.md`, `docs/current/parity-implementation-matrix.md`, `docs/current/byok-open-model-provider-strategy.md` for model/provider/BYOK work, `docs/agent-context/README.md`, `docs/agent-context/local-reference-lessons.md`, `docs/engineering/agent-native-development.md`, and `docs/agent-context/known-flaws.md` before using older launch plans.
 - Follow `docs/engineering/agent-harness-rollout.md` for Claude Code-style context, hooks, skills, plugins, LSP/MCP, and subagent rollout order.
 - Follow `docs/engineering/naming-conventions.md` for product names, CLI command examples, file/folder names, commits, and hooks.
 - Follow `docs/engineering/service-layer-architecture.md` when extracting repeated route/action/command mechanics into shared services.
@@ -34,7 +34,9 @@ These rules must stay mirrored in `AGENTS.md` and guarded by `pnpm check:agent-c
 - Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
+- Do not treat generated audit/report markdown as remediation. Audit files are triage queues: open the cited source files, confirm the issue in implementation, patch production paths when safe, and only summarize after code changes or explicit blocked risks are recorded.
 - Use the nearest path-scoped `AGENTS.md` before editing high-risk areas.
+- Follow `AGENTS.md` LLM Failure Prevention Rules and `docs/agent-context/llm-failure-taxonomy.json`. In particular, do not leave fake tests, swallowed mock assertions, production stubs, vulnerable dependency ranges, or unvalidated tool/LLM/API/IPC inputs; `pnpm check:llm-failures` is the fast guardrail, `pnpm check:llm-failures:staged` protects new staged work, and `pnpm check:llm-failures:strict` applies the broader taxonomy scan.
 
 ## Surface Subagents
 

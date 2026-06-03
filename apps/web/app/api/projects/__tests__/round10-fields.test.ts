@@ -169,7 +169,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
       default_privacy_mode: 'byok',
       default_provider_mode: 'DirectByok',
       allowed_surfaces: ['web', 'mobile'],
-      default_model_id: 'claude-opus-4-7',
+      default_model_id: 'claude-opus-4-8',
       imported_from: 'claude',
     };
     setupUpdateChain({ data: dbRow, error: null });
@@ -178,7 +178,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
       defaultPrivacyMode: 'byok',
       defaultProviderMode: 'DirectByok',
       allowedSurfaces: ['web', 'mobile'],
-      defaultModelId: 'claude-opus-4-7',
+      defaultModelId: 'claude-opus-4-8',
       importedFrom: 'claude',
     });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
@@ -188,7 +188,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
     expect(json.project['defaultPrivacyMode']).toBe('byok');
     expect(json.project['defaultProviderMode']).toBe('DirectByok');
     expect(json.project['allowedSurfaces']).toEqual(['web', 'mobile']);
-    expect(json.project['defaultModelId']).toBe('claude-opus-4-7');
+    expect(json.project['defaultModelId']).toBe('claude-opus-4-8');
     expect(json.project['importedFrom']).toBe('claude');
   });
 

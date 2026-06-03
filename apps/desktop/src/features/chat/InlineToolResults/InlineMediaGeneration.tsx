@@ -43,7 +43,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     const provider = data?.provider as string | undefined;
     const mappedProvider =
       provider === 'openai'
-        ? 'dall-e-3'
+        ? 'gpt-image-2'
         : provider === 'google'
           ? 'google'
           : provider === 'stability'
@@ -53,7 +53,7 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
       <div className="mt-3">
         <MediaGenerationProgress
           type="image"
-          provider={mappedProvider as 'dall-e-3' | 'google' | 'stability' | undefined}
+          provider={mappedProvider as 'gpt-image-2' | 'google' | 'stability' | undefined}
           prompt={prompt}
         />
       </div>

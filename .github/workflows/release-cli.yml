@@ -168,6 +168,9 @@ jobs:
           done
           ls -R dist/cli/
 
+      - name: Verify npm package staging
+        run: npm run --prefix apps/cli/npm package-check -- --staged
+
       - name: Publish all packages
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

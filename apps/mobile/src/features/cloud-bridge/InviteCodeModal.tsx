@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { redeemInviteCode, joinWaitlist } from '@/src/features/waitlist/service';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { InviteCodeError, InviteCodeModalProps } from './types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -83,7 +84,9 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
     if (result.inviteId) onRedeemed?.(result.inviteId);
     setTimeout(() => {
       onClose();
-      router.push('/(auth)/login' as never);
+      if (FEATURES.auth) {
+        router.push('/(auth)/login' as never);
+      }
     }, 1500);
   }, [canSubmit, trimmedCode, source, markInviteRedeemed, onRedeemed, onClose, router]);
 

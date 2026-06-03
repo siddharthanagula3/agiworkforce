@@ -8,11 +8,13 @@ import {
   listCloudConversations,
   updateCloudConversationTitle,
 } from '../api/cloudApi';
+import { getTaskModelForProvider } from '../constants/llm';
 import { isCloudWeb, isTauri, isTestEnvironment } from './runtimeEnvironment';
 
 export { isCloudWeb, isTauri } from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
+const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
 
 function mockDocumentCreationResult(args: Record<string, unknown> | undefined, format: string) {
   const path = String(args?.['outputPath'] ?? '/tmp/mock-document');
@@ -120,7 +122,7 @@ async function handleCloudWebCommand<T>(
       const model =
         typeof req?.['modelOverride'] === 'string' && req['modelOverride'].length > 0
           ? req['modelOverride']
-          : 'claude-sonnet-4.6';
+          : CLOUD_CHAT_DEFAULT_MODEL;
 
       void startCloudChatStream({
         conversationId,
@@ -2371,12 +2373,11 @@ export async function listen<T>(event: string, handler: EventCallback<T>): Promi
     };
   }
 
-  // Mock implementation for web
-  console.debug(`[Tauri Mock] Registered listener for event: ${event}`);
+  // Browser compatibility path for web builds.
+  console.debug(`[Tauri Web Bridge] Registered listener for event: ${event}`);
 
-  // Return a mock unlisten function
   return () => {
-    console.debug(`[Tauri Mock] Unregistered listener for event: ${event}`);
+    console.debug(`[Tauri Web Bridge] Unregistered listener for event: ${event}`);
   };
 }
 

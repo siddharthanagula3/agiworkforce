@@ -40,7 +40,7 @@ function makeValidAgent(overrides: Record<string, unknown> = {}): Record<string,
   return {
     id: 'agent-001',
     name: 'Researcher',
-    model: 'claude-opus-4-7',
+    model: 'claude-opus-4-8',
     status: 'running',
     currentStep: 'Searching the web',
     progress: 42,

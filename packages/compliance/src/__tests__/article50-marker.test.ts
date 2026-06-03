@@ -35,7 +35,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     const claim = buildProvenanceClaim({
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-opus-4.7',
+      model: 'claude-opus-4.8',
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     const serialised = serialiseClaim(claim);

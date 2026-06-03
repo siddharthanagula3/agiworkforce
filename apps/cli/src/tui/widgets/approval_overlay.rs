@@ -13,7 +13,7 @@
 //! │  Allow write_file to modify:                                                 │
 //! │    src/main.rs  (+42 / -3 lines)                                             │
 //! │                                                                              │
-//! │  [ Yes ]  [ No ]  [ Always Allow ]  [ Deny All ]                            │
+//! │  [ Yes ]  [ No ]  [ Allow Session ]  [ Always Allow ]  [ Deny All ]          │
 //! │     ↑                                                                        │
 //! │  ←/→ or h/l to move   Enter to confirm   Esc = No                           │
 //! └──────────────────────────────────────────────────────────────────────────────┘
@@ -44,6 +44,8 @@ pub enum ApprovalChoice {
     /// Deny this single tool call.
     No,
     /// Allow this tool for the remainder of the session (no further prompts).
+    AllowSession,
+    /// Always allow this tool in future sessions where the permission store applies.
     AlwaysAllow,
     /// Deny all remaining tool calls and stop the agentic loop.
     DenyAll,
@@ -55,8 +57,9 @@ impl ApprovalChoice {
         match self {
             Self::Yes => 0,
             Self::No => 1,
-            Self::AlwaysAllow => 2,
-            Self::DenyAll => 3,
+            Self::AllowSession => 2,
+            Self::AlwaysAllow => 3,
+            Self::DenyAll => 4,
         }
     }
 
@@ -65,15 +68,17 @@ impl ApprovalChoice {
         match self {
             Self::Yes => " Yes ",
             Self::No => " No ",
+            Self::AllowSession => " Allow Session ",
             Self::AlwaysAllow => " Always Allow ",
             Self::DenyAll => " Deny All ",
         }
     }
 }
 
-const CHOICES: [ApprovalChoice; 4] = [
+const CHOICES: [ApprovalChoice; 5] = [
     ApprovalChoice::Yes,
     ApprovalChoice::No,
+    ApprovalChoice::AllowSession,
     ApprovalChoice::AlwaysAllow,
     ApprovalChoice::DenyAll,
 ];
@@ -91,7 +96,7 @@ pub struct ApprovalOverlayState {
     pub prompt: String,
     /// Optional detail lines (file path, diff stat, command preview, …).
     pub detail: Vec<String>,
-    /// Index into `CHOICES` (0 = Yes, 1 = No, 2 = Always Allow, 3 = Deny All).
+    /// Index into `CHOICES` (0 = Yes, 1 = No, 2 = Allow Session, 3 = Always Allow, 4 = Deny All).
     pub cursor: usize,
     /// Set once the user confirms; `None` while the overlay is active.
     pub result: Option<ApprovalChoice>,
@@ -304,7 +309,7 @@ impl InteractiveView for ApprovalOverlayState {
                 self.visible = false;
                 ViewAction::Close
             }
-            // y/n/a/d shortcuts
+            // y/n/s/a/d shortcuts
             KeyAction::Char('y') | KeyAction::Char('Y') => {
                 self.cursor = ApprovalChoice::Yes.index();
                 self.result = Some(ApprovalChoice::Yes);
@@ -314,6 +319,12 @@ impl InteractiveView for ApprovalOverlayState {
             KeyAction::Char('n') | KeyAction::Char('N') => {
                 self.cursor = ApprovalChoice::No.index();
                 self.result = Some(ApprovalChoice::No);
+                self.visible = false;
+                ViewAction::Submit(self.cursor)
+            }
+            KeyAction::Char('s') | KeyAction::Char('S') => {
+                self.cursor = ApprovalChoice::AllowSession.index();
+                self.result = Some(ApprovalChoice::AllowSession);
                 self.visible = false;
                 ViewAction::Submit(self.cursor)
             }
@@ -454,15 +465,23 @@ mod tests {
     fn a_shortcut_resolves_always_allow() {
         let mut s = open_overlay();
         let action = s.handle_key(KeyAction::Char('a'));
-        assert_eq!(action, ViewAction::Submit(2));
+        assert_eq!(action, ViewAction::Submit(3));
         assert_eq!(s.result, Some(ApprovalChoice::AlwaysAllow));
+    }
+
+    #[test]
+    fn s_shortcut_resolves_allow_session() {
+        let mut s = open_overlay();
+        let action = s.handle_key(KeyAction::Char('s'));
+        assert_eq!(action, ViewAction::Submit(2));
+        assert_eq!(s.result, Some(ApprovalChoice::AllowSession));
     }
 
     #[test]
     fn d_shortcut_resolves_deny_all() {
         let mut s = open_overlay();
         let action = s.handle_key(KeyAction::Char('d'));
-        assert_eq!(action, ViewAction::Submit(3));
+        assert_eq!(action, ViewAction::Submit(4));
         assert_eq!(s.result, Some(ApprovalChoice::DenyAll));
     }
 
@@ -471,6 +490,7 @@ mod tests {
         for (key, expected) in [
             (KeyAction::Char('Y'), ApprovalChoice::Yes),
             (KeyAction::Char('N'), ApprovalChoice::No),
+            (KeyAction::Char('S'), ApprovalChoice::AllowSession),
             (KeyAction::Char('A'), ApprovalChoice::AlwaysAllow),
             (KeyAction::Char('D'), ApprovalChoice::DenyAll),
         ] {
@@ -489,6 +509,7 @@ mod tests {
         assert!(text.contains("src/main.rs"));
         assert!(text.contains("Yes"));
         assert!(text.contains("No"));
+        assert!(text.contains("Allow Session"));
         assert!(text.contains("Always Allow"));
         assert!(text.contains("Deny All"));
     }

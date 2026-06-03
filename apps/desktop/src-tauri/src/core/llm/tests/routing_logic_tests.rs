@@ -14,7 +14,7 @@
 // `has_provider` (which delegates to `is_configured`), so no real API keys
 // are required.
 //
-// [H20] fix: removed permanent `#[ignore]` from 17 routing-decision tests.
+// [H20] fix: routing-decision tests now run in CI instead of being skipped.
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -532,7 +532,7 @@ mod tests {
             "pro",
             Some("coding"),
             Some("chat"),
-            Some("claude-sonnet-4-5"),
+            Some("claude-sonnet-4-6"),
         );
         let suggestion = router.suggest_for_context(&ctx);
         // Without Anthropic registered, falls to legacy and may return a different provider.
@@ -543,7 +543,7 @@ mod tests {
     #[test]
     fn test_infer_provider_gpt_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.4"));
+        let ctx = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.5"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -572,12 +572,7 @@ mod tests {
     #[test]
     fn test_infer_provider_grok_model_prefix() {
         let router = LLMRouter::new();
-        let ctx = intelligent_context(
-            "hobby",
-            Some("reasoning"),
-            Some("chat"),
-            Some("grok-4-fast-reasoning"),
-        );
+        let ctx = intelligent_context("hobby", Some("reasoning"), Some("chat"), Some("grok-4.3"));
         let suggestion = router.suggest_for_context(&ctx);
         assert!(!suggestion.model.is_empty());
     }
@@ -599,11 +594,11 @@ mod tests {
     fn test_infer_provider_openai_gpt_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("gpt-5.4"),
+            router.infer_provider_from_model("gpt-5.5"),
             Provider::OpenAI
         );
         assert_eq!(
-            router.infer_provider_from_model("gpt-5.4-nano"),
+            router.infer_provider_from_model("gpt-5.4-mini"),
             Provider::OpenAI
         );
         assert_eq!(
@@ -630,7 +625,7 @@ mod tests {
     fn test_infer_provider_openai_non_chat_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("dall-e-3"),
+            router.infer_provider_from_model("gpt-image-2"),
             Provider::OpenAI
         );
         assert_eq!(
@@ -647,11 +642,11 @@ mod tests {
     fn test_infer_provider_anthropic_models() {
         let router = LLMRouter::new();
         assert_eq!(
-            router.infer_provider_from_model("claude-sonnet-4-5"),
+            router.infer_provider_from_model("claude-sonnet-4-6"),
             Provider::Anthropic
         );
         assert_eq!(
-            router.infer_provider_from_model("claude-opus-4-6"),
+            router.infer_provider_from_model("claude-opus-4.8"),
             Provider::Anthropic
         );
         assert_eq!(
@@ -698,11 +693,8 @@ mod tests {
     #[test]
     fn test_infer_provider_xai_models() {
         let router = LLMRouter::new();
-        assert_eq!(router.infer_provider_from_model("grok-4"), Provider::XAI);
-        assert_eq!(
-            router.infer_provider_from_model("grok-4-fast-reasoning"),
-            Provider::XAI
-        );
+        assert_eq!(router.infer_provider_from_model("grok-4.3"), Provider::XAI);
+        assert_eq!(router.infer_provider_from_model("grok-4.3"), Provider::XAI);
         assert_eq!(router.infer_provider_from_model("GROK-4"), Provider::XAI);
     }
 
@@ -997,21 +989,21 @@ mod tests {
             "pro",
             Some("coding"),
             Some("chat"),
-            Some("claude-sonnet-4-5"),
+            Some("claude-sonnet-4-6"),
         );
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::Anthropic);
-        // claude-sonnet-4.5 is deprecated; canonicalization forwards to current Sonnet.
+        // claude-sonnet-4.6 is deprecated; canonicalization forwards to current Sonnet.
         assert_eq!(suggestion.model, "claude-sonnet-4.6");
     }
 
     #[test]
     fn test_intelligent_routing_infer_openai_provider() {
         let router = router_with_all_providers();
-        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.4"));
+        let context = intelligent_context("pro", Some("chat"), Some("chat"), Some("gpt-5.5"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::OpenAI);
-        assert_eq!(suggestion.model, "gpt-5.4");
+        assert_eq!(suggestion.model, "gpt-5.5");
     }
 
     #[test]
@@ -1052,14 +1044,10 @@ mod tests {
     #[test]
     fn test_intelligent_routing_infer_xai_provider() {
         let router = router_with_all_providers();
-        // models.json canonicalization maps grok-4-fast-reasoning + siblings
+        // models.json canonicalization maps grok-4.3 + siblings
         // → grok-4.3 (the deprecated families all sunset 2026-05-15).
-        let context = intelligent_context(
-            "hobby",
-            Some("reasoning"),
-            Some("chat"),
-            Some("grok-4-fast-reasoning"),
-        );
+        let context =
+            intelligent_context("hobby", Some("reasoning"), Some("chat"), Some("grok-4.3"));
         let suggestion = router.suggest_for_context(&context);
         assert_eq!(suggestion.provider, Provider::XAI);
         assert_eq!(suggestion.model, "grok-4.3");

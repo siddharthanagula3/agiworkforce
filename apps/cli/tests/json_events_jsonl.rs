@@ -33,14 +33,7 @@ fn agiworkforce_cmd() -> Command {
 /// Helper: run the binary and collect stdout lines (non-empty, trimmed).
 fn run_json_events(models_arg: &str, prompt: &str) -> (Vec<String>, String, String) {
     let output = agiworkforce_cmd()
-        .args([
-            "--demo",
-            "--json-events",
-            "exec",
-            "-m",
-            models_arg,
-            prompt,
-        ])
+        .args(["--demo", "--json-events", "exec", "-m", models_arg, prompt])
         .output()
         .expect("failed to spawn agiworkforce");
 
@@ -61,7 +54,7 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
     // pass.  --demo forces a rate-limit on the primary and activates demo mode
     // on the fallback, exercising the chat.rs demo-fallback code path.
     let (lines, stdout, stderr) =
-        run_json_events("claude-haiku-4-5,claude-haiku-4-6", "hello");
+        run_json_events("claude-haiku-4-5,claude-haiku-4-5-20251001", "hello");
 
     // There must be at least one output line.
     assert!(
@@ -87,7 +80,11 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
     let has_message_delta = lines.iter().any(|line| {
         serde_json::from_str::<serde_json::Value>(line)
             .ok()
-            .and_then(|v| v.get("event").and_then(|e| e.as_str()).map(|s| s.to_string()))
+            .and_then(|v| {
+                v.get("event")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+            })
             .as_deref()
             == Some("message_delta")
     });
@@ -95,8 +92,7 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
         has_message_delta,
         "expected at least one message_delta event in the json-events stream.\n\
          Full stdout:\n{}\nstderr:\n{}",
-        stdout,
-        stderr
+        stdout, stderr
     );
 }
 
@@ -106,7 +102,7 @@ fn json_events_stdout_is_strict_jsonl_across_demo_fallback() {
 #[test]
 fn json_events_message_delta_session_id_matches_spawning_session_id() {
     let (lines, stdout, stderr) =
-        run_json_events("claude-haiku-4-5,claude-haiku-4-6", "hello");
+        run_json_events("claude-haiku-4-5,claude-haiku-4-5-20251001", "hello");
 
     // Parse all lines as JSON.
     let parsed: Vec<serde_json::Value> = lines
@@ -118,13 +114,21 @@ fn json_events_message_delta_session_id_matches_spawning_session_id() {
     let spawning_sid = parsed
         .iter()
         .find(|v| v.get("event").and_then(|e| e.as_str()) == Some("spawning"))
-        .and_then(|v| v.get("session_id").and_then(|s| s.as_str()).map(|s| s.to_string()));
+        .and_then(|v| {
+            v.get("session_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string())
+        });
 
     // Extract all message_delta session_ids.
     let delta_sids: Vec<String> = parsed
         .iter()
         .filter(|v| v.get("event").and_then(|e| e.as_str()) == Some("message_delta"))
-        .filter_map(|v| v.get("session_id").and_then(|s| s.as_str()).map(|s| s.to_string()))
+        .filter_map(|v| {
+            v.get("session_id")
+                .and_then(|s| s.as_str())
+                .map(|s| s.to_string())
+        })
         .collect();
 
     if let Some(sid) = spawning_sid {

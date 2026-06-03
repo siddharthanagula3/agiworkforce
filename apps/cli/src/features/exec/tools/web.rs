@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -18,6 +19,10 @@ pub(super) fn validate_fetch_url(url: &str) -> Result<(), String> {
     }
 
     let host = parsed.host_str().unwrap_or("");
+    let literal_host = host
+        .strip_prefix('[')
+        .and_then(|h| h.strip_suffix(']'))
+        .unwrap_or(host);
 
     const BLOCKED_HOSTS: &[&str] = &[
         "169.254.169.254",
@@ -29,41 +34,13 @@ pub(super) fn validate_fetch_url(url: &str) -> Result<(), String> {
         return Err(format!("Blocked metadata service host: {}", host));
     }
 
-    if host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "0.0.0.0" {
+    if host == "localhost" {
         return Err(format!("Blocked loopback address: {}", host));
     }
 
-    if let Ok(ip) = host.parse::<std::net::Ipv4Addr>() {
-        if ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified() {
+    if let Ok(ip) = literal_host.parse::<IpAddr>() {
+        if is_private_or_internal_ip(&ip) {
             return Err(format!("Blocked private/internal IP: {}", ip));
-        }
-        if ip.octets()[0] == 169 && ip.octets()[1] == 254 {
-            return Err(format!("Blocked link-local IP: {}", ip));
-        }
-    }
-
-    if let Ok(ip) = host.parse::<std::net::Ipv6Addr>() {
-        let segments = ip.segments();
-        let is_loopback_v6 = ip == std::net::Ipv6Addr::LOCALHOST;
-        let is_unspecified_v6 = ip == std::net::Ipv6Addr::UNSPECIFIED;
-        let is_link_local_v6 = segments[0] & 0xffc0 == 0xfe80;
-        let is_ula_v6 = segments[0] & 0xfe00 == 0xfc00;
-        let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
-
-        if is_loopback_v6 || is_unspecified_v6 || is_link_local_v6 || is_ula_v6 {
-            return Err(format!("Blocked private/internal IPv6: {}", ip));
-        }
-
-        if is_v4_mapped {
-            let mapped = std::net::Ipv4Addr::new(
-                (segments[6] >> 8) as u8,
-                segments[6] as u8,
-                (segments[7] >> 8) as u8,
-                segments[7] as u8,
-            );
-            if mapped.is_loopback() || mapped.is_private() || mapped.is_link_local() {
-                return Err(format!("Blocked private IPv4-mapped IPv6: {}", ip));
-            }
         }
     }
 
@@ -88,6 +65,7 @@ pub(super) fn is_private_or_internal_ip(ip: &std::net::IpAddr) -> bool {
                 || *v6 == std::net::Ipv6Addr::UNSPECIFIED
                 || (segments[0] & 0xffc0 == 0xfe80)
                 || (segments[0] & 0xfe00 == 0xfc00)
+                || v6.is_multicast()
                 || {
                     let is_v4_mapped = segments[0..5] == [0, 0, 0, 0, 0] && segments[5] == 0xffff;
                     if is_v4_mapped {
@@ -382,4 +360,69 @@ pub(super) async fn execute_tool_search(args: &HashMap<String, String>) -> Resul
         success: true,
         output: crate::tool_search::render_schema_results(&results),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_fetch_url;
+
+    #[test]
+    fn validate_fetch_url_rejects_literal_internal_ipv4_hosts() {
+        let blocked = [
+            "http://127.0.0.1/",
+            "http://10.0.0.1/",
+            "http://192.168.1.1/",
+            "http://169.254.169.254/",
+            "http://0.0.0.0/",
+            "http://100.64.0.1/",
+            "http://100.127.255.254/",
+            "http://224.0.0.1/",
+            "http://240.0.0.1/",
+            "http://255.255.255.255/",
+        ];
+
+        for url in blocked {
+            let err = validate_fetch_url(url).expect_err(url);
+            assert!(
+                err.contains("Blocked private/internal IP")
+                    || err.contains("Blocked metadata service host"),
+                "expected {url} to be blocked by SSRF policy, got {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_fetch_url_rejects_literal_internal_ipv6_hosts() {
+        let blocked = [
+            "http://[::1]/",
+            "http://[::]/",
+            "http://[fe80::1]/",
+            "http://[fc00::1]/",
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:10.0.0.1]/",
+            "http://[::ffff:169.254.169.254]/",
+            "http://[::ffff:100.64.0.1]/",
+            "http://[::ffff:224.0.0.1]/",
+            "http://[ff02::1]/",
+        ];
+
+        for url in blocked {
+            let err = validate_fetch_url(url).expect_err(url);
+            assert!(
+                err.contains("Blocked private/internal IP"),
+                "expected {url} to be blocked by SSRF policy, got {err}"
+            );
+        }
+    }
+
+    #[test]
+    fn validate_fetch_url_allows_literal_public_ip_hosts() {
+        for url in [
+            "http://1.1.1.1/",
+            "https://8.8.8.8/",
+            "http://[2001:4860:4860::8888]/",
+        ] {
+            validate_fetch_url(url).expect(url);
+        }
+    }
 }

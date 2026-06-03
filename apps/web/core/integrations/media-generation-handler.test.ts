@@ -1,6 +1,6 @@
 /**
  * Media Generation Handler Tests
- * Unit tests for the unified media generation service integrating DALL-E, Imagen, and Veo
+ * Unit tests for the unified media generation service integrating GPT Image, Imagen, and Veo
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -27,15 +27,15 @@ vi.mock('./google-veo-service', () => ({
   },
 }));
 
-vi.mock('./dalle-image-service', () => ({
-  dallEImageService: {
+vi.mock('./openai-image-service', () => ({
+  openAIImageService: {
     generateImage: vi.fn(),
     estimateCost: vi.fn(),
   },
 }));
 
 describe('Media Generation Handler', () => {
-  let mockDallE: {
+  let mockOpenAIImage: {
     generateImage: ReturnType<typeof vi.fn>;
     estimateCost: ReturnType<typeof vi.fn>;
   };
@@ -52,8 +52,8 @@ describe('Media Generation Handler', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
 
-    const { dallEImageService } = await import('./dalle-image-service');
-    mockDallE = dallEImageService as unknown as {
+    const { openAIImageService } = await import('./openai-image-service');
+    mockOpenAIImage = openAIImageService as unknown as {
       generateImage: ReturnType<typeof vi.fn>;
       estimateCost: ReturnType<typeof vi.fn>;
     };
@@ -109,52 +109,52 @@ describe('Media Generation Handler', () => {
       quality: 'standard',
     };
 
-    it('should generate image successfully using DALL-E', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+    it('should generate image successfully using GPT Image', async () => {
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
-          url: 'https://dalle.openai.com/image.png',
+          url: 'https://images.openai.com/image.png',
           prompt: 'A beautiful sunset',
           revisedPrompt: 'A stunning sunset over the ocean',
           size: '1024x1024',
           quality: 'standard',
           style: 'natural',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
 
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       const result = await mediaGenerationService.generateImage(mockRequest);
 
       expect(result.id).toBe('img-123');
       expect(result.type).toBe('image');
-      expect(result.url).toBe('https://dalle.openai.com/image.png');
+      expect(result.url).toBe('https://images.openai.com/image.png');
       expect(result.status).toBe('completed');
       expect(result.cost).toBe(0.04);
     });
 
     it('should map realistic style to natural', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
           quality: 'standard',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({
         prompt: 'Test',
         style: 'realistic',
       });
 
-      expect(mockDallE.generateImage).toHaveBeenCalledWith(
+      expect(mockOpenAIImage.generateImage).toHaveBeenCalledWith(
         expect.objectContaining({
           style: 'natural',
         }),
@@ -162,24 +162,24 @@ describe('Media Generation Handler', () => {
     });
 
     it('should map photographic style to natural', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({
         prompt: 'Test',
         style: 'photographic',
       });
 
-      expect(mockDallE.generateImage).toHaveBeenCalledWith(
+      expect(mockOpenAIImage.generateImage).toHaveBeenCalledWith(
         expect.objectContaining({
           style: 'natural',
         }),
@@ -187,24 +187,24 @@ describe('Media Generation Handler', () => {
     });
 
     it('should use vivid style for artistic styles', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({
         prompt: 'Test',
         style: 'artistic',
       });
 
-      expect(mockDallE.generateImage).toHaveBeenCalledWith(
+      expect(mockOpenAIImage.generateImage).toHaveBeenCalledWith(
         expect.objectContaining({
           style: 'vivid',
         }),
@@ -212,7 +212,7 @@ describe('Media Generation Handler', () => {
     });
 
     it('should throw error on generation failure', async () => {
-      mockDallE.generateImage.mockRejectedValueOnce(new Error('Content policy violation'));
+      mockOpenAIImage.generateImage.mockRejectedValueOnce(new Error('Content policy violation'));
 
       await expect(mediaGenerationService.generateImage({ prompt: 'Test' })).rejects.toThrow(
         new Error('Image generation failed: Content policy violation'), // AUDIT-FIX: vitest 4.x
@@ -220,17 +220,17 @@ describe('Media Generation Handler', () => {
     });
 
     it('should add result to history', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({ prompt: 'Test' });
 
@@ -240,17 +240,17 @@ describe('Media Generation Handler', () => {
     });
 
     it('should include images array in result', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       const result = await mediaGenerationService.generateImage({
         prompt: 'Test',
@@ -434,17 +434,17 @@ describe('Media Generation Handler', () => {
 
   describe('getGenerationHistory', () => {
     it('should return copy of history', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({ prompt: 'Test' });
 
@@ -473,18 +473,18 @@ describe('Media Generation Handler', () => {
 
     it('should calculate stats correctly', async () => {
       // Generate 2 images
-      mockDallE.generateImage.mockResolvedValue([
+      mockOpenAIImage.generateImage.mockResolvedValue([
         {
           id: 'img-1',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
           style: 'vivid',
         },
       ]);
-      mockDallE.estimateCost.mockReturnValue(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValue(0.04);
 
       await mediaGenerationService.generateImage({
         prompt: 'Image 1',
@@ -533,17 +533,17 @@ describe('Media Generation Handler', () => {
 
   describe('getGenerationById', () => {
     it('should return generation by ID', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({ prompt: 'Test' });
 
@@ -562,17 +562,17 @@ describe('Media Generation Handler', () => {
 
   describe('deleteGeneration', () => {
     it('should delete generation by ID', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({ prompt: 'Test' });
 
@@ -591,17 +591,17 @@ describe('Media Generation Handler', () => {
 
   describe('clearHistory', () => {
     it('should clear all history', async () => {
-      mockDallE.generateImage.mockResolvedValueOnce([
+      mockOpenAIImage.generateImage.mockResolvedValueOnce([
         {
           id: 'img-123',
           url: 'https://example.com/image.png',
           prompt: 'Test',
           size: '1024x1024',
-          model: 'dall-e-3',
+          model: 'gpt-image-2',
           createdAt: new Date(),
         },
       ]);
-      mockDallE.estimateCost.mockReturnValueOnce(0.04);
+      mockOpenAIImage.estimateCost.mockReturnValueOnce(0.04);
 
       await mediaGenerationService.generateImage({ prompt: 'Test' });
 

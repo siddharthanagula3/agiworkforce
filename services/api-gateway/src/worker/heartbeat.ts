@@ -29,6 +29,7 @@ import {
   paramString,
   HEARTBEAT_OFFLINE_THRESHOLD_MS,
 } from './types';
+import { verifySessionIngressToken as verifySignedSessionIngressToken } from './sessionIngressToken';
 
 const router = Router();
 
@@ -41,19 +42,7 @@ function hashSecret(secret: string): string {
 }
 
 function verifySessionIngressToken(token: string, environmentId: string, workId: string): boolean {
-  try {
-    const payload = JSON.parse(Buffer.from(token, 'base64url').toString('utf8')) as {
-      environment_id?: string;
-      work_id?: string;
-      exp?: number;
-    };
-    if (payload.environment_id !== environmentId) return false;
-    if (payload.work_id !== workId) return false;
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return false;
-    return true;
-  } catch {
-    return false;
-  }
+  return verifySignedSessionIngressToken(token, { secret: JWT_SECRET, environmentId, workId });
 }
 
 // ---------------------------------------------------------------------------

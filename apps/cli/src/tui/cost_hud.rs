@@ -9,9 +9,6 @@
 //!   * `<70%`  → dim grey (calm)
 //!   * `70%-89%` → orange (heads up)
 //!   * `>=90%` → red (urgent)
-//!
-//! This is one of the four headline differentiators for the demo (see the
-//! plan in `~/.claude/plans/even-if-it-is-bubbly-octopus.md`).
 
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -42,18 +39,19 @@ pub struct CostHud {
 }
 
 impl CostHud {
-    /// Cumulative dollars spent for the supplied model. Cache creation is
-    /// billed at the input rate; cache reads are conservatively billed at
-    /// 1/10th the input rate (the closest thing to a public default; the
-    /// per-provider value is configurable through models.json once we wire
-    /// it up post-demo).
+    /// Cumulative dollars spent for the supplied model, using catalog pricing.
     pub fn dollars(&self, model_id: &str) -> f64 {
-        let (price_in, price_out) = model_catalog::pricing(model_id);
-        let billable_in = self.in_tokens as f64 + self.cache_creation as f64;
-        let billable_cache_read = self.cache_read as f64;
-        (billable_in * price_in
+        let Some(model) = model_catalog::find(model_id) else {
+            return 0.0;
+        };
+        let price_in = model.input_price_per_1m;
+        let price_out = model.output_price_per_1m;
+        let cache_read_price = model.cache_read_price_per_1m;
+        let cache_write_price = model.cache_write_price_per_1m;
+        (self.in_tokens as f64 * price_in
             + self.out_tokens as f64 * price_out
-            + billable_cache_read * price_in * 0.1)
+            + self.cache_read as f64 * cache_read_price
+            + self.cache_creation as f64 * cache_write_price)
             / 1_000_000.0
     }
 
@@ -173,20 +171,17 @@ mod tests {
     }
 
     #[test]
-    fn cache_creation_bills_at_input_rate() {
-        let no_cache = CostHud {
-            in_tokens: 1_000_000,
-            ..Default::default()
-        };
-        let with_cache = CostHud {
+    fn cache_creation_uses_catalog_write_rate() {
+        let model_id = "claude-sonnet-4-6";
+        let expected = model_catalog::find(model_id)
+            .map(|model| model.cache_write_price_per_1m)
+            .unwrap_or(0.0);
+        let hud = CostHud {
             in_tokens: 0,
             cache_creation: 1_000_000,
             ..Default::default()
         };
-        assert!(
-            (no_cache.dollars("claude-sonnet-4-6") - with_cache.dollars("claude-sonnet-4-6")).abs()
-                < 1e-6
-        );
+        assert!((hud.dollars(model_id) - expected).abs() < 1e-6);
     }
 
     #[test]
@@ -228,7 +223,10 @@ mod tests {
         // (1200 input != 1000 non-cached; we check that "in" comes before "cached")
         let in_pos = text.find("in ").unwrap();
         let cached_pos = text.find("cached").unwrap();
-        assert!(in_pos < cached_pos, "'in' must appear before 'cached': {text}");
+        assert!(
+            in_pos < cached_pos,
+            "'in' must appear before 'cached': {text}"
+        );
     }
 
     /// Reasoning column is absent when reasoning_tokens == 0 (non-reasoning model).

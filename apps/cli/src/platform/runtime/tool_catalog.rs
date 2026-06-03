@@ -451,7 +451,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         ).read_only().with_size_cap(20_000).deferred(),
         def(
             "batch",
-            "Execute multiple tool calls in parallel. Pass an array of tool call objects.",
+            "Execute multiple tool calls in order and return a compact result summary. Pass an array of tool call objects.",
             serde_json::json!({"type":"object","properties":{"calls":{"type":"array","description":"Array of tool call objects with `name` and `args` fields","items":{"type":"object"}}},"required":["calls"]}),
         ).with_size_cap(50_000).deferred(),
         def(
@@ -651,7 +651,7 @@ pub fn built_in_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "advisor",
             "Consult a higher-tier model for a side question without affecting session context. \
-             Returns a concise expert answer. Defaults to claude-opus-4-7 if available.",
+             Returns a concise expert answer using the highest-tier available catalog model unless a model override is supplied.",
             serde_json::json!({
                 "type": "object",
                 "properties": {

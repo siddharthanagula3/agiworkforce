@@ -4,10 +4,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
 import { ToolCallResponseSchema } from '@/lib/validations/tool-calls';
-import { MAX_MESSAGE_LENGTH } from '@/lib/validations/llm';
+import { MAX_MESSAGE_LENGTH, ToolChoiceSchema, ToolDefinitionSchema } from '@/lib/validations/llm';
 import { logger } from '@/lib/logger';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
+import {
+  AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS,
+  AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+  AUTO_ECONOMY_TRIAL_MODEL,
+  AUTO_ECONOMY_TRIAL_PROMPT_LIMIT,
+  isAutoEconomyTrialRequest,
+  isFreePlanTier,
+  reserveAutoEconomyTrialPrompt,
+  type AutoEconomyTrialReservation,
+} from '@/lib/services/auto-economy-trial-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { MODEL_TIER_REQUIREMENTS, canAccessModel } from '@/lib/model-tiers';
@@ -91,8 +101,8 @@ export const ChatCompletionRequestSchema = z.object({
     )
     .optional(),
   user: z.string().optional(),
-  tools: z.array(z.unknown()).optional(),
-  tool_choice: z.unknown().optional(),
+  tools: z.array(ToolDefinitionSchema).max(64).optional(),
+  tool_choice: ToolChoiceSchema.optional(),
   response_format: z
     .object({
       type: z.enum(['text', 'json_object', 'json_schema']).optional(),
@@ -135,6 +145,7 @@ export type ProcessedRequest = {
   quotaWarningHeader: string | null;
   isFlagshipRequest: boolean;
   indicResult: ReturnType<typeof detectIndicScript>;
+  autoEconomyTrial?: AutoEconomyTrialReservation;
   llmRequest: {
     model: string;
     messages: Array<{
@@ -376,6 +387,72 @@ export async function processRequest(
   }
 
   const chatRequest = validationResult.data;
+  const requestedModel = chatRequest.model;
+  const autoEconomyTrialEnabled = isAutoEconomyTrialRequest({
+    requestedModel,
+    planTier: subscription.plan_tier,
+  });
+
+  if (isFreePlanTier(subscription.plan_tier) && !autoEconomyTrialEnabled) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message:
+              'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, join the managed cloud waitlist, or use local/BYOK.',
+            type: 'invalid_request_error',
+            code: 'free_trial_auto_economy_only',
+          },
+        },
+        { status: 403 },
+      ),
+    };
+  }
+
+  if (autoEconomyTrialEnabled) {
+    const usesHostedAddOn =
+      chatRequest.web_search ||
+      chatRequest.web_fetch ||
+      chatRequest.code_execution ||
+      chatRequest.thinking_mode ||
+      chatRequest.thinking ||
+      chatRequest.effort ||
+      (chatRequest.tools?.length ?? 0) > 0 ||
+      (chatRequest.tool_choice !== undefined && chatRequest.tool_choice !== 'none') ||
+      (chatRequest.n ?? 1) > 1 ||
+      chatRequest.messages.some((msg) =>
+        Array.isArray(msg.content)
+          ? msg.content.some((part) => part.type === 'image_url' && part.image_url)
+          : false,
+      );
+
+    if (usesHostedAddOn) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message:
+                'The free Auto Economy trial is text-only and does not include tools, web search, code execution, thinking mode, images, or multiple choices.',
+              type: 'invalid_request_error',
+              code: 'free_trial_feature_unavailable',
+            },
+          },
+          { status: 403 },
+        ),
+      };
+    }
+
+    chatRequest.max_tokens = Math.min(
+      chatRequest.max_tokens ?? AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+      AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+    );
+    chatRequest.max_completion_tokens = Math.min(
+      chatRequest.max_completion_tokens ?? AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+      AUTO_ECONOMY_TRIAL_MAX_OUTPUT_TOKENS,
+    );
+  }
 
   // WEB-MULTIMODAL-IMAGE-SSRF: validate every user-supplied image_url before forwarding.
   for (let mi = 0; mi < chatRequest.messages.length; mi++) {
@@ -467,7 +544,6 @@ export async function processRequest(
   }
 
   // Resolve auto model names to actual models (task-aware, tier-aware)
-  const requestedModel = chatRequest.model;
   chatRequest.model = resolveAutoModel(chatRequest.model, subscription.plan_tier, resolvedTaskType);
 
   if (requestedModel !== chatRequest.model) {
@@ -485,7 +561,10 @@ export async function processRequest(
   }
 
   // Model tier access check
-  if (!checkModelTierAccess(chatRequest.model, subscription.plan_tier)) {
+  if (
+    !autoEconomyTrialEnabled &&
+    !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
+  ) {
     const modelKey = chatRequest.model.toLowerCase();
     const requiredTiers = MODEL_TIER_REQUIREMENTS[modelKey];
     const requiredTier =
@@ -533,21 +612,23 @@ export async function processRequest(
 
   let quotaOutcome: QuotaOutcome = { kind: 'ok' };
   let quotaWarningHeader: string | null = null;
-  try {
-    quotaOutcome = await assertQuota({
-      userId: userId,
-      token,
-      tier: subscription.plan_tier,
-      requestedTokens: quotaEstimateTokens,
-      feature: quotaFeature,
-      slot: resolvedSlot ?? undefined,
-    });
-  } catch (gateError) {
-    // Fail-open: gate error falls back to legacy CreditService flow
-    logger.warn(
-      { userId: userId, error: gateError instanceof Error ? gateError.message : gateError },
-      '[assertQuota] gate errored, falling back to credit-only flow',
-    );
+  if (!autoEconomyTrialEnabled) {
+    try {
+      quotaOutcome = await assertQuota({
+        userId: userId,
+        token,
+        tier: subscription.plan_tier,
+        requestedTokens: quotaEstimateTokens,
+        feature: quotaFeature,
+        slot: resolvedSlot ?? undefined,
+      });
+    } catch (gateError) {
+      // Fail-open: gate error falls back to legacy CreditService flow
+      logger.warn(
+        { userId: userId, error: gateError instanceof Error ? gateError.message : gateError },
+        '[assertQuota] gate errored, falling back to credit-only flow',
+      );
+    }
   }
 
   if (quotaOutcome.kind === 'paywall') {
@@ -670,6 +751,22 @@ export async function processRequest(
     };
   }
 
+  if (autoEconomyTrialEnabled && totalLength > AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: {
+            message: `Free Auto Economy prompts are limited to ${AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS.toLocaleString()} input characters.`,
+            type: 'invalid_request_error',
+            code: 'free_trial_prompt_too_large',
+          },
+        },
+        { status: 413 },
+      ),
+    };
+  }
+
   // Token + cost estimation
   const estimatedPromptTokens = chatRequest.messages.reduce((sum, msg) => {
     const textContent = extractTextContent(msg.content);
@@ -707,126 +804,159 @@ export async function processRequest(
     estimatedPromptTokens,
     maxTokens,
   );
+  let autoEconomyTrial: AutoEconomyTrialReservation | undefined;
 
-  // Credit allocation + availability check
-  let existingBalance = await CreditService.getBalance(userId);
+  if (autoEconomyTrialEnabled) {
+    estimatedCostCents = 0;
+    const trialReservationResult = await reserveAutoEconomyTrialPrompt({ userId, requestId });
+    if (!trialReservationResult.ok) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          {
+            error: {
+              message:
+                'You have used the 3 free Auto Economy prompts for this account. Join the managed cloud waitlist or use local/BYOK to continue.',
+              type: 'insufficient_quota',
+              code: 'website_trial_prompt_limit_reached',
+              trial: {
+                model: AUTO_ECONOMY_TRIAL_MODEL,
+                prompt_limit: AUTO_ECONOMY_TRIAL_PROMPT_LIMIT,
+              },
+            },
+          },
+          { status: 429 },
+        ),
+      };
+    }
+    autoEconomyTrial = trialReservationResult.reservation;
+  } else {
+    // Credit allocation + availability check
+    let existingBalance = await CreditService.getBalance(userId);
 
-  logger.debug(
-    {
-      userId: userId,
-      hasBalance: !!existingBalance,
-      accountId: existingBalance?.account_id,
-      remaining: existingBalance?.credits_remaining_cents,
-      planTier: subscription.plan_tier,
-    },
-    'Credit balance check',
-  );
-
-  if (!existingBalance || !existingBalance.account_id) {
-    logger.info(
-      { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
-      'No credit account found, allocating credits for subscription period',
+    logger.debug(
+      {
+        userId: userId,
+        hasBalance: !!existingBalance,
+        accountId: existingBalance?.account_id,
+        remaining: existingBalance?.credits_remaining_cents,
+        planTier: subscription.plan_tier,
+      },
+      'Credit balance check',
     );
 
-    try {
-      const accountId = await SubscriptionService.allocateCreditsForPeriod(
-        userId,
-        subscription.id,
-        subscription.plan_tier,
-        subscription.current_period_start,
-        subscription.current_period_end,
-        { stripePriceId: subscription.stripe_price_id },
+    if (!existingBalance || !existingBalance.account_id) {
+      logger.info(
+        { userId: userId, subscriptionId: subscription.id, planTier: subscription.plan_tier },
+        'No credit account found, allocating credits for subscription period',
       );
 
-      if (accountId) {
-        logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
-        existingBalance = await CreditService.getBalance(userId);
-        logger.debug(
-          {
-            userId: userId,
-            newBalance: existingBalance?.credits_remaining_cents,
-            accountId: existingBalance?.account_id,
-          },
-          'Balance after allocation',
+      try {
+        const accountId = await SubscriptionService.allocateCreditsForPeriod(
+          userId,
+          subscription.id,
+          subscription.plan_tier,
+          subscription.current_period_start,
+          subscription.current_period_end,
+          { stripePriceId: subscription.stripe_price_id },
         );
-      } else {
-        logger.warn(
-          { userId: userId, planTier: subscription.plan_tier },
-          'Credit allocation returned no account ID - plan may not include credits',
+
+        if (accountId) {
+          logger.info({ userId: userId, accountId }, 'Credits allocated successfully');
+          existingBalance = await CreditService.getBalance(userId);
+          logger.debug(
+            {
+              userId: userId,
+              newBalance: existingBalance?.credits_remaining_cents,
+              accountId: existingBalance?.account_id,
+            },
+            'Balance after allocation',
+          );
+        } else {
+          logger.warn(
+            { userId: userId, planTier: subscription.plan_tier },
+            'Credit allocation returned no account ID - plan may not include credits',
+          );
+        }
+      } catch (allocError) {
+        logger.error(
+          { error: allocError, userId: userId, planTier: subscription.plan_tier },
+          'Failed to allocate credits - continuing with credit check',
         );
       }
-    } catch (allocError) {
-      logger.error(
-        { error: allocError, userId: userId, planTier: subscription.plan_tier },
-        'Failed to allocate credits - continuing with credit check',
-      );
     }
-  }
 
-  const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
+    const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
 
-  logger.debug(
-    {
-      userId: userId,
-      estimatedCostCents,
-      hasCredits,
-      balanceRemaining: existingBalance?.credits_remaining_cents,
-    },
-    'Credit availability check result',
-  );
-
-  if (!hasCredits) {
-    const fallbackModel = findCheaperFallbackModel(
-      chatRequest.model,
-      provider,
-      estimatedPromptTokens,
-      maxTokens,
+    logger.debug(
+      {
+        userId: userId,
+        estimatedCostCents,
+        hasCredits,
+        balanceRemaining: existingBalance?.credits_remaining_cents,
+      },
+      'Credit availability check result',
     );
 
-    if (fallbackModel) {
-      const fallbackProvider = LLMProviderFactory.getProviderFromModel(fallbackModel.model);
-      const fallbackCostCents = LLMCostCalculator.estimateCost(
-        fallbackProvider,
-        fallbackModel.model,
+    if (!hasCredits) {
+      const fallbackModel = findCheaperFallbackModel(
+        chatRequest.model,
+        provider,
         estimatedPromptTokens,
         maxTokens,
       );
 
-      const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
+      if (fallbackModel) {
+        const fallbackProvider = LLMProviderFactory.getProviderFromModel(fallbackModel.model);
+        const fallbackCostCents = LLMCostCalculator.estimateCost(
+          fallbackProvider,
+          fallbackModel.model,
+          estimatedPromptTokens,
+          maxTokens,
+        );
 
-      if (hasFallbackCredits) {
-        usedFallback = true;
-        fallbackReason = `Insufficient credits for ${originalModel}, switched to ${fallbackModel.model}`;
-        chatRequest.model = fallbackModel.model;
-        provider = fallbackProvider;
-        estimatedCostCents = fallbackCostCents;
+        const hasFallbackCredits = await CreditService.checkAvailable(userId, fallbackCostCents);
+
+        if (hasFallbackCredits) {
+          usedFallback = true;
+          fallbackReason = `Insufficient credits for ${originalModel}, switched to ${fallbackModel.model}`;
+          chatRequest.model = fallbackModel.model;
+          provider = fallbackProvider;
+          estimatedCostCents = fallbackCostCents;
+        } else {
+          return {
+            ok: false,
+            response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }),
+          };
+        }
       } else {
-        return { ok: false, response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }) };
+        return {
+          ok: false,
+          response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }),
+        };
       }
-    } else {
-      return { ok: false, response: handleCreditError({ code: 'MONTHLY_CREDIT_LIMIT_REACHED' }) };
     }
-  }
 
-  // Reserve credits with idempotency key
-  const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
-  const reserveResult = await CreditService.deductCredits(
-    userId,
-    estimatedCostCents,
-    `Credit reservation: ${provider}/${chatRequest.model}`,
-    {
-      provider,
-      model: chatRequest.model,
-      type: 'reservation',
-      estimatedPromptTokens,
-      estimatedMaxTokens: maxTokens,
-      requestId,
-    },
-    reservationKey,
-  );
+    // Reserve credits with idempotency key
+    const reservationKey = CreditService.generateIdempotencyKey(userId, 'reservation', requestId);
+    const reserveResult = await CreditService.deductCredits(
+      userId,
+      estimatedCostCents,
+      `Credit reservation: ${provider}/${chatRequest.model}`,
+      {
+        provider,
+        model: chatRequest.model,
+        type: 'reservation',
+        estimatedPromptTokens,
+        estimatedMaxTokens: maxTokens,
+        requestId,
+      },
+      reservationKey,
+    );
 
-  if (!reserveResult.success) {
-    return { ok: false, response: handleCreditError(reserveResult) };
+    if (!reserveResult.success) {
+      return { ok: false, response: handleCreditError(reserveResult) };
+    }
   }
 
   // Build internal message format (preserving multimodal parts)
@@ -839,7 +969,7 @@ export async function processRequest(
   }));
 
   // Inject provider-specific built-in tools
-  let resolvedTools = chatRequest.tools;
+  let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
     if (providerLower === 'anthropic') {
       resolvedTools = [
@@ -909,6 +1039,7 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     indicResult,
+    autoEconomyTrial,
     llmRequest,
   };
 }

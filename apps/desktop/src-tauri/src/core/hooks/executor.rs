@@ -330,7 +330,8 @@ impl HookExecutor {
             let config = self.config.read();
             config
                 .get_matching_hooks(context.event, tool_name)?
-                .into_iter().cloned()
+                .into_iter()
+                .cloned()
                 .collect::<Vec<_>>()
         };
 

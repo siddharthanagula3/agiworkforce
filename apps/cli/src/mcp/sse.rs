@@ -117,10 +117,13 @@ pub(super) async fn connect_sse(
                             return;
                         }
                     }
-                    Err(e) => eprintln!(
-                        "[{}] SSE: invalid JSON in data frame: {} (payload: {})",
-                        server_name, e, data_buf
-                    ),
+                    Err(e) => {
+                        eprintln!(
+                            "[{}] SSE: invalid JSON in data frame: {} (payload: {})",
+                            server_name, e, data_buf
+                        );
+                        return;
+                    }
                 }
                 current_event = None;
             }

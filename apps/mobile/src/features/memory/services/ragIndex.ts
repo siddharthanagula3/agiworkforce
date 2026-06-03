@@ -1,14 +1,12 @@
 /**
- * sqlite-vec RAG index for on-device doc Q&A (Wave 0 scaffold).
+ * sqlite-vec RAG index for on-device doc Q&A.
  *
  * Chunking: ~500-token chunks with 50-token overlap. Token counting uses a
  * whitespace approximation (1 word ≈ 1.3 tokens) which is accurate enough for
  * chunk-boundary decisions without a real tokenizer dependency.
  *
- * Embedding model: nomic-embed-text-v1.5 (384-dim).
- * TODO(embedding-model): replace EMBEDDING_MODEL_ID stub once the model-catalog
- * engineer adds an embedding entry to packages/local-llm/src/catalog.ts.
- * Track: model-catalog-engineer task #18.
+ * Vectorization: deterministic character n-gram feature hashing (384-dim).
+ * This is a lexical local vectorizer, not a claimed neural embedding model.
  */
 
 import { getDb } from '@/storage/db';
@@ -20,10 +18,6 @@ import {
 } from '@/storage/docChunks';
 import type { ParsedDocument, SupportedDocType } from '@/services/docParser';
 
-// TODO(embedding-model): replace with getModelById() from @agiworkforce/types once
-// the model catalog has an embedding entry (task #18). EMBEDDING_MODEL_ID is kept
-// as a named constant pointing to where the catalog lookup should land.
-const EMBEDDING_MODEL_ID = 'nomic-embed-text-v1.5'; // placeholder — see TODO above
 const EMBEDDING_DIM = 384;
 
 export interface ChunkingOptions {
@@ -87,32 +81,23 @@ async function ensureDocChunkVecTable(db: Awaited<ReturnType<typeof getDb>>): Pr
       );
     `);
     return true;
-  } catch {
+  } catch (error) {
     // sqlite-vec not available in this build — vector retrieval will fall back
     // to returning all chunks ordered by position.
+    console.warn('[ragIndex] sqlite-vec table unavailable; using text fallback:', error);
     return false;
   }
 }
 
 /**
- * Character n-gram feature-hashing fallback embedding.
+ * Character n-gram feature-hashing vectorizer.
  *
  * Produces a unit-normalised Float32Array(384) from the input text using
- * trigram feature hashing into EMBEDDING_DIM buckets. This is not a neural
- * embedding — it cannot capture semantic similarity — but it:
- *   1. Returns a non-null vector so the sqlite-vec roundtrip works in tests.
- *   2. Gives documents with overlapping character sequences closer cosine
- *      distances than a zero vector would.
- *   3. Is entirely deterministic and requires no model download.
- *
- * TODO(embedding-model): replace this with a real on-device embedding call
- * using EMBEDDING_MODEL_ID once task #18 lands and the model catalog has an
- * embedding entry. The call signature is intentionally async so the real
- * implementation can be dropped in without changing callers.
+ * trigram feature hashing into EMBEDDING_DIM buckets. It is lexical rather than
+ * semantic: chunks with overlapping character sequences are ranked closer, and
+ * the implementation is deterministic with no model download requirement.
  */
-async function embedText(text: string): Promise<Float32Array | null> {
-  void EMBEDDING_MODEL_ID; // referenced so the constant is not an unused-var lint error
-
+async function vectorizeText(text: string): Promise<Float32Array | null> {
   const normalized = text.toLowerCase().replace(/\s+/g, ' ').trim();
   if (normalized.length === 0) return null;
 
@@ -184,15 +169,16 @@ export async function indexDocument(
 
   if (vecAvailable) {
     for (const chunk of chunks) {
-      const embedding = await embedText(chunk.text);
+      const embedding = await vectorizeText(chunk.text);
       if (embedding) {
         try {
           await db.runAsync(
             'INSERT OR REPLACE INTO doc_chunk_vectors (chunk_id, embedding) VALUES (?, ?);',
             [chunk.id, embedding as unknown as string],
           );
-        } catch {
+        } catch (error) {
           // Insertion failure is non-fatal — text fallback remains available.
+          console.warn('[ragIndex] Failed to persist chunk vector; using text fallback:', error);
         }
       }
     }
@@ -202,7 +188,7 @@ export async function indexDocument(
 export async function retrieve(conversationId: string, query: string, k = 5): Promise<Chunk[]> {
   const db = await getDb();
 
-  const queryEmbedding = await embedText(query);
+  const queryEmbedding = await vectorizeText(query);
 
   if (queryEmbedding) {
     try {
@@ -218,8 +204,9 @@ export async function retrieve(conversationId: string, query: string, k = 5): Pr
         const fullChunks = await getDocChunksByIds(ids);
         return fullChunks;
       }
-    } catch {
+    } catch (error) {
       // sqlite-vec unavailable or query failed — fall through to text fallback.
+      console.warn('[ragIndex] Vector retrieval failed; using text fallback:', error);
     }
   }
 
@@ -246,7 +233,8 @@ export async function deleteDocument(conversationId: string): Promise<void> {
     await db.runAsync(`DELETE FROM doc_chunk_vectors WHERE chunk_id LIKE ?;`, [
       `${conversationId}_chunk_%`,
     ]);
-  } catch {
+  } catch (error) {
     // sqlite-vec table may not exist.
+    console.warn('[ragIndex] Vector cleanup skipped:', error);
   }
 }

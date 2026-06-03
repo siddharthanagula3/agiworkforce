@@ -333,7 +333,7 @@ describe('GoogleProvider', () => {
       );
 
       const requestBody = JSON.parse(mockFetch!.mock.calls[0]![1]!.body!);
-      expect(requestBody.model).toBe('gemini-3.1-pro-preview');
+      expect(requestBody.model).toBe(DEFAULT_GOOGLE_MODEL);
       expect(requestBody.max_tokens).toBe(4096);
       expect(requestBody.temperature).toBe(0.7);
     });

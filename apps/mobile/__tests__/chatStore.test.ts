@@ -120,6 +120,7 @@ const mockGetInstalledModel = getInstalledModel as jest.MockedFunction<typeof ge
 const mockMarkInstalledModelUsed = markInstalledModelUsed as jest.MockedFunction<
   typeof markInstalledModelUsed
 >;
+let capturedLocalGenerateOptions: Parameters<typeof localGenerate>[1] | null = null;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -161,6 +162,7 @@ describe('chatStore — streaming state', () => {
     mockListInstalledModels.mockResolvedValue([]);
     mockGetInstalledModel.mockResolvedValue(null);
     mockMarkInstalledModelUsed.mockResolvedValue(undefined);
+    capturedLocalGenerateOptions = null;
 
     // Seed the store with a conversation and empty message list
     useChatStore.setState({
@@ -292,12 +294,9 @@ describe('chatStore — streaming state', () => {
         },
       ]);
       mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        capturedLocalGenerateOptions = opts;
         opts.onToken?.('Hel');
         opts.onToken?.('lo');
-        expect(opts.messages).toEqual([
-          { role: 'user', content: 'Earlier context' },
-          { role: 'assistant', content: 'Earlier response' },
-        ]);
         return { text: 'Hello', runtime: 'executorch', aborted: false };
       });
 
@@ -309,6 +308,14 @@ describe('chatStore — streaming state', () => {
         undefined,
         expect.objectContaining({ modelId: LOCAL_MODEL, prompt: 'Use local model' }),
       );
+      expect(capturedLocalGenerateOptions?.messages).toEqual([
+        {
+          role: 'system',
+          content: expect.stringContaining('helpful assistant running locally'),
+        },
+        { role: 'user', content: 'Earlier context' },
+        { role: 'assistant', content: 'Earlier response' },
+      ]);
       expect(mockMarkInstalledModelUsed).toHaveBeenCalledWith(LOCAL_MODEL);
 
       const msgs = getState().messages[CONV_ID] ?? [];
@@ -320,6 +327,38 @@ describe('chatStore — streaming state', () => {
         localModelId: LOCAL_MODEL,
         localRuntime: 'executorch',
       });
+    });
+
+    it('keeps a selected local model on-device even when remote chat is otherwise allowed', async () => {
+      mockRemoteDisabledReason.mockReturnValue(null);
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        opts.onToken?.('Local');
+        return { text: 'Local answer', runtime: 'executorch', aborted: false };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Stay local', LOCAL_MODEL);
+      });
+
+      expect(mockLocalGenerate).toHaveBeenCalledWith(
+        undefined,
+        expect.objectContaining({ modelId: LOCAL_MODEL, prompt: 'Stay local' }),
+      );
+      expect(mockStreamChat).not.toHaveBeenCalled();
     });
   });
 

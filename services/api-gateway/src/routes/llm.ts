@@ -25,6 +25,12 @@ import { getUserScopedClient } from '../lib/neonClients';
 import { requireManagedComputeEligibility } from '../middleware/managedComputeGate';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout';
+import {
+  toolCallResponseSchema,
+  toolChoiceSchema,
+  toolDefinitionSchema,
+} from '../lib/llmToolSchemas';
 
 const router: Router = Router();
 
@@ -64,7 +70,7 @@ const messageSchema = z.object({
   content: z.union([z.string(), z.array(z.any())]),
   name: z.string().optional(),
   tool_call_id: z.string().optional(),
-  tool_calls: z.array(z.any()).optional(),
+  tool_calls: z.array(toolCallResponseSchema).max(32).optional(),
 });
 
 const chatCompletionSchema = z
@@ -74,8 +80,8 @@ const chatCompletionSchema = z
     stream: z.boolean().optional().default(false),
     temperature: z.number().min(0).max(2).optional(),
     max_tokens: z.number().int().min(1).max(200_000).optional(),
-    tools: z.array(z.any()).optional(),
-    tool_choice: z.union([z.string(), z.object({}).passthrough()]).optional(),
+    tools: z.array(toolDefinitionSchema).max(64).optional(),
+    tool_choice: toolChoiceSchema.optional(),
   })
   .strict();
 
@@ -219,10 +225,10 @@ function toAnthropicRequest(body: z.infer<typeof chatCompletionSchema>): {
     result.temperature = body.temperature;
   }
   if (body.tools && body.tools.length > 0) {
-    result.tools = body.tools.map((t: Record<string, unknown>) => ({
-      name: (t['function'] as Record<string, unknown>)?.['name'] ?? t['name'],
-      description: (t['function'] as Record<string, unknown>)?.['description'] ?? t['description'],
-      input_schema: (t['function'] as Record<string, unknown>)?.['parameters'] ?? t['input_schema'],
+    result.tools = body.tools.map((tool) => ({
+      name: tool.function.name,
+      description: tool.function.description,
+      input_schema: tool.function.parameters ?? {},
     }));
   }
   if (body.tool_choice !== undefined) {
@@ -230,8 +236,10 @@ function toAnthropicRequest(body: z.infer<typeof chatCompletionSchema>): {
       result.tool_choice = { type: 'auto' };
     } else if (body.tool_choice === 'none') {
       result.tool_choice = { type: 'none' };
+    } else if (body.tool_choice === 'required') {
+      result.tool_choice = { type: 'any' };
     } else if (typeof body.tool_choice === 'object') {
-      result.tool_choice = body.tool_choice;
+      result.tool_choice = { type: 'tool', name: body.tool_choice.function.name };
     }
   }
 
@@ -376,8 +384,9 @@ async function callUpstream(
   switch (provider) {
     case 'anthropic': {
       const anthropicBody = toAnthropicRequest(body);
-      return fetch(ANTHROPIC_API_URL, {
+      return fetchWithTimeout(ANTHROPIC_API_URL, {
         method: 'POST',
+        timeoutMs: 30_000,
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
@@ -387,8 +396,9 @@ async function callUpstream(
       });
     }
     case 'openai': {
-      return fetch(OPENAI_API_URL, {
+      return fetchWithTimeout(OPENAI_API_URL, {
         method: 'POST',
+        timeoutMs: 30_000,
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${apiKey}`,
@@ -409,8 +419,9 @@ async function callUpstream(
       // SECURITY: Pass API key via header instead of URL query to prevent credential exposure in logs
       const url = `${GOOGLE_API_BASE}/${body.model}:${action}`;
       const googleBody = toGoogleRequest(body);
-      return fetch(url, {
+      return fetchWithTimeout(url, {
         method: 'POST',
+        timeoutMs: 30_000,
         headers: {
           'Content-Type': 'application/json',
           'x-goog-api-key': apiKey,

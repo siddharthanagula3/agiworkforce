@@ -79,7 +79,7 @@ describe('enterprise contracts', () => {
       accountId: 'account-1',
       userId: 'user-1',
       provider: 'anthropic',
-      model: 'claude-opus-4-7',
+      model: 'claude-opus-4-8',
       estimatedInputTokens: 1000,
       estimatedOutputTokens: 2000,
       reservedCents: 50,

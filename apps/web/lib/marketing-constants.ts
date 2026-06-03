@@ -32,10 +32,10 @@ export const LAUNCH = {
 } as const;
 
 export const POSITIONING = {
-  wedge: 'Local on device. Web by subscription. Cloud by invite.',
+  wedge: 'Hosted web trial. Local and BYOK for serious work. Cloud by invite.',
   trustBoundary:
-    'Local mode runs on supported devices. BYOK is explicit on supported desktop and developer surfaces. Web uses AGI subscriptions. Cloud is invite-only.',
-  cloudInvite: 'Cloud by invite after Local and subscription demand prove scale.',
+    'Website users can try AGI managed Auto Economy with a small free cap. Local and BYOK are supported on desktop and developer surfaces. Higher hosted cloud is invite-only.',
+  cloudInvite: 'Cloud by invite after web trial, Local, and BYOK demand prove scale.',
 } as const;
 
 export type PricingTabId = 'individual' | 'team' | 'api';
@@ -134,15 +134,10 @@ export const MARKETING = {
   // conservative defensible floor. Update when a canonical skill registry ships.
   skills: { count: 150, display: '150+', label: 'AI Skills' },
   categories: { count: 23, display: '23', label: 'Skill Categories' },
-  // tools: Desktop Tauri IPC commands verified at 1,469 per SSOT (apps/desktop, 151 files).
-  // "1,459+" was an earlier estimate; updating to match the verified SSOT count.
-  // TODO: confirm against a live cargo grep when desktop tooling stabilises.
-  tools: { count: 1469, display: '1,469+', label: 'Built-in Tools' },
-  // models: 70+ is an estimate across all wired providers. Verify against models.json
-  // when each provider's full catalog is registered. Do not raise without substantiation.
-  models: { count: 70, display: '70+', label: 'AI Models' },
+  tools: { count: 0, display: 'Tool-ready', label: 'Agent Tools' },
+  models: { count: 0, display: 'Multi-provider', label: 'Model Routing' },
   surfaces: { count: 6, display: '6', label: 'Platforms' },
-  appSize: { value: 35, display: '~35MB', label: 'App Size' },
+  appSize: { value: 0, display: 'Native', label: 'Desktop Build' },
   tagline:
     'Local-first privacy. Explicit BYOK. Multi-provider routing. Privacy-controlled managed compute.',
 } as const;

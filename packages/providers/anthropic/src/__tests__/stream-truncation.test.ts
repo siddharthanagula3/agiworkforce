@@ -37,7 +37,7 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.7',
+          model: 'claude-opus-4.8',
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -79,7 +79,7 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.7',
+          model: 'claude-opus-4.8',
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -111,7 +111,7 @@ describe('translateAnthropicStream — truncation safety (P1-2)', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-4.7',
+          model: 'claude-opus-4.8',
           stop_reason: null,
           stop_sequence: null,
           usage: {

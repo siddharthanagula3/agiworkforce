@@ -947,8 +947,7 @@ mod advisor_privacy_tests {
     fn acquire() -> Guard<'static> {
         let g = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         // Always start each test from a clean state.
-        ADVISOR_LOCAL_PRIVACY_GUARD
-            .store(false, std::sync::atomic::Ordering::SeqCst);
+        ADVISOR_LOCAL_PRIVACY_GUARD.store(false, std::sync::atomic::Ordering::SeqCst);
         Guard(g)
     }
 
@@ -1061,7 +1060,9 @@ mod advisor_privacy_tests {
 
         // After clearing the guard the privacy message must not appear.
         assert!(
-            !not_blocked.output.contains("unavailable in Local privacy mode"),
+            !not_blocked
+                .output
+                .contains("unavailable in Local privacy mode"),
             "guard should be cleared after set_advisor_local_privacy_mode(false), got: {}",
             not_blocked.output
         );

@@ -157,6 +157,7 @@ async function getLatestReleaseFromGitHub(): Promise<{
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
       headers,
       next: { revalidate: 300 },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!response.ok) {

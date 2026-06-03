@@ -2,8 +2,6 @@
 //! `ListSelectionView<T>` so regressions in the shared overlay surface
 //! show up as a diff instead of silent visual drift.
 
-#![cfg(test)]
-
 use super::list_selection_view::ListSelectionView;
 use super::model_picker::{self, ModelPickerState};
 use super::screen_renderers::{
@@ -11,9 +9,9 @@ use super::screen_renderers::{
     SandboxMode, UsageSummary,
 };
 use crate::model_catalog::Model;
-use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
+use ratatui::Terminal;
 
 // ---------------------------------------------------------------------------
 // Helper: render the model picker overlay to a string via TestBackend.
@@ -32,6 +30,8 @@ fn fixture_models() -> Vec<Model> {
             max_output_tokens: 8_192,
             input_price_per_1m: 15.0,
             output_price_per_1m: 75.0,
+            cache_read_price_per_1m: 0.0,
+            cache_write_price_per_1m: 0.0,
             supports_tools: true,
             supports_vision: true,
             supports_reasoning: true,
@@ -50,6 +50,8 @@ fn fixture_models() -> Vec<Model> {
             max_output_tokens: 8_192,
             input_price_per_1m: 3.0,
             output_price_per_1m: 15.0,
+            cache_read_price_per_1m: 0.0,
+            cache_write_price_per_1m: 0.0,
             supports_tools: true,
             supports_vision: true,
             supports_reasoning: false,
@@ -68,6 +70,8 @@ fn fixture_models() -> Vec<Model> {
             max_output_tokens: 4_096,
             input_price_per_1m: 1.0,
             output_price_per_1m: 3.0,
+            cache_read_price_per_1m: 0.0,
+            cache_write_price_per_1m: 0.0,
             supports_tools: true,
             supports_vision: false,
             supports_reasoning: false,
@@ -156,7 +160,10 @@ fn model_picker_idle_search_shows_placeholder() {
     state.open(&models, "fixture-flagship");
 
     let terminal = draw_model_picker(&state, "fixture-flagship", 80, 20);
-    insta::assert_snapshot!("model_picker_idle_search_shows_placeholder", terminal.backend());
+    insta::assert_snapshot!(
+        "model_picker_idle_search_shows_placeholder",
+        terminal.backend()
+    );
 }
 
 #[test]
@@ -172,7 +179,10 @@ fn model_picker_search_active_filters_list() {
     state.cursor_down();
 
     let terminal = draw_model_picker(&state, "fixture-flagship", 80, 20);
-    insta::assert_snapshot!("model_picker_search_active_filters_list", terminal.backend());
+    insta::assert_snapshot!(
+        "model_picker_search_active_filters_list",
+        terminal.backend()
+    );
 }
 
 #[test]

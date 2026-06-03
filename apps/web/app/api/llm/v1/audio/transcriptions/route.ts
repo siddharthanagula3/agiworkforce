@@ -215,6 +215,7 @@ async function handleTranscriptions(request: NextRequest) {
       Authorization: `Bearer ${requireEnv('OPENAI_API_KEY')}`,
     },
     body: forwardForm,
+    signal: AbortSignal.timeout(60_000),
   });
 
   const responseText = await response.text();

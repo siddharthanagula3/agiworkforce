@@ -98,7 +98,7 @@ const IMAGE_GEN: RegExp[] = [
   /\bmake (a |an |some )?(picture|photo|image)\b/i,
   /\billustrat(e|ion)\b/i,
   /\b(ai |digital )?artwork\b/i,
-  /\bdall.?e\b/i,
+  /\bimage model\b/i,
   /\bflux\b/i,
   /\bstable diffusion\b/i,
   /\bimage gen(erat(e|ion))?\b/i,
@@ -112,7 +112,7 @@ const VIDEO_GEN: RegExp[] = [
   /\banimate\b/i,
   /\bmake (a |an )?clip\b/i,
   /\bvideo (generation|gen)\b/i,
-  /\bsora\b/i,
+  /\bvideo model\b/i,
   /\bveo\b/i,
 ];
 

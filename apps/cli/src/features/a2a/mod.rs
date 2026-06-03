@@ -5,8 +5,8 @@
 //! - **Agent Card**: Capability advertisement for peer discovery.
 //! - **Task Delegation**: Request/response protocol for delegating work.
 //! - **Discovery**: Local file + network-based agent discovery.
-//! - **A2A Server**: Lightweight HTTP server exposing card, task, and handoff endpoints.
-//! - **A2A Client**: Functions to delegate tasks and hand off conversations.
+//! - **A2A Server**: Lightweight HTTP server exposing card and task endpoints.
+//! - **A2A Client**: Functions to delegate tasks.
 
 pub mod client;
 pub mod jsonrpc;
@@ -229,7 +229,7 @@ mod tests {
             name: "test-agent".to_string(),
             version: "0.1.0".to_string(),
             capabilities: vec!["code".to_string(), "research".to_string()],
-            supported_models: vec!["claude-opus-4-6".to_string()],
+            supported_models: vec!["claude-opus-4-8".to_string()],
             endpoint: "http://localhost:7892".to_string(),
             auth_required: false,
             metadata: HashMap::new(),
@@ -351,7 +351,7 @@ mod tests {
             name: "test-agent".to_string(),
             version: "0.1.0".to_string(),
             capabilities: vec!["code".to_string()],
-            supported_models: vec!["claude-opus-4-6".to_string()],
+            supported_models: vec!["claude-opus-4-8".to_string()],
             endpoint: "http://localhost:7892".to_string(),
             auth_required: false,
             metadata: HashMap::new(),

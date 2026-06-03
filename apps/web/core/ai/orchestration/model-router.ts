@@ -81,7 +81,7 @@ const CORE_MODEL_BLUEPRINTS: readonly ModelBlueprint[] = [
       'image-generation',
     ],
     description:
-      'Flagship GPT-5.4 reasoning model for difficult reasoning and high-complexity tasks.',
+      'Flagship GPT-5.5 reasoning model for difficult reasoning and high-complexity tasks.',
   },
   {
     modelId: getTaskModelForProvider('openai', 'chat'),
@@ -94,12 +94,12 @@ const CORE_MODEL_BLUEPRINTS: readonly ModelBlueprint[] = [
       'computer-use',
       'image-generation',
     ],
-    description: 'Primary GPT-5.4 all-rounder for chat, multimodal work, and tool use.',
+    description: 'Primary GPT-5.5 all-rounder for chat, multimodal work, and tool use.',
   },
   {
     modelId: getTaskModelForProvider('openai', 'fast_completion'),
     strengths: ['general', 'agentic', 'computer-use'],
-    description: 'Fast GPT-5.4 mini model for cost-sensitive interactive tasks.',
+    description: 'Fast GPT-5.5 mini model for cost-sensitive interactive tasks.',
   },
   {
     modelId: getTaskModelForProvider('google', 'complex_reasoning'),
@@ -259,9 +259,7 @@ export class ModelRouter {
     }
 
     // Video generation keywords
-    if (
-      /\b(video|animation|movie|generate video|create video|sora|veo|runway)\b/i.test(lowerInput)
-    ) {
+    if (/\b(video|animation|movie|generate video|create video|veo|runway)\b/i.test(lowerInput)) {
       return 'video-generation';
     }
 

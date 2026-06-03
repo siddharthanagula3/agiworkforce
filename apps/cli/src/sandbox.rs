@@ -4,6 +4,9 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+static SANDBOX_DISABLED: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SandboxType {
@@ -97,6 +100,31 @@ impl SandboxManager {
         self.network_policy = policy;
         self
     }
+
+    /// Build the manager used for normal shell command execution.
+    ///
+    /// Callers must provide a network policy explicitly. If no backend is
+    /// available this fails closed instead of silently running unsandboxed.
+    pub fn for_command_execution(
+        workspace_dir: PathBuf,
+        network_policy: NetworkPolicy,
+    ) -> Result<Self> {
+        let manager = Self::full_auto(workspace_dir).with_network(network_policy);
+        if manager.sandbox_type == SandboxType::None {
+            anyhow::bail!(
+                "sandbox not available on this platform or host; pass --no-sandbox only if you accept unrestricted command execution"
+            );
+        }
+        Ok(manager)
+    }
+}
+
+pub fn set_sandbox_disabled(disabled: bool) {
+    SANDBOX_DISABLED.store(disabled, Ordering::Relaxed);
+}
+
+pub fn sandbox_disabled() -> bool {
+    SANDBOX_DISABLED.load(Ordering::Relaxed) || std::env::var("AGIWORKFORCE_NO_SANDBOX").is_ok()
 }
 
 /// Validate a workspace path before embedding it in a Seatbelt SBPL profile.
@@ -268,16 +296,15 @@ pub async fn execute_sandboxed(
                 .await
                 .map_err(|e| anyhow::anyhow!("Bubblewrap exec failed: {}", e))
         }
-        // CLI-SANDBOX-WIN-STUB fix per UNIFIED_LAUNCH_PLAN.md §1:
-        // Refuse loudly on Windows + any other OS without an implemented sandbox,
+        // Refuse loudly on Windows + any other OS without a supported sandbox,
         // instead of silently running unsandboxed. Marketing claim of "sandboxed
-        // execution" must not be honored on platforms where the implementation is
-        // not built. Windows + Landlock are tracked as future work.
+        // execution" must not be honored on platforms where sandbox support is
+        // absent. Windows + Landlock are tracked as future work.
         #[cfg(not(any(target_os = "macos", target_os = "linux")))]
         _ => Err(anyhow::anyhow!(
-            "Sandbox not implemented on this platform ({}). Sandboxed exec is currently \
+            "Sandbox unavailable on this platform ({}). Sandboxed exec is currently \
              supported only on macOS (Seatbelt) and Linux (Bubblewrap). See \
-             docs/plans/UNIFIED_LAUNCH_PLAN.md §1 CLI-SANDBOX-WIN-STUB.",
+             docs/plans/UNIFIED_LAUNCH_PLAN.md §1.",
             std::env::consts::OS
         )),
         // On macOS/Linux, this catch-all only matches if SandboxBackend was extended
@@ -397,15 +424,15 @@ mod tests {
 
     #[test]
     fn sbpl_rejects_unicode_line_separator() {
-        let s = format!("/tmp/ws\u{2028}inject");
-        let msg = reject(&s);
+        let s = "/tmp/ws\u{2028}inject";
+        let msg = reject(s);
         assert!(msg.contains("separator"), "got: {msg}");
     }
 
     #[test]
     fn sbpl_rejects_unicode_paragraph_separator() {
-        let s = format!("/tmp/ws\u{2029}inject");
-        let msg = reject(&s);
+        let s = "/tmp/ws\u{2029}inject";
+        let msg = reject(s);
         assert!(msg.contains("separator"), "got: {msg}");
     }
 
@@ -467,6 +494,31 @@ mod tests {
         let mgr = SandboxManager::new(SandboxPolicy::default(), PathBuf::from("/tmp/test"))
             .with_network(NetworkPolicy::Allow);
         assert_eq!(mgr.network_policy, NetworkPolicy::Allow);
+    }
+
+    #[test]
+    fn command_execution_manager_uses_explicit_network_policy_or_fails_closed() {
+        let detected = SandboxType::detect();
+        let result =
+            SandboxManager::for_command_execution(PathBuf::from("/tmp/test"), NetworkPolicy::Deny);
+
+        if detected == SandboxType::None {
+            assert!(
+                result.is_err(),
+                "command execution must fail closed when no sandbox backend is available"
+            );
+        } else {
+            let mgr = result.expect("manager");
+            assert_eq!(mgr.sandbox_type, detected);
+            assert_eq!(mgr.network_policy, NetworkPolicy::Deny);
+        }
+    }
+
+    #[test]
+    fn sandbox_disabled_flag_can_be_set_by_cli() {
+        set_sandbox_disabled(true);
+        assert!(sandbox_disabled());
+        set_sandbox_disabled(false);
     }
 
     #[test]

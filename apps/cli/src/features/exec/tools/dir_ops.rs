@@ -8,6 +8,8 @@ use super::common::{
 };
 use super::ToolResult;
 
+const MAX_GLOB_RESULTS: usize = 1_000;
+
 pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Result<ToolResult> {
     let pattern = match args.get("pattern") {
         Some(p) => p,
@@ -325,19 +327,33 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
 
-    let matches: Vec<String> = glob::glob(&full_pattern)
-        .map(|paths| {
-            paths
-                .filter_map(|p| p.ok())
-                .filter(|p| {
-                    p.canonicalize()
-                        .map(|c| c.starts_with(&cwd_canonical))
-                        .unwrap_or(false)
-                })
-                .map(|p| p.display().to_string())
-                .collect()
-        })
-        .unwrap_or_default();
+    let paths = match glob::glob(&full_pattern) {
+        Ok(paths) => paths,
+        Err(err) => {
+            return Ok(ToolResult {
+                tool_name: "glob".into(),
+                success: false,
+                output: format!("Invalid glob pattern: {err}"),
+            });
+        }
+    };
+
+    let mut matches = Vec::new();
+    let mut truncated = false;
+    for path in paths.filter_map(|p| p.ok()) {
+        let in_workspace = path
+            .canonicalize()
+            .map(|c| c.starts_with(&cwd_canonical))
+            .unwrap_or(false);
+        if !in_workspace {
+            continue;
+        }
+        if matches.len() >= MAX_GLOB_RESULTS {
+            truncated = true;
+            break;
+        }
+        matches.push(path.display().to_string());
+    }
 
     if matches.is_empty() {
         Ok(ToolResult {
@@ -349,7 +365,15 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
         Ok(ToolResult {
             tool_name: "glob".into(),
             success: true,
-            output: matches.join("\n"),
+            output: {
+                let mut output = matches.join("\n");
+                if truncated {
+                    output.push_str(&format!(
+                        "\n[truncated after {MAX_GLOB_RESULTS} matches; narrow the pattern or path]"
+                    ));
+                }
+                output
+            },
         })
     }
 }

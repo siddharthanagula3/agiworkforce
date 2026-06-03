@@ -5,8 +5,9 @@ use crate::config::CliConfig;
 use crate::errors::CliError;
 
 use super::{
-    deepseek_provider, lmstudio_provider, mistral_provider, moonshot_provider, openai_provider,
-    perplexity_provider, qwen_provider, xai_provider, zhipu_provider, OllamaMode, Provider,
+    deepseek_provider, lmstudio_provider, mistral_provider, moonshot_provider, nvidia_provider,
+    openai_provider, openrouter_provider, perplexity_provider, qwen_provider, xai_provider,
+    zhipu_provider, OllamaMode, Provider,
 };
 
 // ---------------------------------------------------------------------------
@@ -39,46 +40,148 @@ pub fn provider_from_name(name: &str) -> Option<Provider> {
         "zhipu" | "glm" => Some(zhipu_provider()),
         "lmstudio" | "lm-studio" | "lm_studio" => Some(lmstudio_provider()),
         "mistral" | "mistral-ai" | "mistralai" => Some(mistral_provider()),
+        "openrouter" | "open-router" | "open_router" => Some(openrouter_provider()),
+        "nvidia" | "nvidia-nim" | "nvidia_nim" | "nim" => Some(nvidia_provider()),
         _ => lookup_custom_provider(&lower),
     }
 }
 
+fn catalog_provider_for(model: &str) -> Option<Provider> {
+    crate::model_catalog::find(model)
+        .or_else(|| {
+            model
+                .strip_prefix("models/")
+                .and_then(crate::model_catalog::find)
+        })
+        .and_then(|model| provider_from_name(&model.provider))
+}
+
+fn looks_like_local_ollama_model(model: &str) -> bool {
+    let m = model.to_lowercase();
+    m.starts_with("ollama:")
+        || (m.contains(':') && !m.contains('/'))
+        || m.starts_with("llama")
+        || m.starts_with("codellama")
+        || m.starts_with("qwen2")
+        || m.starts_with("qwen3")
+        || m.starts_with("gemma")
+        || m.starts_with("phi")
+        || m.starts_with("deepseek-r1")
+        || m.starts_with("nomic-embed")
+        || m.contains("command-r")
+}
+
 /// Detect the provider from a model name string.
 ///
-/// Mistral / Codestral and other formerly-native providers now route through
-/// the OpenAI-compatible variant (`Mistral` was dropped on 2026-05-03 because
-/// no API key was wired anywhere in the platform).
-pub fn detect_provider(model: &str) -> Provider {
+/// Hosted model IDs must resolve through the catalog. Prefix-only guesses for
+/// `claude-*`, `gpt-*`, `gemini-*`, or router-looking model paths are intentionally rejected by
+/// [`try_detect_provider`] so typoed or invented cloud models do not become
+/// fake provider routes. Local Ollama-style model names are still accepted here;
+/// the streaming path verifies the model exists on the local server before use.
+pub fn try_detect_provider(model: &str) -> Option<Provider> {
+    if let Some(provider) = catalog_provider_for(model) {
+        return Some(provider);
+    }
+
     let m = model.to_lowercase();
-    if m.starts_with("claude") || m.starts_with("anthropic") {
-        Provider::Anthropic
-    } else if m.starts_with("gpt")
-        || m.starts_with("o1")
-        || m.starts_with("o3")
-        || m.starts_with("o4")
-        || m.starts_with("chatgpt")
-    {
-        openai_provider()
-    } else if m.starts_with("gemini") || m.starts_with("models/gemini") {
-        Provider::Google
-    } else if m.starts_with("mistral") || m.starts_with("codestral") {
-        mistral_provider()
-    } else if m.starts_with("grok") {
-        xai_provider()
-    } else if m.starts_with("deepseek") {
-        deepseek_provider()
-    } else if m.starts_with("kimi") || m.starts_with("moonshot") {
-        moonshot_provider()
-    } else if m.starts_with("glm") || m.starts_with("zhipu") {
-        zhipu_provider()
-    } else if m.starts_with("qwen") {
-        qwen_provider()
-    } else if m.contains("llama") || m.contains("phi") || m.contains("command-r") {
-        // Local models commonly served via Ollama (default to local mode)
-        Provider::Ollama(OllamaMode::Local)
+    if looks_like_local_ollama_model(&m) {
+        Some(Provider::Ollama(OllamaMode::Local))
     } else {
-        // Default fallback: try local Ollama (most permissive — no key required)
-        Provider::Ollama(OllamaMode::Local)
+        None
+    }
+}
+
+pub fn detect_provider(model: &str) -> Provider {
+    try_detect_provider(model).unwrap_or_else(openai_provider)
+}
+
+fn provider_allows_uncataloged_models(provider: &Provider) -> bool {
+    match provider {
+        Provider::Ollama(_) | Provider::Custom { .. } => true,
+        Provider::OpenAICompatible { name, .. } => matches!(*name, "lmstudio" | "openrouter"),
+        Provider::Anthropic | Provider::Google => false,
+    }
+}
+
+/// Resolve the provider for a user-selected model.
+///
+/// If a provider override is explicit, validate that provider name first. Known
+/// catalog models must still belong to that provider. Unknown model IDs are only
+/// allowed for local/custom/dynamic providers where the provider endpoint, not
+/// the shared model catalog, is the source of truth.
+pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -> Result<Provider> {
+    if let Some(provider_override_name) = provider_override
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+    {
+        let provider = provider_from_name(provider_override_name).ok_or_else(|| {
+            CliError::config(format!(
+                "Unknown provider '{}'. Run `agi login --help` to see supported providers.",
+                provider_override_name
+            ))
+        })?;
+
+        if let Some(catalog_model) = crate::model_catalog::find(model) {
+            let catalog_provider =
+                provider_from_name(&catalog_model.provider).ok_or_else(|| {
+                    CliError::config(format!(
+                        "Catalog model '{}' uses unsupported provider '{}'.",
+                        model, catalog_model.provider
+                    ))
+                })?;
+            if provider_name(&catalog_provider) != provider_name(&provider) {
+                return Err(CliError::config(format!(
+                    "Model '{}' belongs to provider '{}', not '{}'.",
+                    model,
+                    provider_name(&catalog_provider),
+                    provider_name(&provider)
+                ))
+                .into());
+            }
+            return Ok(provider);
+        }
+
+        if provider_allows_uncataloged_models(&provider) {
+            return Ok(provider);
+        }
+
+        return Err(CliError::config(format!(
+            "Unknown model '{}' for provider '{}'. Add it to [[models]] in config.toml or choose a model from `agi models list`.",
+            model,
+            provider_name(&provider)
+        ))
+        .into());
+    }
+
+    try_detect_provider(model).ok_or_else(|| {
+        CliError::config(format!(
+            "Unknown model '{}'. Run `agi models scan` for local models or `agi models list` for catalog models, then choose a listed model.",
+            model
+        ))
+        .into()
+    })
+}
+
+pub fn selection_provider_override<'a>(
+    selected_model: &str,
+    configured_model: &str,
+    configured_provider: &'a str,
+    explicit_provider: Option<&'a str>,
+) -> Option<&'a str> {
+    if let Some(provider) = explicit_provider
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return Some(provider);
+    }
+    let configured_provider = configured_provider.trim();
+    if configured_provider.is_empty() {
+        return None;
+    }
+    if selected_model == configured_model {
+        Some(configured_provider)
+    } else {
+        None
     }
 }
 
@@ -88,16 +191,12 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
     match provider {
         Provider::Ollama(OllamaMode::Local) => Ok(None), // no key needed
         Provider::Ollama(OllamaMode::Cloud) => {
-            // Ollama Cloud requires OLLAMA_API_KEY. Fall back to env var if not in config.
-            let key = config.resolve_api_key(name).or_else(|| {
-                std::env::var("OLLAMA_API_KEY")
-                    .ok()
-                    .filter(|k| !k.is_empty())
-            });
+            let key = resolve_config_env_auth_key(config, name, "OLLAMA_API_KEY");
             if key.is_none() {
                 return Err(CliError::auth(
                     name,
-                    "No API key found. Set the OLLAMA_API_KEY environment variable.".to_string(),
+                    "No API key found. Run `agi login --provider ollama-cloud` or set OLLAMA_API_KEY."
+                        .to_string(),
                 )
                 .into());
             }
@@ -112,15 +211,13 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             let Some(env_var) = api_key_env else {
                 return Ok(None);
             };
-            let key = config
-                .resolve_api_key(pname)
-                .or_else(|| std::env::var(env_var).ok().filter(|k| !k.is_empty()));
+            let key = resolve_config_env_auth_key(config, pname, env_var);
             if key.is_none() {
                 return Err(CliError::auth(
                     *pname,
                     format!(
-                        "No API key found. Set the {} environment variable.",
-                        env_var
+                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        pname, env_var
                     ),
                 )
                 .into());
@@ -137,13 +234,15 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             };
             let key = config
                 .resolve_api_key(pname)
-                .or_else(|| std::env::var(env_var).ok().filter(|k| !k.is_empty()));
+                .filter(|k| !k.trim().is_empty())
+                .or_else(|| env_api_key(env_var))
+                .or_else(|| auth_store_api_key(pname));
             if key.is_none() {
                 return Err(CliError::auth(
                     pname.clone(),
                     format!(
-                        "No API key found. Set the {} environment variable.",
-                        env_var
+                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        pname, env_var
                     ),
                 )
                 .into());
@@ -151,24 +250,104 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
             Ok(key)
         }
         Provider::Anthropic | Provider::Google => {
-            let key = config.resolve_api_key(name);
+            let env_var = config
+                .providers
+                .get(name)
+                .and_then(|p| p.api_key_env.as_deref())
+                .unwrap_or("UNKNOWN");
+            let key = config
+                .resolve_api_key(name)
+                .filter(|k| !k.trim().is_empty())
+                .or_else(|| env_api_key(env_var))
+                .or_else(|| auth_store_api_key(name));
             if key.is_none() {
-                let env_var = config
-                    .providers
-                    .get(name)
-                    .and_then(|p| p.api_key_env.as_deref())
-                    .unwrap_or("UNKNOWN");
                 return Err(CliError::auth(
                     name,
                     format!(
-                        "No API key found. Set the {} environment variable.",
-                        env_var
+                        "No API key found. Run `agi login --provider {}` or set {}.",
+                        name, env_var
                     ),
                 )
                 .into());
             }
             Ok(key)
         }
+    }
+}
+
+fn env_api_key(env_var: &str) -> Option<String> {
+    std::env::var(env_var).ok().filter(|k| !k.trim().is_empty())
+}
+
+fn resolve_config_env_auth_key(
+    config: &CliConfig,
+    provider_name: &str,
+    env_var: &str,
+) -> Option<String> {
+    config_api_key(config, provider_name)
+        .or_else(|| env_api_key(env_var))
+        .or_else(|| auth_store_api_key(provider_name))
+}
+
+fn config_api_key(config: &CliConfig, provider_name: &str) -> Option<String> {
+    config
+        .resolve_api_key(provider_name)
+        .filter(|k| !k.trim().is_empty())
+        .or_else(|| {
+            auth_store_keys(provider_name)
+                .into_iter()
+                .find_map(|key| config.resolve_api_key(key).filter(|k| !k.trim().is_empty()))
+        })
+}
+
+fn auth_store_api_key(provider_name: &str) -> Option<String> {
+    let store = crate::auth::load_auth().ok()?;
+    api_key_from_auth_store(&store, provider_name)
+}
+
+pub(crate) fn api_key_from_auth_store(
+    store: &crate::auth::AuthStore,
+    provider_name: &str,
+) -> Option<String> {
+    if let Some(crate::auth::AuthEntry::ApiKey { key }) = store.entries.get(provider_name) {
+        if !key.trim().is_empty() {
+            return Some(key.clone());
+        }
+    }
+
+    for key in auth_store_keys(provider_name) {
+        if let Some(crate::auth::AuthEntry::ApiKey { key }) = store.entries.get(key) {
+            if !key.trim().is_empty() {
+                return Some(key.clone());
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn auth_store_keys(provider_name: &str) -> Vec<&'static str> {
+    match provider_name.to_ascii_lowercase().as_str() {
+        "openrouter" | "open_router" | "open-router" => {
+            vec!["openrouter", "open_router", "open-router"]
+        }
+        "nvidia" | "nvidia_nim" | "nvidia-nim" | "nim" => {
+            vec!["nvidia", "nvidia_nim", "nvidia-nim", "nim"]
+        }
+        "ollama_cloud" | "ollama-cloud" | "ollamacloud" => {
+            vec!["ollama-cloud", "ollama_cloud", "ollamacloud"]
+        }
+        "lm-studio" | "lm_studio" | "lmstudio" => vec!["lmstudio", "lm-studio", "lm_studio"],
+        "anthropic" => vec!["anthropic"],
+        "openai" => vec!["openai"],
+        "google" => vec!["google"],
+        "xai" | "grok" => vec!["xai", "grok"],
+        "deepseek" => vec!["deepseek"],
+        "perplexity" => vec!["perplexity"],
+        "qwen" | "dashscope" => vec!["qwen", "dashscope"],
+        "moonshot" | "kimi" => vec!["moonshot", "kimi"],
+        "zhipu" | "glm" => vec!["zhipu", "glm"],
+        "mistral" | "mistral-ai" | "mistralai" => vec!["mistral", "mistral-ai", "mistralai"],
+        _ => Vec::new(),
     }
 }
 
@@ -234,6 +413,13 @@ pub fn register_custom_providers(config: &CliConfig) {
         "mistral",
         "mistral-ai",
         "mistralai",
+        "openrouter",
+        "open-router",
+        "open_router",
+        "nvidia",
+        "nvidia-nim",
+        "nvidia_nim",
+        "nim",
     ];
 
     let Ok(mut registry) = CUSTOM_PROVIDERS.write() else {
@@ -410,42 +596,60 @@ mod tests {
     use super::*;
     use crate::models::{OllamaMode, Provider};
 
+    fn sample_model_for(provider: &str) -> String {
+        crate::model_catalog::models_for(provider)
+            .first()
+            .unwrap_or_else(|| panic!("expected at least one {provider} model"))
+            .id
+            .clone()
+    }
+
     #[test]
     fn test_provider_detection() {
-        assert_eq!(detect_provider("claude-opus-4-6"), Provider::Anthropic);
         assert_eq!(
-            detect_provider("claude-sonnet-4-20250514"),
-            Provider::Anthropic
+            provider_name(&detect_provider(&sample_model_for("anthropic"))),
+            "anthropic"
         );
-        assert_eq!(provider_name(&detect_provider("gpt-5.5")), "openai");
-        assert_eq!(provider_name(&detect_provider("gpt-5.4-turbo")), "openai");
-        assert_eq!(provider_name(&detect_provider("o3-mini")), "openai");
-        assert_eq!(detect_provider("gemini-3-flash-preview"), Provider::Google);
-        assert_eq!(detect_provider("models/gemini-pro"), Provider::Google);
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("openai"))),
+            "openai"
+        );
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("google"))),
+            "google"
+        );
         assert_eq!(
             detect_provider("llama3.1:8b"),
             Provider::Ollama(OllamaMode::Local)
         );
-        // Mistral / Codestral now route through OpenAICompatible (no native variant).
-        assert_eq!(provider_name(&detect_provider("mistral-large")), "mistral");
         assert_eq!(
-            provider_name(&detect_provider("codestral-latest")),
+            provider_name(&detect_provider(&sample_model_for("mistral"))),
             "mistral"
         );
-        assert_eq!(provider_name(&detect_provider("grok-4.1")), "xai");
-        assert_eq!(provider_name(&detect_provider("grok-beta")), "xai");
-        assert_eq!(provider_name(&detect_provider("deepseek-chat")), "deepseek");
         assert_eq!(
-            provider_name(&detect_provider("deepseek-reasoner")),
+            provider_name(&detect_provider(&sample_model_for("xai"))),
+            "xai"
+        );
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("deepseek"))),
             "deepseek"
         );
-        assert_eq!(provider_name(&detect_provider("qwen2.5")), "qwen");
-        assert_eq!(provider_name(&detect_provider("kimi-k2")), "moonshot");
-        assert_eq!(provider_name(&detect_provider("glm-4.6")), "zhipu");
         assert_eq!(
-            detect_provider("unknown-model"),
+            detect_provider("qwen2.5"),
             Provider::Ollama(OllamaMode::Local)
         );
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("moonshot"))),
+            "moonshot"
+        );
+        assert_eq!(
+            provider_name(&detect_provider(&sample_model_for("zhipu"))),
+            "zhipu"
+        );
+        assert!(try_detect_provider("claude-definitely-fake").is_none());
+        assert!(try_detect_provider("gemini-definitely-fake").is_none());
+        assert!(try_detect_provider("unknown-model").is_none());
+        assert_eq!(provider_name(&detect_provider("unknown-model")), "openai");
     }
 
     #[test]
@@ -479,6 +683,22 @@ mod tests {
         assert_eq!(
             provider_name(&provider_from_name("lmstudio").unwrap()),
             "lmstudio"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("openrouter").unwrap()),
+            "openrouter"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("open_router").unwrap()),
+            "openrouter"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("nvidia").unwrap()),
+            "nvidia"
+        );
+        assert_eq!(
+            provider_name(&provider_from_name("nvidia_nim").unwrap()),
+            "nvidia"
         );
         // Aliases
         assert_eq!(provider_name(&provider_from_name("grok").unwrap()), "xai");
@@ -515,6 +735,36 @@ mod tests {
         };
         assert_eq!(*name, "lmstudio");
         assert!(api_key_env.is_none(), "LM Studio is keyless local");
+    }
+
+    #[test]
+    fn api_key_auth_store_aliases_resolve() {
+        let mut entries = HashMap::new();
+        entries.insert(
+            "open_router".to_string(),
+            crate::auth::AuthEntry::ApiKey {
+                key: "or-key".to_string(),
+            },
+        );
+        entries.insert(
+            "nvidia_nim".to_string(),
+            crate::auth::AuthEntry::ApiKey {
+                key: "nv-key".to_string(),
+            },
+        );
+        let store = crate::auth::AuthStore {
+            entries,
+            copilot_cache: None,
+        };
+
+        assert_eq!(
+            api_key_from_auth_store(&store, "openrouter").as_deref(),
+            Some("or-key")
+        );
+        assert_eq!(
+            api_key_from_auth_store(&store, "nvidia").as_deref(),
+            Some("nv-key")
+        );
     }
 
     #[test]

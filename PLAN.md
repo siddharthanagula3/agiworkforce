@@ -38,6 +38,129 @@ The baseline is feature parity. The reason users should stay is:
 - Naming is locked by `docs/engineering/naming-conventions.md`: public brand `AGI`, formal platform `AGI Workforce`, primary CLI command `agi`, compatibility CLI alias `agiworkforce`, and internal repo/package/crate identifiers `agiworkforce`.
 - Local hooks are part of repo operability: commit messages, pre-commit checks, and pre-push checks must stay wired and enforced by `pnpm check:hooks`.
 
+## 2026-06-03 Demo-Readiness Repair Plan
+
+Status: awaiting implementation approval. This plan is based on `TODO.md` Wave 1 findings verified by reading source. Do not implement until the founder explicitly approves.
+
+### Objective
+
+Make the public website and the minimum cross-surface demo honest, smooth, and defensible within the event window. The demo should show AGI as a suite with a working web trial, local/BYOK/desktop/CLI strengths, and waitlisted managed cloud without overclaiming features that are not yet wired.
+
+### Priority order
+
+#### P0 - Blockers before public demo
+
+1. **Model catalog correctness**
+   - Fix findings: F01, F14.
+   - Rationale: fake or unverifiable provider model IDs are the highest-risk hallucination vector. Pricing, routing, CLI catalog, and web model picker all depend on this.
+   - Work:
+     - Verify every active provider `apiModelId` against official provider docs or live provider model-list APIs.
+     - Remove `gpt-5.5` as an OpenAI API ID unless there is a real provider mapping; if keeping it for UI, make it an internal alias resolved before API calls.
+     - Move Auto Economy trial model, prompt limit, input cap, and output cap into a shared server-owned config returned through headers or a typed endpoint.
+   - Breaking-change risk: medium. Users may see different model labels if unsupported labels are removed. Prefer alias mapping and clear display labels.
+
+2. **Website account-bound free trial and waitlist**
+   - Fix findings: F02 plus preserve already-working three-prompt Auto Economy path.
+   - Rationale: website is the first public surface. The user asked for free Auto Economy capped to three prompts and tied to the logged-in customer.
+   - Work:
+     - Require Clerk auth for the account-bound cloud waitlist submit path.
+     - Add/store `user_id` in `cloud_managed_waitlist` or a linked table while retaining normalized email for notification.
+     - Keep any anonymous waitlist path separate with anonymous copy, source, and rate limit.
+     - Ensure free users cannot switch out of Auto Economy, cannot burn expensive tools, and see the managed-cloud modal instead of a pricing redirect.
+   - Breaking-change risk: low to medium. Needs migration or additive schema change.
+
+3. **Website chat demo correctness**
+   - Fix findings: F03, F10, F11, F12, F13.
+   - Rationale: these are the user-visible bugs most likely to appear during a live walkthrough.
+   - Work:
+     - Normalize search result metadata shape across `useChatStream`, `chatStore`, and `MessageBubble`.
+     - Wire collapsed sidebar Search to the same dialog as expanded sidebar.
+     - Either implement pre-send incognito temporary conversation state or hide/disable incognito until a persisted conversation exists.
+     - Restrict attachment UI/copy to image-only on web until file contents are actually sent, or implement text/PDF/code extraction.
+     - Preserve original turn metadata for regenerate, or block regenerate on turns with unsupported metadata.
+   - Breaking-change risk: low. Keep behavior narrow and additive.
+
+4. **Public claim freeze and brand correction**
+   - Fix findings: F04, F05, F09, F15, F20, F21, F22.
+   - Rationale: a funding or job conversation punishes overclaiming more than missing optional features. Public copy must match runtime.
+   - Work:
+     - Prominent public product mark becomes `AGI`; keep `AGI Workforce` only where formal company/platform naming is intentional.
+     - Remove or relabel scripted "live" hero claims unless backed by a real endpoint.
+     - Soften security/compliance pages to "in progress", "configured for", or "available when evidence exists" unless proof artifacts are present.
+     - Align mobile page to actual v1 local-only capabilities.
+     - Align VS Code README/config and Chrome extension naming.
+   - Breaking-change risk: low. Mostly copy and presentation, but legally important.
+
+5. **Mobile launch safety**
+   - Fix findings: F06, F07.
+   - Rationale: mobile local mode can be a strong pitch, but cloud/dispatch/pinning placeholders are release blockers.
+   - Work:
+     - Provision real TLS SPKI pins before cloud-host requests are enabled, or keep cloud features disabled and remove cloud-host claims from mobile demo.
+     - Remove transitional unsigned dispatch acceptance before or on 2026-06-05, or keep dispatch hidden.
+   - Breaking-change risk: medium. Pinning can break network calls if wrong; stage with exact host certificates.
+
+6. **Desktop tool path reliability**
+   - Fix findings: F08, F19.
+   - Rationale: desktop is a core differentiator; a missing Tauri managed state can crash IPC.
+   - Work:
+     - Register `RateLimitState` in Tauri setup before commands are invoked.
+     - Make product demos use `chat_send_message` for tool calls, since direct `llm_send_message` is intentionally non-tool chat.
+     - Keep local/BYOK/cloud trust-boundary labels clear.
+   - Breaking-change risk: low if state is registered once; medium if UI paths are changed broadly.
+
+#### P1 - Needed for a strong suite demo, not first website blocker
+
+7. **CLI demo readiness**
+   - Fix findings: F16, F17, F18.
+   - Rationale: CLI already has real local tools and local model discovery. The remaining work is avoiding dead flags and unsupported cloud claims.
+   - Work:
+     - Either implement `stream-json` and partial-message output or remove them from user-facing help.
+     - Wire headless permission decisions through the SDK/control channel or remove the unused helper.
+     - Keep `cloud_exec` as explicit private beta/waitlist until a backend contract exists.
+   - Breaking-change risk: medium if CLI output contracts change. Preserve stable JSON where it exists.
+
+8. **Chrome and VS Code extension demo scope**
+   - Fix findings: F20, F21, F22, F23, F24.
+   - Rationale: these can be shown as companion surfaces only if the setup path is honest and permissions are explainable.
+   - Work:
+     - VS Code: align defaults/docs, decide API-key/BYOK/local/cloud setup story, and avoid claiming cloud sign-in before it exists.
+     - Chrome: document least-privilege permission story, confirm sender validation/pairing/approval gates for browser actions, and verify desktop `/pair`.
+   - Breaking-change risk: medium for extension permissions and Marketplace packaging.
+
+#### P2 - Post-demo hardening
+
+9. **Evidence ledger and claims guardrail**
+   - Rationale: prevents future LLM-generated public claims from drifting beyond implementation.
+   - Work:
+     - Add a small claims ledger mapping public marketing/security claims to source code, proof artifact, and last verification date.
+     - Add a guardrail script that flags hard claims such as "compliant", "notarized", "HSTS preload", "every table", "live", and unverified model IDs unless evidence is recorded.
+
+10. **Reference-guided UI improvement**
+    - Rationale: after truthfulness blockers are handled, use the reference corpus and frontend-design skill to improve the website without generic LLM landing-page output.
+    - Work:
+      - Use `/Users/siddhartha/Desktop/claude_reference`, `/Users/siddhartha/Desktop/claude settings modal`, and allowed visual references for familiarity.
+      - Keep the first viewport usable: product chat/trial first, no generic marketing hero that delays the actual experience.
+      - Preserve AGI differentiation: lightweight Tauri desktop, local/BYOK, managed cloud waitlist, multi-provider routing, cross-surface continuity.
+
+### Sequencing rationale
+
+- Fix catalog and claims before UI polish. A polished site with fake model IDs or unsupported compliance claims creates diligence risk.
+- Fix website chat before desktop/mobile/extension polish because the website is the public entry point and the requested free Auto Economy trial depends on it.
+- Fix mobile/extension public copy before presenting those surfaces. Hidden local-only features are acceptable; overclaimed unavailable features are not.
+- Apply the code-structure rule during fixes: reuse existing service/helpers for repeated mechanics, but do not create a service for one-off domain logic.
+
+### Verification plan after approval
+
+The user has asked to stop testing first, so no verification commands run during this planning step. After implementation approval and code edits:
+
+- Website: manual browser smoke for sign-in, three free Auto Economy prompts, fourth prompt waitlist modal, search dialog, regenerate, attachment gating, pricing/upgrade modal behavior.
+- API: targeted route checks for waitlist auth/user binding, chat ownership, CSRF, rate-limit behavior.
+- Model catalog: provider ID verification script plus manual official-doc spot check for OpenAI, Anthropic, Google, Ollama/local, and managed auto modes.
+- Desktop: Tauri command registration check and manual chat tool-call flow through `chat_send_message`.
+- CLI: `agi --help`, local Ollama auto-detect, list/read/edit/write tool calls, JSON output smoke, and cloud waitlist error path.
+- Mobile: local-only flow on staged device/simulator, pinning state, no hidden cloud claims.
+- Extensions: VS Code first-run setup, Chrome pairing and permission/approval path.
+
 ## Source Corpus
 
 Locked AGI product decision:

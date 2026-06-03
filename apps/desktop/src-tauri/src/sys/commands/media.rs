@@ -82,6 +82,8 @@ pub struct MediaVideoResponse {
     pub duration_secs: Option<u32>,
     pub cost_estimate: Option<f64>,
     pub latency_ms: u64,
+    pub provider: String,
+    pub model: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -217,12 +219,17 @@ pub async fn media_generate_video(
     let base_url = get_api_base_url();
     let generate_url = format!("{}/api/media/video/generate", base_url);
 
-    let provider = request.provider.as_deref().unwrap_or("runway");
+    let provider = request.provider.as_deref().unwrap_or("google");
+    let provider_for_api = if provider == "veo3" {
+        "google"
+    } else {
+        provider
+    };
     let payload = serde_json::json!({
         "prompt": request.prompt,
         "duration_secs": request.duration_secs,
         "resolution": request.resolution,
-        "provider": if provider == "veo3" { "google" } else { provider },
+        "provider": provider_for_api,
     });
 
     let started = Instant::now();
@@ -350,6 +357,8 @@ pub async fn media_generate_video(
         duration_secs: request.duration_secs,
         cost_estimate: None,
         latency_ms,
+        provider: provider_for_api.to_string(),
+        model: request.model,
     })
 }
 

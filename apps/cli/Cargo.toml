@@ -64,7 +64,7 @@ regex = "1"
 bytes = { version = "1.11.1", default-features = false }
 cpal = "0.15"
 hound = "3.5"
-crossterm = "0.28"
+crossterm = { version = "0.28", features = ["bracketed-paste"] }
 ratatui = "0.29"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 cron = "0.13"

@@ -1,10 +1,95 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
+use dialoguer::Confirm;
 
-use super::ToolResult;
+use super::common::describe_command;
+use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
+use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
-pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Result<ToolResult> {
+async fn worktree_approval_denial(
+    tool_name: &str,
+    prompt: &str,
+    permission_command: &str,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Option<ToolResult> {
+    if !require_confirmation {
+        return None;
+    }
+
+    let perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+    match perms.check_command(permission_command) {
+        Some(true) => None,
+        Some(false) => Some(ToolResult {
+            tool_name: tool_name.to_string(),
+            success: false,
+            output: format!(
+                "Worktree action is denied by saved permissions. Use /permissions reset to clear.\n{}",
+                describe_command(permission_command)
+            ),
+        }),
+        None => {
+            if let Some(decision) = request_approval(
+                approval_callback,
+                ApprovalRequest::new(
+                    ApprovalRequestKind::Exec {
+                        command: permission_command.to_string(),
+                    },
+                    prompt,
+                    vec![describe_command(permission_command)],
+                ),
+            )
+            .await
+            {
+                if !approval_allows(decision) {
+                    return Some(ToolResult {
+                        tool_name: tool_name.to_string(),
+                        success: false,
+                        output: "User denied worktree action".to_string(),
+                    });
+                }
+
+                let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                match decision {
+                    ApprovalDecision::AllowSession => {
+                        perms.allow_session_for_process(permission_command);
+                    }
+                    ApprovalDecision::AlwaysAllow => {
+                        perms.allow_always(permission_command);
+                        let _ = perms.save();
+                    }
+                    _ => {}
+                }
+                None
+            } else {
+                let confirmed = Confirm::new()
+                    .with_prompt(prompt)
+                    .default(false)
+                    .interact()
+                    .unwrap_or(false);
+
+                if !confirmed {
+                    return Some(ToolResult {
+                        tool_name: tool_name.to_string(),
+                        success: false,
+                        output: "User denied worktree action".to_string(),
+                    });
+                }
+
+                let mut perms = crate::permissions::PermissionStore::load().unwrap_or_default();
+                perms.allow_session_for_process(permission_command);
+                None
+            }
+        }
+    }
+}
+
+pub(super) async fn execute_enter_worktree(
+    args: &HashMap<String, String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
     let branch = match args.get("branch").filter(|s| !s.is_empty()) {
         Some(b) => b.clone(),
         None => {
@@ -17,6 +102,22 @@ pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Re
     };
     let base = args.get("base").cloned();
     let target_dir = args.get("target_dir").map(std::path::PathBuf::from);
+    let permission_command = match &target_dir {
+        Some(dir) => format!("git worktree add {} {}", dir.display(), branch),
+        None => format!("git worktree add <auto-dir> {}", branch),
+    };
+    if let Some(denial) = worktree_approval_denial(
+        "enter_worktree",
+        "Create this git worktree?",
+        &permission_command,
+        require_confirmation,
+        approval_callback,
+    )
+    .await
+    {
+        return Ok(denial);
+    }
+
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let opts = crate::runtime::worktree::WorktreeOptions {
         branch: branch.clone(),
@@ -44,8 +145,9 @@ pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Re
             Ok(ToolResult {
                 tool_name: "enter_worktree".into(),
                 success: true,
-                output: serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()})
-                    .to_string(),
+                output:
+                    serde_json::json!({"branch": wt.branch, "path": wt.path.display().to_string()})
+                        .to_string(),
             })
         }
         Err(e) => Ok(ToolResult {
@@ -56,7 +158,11 @@ pub(super) async fn execute_enter_worktree(args: &HashMap<String, String>) -> Re
     }
 }
 
-pub(super) async fn execute_exit_worktree(args: &HashMap<String, String>) -> Result<ToolResult> {
+pub(super) async fn execute_exit_worktree(
+    args: &HashMap<String, String>,
+    require_confirmation: bool,
+    approval_callback: Option<&ApprovalCallback>,
+) -> Result<ToolResult> {
     let path = match args.get("path").filter(|s| !s.is_empty()) {
         Some(p) => std::path::PathBuf::from(p),
         None => {
@@ -67,6 +173,19 @@ pub(super) async fn execute_exit_worktree(args: &HashMap<String, String>) -> Res
             });
         }
     };
+    let permission_command = format!("git worktree remove {}", path.display());
+    if let Some(denial) = worktree_approval_denial(
+        "exit_worktree",
+        "Remove this git worktree?",
+        &permission_command,
+        require_confirmation,
+        approval_callback,
+    )
+    .await
+    {
+        return Ok(denial);
+    }
+
     let repo = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     match crate::runtime::worktree::exit_worktree(&repo, &path) {
         Ok(()) => {

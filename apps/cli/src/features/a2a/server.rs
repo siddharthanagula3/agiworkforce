@@ -8,8 +8,7 @@ use colored::Colorize;
 use tokio::sync::Semaphore;
 
 use super::protocol::{
-    A2aState, AgentCard, HandoffRequest, InFlightTask, TaskRequest, TaskResponse,
-    TaskResponseStatus,
+    A2aState, AgentCard, InFlightTask, TaskRequest, TaskResponse, TaskResponseStatus,
 };
 use super::security::constant_time_eq;
 
@@ -72,7 +71,6 @@ pub fn build_a2a_state(
 /// - `GET  /a2a/card`       — returns this agent's AgentCard as JSON
 /// - `POST /a2a/task`       — accept a delegated task
 /// - `GET  /a2a/task/{id}`  — check task status
-/// - `POST /a2a/handoff`    — receive a conversation handoff
 pub async fn serve_a2a(state: A2aState, port: u16) -> Result<()> {
     let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port))
         .await
@@ -197,7 +195,6 @@ async fn handle_connection(
     let response = match (method, path) {
         ("GET", "/a2a/card") => handle_get_card(&state).await,
         ("POST", "/a2a/task") => handle_post_task(&state, body).await,
-        ("POST", "/a2a/handoff") => handle_post_handoff(&state, body).await,
         ("GET", p) if p.starts_with("/a2a/task/") => {
             let task_id = &p["/a2a/task/".len()..];
             handle_get_task(&state, task_id).await
@@ -345,22 +342,6 @@ async fn handle_get_task(state: &A2aState, task_id: &str) -> String {
     }
 }
 
-async fn handle_post_handoff(_state: &A2aState, body: &str) -> String {
-    let messages_received = serde_json::from_str::<HandoffRequest>(body)
-        .map(|h| h.messages.len())
-        .unwrap_or(0);
-
-    http_json_response(
-        501,
-        &serde_json::json!({
-            "error": "handoff not yet implemented",
-            "status": "not-implemented",
-            "messages_received": messages_received
-        })
-        .to_string(),
-    )
-}
-
 // ---------------------------------------------------------------------------
 // Task execution
 // ---------------------------------------------------------------------------
@@ -370,7 +351,17 @@ async fn execute_delegated_task(
     request: &TaskRequest,
 ) -> Result<String> {
     let sys_context = crate::context::gather_system_context();
-    let mut session = crate::agent::AgentSession::new(&config.default.model, &sys_context, None);
+    let mut session = crate::agent::AgentSession::new_checked(
+        &config.default.model,
+        &sys_context,
+        None,
+        crate::models::selection_provider_override(
+            &config.default.model,
+            &config.default.model,
+            &config.default.provider,
+            None,
+        ),
+    )?;
     session.skip_permissions = false;
     session.auto_approve_safe = true;
     session.max_turns = Some(15);

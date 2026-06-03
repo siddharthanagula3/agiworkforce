@@ -8,7 +8,13 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use stripe::{Event, EventObject, EventType};
 use uuid::Uuid;
 
+use crate::sys::security::{
+    encryption::{decrypt_secret, encrypt_secret, EncryptedSecret},
+    machine_key::{self, KeyPurpose},
+};
+
 type HmacSha256 = Hmac<Sha256>;
+const ENCRYPTED_WEBHOOK_PAYLOAD_PREFIX: &str = "encrypted:v1:";
 
 /// MEDIUM-003 fix: Helper to acquire database lock with better error context.
 /// Recovers from poisoned mutex and logs the error context.
@@ -28,6 +34,26 @@ fn acquire_db_lock<'a>(
             operation
         )
     })
+}
+
+fn encrypt_webhook_payload(payload: &str) -> Result<String> {
+    let key = machine_key::derive_key(KeyPurpose::DatabaseEncryption);
+    let encrypted = encrypt_secret(&key, payload)
+        .map_err(|error| anyhow!("Encrypt webhook payload: {error}"))?;
+    let serialized = serde_json::to_string(&encrypted)
+        .map_err(|error| anyhow!("Serialize encrypted webhook payload: {error}"))?;
+    Ok(format!("{ENCRYPTED_WEBHOOK_PAYLOAD_PREFIX}{serialized}"))
+}
+
+fn decrypt_stored_webhook_payload(payload: &str) -> Result<String> {
+    let Some(serialized) = payload.strip_prefix(ENCRYPTED_WEBHOOK_PAYLOAD_PREFIX) else {
+        return Ok(payload.to_string());
+    };
+
+    let encrypted: EncryptedSecret = serde_json::from_str(serialized)
+        .map_err(|error| anyhow!("Parse encrypted webhook payload: {error}"))?;
+    let key = machine_key::derive_key(KeyPurpose::DatabaseEncryption);
+    decrypt_secret(&key, &encrypted).map_err(|error| anyhow!("Decrypt webhook payload: {error}"))
 }
 
 #[derive(Clone)]
@@ -189,6 +215,7 @@ impl WebhookHandler {
 
         let id = Uuid::new_v4().to_string();
         let now = Utc::now().timestamp();
+        let encrypted_payload = encrypt_webhook_payload(payload)?;
 
         db.execute(
             "INSERT OR IGNORE INTO billing_webhook_events (
@@ -198,7 +225,7 @@ impl WebhookHandler {
                 id,
                 event.id.to_string(),
                 format!("{:?}", event.type_),
-                payload,
+                encrypted_payload,
                 false,
                 0,
                 now
@@ -598,10 +625,11 @@ impl WebhookHandler {
             rows
         };
 
-        for (event_id, payload) in events {
+        for (event_id, stored_payload) in events {
             // Retry by directly parsing and processing the stored event payload,
             // bypassing signature verification (already verified on first receipt).
             let retry_result: Result<()> = async {
+                let payload = decrypt_stored_webhook_payload(&stored_payload)?;
                 let event: Event = serde_json::from_str(&payload)?;
 
                 if self.is_event_processed(event.id.as_ref())? {

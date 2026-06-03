@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Loader2, Puzzle, ChevronDown } from 'lucide-react';
+import { Search, Loader2, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
 import { Input } from '@shared/ui/input';
@@ -210,7 +210,8 @@ function ConnectorsTab({ query }: { query: string }) {
     const q = query.toLowerCase();
     return CONNECTORS.filter(
       (c) =>
-        q === '' || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q),
+        !c.exclusive &&
+        (q === '' || c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q)),
     );
   }, [query]);
 
@@ -247,22 +248,6 @@ function ConnectorsTab({ query }: { query: string }) {
   );
 }
 
-// ─── Plugins Tab ─────────────────────────────────────────────────────────────
-
-function PluginsTab() {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-muted/50">
-        <Puzzle className="h-6 w-6 text-muted-foreground/60" aria-hidden="true" />
-      </div>
-      <h3 className="text-base font-medium text-foreground">Plugins coming soon</h3>
-      <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-        The plugin system is under development. Check back in a future release.
-      </p>
-    </div>
-  );
-}
-
 // ─── DirectoryModal ───────────────────────────────────────────────────────────
 
 export function DirectoryModal() {
@@ -283,7 +268,7 @@ export function DirectoryModal() {
               aria-hidden="true"
             />
             <Input
-              placeholder="Search skills, connectors, and plugins..."
+              placeholder="Search skills and connectors..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="h-9 pl-9 text-sm"
@@ -306,9 +291,6 @@ export function DirectoryModal() {
             <TabsTrigger value="connectors" className="rounded-md px-4 text-sm">
               Connectors
             </TabsTrigger>
-            <TabsTrigger value="plugins" className="rounded-md px-4 text-sm">
-              Plugins
-            </TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
@@ -317,9 +299,6 @@ export function DirectoryModal() {
             </TabsContent>
             <TabsContent value="connectors" tabIndex={-1} className="mt-0">
               <ConnectorsTab query={query} />
-            </TabsContent>
-            <TabsContent value="plugins" tabIndex={-1} className="mt-0">
-              <PluginsTab />
             </TabsContent>
           </div>
         </Tabs>
