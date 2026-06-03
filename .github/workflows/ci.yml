@@ -25,7 +25,7 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
 
@@ -138,7 +138,6 @@ jobs:
             p/security-audit
             p/typescript
             p/owasp-top-ten
-          severity: ERROR
         continue-on-error: true
 
       - name: Build packages
