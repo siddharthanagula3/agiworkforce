@@ -1,0 +1,85 @@
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConnectorGallery } from '../ConnectorGallery';
+import { useConnectorsStore } from '../../../stores/connectorsStore';
+import { McpClient } from '@/api/mcp';
+import { TooltipProvider } from '@/components/ui/Tooltip';
+
+vi.mock('@/api/mcp', () => ({
+  McpClient: {
+    listConnectedProviders: vi.fn(),
+    oauthStatus: vi.fn(),
+    oauthRefresh: vi.fn(),
+    oauthStartRaw: vi.fn(),
+    oauthCallbackRaw: vi.fn(),
+    connectConnector: vi.fn(),
+    saveApiKey: vi.fn(),
+    oauthDisconnectRaw: vi.fn(),
+  },
+}));
+
+function resetConnectorsStore() {
+  useConnectorsStore.setState({
+    connectedIds: [],
+    loading: {},
+    error: {},
+    pendingOAuth: {},
+    oauthStartedAt: {},
+    _oauthTimers: {},
+    connectorPermissions: {},
+  });
+}
+
+describe('ConnectorGallery', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetConnectorsStore();
+    vi.mocked(McpClient.listConnectedProviders).mockResolvedValue([]);
+    vi.mocked(McpClient.oauthStatus).mockResolvedValue({
+      connected: true,
+      userInfo: null,
+      expiresAt: null,
+    });
+  });
+
+  it('renders connectors inside Settings without Directory or Customize copy', async () => {
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Connectors')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Connected')).toBeInTheDocument();
+    expect(screen.getByText('Available to connect')).toBeInTheDocument();
+    expect(screen.queryByText(/Directory/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Customize/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Featured/i)).not.toBeInTheDocument();
+  });
+
+  it('shows connected connectors from the MCP store with a real configure path', async () => {
+    vi.mocked(McpClient.listConnectedProviders).mockResolvedValue(['gmail']);
+
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Gmail').length).toBeGreaterThan(0);
+      expect(screen.getByText('1 active')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: /configure/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /back to connectors/i })).toBeInTheDocument();
+      expect(screen.getByText(/no live tool schema available/i)).toBeInTheDocument();
+    });
+  });
+});

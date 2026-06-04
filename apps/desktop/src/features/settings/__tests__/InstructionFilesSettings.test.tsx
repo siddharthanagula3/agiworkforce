@@ -117,10 +117,9 @@ describe('InstructionFilesSettings', () => {
     it('shows source labels for files', () => {
       mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
-      // Multiple files may share the same source label (e.g. both CLAUDE.md and AGENTS.md
-      // are "Claude Code"), so use getAllByText.
-      const claudeCodeLabels = screen.getAllByText('Claude Code');
-      expect(claudeCodeLabels.length).toBeGreaterThan(0);
+      // Multiple files may share the same compatibility source label.
+      const compatibilityLabels = screen.getAllByText('Compatibility');
+      expect(compatibilityLabels.length).toBeGreaterThan(0);
       expect(screen.getByText('Cursor')).toBeInTheDocument();
       expect(screen.getByText('Windsurf')).toBeInTheDocument();
     });
