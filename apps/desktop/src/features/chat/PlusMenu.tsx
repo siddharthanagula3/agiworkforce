@@ -167,7 +167,7 @@ export function PlusMenu({
               onClick={() => {
                 setIsOpen(false);
                 setShowToolsPanel(false);
-                openSettings('mcp-skills');
+                openSettings('skills');
               }}
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-[hsl(var(--popover-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
             >

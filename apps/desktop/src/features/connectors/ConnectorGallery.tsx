@@ -6,6 +6,7 @@ import { useConnectorsStore } from '../../stores/connectorsStore';
 import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
+  CONNECTOR_DIRECTORY,
   FEATURED_CONNECTORS,
   type ConnectorCategory,
   type ConnectorDef,
@@ -172,8 +173,14 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
-  // Determine which source list to use
-  const sourceList = activeTab === 'featured' ? FEATURED_CONNECTORS : CONNECTORS;
+  const visibleCategories = useMemo(
+    () => CONNECTOR_CATEGORIES.filter((cat) => CONNECTOR_DIRECTORY.some((c) => c.category === cat)),
+    [],
+  );
+
+  // Determine which source list to use. The directory shows supported entries only;
+  // future catalog items stay out of the live connect flow until they have a backend path.
+  const sourceList = activeTab === 'featured' ? FEATURED_CONNECTORS : CONNECTOR_DIRECTORY;
 
   // Filter by search text, category, and connection status
   const filtered = useMemo(() => {
@@ -318,7 +325,7 @@ export function ConnectorGallery() {
         <div>
           <h3 className="text-lg font-semibold">Connectors</h3>
           <p className="text-sm text-muted-foreground mt-1">
-            Connect to your apps, files, and services via OAuth or API keys.
+            Connect supported apps, files, and services via OAuth, API keys, or MCP.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -412,7 +419,7 @@ export function ConnectorGallery() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {CONNECTOR_CATEGORIES.map((cat) => (
+                {visibleCategories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat}
                   </SelectItem>
@@ -478,8 +485,8 @@ function EmptyState({ statusFilter }: EmptyStateProps) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <Check className="h-10 w-10 mb-3 opacity-40" />
-        <p className="text-sm font-medium">All connectors are connected</p>
-        <p className="text-xs mt-1 opacity-70">You've connected everything in this view.</p>
+        <p className="text-sm font-medium">No available connectors in this view</p>
+        <p className="text-xs mt-1 opacity-70">Clear the search or choose another category.</p>
       </div>
     );
   }

@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   Code,
   FolderOpen,
-  LayoutGrid,
   MessageSquare,
   Search,
   Settings,
@@ -91,12 +90,12 @@ export function Sidebar() {
       action: toggleSearchModal,
     },
     {
-      id: 'customize',
-      icon: <LayoutGrid size={18} strokeWidth={1.75} />,
-      label: 'Customize',
+      id: 'settings',
+      icon: <Settings size={18} strokeWidth={1.75} />,
+      label: 'Settings',
       action: () =>
         window.dispatchEvent(
-          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'mcp-skills' } }),
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'general' } }),
         ),
     },
     {
@@ -117,7 +116,7 @@ export function Sidebar() {
       label: 'Skills',
       action: () =>
         window.dispatchEvent(
-          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'mcp-skills' } }),
+          new CustomEvent('chat:action', { detail: { type: 'open-settings', tab: 'skills' } }),
         ),
     },
     {

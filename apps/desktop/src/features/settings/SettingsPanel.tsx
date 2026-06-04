@@ -6,16 +6,17 @@ import { save } from '@tauri-apps/plugin-dialog';
 import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bell,
+  BookOpen,
   Brain,
   CreditCard,
   Mic,
   Plug,
+  Puzzle,
   Search,
   Server,
   Settings2,
   Shield,
   UserRound,
-  Wrench,
   Zap,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -51,11 +52,11 @@ import { AppearanceTab } from './tabs/Appearance';
 import { PrivacyTab } from './tabs/Privacy';
 import { ModelsKeysTab } from './tabs/ModelsKeys';
 import { AgentsTab } from './tabs/Agents';
-import { McpSkillsTab } from './tabs/McpSkills';
+import { SkillsTab } from './tabs/Skills';
 import { ConnectorsTab } from './tabs/Connectors';
+import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
-import { CapabilitiesTab } from './tabs/Capabilities';
 import { MemoryTab } from './tabs/Memory';
 
 type CanonicalTab =
@@ -65,11 +66,11 @@ type CanonicalTab =
   | 'privacy'
   | 'models-keys'
   | 'agents'
-  | 'mcp-skills'
+  | 'skills'
   | 'connectors'
+  | 'plugins'
   | 'notifications'
   | 'voice'
-  | 'capabilities'
   | 'memory';
 
 function resolveTab(tab: SettingsTab): CanonicalTab {
@@ -83,15 +84,15 @@ const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType 
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
-  { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
-  { key: 'capabilities', label: 'Capabilities', icon: Zap },
+  { key: 'skills', label: 'Skills', icon: BookOpen },
+  { key: 'connectors', label: 'Connectors', icon: Plug },
+  { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
 
-const SELF_SAVING_TABS = new Set<CanonicalTab>(['mcp-skills', 'connectors']);
+const SELF_SAVING_TABS = new Set<CanonicalTab>(['skills', 'connectors', 'plugins']);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
@@ -102,8 +103,8 @@ const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
     keys: ['general', 'account', 'appearance', 'privacy', 'models-keys'],
   },
   {
-    label: 'Customize',
-    keys: ['agents', 'mcp-skills', 'connectors', 'capabilities', 'memory'],
+    label: 'Tools',
+    keys: ['skills', 'connectors', 'plugins', 'agents', 'memory'],
   },
   {
     label: 'Desktop app',
@@ -202,7 +203,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   };
 
   const ollamaStatus = providerStatuses.ollama;
-  const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
+  const isOllamaAvailable =
+    Boolean(ollamaStatus?.available && ollamaStatus?.ollamaRunning) || ollamaModels.length > 0;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
   const isBusy = loading || isSaving || notificationLoading;
   const normalizedNavQuery = navQuery.trim().toLowerCase();
@@ -593,11 +595,13 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           />
         );
       case 'agents':
-        return <AgentsTab onSettingsChange={() => setHasUnsavedChanges(true)} />;
-      case 'mcp-skills':
-        return <McpSkillsTab isBusy={isBusy} onOpenConnectors={() => setActiveTab('connectors')} />;
+        return <AgentsTab />;
+      case 'skills':
+        return <SkillsTab />;
       case 'connectors':
-        return <ConnectorsTab isBusy={isBusy} onOpenMcpSkills={() => setActiveTab('mcp-skills')} />;
+        return <ConnectorsTab />;
+      case 'plugins':
+        return <PluginsTab />;
       case 'notifications':
         return (
           <NotificationsTab
@@ -609,8 +613,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         );
       case 'voice':
         return <VoiceTab />;
-      case 'capabilities':
-        return <CapabilitiesTab />;
       case 'memory':
         return <MemoryTab />;
       default:
