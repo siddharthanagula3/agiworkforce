@@ -5,6 +5,7 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
+  Plug,
   RefreshCw,
   Search,
   Settings,
@@ -12,6 +13,23 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ComponentType, ReactNode } from 'react';
+import {
+  siAtlassian,
+  siBox,
+  siDropbox,
+  siFigma,
+  siGithub,
+  siGmail,
+  siGooglecalendar,
+  siGoogledrive,
+  siHubspot,
+  siLinear,
+  siModelcontextprotocol,
+  siN8n,
+  siNotion,
+  siStripe,
+  siVercel,
+} from 'simple-icons';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { useConnectorsStore } from '../../stores/connectorsStore';
@@ -36,6 +54,47 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
+
+interface BrandIconData {
+  path: string;
+  hex: string;
+  title: string;
+}
+
+const CONNECTOR_BRAND_ICONS: Record<string, BrandIconData> = {
+  gmail: siGmail,
+  google_calendar: siGooglecalendar,
+  google_drive: siGoogledrive,
+  google: siGoogledrive,
+  notion: siNotion,
+  figma: siFigma,
+  atlassian: siAtlassian,
+  hubspot: siHubspot,
+  linear: siLinear,
+  github: siGithub,
+  vercel: siVercel,
+  stripe: siStripe,
+  context7: siModelcontextprotocol,
+  modelcontextprotocol: siModelcontextprotocol,
+  dropbox: siDropbox,
+  box: siBox,
+  n8n: siN8n,
+};
+
+function getConnectorBrandIcon(connector: ConnectorDef): BrandIconData | null {
+  return (
+    CONNECTOR_BRAND_ICONS[connector.id] ??
+    CONNECTOR_BRAND_ICONS[connector.provider] ??
+    CONNECTOR_BRAND_ICONS[connector.mcpPackage?.toLowerCase() ?? ''] ??
+    null
+  );
+}
+
+function brandFillColor(icon: BrandIconData): string {
+  const hex = icon.hex.toUpperCase();
+  if (hex === '000000' || hex === '181717') return '#F4F1EA';
+  return `#${icon.hex}`;
+}
 
 function connectorAuthLabel(connector: ConnectorDef): string {
   switch (connector.authType) {
@@ -62,13 +121,18 @@ function ConnectorMark({
   size?: 'sm' | 'md';
 }) {
   const [failed, setFailed] = useState(false);
-  const wrapperSize = size === 'sm' ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-xl';
+  const brandIcon = getConnectorBrandIcon(connector);
+  const wrapperSize = size === 'sm' ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-lg';
   const imageSize = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6';
+  const iconSize = size === 'sm' ? 18 : 22;
+  const source = connector.iconUrl && !failed ? 'image' : brandIcon ? 'brand' : 'neutral';
 
   return (
     <div
+      data-testid={`connector-mark-${connector.id}`}
+      data-brand-source={source}
       className={cn(
-        'flex shrink-0 items-center justify-center border border-border bg-muted/35',
+        'flex shrink-0 items-center justify-center border border-border/80 bg-muted/45',
         wrapperSize,
       )}
     >
@@ -79,10 +143,19 @@ function ConnectorMark({
           className={cn('rounded-sm object-contain', imageSize)}
           onError={() => setFailed(true)}
         />
+      ) : brandIcon ? (
+        <svg
+          role="img"
+          aria-label={`${brandIcon.title} logo`}
+          viewBox="0 0 24 24"
+          width={iconSize}
+          height={iconSize}
+          style={{ fill: brandFillColor(brandIcon), flexShrink: 0 }}
+        >
+          <path d={brandIcon.path} />
+        </svg>
       ) : (
-        <span className={size === 'sm' ? 'text-base' : 'text-lg'} aria-hidden>
-          {connector.icon}
-        </span>
+        <Plug className={cn('text-muted-foreground', size === 'sm' ? 'h-4 w-4' : 'h-5 w-5')} />
       )}
     </div>
   );
@@ -202,14 +275,13 @@ interface AvailableCardProps {
 
 function AvailableConnectorCard({ connector, loading, error, onConnect }: AvailableCardProps) {
   return (
-    <div className="group flex min-h-[104px] items-start gap-3 rounded-xl border border-border bg-card/45 p-3 transition-colors hover:bg-card/70">
+    <div className="group flex min-h-[112px] items-start gap-3 rounded-lg border border-border/80 bg-card/35 p-4 transition-colors hover:bg-card/55">
       <ConnectorMark connector={connector} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
               <p className="truncate text-sm font-medium text-foreground">{connector.name}</p>
-              <span className="text-xs text-muted-foreground">#{connector.category}</span>
             </div>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
               {connector.description}
@@ -228,15 +300,10 @@ function AvailableConnectorCard({ connector, loading, error, onConnect }: Availa
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           </button>
         </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="rounded-full bg-muted/45 px-2 py-0.5 text-[11px] text-muted-foreground">
-            {connectorAuthLabel(connector)}
-          </span>
-          {connector.mcpPackage ? (
-            <span className="rounded-full bg-muted/45 px-2 py-0.5 text-[11px] text-muted-foreground">
-              MCP
-            </span>
-          ) : null}
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{connectorAuthLabel(connector)}</span>
+          {connector.mcpPackage ? <span aria-hidden>·</span> : null}
+          {connector.mcpPackage ? <span>MCP</span> : null}
         </div>
         {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
       </div>
@@ -254,7 +321,7 @@ function EmptyState({
   icon: ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="rounded-xl border border-border bg-card/35 px-4 py-6 text-center">
+    <div className="rounded-lg border border-border/80 bg-card/25 px-4 py-6 text-center">
       <Icon className="mx-auto h-5 w-5 text-muted-foreground" />
       <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
       <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
@@ -507,7 +574,7 @@ export function ConnectorGallery() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-4 border-b border-border/80 pb-4">
         <div>
           <h3 className="text-lg font-semibold text-foreground">Connectors</h3>
           <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -625,7 +692,7 @@ export function ConnectorGallery() {
         )}
       </section>
 
-      <div className="rounded-xl border border-border bg-card/35 px-4 py-3">
+      <div className="border-t border-border/80 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-foreground">Advanced MCP configuration</p>
