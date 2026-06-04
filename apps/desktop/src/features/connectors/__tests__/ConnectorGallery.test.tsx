@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConnectorGallery } from '../ConnectorGallery';
@@ -59,6 +59,35 @@ describe('ConnectorGallery', () => {
     expect(screen.queryByText(/Directory/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Customize/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Featured/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId('connector-mark-gmail')).toHaveAttribute(
+      'data-brand-source',
+      'image',
+    );
+    expect(screen.getByTestId('connector-mark-gmail')).not.toHaveTextContent('\u{1F4E7}');
+  });
+
+  it('falls back to a bundled brand mark instead of emoji artwork', async () => {
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('connector-mark-figma')).toBeInTheDocument();
+    });
+
+    const figmaMark = screen.getByTestId('connector-mark-figma');
+    const officialImage = figmaMark.querySelector('img');
+    expect(officialImage).toBeTruthy();
+
+    fireEvent.error(officialImage as HTMLImageElement);
+
+    await waitFor(() => {
+      expect(figmaMark).toHaveAttribute('data-brand-source', 'brand');
+    });
+    expect(within(figmaMark).getByRole('img', { name: /figma logo/i })).toBeInTheDocument();
+    expect(figmaMark).not.toHaveTextContent('\u{1F3A8}');
   });
 
   it('shows connected connectors from the MCP store with a real configure path', async () => {
