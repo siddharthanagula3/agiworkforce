@@ -55,6 +55,8 @@ describe('SkillsPluginsSettings', () => {
     expect(
       screen.getByText(/Plugin package actions are disabled because the compatible CLI/i),
     ).toBeInTheDocument();
-    expect(screen.getByText(/Built-in AGI skills remain available/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Built-in AGI skills and project resources remain available/i),
+    ).toBeInTheDocument();
   });
 });
