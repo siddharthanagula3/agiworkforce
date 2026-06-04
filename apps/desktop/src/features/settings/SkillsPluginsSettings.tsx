@@ -724,8 +724,8 @@ export function SkillsPluginsSettings() {
               <div className="divide-y divide-border">
                 {plugins.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-muted-foreground">
-                    No compatible plugins installed. Built-in AGI skills remain available in the
-                    Skill Marketplace above.
+                    No plugins installed. Built-in AGI skills and project resources remain
+                    available.
                   </p>
                 ) : (
                   plugins.map((p) => (
