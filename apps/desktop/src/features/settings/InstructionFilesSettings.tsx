@@ -26,9 +26,9 @@ interface InstructionFilePattern {
 }
 
 const INSTRUCTION_FILE_PATTERNS: InstructionFilePattern[] = [
-  { pattern: 'CLAUDE.md', source: 'Claude Code', priority: 1 },
+  { pattern: 'CLAUDE.md', source: 'Compatibility', priority: 1 },
   { pattern: 'AGENTS.md', source: 'Generic', priority: 2 },
-  { pattern: '.claude/CLAUDE.md', source: 'Claude Code', priority: 3 },
+  { pattern: '.claude/CLAUDE.md', source: 'Compatibility', priority: 3 },
   { pattern: 'GEMINI.md', source: 'Gemini', priority: 4 },
   { pattern: '.cursorrules', source: 'Cursor', priority: 5 },
   { pattern: '.windsurfrules', source: 'Windsurf', priority: 6 },

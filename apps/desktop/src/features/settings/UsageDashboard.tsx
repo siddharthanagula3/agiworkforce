@@ -1,5 +1,5 @@
 /**
- * UsageDashboard — Claude.ai-style usage dashboard for the Settings Account tab.
+ * UsageDashboard — usage dashboard for the Settings Account tab.
  *
  * Shows:
  * - Plan usage limits: session token budget with colour-coded progress bar

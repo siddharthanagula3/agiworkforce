@@ -149,15 +149,8 @@ function TeamPanel() {
           return (
             <div key={member.userId} className="flex items-center gap-3 px-4 py-3">
               {/* Avatar */}
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-xs font-semibold text-white">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
                 {initials}
-                {/* Online indicator — placeholder: show green for owner */}
-                <span
-                  className={cn(
-                    'absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card',
-                    member.role === TeamRole.Owner ? 'bg-green-500' : 'bg-muted-foreground/30',
-                  )}
-                />
               </div>
 
               {/* Info */}

@@ -162,8 +162,10 @@ export const useConnectorsStore = create<ConnectorsState>()(
           try {
             const providers = await McpClient.listConnectedProviders();
             set({ connectedIds: providers });
-          } catch {
-            // Silently fail — the backend command may not exist yet
+          } catch (err) {
+            const message =
+              err instanceof Error ? err.message : 'Failed to load connected providers';
+            set((state) => ({ error: { ...state.error, __list: message } }));
           }
         },
 
@@ -186,25 +188,32 @@ export const useConnectorsStore = create<ConnectorsState>()(
             // OAuth tokens are already stored by the callback handler.
             // Now activate the MCP server with those credentials.
             await McpClient.connectConnector(id);
-            // Verify the MCP server actually activated by checking connected providers
-            const providers = await McpClient.listConnectedProviders().catch(() => [] as string[]);
-            const mcpActive = providers.includes(id);
-            if (!mcpActive) {
-              console.warn(
-                `[ConnectorsStore] MCP server for "${id}" not active after OAuth — marking connected anyway (tokens stored)`,
-              );
+            // Verify the MCP server actually activated by checking connected providers.
+            const providers = await McpClient.listConnectedProviders();
+            if (!providers.includes(id)) {
+              const message =
+                'Authorization finished, but the MCP connector is not active yet. Refresh MCP Tools or reconnect.';
+              set((state) => ({
+                loading: { ...state.loading, [id]: false },
+                error: { ...state.error, [id]: message },
+              }));
+              throw new Error(message);
             }
             set((state) => ({
               connectedIds: [...new Set([...state.connectedIds, id])],
               loading: { ...state.loading, [id]: false },
+              error: { ...state.error, [id]: null },
             }));
-          } catch {
-            // MCP server might not exist for this connector — still mark connected
-            // since the OAuth tokens are stored and available for other uses.
+          } catch (err) {
+            const message =
+              err instanceof Error
+                ? err.message
+                : 'Authorization finished, but the MCP connector did not activate.';
             set((state) => ({
-              connectedIds: [...new Set([...state.connectedIds, id])],
               loading: { ...state.loading, [id]: false },
+              error: { ...state.error, [id]: message },
             }));
+            throw err;
           }
         },
 

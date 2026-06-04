@@ -609,7 +609,26 @@ const DesktopShell = () => {
           provider: string;
           available: boolean;
         }
-        const rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        let rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        if (
+          currentMode === 'local' &&
+          !rustModels.some((model) => model.provider.toLowerCase() === 'ollama')
+        ) {
+          try {
+            const directOllamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models');
+            const seenModelIds = new Set(rustModels.map((model) => model.id));
+            rustModels = [
+              ...rustModels,
+              ...directOllamaModels.filter((model) => {
+                if (seenModelIds.has(model.id)) return false;
+                seenModelIds.add(model.id);
+                return true;
+              }),
+            ];
+          } catch (error) {
+            console.warn('Failed to directly load Ollama models for local picker:', error);
+          }
+        }
         const validProviders = new Set([
           'anthropic',
           'openai',
@@ -1445,12 +1464,10 @@ const DesktopShell = () => {
                   }}
                   onOpenSearch={() => useSearchModal.getState().open()}
                   onNavigateView={(view) => {
-                    if (view === 'customize') {
-                      openSettingsDialog('mcp-skills');
-                    } else if (view === 'connectors') {
+                    if (view === 'connectors') {
                       openSettingsDialog('connectors');
                     } else if (view === 'skills') {
-                      openSettingsDialog('mcp-skills');
+                      openSettingsDialog('skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
                     } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
@@ -1473,12 +1490,10 @@ const DesktopShell = () => {
                     window.dispatchEvent(event);
                   }}
                   onNavigateView={(view) => {
-                    if (view === 'customize') {
-                      openSettingsDialog('mcp-skills');
-                    } else if (view === 'connectors') {
+                    if (view === 'connectors') {
                       openSettingsDialog('connectors');
                     } else if (view === 'skills') {
-                      openSettingsDialog('mcp-skills');
+                      openSettingsDialog('skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
                     } else if (view === 'pricing' || view === 'billing' || view === 'byok') {

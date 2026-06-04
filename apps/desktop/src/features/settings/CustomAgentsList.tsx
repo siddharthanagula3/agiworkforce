@@ -150,8 +150,8 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
       <h4 className="font-medium mb-1">No custom agents yet</h4>
       <p className="text-sm text-muted-foreground max-w-xs mb-4">
         Create a named agent with a custom model, system prompt, and tool restrictions. Agents are
-        saved as <code className="rounded bg-muted px-1 py-0.5 text-xs">.md</code> files in your{' '}
-        <code className="rounded bg-muted px-1 py-0.5 text-xs">.claude/agents/</code> directory.
+        saved as <code className="rounded bg-muted px-1 py-0.5 text-xs">.md</code> files and loaded
+        from AGI-compatible agent directories.
       </p>
       <Button onClick={onCreate} size="sm">
         <Plus className="h-4 w-4 mr-1" />
@@ -271,18 +271,19 @@ export function CustomAgentsList() {
         </div>
       )}
 
-      {/* Path hints */}
+      {/* Storage hints */}
       <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
+        <p className="font-medium text-foreground">Agent storage</p>
         <p>
-          <strong>Global agents:</strong>{' '}
+          <strong>Global compatibility path:</strong>{' '}
           <code className="rounded bg-muted px-1 py-0.5">~/.claude/agents/</code>
         </p>
         <p>
-          <strong>Project agents:</strong>{' '}
+          <strong>Project compatibility path:</strong>{' '}
           <code className="rounded bg-muted px-1 py-0.5">.claude/agents/</code> (relative to working
           directory)
         </p>
-        <p>Agent files are Markdown with YAML frontmatter and can be edited manually.</p>
+        <p>AGI reads these Markdown files with YAML frontmatter and can edit them manually.</p>
       </div>
     </div>
   );

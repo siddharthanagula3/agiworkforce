@@ -194,7 +194,7 @@ export function GeneralTab({
         <div className="pt-6 border-t border-border">
           <h3 className="text-lg font-semibold mb-4">Window Preferences</h3>
           <p className="text-sm text-muted-foreground mb-6">
-            Customize window behavior and appearance
+            Configure window behavior and appearance
           </p>
           <div className="space-y-6">
             <div className="rounded-lg border border-border bg-card p-6 space-y-4">

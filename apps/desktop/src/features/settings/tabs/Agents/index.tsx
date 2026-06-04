@@ -1,11 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { Loader2 } from 'lucide-react';
 
-const LazyAgentExecutionSettings = lazy(() =>
-  import('../../AgentExecutionSettings').then((m) => ({ default: m.AgentExecutionSettings })),
-);
-const LazyFeaturesPrivacySettings = lazy(() =>
-  import('../../FeaturesPrivacySettings').then((m) => ({ default: m.FeaturesPrivacySettings })),
+const LazyAgentsSettings = lazy(() =>
+  import('../../AgentsSettings').then((m) => ({ default: m.AgentsSettings })),
 );
 
 function Fallback({ label }: { label: string }) {
@@ -17,20 +14,10 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-interface AgentsTabProps {
-  onSettingsChange: () => void;
-}
-
-export function AgentsTab({ onSettingsChange }: AgentsTabProps) {
+export function AgentsTab() {
   return (
     <Suspense fallback={<Fallback label="Loading agent settings..." />}>
-      <>
-        <LazyAgentExecutionSettings onSettingsChange={onSettingsChange} />
-        <div className="pt-6 border-t border-border">
-          <h3 className="text-lg font-semibold mb-4">Features</h3>
-          <LazyFeaturesPrivacySettings />
-        </div>
-      </>
+      <LazyAgentsSettings />
     </Suspense>
   );
 }
