@@ -11,6 +11,8 @@ export type SettingsTab =
   | 'connectors'
   | 'notifications'
   | 'voice'
+  | 'capabilities'
+  | 'memory'
   | 'team'
   | 'personalization'
   | 'features'

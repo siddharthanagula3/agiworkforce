@@ -3017,6 +3017,42 @@ impl ToolRegistry {
 
         // ── Planning / Todo ───────────────────────────────────────────────────
         self.register_tool(Tool {
+            id: "tool_search".to_string(),
+            name: "Search Available Tools".to_string(),
+            description: "Search the available AGI tool catalog by name, capability, or description and return exact callable schemas. Use this before guessing tool names, when the user asks for a less common action, or when you need to inspect which local tools are available. Use query \"select:<tool_name>\" for exact lookup of one or more comma-separated tools.".to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "query".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Search terms, or select:<tool_name>[,<tool_name>] for exact lookup".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "max_results".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum matching tools to return (default 8, max 20)".to_string(),
+                    default: Some(serde_json::json!(8)),
+                },
+                ToolParameter {
+                    name: "include_schemas".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Include complete JSON schemas for matched tools (default true)".to_string(),
+                    default: Some(serde_json::json!(true)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 4,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
             id: "todo_write".to_string(),
             name: "TodoWrite (Task List)".to_string(),
             description: "Create or update a structured task list. Use to track multi-step \

@@ -8,7 +8,6 @@ import type { ChatRuntime } from '@agiworkforce/unified-chat';
 import { EmptyChat } from './EmptyChat';
 import { CapModal } from './CapModal';
 import { Sidebar } from './Sidebar';
-import { AccountMenu } from './AccountMenu';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -30,6 +29,7 @@ export interface DesktopShellV3Props {
   onModelSelectorClick?: () => void;
   onVoiceClick?: () => void;
   onNavigateView?: ChatInterfaceProps['onNavigateView'];
+  onOpenSearch?: () => void;
   onBuyTopUp?: () => void;
 }
 
@@ -50,6 +50,7 @@ export function DesktopShellV3({
   onModelSelectorClick,
   onVoiceClick,
   onNavigateView,
+  onOpenSearch,
   onBuyTopUp,
 }: DesktopShellV3Props) {
   const { mode } = useV3Mode();
@@ -60,8 +61,11 @@ export function DesktopShellV3({
   }, [onModelSelectorClick]);
 
   const handleNewChat = useCallback(() => {
-    // Delegate to ChatInterface via runtime; no direct store call needed here
-  }, []);
+    const conversationId = hostBridge?.createConversation?.('New chat');
+    if (conversationId) {
+      hostBridge?.selectConversation?.(conversationId);
+    }
+  }, [hostBridge]);
 
   const handleNavigateView = useCallback(
     (view: string) => {
@@ -82,17 +86,11 @@ export function DesktopShellV3({
       <Sidebar
         mode={mode}
         onNewChat={handleNewChat}
-        onOpenSearch={() => {
-          // Trigger ⌘K via keyboard event so ChatInterface's shortcut handler picks it up
-          window.dispatchEvent(
-            new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
-          );
-        }}
+        onOpenSearch={onOpenSearch}
         onNavigateView={handleNavigateView}
         onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
         accountMenuOpen={accountMenuOpen}
       />
-      {accountMenuOpen && <AccountMenu onClose={() => setAccountMenuOpen(false)} />}
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
         <ChatInterface
@@ -104,7 +102,9 @@ export function DesktopShellV3({
           onModelSelectorClick={onModelSelectorClick}
           onVoiceClick={onVoiceClick}
           onNavigateView={onNavigateView}
+          sidebarSlot={null}
           emptyStateSlot={<EmptyChat />}
+          enableSearchOverlay={false}
           showProvenanceFooter={true}
         />
         <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />

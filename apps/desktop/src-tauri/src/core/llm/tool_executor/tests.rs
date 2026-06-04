@@ -941,3 +941,40 @@ fn test_tilde_expansion() {
         "expanded path should preserve relative portion, got: {expanded}"
     );
 }
+
+#[tokio::test]
+async fn test_tool_search_select_returns_exact_schema() {
+    let registry = Arc::new(ToolRegistry::new().expect("registry"));
+    registry
+        .register_all_tools()
+        .expect("register all tools for tool_search");
+    let executor = ToolExecutor::new(registry);
+
+    let tool_call = ToolCall {
+        id: "test_tool_search_select".to_string(),
+        name: "tool_search".to_string(),
+        arguments: json!({
+            "query": "select:edit_exact_replace",
+            "max_results": 5
+        })
+        .to_string(),
+    };
+
+    let result = executor.execute_tool_call(&tool_call).await.unwrap();
+
+    assert!(
+        result.success,
+        "tool_search should succeed: {:?}",
+        result.error
+    );
+    assert_eq!(result.data["match_count"].as_u64(), Some(1));
+    assert_eq!(
+        result.data["matches"][0]["name"].as_str(),
+        Some("edit_exact_replace")
+    );
+    assert_eq!(
+        result.data["matches"][0]["schema"]["parameters"]["properties"]["old_text"]["type"]
+            .as_str(),
+        Some("string")
+    );
+}

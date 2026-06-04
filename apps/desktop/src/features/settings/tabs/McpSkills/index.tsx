@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useCallback, useRef, type RefObject } from 'react';
 import { Database, Loader2, Plug, Wrench, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -39,24 +39,33 @@ interface McpSkillsTabProps {
 }
 
 export function McpSkillsTab({ isBusy, onOpenConnectors }: McpSkillsTabProps) {
+  const skillCatalogRef = useRef<HTMLDivElement>(null);
+  const mcpToolsRef = useRef<HTMLDivElement>(null);
+  const skillsPluginsRef = useRef<HTMLDivElement>(null);
+  const researchRef = useRef<HTMLDivElement>(null);
+
+  const scrollToSection = useCallback((ref: RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
   const cards = [
     {
       title: 'Skills & Plugins',
       description: 'Install reusable capabilities and project-specific helpers.',
       icon: Zap,
-      action: undefined as (() => void) | undefined,
+      action: () => scrollToSection(skillsPluginsRef),
     },
     {
       title: 'MCP Tools',
       description: 'Control which tools and servers are available to agents.',
       icon: Wrench,
-      action: undefined as (() => void) | undefined,
+      action: () => scrollToSection(mcpToolsRef),
     },
     {
       title: 'Research Defaults',
       description: 'Tune search, sources, and retrieval behavior.',
       icon: Database,
-      action: undefined as (() => void) | undefined,
+      action: () => scrollToSection(researchRef),
     },
     {
       title: 'Integrations',
@@ -88,11 +97,11 @@ export function McpSkillsTab({ isBusy, onOpenConnectors }: McpSkillsTabProps) {
               key={item.title}
               type="button"
               onClick={item.action}
-              disabled={!item.action || isBusy}
+              disabled={isBusy}
               className={cn(
                 'rounded-lg border border-border bg-background p-3 text-left transition-colors',
-                item.action ? 'hover:border-primary/40 hover:bg-muted/40' : 'cursor-default',
-                !item.action && 'opacity-90',
+                'hover:border-primary/40 hover:bg-muted/40',
+                isBusy && 'cursor-not-allowed opacity-60',
               )}
             >
               <item.icon className="h-4 w-4 text-primary" />
@@ -103,35 +112,51 @@ export function McpSkillsTab({ isBusy, onOpenConnectors }: McpSkillsTabProps) {
         </div>
       </div>
 
-      <Suspense fallback={<Fallback label="Loading skill catalog..." />}>
-        <div>
+      <div ref={skillCatalogRef} data-mcp-section="skill-catalog" className="scroll-mt-6">
+        <Suspense fallback={<Fallback label="Loading skill catalog..." />}>
           <h3 className="text-lg font-semibold mb-4">Skill Catalog</h3>
           <LazySkillMarketplace />
-        </div>
-      </Suspense>
+        </Suspense>
+      </div>
 
-      <Suspense fallback={<Fallback label="Loading customization settings..." />}>
-        <>
+      <div ref={mcpToolsRef} data-mcp-section="mcp-tools" className="scroll-mt-6">
+        <Suspense fallback={<Fallback label="Loading MCP tools..." />}>
           <LazyMCPToolsSettings />
-          <div className="pt-6 border-t border-border">
-            <LazySkillsPluginsSettings />
+        </Suspense>
+      </div>
+      <div
+        ref={skillsPluginsRef}
+        data-mcp-section="skills-plugins"
+        className="scroll-mt-6 border-t border-border pt-6"
+      >
+        <Suspense fallback={<Fallback label="Loading skills and plugins..." />}>
+          <LazySkillsPluginsSettings />
+        </Suspense>
+      </div>
+      <div className="pt-6 border-t border-border scroll-mt-6" data-mcp-section="mcp-server">
+        <Suspense fallback={<Fallback label="Loading MCP server settings..." />}>
+          <h3 className="text-lg font-semibold mb-4">MCP Server</h3>
+          <LazyMCPServerSettings />
+        </Suspense>
+      </div>
+      <div className="pt-6 border-t border-border scroll-mt-6" data-mcp-section="tools">
+        <Suspense fallback={<Fallback label="Loading direct tools..." />}>
+          <h3 className="text-lg font-semibold mb-4">Tools</h3>
+          <div className="flex min-h-[460px] flex-col">
+            <LazyToolsPanel />
           </div>
-          <div className="pt-6 border-t border-border">
-            <h3 className="text-lg font-semibold mb-4">MCP Server</h3>
-            <LazyMCPServerSettings />
-          </div>
-          <div className="pt-6 border-t border-border">
-            <h3 className="text-lg font-semibold mb-4">Tools</h3>
-            <div className="h-full flex flex-col min-h-0">
-              <LazyToolsPanel />
-            </div>
-          </div>
-          <div className="pt-6 border-t border-border">
-            <h3 className="text-lg font-semibold mb-4">Research</h3>
-            <LazyResearchSettings />
-          </div>
-        </>
-      </Suspense>
+        </Suspense>
+      </div>
+      <div
+        ref={researchRef}
+        data-mcp-section="research"
+        className="scroll-mt-6 border-t border-border pt-6"
+      >
+        <Suspense fallback={<Fallback label="Loading research settings..." />}>
+          <h3 className="text-lg font-semibold mb-4">Research</h3>
+          <LazyResearchSettings />
+        </Suspense>
+      </div>
     </div>
   );
 }

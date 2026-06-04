@@ -19,6 +19,8 @@ import * as _React from 'react';
 // ── Components under test ─────────────────────────────────────────────────────
 import { BrandedGreeting } from '../BrandedGreeting';
 import { AdvancedEmptyState } from '../AdvancedEmptyState';
+import { ChatInterface } from '../ChatInterface';
+import { EmptyState } from '../EmptyState';
 import {
   BriefStatus,
   FloatingBriefStatus,
@@ -105,6 +107,56 @@ describe('AdvancedEmptyState', () => {
   it('applies custom className', () => {
     const html = renderToStaticMarkup(<AdvancedEmptyState className="test-empty" />);
     expect(html).toContain('test-empty');
+  });
+});
+
+describe('ChatInterface host ownership slots', () => {
+  beforeEach(resetStores);
+
+  it('does not render package quick chips when the host provides an empty state', () => {
+    const html = renderToStaticMarkup(
+      <ChatInterface
+        runtime={null}
+        sidebarSlot={null}
+        emptyStateSlot={<div data-host-empty-state="">Desktop empty</div>}
+        enableSearchOverlay={false}
+      />,
+    );
+
+    expect(html).toContain('Desktop empty');
+    expect(html).not.toContain('>Code<');
+    expect(html).not.toContain('>Research<');
+    expect(html).not.toContain('>Computer<');
+  });
+
+  it('keeps the empty-state badge CTA host-configurable', () => {
+    const html = renderToStaticMarkup(
+      <EmptyState
+        headline="What can I help with, Local?"
+        planBadgeLabel="Local Mode"
+        planBadgeActionLabel="Cloud Sync"
+        showPlanBadgeNoun={false}
+      />,
+    );
+
+    expect(html).toContain('Local Mode');
+    expect(html).toContain('Cloud Sync');
+    expect(html).not.toContain('Local Mode plan');
+    expect(html).not.toContain('Upgrade');
+  });
+
+  it('does not render a default badge CTA when the host omits one', () => {
+    const html = renderToStaticMarkup(
+      <EmptyState
+        headline="What can I help with, Local?"
+        planBadgeLabel="Local Mode"
+        showPlanBadgeNoun={false}
+      />,
+    );
+
+    expect(html).toContain('Local Mode');
+    expect(html).not.toContain('Upgrade');
+    expect(html).not.toContain('Cloud Sync');
   });
 });
 

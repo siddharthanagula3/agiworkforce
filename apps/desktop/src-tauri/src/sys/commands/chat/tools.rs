@@ -138,6 +138,10 @@ fn convert_tool_to_definition(tool: &Tool) -> ToolDefinition {
             "description": param.description,
         });
 
+        if matches!(param.parameter_type, ParameterType::Array) {
+            prop["items"] = json!({});
+        }
+
         // BUG 2 FIX: Include default values so the LLM knows which parameters are optional
         // and what value to expect when they are omitted.
         if let Some(default_val) = &param.default {
@@ -1430,5 +1434,30 @@ mod tests {
         assert!(names.contains("calendar_create_event"));
         assert!(names.contains("cloud_upload"));
         assert!(names.contains("productivity_create_task"));
+    }
+
+    #[test]
+    fn build_chat_tools_includes_tool_search_with_valid_array_schemas() {
+        let tools = build_chat_tools(None, None);
+        let names: HashSet<&str> = tools.iter().map(|tool| tool.name.as_str()).collect();
+        assert!(names.contains("tool_search"));
+
+        let todo_write = tools
+            .iter()
+            .find(|tool| tool.name == "todo_write")
+            .expect("todo_write should be present");
+        assert!(
+            todo_write.parameters["properties"]["todos"]["items"].is_object(),
+            "array parameters exposed from the registry must include JSON Schema items"
+        );
+
+        let multi_edit = tools
+            .iter()
+            .find(|tool| tool.name == "multi_edit")
+            .expect("multi_edit should be present");
+        assert!(
+            multi_edit.parameters["properties"]["edits"]["items"].is_object(),
+            "multi_edit.edits must include JSON Schema items"
+        );
     }
 }

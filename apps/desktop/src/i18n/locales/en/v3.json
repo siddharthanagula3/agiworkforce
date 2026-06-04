@@ -59,13 +59,18 @@
       "dispatch": "Dispatch",
       "routines": "Routines"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Sign in",
+    "cloudSync": "Cloud sync"
   },
   "emptyChat": {
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Local Mode",
+    "cloudSyncAction": "Cloud Sync",
+    "cloudSyncAria": "Set up Cloud Managed sync",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",

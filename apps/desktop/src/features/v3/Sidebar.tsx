@@ -6,9 +6,9 @@ import {
   Search,
   FolderOpen,
   Box,
-  Sliders,
   RefreshCw,
   GitBranch,
+  LogIn,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
@@ -16,9 +16,16 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
-import { useUnifiedAuthStore, selectUser, selectPlanDisplayName } from '../../stores/auth';
+import {
+  useUnifiedAuthStore,
+  selectUser,
+  selectPlanDisplayName,
+  selectHasCloudAccountSession,
+} from '../../stores/auth';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
+import { AccountMenu } from './AccountMenu';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -27,13 +34,23 @@ type RecentsGroup = {
   items: ConversationSummary[];
 };
 
+function conversationUpdatedAtMs(conversation: ConversationSummary): number {
+  const value = conversation.updatedAt as unknown;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string' || typeof value === 'number') {
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
+  }
+  return 0;
+}
+
 function groupConversations(convos: ConversationSummary[], t: TFunction): RecentsGroup[] {
   const now = Date.now();
   const HOUR = 3_600_000;
   const DAY = 86_400_000;
 
   const sorted = [...convos]
-    .sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
+    .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a))
     .slice(0, 30);
 
   const groups: RecentsGroup[] = [
@@ -45,7 +62,7 @@ function groupConversations(convos: ConversationSummary[], t: TFunction): Recent
   ];
 
   for (const c of sorted) {
-    const age = now - (c.updatedAt?.getTime() ?? 0);
+    const age = now - conversationUpdatedAtMs(c);
     if (age < HOUR) groups[0]!.items.push(c);
     else if (age < DAY) groups[1]!.items.push(c);
     else if (age < 2 * DAY) groups[2]!.items.push(c);
@@ -73,7 +90,6 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'live-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
     { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
-    { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
   ];
 }
 
@@ -83,8 +99,6 @@ function railItems(t: TFunction): { id: string; icon: React.ElementType; title: 
   return [
     { id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') },
     { id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') },
-    { id: 'customize', icon: Sliders, title: t('sidebar.nav.customize') },
-    { id: 'settings', icon: Settings, title: t('common.settings') },
   ];
 }
 
@@ -127,6 +141,10 @@ export function Sidebar({
   const conversations = useChatStore((s: ChatState) => s.conversations);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
+  const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const isSignedIn = hasCloudAccountSession;
+  const showAccountMenu = accountMenuOpen && isSignedIn;
 
   const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
   const displayGroups = useMemo(() => {
@@ -156,14 +174,20 @@ export function Sidebar({
         scheduled: 'cowork-scheduled',
         'live-artifacts': 'cowork-artifacts',
         dispatch: 'cowork-dispatch',
-        customize: 'customize-home',
-        settings: 'voice-settings',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
     },
     [onNavigateView],
   );
+
+  const handleFooterPrimaryClick = useCallback(() => {
+    if (isSignedIn) {
+      onOpenAccountMenu?.();
+      return;
+    }
+    openSettings('account');
+  }, [isSignedIn, onOpenAccountMenu, openSettings]);
 
   const newLabel = t('sidebar.newChat');
 
@@ -338,8 +362,22 @@ export function Sidebar({
         </div>
       )}
 
+      {/* Account menu replaces recents while open, so it never overlays footer content. */}
+      {!collapsed && showAccountMenu && (
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '8px',
+            minHeight: 0,
+          }}
+        >
+          <AccountMenu onClose={() => onOpenAccountMenu?.()} showHeader={false} />
+        </div>
+      )}
+
       {/* Recents (expanded only) */}
-      {!collapsed && (
+      {!collapsed && !showAccountMenu && (
         <div
           style={{
             flex: 1,
@@ -476,41 +514,52 @@ export function Sidebar({
           padding: '8px',
         }}
       >
-        <button
-          onClick={onOpenAccountMenu}
-          data-open={accountMenuOpen}
+        <div
           style={{
             width: '100%',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: collapsed ? '6px 0' : '6px 8px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            borderRadius: 8,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
           }}
         >
-          <div
+          <button
+            onClick={handleFooterPrimaryClick}
+            data-open={showAccountMenu}
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: 'var(--chat-accent-primary)',
-              color: '#fff',
+              flex: collapsed ? '0 0 auto' : 1,
+              minWidth: 0,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              fontWeight: 700,
-              flexShrink: 0,
+              gap: 8,
+              padding: collapsed ? '6px 0' : '6px 8px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              borderRadius: 8,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
             }}
           >
-            {initials(user?.name, user?.email)}
-          </div>
-          {!collapsed && (
-            <>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: isSignedIn
+                  ? 'var(--chat-accent-primary)'
+                  : 'var(--chat-surface-elevated)',
+                border: isSignedIn ? 'none' : '1px solid var(--chat-border)',
+                color: isSignedIn ? '#fff' : 'var(--chat-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {isSignedIn ? initials(user?.name, user?.email) : <LogIn size={14} />}
+            </div>
+            {!collapsed && (
               <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
                 <div
                   style={{
@@ -522,7 +571,7 @@ export function Sidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {user?.name ?? user?.email ?? t('sidebar.account')}
+                  {isSignedIn ? (user?.name ?? user?.email) : t('sidebar.signIn')}
                 </div>
                 <div
                   style={{
@@ -533,14 +582,35 @@ export function Sidebar({
                     gap: 3,
                   }}
                 >
-                  {planDisplayName}
-                  <ChevronDown size={9} />
+                  {isSignedIn ? planDisplayName : t('sidebar.cloudSync')}
+                  {isSignedIn && <ChevronDown size={9} />}
                 </div>
               </div>
-              <ChevronDown size={12} style={{ color: 'var(--chat-text-muted)', flexShrink: 0 }} />
-            </>
+            )}
+          </button>
+          {!collapsed && (
+            <button
+              type="button"
+              onClick={() => openSettings('general')}
+              title={t('common.settings')}
+              aria-label={t('common.settings')}
+              style={{
+                width: 30,
+                height: 30,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: 8,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--chat-text-muted)',
+              }}
+            >
+              <Settings size={15} />
+            </button>
           )}
-        </button>
+        </div>
       </div>
     </aside>
   );
