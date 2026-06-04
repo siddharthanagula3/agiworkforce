@@ -19,7 +19,7 @@ function Fallback() {
 export function SkillsTab() {
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border bg-card p-4">
+      <div className="border-b border-border/80 pb-4">
         <h3 className="text-lg font-semibold">Skills</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Reusable instructions and workflow capabilities available to AGI.
