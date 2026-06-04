@@ -237,6 +237,11 @@ export interface ChatInterfaceProps {
    * Default true.
    */
   enableShortcuts?: boolean;
+  /**
+   * When false, the package does not mount its fallback search overlay.
+   * Desktop hosts use their own Cmd+K search modal to avoid duplicate dialogs.
+   */
+  enableSearchOverlay?: boolean;
   /** Called when the user clicks the "+" attachment button */
   onPlusClick?: () => void;
   /** Called when the user clicks the model selector */
@@ -286,6 +291,7 @@ export function ChatInterface({
   className,
   manageTheme = false,
   enableShortcuts = true,
+  enableSearchOverlay = true,
   onPlusClick: onPlusClickProp,
   onModelSelectorClick: onModelSelectorClickProp,
   onVoiceClick: onVoiceClickProp,
@@ -498,8 +504,11 @@ export function ChatInterface({
                 conversationId={activeConversationId}
                 projectId={null}
               />
-              {/* Sample-prompt chips below composer per design-spec §8 */}
-              {!hasMessages && <QuickChips onChipClick={handleChipClick} />}
+              {/* Sample-prompt chips below composer per design-spec §8.
+                  Hosts that provide a branded empty state own their own chip row. */}
+              {!hasMessages && emptyStateSlot === undefined && (
+                <QuickChips onChipClick={handleChipClick} />
+              )}
               <Disclaimer variant={disclaimerVariant} />
             </>
           )}
@@ -549,8 +558,10 @@ export function ChatInterface({
           )}
         </div>
 
-        {/* Search overlay — triggered by sidebar Search button or Cmd+F */}
-        <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
+        {/* Search overlay — fallback only. Desktop mounts its own Cmd+K modal. */}
+        {enableSearchOverlay && (
+          <SearchOverlay open={searchModalOpen} onClose={toggleSearchModal} />
+        )}
 
         {/* Settings modal — shared across desktop & web */}
         <SettingsModal />

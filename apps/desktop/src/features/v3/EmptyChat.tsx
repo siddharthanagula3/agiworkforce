@@ -50,7 +50,11 @@ export function EmptyChat() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 px-6">
       <div className="w-full">
-        <EmptyState headline={headline} />
+        <EmptyState
+          headline={headline}
+          planBadgeLabel={t('emptyChat.modeLabel')}
+          showPlanBadgeNoun={false}
+        />
       </div>
       <div className="w-full max-w-xl">
         <QuickChips onChipClick={handleChipClick} />

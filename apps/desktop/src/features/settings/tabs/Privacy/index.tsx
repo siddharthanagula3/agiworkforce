@@ -8,6 +8,7 @@ import { writeTextFile } from '@tauri-apps/plugin-fs';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { Button } from '@/components/ui/Button';
 import { errorTracking } from '../../../../services/errorTracking';
+import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
 
 const LazyMasterPasswordSettings = lazy(() =>
   import('../../MasterPasswordSettings').then((m) => ({ default: m.MasterPasswordSettings })),
@@ -347,6 +348,8 @@ interface PrivacyTabProps {
 }
 
 export function PrivacyTab({ onOpenGovernanceWorkspace }: PrivacyTabProps) {
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
+
   return (
     <>
       <div>
@@ -359,13 +362,15 @@ export function PrivacyTab({ onOpenGovernanceWorkspace }: PrivacyTabProps) {
         </Suspense>
       </div>
       <div className="pt-6 border-t border-border">
-        <Suspense fallback={<Fallback label="Loading data controls..." />}>
-          <LazyPrivacyDataSection />
-        </Suspense>
-      </div>
-      <div className="pt-6 border-t border-border">
         <DataPrivacySection />
       </div>
+      {hasCloudAccountSession && (
+        <div className="pt-6 border-t border-border">
+          <Suspense fallback={<Fallback label="Loading cloud account data controls..." />}>
+            <LazyPrivacyDataSection />
+          </Suspense>
+        </div>
+      )}
       <div className="pt-6 border-t border-border">
         <Suspense fallback={<Fallback label="Loading cache settings..." />}>
           <LazyCacheManagement />

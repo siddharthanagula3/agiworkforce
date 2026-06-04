@@ -9,12 +9,12 @@ import {
   Brain,
   CreditCard,
   Mic,
-  Palette,
   Plug,
   Search,
   Server,
   Settings2,
   Shield,
+  UserRound,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -79,7 +79,7 @@ function resolveTab(tab: SettingsTab): CanonicalTab {
 const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType }[] = [
   { key: 'general', label: 'General', icon: Settings2 },
   { key: 'account', label: 'Account', icon: CreditCard },
-  { key: 'appearance', label: 'Appearance', icon: Palette },
+  { key: 'appearance', label: 'Personalization', icon: UserRound },
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
@@ -125,6 +125,22 @@ function stableSerialize(value: unknown): string {
     return input;
   };
   return JSON.stringify(sortRecursively(value));
+}
+
+type OllamaModelListItem = string | { id?: unknown; name?: unknown; model?: unknown };
+
+function normalizeOllamaModelList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: OllamaModelListItem) => {
+      if (typeof item === 'string') return item;
+      const id = typeof item.id === 'string' ? item.id : null;
+      const model = typeof item.model === 'string' ? item.model : null;
+      const name = typeof item.name === 'string' ? item.name : null;
+      return id ?? model ?? name ?? '';
+    })
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
 }
 
 interface SettingsPanelProps {
@@ -296,8 +312,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setCheckingOllama(true);
     try {
       await checkProviderStatus('ollama');
-      const models =
-        ((await modelsApi.llmGetOllamaModels().catch(() => [] as string[])) as string[]) || [];
+      const models = normalizeOllamaModelList(await modelsApi.llmGetOllamaModels().catch(() => []));
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
