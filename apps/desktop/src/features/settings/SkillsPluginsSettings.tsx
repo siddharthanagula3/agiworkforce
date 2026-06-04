@@ -1,8 +1,8 @@
 /**
  * SkillsPluginsSettings
  *
- * Shows installed Claude plugins (user-level) and project-scoped resources:
- * - Installed plugins from ~/.claude/plugins/installed_plugins.json
+ * Shows AGI and Claude-compatible plugin resources:
+ * - Installed compatible plugins from ~/.claude/plugins/installed_plugins.json
  * - Project skills from .claude/skills/
  * - Project agents from .claude/agents/
  * - Project slash commands from .claude/commands/
@@ -174,11 +174,13 @@ function SectionHeader({
 function PluginRow({
   plugin,
   actionInProgress,
+  pluginCliAvailable,
   onUpdate,
   onRemove,
 }: {
   plugin: ResolvedPlugin;
   actionInProgress: string | null;
+  pluginCliAvailable: boolean;
   onUpdate: (plugin: ResolvedPlugin) => void;
   onRemove: (plugin: ResolvedPlugin) => void;
 }) {
@@ -239,7 +241,7 @@ function PluginRow({
             <Button
               size="sm"
               variant="outline"
-              disabled={isUpdating || isRemoving}
+              disabled={!pluginCliAvailable || isUpdating || isRemoving}
               onClick={() => onUpdate(plugin)}
             >
               {isUpdating ? (
@@ -254,7 +256,7 @@ function PluginRow({
             <Button
               size="sm"
               variant="outline"
-              disabled={isUpdating || isRemoving}
+              disabled={!pluginCliAvailable || isUpdating || isRemoving}
               className="text-destructive hover:text-destructive"
               onClick={() => onRemove(plugin)}
             >
@@ -348,6 +350,7 @@ export function SkillsPluginsSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pluginInput, setPluginInput] = useState('');
+  const [pluginCliAvailable, setPluginCliAvailable] = useState<boolean | null>(null);
   const [pluginActionInProgress, setPluginActionInProgress] = useState<string | null>(null);
   const [pluginActionMessage, setPluginActionMessage] = useState<string | null>(null);
 
@@ -491,12 +494,45 @@ export function SkillsPluginsSettings() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (isNonTauri) {
+      setPluginCliAvailable(false);
+      return;
+    }
+
+    let mounted = true;
+    setPluginCliAvailable(null);
+    void invoke<TerminalCommandResult>('execute_terminal_command', {
+      command: 'claude --version',
+      cwd: projectRoot,
+      shell: null,
+      timeoutMs: 10000,
+    })
+      .then((response) => {
+        if (!mounted) return;
+        setPluginCliAvailable((response.exitCode ?? 1) === 0);
+      })
+      .catch(() => {
+        if (mounted) setPluginCliAvailable(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [isNonTauri, projectRoot]);
+
   const runPluginCliAction = useCallback(
     async (action: 'install' | 'update' | 'remove', pluginSpec: string) => {
       const normalizedSpec = normalizePluginSpec(pluginSpec);
       if (!normalizedSpec) {
         setPluginActionMessage(
           `Invalid plugin identifier "${pluginSpec}". Use letters, numbers, ., _, -, :, @, and /.`,
+        );
+        return;
+      }
+      if (pluginCliAvailable !== true) {
+        setPluginActionMessage(
+          'Compatible plugin CLI is not available. AGI skills still work locally; install the Claude-compatible CLI only if you want to manage those plugin packages from Settings.',
         );
         return;
       }
@@ -542,7 +578,7 @@ export function SkillsPluginsSettings() {
 
       setPluginActionInProgress(null);
     },
-    [load, projectRoot],
+    [load, pluginCliAvailable, projectRoot],
   );
 
   const handleInstallPlugin = useCallback(async () => {
@@ -564,6 +600,12 @@ export function SkillsPluginsSettings() {
   );
 
   const totalProjectItems = commands.length + skills.length + agents.length;
+  const pluginCliStatus =
+    pluginCliAvailable === null
+      ? 'Checking compatible CLI...'
+      : pluginCliAvailable
+        ? 'Compatible CLI detected'
+        : 'Compatible CLI unavailable';
 
   return (
     <div className="space-y-6">
@@ -571,8 +613,9 @@ export function SkillsPluginsSettings() {
         <div>
           <h3 className="text-lg font-semibold mb-1">Skills &amp; Plugins</h3>
           <p className="text-sm text-muted-foreground">
-            Installed plugins provide agents, skills, and tools. Project-level resources live in{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">.claude/</code>.
+            Installed compatible plugins can provide agents, skills, and tools. Project-level
+            resources live in <code className="rounded bg-muted px-1 py-0.5 text-xs">.claude/</code>
+            .
           </p>
         </div>
         <Button
@@ -593,22 +636,45 @@ export function SkillsPluginsSettings() {
 
       <div className="rounded-lg border border-border p-4 space-y-3">
         <div>
-          <p className="text-sm font-medium">Plugin Lifecycle (Claude CLI)</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-medium">Compatible plugin lifecycle</p>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                pluginCliAvailable
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {pluginCliStatus}
+            </span>
+          </div>
           <p className="text-xs text-muted-foreground">
-            Install, update, or remove plugins directly from settings.
+            Install, update, or remove Claude-compatible plugin packages when the CLI is present.
+            AGI built-in skills and local MCP tools do not require sign-in or that CLI.
           </p>
         </div>
+        {pluginCliAvailable === false && (
+          <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            Plugin package actions are disabled because the compatible CLI is not installed or not
+            reachable. Skill Marketplace and project resources below remain available.
+          </div>
+        )}
         <div className="flex flex-col sm:flex-row gap-2">
           <input
             value={pluginInput}
             onChange={(event) => setPluginInput(event.target.value)}
             placeholder="plugin-name@marketplace"
-            disabled={isNonTauri || pluginActionInProgress !== null}
+            disabled={isNonTauri || pluginCliAvailable !== true || pluginActionInProgress !== null}
             className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
           />
           <Button
             size="sm"
-            disabled={isNonTauri || pluginActionInProgress !== null || !pluginInput.trim()}
+            disabled={
+              isNonTauri ||
+              pluginCliAvailable !== true ||
+              pluginActionInProgress !== null ||
+              !pluginInput.trim()
+            }
             onClick={() => void handleInstallPlugin()}
           >
             {pluginActionInProgress?.startsWith('install:') ? (
@@ -617,7 +683,7 @@ export function SkillsPluginsSettings() {
                 Installing…
               </>
             ) : (
-              'Install Plugin'
+              'Install plugin'
             )}
           </Button>
         </div>
@@ -662,7 +728,8 @@ export function SkillsPluginsSettings() {
               <div className="divide-y divide-border">
                 {plugins.length === 0 ? (
                   <p className="px-4 py-3 text-sm text-muted-foreground">
-                    No plugins installed. Install plugins via the Claude Code CLI.
+                    No compatible plugins installed. Built-in AGI skills remain available in the
+                    Skill Marketplace above.
                   </p>
                 ) : (
                   plugins.map((p) => (
@@ -670,6 +737,7 @@ export function SkillsPluginsSettings() {
                       key={p.id}
                       plugin={p}
                       actionInProgress={pluginActionInProgress}
+                      pluginCliAvailable={pluginCliAvailable === true}
                       onUpdate={handleUpdatePlugin}
                       onRemove={handleRemovePlugin}
                     />

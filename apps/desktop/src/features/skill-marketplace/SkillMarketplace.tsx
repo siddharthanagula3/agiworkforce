@@ -11,6 +11,7 @@
  */
 import { LayoutGrid, List, RefreshCw, Sparkles } from 'lucide-react';
 import { useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -89,18 +90,19 @@ export function SkillMarketplace() {
   const fetchSkills = useSkillMarketplaceStore((s) => s.fetchSkills);
   const reloadSkills = useSkillMarketplaceStore((s) => s.reloadSkills);
   const totalCount = useSkillMarketplaceStore((s) => s.skills.length);
+  const hasLoaded = useSkillMarketplaceStore((s) => s.hasLoaded);
   const searchQuery = useSkillMarketplaceStore((s) => s.searchQuery);
   const selectedCategory = useSkillMarketplaceStore((s) => s.selectedCategory);
 
   // Use the selector via the hook to stay reactive
-  const filteredSkills = useSkillMarketplaceStore(selectFilteredSkills);
+  const filteredSkills = useSkillMarketplaceStore(useShallow(selectFilteredSkills));
 
   // Load on mount — idempotent if already loaded
   useEffect(() => {
-    if (totalCount === 0 && !isLoading) {
+    if (!hasLoaded && !isLoading) {
       void fetchSkills();
     }
-  }, [fetchSkills, totalCount, isLoading]);
+  }, [fetchSkills, hasLoaded, isLoading]);
 
   const hasActiveFilter = searchQuery.trim() !== '' || selectedCategory !== 'all';
 

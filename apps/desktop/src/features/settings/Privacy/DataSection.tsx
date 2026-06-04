@@ -36,7 +36,7 @@ import { onboarding } from '@agiworkforce/api';
 import { toast } from 'sonner';
 
 import { errorTracking } from '../../../services/errorTracking';
-import { useAuthStore } from '../../../stores/auth';
+import { selectHasCloudAccountSession, useAuthStore } from '../../../stores/auth';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { useIsMounted } from '@/hooks/useIsMounted';
@@ -77,6 +77,7 @@ function formatPurgeDate(iso: string | null): string {
 
 export function DataSection() {
   const userId = useAuthStore((state) => state.user?.id ?? null);
+  const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
 
   // Settings panels often unmount while async work is in flight — user
   // navigates to a different settings tab, closes the dialog, or signs
@@ -161,8 +162,17 @@ export function DataSection() {
   }, [isMounted]);
 
   useEffect(() => {
+    if (!hasCloudAccountSession) {
+      setPendingStatus({
+        pending: false,
+        requestedAt: null,
+        purgeAt: null,
+        daysRemaining: null,
+      });
+      return;
+    }
     void refreshPendingStatus();
-  }, [refreshPendingStatus]);
+  }, [hasCloudAccountSession, refreshPendingStatus]);
 
   // ── Delete account flow (2 confirmations) ───────────────────────────────
   const [confirm1Open, setConfirm1Open] = useState(false);
@@ -179,6 +189,12 @@ export function DataSection() {
 
   const handleConfirmStep2 = useCallback(async () => {
     if (confirmText !== 'DELETE') return;
+    if (!hasCloudAccountSession || !userId) {
+      toast.error('Cloud account required', {
+        description: 'Account deletion is only available after signing in to Cloud sync.',
+      });
+      return;
+    }
     setSubmittingDelete(true);
     try {
       const status = await invoke<PendingDeletionStatus>('privacy_request_account_deletion', {
@@ -200,7 +216,7 @@ export function DataSection() {
         setSubmittingDelete(false);
       }
     }
-  }, [confirmText, userId, isMounted]);
+  }, [confirmText, hasCloudAccountSession, userId, isMounted]);
 
   const handleCancelDeletion = useCallback(async () => {
     setCancellingDelete(true);
@@ -342,7 +358,7 @@ export function DataSection() {
       </div>
 
       {/* Pending-deletion banner */}
-      {pendingStatus?.pending && (
+      {hasCloudAccountSession && pendingStatus?.pending && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
@@ -425,36 +441,39 @@ export function DataSection() {
       </div>
 
       {/* Delete account */}
-      <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6">
-        <div className="flex items-start gap-4">
-          <div className="rounded-md bg-red-500/10 p-3">
-            <Database className="h-5 w-5 text-red-500" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="font-semibold text-red-500 dark:text-red-400">Delete my account</h4>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Permanently delete your conversations, settings, and subscription. We hold the request
-              for 7 days so you can change your mind; after that, the data is purged from Neon, your
-              Stripe subscription is cancelled, and your authentication record is removed.
-            </p>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="mt-3"
-              onClick={() => setConfirm1Open(true)}
-              disabled={statusLoading || pendingStatus?.pending === true}
-            >
-              <ShieldAlert className="mr-2 h-4 w-4" />
-              Delete my account
-            </Button>
-            {pendingStatus?.pending && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Already pending. Use Cancel deletion above to revert.
+      {hasCloudAccountSession && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-md bg-red-500/10 p-3">
+              <Database className="h-5 w-5 text-red-500" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-semibold text-red-500 dark:text-red-400">Delete my account</h4>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Permanently delete your cloud conversations, settings, and subscription. We hold the
+                request for 7 days so you can change your mind; after that, the data is purged from
+                Neon, your Stripe subscription is cancelled, and your authentication record is
+                removed.
               </p>
-            )}
+              <Button
+                variant="destructive"
+                size="sm"
+                className="mt-3"
+                onClick={() => setConfirm1Open(true)}
+                disabled={statusLoading || pendingStatus?.pending === true}
+              >
+                <ShieldAlert className="mr-2 h-4 w-4" />
+                Delete my account
+              </Button>
+              {pendingStatus?.pending && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Already pending. Use Cancel deletion above to revert.
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Sentry telemetry toggle */}
       <div className="rounded-lg border border-border bg-card p-6">
@@ -483,31 +502,32 @@ export function DataSection() {
       </div>
 
       {/* Web analytics toggle */}
-      <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-start gap-4">
-          <div className="rounded-md bg-muted p-3">
-            <BarChart3 className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <h4 className="font-semibold">Web Analytics</h4>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Web Analytics, only affects the web app. Allows Google Tag Manager to record
-                  pageviews and button clicks on agiworkforce.com. Off by default if you have Do Not
-                  Track enabled in your browser.
-                </p>
+      {hasCloudAccountSession && (
+        <div className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-start gap-4">
+            <div className="rounded-md bg-muted p-3">
+              <BarChart3 className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-semibold">Web analytics</h4>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Controls analytics on agiworkforce.com for your signed-in cloud account. Local
+                    chats and local files are not sent.
+                  </p>
+                </div>
+                <Switch
+                  checked={webAnalyticsEnabled}
+                  disabled={savingWebAnalytics}
+                  onCheckedChange={(v) => void handleToggleWebAnalytics(v)}
+                  aria-label="Web analytics"
+                />
               </div>
-              <Switch
-                checked={webAnalyticsEnabled}
-                disabled={savingWebAnalytics}
-                onCheckedChange={(v) => void handleToggleWebAnalytics(v)}
-                aria-label="Web analytics"
-              />
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Confirmation 1 */}
       <AlertDialog open={confirm1Open} onOpenChange={setConfirm1Open}>

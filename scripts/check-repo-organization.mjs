@@ -9,6 +9,7 @@ const errors = [];
 const warnings = [];
 
 const allowedRootFiles = new Set([
+  '.git',
   '.claudeignore',
   '.env.example',
   '.gitattributes',

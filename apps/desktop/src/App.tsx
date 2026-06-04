@@ -65,7 +65,7 @@ import {
 } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
-import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
+import useErrorStore from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
 import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
@@ -206,17 +206,14 @@ const DesktopShell = () => {
   const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
 
-  // Onboarding state - show mode picker only on first-ever launch
-  const onboardingCompleted = useSimpleModeStore(selectOnboardingCompleted);
+  // Onboarding state - mode selection is the trust-boundary gate.
   const hasSelectedMode = useAppModeStore((s) => s.hasSelectedMode);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
-  // Show mode picker only when neither onboarding nor mode selection has been persisted
+  // Show mode picker whenever no Local/BYOK/Cloud mode has been selected.
   useEffect(() => {
-    if (!onboardingCompleted && !hasSelectedMode) {
-      setShowOnboarding(true);
-    }
-  }, [onboardingCompleted, hasSelectedMode]);
+    setShowOnboarding(!hasSelectedMode);
+  }, [hasSelectedMode]);
 
   // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
@@ -595,12 +592,13 @@ const DesktopShell = () => {
     ensureActiveConversation();
   }, [restoreSession, ensureActiveConversation]);
 
-  // Initialize cloud provider + load available models into the chat package's model store
+  // Initialize providers + load mode-appropriate models into the chat package's model store.
   useEffect(() => {
     async function initModels() {
+      const currentMode = appMode;
       try {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
-        if (useAppModeStore.getState().mode === 'cloud') {
+        if (currentMode === 'cloud') {
           await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
         }
 
@@ -616,13 +614,46 @@ const DesktopShell = () => {
           'anthropic',
           'openai',
           'google',
+          'managed_cloud',
           'mistral',
           'meta',
           'xai',
           'deepseek',
+          'qwen',
+          'moonshot',
+          'perplexity',
+          'zhipu',
+          'groq',
+          'together',
+          'fireworks',
+          'cerebras',
+          'deepinfra',
+          'nvidia_nim',
+          'open_router',
+          'cohere',
+          'ai21',
+          'sambanova',
+          'azure',
+          'bedrock',
+          'lmstudio',
           'local',
+          'ollama',
         ]);
-        const chatModels = rustModels.map((m) => ({
+        const visibleModels = rustModels.filter((model) => {
+          const provider = model.provider.toLowerCase();
+          const isLocalProvider =
+            provider === 'ollama' || provider === 'local' || provider === 'lmstudio';
+          const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
+          const isConfiguredByok = model.available && !isLocalProvider && !isManagedProvider;
+
+          if (currentMode === 'local') {
+            return isLocalProvider || isConfiguredByok;
+          }
+
+          return isManagedProvider || model.id.startsWith('auto');
+        });
+
+        const chatModels = visibleModels.map((m) => ({
           id: m.id,
           name: m.name,
           provider: (validProviders.has(m.provider.toLowerCase())
@@ -643,7 +674,12 @@ const DesktopShell = () => {
           supportsTools: true,
           contextWindow: 128000,
           isLocal: m.provider.toLowerCase() === 'ollama' || m.provider.toLowerCase() === 'local',
-          isByok: m.available,
+          isByok:
+            currentMode === 'local' &&
+            m.available &&
+            !['ollama', 'local', 'lmstudio', 'managed_cloud', 'managed-cloud'].includes(
+              m.provider.toLowerCase(),
+            ),
         }));
         useChatModelStore.getState().setModels(chatModels);
       } catch {
@@ -682,7 +718,10 @@ const DesktopShell = () => {
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-          const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
+          const fallbackProviders =
+            currentMode === 'local'
+              ? ['ollama']
+              : ['managed_cloud', 'anthropic', 'openai', 'google'];
           const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
               const defaultModelId = getProviderDefaultModel(
@@ -705,19 +744,25 @@ const DesktopShell = () => {
                   supportsTools: m.capabilities?.['tools'] ?? false,
                   contextWindow: m.contextWindow ?? 128000,
                   isLocal: p === 'ollama',
-                  isByok: p !== 'ollama',
+                  isByok: false,
                 },
               ];
             });
           useChatModelStore.getState().setModels(fallbackModels);
-          toast.error('Could not load models from backend. Using defaults.');
+          if (currentMode === 'local' && fallbackModels.length === 0) {
+            toast.info(
+              'No local or BYOK models detected yet. Add Ollama or an API key in Settings.',
+            );
+          } else {
+            toast.error('Could not load models from backend. Using mode-safe defaults.');
+          }
         } catch {
           // Even the fallback import failed — chat will use its own internal default
         }
       }
     }
     void initModels();
-  }, []);
+  }, [appMode]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -1322,7 +1367,7 @@ const DesktopShell = () => {
             <VoiceInputOverlay />
           </Suspense>
         )}
-        {isTauri && showOnboarding && !onboardingCompleted && (
+        {isTauri && showOnboarding && !hasSelectedMode && (
           <Suspense fallback={null}>
             <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
           </Suspense>
@@ -1361,12 +1406,22 @@ const DesktopShell = () => {
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
-              fallback={
+              fallback={(error, errorInfo) => (
                 <div className="flex h-full w-full items-center justify-center bg-surface-base">
-                  <div className="text-center">
+                  <div className="max-w-xl px-6 text-center">
                     <p className="mb-4 text-lg font-semibold text-foreground">
                       Chat interface encountered an error
                     </p>
+                    {error ? (
+                      <p className="mb-4 rounded-md border border-border bg-surface-panel px-3 py-2 text-left font-mono text-xs text-muted-foreground">
+                        {error.message || String(error)}
+                      </p>
+                    ) : null}
+                    {import.meta.env.DEV && errorInfo?.componentStack ? (
+                      <pre className="mb-4 max-h-48 overflow-auto rounded-md border border-border bg-surface-panel px-3 py-2 text-left font-mono text-xs text-muted-foreground">
+                        {errorInfo.componentStack}
+                      </pre>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => window.location.reload()}
@@ -1376,7 +1431,7 @@ const DesktopShell = () => {
                     </button>
                   </div>
                 </div>
-              }
+              )}
             >
               {isV3DesktopChatEnabled ? (
                 <DesktopShellV3
@@ -1388,6 +1443,7 @@ const DesktopShell = () => {
                     const event = new CustomEvent('toggle-voice-input');
                     window.dispatchEvent(event);
                   }}
+                  onOpenSearch={() => useSearchModal.getState().open()}
                   onNavigateView={(view) => {
                     if (view === 'customize') {
                       openSettingsDialog('mcp-skills');

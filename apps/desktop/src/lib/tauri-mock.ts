@@ -1226,6 +1226,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return [false, (args?.['goal'] as string | undefined) ?? ''] as T;
 
     // ── Skill commands (newly wired) ────────────────────────────────
+    case 'skill_list':
+      return [] as T;
+
+    case 'skill_reload':
+      return undefined as T;
+
     case 'skill_get':
       return null as T;
 

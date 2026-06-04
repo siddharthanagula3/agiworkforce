@@ -142,6 +142,20 @@ function getProviderLabel(providerKey: string): string {
   return fallback[providerKey] ?? providerKey.charAt(0).toUpperCase() + providerKey.slice(1);
 }
 
+function readPersistedDesktopMode(): 'local' | 'cloud' | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('app-mode-store');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { mode?: unknown } };
+    return parsed.state?.mode === 'local' || parsed.state?.mode === 'cloud'
+      ? parsed.state.mode
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Provider logo — SVG inline or brand-color dot
 // ---------------------------------------------------------------------------
@@ -410,8 +424,10 @@ export function ModelSelector({
   onProPlusRequired,
 }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
+  const persistedDesktopMode = readPersistedDesktopMode();
+  const isDesktopLocalMode = persistedDesktopMode === 'local';
 
-  const usingFallback = models.length === 0;
+  const usingFallback = models.length === 0 && !isDesktopLocalMode;
   const displayModels = usingFallback ? CLOUD_FALLBACK_MODELS : models;
 
   // Pro+ gate — when a non-Pro+ user picks a model from a different provider
@@ -523,12 +539,34 @@ export function ModelSelector({
               Model
             </span>
             <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary)]">
-              13+ Providers
+              {isDesktopLocalMode ? 'Local / BYOK' : '13+ Providers'}
             </span>
           </div>
 
           {/* Scrollable model list */}
           <div className="max-h-80 overflow-y-auto p-1">
+            {displayModels.length === 0 && (
+              <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
+                <div className="font-medium text-[var(--chat-text-primary)]">
+                  No local or BYOK models detected
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
+                  Start Ollama, download a model, or add an API key in Models & Keys.
+                </p>
+                {onSettingsClick && (
+                  <Popover.Close asChild>
+                    <button
+                      type="button"
+                      onClick={onSettingsClick}
+                      className="mt-3 rounded-lg border border-[var(--chat-border)] px-3 py-1.5 text-xs font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                    >
+                      Open Models & Keys
+                    </button>
+                  </Popover.Close>
+                )}
+              </div>
+            )}
+
             {/* Best (auto) synthetic option at top */}
             {autoModels.length > 0 && bestAutoId && (
               <div className="mb-1">
