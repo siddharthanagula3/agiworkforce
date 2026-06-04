@@ -11,7 +11,7 @@ import {
   HelpCircle,
 } from 'lucide-react';
 import { useUnifiedAuthStore } from '../../stores/auth';
-import { useSettingsDialogStore } from '../../stores/settingsStore';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 type MenuItemDef =
   | { kind: 'header'; label: string; sub?: string }
@@ -97,7 +97,7 @@ export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
       label: t('accountMenu.appsExtensions'),
       chev: true,
       action: () => {
-        openSettings('mcp-skills');
+        openSettings('connectors');
         onClose();
       },
     },

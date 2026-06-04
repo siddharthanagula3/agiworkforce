@@ -2,7 +2,7 @@
  * H44 — AgentsSettings tests
  *
  * Covers: render with default settings, approval mode radio buttons,
- * sub-agents toggle, agent teams toggle, and execution preference updates.
+ * custom agent CRUD mounting, and execution preference updates.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -31,7 +31,6 @@ global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 const mockSetAutoApproveTools = vi.fn().mockResolvedValue(undefined);
 const mockSetAlwaysUseAgentMode = vi.fn();
-const mockSetFeature = vi.fn();
 const mockSetMaxTimeoutMinutes = vi.fn();
 const mockSetEnableCheckpointing = vi.fn();
 const mockSetCheckpointInterval = vi.fn();
@@ -53,20 +52,13 @@ let mockExecutionPreferences = {
   enableTimeoutWarnings: true,
 };
 
-let mockFeatures: Record<string, boolean> = {
-  subAgents: true,
-  agentTeams: true,
-};
-
 vi.mock('../../../stores/settingsStore', () => ({
   useSettingsStore: vi.fn((selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       chatPreferences: mockChatPreferences,
       executionPreferences: mockExecutionPreferences,
-      features: mockFeatures,
       setAutoApproveTools: mockSetAutoApproveTools,
       setAlwaysUseAgentMode: mockSetAlwaysUseAgentMode,
-      setFeature: mockSetFeature,
       setMaxTimeoutMinutes: mockSetMaxTimeoutMinutes,
       setEnableCheckpointing: mockSetEnableCheckpointing,
       setCheckpointInterval: mockSetCheckpointInterval,
@@ -98,7 +90,6 @@ describe('AgentsSettings', () => {
       autoResumeOnRestart: false,
       enableTimeoutWarnings: true,
     };
-    mockFeatures = { subAgents: true, agentTeams: true };
   });
 
   describe('Renders with default settings', () => {
@@ -109,13 +100,6 @@ describe('AgentsSettings', () => {
     it('shows Agent Configuration section heading', () => {
       render(<AgentsSettings />);
       expect(screen.getByText(/agent configuration/i)).toBeInTheDocument();
-    });
-
-    it('shows Sub-agents & Teams section heading', () => {
-      render(<AgentsSettings />);
-      // Multiple elements contain "sub-agents" (heading + label); confirm at least one heading
-      const headings = screen.getAllByText(/sub-agents/i);
-      expect(headings.length).toBeGreaterThan(0);
     });
 
     it('shows Execution section heading', () => {
@@ -134,6 +118,13 @@ describe('AgentsSettings', () => {
       expect(screen.getByText(/auto-approve safe actions/i)).toBeInTheDocument();
       // "Auto-approve all" label text
       expect(screen.getAllByText(/auto-approve all/i).length).toBeGreaterThan(0);
+    });
+
+    it('does not expose unproven sub-agent or team toggles in demo settings', () => {
+      render(<AgentsSettings />);
+      expect(screen.queryByText(/sub-agents & teams/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /enable sub-agents/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('switch', { name: /enable agent teams/i })).not.toBeInTheDocument();
     });
   });
 
@@ -192,36 +183,6 @@ describe('AgentsSettings', () => {
       expect(safeRadio).toBeDefined();
       await userEvent.click(safeRadio!);
       expect(mockSetAlwaysUseAgentMode).toHaveBeenCalledWith(true);
-    });
-  });
-
-  describe('Sub-agents toggle', () => {
-    it('renders Enable Sub-agents switch as checked when feature is enabled', () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable sub-agents/i });
-      expect(toggle).toHaveAttribute('aria-checked', 'true');
-    });
-
-    it('calls setFeature("subAgents", false) when toggled off', async () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable sub-agents/i });
-      await userEvent.click(toggle);
-      expect(mockSetFeature).toHaveBeenCalledWith('subAgents', false);
-    });
-  });
-
-  describe('Agent Teams toggle', () => {
-    it('renders Enable Agent Teams switch as checked when feature is enabled', () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable agent teams/i });
-      expect(toggle).toHaveAttribute('aria-checked', 'true');
-    });
-
-    it('calls setFeature("agentTeams", false) when toggled off', async () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable agent teams/i });
-      await userEvent.click(toggle);
-      expect(mockSetFeature).toHaveBeenCalledWith('agentTeams', false);
     });
   });
 

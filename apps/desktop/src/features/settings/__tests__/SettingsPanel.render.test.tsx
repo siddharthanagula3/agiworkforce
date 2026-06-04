@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAuthStore } from '../../../stores/auth';
+import { useAppModeStore } from '../../../stores/appModeStore';
 import { SettingsPanel } from '../SettingsPanel';
 
 vi.mock('@agiworkforce/api', () => ({
@@ -41,16 +42,33 @@ vi.mock('../TeamAccountSettings', () => ({
   TeamAccountSettings: () => <div>Team account settings</div>,
 }));
 
-vi.mock('../FavoriteModelsSelector', () => ({
-  FavoriteModelsSelector: () => <div>Favorite models</div>,
-}));
-
 vi.mock('../CustomModelsSettings', () => ({
   CustomModelsSettings: () => <div>Custom models</div>,
 }));
 
-vi.mock('../TaskRoutingSettings', () => ({
-  TaskRoutingSettings: () => <div>Task routing</div>,
+vi.mock('@/features/skill-marketplace/SkillMarketplace', () => ({
+  SkillMarketplace: () => <div>Skill Marketplace</div>,
+}));
+
+vi.mock('@/features/connectors/ConnectorGallery', () => ({
+  ConnectorGallery: () => <div>Connector gallery</div>,
+}));
+
+vi.mock('../SkillsPluginsSettings', () => ({
+  SkillsPluginsSettings: () => <div>Plugins settings</div>,
+}));
+
+vi.mock('../AgentsSettings', () => ({
+  AgentsSettings: () => (
+    <div>
+      <div>Agent Configuration</div>
+      <div>Custom Agents</div>
+    </div>
+  ),
+}));
+
+vi.mock('@agiworkforce/unified-chat', () => ({
+  MemoryEditor: () => <div>Local memory editor</div>,
 }));
 
 vi.mock('../MasterPasswordSettings', () => ({
@@ -95,6 +113,12 @@ describe('SettingsPanel render stability', () => {
       accessToken: null,
       refreshToken: null,
     });
+    useAppModeStore.setState({
+      mode: 'local',
+      planTier: 'free',
+      hasOnboarded: true,
+      hasSelectedMode: true,
+    });
   });
 
   afterEach(() => {
@@ -117,6 +141,9 @@ describe('SettingsPanel render stability', () => {
     expect(screen.getByText('Request routing')).toBeInTheDocument();
     expect(screen.getByText('Local models')).toBeInTheDocument();
     expect(screen.getByText('BYOK providers')).toBeInTheDocument();
+    expect(screen.queryByText('Favorite models')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task Routing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task routing')).not.toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
 
     await waitFor(() => {
@@ -129,6 +156,14 @@ describe('SettingsPanel render stability', () => {
 
     expect(await screen.findByRole('button', { name: /Personalization/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Appearance$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Customize')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Directory/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Skills$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Connectors$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Plugins$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Agents$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Memory$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
   });
 
   it('keeps cloud account deletion out of Local Mode privacy settings', async () => {
@@ -141,16 +176,65 @@ describe('SettingsPanel render stability', () => {
     expect(screen.queryByText('Cloud account settings')).not.toBeInTheDocument();
   });
 
-  it('renders MCP & Skills without tripping the settings error boundary', async () => {
-    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="mcp-skills" />);
+  it('renders Skills as a direct Settings page', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="skills" />);
 
-    expect(await screen.findByText('Customize your workforce')).toBeInTheDocument();
     expect(await screen.findByText('Skill Marketplace')).toBeInTheDocument();
-    expect(await screen.findAllByText('MCP Tools')).toHaveLength(2);
-    expect(await screen.findAllByText(/Skills & Plugins/i)).toHaveLength(2);
-    expect(await screen.findAllByText('MCP Server')).not.toHaveLength(0);
-    expect(await screen.findAllByText('Tools')).not.toHaveLength(0);
-    expect(await screen.findByText('Research')).toBeInTheDocument();
+    expect(screen.queryByText('Directory')).not.toBeInTheDocument();
+    expect(screen.queryByText('MCP & skills')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('renders Connectors as a direct Settings page', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="connectors" />);
+
+    expect(await screen.findByText('Connector gallery')).toBeInTheDocument();
+    expect(screen.queryByText('Directory')).not.toBeInTheDocument();
+    expect(screen.queryByText('MCP & skills')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('renders Plugins as a direct Settings page', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="plugins" />);
+
+    expect(await screen.findByText('Plugins settings')).toBeInTheDocument();
+    expect(screen.queryByText('Directory')).not.toBeInTheDocument();
+    expect(screen.queryByText('MCP & skills')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('renders Agents as the real custom-agent management surface', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="agents" />);
+
+    expect(await screen.findByText('Agent Configuration')).toBeInTheDocument();
+    expect(screen.getByText('Custom Agents')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('renders Memory as a local persisted memory surface', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="memory" />);
+
+    expect(await screen.findByText('Local memory editor')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('maps legacy Capabilities settings links to Agents instead of the archived surface', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="capabilities" />);
+
+    expect(await screen.findByText('Agent Configuration')).toBeInTheDocument();
+    expect(screen.getByText('Custom Agents')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Capabilities$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
+  });
+
+  it('maps legacy MCP settings links to Connectors instead of the archived combined surface', async () => {
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="mcp" />);
+
+    expect(await screen.findByText('Connector gallery')).toBeInTheDocument();
+    expect(screen.queryByText('Directory')).not.toBeInTheDocument();
+    expect(screen.queryByText('MCP & skills')).not.toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
   });
 });

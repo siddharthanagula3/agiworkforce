@@ -595,8 +595,8 @@ export function Sidebar({
               title={t('common.settings')}
               aria-label={t('common.settings')}
               style={{
-                width: 30,
-                height: 30,
+                width: 36,
+                height: 36,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -605,6 +605,7 @@ export function Sidebar({
                 background: 'transparent',
                 cursor: 'pointer',
                 color: 'var(--chat-text-muted)',
+                flexShrink: 0,
               }}
             >
               <Settings size={15} />

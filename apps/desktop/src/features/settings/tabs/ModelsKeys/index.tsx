@@ -15,13 +15,9 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
-import { FavoriteModelsSelector } from '../../FavoriteModelsSelector';
 
 const LazyCustomModelsSettings = lazy(() =>
   import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),
-);
-const LazyTaskRoutingSettings = lazy(() =>
-  import('../../TaskRoutingSettings').then((m) => ({ default: m.TaskRoutingSettings })),
 );
 
 function Fallback({ label }: { label: string }) {
@@ -411,18 +407,10 @@ export function ModelsKeysTab({
             </div>
           </div>
 
-          <FavoriteModelsSelector />
           <Suspense fallback={<Fallback label="Loading custom model settings..." />}>
             <LazyCustomModelsSettings />
           </Suspense>
         </div>
-      </div>
-
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Task Routing</h3>
-        <Suspense fallback={<Fallback label="Loading task routing settings..." />}>
-          <LazyTaskRoutingSettings />
-        </Suspense>
       </div>
 
       <div className="pt-6 border-t border-border">
@@ -497,17 +485,9 @@ export function ModelsKeysTab({
       <div className="pt-4 text-xs text-muted-foreground">
         <h4 className="font-medium mb-2">Supported Providers</h4>
         <ul className="list-disc list-inside space-y-1">
-          <li>OpenAI</li>
-          <li>Anthropic</li>
-          <li>Google</li>
-          <li>xAI</li>
-          <li>DeepSeek</li>
-          <li>Mistral (Large, Codestral)</li>
-          <li>Qwen</li>
-          <li>Kimi</li>
-          <li>Perplexity (Sonar Pro, Sonar Reasoning)</li>
-          <li>NVIDIA NIM (Nemotron Ultra, Super, Nano — free tier)</li>
-          <li>OpenRouter (200+ models, generous free tier)</li>
+          {BYOK_PROVIDERS.map(({ id, name }) => (
+            <li key={id}>{name}</li>
+          ))}
           <li>Ollama (any local model)</li>
         </ul>
       </div>
