@@ -18,7 +18,7 @@ env:
 jobs:
   create-release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
@@ -66,7 +66,7 @@ jobs:
 
   validate:
     name: Validate (lint + typecheck + test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: create-release
     steps:
       - uses: actions/checkout@v6
@@ -185,7 +185,7 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [create-release, build-tauri]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
