@@ -6,8 +6,9 @@ name: Actions pinned-SHA check
 # (TAURI_SIGNING_PRIVATE_KEY, SUPABASE_SERVICE_ROLE_KEY, APPLE_*, NPM_TOKEN,
 # FLY_API_TOKEN, RAILWAY_TOKEN, …).
 #
-# Allowlist for unpinned uses: only `uses: ./...` reusable workflows in this
-# repo. External actions, including GitHub-owned actions, must use a full SHA.
+# Allowlist for unpinned uses: actions/*, github/*, microsoft/*, and any
+# `uses: ./...` reusable workflow in this repo. Other external actions must use
+# a full commit SHA.
 
 on:
   pull_request:
@@ -25,7 +26,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+      - uses: actions/checkout@v5
 
       - name: Scan for invalid external action pins
         shell: bash

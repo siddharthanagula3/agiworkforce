@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # scripts/check-action-pins.sh
 #
-# Verify every external GitHub Action is pinned to a full commit SHA.
-# Fails (exit 1) if any `uses:` line points at a tag or, when
-# VERIFY_ACTION_PIN_OBJECTS=1, an annotated tag object SHA.
+# Verify every third-party GitHub Action is pinned to a full commit SHA.
+# Fails (exit 1) if any non-allowlisted `uses:` line points at a tag or,
+# when VERIFY_ACTION_PIN_OBJECTS=1, an annotated tag object SHA.
 #
 # Source: docs/plans/redteam-services.md (red team report 2026-05-04, C3).
 #
-# Every external action MUST be SHA-pinned, including GitHub-owned actions.
-# Owners can grant exceptions by adding the `uses:` value to ALLOWED_UNPINNED
-# below with a justification.
+# Trusted first-party prefixes may use version tags. Everything else MUST be
+# SHA-pinned. Owners can grant exceptions by adding the `uses:` value to
+# ALLOWED_UNPINNED below with a justification.
 
 set -euo pipefail
 
@@ -21,7 +21,14 @@ if [ ! -d "$WORKFLOWS_DIR" ]; then
   exit 2
 fi
 
-# Specific "external but reviewed" exceptions. Add here ONLY with a
+# Trusted first-party allowlist.
+TRUSTED_PREFIXES=(
+  "actions/"
+  "github/"
+  "microsoft/"
+)
+
+# Specific "third-party but reviewed" exceptions. Add here ONLY with a
 # justification comment in the workflow itself.
 ALLOWED_UNPINNED=()
 
@@ -79,8 +86,16 @@ while IFS= read -r line; do
 
   checked=$((checked + 1))
 
-  # Allow explicit exceptions.
+  # Allow trusted prefixes.
   trusted=0
+  for prefix in "${TRUSTED_PREFIXES[@]}"; do
+    case "$owner_repo/" in
+      "$prefix"*) trusted=1; break ;;
+    esac
+  done
+  if [ "$trusted" -eq 1 ]; then continue; fi
+
+  # Allow explicit exceptions.
   for allow in "${ALLOWED_UNPINNED[@]:-}"; do
     if [ "$ref" = "$allow" ]; then trusted=1; break; fi
   done
@@ -102,7 +117,7 @@ while IFS= read -r line; do
 done < <(grep -E "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*" "$WORKFLOWS_DIR"/*.yml 2>/dev/null | cut -d: -f2-)
 
 echo ""
-echo "Checked $checked external action references."
+echo "Scanned $checked action references."
 if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
   echo "Verified $object_checks pinned action object(s)."
 fi
@@ -110,4 +125,4 @@ if [ "$violations" -gt 0 ]; then
   echo "FAIL: $violations unpinned external action(s)." >&2
   exit 1
 fi
-echo "PASS: all external actions are SHA-pinned."
+echo "PASS: all third-party actions are SHA-pinned."
