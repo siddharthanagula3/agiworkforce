@@ -20,6 +20,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { MessageList } from '@/src/features/chat/components/MessageList';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
+import {
+  TASK_CHIP_SEND_CONTEXT,
+  type TaskChipType,
+} from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { ModeSwitchModal, type AppMode } from '@/src/features/chat/components/ModeSwitchModal';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
@@ -166,6 +170,7 @@ export default function ChatScreen() {
     (
       text: string,
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+      mode?: TaskChipType,
     ) => {
       if (!id) return;
       stopSpeaking?.();
@@ -194,6 +199,8 @@ export default function ChatScreen() {
         return;
       }
 
+      const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
+
       // Handle /image command — generate an image and add result to conversation
       if (finalText.startsWith('/image ')) {
         if (!FEATURES.imageGen) {
@@ -206,7 +213,7 @@ export default function ChatScreen() {
         const prompt = finalText.slice(7).trim();
         if (prompt) {
           // Add user message immediately, then kick off generation
-          sendMessage(id, finalText, selectedModel, attachments);
+          sendMessage(id, finalText, selectedModel, attachments, sendOptions);
           generateImage({ prompt }).catch((err) => {
             console.warn('[ChatScreen] Image generation failed:', err);
           });
@@ -214,7 +221,7 @@ export default function ChatScreen() {
         }
       }
 
-      sendMessage(id, finalText, selectedModel, attachments);
+      sendMessage(id, finalText, selectedModel, attachments, sendOptions);
     },
     [id, selectedModel, sendMessage, stopSpeaking, quotedMessage, isOnline, enqueueOfflineMessage],
   );
@@ -294,7 +301,7 @@ export default function ChatScreen() {
   }, []);
 
   const handleOpenConnectors = useCallback(() => {
-    if (!FEATURES.connectorsCloudOnly) {
+    if (!FEATURES.connectors) {
       Alert.alert(
         'Connectors require Cloud Managed',
         'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
@@ -433,6 +440,14 @@ export default function ChatScreen() {
 
   const handleOpenVoiceMode = useCallback(() => {
     setVoiceModeVisible(true);
+  }, []);
+
+  const handleOpenCompare = useCallback(() => {
+    router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const handleOpenExport = useCallback(() => {
+    exportSheetRef.current?.snapToIndex(0);
   }, []);
 
   const handleCloseVoiceMode = useCallback(() => {
@@ -750,6 +765,8 @@ export default function ChatScreen() {
           onStop={handleStop}
           onOpenModelPicker={handleOpenModelPicker}
           onOpenVoiceMode={handleOpenVoiceMode}
+          onOpenCompare={handleOpenCompare}
+          onOpenExport={handleOpenExport}
           onOpenAddToChat={handleOpenAddToChat}
           onOpenConnectors={handleOpenConnectors}
           isOnline={isOnline}
@@ -764,7 +781,6 @@ export default function ChatScreen() {
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
           onFile={handleSheetFile}
-          conversationId={id}
         />
 
         {/* Model picker bottom sheet */}

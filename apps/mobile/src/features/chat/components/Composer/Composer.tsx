@@ -10,6 +10,8 @@ interface ComposerProps {
   onStop?: () => void;
   onOpenModelPicker?: () => void;
   onOpenVoiceMode?: () => void;
+  onOpenCompare?: () => void;
+  onOpenExport?: () => void;
   onOpenAddToChat?: () => void;
   onOpenConnectors?: () => void;
   isOnline?: boolean;
@@ -27,6 +29,8 @@ export function Composer({
   onStop,
   onOpenModelPicker,
   onOpenVoiceMode,
+  onOpenCompare,
+  onOpenExport,
   onOpenAddToChat,
   onOpenConnectors,
   isOnline,
@@ -62,6 +66,8 @@ export function Composer({
         onStop={onStop}
         onOpenModelPicker={onOpenModelPicker}
         onOpenVoiceMode={onOpenVoiceMode}
+        onOpenCompare={onOpenCompare}
+        onOpenExport={onOpenExport}
         onOpenAddToChat={onOpenAddToChat}
         onOpenConnectors={onOpenConnectors}
         isOnline={isOnline}

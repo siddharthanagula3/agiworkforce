@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { View, Pressable, Modal, Share, Platform, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { X, Share2, Download } from 'lucide-react-native';
+import { X, Share2 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -23,7 +23,6 @@ interface ImageFullScreenProps {
 export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFullScreenProps) {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
-  const [saved, setSaved] = useState(false);
 
   // Zoom state via reanimated shared values
   const scale = useSharedValue(1);
@@ -112,14 +111,6 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
     }
   }, [imageUrl, prompt]);
 
-  const handleSave = useCallback(async () => {
-    if (!imageUrl) return;
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    // Placeholder: actual save would use expo-media-library
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }, [imageUrl]);
-
   const handleClose = useCallback(() => {
     // Reset zoom before closing
     scale.value = 1;
@@ -176,20 +167,6 @@ export function ImageFullScreen({ imageUrl, prompt, visible, onClose }: ImageFul
               accessibilityRole="button"
             >
               <Share2 size={18} color={colors.textSecondary} />
-            </Pressable>
-
-            {/* Save button */}
-            <Pressable
-              onPress={handleSave}
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                backgroundColor: saved ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-              }}
-              accessibilityLabel={saved ? 'Saved' : 'Save image'}
-              accessibilityRole="button"
-            >
-              <Download size={18} color={saved ? colors.agentSuccess : colors.textSecondary} />
             </Pressable>
 
             {/* Close button */}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, ScrollView, Pressable } from 'react-native';
+import { Alert, View, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -237,6 +237,8 @@ export default function SettingsTabScreen() {
   const themeMode = useSettingsStore((s) => s.themeMode);
   const accentColor = useSettingsStore((s) => s.accentColor);
   const selectedModel = useModelStore((s) => s.selectedModel);
+  const user = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
   const appVersion = Constants.expoConfig?.version ?? '1.0.0';
 
   const push = useCallback(
@@ -245,6 +247,13 @@ export default function SettingsTabScreen() {
   );
 
   const openInvite = useCallback(() => setInviteOpen(true), []);
+
+  const handleSignOut = useCallback(() => {
+    Alert.alert('Log Out', 'Log out of AGI Cloud on this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Log Out', style: 'destructive', onPress: () => void signOut() },
+    ]);
+  }, [signOut]);
 
   const sections = useMemo<SettingsSection[]>(
     () => [
@@ -366,14 +375,17 @@ export default function SettingsTabScreen() {
             tone: 'cloud',
             onPress: openInvite,
           },
-          {
-            key: 'logout',
-            label: 'Log Out',
-            icon: LogOut,
-            tag: 'Invite',
-            tone: 'cloud',
-            onPress: openInvite,
-          },
+          ...(user
+            ? [
+                {
+                  key: 'logout',
+                  label: 'Log Out',
+                  icon: LogOut,
+                  tone: 'danger' as const,
+                  onPress: handleSignOut,
+                },
+              ]
+            : []),
         ],
       },
       {
@@ -403,7 +415,7 @@ export default function SettingsTabScreen() {
         ],
       },
     ],
-    [accentColor, appVersion, openInvite, push, selectedModel, themeMode],
+    [accentColor, appVersion, handleSignOut, openInvite, push, selectedModel, themeMode, user],
   );
 
   return (

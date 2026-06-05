@@ -21,7 +21,7 @@
  * changes required — all guards are derived from this single source of truth.
  */
 export const FEATURES = {
-  /** Master switch — true = v1 local-only mode is active. */
+  /** Compatibility flag: true keeps Mobile chat on Local Mode until AGI Cloud is invite-enabled. */
   v1LocalOnly: true,
 
   /** Projects tab — ships in v1 per FOUNDER DECISION 2026-05-18. */
@@ -33,7 +33,7 @@ export const FEATURES = {
   /** Billing / subscription / Stripe portal. */
   billing: false,
 
-  /** Auth (login, OAuth, password reset). No auth in v1 — local only. */
+  /** Auth (login, OAuth, password reset). Cloud account flows open through invite access. */
   auth: false,
 
   /** Legacy direct-provider credential entry is not exposed on Mobile. */
@@ -54,8 +54,8 @@ export const FEATURES = {
   /** External messaging integrations (WhatsApp, Telegram, Slack). */
   messaging: false,
 
-  /** Server-OAuth connectors (cloud-only OAuth flows). */
-  connectorsCloudOnly: false,
+  /** Server-OAuth connectors. Disabled until AGI Cloud invite access enables them. */
+  connectors: false,
 
   /** Web search via server-side API. */
   webSearch: false,

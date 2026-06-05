@@ -1,30 +1,38 @@
-import { useCallback } from 'react';
-import { View, Pressable, ScrollView } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Zap, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Cloud, Sparkles } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-
-const SKILL_CATEGORIES = [
-  { id: 'productivity', label: 'Productivity', description: 'Writing, summarizing, scheduling' },
-  { id: 'coding', label: 'Coding', description: 'Code review, debugging, generation' },
-  { id: 'research', label: 'Research', description: 'Web search, synthesis, citations' },
-  { id: 'data', label: 'Data Analysis', description: 'Charts, statistics, insights' },
-  { id: 'legal', label: 'Legal', description: 'Contract review, compliance checks' },
-  { id: 'healthcare', label: 'Healthcare', description: 'Medical literature, protocols' },
-  { id: 'finance', label: 'Finance', description: 'Market analysis, financial modeling' },
-  { id: 'education', label: 'Education', description: 'Tutoring, lesson plans, quizzes' },
-];
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
+import { useWaitlistStore } from '@/src/features/waitlist';
+import type { InviteCodeTab } from '@/src/features/cloud-bridge/types';
 
 export default function SkillsScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  const waitlistJoined = useWaitlistStore((s) => s.joined);
+  const waitlistRank = useWaitlistStore((s) => s.rank);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [defaultTab, setDefaultTab] = useState<InviteCodeTab>('waitlist');
 
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
   }, [router]);
+
+  const openCloudAccess = useCallback((tab: InviteCodeTab) => {
+    setDefaultTab(tab);
+    setInviteOpen(true);
+  }, []);
+
+  const waitlistLabel =
+    waitlistJoined && typeof waitlistRank === 'number'
+      ? `Waitlist #${(waitlistRank + 1).toLocaleString()}`
+      : waitlistJoined
+        ? 'Waitlist joined'
+        : 'Join waitlist';
 
   return (
     <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
@@ -38,42 +46,82 @@ export default function SkillsScreen() {
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <View className="flex-row items-center gap-2 ml-2">
-          <Zap size={18} color={colors.teal} />
-          <Text variant="subheading" className="text-white">
+          <Sparkles size={18} color={colors.textSecondary} />
+          <Text variant="subheading" style={{ color: colors.textPrimary }}>
             Skills
           </Text>
         </View>
       </View>
 
-      <View className="px-4 pb-3">
-        <Text className="text-[13px]" style={{ color: colors.textMuted }}>
-          150+ AI skills across 8 domains. Tap a category to explore.
+      <View className="flex-1 px-5 justify-center pb-24">
+        <View
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: colors.surfaceElevated,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 18,
+          }}
+        >
+          <Cloud size={24} color={colors.textSecondary} />
+        </View>
+        <Text style={{ fontSize: 26, fontWeight: '700', color: colors.textPrimary }}>
+          AGI Cloud skills
         </Text>
+        <Text style={{ fontSize: 15, lineHeight: 22, color: colors.textSecondary, marginTop: 10 }}>
+          Skills will connect AGI to repeatable cloud workflows across chat, projects, files, and
+          artifacts. Local chat stays available while cloud access is invite-only.
+        </Text>
+
+        <View style={{ gap: 10, marginTop: 28 }}>
+          <Pressable
+            onPress={() => openCloudAccess('waitlist')}
+            accessibilityRole="button"
+            accessibilityLabel={waitlistLabel}
+            style={{
+              minHeight: 52,
+              borderRadius: 16,
+              backgroundColor: colors.teal,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 18,
+            }}
+          >
+            <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>
+              {waitlistLabel}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => openCloudAccess('invite')}
+            accessibilityRole="button"
+            accessibilityLabel="Enter invite code"
+            style={{
+              minHeight: 52,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceElevated,
+              alignItems: 'center',
+              justifyContent: 'center',
+              paddingHorizontal: 18,
+            }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 16, fontWeight: '600' }}>
+              Enter invite code
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
-      <ScrollView
-        className="flex-1 px-4"
-        contentContainerStyle={{ paddingBottom: 40, gap: 8 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {SKILL_CATEGORIES.map((cat) => (
-          <Pressable
-            key={cat.id}
-            className="flex-row items-center justify-between px-4 py-3.5 rounded-xl active:opacity-80"
-            style={{ backgroundColor: colors.surfaceElevated }}
-            accessibilityLabel={cat.label}
-            accessibilityRole="button"
-          >
-            <View className="flex-1">
-              <Text className="text-[14px] font-semibold text-white">{cat.label}</Text>
-              <Text className="text-[12px] mt-0.5" style={{ color: colors.textMuted }}>
-                {cat.description}
-              </Text>
-            </View>
-            <ChevronRight size={16} color={colors.textMuted} />
-          </Pressable>
-        ))}
-      </ScrollView>
+      <InviteCodeModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        source="other"
+        defaultTab={defaultTab}
+      />
     </SafeAreaView>
   );
 }

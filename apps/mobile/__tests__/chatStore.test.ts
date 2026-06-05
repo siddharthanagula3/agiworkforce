@@ -143,6 +143,10 @@ function resetStore() {
     isLoadingConversations: false,
     isLoadingMessages: false,
     error: null,
+    chatMode: 'chat',
+    chatStyle: 'normal',
+    toolAccess: 'auto',
+    features: { webSearch: true, imageGen: true, health: false },
   });
 }
 
@@ -181,6 +185,84 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('streaming success path', () => {
+    it('sends selected chat mode and style context to the remote stream', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      useChatStore.setState({ chatMode: 'create', chatStyle: 'detailed' });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'Draft ready' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'make a launch checklist', MODEL);
+      });
+
+      expect(capturedBody?.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining('Mode: Create'),
+          }),
+        ]),
+      );
+      expect(capturedBody?.messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            role: 'system',
+            content: expect.stringContaining('Style: Detailed'),
+          }),
+        ]),
+      );
+    });
+
+    it('uses per-send task options over persisted chat mode', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      useChatStore.setState({ chatMode: 'chat', chatStyle: 'normal' });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'Code answer' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'fix this function', MODEL, undefined, {
+          mode: 'create',
+          taskInstruction: 'Task: Code. Write a focused patch.',
+        });
+      });
+
+      const systemMessages = capturedBody?.messages.filter((m) => m.role === 'system') ?? [];
+      expect(systemMessages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining('Mode: Create'),
+          }),
+        ]),
+      );
+      expect(systemMessages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            content: expect.stringContaining('Task: Code. Write a focused patch.'),
+          }),
+        ]),
+      );
+    });
+
     it('sets isStreaming=true while streaming, then clears it on onDone', async () => {
       let capturedCallbacks: StreamCallbacks | null = null;
 
@@ -256,6 +338,46 @@ describe('chatStore — streaming state', () => {
   });
 
   describe('local LLM path', () => {
+    it('sends selected chat mode and style context to local generation', async () => {
+      useChatStore.setState({ chatMode: 'research', chatStyle: 'concise' });
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Lite',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 1_181_116_006,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        capturedLocalGenerateOptions = opts;
+        opts.onToken?.('Answer');
+        return { text: 'Answer', runtime: 'executorch', aborted: false };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'compare options', LOCAL_MODEL);
+      });
+
+      expect(capturedLocalGenerateOptions?.messages).toEqual([
+        {
+          role: 'system',
+          content: expect.stringContaining('helpful assistant running locally'),
+        },
+        {
+          role: 'system',
+          content: expect.stringContaining('Mode: Research'),
+        },
+      ]);
+      expect(capturedLocalGenerateOptions?.messages?.[1]?.content).toContain('Style: Concise');
+    });
+
     it('runs the selected installed local model and streams tokens into the assistant message', async () => {
       useChatStore.setState({
         messages: {

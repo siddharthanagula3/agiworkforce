@@ -273,7 +273,7 @@ export default function IntegrationsScreen() {
     ]);
   }, []);
 
-  if (!FEATURES.connectorsCloudOnly) return null;
+  if (!FEATURES.connectors) return null;
 
   const connectedCount = platforms.filter((p) => p.connected).length;
 

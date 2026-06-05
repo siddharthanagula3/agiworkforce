@@ -22,6 +22,7 @@ import Constants from 'expo-constants';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
 import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
@@ -527,19 +528,9 @@ function DeviceTierScreen({
   onDownload: (cellularEnabled: boolean) => void;
   onPickModel: () => void;
 }) {
-  const tierLabel = deviceInfo.tier === 1 ? 'Tier 1' : deviceInfo.tier === 2 ? 'Tier 2' : 'Tier 3';
-  const memoryLabel =
-    Constants.isDevice && deviceInfo.ramGB >= 2
-      ? `${deviceInfo.ramGB} GB RAM`
-      : 'Memory check unavailable in simulator';
-  const deviceSummary = [
-    deviceInfo.deviceName,
-    memoryLabel,
-    deviceInfo.osVersion !== 'Unknown' ? deviceInfo.osVersion : null,
-    `${tierLabel} local runtime`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const deviceSummary = model.needsDownload
+    ? 'Download one local model to start private chats on this device.'
+    : 'A built-in local model is ready to use.';
   const [cellularEnabled, setCellularEnabled] = useState(false);
 
   return (
@@ -554,7 +545,7 @@ function DeviceTierScreen({
         style={[styles.tierHeadline, { color: colors.textPrimary }]}
         accessibilityRole="header"
       >
-        Your {deviceInfo.deviceName} is ready.
+        Set up local chat on {deviceInfo.deviceName}.
       </Text>
 
       <Text style={[styles.tierSubhead, { color: colors.textMuted }]}>{deviceSummary}</Text>
@@ -566,25 +557,21 @@ function DeviceTierScreen({
           {
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 1 },
-            shadowOpacity: 0.05,
-            shadowRadius: 3,
-            elevation: 2,
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
           },
         ]}
       >
         <View style={styles.modelCardHeader}>
           <Text style={[styles.modelName, { color: colors.textPrimary }]}>{model.displayName}</Text>
           <View style={[styles.tierBadge, { backgroundColor: 'rgba(62,184,196,0.12)' }]}>
-            <Text style={[styles.tierBadgeText, { color: colors.teal }]}>{tierLabel}</Text>
+            <Text style={[styles.tierBadgeText, { color: colors.teal }]}>Recommended</Text>
           </View>
         </View>
 
         {model.needsDownload ? (
           <>
             <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-              {formatBytes(model.fileSizeBytes)} · Wi-Fi recommended
+              {formatBytes(model.fileSizeBytes)} download · Wi-Fi recommended
             </Text>
             <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
               Estimated download: {estimateWifiMinutes(model.fileSizeBytes)} on Wi-Fi
@@ -610,22 +597,7 @@ function DeviceTierScreen({
           <Text style={[styles.cellularLabel, { color: colors.textSecondary }]}>
             Download over cellular too
           </Text>
-          <View
-            style={[
-              styles.toggleTrack,
-              { backgroundColor: cellularEnabled ? colors.teal : 'rgba(255,255,255,0.12)' },
-            ]}
-          >
-            <View
-              style={[
-                styles.toggleThumb,
-                {
-                  backgroundColor: colors.white,
-                  transform: [{ translateX: cellularEnabled ? 20 : 2 }],
-                },
-              ]}
-            />
-          </View>
+          <Switch value={cellularEnabled} onValueChange={setCellularEnabled} />
         </Pressable>
       )}
 
@@ -638,9 +610,7 @@ function DeviceTierScreen({
         style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
       >
         <Text style={[styles.ctaBtnText, { color: colors.black }]}>
-          {model.needsDownload
-            ? `Download model (${formatBytes(model.fileSizeBytes)})`
-            : 'Continue'}
+          {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
         </Text>
       </Pressable>
 
@@ -866,10 +836,11 @@ const styles = StyleSheet.create({
   // Device tier
   deviceTierRoot: {
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 56,
   },
   tierHeadline: {
-    fontSize: 28,
+    fontSize: 26,
+    lineHeight: 34,
     fontWeight: '700',
     letterSpacing: 0,
     marginBottom: 8,
@@ -919,22 +890,6 @@ const styles = StyleSheet.create({
   cellularLabel: {
     fontSize: 15,
     flex: 1,
-  },
-  toggleTrack: {
-    width: 44,
-    height: 26,
-    borderRadius: 13,
-    justifyContent: 'center',
-  },
-  toggleThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 2,
   },
   secondaryBtn: {
     paddingVertical: 14,

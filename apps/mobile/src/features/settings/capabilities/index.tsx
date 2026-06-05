@@ -14,7 +14,6 @@ import {
   Paintbrush,
   Brain,
   Monitor,
-  Key,
   Lock,
   FileCode,
   Layout,
@@ -84,14 +83,6 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     state: 'nav',
     label: 'View your memory',
     description: 'Browse and manage what AGI remembers about you.',
-    stateLabel: '',
-  },
-  {
-    key: 'tool-access',
-    icon: Key,
-    state: 'nav',
-    label: 'Tool access',
-    description: 'Configure which tools and integrations can run automatically.',
     stateLabel: '',
   },
   {
@@ -188,7 +179,6 @@ export default function CapabilitiesScreen() {
 
   const CAPABILITIES: CapabilityMeta[] = BASE_CAPABILITIES.map((cap) => {
     if (cap.key === 'view-memory') return { ...cap, onPress: push('/(app)/settings/memory') };
-    if (cap.key === 'tool-access') return { ...cap, onPress: push('/(app)/settings/auto-approve') };
     return cap;
   });
 

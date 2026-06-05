@@ -135,7 +135,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { companion: false, connectorsCloudOnly: false },
+  FEATURES: { companion: false, connectors: false },
 }));
 
 jest.mock('@/src/features/cloud-bridge', () => {

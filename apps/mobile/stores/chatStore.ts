@@ -3,7 +3,7 @@
  * Consumer imports remain unchanged: `import { useChatStore } from '@/stores/chatStore'`
  */
 export type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
-export type { PaywallErrorState } from './chat/chatExecutionStore';
+export type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
 
 export { useChatMessageStore } from './chat/chatMessageStore';
 export { useChatExecutionStore } from './chat/chatExecutionStore';
@@ -15,7 +15,7 @@ import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
-import type { PaywallErrorState } from './chat/chatExecutionStore';
+import type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 /** Combined state shape — mirrors the original useChatStore state interface. */
@@ -72,6 +72,7 @@ export interface CombinedChatState {
     content: string,
     model: string,
     attachments?: Attachment[],
+    options?: SendMessageOptions,
   ) => Promise<void>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
