@@ -6,8 +6,8 @@ name: Actions pinned-SHA check
 # (TAURI_SIGNING_PRIVATE_KEY, SUPABASE_SERVICE_ROLE_KEY, APPLE_*, NPM_TOKEN,
 # FLY_API_TOKEN, RAILWAY_TOKEN, …).
 #
-# Allowlist for unpinned uses: actions/*, github/*, microsoft/*, and any
-# `uses: ./...` (reusable workflows in this repo).
+# Allowlist for unpinned uses: only `uses: ./...` reusable workflows in this
+# repo. External actions, including GitHub-owned actions, must use a full SHA.
 
 on:
   pull_request:
@@ -25,20 +25,19 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - name: Scan for unpinned third-party actions
+      - name: Scan for unpinned external actions
         shell: bash
         run: |
           set -euo pipefail
           # Match `uses: <thing>@<ref>` lines that are NOT in the allowlist.
-          # Allowlist: actions/*, github/*, microsoft/* (first-party-trusted),
-          # `uses: ./...` (in-repo reusable workflows).
+          # Allowlist: `uses: ./...` in-repo reusable workflows only.
           # Required form for everything else: @<40-hex-char SHA>.
           unpinned=$(
             grep -rEn '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[^[:space:]]+@[^[:space:]]+' \
               .github/workflows \
-              | grep -vE 'uses:[[:space:]]+(\./|actions/|github/|microsoft/)' \
+              | grep -vE 'uses:[[:space:]]+\./' \
               | grep -vE '@[0-9a-f]{40}([[:space:]]|$|#)' \
               || true
           )
