@@ -76,6 +76,12 @@ const config = {
         'AGI Workforce uses Face ID to securely unlock the app and protect your data.',
       NSCalendarsUsageDescription:
         'AGI Workforce accesses your calendar to help schedule tasks and set reminders through AI agents.',
+      NSCalendarsFullAccessUsageDescription:
+        'AGI Workforce accesses your calendar to read upcoming events only after you enable the Calendar connector.',
+      NSRemindersUsageDescription:
+        'AGI Workforce accesses reminders only after you enable the Calendar connector.',
+      NSRemindersFullAccessUsageDescription:
+        'AGI Workforce accesses reminders only after you enable the Calendar connector.',
       NSContactsUsageDescription:
         'AGI Workforce accesses your contacts to help compose messages and manage communications through AI.',
       NSHealthShareUsageDescription:

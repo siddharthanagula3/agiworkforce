@@ -79,7 +79,7 @@ describe('mobile local conversation forks', () => {
     jest.clearAllMocks();
   });
 
-  it('creates only a local copy fork and does not create a BYOK handoff payload', async () => {
+  it('creates only a local copy fork and does not create a legacy remote handoff payload', async () => {
     const forkId = await useChatStore.getState().forkConversation('local-conv', {
       title: 'Local copy',
       model: 'llama-local',
@@ -88,9 +88,9 @@ describe('mobile local conversation forks', () => {
     const forkMessages = useChatStore.getState().messages[forkId] ?? [];
     expect(forkMessages).toHaveLength(2);
     expect(forkMessages[0]?.content).toBe('Local-only prompt');
-    expect(forkMessages.some((message) => message.metadata?.kind === 'local_to_byok_handoff')).toBe(
-      false,
-    );
+    expect(
+      forkMessages.some((message) => String(message.metadata?.kind ?? '').includes('handoff')),
+    ).toBe(false);
     expect(useChatStore.getState().messages['local-conv']).toHaveLength(2);
   });
 

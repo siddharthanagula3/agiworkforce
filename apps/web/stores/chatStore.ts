@@ -117,6 +117,7 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
   model?: string | null;
+  projectId?: string | null;
   messageCount?: number;
   isTemporary?: boolean;
 }

@@ -3,7 +3,7 @@
  *
  * Active/selectable rows come from @agiworkforce/local-llm. Cloud provider
  * models are included only as locked visual context; this service never fetches
- * `/api/models` and never enables BYOK or managed-cloud sends.
+ * `/api/models` and never enables managed-cloud sends.
  */
 
 import {
@@ -36,6 +36,7 @@ export interface ModelDef {
   description?: string;
   lockReason?: string;
   fileSizeBytes?: number;
+  executorchPreset?: OnDeviceModel['executorchPreset'];
   license?: string;
   isNew?: boolean;
 }
@@ -56,7 +57,7 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-export const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only. Mobile BYOK is not available.';
+export const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only on Mobile.';
 
 /**
  * Static model descriptions shown as a subtitle in the picker.
@@ -119,12 +120,10 @@ const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
 };
 
 /**
- * System-runtime-only models (Apple Foundation Models, Gemini Nano AICore)
- * ship a stub native impl in v1 that always returns "not available".
- * They are preserved in the catalog (shipsInV1:true) for future activation,
- * but must NOT appear as selectable rows in the picker until the native impl
- * is functional. Filter them out here rather than changing the catalog so
- * catalog.test.ts and the integrity guard remain unaffected.
+ * The catalog includes future local models before all native packages are
+ * shippable on Mobile. The picker only shows rows that can actually be used:
+ * system-runtime rows when their runtime is active, or downloadable rows with
+ * an ExecuTorch preset.
  */
 const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
 
@@ -132,12 +131,17 @@ function isSystemRuntimeOnly(model: OnDeviceModel): boolean {
   return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
 }
 
+function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {
+  if (isSystemRuntimeOnly(model)) return false;
+  if (model.fileSizeBytes <= 0) return true;
+  return Boolean(model.executorchPreset);
+}
+
 function safeGetShippableModels(): OnDeviceModel[] {
   try {
     if (typeof getCatalogShippableModels === 'function') {
       const models = getCatalogShippableModels();
-      // Filter out system-runtime-only models (stubbed native impls in v1).
-      const selectable = models.filter((m) => !isSystemRuntimeOnly(m));
+      const selectable = models.filter(isSelectableLocalCatalogModel);
       if (Array.isArray(selectable) && selectable.length > 0) return selectable;
     }
   } catch {
@@ -274,6 +278,7 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
     detailLabel: detailForLocalModel(model),
     description: MODEL_DESCRIPTIONS[model.id],
     fileSizeBytes: model.fileSizeBytes,
+    executorchPreset: model.executorchPreset,
     license: model.license,
   };
 }

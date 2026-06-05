@@ -130,7 +130,7 @@ Act 2023 (India) Section 5 Notice requirement.
 - Settings → Privacy (or the first-run disclosure modal, if reachable
   from settings).
 - The privacy screen should show: data controller identity ("AGI
-  Automation LLC, Delaware, USA"), DPDP Act 2023 disclosure, purpose
+  Automation LLC, USA"), DPDP Act 2023 disclosure, purpose
   of data processing, and rights (access, erasure, grievance).
 - The "Export my data" button and "Delete my account" button visible
   (or their entry points).

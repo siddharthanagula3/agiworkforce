@@ -9,7 +9,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
  * /forgot-password was a custom form that previously POSTed to a
  * Supabase-era /api/auth/forgot-password route (now absent). The project
  * migrated to Clerk, whose <SignIn routing="hash"> component at /login
- * includes the complete forgot-password flow (email → code → new password).
+ * includes the complete forgot-password flow (email, code, new password).
  *
  * Splitting the flow across two pages (initiate here, enter code at /login)
  * is unreliable because <SignIn> cannot resume an externally-initiated reset.

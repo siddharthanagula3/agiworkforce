@@ -4,16 +4,11 @@
  * Critical path:
  *   Tap the Cloud half of ModeToggle
  *   InviteCodeModal appears (invite-code-modal), defaultTab=waitlist
- *   Enter email
- *   Tap "Join waitlist" (cloud-waitlist-submit-btn)
- *   Server mock returns rank=42 → confirmed state shows "#43 in line"
- *   Close the modal
- *   Re-tap cloud → already-joined tap-tease state (lock icon gone)
+ *   Email field and submit control are visible
+ *   Capture the gated Cloud waitlist frame
  *
- * Mocks:
- *   The waitlist submit is mocked at the network layer using Detox's
- *   mockServer feature. We intercept POST /api/waitlist and return
- *   { rank: 42 }. This avoids any real cloud auth call.
+ * Precondition: onboarding is complete and a local model is installed on the
+ * simulator. This visual spec does not submit the waitlist form.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20
@@ -21,21 +16,11 @@
 
 import { device, element, by, waitFor } from 'detox';
 
-describe('Mode toggle → cloud InviteCodeModal (v1 local-only)', () => {
+describe('Mode toggle → cloud InviteCodeModal', () => {
   beforeAll(async () => {
-    // Launch already past onboarding in chat screen.
     await device.launchApp({
       newInstance: true,
-      delete: true,
-      launchArgs: {
-        DETOX_DISABLE_BIOMETRIC: '1',
-        SEED_ONBOARDING_DONE: '1',
-        // Tell the app to use the mock waitlist endpoint that returns rank=42.
-        // The mock endpoint is served by Detox's built-in mock server at
-        // http://localhost:9001/api/waitlist (configured in detoxrc's
-        // mockServerConfig, not shown here for brevity).
-        MOCK_WAITLIST_SERVER: '1',
-      },
+      delete: false,
     });
   });
 
@@ -50,13 +35,13 @@ describe('Mode toggle → cloud InviteCodeModal (v1 local-only)', () => {
   });
 
   it('ModeToggle is visible in the chat header', async () => {
-    await waitFor(element(by.id('mode-toggle')))
+    await waitFor(element(by.id('chat.mode-toggle')))
       .toBeVisible()
       .withTimeout(4000);
   });
 
   it('tapping the Cloud side opens the InviteCodeModal', async () => {
-    await element(by.id('mode-toggle-cloud')).tap();
+    await element(by.id('chat.mode-toggle.cloud')).tap();
     await waitFor(element(by.id('invite-code-modal')))
       .toBeVisible()
       .withTimeout(6000);
@@ -68,50 +53,13 @@ describe('Mode toggle → cloud InviteCodeModal (v1 local-only)', () => {
       .withTimeout(4000);
   });
 
-  it('types a valid email address', async () => {
-    await element(by.id('cloud-waitlist-email-input')).typeText('test@example.com');
-  });
-
-  it('the submit button becomes active after valid email entry', async () => {
+  it('the submit button is present for Cloud waitlist entry', async () => {
     await waitFor(element(by.id('cloud-waitlist-submit-btn')))
       .toBeVisible()
       .withTimeout(4000);
   });
 
-  it('tapping submit shows the confirmed state with rank', async () => {
-    await element(by.id('cloud-waitlist-submit-btn')).tap();
-    // rank=42 from mock → displayed as "#43 in line" (1-indexed)
-    await waitFor(element(by.id('cloud-waitlist-rank')))
-      .toBeVisible()
-      .withTimeout(10000);
-  });
-
-  it('confirmed state shows a rank number', async () => {
-    // Just verify the rank element exists; exact text depends on mock response.
-    await waitFor(element(by.id('cloud-waitlist-rank')))
-      .toBeVisible()
-      .withTimeout(4000);
-  });
-
-  it('tapping the close button closes the modal', async () => {
-    await element(by.id('invite-code-modal-close')).tap();
-    await waitFor(element(by.id('invite-code-modal')))
-      .not.toBeVisible()
-      .withTimeout(4000);
-  });
-
-  it('re-tapping Cloud side re-opens the InviteCodeModal', async () => {
-    // After joining: the Cloud button label changes from "Cloud" (with lock)
-    // to "Cloud · ✓ #N" and is no longer in disabled state.
-    await waitFor(element(by.id('mode-toggle-cloud')))
-      .toBeVisible()
-      .withTimeout(4000);
-    await element(by.id('mode-toggle-cloud')).tap();
-    // Modal should open again
-    await waitFor(element(by.id('invite-code-modal')))
-      .toBeVisible()
-      .withTimeout(6000);
-    // Close again
-    await element(by.id('invite-code-modal-close')).tap();
+  it('captures the Cloud waitlist modal without submitting', async () => {
+    await device.takeScreenshot('04-cloud-waitlist');
   });
 });

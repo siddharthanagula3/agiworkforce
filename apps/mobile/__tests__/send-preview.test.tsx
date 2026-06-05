@@ -39,7 +39,6 @@ jest.mock('lucide-react-native', () => {
     ChevronUp: factory('chevron-up'),
     Cloud: factory('cloud'),
     HardDrive: factory('hard-drive'),
-    KeyRound: factory('key-round'),
     Lock: factory('lock'),
   };
 });
@@ -63,18 +62,19 @@ describe('Mobile SendPreview', () => {
     expect(queryByTestId('icon-hard-drive')).toBeTruthy();
   });
 
-  it('renders BYOK destination + key icon', () => {
+  it('maps legacy direct-provider preview to Cloud invite on Mobile', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
     });
-    const { getByText, queryAllByText, queryByTestId } = render(
+    const { getByText, getAllByText, queryByText, queryByTestId } = render(
       <SendPreview presentation={presentation} />,
     );
-    expect(getByText('Sent to api.anthropic.com')).toBeTruthy();
-    // 'BYOK' may appear in both the privacy chip and the default model-label fallback
-    expect(queryAllByText('BYOK').length).toBeGreaterThanOrEqual(1);
-    expect(queryByTestId('icon-key-round')).toBeTruthy();
+    expect(getByText('Cloud invite required')).toBeTruthy();
+    expect(getAllByText('Cloud').length).toBeGreaterThan(0);
+    expect(getByText(/Cloud access is invite-gated on Mobile/i)).toBeTruthy();
+    expect(queryByText(/byok/i)).toBeNull();
+    expect(queryByTestId('icon-cloud')).toBeTruthy();
   });
 
   it('renders Managed gateway + cloud icon for ManagedNative', () => {

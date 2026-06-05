@@ -20,7 +20,6 @@ import {
   CreditCard,
   Keyboard,
   Globe,
-  Loader2,
 } from 'lucide-react';
 import { useClerk } from '@clerk/nextjs';
 import { cn } from '@shared/lib/utils';
@@ -41,7 +40,8 @@ import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { useDirectoryStore } from '@features/chat/stores/directory-store';
 import { ConversationListItem } from './ConversationListItem';
 import { GlobalSearchDialog } from '@features/chat/components/dialogs/GlobalSearchDialog';
-import { getAuthToken } from '@shared/lib/get-auth-token';
+import { KeyboardShortcutsDialog } from '@features/chat/components/dialogs/KeyboardShortcutsDialog';
+import type { KeyboardShortcut } from '@features/chat/hooks/use-keyboard-shortcuts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -63,7 +63,7 @@ export interface ChatSidebarProps {
   activeSessionId?: string;
   onNewChat: () => void;
   onSelectSession: (id: string) => void;
-  onDeleteSession: (sessionId: string) => void;
+  onDeleteSession: (sessionId: string) => void | Promise<boolean | void>;
   onRenameSession: (sessionId: string, title: string) => void;
   onToggleSidebar?: () => void;
   collapsed?: boolean;
@@ -74,7 +74,7 @@ export interface ChatSidebarProps {
   onShareSession?: (sessionId: string) => void;
   onDuplicateSession?: (sessionId: string) => void;
   /** Move a session to a project. Called with (sessionId, projectId). */
-  onMoveToProjectSession?: (sessionId: string, projectId: string) => void;
+  onMoveToProjectSession?: (sessionId: string, projectId: string) => void | Promise<boolean | void>;
   /** Opens the Cloud Managed waitlist modal from upgrade affordances. */
   onUpgradeRequest?: () => void;
 }
@@ -145,14 +145,14 @@ const SessionItem = React.memo(function SessionItem({
   session: SessionLike;
   isActive: boolean;
   onSelect: (id: string) => void;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => void | Promise<boolean | void>;
   onRename: (id: string, title: string) => void;
   onPin?: (id: string) => void;
   onStar?: (id: string) => void;
   onArchive?: (id: string) => void;
   onShare?: (id: string) => void;
   onDuplicate?: (id: string) => void;
-  onMoveToProject?: (id: string, projectId: string) => void;
+  onMoveToProject?: (id: string, projectId: string) => void | Promise<boolean | void>;
   bulkMode?: boolean;
   isChecked?: boolean;
   onToggleCheck?: (id: string) => void;
@@ -258,8 +258,10 @@ const SessionItem = React.memo(function SessionItem({
 
 const UserProfileArea = React.memo(function UserProfileArea({
   onUpgradeRequest,
+  onOpenKeyboardShortcuts,
 }: {
   onUpgradeRequest?: () => void;
+  onOpenKeyboardShortcuts: () => void;
 }) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
@@ -337,7 +339,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
               <ChevronRight className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="w-40">
-              <DropdownMenuItem>English</DropdownMenuItem>
+              <DropdownMenuItem disabled>English</DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuItem onClick={() => router.push('/help')}>
@@ -345,7 +347,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
             Get help
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onUpgradeRequest}>
+          <DropdownMenuItem onClick={onUpgradeRequest} disabled={!onUpgradeRequest}>
             <CreditCard className="mr-2 h-4 w-4" />
             Upgrade
           </DropdownMenuItem>
@@ -353,11 +355,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
             <Download className="mr-2 h-4 w-4" />
             Get apps and extensions
           </DropdownMenuItem>
-          <DropdownMenuItem
-            onClick={() => {
-              /* keyboard shortcuts — show hint inline */
-            }}
-          >
+          <DropdownMenuItem onClick={onOpenKeyboardShortcuts}>
             <Keyboard className="mr-2 h-4 w-4" />
             Keyboard shortcuts
             <span className="ml-auto text-[10px] text-muted-foreground">?</span>
@@ -462,18 +460,20 @@ function CollapsedSidebar({
       <div className="flex-1" />
 
       <button
+        onClick={() => router.push('/download')}
         className={cn(RAIL_BTN, 'relative')}
         title="Get apps and extensions"
-        aria-label="Get apps"
+        aria-label="Get apps and extensions"
       >
         <Download className="h-[18px] w-[18px]" />
         <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-blue-500" />
       </button>
 
       <button
+        onClick={() => router.push('/settings/general')}
         className="flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-semibold bg-[var(--chat-accent-primary)] text-white"
-        title={user?.name ?? 'Account'}
-        aria-label="Account menu"
+        title={user?.name ? `${user.name} settings` : 'Account settings'}
+        aria-label="Account settings"
       >
         {initials}
       </button>
@@ -532,15 +532,11 @@ function ChatSidebarContent({
 }: ChatSidebarProps) {
   const router = useRouter();
   const openDirectory = useDirectoryStore((s) => s.setOpen);
-  const [searchQuery, setSearchQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchDialogOpen, setSearchDialogOpen] = useState(false);
-
-  // Server-side search state
-  const [apiSearchResults, setApiSearchResults] = useState<SessionLike[] | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [keyboardShortcutsOpen, setKeyboardShortcutsOpen] = useState(false);
 
   const exitBulkMode = useCallback(() => {
     setBulkMode(false);
@@ -567,105 +563,86 @@ function ChatSidebarContent({
     [selectedIds.size],
   );
 
-  const handleBulkDelete = useCallback(() => {
-    for (const id of selectedIds) {
-      onDeleteSession(id);
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedIds.size === 0 || isBulkDeleting) return;
+    setIsBulkDeleting(true);
+    try {
+      for (const id of Array.from(selectedIds)) {
+        await onDeleteSession(id);
+      }
+      exitBulkMode();
+    } finally {
+      setIsBulkDeleting(false);
     }
-    exitBulkMode();
-  }, [selectedIds, onDeleteSession, exitBulkMode]);
+  }, [exitBulkMode, isBulkDeleting, onDeleteSession, selectedIds]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (bulkMode) exitBulkMode();
-        else setSearchQuery('');
       }
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [bulkMode, exitBulkMode]);
 
-  // Debounced server-side search: fires 300ms after the user stops typing
-  useEffect(() => {
-    if (searchTimeoutRef.current) {
-      clearTimeout(searchTimeoutRef.current);
+  const keyboardShortcuts = useMemo<KeyboardShortcut[]>(() => {
+    const shortcuts: KeyboardShortcut[] = [
+      {
+        key: 'K',
+        ctrl: true,
+        meta: true,
+        action: () => setSearchDialogOpen(true),
+        description: 'Open search',
+        category: 'navigation',
+      },
+      {
+        key: '/',
+        ctrl: true,
+        meta: true,
+        action: () => setKeyboardShortcutsOpen(true),
+        description: 'Show keyboard shortcuts',
+        category: 'ui',
+      },
+      {
+        key: 'N',
+        ctrl: true,
+        meta: true,
+        action: onNewChat,
+        description: 'New conversation',
+        category: 'conversation',
+      },
+    ];
+    if (onToggleSidebar) {
+      shortcuts.push({
+        key: 'B',
+        ctrl: true,
+        meta: true,
+        action: onToggleSidebar,
+        description: 'Toggle sidebar',
+        category: 'ui',
+      });
     }
+    return shortcuts;
+  }, [onNewChat, onToggleSidebar]);
 
-    if (!searchQuery.trim()) {
-      setApiSearchResults(null);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-
-    searchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const token = await getAuthToken();
-        const q = searchQuery.slice(0, 200).trim();
-        const params = new URLSearchParams({ q });
-        const res = await fetch(`/api/chat/conversations?${params.toString()}`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (!res.ok) {
-          setApiSearchResults(null);
-          return;
-        }
-        const data = (await res.json()) as {
-          conversations: Array<{
-            id: string;
-            title: string;
-            model?: string | null;
-            created_at: string;
-            updated_at: string;
-          }>;
-        };
-        setApiSearchResults(
-          (data.conversations ?? []).map((c) => ({
-            id: c.id,
-            title: c.title ?? 'Untitled Chat',
-            createdAt: c.created_at,
-            updatedAt: c.updated_at,
-          })),
-        );
-      } catch {
-        setApiSearchResults(null);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-
-    return () => {
-      if (searchTimeoutRef.current) {
-        clearTimeout(searchTimeoutRef.current);
-      }
-    };
-  }, [searchQuery]);
-
-  // Immediate client-side filter (shown while API call is in flight)
-  const clientFilteredSessions = useMemo(() => {
-    if (!searchQuery.trim()) return sessions;
-    const q = searchQuery.toLowerCase();
-    return sessions.filter(
-      (s) =>
-        s.title.toLowerCase().includes(q) || (s.preview && s.preview.toLowerCase().includes(q)),
-    );
-  }, [sessions, searchQuery]);
-
-  // Use API results once available; fall back to client-side filter while loading
-  const filteredSessions = searchQuery.trim()
-    ? (apiSearchResults ?? clientFilteredSessions)
-    : sessions;
-
-  const grouped = useMemo(() => groupSessions(filteredSessions), [filteredSessions]);
+  const grouped = useMemo(() => groupSessions(sessions), [sessions]);
 
   if (collapsed) {
     return (
-      <CollapsedSidebar
-        onNewChat={onNewChat}
-        onToggleSidebar={onToggleSidebar}
-        onOpenSearch={() => setSearchDialogOpen(true)}
-      />
+      <>
+        <CollapsedSidebar
+          onNewChat={onNewChat}
+          onToggleSidebar={onToggleSidebar}
+          onOpenSearch={() => setSearchDialogOpen(true)}
+        />
+        <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
+        <KeyboardShortcutsDialog
+          open={keyboardShortcutsOpen}
+          onOpenChange={setKeyboardShortcutsOpen}
+          shortcuts={keyboardShortcuts}
+        />
+      </>
     );
   }
 
@@ -676,19 +653,27 @@ function ChatSidebarContent({
         <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px]">
           <span className="text-muted-foreground">{selectedIds.size} selected</span>
           <button
-            onClick={() => handleSelectAll(filteredSessions)}
+            type="button"
+            onClick={() => handleSelectAll(sessions)}
             className="ml-1 text-primary hover:underline"
+            disabled={isBulkDeleting}
           >
-            {selectedIds.size === filteredSessions.length ? 'Deselect all' : 'Select all'}
+            {selectedIds.size === sessions.length ? 'Deselect all' : 'Select all'}
           </button>
           <button
-            onClick={handleBulkDelete}
-            disabled={selectedIds.size === 0}
+            type="button"
+            onClick={() => void handleBulkDelete()}
+            disabled={selectedIds.size === 0 || isBulkDeleting}
             className="ml-1 text-destructive hover:underline disabled:opacity-40"
           >
-            Delete
+            {isBulkDeleting ? 'Deleting...' : 'Delete'}
           </button>
-          <button onClick={exitBulkMode} className="ml-auto text-muted-foreground hover:underline">
+          <button
+            type="button"
+            onClick={exitBulkMode}
+            disabled={isBulkDeleting}
+            className="ml-auto text-muted-foreground hover:underline disabled:opacity-40"
+          >
             Cancel
           </button>
         </div>
@@ -782,24 +767,17 @@ function ChatSidebarContent({
 
       {/* Session list */}
       <ScrollArea className="flex-1">
-        {/* Inline loading indicator: shown alongside the client-side fallback list */}
-        {isSearching && searchQuery.trim() && (
-          <div className="flex items-center gap-1.5 px-3 py-1 text-[11px] text-muted-foreground/50">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Searching...
-          </div>
-        )}
-        {filteredSessions.length === 0 ? (
+        {sessions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <MessageSquare className="mb-2 h-7 w-7 text-muted-foreground/25" />
-            <p className="text-sm text-muted-foreground/50">
-              {searchQuery ? 'No matching chats' : 'No conversations yet'}
-            </p>
-            {!searchQuery && (
-              <button onClick={onNewChat} className="mt-2 text-xs text-primary hover:underline">
-                Start a new chat
-              </button>
-            )}
+            <p className="text-sm text-muted-foreground/50">No conversations yet</p>
+            <button
+              type="button"
+              onClick={onNewChat}
+              className="mt-2 text-xs text-primary hover:underline"
+            >
+              Start a new chat
+            </button>
           </div>
         ) : (
           Array.from(grouped.entries()).map(([group, groupSessions]) => (
@@ -835,10 +813,18 @@ function ChatSidebarContent({
       <FreePlanNudge onUpgradeRequest={onUpgradeRequest} />
 
       {/* User profile */}
-      <UserProfileArea onUpgradeRequest={onUpgradeRequest} />
+      <UserProfileArea
+        onUpgradeRequest={onUpgradeRequest}
+        onOpenKeyboardShortcuts={() => setKeyboardShortcutsOpen(true)}
+      />
 
       {/* Global search dialog */}
       <GlobalSearchDialog open={searchDialogOpen} onOpenChange={setSearchDialogOpen} />
+      <KeyboardShortcutsDialog
+        open={keyboardShortcutsOpen}
+        onOpenChange={setKeyboardShortcutsOpen}
+        shortcuts={keyboardShortcuts}
+      />
     </div>
   );
 }

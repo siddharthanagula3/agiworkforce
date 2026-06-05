@@ -1,13 +1,36 @@
 'use client';
 
+import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { useState } from 'react';
 import { Button } from '@/components/ui';
 
+function getErrorMessage(data: { error?: unknown } | null): string {
+  const error = data?.error;
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return 'Request failed';
+}
+
 export function VerifyDeviceClient({ code }: { code: string }) {
+  const { isLoaded, isSignedIn } = useAuth();
   const [loading, setLoading] = useState<'approve' | 'deny' | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const signInHref = `/login?redirectTo=${encodeURIComponent(`/verify?code=${encodeURIComponent(code)}`)}`;
 
   const submit = async (action: 'approve' | 'deny') => {
+    if (!isLoaded) return;
+    if (!isSignedIn) {
+      setMessage({
+        type: 'error',
+        text: 'Sign in before approving or denying this device request.',
+      });
+      return;
+    }
+
     setLoading(action);
     setMessage(null);
 
@@ -35,8 +58,7 @@ export function VerifyDeviceClient({ code }: { code: string }) {
       } | null;
 
       if (!res.ok) {
-        const errMsg = data?.error?.message || 'Request failed';
-        throw new Error(errMsg);
+        throw new Error(getErrorMessage(data));
       }
 
       if (action === 'approve') {
@@ -57,15 +79,40 @@ export function VerifyDeviceClient({ code }: { code: string }) {
     }
   };
 
+  if (isLoaded && !isSignedIn) {
+    return (
+      <div className="mt-5 space-y-3">
+        <div
+          role="alert"
+          style={{
+            border: '1px solid var(--agi-rule)',
+            borderRadius: 8,
+            color: 'var(--agi-error)',
+            padding: '12px 14px',
+            fontSize: 14,
+          }}
+        >
+          Sign in before approving or denying this device request.
+        </div>
+        <Link href={signInHref} className="agi-cta-primary" style={{ display: 'block' }}>
+          Sign in to continue
+        </Link>
+      </div>
+    );
+  }
+
   return (
     <div className="mt-5 space-y-3">
       {message ? (
         <div
-          className={`rounded-lg border px-4 py-3 text-sm ${
-            message.type === 'success'
-              ? 'border-emerald-700/40 bg-emerald-950/30 text-emerald-200'
-              : 'border-red-700/40 bg-red-950/30 text-red-200'
-          }`}
+          role={message.type === 'error' ? 'alert' : 'status'}
+          style={{
+            border: '1px solid var(--agi-rule)',
+            borderRadius: 8,
+            color: message.type === 'success' ? 'var(--agi-success)' : 'var(--agi-error)',
+            padding: '12px 14px',
+            fontSize: 14,
+          }}
         >
           {message.text}
         </div>
@@ -74,19 +121,14 @@ export function VerifyDeviceClient({ code }: { code: string }) {
       <div className="grid grid-cols-2 gap-3">
         <Button
           onClick={() => submit('deny')}
-          disabled={loading !== null}
+          disabled={!isLoaded || loading !== null}
           variant="outline"
-          className="border-zinc-700 text-zinc-200 hover:bg-zinc-900"
         >
-          {loading === 'deny' ? 'Denying…' : 'Deny'}
+          {!isLoaded ? 'Checking...' : loading === 'deny' ? 'Denying...' : 'Deny'}
         </Button>
 
-        <Button
-          onClick={() => submit('approve')}
-          disabled={loading !== null}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          {loading === 'approve' ? 'Approving…' : 'Approve'}
+        <Button onClick={() => submit('approve')} disabled={!isLoaded || loading !== null}>
+          {!isLoaded ? 'Checking...' : loading === 'approve' ? 'Approving...' : 'Approve'}
         </Button>
       </div>
     </div>

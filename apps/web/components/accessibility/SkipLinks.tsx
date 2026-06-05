@@ -15,10 +15,7 @@ interface SkipLinksProps {
   links?: SkipLink[];
 }
 
-const defaultLinks: SkipLink[] = [
-  { href: '#main-content', label: 'Skip to main content' },
-  { href: '#main-navigation', label: 'Skip to navigation' },
-];
+const defaultLinks: SkipLink[] = [{ href: '#main-content', label: 'Skip to main content' }];
 
 export function SkipLinks({ links = defaultLinks }: SkipLinksProps) {
   return (

@@ -14,6 +14,7 @@ const configDir = path.dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = path.resolve(configDir, '../..');
 
 const nextConfig: NextConfig = {
+  devIndicators: false,
   // Turbopack config (Next.js 16+ default bundler)
   turbopack: {
     root: workspaceRoot,

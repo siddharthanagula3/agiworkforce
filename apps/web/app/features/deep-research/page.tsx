@@ -12,7 +12,7 @@ import { LAUNCH } from '../../../lib/marketing-constants';
 export const metadata: Metadata = {
   title: 'AGI Deep Research - Cited reports across web, files, and connectors',
   description:
-    'AGI Deep Research plans, searches, reads, cites, and produces structured reports using web, files, projects, and connected data sources.',
+    'AGI Deep Research combines planning, source collection, citations, and structured reports across web, files, projects, and connected data sources.',
   alternates: { canonical: 'https://agiworkforce.com/features/deep-research' },
 };
 
@@ -24,7 +24,7 @@ export default function DeepResearchPage() {
         <CampaignHero
           eyebrow={`${LAUNCH.publicLabel} · Deep research`}
           title="Research that shows its sources and keeps the output editable."
-          lede="ChatGPT and Claude both make research a core workflow. AGI needs the same expectation: multi-step plans, web search, connector search, source panels, citations, and report artifacts across whichever model the user chooses."
+          lede="ChatGPT and Claude made research a core workflow. AGI brings the same workflow expectation to multi-step plans, web search, connector search, source panels, citations, and report artifacts across selected model routes."
           primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondaryCta={{ href: '/features/artifacts', label: 'Report artifacts' }}
           chips={['Planning', 'Web search', 'Connectors', 'Citations', 'Report artifacts']}
@@ -39,7 +39,7 @@ export default function DeepResearchPage() {
 
         <FeatureGrid
           eyebrow="Research workflow"
-          title="The page should sell the whole research loop."
+          title="One workspace for the whole research loop."
           items={[
             {
               meta: 'Current info',
@@ -71,14 +71,14 @@ export default function DeepResearchPage() {
             {
               meta: 'Controls',
               title: 'Stop, resume, and notify',
-              body: 'Long research needs cancel, background completion, notifications, and preserved partial results.',
+              body: 'Long research runs include cancel, background completion, notifications, and preserved partial results.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Ad promise"
-          title="How to frame research in campaigns."
+          eyebrow="Research promise"
+          title="A practical research workflow for daily work."
           rows={[
             {
               k: 'Audience',
@@ -86,22 +86,22 @@ export default function DeepResearchPage() {
             },
             {
               k: 'Offer',
-              v: 'Research with sources, files, tools, and editable report artifacts across Local, BYOK, and Cloud invite modes.',
+              v: 'Research with sources, files, tools, and editable report artifacts across available Local, BYOK, and Cloud invite routes.',
             },
             {
               k: 'Differentiator',
               v: 'Model choice: use OpenAI, Claude, Gemini, Perplexity, local models, or other providers from one AGI workflow.',
             },
             {
-              k: 'Caution',
-              v: 'Do not imply local-only models can browse the web or access connectors unless those tools are explicitly enabled and routed.',
+              k: 'Boundary',
+              v: 'Local-only models browse or access connectors only when those tools are explicitly enabled and routed.',
             },
           ]}
         />
 
         <LaunchCta
-          title="Deep research is a buying trigger."
-          body="Use this page for ads aimed at strategy, diligence, reports, market maps, and internal knowledge synthesis."
+          title="Deep research is a high-frequency workflow."
+          body="Strategy, diligence, reports, market maps, and internal knowledge synthesis all need source-backed answers that remain editable."
           primary={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondary={{ href: '/use-cases/consulting', label: 'Consulting use case' }}
         />

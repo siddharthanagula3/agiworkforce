@@ -16,8 +16,8 @@
   https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api
 
   AGI default install collects NO personal data (Local mode is the
-  default; BYOK mode keys live in Keychain; Cloud-mode account
-  creation is opt-in). NSPrivacyCollectedDataTypes is intentionally
+  default; Cloud-mode account creation is opt-in).
+  NSPrivacyCollectedDataTypes is intentionally
   empty. NSPrivacyTracking is false. AGI does not include the
   AdSupport / IDFA APIs.
 -->

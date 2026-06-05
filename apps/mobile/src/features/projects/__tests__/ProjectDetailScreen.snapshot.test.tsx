@@ -50,6 +50,7 @@ jest.mock('lucide-react-native', () => {
     <RN.View testID={`icon-${name}`} {...props} />
   );
   return {
+    Cloud: factory('cloud'),
     Folder: factory('folder'),
     KeyRound: factory('key-round'),
     Lock: factory('lock'),

@@ -7,7 +7,6 @@ import {
   Image as ImageIcon,
   Globe,
   Sparkles,
-  BookOpen,
   Wand2,
   ChevronRight,
   Check,
@@ -119,7 +118,7 @@ const STYLE_OPTIONS: StyleOption[] = [
   { id: 'explanatory', label: 'Explanatory', description: 'Detailed with examples' },
 ];
 
-/** Toggle row used in + menu for Research and Web search. */
+/** Toggle row used in the + menu for connected send options. */
 function MenuToggleRow({
   icon: Icon,
   label,
@@ -171,6 +170,7 @@ const ChatComposerNewComponent = ({
   freeTrial,
 }: ChatComposerProps) => {
   const [message, setMessage] = useState('');
+  const [localNotice, setLocalNotice] = useState<string | null>(null);
   const {
     attachments,
     previews,
@@ -178,9 +178,7 @@ const ChatComposerNewComponent = ({
     removeFile,
     clearAll: clearAttachments,
   } = useAttachments({
-    onError: (_msg) => {
-      // Validation errors are surfaced by the useAttachments hook via its return value.
-    },
+    onError: (message) => setLocalNotice(message),
   });
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const [showMentions, setShowMentions] = useState(false);
@@ -200,12 +198,10 @@ const ChatComposerNewComponent = ({
   const agentMode: ChatMode = initialAgentMode;
   const selectedFolderId: string | null = null;
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [researchEnabled, setResearchEnabled] = useState(false);
   const [styleMode, setStyleMode] = useState<StyleMode>('normal');
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
-  const [localNotice, setLocalNotice] = useState<string | null>(null);
   const isFreeAutoEconomyTrial = freeTrial?.enabled ?? false;
   const trialPromptLimit = freeTrial?.promptLimit ?? 3;
   const trialPromptsRemaining = getAutoEconomyTrialRemaining(
@@ -313,7 +309,6 @@ const ChatComposerNewComponent = ({
     setSelectedSkill(null);
     setSkillBody(null);
     setWebSearchEnabled(false);
-    setResearchEnabled(false);
     setStyleMode('normal');
     setShowStyleSubmenu(false);
     setActiveTags([]);
@@ -330,7 +325,6 @@ const ChatComposerNewComponent = ({
     setSelectedSkill(null);
     setSkillBody(null);
     setWebSearchEnabled(false);
-    setResearchEnabled(false);
     setStyleMode('normal');
     setShowOverflowMenu(false);
     setShowSkillsSubmenu(false);
@@ -355,14 +349,24 @@ const ChatComposerNewComponent = ({
       return;
     }
     let cancelled = false;
+    const skillName = selectedSkill.name;
     void (async () => {
       try {
-        const res = await fetch(`/api/skills/${encodeURIComponent(selectedSkill.name)}`);
-        if (!res.ok) return;
-        const json = (await res.json()) as { body: string };
-        if (!cancelled) setSkillBody(json.body ?? null);
+        const res = await fetch(`/api/skills/${encodeURIComponent(skillName)}`);
+        if (!res.ok) throw new Error(`Could not load ${skillName}`);
+        const json = (await res.json()) as { body?: unknown };
+        const body = typeof json.body === 'string' && json.body.trim() ? json.body : null;
+        if (!body) throw new Error(`Could not load ${skillName}`);
+        if (!cancelled) {
+          setSkillBody(body);
+          setLocalNotice(null);
+        }
       } catch {
-        // Body injection is best-effort; silently skip on network error.
+        if (!cancelled) {
+          setSkillBody(null);
+          setSelectedSkill(null);
+          setLocalNotice(`Could not load ${skillName} skill instructions. Select the skill again.`);
+        }
       }
     })();
     return () => {
@@ -392,6 +396,7 @@ const ChatComposerNewComponent = ({
         'File upload is available on hosted cloud upgrades. Free web chat accepts text prompts only.',
       );
     } else {
+      setLocalNotice(null);
       addFiles(droppedFiles);
     }
     onDroppedFilesConsumed?.();
@@ -449,19 +454,7 @@ const ChatComposerNewComponent = ({
   }, []);
 
   const handleWebSearchToggle = useCallback(() => {
-    setWebSearchEnabled((prev) => {
-      const next = !prev;
-      if (next) setResearchEnabled(false);
-      return next;
-    });
-  }, []);
-
-  const handleResearchToggle = useCallback(() => {
-    setResearchEnabled((prev) => {
-      const next = !prev;
-      if (next) setWebSearchEnabled(false);
-      return next;
-    });
+    setWebSearchEnabled((prev) => !prev);
   }, []);
 
   const closeMenu = useCallback(() => {
@@ -709,14 +702,14 @@ const ChatComposerNewComponent = ({
         );
         return;
       }
+      setLocalNotice(null);
       addFiles(files);
     },
     [addFiles, isFreeAutoEconomyTrial],
   );
 
   // + button indicator: amber tint when any feature is active
-  const hasOverflowActive =
-    selectedSkill !== null || webSearchEnabled || researchEnabled || styleMode !== 'normal';
+  const hasOverflowActive = selectedSkill !== null || webSearchEnabled || styleMode !== 'normal';
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
@@ -738,7 +731,10 @@ const ChatComposerNewComponent = ({
       )}
 
       {localNotice && (
-        <div className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+        <div
+          role="alert"
+          className="mb-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        >
           {localNotice}
         </div>
       )}
@@ -1050,19 +1046,7 @@ const ChatComposerNewComponent = ({
                     {/* Divider */}
                     <div className="my-1 border-t border-border/30" />
 
-                    {/* 8. Research toggle */}
-                    <MenuToggleRow
-                      icon={BookOpen}
-                      label="Research"
-                      checked={researchEnabled}
-                      onToggle={() => {
-                        handleResearchToggle();
-                        closeMenu();
-                      }}
-                      disabled={isLoading || disabled}
-                    />
-
-                    {/* 9. Web search toggle */}
+                    {/* 8. Web search toggle */}
                     <MenuToggleRow
                       icon={Globe}
                       label="Web search"
@@ -1074,7 +1058,7 @@ const ChatComposerNewComponent = ({
                       disabled={isLoading || disabled}
                     />
 
-                    {/* 10. Use style -- right flyout */}
+                    {/* 9. Use style -- right flyout */}
                     <div className="relative">
                       <button
                         type="button"
@@ -1142,36 +1126,19 @@ const ChatComposerNewComponent = ({
             <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
               <button
                 onClick={handleWebSearchToggle}
-                disabled={isLoading || disabled || researchEnabled}
+                disabled={isLoading || disabled}
                 className={cn(
                   'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                   webSearchEnabled
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled || researchEnabled) && 'cursor-not-allowed opacity-50',
+                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
                 )}
                 aria-label="Toggle web search"
                 aria-pressed={webSearchEnabled}
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Search</span>
-              </button>
-
-              <button
-                onClick={handleResearchToggle}
-                disabled={isLoading || disabled}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  researchEnabled
-                    ? 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/30'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
-                )}
-                aria-label="Toggle research mode"
-                aria-pressed={researchEnabled}
-              >
-                <BookOpen className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Research</span>
               </button>
 
               <button
@@ -1329,8 +1296,8 @@ const ChatComposerNewComponent = ({
  * ChatComposerNew with memoization optimization.
  *
  * + menu matches Claude's structure:
- *   Add files/photos, Skills flyout, Connectors flyout, Research toggle,
- *   Web search toggle, Use style flyout.
+ *   Add files/photos, Skills flyout, Connectors flyout, Web search toggle,
+ *   Use style flyout.
  *
  * Removed from + menu: Focus Mode, Agent Mode, Project Context, Tools group,
  * Browse Directory. State kept with safe defaults so onSend meta is unchanged.

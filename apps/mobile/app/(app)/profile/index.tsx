@@ -162,7 +162,7 @@ export default function ProfileScreen() {
           </Card>
         </Animated.View>
 
-        {/* Upsell card — only shown for free / byok / local-only plans */}
+        {/* Upsell card — only shown for non-cloud-ready plans */}
         {showUpsell && (
           <Animated.View entering={FadeInDown.duration(250).delay(50)}>
             <UpsellCard onUpgradePress={handleUpgradePress} />

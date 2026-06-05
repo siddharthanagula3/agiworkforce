@@ -10,7 +10,7 @@
  */
 
 import { View } from 'react-native';
-import { Folder, KeyRound, Lock, Users } from 'lucide-react-native';
+import { Cloud, Folder, Lock, Users } from 'lucide-react-native';
 import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { colors } from '@/src/ui/theme';
@@ -59,7 +59,9 @@ const ACCENT_TOKENS: Record<ProjectAccentColor, AccentTokens> = {
 };
 
 function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation }) {
-  const Icon = presentation.staysLocal ? Lock : KeyRound;
+  const Icon = presentation.staysLocal ? Lock : Cloud;
+  const privacyLabel =
+    presentation.providerMode === 'DirectByok' ? 'Cloud' : presentation.privacyLabel;
   const tone = presentation.staysLocal
     ? {
         bg: 'rgba(16, 185, 129, 0.12)',
@@ -74,7 +76,7 @@ function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation
   return (
     <View
       testID="project-header-privacy-chip"
-      accessibilityLabel={`Privacy: ${presentation.privacyLabel}`}
+      accessibilityLabel={`Privacy: ${privacyLabel}`}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
@@ -88,9 +90,7 @@ function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation
       }}
     >
       <Icon size={11} color={tone.fg} />
-      <Text style={{ fontSize: 11, fontWeight: '500', color: tone.fg }}>
-        {presentation.privacyLabel}
-      </Text>
+      <Text style={{ fontSize: 11, fontWeight: '500', color: tone.fg }}>{privacyLabel}</Text>
     </View>
   );
 }
@@ -98,7 +98,7 @@ function PrivacyChip({ presentation }: { presentation: ProjectHeaderPresentation
 function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentation }) {
   let tone: AccentTokens;
   if (presentation.providerMode === 'DirectByok') {
-    tone = ACCENT_TOKENS.amber;
+    tone = ACCENT_TOKENS.sky;
   } else if (
     presentation.providerMode === 'ManagedGateway' ||
     presentation.providerMode === 'ManagedNative'
@@ -121,7 +121,7 @@ function ProviderChip({ presentation }: { presentation: ProjectHeaderPresentatio
       }}
     >
       <Text style={{ fontSize: 11, fontWeight: '500', color: tone.fg }}>
-        {presentation.providerLabel}
+        {presentation.providerMode === 'DirectByok' ? 'Cloud invite' : presentation.providerLabel}
       </Text>
     </View>
   );

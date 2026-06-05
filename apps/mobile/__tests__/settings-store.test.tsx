@@ -4,7 +4,7 @@
  * Covers:
  *   - personalization has all fields with defaults
  *   - setPersonalization updates partial fields
- *   - capabilities has all 4 toggles defaulting to true
+ *   - capabilities default to true
  *   - setCapability toggles individual capabilities
  *   - autoApproveMode defaults to 'ask'
  */
@@ -56,13 +56,15 @@ function resetStore() {
     notificationsEnabled: true,
     voiceEnabled: true,
     backgroundFetchEnabled: true,
-    themeMode: 'dark',
+    themeMode: 'system',
+    accentColor: 'neutral',
     fontPreference: 'default',
     selectedVoiceId: null,
     speechRate: 1.0,
     speechPitch: 1.0,
     selectedPresetId: null,
     ttsProvider: 'system',
+    speechLanguage: 'en',
     autoListenEnabled: true,
     isTemporaryChat: false,
     personalization: {
@@ -80,6 +82,10 @@ function resetStore() {
       imageGen: true,
       memory: true,
       desktopControl: true,
+      artifacts: true,
+      codeExecution: true,
+      voice: true,
+      camera: true,
     },
   });
 }
@@ -175,13 +181,17 @@ describe('settingsStore', () => {
   });
 
   describe('capabilities defaults', () => {
-    it('all 4 capabilities default to true', () => {
+    it('all capabilities default to true', () => {
       const { capabilities } = getState();
 
       expect(capabilities.webSearch).toBe(true);
       expect(capabilities.imageGen).toBe(true);
       expect(capabilities.memory).toBe(true);
       expect(capabilities.desktopControl).toBe(true);
+      expect(capabilities.artifacts).toBe(true);
+      expect(capabilities.codeExecution).toBe(true);
+      expect(capabilities.voice).toBe(true);
+      expect(capabilities.camera).toBe(true);
     });
   });
 
@@ -244,8 +254,17 @@ describe('settingsStore', () => {
       expect(getState().hapticsEnabled).toBe(true);
     });
 
-    it('themeMode defaults to dark', () => {
-      expect(getState().themeMode).toBe('dark');
+    it('themeMode defaults to system', () => {
+      expect(getState().themeMode).toBe('system');
+    });
+
+    it('accentColor defaults to neutral', () => {
+      expect(getState().accentColor).toBe('neutral');
+    });
+
+    it('setAccentColor changes the accent', () => {
+      getState().setAccentColor('green');
+      expect(getState().accentColor).toBe('green');
     });
 
     it('isTemporaryChat defaults to false', () => {

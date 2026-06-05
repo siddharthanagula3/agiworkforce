@@ -2,7 +2,7 @@
 
 Status: Current
 Owner role: Mobile lead
-Last updated: 2026-05-21
+Last updated: 2026-06-05
 Kind: app
 Criticality: high
 
@@ -16,7 +16,7 @@ Authoritative specs (read these before non-trivial changes):
 - Root `/AGI_WORKFORCE.md` — product SSOT
 - `/docs/current/product-suite.md` — product thesis, surfaces, trust modes, and sync boundary
 - `/docs/current/technical-architecture.md` — cross-surface architecture and generated-file strategy
-- `/docs/current/commercial-and-launch.md` — Local/BYOK/Managed launch posture and waitlist gates
+- `/docs/current/commercial-and-launch.md` — Local and Managed Cloud launch posture and waitlist gates
 - `/docs/surfaces/mobile.md` — mobile surface deep-dive
 - `/docs/decisions/CURRENT_DECISIONS.md` — latest decision index and mobile-v1 launch clarification
 - `/docs/archive/2026-05-18-exploration-report.md` — 24-teammate verification report
@@ -96,7 +96,7 @@ Capability-routed per device, configured in `lib/models.ts` + `src/features/mode
 | T2   | react-native-executorch       | A15+ / mid-range Android       | Llama 3.2 1B/3B, Phi-3.5 mini |
 | T3   | llama.rn (GGUF, llama.cpp)    | Older devices, manual override | Llama 3.2 1B Q4               |
 
-Mobile v1 does not expose BYOK. It ships small on-device/local LLM routes plus Cloud Managed invite/waitlist. Cloud sends require invite/subscription-backed account state and must stay visually separate from Local.
+Mobile does not expose direct provider-key entry. It ships small on-device/local LLM routes plus Cloud Managed invite/waitlist gates. Cloud sends require invite/subscription-backed account state and must stay visually separate from Local.
 
 ## Stack pins
 

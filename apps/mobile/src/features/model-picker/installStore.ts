@@ -67,8 +67,8 @@ function defaultStatusForModel(
     };
   }
 
-  const catalogModel = getCatalogModelById(model.id);
-  if (!catalogModel?.executorchPreset && model.availability === 'download_required') {
+  const preset = model.executorchPreset ?? getCatalogModelById(model.id)?.executorchPreset;
+  if (!preset && model.availability === 'download_required') {
     return {
       status: 'unavailable',
       progress: 0,
@@ -160,7 +160,7 @@ export const useModelInstallStore = create<ModelInstallState>()((set, get) => ({
     }
 
     const catalogModel = getCatalogModelById(model.id);
-    const preset = catalogModel?.executorchPreset;
+    const preset = model.executorchPreset ?? catalogModel?.executorchPreset;
     if (!preset) {
       const error = 'The native package for this model is not bundled yet.';
       set((state) => ({

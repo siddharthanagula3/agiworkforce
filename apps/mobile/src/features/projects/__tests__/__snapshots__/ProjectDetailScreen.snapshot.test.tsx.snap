@@ -118,7 +118,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       <View
         color="#e4e4e7"
         size={11}
-        testID="icon-key-round"
+        testID="icon-cloud"
       />
       <Text
         style={

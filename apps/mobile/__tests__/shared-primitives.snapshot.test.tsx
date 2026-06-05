@@ -40,7 +40,7 @@ jest.mock('lucide-react-native', () => {
   );
   return {
     Folder: factory('folder'),
-    KeyRound: factory('key-round'),
+    Cloud: factory('cloud'),
     Lock: factory('lock'),
     Users: factory('users'),
   };
@@ -85,7 +85,7 @@ describe('Mobile shared-primitive snapshots', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('locks the RN-native ProjectHeader tree for a BYOK project', () => {
+  it('locks the RN-native ProjectHeader tree for Cloud invite rendering', () => {
     const { toJSON } = render(
       <ProjectHeader
         presentation={buildPresentation({

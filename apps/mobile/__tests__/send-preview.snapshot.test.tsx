@@ -2,7 +2,7 @@
 /**
  * Mobile SendPreview snapshot tests.
  *
- * Locks the RN-native SendPreview rendered tree across Local / BYOK /
+ * Locks the RN-native SendPreview rendered tree across Local / Cloud invite /
  * Managed variants. Mirrors the unified-chat snapshot pattern so any
  * future layout drift fires a diff. Structural visual-verification —
  * not pixel parity.
@@ -45,7 +45,6 @@ jest.mock('lucide-react-native', () => {
     ChevronUp: factory('chevron-up'),
     Cloud: factory('cloud'),
     HardDrive: factory('hard-drive'),
-    KeyRound: factory('key-round'),
     Lock: factory('lock'),
   };
 });
@@ -63,7 +62,7 @@ describe('Mobile SendPreview snapshots', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('locks the BYOK turn rendered tree', () => {
+  it('locks the Cloud invite rendered tree for legacy direct-provider input', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',

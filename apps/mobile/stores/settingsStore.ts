@@ -4,6 +4,7 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import type { AutoApproveMode } from '@/types/chat';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
+export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
 export type TTSProvider = 'system' | 'cloud';
 
@@ -42,6 +43,8 @@ interface SettingsState {
   backgroundFetchEnabled: boolean;
   /** Theme mode: dark, light, or follow system */
   themeMode: ThemeMode;
+  /** Accent color used by selected controls and highlights */
+  accentColor: AccentColor;
   /** Font preference */
   fontPreference: FontPreference;
   /** Selected TTS voice identifier (null = system default) */
@@ -71,6 +74,7 @@ interface SettingsState {
   setVoiceEnabled: (enabled: boolean) => void;
   setBackgroundFetchEnabled: (enabled: boolean) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setAccentColor: (color: AccentColor) => void;
   setFontPreference: (pref: FontPreference) => void;
   // LOW-MOB-1 fix (red-team 2026-05): biometricLockEnabled / setBiometricLockEnabled
   // moved out of this MMKV-backed store and into lib/biometricFlagStore.ts
@@ -96,7 +100,8 @@ export const useSettingsStore = create<SettingsState>()(
       notificationsEnabled: true,
       voiceEnabled: true,
       backgroundFetchEnabled: true,
-      themeMode: 'dark',
+      themeMode: 'system',
+      accentColor: 'neutral',
       fontPreference: 'default',
       selectedVoiceId: null,
       speechRate: 1.0,
@@ -133,6 +138,7 @@ export const useSettingsStore = create<SettingsState>()(
       setVoiceEnabled: (enabled) => set({ voiceEnabled: enabled }),
       setBackgroundFetchEnabled: (enabled) => set({ backgroundFetchEnabled: enabled }),
       setThemeMode: (mode) => set({ themeMode: mode }),
+      setAccentColor: (color) => set({ accentColor: color }),
       setFontPreference: (pref) => set({ fontPreference: pref }),
       setSelectedVoiceId: (voiceId) => set({ selectedVoiceId: voiceId }),
       setSpeechRate: (rate) => set({ speechRate: Math.min(Math.max(rate, 0.5), 2.0) }),

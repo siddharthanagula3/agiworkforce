@@ -13,6 +13,8 @@ interface BiometricGateResult {
 }
 
 export function useBiometricGate(): BiometricGateResult {
+  const visualQaBiometricBypassEnabled =
+    __DEV__ && process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC === '1';
   // LOW-MOB-1 fix (red-team 2026-05): the flag lives in SecureStore, not
   // MMKV — extracting the MMKV encryption key no longer disables the gate.
   // See lib/biometricFlagStore.ts for the rationale.
@@ -35,6 +37,11 @@ export function useBiometricGate(): BiometricGateResult {
       if (!hydrated) {
         setIsUnlocked(false);
         return false;
+      }
+
+      if (visualQaBiometricBypassEnabled) {
+        setIsUnlocked(true);
+        return true;
       }
 
       if (!biometricLockEnabled) {
@@ -105,18 +112,23 @@ export function useBiometricGate(): BiometricGateResult {
       },
     );
     return authenticationPromise;
-  }, [hydrated, biometricLockEnabled]);
+  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled]);
 
   // Prompt after the SecureStore-backed biometric flag has hydrated.
   useEffect(() => {
+    if (visualQaBiometricBypassEnabled) {
+      setIsUnlocked(true);
+      return;
+    }
+
     if (hydrated && biometricLockEnabled && !isUnlocked) {
       void authenticate();
     }
-  }, [hydrated, biometricLockEnabled, isUnlocked, authenticate]);
+  }, [hydrated, biometricLockEnabled, isUnlocked, authenticate, visualQaBiometricBypassEnabled]);
 
   // Re-lock only when returning from background (not from biometric prompt)
   useEffect(() => {
-    if (!hydrated || !biometricLockEnabled) return;
+    if (!hydrated || !biometricLockEnabled || visualQaBiometricBypassEnabled) return;
 
     const handleAppState = (nextState: AppStateStatus) => {
       const prev = previousStateRef.current;
@@ -132,15 +144,15 @@ export function useBiometricGate(): BiometricGateResult {
 
     const subscription = AppState.addEventListener('change', handleAppState);
     return () => subscription.remove();
-  }, [hydrated, biometricLockEnabled, authenticate]);
+  }, [hydrated, biometricLockEnabled, authenticate, visualQaBiometricBypassEnabled]);
 
   // If lock is disabled, always unlocked (only after hydration completes —
   // pre-hydration we treat the gate as engaged for fail-closed safety).
   useEffect(() => {
-    if (hydrated && !biometricLockEnabled) {
+    if (hydrated && (!biometricLockEnabled || visualQaBiometricBypassEnabled)) {
       setIsUnlocked(true);
     }
-  }, [hydrated, biometricLockEnabled]);
+  }, [hydrated, biometricLockEnabled, visualQaBiometricBypassEnabled]);
 
   // AUDIT-FIX: H-10 — surface explicit readiness so _layout can gate its
   // navigator tree on `isReady` rather than racing the SecureStore read.
@@ -154,9 +166,9 @@ export function useBiometricGate(): BiometricGateResult {
   }
 
   return {
-    isUnlocked,
+    isUnlocked: visualQaBiometricBypassEnabled ? true : isUnlocked,
     isReady: true,
-    isLocked: !isUnlocked,
+    isLocked: visualQaBiometricBypassEnabled ? false : !isUnlocked,
     authenticate,
   };
 }

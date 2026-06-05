@@ -2,7 +2,7 @@
 
 **Embargo:** 2026-07-12 00:00 CET
 **Contact:** press@agiworkforce.com  
-**Developer:** AGI Automation LLC (Delaware, USA)  
+**Developer:** AGI Automation LLC (USA)
 **EU Representative:** [to be appointed per Art. 27 GDPR before launch]
 
 ---
@@ -27,7 +27,7 @@ Google's on-device AI (Gemini Nano, accessed via Android AICore) requires:
 
 The result: fewer than 5% of EU Android handsets in active use as of mid-2026 meet all four requirements. A user with a Samsung Galaxy S23, a OnePlus 13, a Pixel 7, any Xiaomi, any Motorola, any Nokia, or virtually any device from 2024 or earlier cannot run Gemini Nano on-device.
 
-AGI Mobile covers all of them. The path: Gemma + LiteRT (Google's own canonical local inference stack, recommended by Google for non-Nano Android devices) as primary, Qwen3-4B as a universal fallback for devices with 4 GB+ RAM. Local mode is on-device where supported and is not silently routed to BYOK or Cloud.
+AGI Mobile covers all of them. The path: Gemma + LiteRT (Google's own canonical local inference stack, recommended by Google for non-Nano Android devices) as primary, Qwen3-4B as a universal fallback for devices with 4 GB+ RAM. Local mode is on-device where supported and is not silently routed to Cloud.
 
 For iOS, Apple Foundation Models work on iPhone 15 Pro and later. AGI falls through to Qwen3-4B via executorch/llama.rn on iPhone 15 (non-Pro), 14 series, and earlier supported hardware.
 
@@ -49,7 +49,7 @@ AGI Mobile v1 is a general-purpose AI system serving consumers. Applicable oblig
 
 ## GDPR posture
 
-- **Mode-specific processing.** Local-mode inference is on-device where supported. BYOK and Cloud use explicit provider labels and the user-selected trust boundary.
+- **Mode-specific processing.** Local-mode inference is on-device where supported. Cloud uses explicit provider labels and the user-selected trust boundary.
 - **Crash telemetry is minimal.** Sentry strips all strings longer than 40 characters before transmission. No conversation content reaches Sentry servers.
 - **No behavioural advertising.** User data is not sold, licensed, or shared with advertising platforms.
 - **Analytics.** PostHog masks all text input. No session replay on AI screens. Telemetry is off by default; users opt in.
@@ -59,7 +59,7 @@ AGI Mobile v1 is a general-purpose AI system serving consumers. Applicable oblig
 
 ## The practical privacy advantage for EU users
 
-Most AI assistants require users to accept one cloud path for every task. AGI Mobile separates Local, BYOK, and Cloud-invite modes so users can choose the route that fits the work. Local-mode chats are not silently moved into BYOK or Cloud.
+Most AI assistants require users to accept one cloud path for every task. AGI Mobile separates Local and Cloud-invite modes so users can choose the route that fits the work. Local-mode chats are not silently moved into Cloud.
 
 ---
 
@@ -92,7 +92,7 @@ The Gemma + LiteRT path is maintained by Google (see developer.android.com/ai/go
 
 ## Boilerplate about AGI Automation LLC
 
-AGI Automation LLC is a Delaware-registered software company building a multi-surface AI agent platform. The platform wraps 10+ AI providers (cloud and local) into a single chat layer across six surfaces: iOS, Android, Desktop (macOS, Windows, Linux), Web, CLI, VS Code extension, and Chrome extension. AGI Mobile launches globally on 2026-07-12.
+AGI Automation LLC is a U.S. software company building a multi-surface AI agent platform. The platform wraps cloud and local AI routes into a single chat layer across six surfaces: iOS, Android, Desktop (macOS, Windows, Linux), Web, CLI, VS Code extension, and Chrome extension. AGI Mobile launches globally on 2026-07-12.
 
 ---
 

@@ -1,0 +1,17 @@
+- generic [active] [ref=e1] [box=0,0,382,844]:
+  - navigation "Skip links" [ref=e3] [box=0,0,187,52]:
+    - list [ref=e4] [box=8,8,171,36]:
+      - listitem [ref=e5] [box=8,8,171,36]
+  - generic [ref=e7] [box=0,0,382,7477]:
+    - main [ref=e9] [box=0,0,382,7477]:
+      - generic [ref=e10] [box=28,0,326,79]
+      - generic [ref=e34] [box=28,79,326,1563]
+      - region "Key proof points" [ref=e76] [box=28,1642,326,538]
+      - generic "cross-provider chat demo" [ref=e94] [box=28,2236,326,418]
+      - generic [ref=e112] [box=28,2751,326,834]
+      - generic [ref=e128] [box=28,3585,326,1302]
+      - generic [ref=e156] [box=28,4887,326,1224]
+      - generic [ref=e185] [box=28,6175,326,301]
+      - generic [ref=e191] [box=28,6636,326,841]
+    - region "Notifications alt+T" [box=0,7477,382,0]
+  - alert [ref=e269] [box=-1,7476,1,1]

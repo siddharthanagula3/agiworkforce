@@ -142,4 +142,45 @@ describe('iframe-sandbox regression (WEB-13)', () => {
 
     expect(offenders).toEqual([]);
   });
+
+  it('does not create executable text/html Blob URLs from web source', () => {
+    const files = walk(WEB_ROOT);
+    const offenders: { file: string; line: number; content: string }[] = [];
+
+    for (const file of files) {
+      if (file.endsWith('eslint.config.mjs')) continue;
+
+      let text: string;
+      try {
+        text = readFileSync(file, 'utf8');
+      } catch {
+        continue;
+      }
+
+      const lines = text.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        const trimmed = line.trim();
+        if (trimmed.startsWith('*') || trimmed.startsWith('//') || trimmed.startsWith('<!--')) {
+          continue;
+        }
+        if (!/new\s+Blob\s*\(/.test(line)) continue;
+
+        const windowText = lines.slice(i, i + 6).join('\n');
+        if (/type\s*:\s*['"]text\/html['"]/.test(windowText)) {
+          offenders.push({ file, line: i + 1, content: line.trim() });
+        }
+      }
+    }
+
+    if (offenders.length > 0) {
+      const msg = offenders.map((o) => `  ${o.file}:${o.line}: ${o.content}`).join('\n');
+      throw new Error(
+        `HTML Blob regression — source creates executable text/html Blob URLs:\n${msg}\n\n` +
+          `Render untrusted HTML in SandboxedIframe and use text/plain for source-view Blob URLs.`,
+      );
+    }
+
+    expect(offenders).toEqual([]);
+  });
 });

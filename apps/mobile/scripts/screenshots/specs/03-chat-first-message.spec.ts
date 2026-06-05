@@ -8,11 +8,8 @@
  *   Wait for response to complete
  *   PerformanceChip shows tok/s + ttft
  *
- * Mocks:
- *   The local model is the on-device stub (llama.rn / executorch).
- *   No real network call is made in v1 local-only mode.
- *   We launch with `onboarding-done` already set so the app opens
- *   directly to chat.
+ * Precondition: onboarding is complete and a local model is installed on the
+ * simulator. The app is launched without undocumented seed arguments.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20
@@ -22,16 +19,9 @@ import { device, element, by, waitFor } from 'detox';
 
 describe('Chat — first message (on-device model)', () => {
   beforeAll(async () => {
-    // Launch with onboarding already completed so we land directly in chat.
     await device.launchApp({
       newInstance: true,
-      delete: true,
-      launchArgs: {
-        DETOX_DISABLE_BIOMETRIC: '1',
-        // Skip onboarding by pre-seeding MMKV keys via launch arg bridge.
-        // The app reads these in its __DEV__ launch-arg bridge (see lib/devSeed.ts).
-        SEED_ONBOARDING_DONE: '1',
-      },
+      delete: false,
     });
   });
 
@@ -68,5 +58,6 @@ describe('Chat — first message (on-device model)', () => {
     await waitFor(element(by.id('performance-chip')))
       .toBeVisible()
       .withTimeout(60000);
+    await device.takeScreenshot('03-first-message');
   });
 });

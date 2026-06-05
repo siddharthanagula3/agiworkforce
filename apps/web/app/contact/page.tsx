@@ -6,7 +6,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export default function ContactPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const [draftOpened, setDraftOpened] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,7 +27,7 @@ export default function ContactPage() {
         `?subject=${encodeURIComponent(subject)}` +
         `&body=${encodeURIComponent(body)}`;
       window.location.href = mailto;
-      setSubmitted(true);
+      setDraftOpened(true);
       form.reset();
     } catch {
       setError('Could not open mail client. Email contact@agiworkforce.com directly.');
@@ -58,10 +58,12 @@ export default function ContactPage() {
           </p>
         </section>
         <section className="agi-section">
-          {submitted ? (
-            <div className="agi-callout">
-              <h2 className="agi-callout-h">Sent.</h2>
-              <p className="agi-callout-p">We&rsquo;ll respond within one business day.</p>
+          {draftOpened ? (
+            <div className="agi-callout" role="status" aria-live="polite">
+              <h2 className="agi-callout-h">Email draft opened.</h2>
+              <p className="agi-callout-p">
+                If your mail client did not open, email contact@agiworkforce.com directly.
+              </p>
             </div>
           ) : (
             <form
@@ -83,6 +85,7 @@ export default function ContactPage() {
                   required
                   name="name"
                   type="text"
+                  autoComplete="name"
                   style={{
                     background: 'var(--agi-bg-2)',
                     border: '1px solid var(--agi-rule)',
@@ -109,6 +112,7 @@ export default function ContactPage() {
                   required
                   name="email"
                   type="email"
+                  autoComplete="email"
                   style={{
                     background: 'var(--agi-bg-2)',
                     border: '1px solid var(--agi-rule)',
@@ -135,6 +139,7 @@ export default function ContactPage() {
                   required
                   name="subject"
                   type="text"
+                  autoComplete="off"
                   style={{
                     background: 'var(--agi-bg-2)',
                     border: '1px solid var(--agi-rule)',
@@ -160,6 +165,7 @@ export default function ContactPage() {
                 <textarea
                   required
                   name="message"
+                  autoComplete="off"
                   rows={6}
                   style={{
                     background: 'var(--agi-bg-2)',
@@ -174,7 +180,9 @@ export default function ContactPage() {
                 />
               </label>
               {error && (
-                <p style={{ color: 'var(--agi-error)', fontSize: 13, margin: 0 }}>{error}</p>
+                <p role="alert" style={{ color: 'var(--agi-error)', fontSize: 13, margin: 0 }}>
+                  {error}
+                </p>
               )}
               <div className="agi-cta-row">
                 <button
@@ -183,7 +191,7 @@ export default function ContactPage() {
                   className="agi-cta-primary"
                   style={{ border: 'none', cursor: 'pointer' }}
                 >
-                  {pending ? 'Sending...' : 'Send'}
+                  {pending ? 'Opening...' : 'Open email draft'}
                 </button>
                 <a href="mailto:contact@agiworkforce.com" className="agi-cta-ghost">
                   Or just email →

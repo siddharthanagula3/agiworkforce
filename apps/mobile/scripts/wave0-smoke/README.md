@@ -84,7 +84,7 @@ After installing the dev client from the build URL:
 Look at the first screen that appears. Verify all of the following:
 
 - [ ] Tagline reads exactly: **"AGI runs on your device."**
-- [ ] Trust chip reads: **"AGI Automation LLC · Delaware, USA"**
+- [ ] Trust chip reads: **"AGI Automation LLC, USA"**
 - [ ] DPDP Act badge / chip is present
 - [ ] "Start chatting" button is visible at the bottom
 

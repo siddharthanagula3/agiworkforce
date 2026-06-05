@@ -20,6 +20,14 @@ const modelFixtureIds = vi.hoisted(() => ({
   secondary: 'test-command-model-secondary',
 }));
 
+const navigationState = vi.hoisted(() => ({
+  pathname: '/',
+}));
+
+const modelStoreMocks = vi.hoisted(() => ({
+  setSelectedModelId: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -28,19 +36,12 @@ const mockPush = vi.fn();
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  usePathname: () => navigationState.pathname,
 }));
 
 const mockSetTheme = vi.fn();
 vi.mock('next-themes', () => ({
   useTheme: () => ({ theme: 'dark', setTheme: mockSetTheme }),
-}));
-
-// UIStore
-vi.mock('@/stores/uiStore', () => ({
-  useUIStore: () => ({
-    simpleMode: false,
-    toggleSimpleMode: vi.fn(),
-  }),
 }));
 
 // ChatStore
@@ -52,7 +53,6 @@ vi.mock('@/stores/chatStore', () => ({
   }),
 }));
 
-// model-store
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
@@ -68,6 +68,16 @@ vi.mock('@/shared/stores/model-store', () => ({
       description: 'Secondary command palette fixture model',
     },
   ],
+  useModelStore: (
+    selector: (state: {
+      selectedModelId: string;
+      setSelectedModelId: typeof modelStoreMocks.setSelectedModelId;
+    }) => unknown,
+  ) =>
+    selector({
+      selectedModelId: modelFixtureIds.primary,
+      setSelectedModelId: modelStoreMocks.setSelectedModelId,
+    }),
 }));
 
 // Radix Dialog — render children directly (no Portal)
@@ -77,6 +87,16 @@ vi.mock('@/components/ui/Dialog', () => ({
   DialogContent: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="dialog-content">{children}</div>
   ),
+  DialogTitle: ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <h2 className={className}>{children}</h2>
+  ),
+  DialogDescription: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => <p className={className}>{children}</p>,
 }));
 
 // ---------------------------------------------------------------------------
@@ -94,6 +114,7 @@ function renderPalette(open = true, onOpenChange = vi.fn()) {
 describe('CommandPalette', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    navigationState.pathname = '/';
   });
 
   // ============================================================
@@ -122,14 +143,24 @@ describe('CommandPalette', () => {
       expect(screen.getByLabelText('Command palette search')).toBeInTheDocument();
     });
 
+    it('renders accessible dialog title and description', () => {
+      renderPalette();
+      expect(screen.getByText('Command palette')).toBeInTheDocument();
+      expect(
+        screen.getByText(
+          'Search commands, navigate the app, change preferences, and switch AI models.',
+        ),
+      ).toBeInTheDocument();
+    });
+
     it('has the correct placeholder', () => {
       renderPalette();
-      expect(screen.getByPlaceholderText('Type a command or search...')).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('Type a command or search…')).toBeInTheDocument();
     });
 
     it('filters commands based on query', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
 
       fireEvent.change(input, { target: { value: 'settings' } });
 
@@ -141,7 +172,7 @@ describe('CommandPalette', () => {
 
     it('shows "No commands found." when query has no match', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
 
       fireEvent.change(input, { target: { value: 'zzzzzzz_impossible' } });
 
@@ -150,7 +181,7 @@ describe('CommandPalette', () => {
 
     it('shows clear button when query is non-empty', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
 
       fireEvent.change(input, { target: { value: 'chat' } });
       expect(screen.getByLabelText('Clear search')).toBeInTheDocument();
@@ -158,7 +189,7 @@ describe('CommandPalette', () => {
 
     it('clicking clear button resets the query', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search...') as HTMLInputElement;
+      const input = screen.getByPlaceholderText('Type a command or search…') as HTMLInputElement;
 
       fireEvent.change(input, { target: { value: 'chat' } });
       expect(input.value).toBe('chat');
@@ -208,9 +239,15 @@ describe('CommandPalette', () => {
       expect(screen.getByText('Go to Settings')).toBeInTheDocument();
     });
 
-    it('renders toggle sidebar command', () => {
+    it('does not render chat sidebar command outside chat routes', () => {
       renderPalette();
-      expect(screen.getByText('Collapse Sidebar')).toBeInTheDocument();
+      expect(screen.queryByText('Collapse Chat Sidebar')).not.toBeInTheDocument();
+    });
+
+    it('renders chat sidebar command on chat routes', () => {
+      navigationState.pathname = '/chat';
+      renderPalette();
+      expect(screen.getByText('Collapse Chat Sidebar')).toBeInTheDocument();
     });
 
     it('renders toggle theme command when theme is dark', () => {
@@ -259,9 +296,10 @@ describe('CommandPalette', () => {
   describe('preferences commands', () => {
     it('calls toggleSidebar when sidebar toggle is clicked', () => {
       const onOpenChange = vi.fn();
+      navigationState.pathname = '/chat';
       renderPalette(true, onOpenChange);
 
-      fireEvent.click(screen.getByText('Collapse Sidebar'));
+      fireEvent.click(screen.getByText('Collapse Chat Sidebar'));
       expect(mockToggleSidebar).toHaveBeenCalled();
     });
 
@@ -298,12 +336,13 @@ describe('CommandPalette', () => {
       fireEvent.click(screen.getByText('Switch AI Model'));
       fireEvent.click(screen.getByText('Fixture Primary Model'));
 
+      expect(modelStoreMocks.setSelectedModelId).toHaveBeenCalledWith(modelFixtureIds.primary);
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
     it('pressing Escape in sub-menu returns to main menu', () => {
       renderPalette();
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
 
       fireEvent.click(screen.getByText('Switch AI Model'));
 
@@ -344,7 +383,7 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
       fireEvent.keyDown(input, { key: 'Escape' });
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
@@ -355,7 +394,7 @@ describe('CommandPalette', () => {
       renderPalette(true, onOpenChange);
 
       // Filter to a single result
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      const input = screen.getByPlaceholderText('Type a command or search…');
       fireEvent.change(input, { target: { value: 'New Chat' } });
 
       fireEvent.keyDown(input, { key: 'Enter' });
@@ -368,12 +407,11 @@ describe('CommandPalette', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
-      // Filter to the two commands in Navigate that contain "Dashboard" and "Chat"
-      const input = screen.getByPlaceholderText('Type a command or search...');
+      // Filter to multiple navigation commands.
+      const input = screen.getByPlaceholderText('Type a command or search…');
       fireEvent.change(input, { target: { value: 'Go to' } });
 
-      // Go to Dashboard is index 0, Go to Chat is index 1
-      // ArrowDown moves to index 1
+      // ArrowDown moves to the second visible result.
       fireEvent.keyDown(input, { key: 'ArrowDown' });
       fireEvent.keyDown(input, { key: 'Enter' });
 

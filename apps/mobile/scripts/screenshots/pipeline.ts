@@ -9,8 +9,8 @@
  * composites the locked tagline overlay.
  *
  * Usage:
- *   pnpm screenshots:ios       — iOS simulator captures (5 classes × 6 = 30)
- *   pnpm screenshots:android   — Android emulator captures (3 classes × 6 = 18)
+ *   pnpm screenshots:ios       — iOS simulator captures (4 classes × 6 = 24)
+ *   pnpm screenshots:android   — Android emulator captures (1 class × 6 = 6)
  *   pnpm screenshots:composite — re-composite existing raw frames only
  *
  * Outputs:
@@ -33,47 +33,42 @@ interface DeviceClass {
 }
 
 const DEVICES: DeviceClass[] = [
-  // iOS — order matches App Store Connect required classes
-  // 6.9" class added for iPhone 16 Pro Max (App Store Connect 2026)
-  { platform: 'ios', className: '6.9', simulator: 'iPhone 16 Pro Max', width: 1320, height: 2868 },
-  { platform: 'ios', className: '6.7', simulator: 'iPhone 17 Pro Max', width: 1290, height: 2796 },
-  { platform: 'ios', className: '6.5', simulator: 'iPhone 15 Pro', width: 1242, height: 2688 },
-  { platform: 'ios', className: '5.5', simulator: 'iPhone 8 Plus', width: 1242, height: 2208 },
+  // Local demo QA matrix. Keep this aligned with installed simulators.
   {
     platform: 'ios',
-    className: '12.9',
-    simulator: 'iPad Pro (12.9-inch) (6th generation)',
+    className: 'iphone-17-pro',
+    simulator: 'iPhone 17 Pro',
+    width: 1206,
+    height: 2622,
+  },
+  {
+    platform: 'ios',
+    className: 'iphone-17-pro-max',
+    simulator: 'iPhone 17 Pro Max',
+    width: 1320,
+    height: 2868,
+  },
+  {
+    platform: 'ios',
+    className: 'ipad-pro-13',
+    simulator: 'iPad Pro 13-inch (M5)',
     width: 2048,
     height: 2732,
   },
   {
     platform: 'ios',
-    className: '11',
-    simulator: 'iPad Pro (11-inch) (4th generation)',
+    className: 'ipad-pro-11',
+    simulator: 'iPad Pro 11-inch (M5)',
     width: 1668,
     height: 2388,
   },
-  // Android — phone + 2 tablets (API 35 AVDs for Play Console 2026)
+  // Android requires the local AVD to exist before running screenshots:android.
   {
     platform: 'android',
     className: 'phone',
-    simulator: 'pixel_8_api_35',
+    simulator: 'pixel_8_api_34',
     width: 1080,
     height: 2400,
-  },
-  {
-    platform: 'android',
-    className: 'tablet-10',
-    simulator: 'pixel_tablet_api_35',
-    width: 1920,
-    height: 1200,
-  },
-  {
-    platform: 'android',
-    className: 'tablet-7',
-    simulator: 'Nexus_7_2013_API_35',
-    width: 1200,
-    height: 1920,
   },
 ];
 
@@ -86,108 +81,52 @@ interface Screenshot {
 }
 
 /**
- * Wave 1 screenshots (v1 BYOK-multi-provider positioning).
- * Retained for historical reference and any future BYOK-mode build.
- * These specs are not run by default in the v1 local-only build.
- */
-const SCREENSHOTS_WAVE1: Screenshot[] = [
-  {
-    id: '01',
-    name: 'multi-provider',
-    spec: '01-multi-provider.spec.ts',
-    heading: 'One conversation. Every model.',
-    subhead: 'Switch between Claude, GPT, Gemini, and 9 more — mid-thread.',
-  },
-  {
-    id: '02',
-    name: 'byok-keys',
-    spec: '02-byok-keys.spec.ts',
-    heading: 'Your keys. Your billing.',
-    subhead: 'Paste once. We never see them. Pay providers direct.',
-  },
-  {
-    id: '03',
-    name: 'cross-provider-continuity',
-    spec: '03-cross-provider.spec.ts',
-    heading: 'Continue with Llama. Or Claude. Or both.',
-    subhead: 'Tool calls, attachments, and context migrate automatically.',
-  },
-  {
-    id: '04',
-    name: 'voice-hold-to-speak',
-    spec: '04-voice.spec.ts',
-    heading: 'Hold to speak.',
-    subhead: 'On-device transcription. No audio leaves your phone.',
-  },
-  {
-    id: '05',
-    name: 'vision-attachment',
-    spec: '05-vision.spec.ts',
-    heading: 'Vision in any provider.',
-    subhead: 'Attach an image. Get an answer from Claude, GPT, or Gemini.',
-  },
-  {
-    id: '06',
-    name: 'cross-device-sync',
-    spec: '06-sync.spec.ts',
-    heading: 'Start here. Finish anywhere.',
-    subhead: 'Phone, laptop, tablet, web. One thread, all devices.',
-  },
-];
-
-/**
- * Wave 4 screenshots (v1 local-only + on-device + India-first positioning).
- * These are the 6 canonical slots used for all 48 store captures
- * (30 iOS + 18 Android). Spec details in store-listing/screenshots/specs/IOS-01..30
- * and AND-01..18.
- *
- * Slot 5 differs by platform:
- *   iOS  → HealthKit steps chat  (spec: 05-healthkit-ios.spec.ts)
- *   Android → Health Connect chat (spec: 05-health-connect-android.spec.ts)
+ * Current demo screenshot slots. These map to real specs in
+ * scripts/screenshots/specs and are used for local visual QA. Store-release
+ * multi-device captures require a separate installed device matrix.
  */
 const SCREENSHOTS: Screenshot[] = [
   {
     id: '01',
-    name: 'offline-chat',
-    spec: '01-offline-chat.spec.ts',
-    heading: 'AI that works offline',
-    subhead: 'Runs on your phone. No Wi-Fi. No sign-up.',
+    name: 'local-demo-chat',
+    spec: '01-multi-provider.spec.ts',
+    heading: 'Local chat first',
+    subhead: 'Start privately, then unlock cloud when invited.',
   },
   {
     id: '02',
-    name: 'model-picker',
-    spec: '02-model-picker.spec.ts',
-    heading: '10+ models. One conversation.',
-    subhead: 'Switch Claude, GPT, Gemini any turn.',
+    name: 'onboarding-local',
+    spec: '02-onboarding-local.spec.ts',
+    heading: 'Start without an account',
+    subhead: 'Local setup, device fit, and model readiness.',
   },
   {
     id: '03',
-    name: 'privacy-screen',
-    spec: '03-privacy-screen.spec.ts',
-    heading: 'Private by design',
-    subhead: 'No cloud. No tracking. Data stays on device.',
+    name: 'first-message',
+    spec: '03-chat-first-message.spec.ts',
+    heading: 'Chat with local models',
+    subhead: 'Composer, model badge, and performance feedback.',
   },
   {
     id: '04',
-    name: 'voice-recording',
-    spec: '04-voice-recording.spec.ts',
-    heading: 'Speak. AI listens.',
-    subhead: 'On-device transcription. No audio uploaded.',
+    name: 'cloud-waitlist',
+    spec: '04-mode-toggle-to-waitlist.spec.ts',
+    heading: 'Cloud is invite-gated',
+    subhead: 'AGI Agent opens through a visible waitlist flow.',
   },
   {
-    // Platform-specific spec resolved in captureForDevice()
     id: '05',
-    name: 'health-data-chat',
-    spec: '05-health-data-chat.spec.ts',
-    heading: 'AI meets your health data',
-    subhead: 'Steps, sleep, heart rate. Stays on device.',
+    name: 'image-question',
+    spec: '05-image-with-question.spec.ts',
+    heading: 'Ask about images',
+    subhead: 'Attach a photo and keep the workflow in chat.',
   },
   {
     id: '06',
-    name: 'free-plan',
-    spec: '06-free-plan.spec.ts',
-    heading: 'Free. Forever. No catch.',
-    subhead: 'On-device AI. No subscription. No cloud needed.',
+    name: 'voice-recording',
+    spec: '06-voice-record-and-send.spec.ts',
+    heading: 'Hold to speak',
+    subhead: 'Voice input feeds the same local chat workflow.',
   },
 ];
 
@@ -196,6 +135,14 @@ const OUT = join(ROOT, 'store-listing', 'screenshots', 'captures');
 
 function ensureDir(p: string) {
   if (!existsSync(p)) mkdirSync(p, { recursive: true });
+}
+
+function ensureDetoxInstalled() {
+  try {
+    execSync('pnpm exec detox --version', { stdio: 'ignore' });
+  } catch {
+    throw new Error('Detox is not installed. Add detox@20 before running screenshot automation.');
+  }
 }
 
 function bootSimulator(device: DeviceClass) {
@@ -209,23 +156,22 @@ function bootSimulator(device: DeviceClass) {
 }
 
 /**
- * Resolve the Detox spec file for a given screenshot slot + device.
- * Slot 05 ("health-data-chat") is platform-specific:
- *   iOS  → 05-healthkit-ios.spec.ts
- *   Android → 05-health-connect-android.spec.ts
+ * Resolve the Detox spec file for a given screenshot slot and device.
  */
 function resolveSpec(s: Screenshot, d: DeviceClass): string {
-  if (s.id === '05') {
-    return d.platform === 'ios' ? '05-healthkit-ios.spec.ts' : '05-health-connect-android.spec.ts';
-  }
+  void d;
   return s.spec;
 }
 
 function runDetoxSpec(device: DeviceClass, spec: string, rawOut: string) {
-  const detoxConfig = device.platform === 'ios' ? 'ios.sim.release' : 'android.emu.release';
+  const detoxConfig = device.platform === 'ios' ? 'ios.sim.debug' : 'android.emu.debug';
+  const specPath = join(ROOT, 'scripts', 'screenshots', 'specs', spec);
+  if (!existsSync(specPath)) {
+    throw new Error(`Screenshot spec not found: ${specPath}`);
+  }
   const env = { ...process.env, DETOX_CAPTURE_PATH: rawOut };
   execSync(
-    `pnpm detox test --configuration ${detoxConfig} apps/mobile/scripts/screenshots/specs/${spec}`,
+    `pnpm exec detox test --configuration ${detoxConfig} apps/mobile/scripts/screenshots/specs/${spec}`,
     { stdio: 'inherit', env },
   );
 }
@@ -263,6 +209,7 @@ function captureForDevice(device: DeviceClass) {
 
 function main() {
   const target = process.argv[2] ?? 'all';
+  ensureDetoxInstalled();
   ensureDir(OUT);
   const filter = (d: DeviceClass) =>
     target === 'all' || target === d.platform || target === d.className;

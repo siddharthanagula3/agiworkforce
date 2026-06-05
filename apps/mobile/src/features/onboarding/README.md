@@ -2,11 +2,11 @@
 
 Status: Current
 Owner role: Mobile lead
-Last updated: 2026-05-21
-Purpose: Mobile first-run disclosures, Local Mode onboarding, and disabled BYOK notice surfaces.
+Last updated: 2026-06-05
+Purpose: Mobile first-run disclosures, Local Mode onboarding, and Cloud invite entry points.
 
 ## Rules
 
 - Import onboarding UI through `@/src/features/onboarding`.
-- Mobile v1 stays Local Mode first with small on-device/local LLM routes. Cloud Managed is waitlist/invite-only, and BYOK is unavailable on Mobile.
+- Mobile demo starts from Local Mode with small on-device/local LLM routes. Cloud Managed stays visible only through invite/waitlist gates until access is enabled.
 - Onboarding state should stay in approved stores/services, not in modal-only components.

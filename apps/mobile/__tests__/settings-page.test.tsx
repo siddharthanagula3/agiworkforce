@@ -1,31 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Settings Page — data structure and rendering tests
- *
- * The Settings page uses a SectionList, which virtualizes content in test.
- * Combined with NativeWind's CSS interop, full render tests are fragile.
- *
- * Strategy: render the component but use getAllByText/queryAllByText to find
- * items that SectionList renders in its initial window, and also test the
- * section data structure by importing and verifying the component's behavior.
- *
- * Covers:
- *   - Renders the Settings header
- *   - Renders section headers that appear in the initial render window
- *   - Local-first Mode, Keys, and Local AI sections render
- *   - Haptic Feedback is a toggle type
- *   - Version number rendered
- */
+import React from 'react';
+import { render, fireEvent } from '@testing-library/react-native';
 
-import { render, within } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
+const mockPush = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({
-    push: jest.fn(),
+    push: mockPush,
     replace: jest.fn(),
     canGoBack: jest.fn().mockReturnValue(true),
     back: jest.fn(),
@@ -42,103 +23,49 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(),
-  selectionAsync: jest.fn(),
-  ImpactFeedbackStyle: { Light: 'light' },
-}));
-
-jest.mock('react-native-reanimated', () => {
-  const { View } = require('react-native');
-  return {
-    __esModule: true,
-    default: {
-      View: ({ children, style }: { children: React.ReactNode; style?: object }) => (
-        <View style={style}>{children}</View>
-      ),
-    },
-    useAnimatedStyle: (fn: () => object) => fn(),
-    useSharedValue: (initial: number) => ({ value: initial }),
-    withSpring: (toValue: number) => toValue,
-  };
-});
-
 jest.mock('react-native-safe-area-context', () => {
-  const { View } = require('react-native');
   return {
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
-  };
-});
-
-jest.mock('@gorhom/bottom-sheet', () => {
-  const { View } = require('react-native');
-  const { forwardRef } = require('react');
-  const MockBottomSheet = forwardRef(function MockBottomSheet(
-    { children }: { children: React.ReactNode },
-    _ref: React.Ref<unknown>,
-  ) {
-    return <View>{children}</View>;
-  });
-  return {
-    __esModule: true,
-    default: MockBottomSheet,
-    BottomSheetBackdrop: () => null,
+    SafeAreaView: ({ children }: { children: unknown }) => children,
   };
 });
 
 jest.mock('lucide-react-native', () => {
-  const { Text } = require('react-native');
-  const icon = () => <Text>icon</Text>;
+  const icon = jest.fn().mockReturnValue(null);
   return {
-    User: icon,
-    CreditCard: icon,
-    BarChart3: icon,
-    Brain: icon,
-    Zap: icon,
-    Shield: icon,
-    Smartphone: icon,
-    Link2: icon,
-    Palette: icon,
-    Volume2: icon,
+    Baby: icon,
     Bell: icon,
-    UserCog: icon,
-    Vibrate: icon,
-    HelpCircle: icon,
-    Lock: icon,
-    FileText: icon,
-    LogOut: icon,
+    Brain: icon,
     ChevronRight: icon,
-    Sun: icon,
-    Moon: icon,
-    Monitor: icon,
-    Mic: icon,
-    Wifi: icon,
-    HardDrive: icon,
-    Globe: icon,
-    EyeOff: icon,
+    CircleHelp: icon,
+    CreditCard: icon,
+    Database: icon,
     Info: icon,
-    Key: icon,
+    Link2: icon,
+    LogOut: icon,
+    Mail: icon,
+    MessageCircleWarning: icon,
+    Mic: icon,
+    Palette: icon,
+    Plug: icon,
+    RotateCcw: icon,
+    Shield: icon,
+    SlidersHorizontal: icon,
+    Sparkles: icon,
+    UserRound: icon,
+    Zap: icon,
   };
 });
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
-    if (store && store.persist && typeof store.persist.rehydrate === 'function')
-      store.persist.rehydrate();
+    if (store?.persist?.rehydrate) store.persist.rehydrate();
   }),
   mmkvStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),
   },
-}));
-
-jest.mock('react-native-webrtc', () => ({
-  RTCPeerConnection: jest.fn(),
-  RTCSessionDescription: jest.fn(),
-  RTCIceCandidate: jest.fn(),
-  mediaDevices: { getUserMedia: jest.fn() },
 }));
 
 jest.mock('../services/authSession', () => ({
@@ -150,108 +77,70 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-jest.mock('../services/api', () => ({
-  api: { get: jest.fn(), post: jest.fn(), put: jest.fn(), delete: jest.fn() },
-}));
-
-jest.mock('../services/streaming', () => ({
-  streamChat: jest.fn(),
-}));
-
-jest.mock('../src/features/voice/components/VoiceSelector', () => {
+jest.mock('../src/features/cloud-bridge', () => {
   const { View } = require('react-native');
-  const { forwardRef } = require('react');
   return {
-    VoiceSelector: forwardRef(function MockVoiceSelector(_props: object, _ref: React.Ref<unknown>) {
-      return <View testID="voice-selector" />;
-    }),
+    InviteCodeModal: ({ open }: { open: boolean }) =>
+      open ? <View testID="invite-code-modal" /> : null,
   };
 });
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import SettingsTabScreen from '../app/(app)/(tabs)/settings';
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+import { useSettingsStore } from '../stores/settingsStore';
 
 describe('Settings page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    useSettingsStore.setState({ themeMode: 'system', accentColor: 'neutral' });
   });
 
-  it('renders the Settings header', () => {
-    const { getByText } = render(<SettingsTabScreen />);
+  it('renders the new settings information architecture', () => {
+    const { getByText, queryByText } = render(<SettingsTabScreen />);
+
     expect(getByText('Settings')).toBeTruthy();
+    expect(getByText('Personalization')).toBeTruthy();
+    expect(getByText('Memory')).toBeTruthy();
+    expect(getByText('Appearance')).toBeTruthy();
+    expect(getByText('Accent Color')).toBeTruthy();
+    expect(getByText('General')).toBeTruthy();
+    expect(getByText('Safety & Security')).toBeTruthy();
+    expect(getByText('Data Controls')).toBeTruthy();
+    expect(getByText('Parental Controls')).toBeTruthy();
+    expect(queryByText(/byok/i)).toBeNull();
   });
 
-  // SectionList renders visible sections. Mode, Keys, and Local AI appear in the
-  // initial window, which is enough to lock the v1 local-first IA.
+  it('shows cloud rows as invite-gated instead of live account controls', () => {
+    const { getByText, getAllByText } = render(<SettingsTabScreen />);
 
-  it('renders the Mode section header', () => {
+    expect(getAllByText('Cloud').length).toBeGreaterThan(0);
+    expect(getByText('Email / Phone Number')).toBeTruthy();
+    expect(getByText('Subscription')).toBeTruthy();
+    expect(getByText('Connectors')).toBeTruthy();
+    expect(getByText('Plugins')).toBeTruthy();
+    expect(getByText('Skills')).toBeTruthy();
+    expect(getAllByText('Invite').length).toBeGreaterThan(0);
+  });
+
+  it('opens invite modal from a cloud row', () => {
+    const { getByLabelText, getByTestId } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Subscription. Invite'));
+
+    expect(getByTestId('invite-code-modal')).toBeTruthy();
+  });
+
+  it('navigates to real local settings routes', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Appearance. System'));
+    fireEvent.press(getByLabelText('Data Controls'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/appearance');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/data-controls');
+  });
+
+  it('renders version in About row', () => {
     const { getByText } = render(<SettingsTabScreen />);
-    expect(getByText('Mode')).toBeTruthy();
-  });
-
-  it('renders the Local AI section header', () => {
-    const { getByText } = render(<SettingsTabScreen />);
-    expect(getByText('Local AI')).toBeTruthy();
-  });
-
-  it('renders Mode items: Local Mode, Local LLMs, Cloud Managed', () => {
-    const { getByText } = render(<SettingsTabScreen />);
-
-    expect(getByText('Local Mode')).toBeTruthy();
-    expect(getByText('Local LLMs')).toBeTruthy();
-    expect(getByText('Cloud Managed')).toBeTruthy();
-  });
-
-  it('renders the Local AI section with its first visible capability row', () => {
-    const { getByText } = render(<SettingsTabScreen />);
-
-    expect(getByText('Capabilities')).toBeTruthy();
-    expect(getByText('Local tools are active. Cloud tools are locked or waitlisted.')).toBeTruthy();
-  });
-
-  it('renders local-first section headers', () => {
-    const { queryAllByText } = render(<SettingsTabScreen />);
-
-    expect(queryAllByText('Mode').length).toBeGreaterThanOrEqual(1);
-    expect(queryAllByText('Keys').length).toBeGreaterThanOrEqual(1);
-    expect(queryAllByText('Local AI').length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('shows BYOK as unavailable on Mobile instead of navigable key entry', () => {
-    const { getByLabelText, getByText, queryByText } = render(<SettingsTabScreen />);
-
-    expect(getByLabelText(/BYOK.*Not available on Mobile.*Locked/)).toBeTruthy();
-    expect(getByText('Locked')).toBeTruthy();
-    expect(queryByText('Sign Out')).toBeNull();
-  });
-
-  it('version text follows the format vX.X.X Build N', () => {
-    const { queryAllByText } = render(<SettingsTabScreen />);
-
-    // Version row may be at the bottom of the virtualized list
-    const versionElements = queryAllByText(/^v\d+\.\d+\.\d+ Build \d+$/);
-    if (versionElements.length > 0) {
-      expect(versionElements[0]).toBeTruthy();
-    }
-    // SectionList may not render the bottom — absence is valid
-  });
-
-  it('Haptic Feedback toggle renders with accessibilityRole=switch when visible', () => {
-    const { queryAllByRole } = render(<SettingsTabScreen />);
-
-    // The switch may or may not be visible depending on SectionList virtualization
-    const switches = queryAllByRole('switch');
-    // If the Preferences section is in the render window, there should be a switch
-    if (switches.length > 0) {
-      expect(switches[0]).toBeTruthy();
-    }
-    // SectionList virtualization may omit the switch — absence is valid
+    expect(getByText('v2.1.0')).toBeTruthy();
   });
 });
