@@ -14,28 +14,13 @@ import type { ProjectRecord } from '@agiworkforce/types';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
-jest.mock('@/src/ui/theme', () => ({
-  colors: {
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    teal: '#2dd4bf',
-    background: '#0e0e0e',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-  },
-  useThemeColors: () => ({
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    teal: '#2dd4bf',
-    background: '#0e0e0e',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-  }),
-}));
+jest.mock('@/src/ui/theme', () => {
+  const actual = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...actual,
+    useThemeColors: () => actual.colors,
+  };
+});
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');

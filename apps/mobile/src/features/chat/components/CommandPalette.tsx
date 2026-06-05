@@ -3,7 +3,7 @@ import { View, FlatList, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 /**
  * Slash-command palette shown above the chat input when the user types "/".
@@ -17,7 +17,7 @@ interface Command {
   label: string;
   command: ChatCommand;
   description: string;
-  icon: React.ReactNode;
+  Icon: typeof Image;
 }
 
 const COMMANDS: Command[] = [
@@ -25,25 +25,25 @@ const COMMANDS: Command[] = [
     label: 'image',
     command: '/image',
     description: 'Generate an image',
-    icon: <Image size={16} color={colors.teal} />,
+    Icon: Image,
   },
   {
     label: 'voice',
     command: '/voice',
     description: 'Start voice conversation',
-    icon: <Mic size={16} color={colors.teal} />,
+    Icon: Mic,
   },
   {
     label: 'compare',
     command: '/compare',
     description: 'Compare model responses',
-    icon: <GitCompare size={16} color={colors.teal} />,
+    Icon: GitCompare,
   },
   {
     label: 'export',
     command: '/export',
     description: 'Export conversation',
-    icon: <Download size={16} color={colors.teal} />,
+    Icon: Download,
   },
 ];
 
@@ -60,29 +60,43 @@ export function CommandPalette({
   availableCommands,
   onSelectCommand,
 }: CommandPaletteProps) {
+  const colors = useThemeColors();
   const filtered = COMMANDS.filter(
     (cmd) =>
       availableCommands.includes(cmd.command) && cmd.label.startsWith(query.slice(1).toLowerCase()),
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: Command }) => (
-      <Pressable
-        onPress={() => onSelectCommand(item.command)}
-        className="flex-row items-center gap-3 px-3 py-2.5 active:bg-white/5"
-        accessibilityLabel={`Command ${item.command}: ${item.description}`}
-        accessibilityRole="button"
-      >
-        <View className="w-7 h-7 rounded-lg bg-teal-500/15 items-center justify-center">
-          {item.icon}
-        </View>
-        <View className="flex-1">
-          <Text className="text-[13px] font-semibold text-white">{item.command}</Text>
-          <Text className="text-[11px] text-white/50">{item.description}</Text>
-        </View>
-      </Pressable>
-    ),
-    [onSelectCommand],
+    ({ item }: { item: Command }) => {
+      const Icon = item.Icon;
+      return (
+        <Pressable
+          onPress={() => onSelectCommand(item.command)}
+          className="flex-row items-center gap-3 px-3 py-2.5"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
+          accessibilityLabel={`Command ${item.command}: ${item.description}`}
+          accessibilityRole="button"
+        >
+          <View
+            className="w-7 h-7 rounded-lg items-center justify-center"
+            style={{ backgroundColor: colors.accentSurface }}
+          >
+            <Icon size={16} color={colors.teal} />
+          </View>
+          <View className="flex-1">
+            <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
+              {item.command}
+            </Text>
+            <Text className="text-[11px]" style={{ color: colors.textMuted }}>
+              {item.description}
+            </Text>
+          </View>
+        </Pressable>
+      );
+    },
+    [colors, onSelectCommand],
   );
 
   const keyExtractor = useCallback((item: Command) => item.command, []);
@@ -93,8 +107,8 @@ export function CommandPalette({
     <Animated.View
       entering={FadeIn.duration(150)}
       exiting={FadeOut.duration(100)}
-      className="mb-1 rounded-xl border border-white/8 overflow-hidden"
-      style={{ backgroundColor: colors.surfaceOverlay }}
+      className="mb-1 rounded-xl border overflow-hidden"
+      style={{ backgroundColor: colors.surfaceOverlay, borderColor: colors.border }}
       accessibilityLabel="Command suggestions"
       accessibilityRole="menu"
     >

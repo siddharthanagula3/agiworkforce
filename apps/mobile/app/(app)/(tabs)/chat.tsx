@@ -3,7 +3,7 @@ import { View, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { DrawerActions } from '@react-navigation/native';
-import { Cpu, Plus, Menu } from 'lucide-react-native';
+import { Cloud, Cpu, Plus, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -15,12 +15,13 @@ import {
 } from '@/src/features/chat/components/TaskChips';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
-import { SendPreview } from '@/src/features/chat/components/SendPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { VoiceConversationScreen } from '@/src/features/voice/components/VoiceConversationScreen';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { getModelById, isAutoMode } from '@/src/features/model-picker/service';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 
@@ -49,17 +50,26 @@ export default function ChatTabScreen() {
     ) => void;
   } | null>(null);
   const [voiceModeVisible, setVoiceModeVisible] = useState(false);
+  const [cloudAccessVisible, setCloudAccessVisible] = useState(false);
+  const [cloudAccessDefaultTab, setCloudAccessDefaultTab] = useState<'invite' | 'waitlist'>(
+    'waitlist',
+  );
 
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
+  const selectedModelDef = useMemo(
+    () => (isAutoMode(selectedModel) ? undefined : getModelById(selectedModel)),
+    [selectedModel],
+  );
+  const activeMode = selectedModelDef?.surface === 'cloud_managed' ? 'cloud' : 'local';
 
-  // SendPreview disclosure — Mobile supports Local and Cloud Managed invite only.
+  // SendPreview disclosure data: Mobile supports Local and invite-gated AGI Cloud.
   const sendPreviewPresentation = useMemo(() => {
     const providerMode: ProviderMode =
-      selectedProvider === 'managed_cloud' ? 'ManagedGateway' : 'Local';
+      selectedProvider === 'cloud_managed' ? 'ManagedGateway' : 'Local';
     return summarizeSendPreview({
       providerMode,
       modelLabel: selectedModel,
@@ -112,11 +122,16 @@ export default function ChatTabScreen() {
     addToChatRef.current?.snapToIndex(0);
   }, []);
 
+  const handleOpenCloudAccess = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
+    setCloudAccessDefaultTab(defaultTab);
+    setCloudAccessVisible(true);
+  }, []);
+
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
       Alert.alert(
-        'Connectors require Cloud Managed',
-        'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
+        'Connectors are available with AGI Cloud',
+        'Join the waitlist or enter an invitation code to use connected sources on mobile.',
       );
       return;
     }
@@ -255,7 +270,8 @@ export default function ChatTabScreen() {
         <View className="flex-row items-center gap-2">
           <Pressable
             onPress={handleOpenDrawer}
-            className="w-8 h-8 rounded-lg items-center justify-center active:bg-white/5"
+            className="w-8 h-8 rounded-lg items-center justify-center"
+            style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
             accessibilityLabel="Open navigation drawer"
             accessibilityRole="button"
           >
@@ -267,7 +283,8 @@ export default function ChatTabScreen() {
         </View>
         <Pressable
           onPress={handleNewChat}
-          className="w-8 h-8 rounded-lg bg-teal-500/20 items-center justify-center active:bg-teal-500/30"
+          className="w-8 h-8 rounded-lg items-center justify-center"
+          style={{ backgroundColor: c.accentSurface }}
           accessibilityLabel="New chat"
           accessibilityRole="button"
         >
@@ -284,15 +301,19 @@ export default function ChatTabScreen() {
             paddingHorizontal: 11,
             paddingVertical: 6,
             borderRadius: 999,
-            backgroundColor: `${c.teal}18`,
+            backgroundColor: c.accentSurface,
             borderWidth: 1,
-            borderColor: `${c.teal}30`,
+            borderColor: c.accentBorder,
             marginBottom: 18,
           }}
         >
-          <Cpu size={13} color={c.teal} />
+          {activeMode === 'cloud' ? (
+            <Cloud size={13} color={c.teal} />
+          ) : (
+            <Cpu size={13} color={c.teal} />
+          )}
           <Text style={{ fontSize: 12, fontWeight: '600', color: c.teal }}>
-            Local Mode + Local LLMs
+            {activeMode === 'cloud' ? 'AGI Cloud' : 'Local Mode'}
           </Text>
         </View>
         <Text
@@ -316,16 +337,11 @@ export default function ChatTabScreen() {
             maxWidth: 300,
           }}
         >
-          Start privately on this device. Use the sidebar for recents, projects, artifacts, and code
-          sessions.
+          Start privately on this device. Use the sidebar for recents and projects.
         </Text>
       </View>
 
       <ProjectSelectorBar />
-
-      <View style={{ paddingHorizontal: 16, paddingBottom: 6 }}>
-        <SendPreview presentation={sendPreviewPresentation} />
-      </View>
 
       <ChatInput
         onSend={handleSend}
@@ -344,16 +360,24 @@ export default function ChatTabScreen() {
         onCamera={handleSheetCamera}
         onPhotos={handleSheetPhotos}
         onFile={handleSheetFile}
+        onOpenCloudAccess={handleOpenCloudAccess}
       />
 
       {/* Model picker bottom sheet */}
-      <ModelPickerSheet sheetRef={modelPickerRef} />
+      <ModelPickerSheet sheetRef={modelPickerRef} onOpenCloudAccess={handleOpenCloudAccess} />
 
       {/* Voice conversation full-screen overlay */}
       <VoiceConversationScreen
         visible={voiceModeVisible}
         onClose={handleCloseVoiceMode}
         onSendMessage={handleVoiceSendMessage}
+      />
+
+      <InviteCodeModal
+        open={cloudAccessVisible}
+        onClose={() => setCloudAccessVisible(false)}
+        source="other"
+        defaultTab={cloudAccessDefaultTab}
       />
     </SafeAreaView>
   );

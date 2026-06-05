@@ -14,7 +14,7 @@ import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-nat
 import type { ReactElement } from 'react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
@@ -23,20 +23,25 @@ export interface SendPreviewProps {
 
 function DestinationIcon({
   presentation,
+  colors,
 }: {
   presentation: SendPreviewPresentation;
+  colors: ColorScheme;
 }): ReactElement {
   if (presentation.staysLocal) {
     return <HardDrive size={14} color={colors.agentSuccess} />;
   }
-  return <Cloud size={14} color="#7dd3fc" />;
+  return <Cloud size={14} color={colors.agentActive} />;
 }
 
-function getAccent(presentation: SendPreviewPresentation): { bg: string; border: string } {
+function getAccent(
+  presentation: SendPreviewPresentation,
+  colors: ColorScheme,
+): { bg: string; border: string } {
   if (presentation.staysLocal) {
-    return { bg: 'rgba(16, 185, 129, 0.06)', border: 'rgba(16, 185, 129, 0.3)' };
+    return { bg: colors.surfaceElevated, border: colors.successBorder };
   }
-  return { bg: 'rgba(56, 189, 248, 0.06)', border: 'rgba(56, 189, 248, 0.3)' };
+  return { bg: colors.surfaceElevated, border: colors.accentBorder };
 }
 
 function getMobileDestinationLabel(presentation: SendPreviewPresentation): string {
@@ -51,7 +56,10 @@ function getMobilePrivacyLabel(presentation: SendPreviewPresentation): string {
 
 function getMobileBannerCopy(presentation: SendPreviewPresentation): string {
   if (presentation.providerMode === 'DirectByok') {
-    return 'Cloud access is invite-gated on Mobile. Continue after Cloud Managed access is enabled.';
+    return 'Cloud access is available by invite. Join the waitlist or enter an invite code to continue.';
+  }
+  if (presentation.staysLocal) {
+    return 'The model runs on your device. Nothing is uploaded unless you choose Cloud.';
   }
   return presentation.bannerCopy;
 }
@@ -61,7 +69,15 @@ function getMobileModelLabel(presentation: SendPreviewPresentation): string | un
   return presentation.modelLabel;
 }
 
-function DetailRow({ term, definition }: { term: string; definition: string }) {
+function DetailRow({
+  term,
+  definition,
+  colors,
+}: {
+  term: string;
+  definition: string;
+  colors: ColorScheme;
+}) {
   return (
     <View style={{ flexDirection: 'row', gap: 6 }}>
       <Text style={{ fontSize: 10, color: colors.textMuted, minWidth: 90 }}>{term}</Text>
@@ -73,8 +89,9 @@ function DetailRow({ term, definition }: { term: string; definition: string }) {
 }
 
 export function SendPreview({ presentation, defaultExpanded = false }: SendPreviewProps) {
+  const colors = useThemeColors();
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const accent = getAccent(presentation);
+  const accent = getAccent(presentation, colors);
   const detailsAvailable = Boolean(
     presentation.bodyCharLabel ||
     presentation.attachmentLabel ||
@@ -97,7 +114,7 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        <DestinationIcon presentation={presentation} />
+        <DestinationIcon presentation={presentation} colors={colors} />
         <Text
           style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary }}
           numberOfLines={1}
@@ -114,7 +131,7 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
             borderRadius: 9999,
             borderWidth: 1,
             borderColor: colors.border,
-            backgroundColor: 'rgba(255, 255, 255, 0.04)',
+            backgroundColor: colors.surfaceBase,
           }}
         >
           <Lock size={10} color={colors.textSecondary} />
@@ -167,22 +184,38 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
       {expanded && detailsAvailable ? (
         <View testID="send-preview-details" style={{ gap: 3, paddingTop: 2 }}>
           {presentation.bodyCharLabel ? (
-            <DetailRow term="Message" definition={presentation.bodyCharLabel} />
+            <DetailRow term="Message" definition={presentation.bodyCharLabel} colors={colors} />
           ) : null}
           {presentation.attachmentLabel ? (
-            <DetailRow term="Attachments" definition={presentation.attachmentLabel} />
+            <DetailRow
+              term="Attachments"
+              definition={presentation.attachmentLabel}
+              colors={colors}
+            />
           ) : null}
           {presentation.systemPromptLabel ? (
-            <DetailRow term="System prompt" definition={presentation.systemPromptLabel} />
+            <DetailRow
+              term="System prompt"
+              definition={presentation.systemPromptLabel}
+              colors={colors}
+            />
           ) : null}
           {presentation.contextLabel ? (
-            <DetailRow term="Context budget" definition={presentation.contextLabel} />
+            <DetailRow
+              term="Context budget"
+              definition={presentation.contextLabel}
+              colors={colors}
+            />
           ) : null}
           {presentation.toolsLabel ? (
-            <DetailRow term="Tools" definition={presentation.toolsLabel} />
+            <DetailRow term="Tools" definition={presentation.toolsLabel} colors={colors} />
           ) : null}
           {presentation.sourceSessionLabel ? (
-            <DetailRow term="Source session" definition={presentation.sourceSessionLabel} />
+            <DetailRow
+              term="Source session"
+              definition={presentation.sourceSessionLabel}
+              colors={colors}
+            />
           ) : null}
         </View>
       ) : null}

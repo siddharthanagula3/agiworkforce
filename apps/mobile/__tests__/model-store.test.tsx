@@ -2,8 +2,8 @@
  * Unit tests for modelStore.
  *
  * Mobile starts from local models: selectable ids are local rows with an active
- * runtime/download preset or local auto modes. Cloud provider ids are ignored
- * by this local store.
+ * runtime/download preset or local auto modes. Cloud provider ids require an
+ * explicit invite unlock before the store accepts them.
  */
 
 // ---------------------------------------------------------------------------
@@ -28,15 +28,20 @@ jest.mock('../lib/mmkv', () => ({
 // Import module under test AFTER mocks
 // ---------------------------------------------------------------------------
 
-import { DEFAULT_LOCAL_MODEL_ID, LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
+import {
+  DEFAULT_LOCAL_MODEL_ID,
+  LOCAL_MODEL_LIST,
+  LOCKED_CLOUD_MODELS,
+} from '../src/features/model-picker/service';
 import { useModelStore } from '../src/features/model-picker/store';
+import { useWaitlistStore } from '../src/features/waitlist/store';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
-const CLOUD_MODEL_ID = 'gpt-5.5';
+const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
 const SELECTABLE_MODEL_IDS = LOCAL_MODEL_LIST.map((model) => model.id);
 const SECOND_SELECTABLE_MODEL_ID = SELECTABLE_MODEL_IDS.find((id) => id !== LITE_MODEL_ID);
 
@@ -45,6 +50,17 @@ function getState() {
 }
 
 function resetStore() {
+  useWaitlistStore.setState({
+    joined: false,
+    email: undefined,
+    country: undefined,
+    rank: undefined,
+    joinedAt: undefined,
+    cloudUnlocked: false,
+    inviteId: undefined,
+    inviteCode: undefined,
+    cloudUnlockedAt: undefined,
+  });
   useModelStore.setState({
     selectedModel: DEFAULT_LOCAL_MODEL_ID,
     selectedProvider: 'local',
@@ -79,11 +95,21 @@ describe('modelStore', () => {
       expect(getState().selectedProvider).toBe('local');
     });
 
-    it('ignores cloud provider model ids', () => {
+    it('ignores cloud provider model ids before invite access', () => {
       getState().setModel(CLOUD_MODEL_ID);
 
       expect(getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
       expect(getState().recentModels).toEqual([]);
+    });
+
+    it('selects cloud provider model ids after invite access', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+
+      getState().setModel(CLOUD_MODEL_ID);
+
+      expect(getState().selectedModel).toBe(CLOUD_MODEL_ID);
+      expect(getState().selectedProvider).toBe('cloud_managed');
+      expect(getState().recentModels[0]).toBe(CLOUD_MODEL_ID);
     });
 
     it('pushes local models to recents newest first', () => {
@@ -164,10 +190,18 @@ describe('modelStore', () => {
   });
 
   describe('setProvider', () => {
-    it('keeps selectedProvider locked to local', () => {
-      getState().setProvider('managed_cloud');
+    it('keeps selectedProvider local before invite access', () => {
+      getState().setProvider('cloud_managed');
 
       expect(getState().selectedProvider).toBe('local');
+    });
+
+    it('allows cloud provider after invite access', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+
+      getState().setProvider('cloud_managed');
+
+      expect(getState().selectedProvider).toBe('cloud_managed');
     });
   });
 

@@ -11,9 +11,11 @@ import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
   AUTO_MODES,
-  MODEL_LIST,
+  getModelByIdForCloudAccess,
+  getModelListForCloudAccess,
   isAutoMode,
   type AutoModeDef,
   type ModelDef,
@@ -56,7 +58,7 @@ function AutoModeRow({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 12,
-        backgroundColor: selected ? `${colors.teal}10` : colors.transparent,
+        backgroundColor: selected ? colors.accentSurface : colors.transparent,
       }}
     >
       <View
@@ -66,7 +68,7 @@ function AutoModeRow({
           borderRadius: 9,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: selected ? `${colors.teal}18` : colors.surfaceHover,
+          backgroundColor: selected ? colors.accentSurface : colors.surfaceHover,
         }}
       >
         <Cpu size={17} color={selected ? colors.teal : colors.textSecondary} />
@@ -93,15 +95,17 @@ function AutoModeRow({
 interface ModelPickerSheetProps {
   sheetRef: React.RefObject<BottomSheet | null>;
   onSelect?: (modelId: string) => void;
+  onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
 }
 
-export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) {
+export function ModelPickerSheet({ sheetRef, onSelect, onOpenCloudAccess }: ModelPickerSheetProps) {
   const colors = useThemeColors();
   const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const favorites = useModelStore((s) => s.favorites);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const setModel = useModelStore((s) => s.setModel);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
@@ -116,6 +120,7 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
+  const modelList = useMemo(() => getModelListForCloudAccess(cloudUnlocked), [cloudUnlocked]);
 
   useEffect(() => {
     void hydrateInstalledModels();
@@ -123,8 +128,8 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
 
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
-    if (!query) return MODEL_LIST;
-    return MODEL_LIST.filter(
+    if (!query) return modelList;
+    return modelList.filter(
       (model) =>
         model.name.toLowerCase().includes(query) ||
         model.provider.toLowerCase().includes(query) ||
@@ -132,11 +137,10 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
         model.runtimeLabel.toLowerCase().includes(query) ||
         model.id.toLowerCase().includes(query),
     );
-  }, [query]);
+  }, [modelList, query]);
 
   const favoriteModels = useMemo(
-    () =>
-      filteredModels.filter((model) => model.surface === 'local' && favorites.includes(model.id)),
+    () => filteredModels.filter((model) => favorites.includes(model.id)),
     [favorites, filteredModels],
   );
 
@@ -158,10 +162,28 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
     [onSelect, setModel, sheetRef],
   );
 
+  const openInvite = useCallback(() => {
+    if (onOpenCloudAccess) {
+      sheetRef.current?.close();
+      requestAnimationFrame(() => {
+        onOpenCloudAccess('invite');
+      });
+      return;
+    }
+    sheetRef.current?.close();
+    requestAnimationFrame(() => {
+      setInviteOpen(true);
+    });
+  }, [onOpenCloudAccess, sheetRef]);
+
   const handleSelectModel = useCallback(
     (id: string) => {
-      const chosenModel = MODEL_LIST.find((model) => model.id === id);
-      if (!chosenModel || chosenModel.availability === 'locked') return;
+      const chosenModel = getModelByIdForCloudAccess(id, cloudUnlocked);
+      if (!chosenModel) return;
+      if (chosenModel.availability === 'locked') {
+        openInvite();
+        return;
+      }
 
       const installStatus = statusForModel(chosenModel);
       if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
@@ -174,13 +196,21 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
       }
 
       if (id === selectedModel && !isAutoMode(id)) {
-        setExpandedModelId((prev) => (prev === id ? null : id));
+        sheetRef.current?.close();
         return;
       }
 
       selectAndClose(id);
     },
-    [prepareModel, selectAndClose, selectedModel, statusForModel],
+    [
+      cloudUnlocked,
+      openInvite,
+      prepareModel,
+      selectAndClose,
+      selectedModel,
+      sheetRef,
+      statusForModel,
+    ],
   );
 
   const handleSelectAutoMode = useCallback(
@@ -192,11 +222,6 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
     },
     [onSelect, setModel, sheetRef],
   );
-
-  const openInvite = useCallback(() => {
-    sheetRef.current?.close();
-    setInviteOpen(true);
-  }, [sheetRef]);
 
   const clearSearch = useCallback(() => {
     setSearch('');
@@ -277,8 +302,11 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
             </Text>
             <Pressable
               onPress={() => sheetRef.current?.close()}
+              testID="model-picker-close"
+              accessible
               accessibilityLabel="Close model picker"
               accessibilityRole="button"
+              hitSlop={8}
               style={{
                 width: 32,
                 height: 32,
@@ -294,7 +322,9 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
             </Pressable>
           </View>
           <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
-            Local models are selectable. Cloud models require an invite.
+            {cloudUnlocked
+              ? 'Local and AGI Cloud models are selectable.'
+              : 'Local models are selectable. Cloud models require an invite.'}
           </Text>
         </View>
 
@@ -302,9 +332,10 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
           style={{
             marginHorizontal: 16,
             marginBottom: 12,
-            height: 42,
-            borderRadius: 21,
+            minHeight: 48,
+            borderRadius: 24,
             paddingHorizontal: 13,
+            paddingVertical: 6,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
@@ -316,7 +347,16 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
           <Search size={16} color={colors.textMuted} />
           <TextInput
             ref={searchInputRef}
-            style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
+            testID="model-picker-search-input"
+            style={{
+              flex: 1,
+              minHeight: 32,
+              color: colors.textPrimary,
+              fontSize: 16,
+              lineHeight: 21,
+              paddingTop: 0,
+              paddingBottom: 0,
+            }}
             placeholder="Search models"
             placeholderTextColor={colors.textMuted}
             value={search}
@@ -326,7 +366,7 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
             autoCapitalize="none"
             returnKeyType="search"
             accessibilityLabel="Search models"
-            accessibilityRole="search"
+            accessibilityHint="Filters the model list"
           />
           {search.length > 0 ? (
             <Pressable onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>

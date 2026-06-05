@@ -1,9 +1,10 @@
 /**
- * Local-first model catalog for Mobile v1.
+ * Local + invite-gated cloud model catalog for Mobile.
  *
  * Active/selectable rows come from @agiworkforce/local-llm. Cloud provider
- * models are included only as locked visual context; this service never fetches
- * `/api/models` and never enables managed-cloud sends.
+ * models are included as gated rows and become selectable only when the
+ * waitlist/invite store proves AGI Cloud access. This service never fetches
+ * `/api/models`.
  */
 
 import {
@@ -12,7 +13,11 @@ import {
   getShippableModels as getCatalogShippableModels,
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel, PickerModelTier } from '@agiworkforce/types';
-import { MODEL_LIST as CLOUD_MODEL_LIST, type ModelDef as CloudModelDef } from '@/lib/models';
+import {
+  MODEL_LIST as CLOUD_MODEL_LIST,
+  getProviderById as getCloudProviderById,
+  type ModelDef as CloudModelDef,
+} from '@/lib/models';
 
 export type ModelTier = PickerModelTier;
 export type ModelSurface = 'local' | 'cloud_managed';
@@ -45,7 +50,6 @@ export interface ProviderDef {
   id: string;
   name: string;
   icon: string;
-  color: string;
 }
 
 export interface AutoModeDef {
@@ -57,7 +61,7 @@ export interface AutoModeDef {
 }
 
 const LOCAL_PROVIDER_ID = 'local';
-export const CLOUD_LOCK_REASON = 'Cloud Managed is invite-only on Mobile.';
+export const CLOUD_LOCK_REASON = 'AGI Cloud is invite-only on mobile.';
 
 /**
  * Static model descriptions shown as a subtitle in the picker.
@@ -215,13 +219,11 @@ export const PROVIDERS: ProviderDef[] = [
     id: LOCAL_PROVIDER_ID,
     name: 'On device',
     icon: 'Cpu',
-    color: '#14b8a6',
   },
   {
     id: 'cloud_managed',
-    name: 'Cloud Managed',
+    name: 'AGI Cloud',
     icon: 'Cloud',
-    color: '#64748b',
   },
 ];
 
@@ -283,23 +285,25 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
   };
 }
 
-function toLockedCloudModelDef(model: CloudModelDef): ModelDef {
+function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef {
+  const providerLabel = getCloudProviderById(model.provider)?.name ?? model.provider;
+
   return {
     id: model.id,
     name: model.name,
     provider: model.provider,
-    providerLabel: 'Cloud Managed',
+    providerLabel,
     contextWindow: model.contextWindow,
     maxOutput: model.maxOutput,
     supportsVision: model.supportsVision,
     supportsThinking: model.supportsThinking,
     tier: model.tier,
     surface: 'cloud_managed',
-    availability: 'locked',
-    runtimeLabel: 'Cloud Managed',
-    detailLabel: 'Cloud Managed - invite required',
+    availability: cloudUnlocked ? 'ready' : 'locked',
+    runtimeLabel: 'AGI Cloud',
+    detailLabel: cloudUnlocked ? 'AGI Cloud' : 'AGI Cloud - invite required',
     description: MODEL_DESCRIPTIONS[model.id],
-    lockReason: CLOUD_LOCK_REASON,
+    lockReason: cloudUnlocked ? undefined : CLOUD_LOCK_REASON,
   };
 }
 
@@ -319,11 +323,17 @@ export const LOCKED_CLOUD_MODELS: ModelDef[] = [
 ]
   .map(firstCloudModelByProvider)
   .filter((model): model is CloudModelDef => Boolean(model))
-  .map(toLockedCloudModelDef);
+  .map((model) => toCloudModelDef(model, false));
 
 export const MODEL_LIST: ModelDef[] = [...LOCAL_MODEL_LIST, ...LOCKED_CLOUD_MODELS];
 
 const localModelMap = new Map<string, ModelDef>(LOCAL_MODEL_LIST.map((model) => [model.id, model]));
+const cloudModelSourceMap = new Map<string, CloudModelDef>(
+  LOCKED_CLOUD_MODELS.map((model): [string, CloudModelDef | undefined] => [
+    model.id,
+    CLOUD_MODEL_SOURCE.find((item) => item.id === model.id),
+  ]).filter((entry): entry is [string, CloudModelDef] => Boolean(entry[1])),
+);
 const allModelMap = new Map<string, ModelDef>(MODEL_LIST.map((model) => [model.id, model]));
 const providerMap = new Map<string, ProviderDef>(
   PROVIDERS.map((provider) => [provider.id, provider]),
@@ -338,8 +348,33 @@ export function getSelectableModelById(id: string): ModelDef | undefined {
   return localModelMap.get(id);
 }
 
+export function isCloudManagedModelId(id: string): boolean {
+  return cloudModelSourceMap.has(id);
+}
+
 export function isSelectableModelId(id: string): boolean {
   return autoModeMap.has(id) || localModelMap.has(id);
+}
+
+export function isSelectableModelIdForCloudAccess(id: string, cloudUnlocked: boolean): boolean {
+  return isSelectableModelId(id) || (cloudUnlocked && isCloudManagedModelId(id));
+}
+
+export function getModelByIdForCloudAccess(
+  id: string,
+  cloudUnlocked: boolean,
+): ModelDef | undefined {
+  const cloudModel = cloudModelSourceMap.get(id);
+  if (cloudModel) return toCloudModelDef(cloudModel, cloudUnlocked);
+  return getModelById(id);
+}
+
+export function getModelListForCloudAccess(cloudUnlocked: boolean): ModelDef[] {
+  if (!cloudUnlocked) return MODEL_LIST;
+  return [
+    ...LOCAL_MODEL_LIST,
+    ...Array.from(cloudModelSourceMap.values()).map((model) => toCloudModelDef(model, true)),
+  ];
 }
 
 export function getModelsByProvider(providerId: string): ModelDef[] {

@@ -1,7 +1,6 @@
 import type { ReactElement } from 'react';
 import { Pressable, View } from 'react-native';
 import { Cloud, Cpu, Lock } from 'lucide-react-native';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import type { AppMode } from './ModeSwitchModal';
@@ -9,6 +8,7 @@ import type { AppMode } from './ModeSwitchModal';
 export interface ModeToggleProps {
   mode?: AppMode;
   cloudJoined?: boolean;
+  cloudUnlocked?: boolean;
   waitlistRank?: number | undefined;
   onChange?: (mode: AppMode) => void;
   onTapCloud?: () => void;
@@ -17,15 +17,21 @@ export interface ModeToggleProps {
 export function ModeToggle({
   mode = 'local',
   cloudJoined = false,
+  cloudUnlocked = false,
   waitlistRank,
   onTapCloud,
 }: ModeToggleProps): ReactElement {
   const colors = useThemeColors();
-  const cloudLabel = cloudJoined
-    ? waitlistRank
-      ? `Waitlist #${waitlistRank}`
-      : 'Waitlisted'
-    : 'Waitlist';
+  const cloudLabel = cloudUnlocked
+    ? 'Cloud'
+    : cloudJoined
+      ? waitlistRank
+        ? `Waitlist #${waitlistRank}`
+        : 'Waitlisted'
+      : 'Waitlist';
+  const cloudActive = mode === 'cloud';
+  const cloudAccessible = cloudUnlocked || cloudJoined;
+  const cloudAccessibilityLabel = cloudUnlocked ? 'AGI Cloud' : `AGI Cloud ${cloudLabel}`;
 
   return (
     <View
@@ -38,7 +44,7 @@ export function ModeToggle({
         borderWidth: 1,
         borderColor: colors.border,
         padding: 3,
-        maxWidth: 260,
+        maxWidth: 190,
       }}
       accessibilityRole="tablist"
       accessibilityLabel="Chat execution mode"
@@ -52,11 +58,11 @@ export function ModeToggle({
           paddingHorizontal: 10,
           height: 28,
           borderRadius: 999,
-          backgroundColor: mode === 'local' ? `${colors.teal}22` : 'transparent',
+          backgroundColor: mode === 'local' ? colors.accentSurface : colors.transparent,
         }}
         accessibilityRole="tab"
         accessibilityState={{ selected: mode === 'local' }}
-        accessibilityLabel={formatChatExecutionModeLabel('local_only')}
+        accessibilityLabel="Local Mode"
       >
         <Cpu size={13} color={mode === 'local' ? colors.teal : colors.textMuted} />
         <Text
@@ -67,7 +73,7 @@ export function ModeToggle({
             color: mode === 'local' ? colors.teal : colors.textMuted,
           }}
         >
-          Local LLMs
+          Local Mode
         </Text>
       </View>
 
@@ -81,27 +87,31 @@ export function ModeToggle({
           paddingHorizontal: 9,
           height: 28,
           borderRadius: 999,
+          backgroundColor: cloudActive ? colors.accentSurface : colors.transparent,
           opacity: pressed ? 0.75 : 1,
         })}
         accessibilityRole="button"
-        accessibilityLabel={`${formatChatExecutionModeLabel('cloud_managed')} ${cloudLabel}`}
-        accessibilityHint="Opens the Cloud Managed waitlist"
+        accessibilityLabel={cloudAccessibilityLabel}
+        accessibilityHint="Opens AGI Cloud access"
       >
-        {cloudJoined ? (
-          <Cloud size={13} color={colors.textSecondary} />
+        {cloudAccessible ? (
+          <Cloud size={13} color={cloudActive ? colors.teal : colors.textSecondary} />
         ) : (
           <Lock size={12} color={colors.textMuted} />
         )}
-        <Text
-          numberOfLines={1}
-          style={{
-            fontSize: 12,
-            fontWeight: '500',
-            color: cloudJoined ? colors.textSecondary : colors.textMuted,
-          }}
-        >
-          {cloudLabel}
-        </Text>
+        {cloudAccessible ? (
+          <Text
+            numberOfLines={1}
+            style={{
+              fontSize: 12,
+              fontWeight: cloudActive ? '600' : '500',
+              color: cloudActive ? colors.teal : colors.textSecondary,
+              maxWidth: 70,
+            }}
+          >
+            {cloudLabel}
+          </Text>
+        ) : null}
       </Pressable>
     </View>
   );

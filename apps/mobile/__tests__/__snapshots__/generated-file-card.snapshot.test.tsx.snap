@@ -4,8 +4,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
 <View
   style={
     {
-      "backgroundColor": "rgba(255, 255, 255, 0.04)",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 8,
@@ -27,7 +27,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "backgroundColor": "rgba(255, 255, 255, 0.07)",
           "borderRadius": 6,
           "height": 48,
           "justifyContent": "center",
@@ -36,7 +36,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
       }
     >
       <View
-        color="#fb7185"
+        color="#f87171"
         size={16}
         testID="icon-file-text"
       />
@@ -62,7 +62,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "flex": 1,
               "fontSize": 13,
               "fontWeight": "600",
@@ -75,7 +75,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(16, 185, 129, 0.16)",
+              "backgroundColor": "rgba(16, 163, 127, 0.12)",
               "borderRadius": 9999,
               "flexDirection": "row",
               "gap": 4,
@@ -86,14 +86,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           testID="generated-file-status-badge"
         >
           <View
-            color="#10b981"
+            color="#10a37f"
             size={10}
             testID="icon-shield-check"
           />
           <Text
             style={
               {
-                "color": "#10b981",
+                "color": "#10a37f",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
@@ -117,7 +117,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -127,7 +127,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -139,7 +139,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 11,
             }
           }
@@ -162,8 +162,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -174,14 +174,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           }
         >
           <View
-            color="#aaa"
+            color="rgba(244, 244, 244, 0.74)"
             size={10}
             testID="icon-lock"
           />
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -194,8 +194,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -208,7 +208,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -221,8 +221,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -235,7 +235,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -250,7 +250,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the completed Local PDF tree 1
   <Text
     style={
       {
-        "color": "#777",
+        "color": "rgba(244, 244, 244, 0.48)",
         "fontSize": 11,
       }
     }
@@ -264,8 +264,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
 <View
   style={
     {
-      "backgroundColor": "rgba(255, 255, 255, 0.04)",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 8,
@@ -287,7 +287,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "backgroundColor": "rgba(255, 255, 255, 0.07)",
           "borderRadius": 6,
           "height": 48,
           "justifyContent": "center",
@@ -296,7 +296,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
       }
     >
       <View
-        color="#fb7185"
+        color="#f87171"
         size={16}
         testID="icon-file-text"
       />
@@ -322,7 +322,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "flex": 1,
               "fontSize": 13,
               "fontWeight": "600",
@@ -335,7 +335,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(239, 68, 68, 0.16)",
+              "backgroundColor": "rgba(248, 113, 113, 0.13)",
               "borderRadius": 9999,
               "flexDirection": "row",
               "gap": 4,
@@ -346,14 +346,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           testID="generated-file-status-badge"
         >
           <View
-            color="#ef4444"
+            color="#f87171"
             size={10}
             testID="icon-alert-triangle"
           />
           <Text
             style={
               {
-                "color": "#ef4444",
+                "color": "#f87171",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
@@ -377,7 +377,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -387,7 +387,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -399,7 +399,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 11,
             }
           }
@@ -422,8 +422,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -434,14 +434,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           }
         >
           <View
-            color="#aaa"
+            color="rgba(244, 244, 244, 0.74)"
             size={10}
             testID="icon-lock"
           />
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -454,8 +454,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -468,7 +468,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -481,8 +481,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -495,7 +495,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -510,7 +510,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the failed state tree 1`] = `
   <Text
     style={
       {
-        "color": "#777",
+        "color": "rgba(244, 244, 244, 0.48)",
         "fontSize": 11,
       }
     }
@@ -524,8 +524,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
 <View
   style={
     {
-      "backgroundColor": "rgba(255, 255, 255, 0.04)",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 8,
@@ -547,7 +547,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "backgroundColor": "rgba(255, 255, 255, 0.07)",
           "borderRadius": 6,
           "height": 48,
           "justifyContent": "center",
@@ -556,7 +556,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
       }
     >
       <View
-        color="#fb7185"
+        color="#f87171"
         size={16}
         testID="icon-file-text"
       />
@@ -582,7 +582,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "flex": 1,
               "fontSize": 13,
               "fontWeight": "600",
@@ -595,7 +595,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(16, 185, 129, 0.16)",
+              "backgroundColor": "rgba(16, 163, 127, 0.12)",
               "borderRadius": 9999,
               "flexDirection": "row",
               "gap": 4,
@@ -606,14 +606,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           testID="generated-file-status-badge"
         >
           <View
-            color="#10b981"
+            color="#10a37f"
             size={10}
             testID="icon-shield-check"
           />
           <Text
             style={
               {
-                "color": "#10b981",
+                "color": "#10a37f",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
@@ -637,7 +637,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -647,7 +647,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -659,7 +659,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 11,
             }
           }
@@ -682,8 +682,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -694,14 +694,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           }
         >
           <View
-            color="#aaa"
+            color="rgba(244, 244, 244, 0.74)"
             size={10}
             testID="icon-lock"
           />
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -714,8 +714,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -728,7 +728,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -741,8 +741,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -755,7 +755,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the managed-cloud tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -774,8 +774,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
 <View
   style={
     {
-      "backgroundColor": "rgba(255, 255, 255, 0.04)",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 8,
@@ -797,7 +797,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
+          "backgroundColor": "rgba(255, 255, 255, 0.07)",
           "borderRadius": 6,
           "height": 48,
           "justifyContent": "center",
@@ -806,7 +806,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
       }
     >
       <View
-        color="#fb7185"
+        color="#f87171"
         size={16}
         testID="icon-file-text"
       />
@@ -832,7 +832,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "flex": 1,
               "fontSize": 13,
               "fontWeight": "600",
@@ -845,7 +845,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(245, 158, 11, 0.16)",
+              "backgroundColor": "rgba(251, 191, 36, 0.14)",
               "borderRadius": 9999,
               "flexDirection": "row",
               "gap": 4,
@@ -856,14 +856,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           testID="generated-file-status-badge"
         >
           <View
-            color="#f59e0b"
+            color="#fbbf24"
             size={10}
             testID="icon-loader"
           />
           <Text
             style={
               {
-                "color": "#f59e0b",
+                "color": "#fbbf24",
                 "fontSize": 10,
                 "fontWeight": "600",
                 "letterSpacing": 0.5,
@@ -887,7 +887,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -897,7 +897,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
         <Text
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
               "fontSize": 11,
             }
           }
@@ -909,7 +909,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           accessibilityLabel="SHA-256 abcdef012345"
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 11,
             }
           }
@@ -932,8 +932,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -944,14 +944,14 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           }
         >
           <View
-            color="#aaa"
+            color="rgba(244, 244, 244, 0.74)"
             size={10}
             testID="icon-lock"
           />
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -964,8 +964,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -978,7 +978,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -991,8 +991,8 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           style={
             {
               "alignItems": "center",
-              "backgroundColor": "rgba(255, 255, 255, 0.04)",
-              "borderColor": "#333",
+              "backgroundColor": "rgba(255, 255, 255, 0.07)",
+              "borderColor": "rgba(255, 255, 255, 0.10)",
               "borderRadius": 9999,
               "borderWidth": 1,
               "flexDirection": "row",
@@ -1005,7 +1005,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
           <Text
             style={
               {
-                "color": "#aaa",
+                "color": "rgba(244, 244, 244, 0.74)",
                 "fontSize": 10,
                 "fontWeight": "600",
               }
@@ -1020,7 +1020,7 @@ exports[`Mobile GeneratedFileCard snapshots locks the running state tree 1`] = `
   <Text
     style={
       {
-        "color": "#777",
+        "color": "rgba(244, 244, 244, 0.48)",
         "fontSize": 11,
       }
     }

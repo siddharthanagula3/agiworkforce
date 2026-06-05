@@ -23,7 +23,7 @@ import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, type ColorScheme } from '@/src/ui/theme';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
 import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
@@ -143,8 +143,9 @@ type ScreenId = 'hero' | 'device-tier' | 'download';
 // Main screen
 // ---------------------------------------------------------------------------
 export default function OnboardingScreen() {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
+  const primaryButtonTextColor = isDark ? colors.black : colors.white;
 
   const [screen, setScreen] = useState<ScreenId>('hero');
   const [disclosureVisible, setDisclosureVisible] = useState(false);
@@ -387,10 +388,17 @@ export default function OnboardingScreen() {
         exiting={FadeOut.duration(160)}
         style={{ flex: 1 }}
       >
-        {screen === 'hero' && <HeroScreen colors={colors} onStartChatting={handleHeroCTA} />}
+        {screen === 'hero' && (
+          <HeroScreen
+            colors={colors}
+            primaryButtonTextColor={primaryButtonTextColor}
+            onStartChatting={handleHeroCTA}
+          />
+        )}
         {screen === 'device-tier' && (
           <DeviceTierScreen
             colors={colors}
+            primaryButtonTextColor={primaryButtonTextColor}
             deviceInfo={deviceInfo}
             model={recommendedModel}
             onDownload={handleStartDownload}
@@ -431,9 +439,11 @@ export default function OnboardingScreen() {
 // ---------------------------------------------------------------------------
 function HeroScreen({
   colors,
+  primaryButtonTextColor,
   onStartChatting,
 }: {
-  colors: ReturnType<typeof useThemeColors>;
+  colors: ColorScheme;
+  primaryButtonTextColor: string;
   onStartChatting: () => void;
 }) {
   return (
@@ -473,7 +483,7 @@ function HeroScreen({
         accessibilityLabel="Start chatting"
         style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
       >
-        <Text style={[styles.ctaBtnText, { color: colors.black }]}>Start chatting</Text>
+        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Start chatting</Text>
       </Pressable>
 
       <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
@@ -517,12 +527,14 @@ function AgiNativeMark({
 // ---------------------------------------------------------------------------
 function DeviceTierScreen({
   colors,
+  primaryButtonTextColor,
   deviceInfo,
   model,
   onDownload,
   onPickModel,
 }: {
-  colors: ReturnType<typeof useThemeColors>;
+  colors: ColorScheme;
+  primaryButtonTextColor: string;
   deviceInfo: DeviceTierInfo;
   model: RecommendedModel;
   onDownload: (cellularEnabled: boolean) => void;
@@ -557,13 +569,12 @@ function DeviceTierScreen({
           {
             backgroundColor: colors.surfaceElevated,
             borderColor: colors.border,
-            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
           },
         ]}
       >
         <View style={styles.modelCardHeader}>
           <Text style={[styles.modelName, { color: colors.textPrimary }]}>{model.displayName}</Text>
-          <View style={[styles.tierBadge, { backgroundColor: 'rgba(62,184,196,0.12)' }]}>
+          <View style={[styles.tierBadge, { backgroundColor: colors.accentSurface }]}>
             <Text style={[styles.tierBadgeText, { color: colors.teal }]}>Recommended</Text>
           </View>
         </View>
@@ -584,7 +595,7 @@ function DeviceTierScreen({
         )}
       </View>
 
-      {/* Cellular toggle — off by default (Wi-Fi first for India) */}
+      {/* Cellular toggle is off by default so large model downloads prefer Wi-Fi. */}
       {model.needsDownload && (
         <Pressable
           testID="device-tier-cellular-toggle"
@@ -609,7 +620,7 @@ function DeviceTierScreen({
         accessibilityLabel={model.needsDownload ? 'Download model' : 'Continue'}
         style={[styles.ctaBtn, { backgroundColor: colors.teal, marginTop: 24 }]}
       >
-        <Text style={[styles.ctaBtnText, { color: colors.black }]}>
+        <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>
           {model.needsDownload ? `Download ${model.displayName}` : 'Continue'}
         </Text>
       </Pressable>
@@ -622,7 +633,7 @@ function DeviceTierScreen({
         onPress={onPickModel}
         style={styles.secondaryBtn}
       >
-        <Text style={[styles.secondaryBtnText, { color: colors.textMuted }]}>
+        <Text style={[styles.secondaryBtnText, { color: colors.textSecondary }]}>
           Pick a different model
         </Text>
       </Pressable>
@@ -642,7 +653,7 @@ function DownloadScreen({
   error,
   skipDisabled = false,
 }: {
-  colors: ReturnType<typeof useThemeColors>;
+  colors: ColorScheme;
   progress: number;
   speedMBs: number;
   model: RecommendedModel;
@@ -664,7 +675,13 @@ function DownloadScreen({
 
   return (
     <View testID="onboarding-download-screen" style={styles.downloadRoot}>
-      <RadialProgress progress={progress} size={160} stroke={10} color={colors.terraCotta} />
+      <RadialProgress
+        progress={progress}
+        size={160}
+        stroke={10}
+        color={colors.terraCotta}
+        trackColor={colors.progressTrack}
+      />
 
       <Text
         testID="download-percent"
@@ -717,7 +734,7 @@ function DownloadScreen({
         accessibilityState={{ disabled: skipDisabled }}
         style={[
           styles.skipBtn,
-          { backgroundColor: 'rgba(255,255,255,0.08)', opacity: skipDisabled ? 0.4 : 1 },
+          { backgroundColor: colors.neutralSurface, opacity: skipDisabled ? 0.4 : 1 },
         ]}
       >
         <Text style={[styles.skipBtnText, { color: colors.textSecondary }]}>Continue to chat</Text>
@@ -734,11 +751,13 @@ function RadialProgress({
   size,
   stroke,
   color,
+  trackColor,
 }: {
   progress: number;
   size: number;
   stroke: number;
   color: string;
+  trackColor: string;
 }) {
   const normalizedProgress = Math.max(0, Math.min(100, progress));
   const radius = (size - stroke) / 2;
@@ -755,7 +774,7 @@ function RadialProgress({
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke="rgba(255,255,255,0.08)"
+          stroke={trackColor}
           strokeWidth={stroke}
           fill="none"
         />

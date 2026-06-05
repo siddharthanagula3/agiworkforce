@@ -9,6 +9,8 @@ jest.mock('@/src/ui/theme', () => ({
     teal: '#14b8a6',
     textMuted: '#94a3b8',
     textSecondary: '#cbd5e1',
+    accentSurface: '#0f766e22',
+    transparent: 'transparent',
   }),
 }));
 
@@ -31,8 +33,10 @@ describe('ModeToggle', () => {
     const { getByTestId, getByText } = render(<ModeToggle />);
 
     expect(getByTestId('chat.mode-toggle')).toBeTruthy();
-    expect(getByText('Local LLMs')).toBeTruthy();
-    expect(getByText('Waitlist')).toBeTruthy();
+    expect(getByText('Local Mode')).toBeTruthy();
+    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe(
+      'AGI Cloud Waitlist',
+    );
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
   });
 
@@ -50,5 +54,13 @@ describe('ModeToggle', () => {
 
     expect(getByText('Waitlist #42')).toBeTruthy();
     expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
+  });
+
+  it('shows unlocked cloud as the active mode', () => {
+    const { getByText, getByTestId } = render(<ModeToggle mode="cloud" cloudUnlocked />);
+
+    expect(getByText('Cloud')).toBeTruthy();
+    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(false);
+    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityLabel).toBe('AGI Cloud');
   });
 });

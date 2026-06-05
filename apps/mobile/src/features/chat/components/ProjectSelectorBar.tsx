@@ -11,7 +11,7 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { FolderOpen, ChevronDown, X, Check, FolderMinus } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useProjectStore, type Project } from '@/src/features/projects/store';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Dropdown item
@@ -20,20 +20,28 @@ import { colors } from '@/src/ui/theme';
 interface ProjectDropdownItemProps {
   project: Project;
   isActive: boolean;
+  colors: ColorScheme;
   onSelect: (id: string) => void;
 }
 
-function ProjectDropdownItem({ project, isActive, onSelect }: ProjectDropdownItemProps) {
+function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDropdownItemProps) {
   return (
     <Pressable
       onPress={() => onSelect(project.id)}
-      className="flex-row items-center gap-3 px-4 py-3 active:bg-white/5"
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+      })}
       accessibilityLabel={`Select project: ${project.name}`}
       accessibilityRole="menuitem"
     >
       <View
         className="w-8 h-8 rounded-lg items-center justify-center"
-        style={{ backgroundColor: isActive ? `${colors.teal}20` : `${colors.textMuted}15` }}
+        style={{ backgroundColor: isActive ? colors.accentSurface : colors.neutralSurface }}
       >
         <FolderOpen size={16} color={isActive ? colors.teal : colors.textMuted} />
       </View>
@@ -46,7 +54,7 @@ function ProjectDropdownItem({ project, isActive, onSelect }: ProjectDropdownIte
           {project.name}
         </Text>
         {project.description ? (
-          <Text className="text-[11px] text-white/40 mt-0.5" numberOfLines={1}>
+          <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
             {project.description}
           </Text>
         ) : null}
@@ -61,6 +69,7 @@ function ProjectDropdownItem({ project, isActive, onSelect }: ProjectDropdownIte
 // ---------------------------------------------------------------------------
 
 export function ProjectSelectorBar() {
+  const colors = useThemeColors();
   const projects = useProjectStore((s) => s.projects);
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
@@ -99,9 +108,9 @@ export function ProjectSelectorBar() {
               onPress={handleOpenDropdown}
               className="flex-row items-center gap-2 self-start rounded-full px-3 py-1.5 active:opacity-70"
               style={{
-                backgroundColor: `${colors.teal}15`,
+                backgroundColor: colors.accentSurface,
                 borderWidth: 1,
-                borderColor: `${colors.teal}30`,
+                borderColor: colors.accentBorder,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to change`}
               accessibilityRole="button"
@@ -114,7 +123,7 @@ export function ProjectSelectorBar() {
               >
                 {activeProject.name}
               </Text>
-              <ChevronDown size={11} color={`${colors.teal}90`} />
+              <ChevronDown size={11} color={colors.teal} />
               <Pressable
                 onPress={handleClearProject}
                 hitSlop={8}
@@ -122,7 +131,7 @@ export function ProjectSelectorBar() {
                 accessibilityLabel="Clear project"
                 accessibilityRole="button"
               >
-                <X size={12} color={`${colors.teal}80`} />
+                <X size={12} color={colors.teal} />
               </Pressable>
             </Pressable>
           </Animated.View>
@@ -131,12 +140,12 @@ export function ProjectSelectorBar() {
           <Pressable
             onPress={handleOpenDropdown}
             className="flex-row items-center gap-1.5 self-start rounded-full px-3 py-1.5 active:opacity-70"
-            style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+            style={{ backgroundColor: colors.neutralSurface }}
             accessibilityLabel="Select a project for this chat"
             accessibilityRole="button"
           >
             <FolderMinus size={12} color={colors.textMuted} />
-            <Text className="text-[11px] text-white/40">No project</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>No project</Text>
             <ChevronDown size={11} color={colors.textMuted} />
           </Pressable>
         )}
@@ -151,7 +160,7 @@ export function ProjectSelectorBar() {
       >
         <Pressable
           className="flex-1"
-          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          style={{ backgroundColor: colors.scrim }}
           onPress={() => setDropdownVisible(false)}
         >
           <Pressable
@@ -164,15 +173,34 @@ export function ProjectSelectorBar() {
                 backgroundColor: colors.surfaceOverlay,
                 borderRadius: 16,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.08)',
+                borderColor: colors.border,
               }}
             >
               {/* Header */}
-              <View className="flex-row items-center justify-between px-4 py-3 border-b border-white/8">
-                <Text className="text-[13px] font-semibold text-white/70">Select Project</Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.border,
+                }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: 13, fontWeight: '600' }}>
+                  Select Project
+                </Text>
                 <Pressable
                   onPress={() => setDropdownVisible(false)}
-                  className="w-6 h-6 rounded-full items-center justify-center active:bg-white/10"
+                  style={({ pressed }) => ({
+                    width: 24,
+                    height: 24,
+                    borderRadius: 12,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  })}
                 >
                   <X size={14} color={colors.textMuted} />
                 </Pressable>
@@ -184,17 +212,24 @@ export function ProjectSelectorBar() {
                   setActiveProject(null);
                   setDropdownVisible(false);
                 }}
-                className="flex-row items-center gap-3 px-4 py-3 active:bg-white/5"
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                })}
                 accessibilityLabel="No project"
                 accessibilityRole="menuitem"
               >
                 <View
                   className="w-8 h-8 rounded-lg items-center justify-center"
-                  style={{ backgroundColor: 'rgba(255,255,255,0.05)' }}
+                  style={{ backgroundColor: colors.neutralSurface }}
                 >
                   <FolderMinus size={16} color={colors.textMuted} />
                 </View>
-                <Text className="text-[14px] text-white/50 flex-1">No project</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 14, flex: 1 }}>No project</Text>
                 {!activeProjectId && <Check size={16} color={colors.textMuted} />}
               </Pressable>
 
@@ -207,6 +242,7 @@ export function ProjectSelectorBar() {
                   <ProjectDropdownItem
                     project={item}
                     isActive={item.id === activeProjectId}
+                    colors={colors}
                     onSelect={handleSelect}
                   />
                 )}
@@ -214,7 +250,7 @@ export function ProjectSelectorBar() {
                   <View
                     style={{
                       height: 1,
-                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      backgroundColor: colors.borderLight,
                       marginHorizontal: 16,
                     }}
                   />

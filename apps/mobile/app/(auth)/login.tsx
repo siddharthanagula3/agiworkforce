@@ -5,15 +5,13 @@ import { Text } from '@/components/ui/text';
 import { LoginForm } from '@/src/features/auth/components/LoginForm';
 import { OAuthButtons } from '@/src/features/auth/components/OAuthButtons';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useThemeColors } from '@/src/ui/theme';
 
 export default function LoginScreen() {
-  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
-  // Public v1 keeps auth hidden. Invite-redeemed alpha testers can sign in or
-  // sign up after unlocking Cloud Managed access with their invitation code.
-  if (!FEATURES.auth && !cloudUnlocked) return <Redirect href="/(app)" />;
+  const colors = useThemeColors();
+  if (!FEATURES.auth) return <Redirect href="/(app)" />;
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         className="flex-1"
@@ -25,13 +23,18 @@ export default function LoginScreen() {
           <View className="gap-8">
             {/* Logo + Title */}
             <View className="items-center gap-3">
-              <View className="w-16 h-16 rounded-2xl bg-teal-500 items-center justify-center">
-                <Text className="text-2xl font-bold text-white">AG</Text>
+              <View
+                className="w-16 h-16 rounded-2xl items-center justify-center"
+                style={{ backgroundColor: colors.teal }}
+              >
+                <Text className="text-2xl font-bold" style={{ color: colors.accentText }}>
+                  AG
+                </Text>
               </View>
               <Text variant="heading" className="text-center">
                 AGI Workforce
               </Text>
-              <Text className="text-center text-white/50">
+              <Text className="text-center" style={{ color: colors.textMuted }}>
                 Your AI desktop agent, in your pocket.
               </Text>
             </View>

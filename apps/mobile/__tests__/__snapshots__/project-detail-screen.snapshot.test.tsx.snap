@@ -9,7 +9,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
   }
   style={
     {
-      "backgroundColor": "#000",
+      "backgroundColor": "#0f0f0f",
       "flex": 1,
     }
   }
@@ -19,7 +19,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
     style={
       {
         "alignItems": "center",
-        "borderBottomColor": "#333",
+        "borderBottomColor": "rgba(255, 255, 255, 0.10)",
         "borderBottomWidth": 1,
         "flexDirection": "row",
         "height": 48,
@@ -68,7 +68,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={22}
         testID="icon-arrow-left"
       />
@@ -77,7 +77,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
       numberOfLines={1}
       style={
         {
-          "color": "#fff",
+          "color": "#f4f4f4",
           "flex": 1,
           "fontSize": 16,
           "fontWeight": "600",
@@ -128,7 +128,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={22}
         testID="icon-menu"
       />
@@ -145,8 +145,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
     <View
       style={
         {
-          "backgroundColor": "#1a1a1a",
-          "borderColor": "#333",
+          "backgroundColor": "#212121",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 12,
           "borderWidth": 1,
           "gap": 12,
@@ -159,7 +159,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
       <Text
         style={
           {
-            "color": "#fff",
+            "color": "#f4f4f4",
             "fontSize": 15,
             "fontWeight": "600",
           }
@@ -170,13 +170,12 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 13,
           }
         }
       >
-        Local Mode + Local LLMs
-         — project details sync when you join Cloud.
+        Local Mode. Project details sync when you join AGI Cloud.
       </Text>
       <View
         accessibilityLabel="Join Cloud waitlist"
@@ -214,8 +213,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           {
             "alignItems": "center",
             "alignSelf": "flex-start",
-            "backgroundColor": "#10b98120",
-            "borderColor": "#10b98140",
+            "backgroundColor": "rgba(244, 244, 244, 0.12)",
+            "borderColor": "rgba(244, 244, 244, 0.24)",
             "borderRadius": 8,
             "borderWidth": 1,
             "flexDirection": "row",
@@ -226,14 +225,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         }
       >
         <View
-          color="#10b981"
+          color="#f4f4f4"
           size={14}
           testID="icon-log-in"
         />
         <Text
           style={
             {
-              "color": "#10b981",
+              "color": "#f4f4f4",
               "fontSize": 13,
               "fontWeight": "600",
             }
@@ -246,8 +245,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
     <View
       style={
         {
-          "backgroundColor": "#1a1a1a",
-          "borderColor": "#333",
+          "backgroundColor": "#212121",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 10,
           "borderWidth": 1,
           "flexDirection": "row",
@@ -293,7 +292,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         style={
           {
             "alignItems": "center",
-            "backgroundColor": "#0e0e0e",
+            "backgroundColor": "#2a2a2a",
             "borderRadius": 8,
             "flex": 1,
             "paddingVertical": 7,
@@ -303,7 +302,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         <Text
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 13,
               "fontWeight": "600",
             }
@@ -357,7 +356,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
         <Text
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 13,
               "fontWeight": "500",
             }
@@ -408,14 +407,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#10b98118",
-              "borderColor": "#10b98135",
+              "backgroundColor": "#f4f4f418",
+              "borderColor": "#f4f4f435",
               "borderWidth": 1,
             }
           }
         >
           <View
-            color="#10b981"
+            color="#f4f4f4"
             size={16}
             testID="icon-plus"
           />
@@ -423,7 +422,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
             className="text-[14px] font-semibold"
             style={
               {
-                "color": "#10b981",
+                "color": "#f4f4f4",
               }
             }
           >
@@ -438,12 +437,12 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
           style={
             {
-              "backgroundColor": "#77714",
+              "backgroundColor": "rgba(244, 244, 244, 0.48)14",
             }
           }
         >
           <View
-            color="#777"
+            color="rgba(244, 244, 244, 0.48)"
             size={28}
             testID="icon-message-square"
           />
@@ -452,7 +451,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           className="text-[15px] font-semibold text-center mb-2"
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
             }
           }
         >
@@ -462,7 +461,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           className="text-[13px] text-center leading-[19px] mb-6"
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
             }
           }
         >
@@ -503,14 +502,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#10b98118",
-              "borderColor": "#10b98135",
+              "backgroundColor": "#f4f4f418",
+              "borderColor": "#f4f4f435",
               "borderWidth": 1,
             }
           }
         >
           <View
-            color="#10b981"
+            color="#f4f4f4"
             size={15}
             testID="icon-plus"
           />
@@ -518,7 +517,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
             className="text-[13px] font-semibold"
             style={
               {
-                "color": "#10b981",
+                "color": "#f4f4f4",
               }
             }
           >
@@ -541,7 +540,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the no-id empty
   style={
     {
       "alignItems": "center",
-      "backgroundColor": "#000",
+      "backgroundColor": "#0f0f0f",
       "flex": 1,
       "justifyContent": "center",
     }
@@ -550,7 +549,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the no-id empty
   <Text
     style={
       {
-        "color": "#aaa",
+        "color": "rgba(244, 244, 244, 0.74)",
       }
     }
   >
@@ -568,7 +567,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
   }
   style={
     {
-      "backgroundColor": "#000",
+      "backgroundColor": "#0f0f0f",
       "flex": 1,
     }
   }
@@ -578,7 +577,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
     style={
       {
         "alignItems": "center",
-        "borderBottomColor": "#333",
+        "borderBottomColor": "rgba(255, 255, 255, 0.10)",
         "borderBottomWidth": 1,
         "flexDirection": "row",
         "height": 48,
@@ -627,7 +626,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={22}
         testID="icon-arrow-left"
       />
@@ -636,7 +635,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
       numberOfLines={1}
       style={
         {
-          "color": "#fff",
+          "color": "#f4f4f4",
           "flex": 1,
           "fontSize": 16,
           "fontWeight": "600",
@@ -687,7 +686,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={22}
         testID="icon-menu"
       />
@@ -713,8 +712,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
         accessibilityLabel="Project: Snapshot project"
         style={
           {
-            "backgroundColor": "#1a1a1a",
-            "borderColor": "#333",
+            "backgroundColor": "#212121",
+            "borderColor": "rgba(255, 255, 255, 0.10)",
             "borderRadius": 12,
             "borderWidth": 1,
             "flexDirection": "column",
@@ -774,7 +773,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
                 numberOfLines={1}
                 style={
                   {
-                    "color": "#fff",
+                    "color": "#f4f4f4",
                     "fontSize": 16,
                     "fontWeight": "600",
                   }
@@ -814,7 +813,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
               numberOfLines={2}
               style={
                 {
-                  "color": "#aaa",
+                  "color": "rgba(244, 244, 244, 0.74)",
                   "fontSize": 12,
                   "marginTop": 2,
                 }
@@ -915,14 +914,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             }
           >
             <View
-              color="#777"
+              color="rgba(244, 244, 244, 0.48)"
               size={11}
               testID="icon-users"
             />
             <Text
               style={
                 {
-                  "color": "#777",
+                  "color": "rgba(244, 244, 244, 0.48)",
                   "fontSize": 11,
                 }
               }
@@ -942,7 +941,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             <Text
               style={
                 {
-                  "color": "#777",
+                  "color": "rgba(244, 244, 244, 0.48)",
                   "fontSize": 11,
                 }
               }
@@ -964,8 +963,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           <View
             style={
               {
-                "backgroundColor": "#0e0e0e",
-                "borderColor": "#333",
+                "backgroundColor": "#2a2a2a",
+                "borderColor": "rgba(255, 255, 255, 0.10)",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "paddingHorizontal": 6,
@@ -976,7 +975,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             <Text
               style={
                 {
-                  "color": "#aaa",
+                  "color": "rgba(244, 244, 244, 0.74)",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.4,
@@ -990,8 +989,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           <View
             style={
               {
-                "backgroundColor": "#0e0e0e",
-                "borderColor": "#333",
+                "backgroundColor": "#2a2a2a",
+                "borderColor": "rgba(255, 255, 255, 0.10)",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "paddingHorizontal": 6,
@@ -1002,7 +1001,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             <Text
               style={
                 {
-                  "color": "#aaa",
+                  "color": "rgba(244, 244, 244, 0.74)",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.4,
@@ -1016,8 +1015,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           <View
             style={
               {
-                "backgroundColor": "#0e0e0e",
-                "borderColor": "#333",
+                "backgroundColor": "#2a2a2a",
+                "borderColor": "rgba(255, 255, 255, 0.10)",
                 "borderRadius": 4,
                 "borderWidth": 1,
                 "paddingHorizontal": 6,
@@ -1028,7 +1027,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             <Text
               style={
                 {
-                  "color": "#aaa",
+                  "color": "rgba(244, 244, 244, 0.74)",
                   "fontSize": 10,
                   "fontWeight": "500",
                   "letterSpacing": 0.4,
@@ -1045,8 +1044,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
     <View
       style={
         {
-          "backgroundColor": "#1a1a1a",
-          "borderColor": "#333",
+          "backgroundColor": "#212121",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 10,
           "borderWidth": 1,
           "flexDirection": "row",
@@ -1092,7 +1091,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
         style={
           {
             "alignItems": "center",
-            "backgroundColor": "#0e0e0e",
+            "backgroundColor": "#2a2a2a",
             "borderRadius": 8,
             "flex": 1,
             "paddingVertical": 7,
@@ -1102,7 +1101,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
         <Text
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 13,
               "fontWeight": "600",
             }
@@ -1156,7 +1155,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
         <Text
           style={
             {
-              "color": "#777",
+              "color": "rgba(244, 244, 244, 0.48)",
               "fontSize": 13,
               "fontWeight": "500",
             }
@@ -1207,14 +1206,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#10b98118",
-              "borderColor": "#10b98135",
+              "backgroundColor": "#f4f4f418",
+              "borderColor": "#f4f4f435",
               "borderWidth": 1,
             }
           }
         >
           <View
-            color="#10b981"
+            color="#f4f4f4"
             size={16}
             testID="icon-plus"
           />
@@ -1222,7 +1221,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             className="text-[14px] font-semibold"
             style={
               {
-                "color": "#10b981",
+                "color": "#f4f4f4",
               }
             }
           >
@@ -1237,12 +1236,12 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           className="w-16 h-16 rounded-2xl items-center justify-center mb-4"
           style={
             {
-              "backgroundColor": "#77714",
+              "backgroundColor": "rgba(244, 244, 244, 0.48)14",
             }
           }
         >
           <View
-            color="#777"
+            color="rgba(244, 244, 244, 0.48)"
             size={28}
             testID="icon-message-square"
           />
@@ -1251,7 +1250,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           className="text-[15px] font-semibold text-center mb-2"
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
             }
           }
         >
@@ -1261,7 +1260,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           className="text-[13px] text-center leading-[19px] mb-6"
           style={
             {
-              "color": "#aaa",
+              "color": "rgba(244, 244, 244, 0.74)",
             }
           }
         >
@@ -1302,14 +1301,14 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           onStartShouldSetResponder={[Function]}
           style={
             {
-              "backgroundColor": "#10b98118",
-              "borderColor": "#10b98135",
+              "backgroundColor": "#f4f4f418",
+              "borderColor": "#f4f4f435",
               "borderWidth": 1,
             }
           }
         >
           <View
-            color="#10b981"
+            color="#f4f4f4"
             size={15}
             testID="icon-plus"
           />
@@ -1317,7 +1316,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
             className="text-[13px] font-semibold"
             style={
               {
-                "color": "#10b981",
+                "color": "#f4f4f4",
               }
             }
           >

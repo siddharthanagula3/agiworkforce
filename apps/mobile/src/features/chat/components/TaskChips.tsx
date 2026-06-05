@@ -75,16 +75,12 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
               paddingHorizontal: 12,
               borderWidth: 1,
               borderRadius: 999,
-              borderColor: active
-                ? `${colors.teal}66`
-                : pressed
-                  ? 'rgba(255,255,255,0.15)'
-                  : colors.border,
+              borderColor: active ? colors.accentBorder : pressed ? colors.border : colors.border,
               backgroundColor: active
-                ? `${colors.teal}22`
+                ? colors.accentSurface
                 : pressed
                   ? colors.surfaceHover
-                  : 'transparent',
+                  : colors.transparent,
             })}
             accessibilityLabel={`${chip.label} mode`}
             accessibilityRole="button"

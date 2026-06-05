@@ -4,8 +4,8 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
 <View
   style={
     {
-      "backgroundColor": "rgba(56, 189, 248, 0.06)",
-      "borderColor": "rgba(56, 189, 248, 0.3)",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(244, 244, 244, 0.24)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 6,
@@ -24,7 +24,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
     }
   >
     <View
-      color="#7dd3fc"
+      color="#60a5fa"
       size={14}
       testID="icon-cloud"
     />
@@ -32,7 +32,7 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
       numberOfLines={1}
       style={
         {
-          "color": "#fff",
+          "color": "#f4f4f4",
           "flex": 1,
           "fontSize": 12,
           "fontWeight": "600",
@@ -45,8 +45,8 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
-          "borderColor": "#333",
+          "backgroundColor": "#171717",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 9999,
           "borderWidth": 1,
           "flexDirection": "row",
@@ -57,14 +57,14 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={10}
         testID="icon-lock"
       />
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 9,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -79,13 +79,13 @@ exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for l
   <Text
     style={
       {
-        "color": "#aaa",
+        "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 11,
         "lineHeight": 15,
       }
     }
   >
-    Cloud access is invite-gated on Mobile. Continue after Cloud Managed access is enabled.
+    Cloud access is available by invite. Join the waitlist or enter an invite code to continue.
   </Text>
 </View>
 `;
@@ -94,8 +94,8 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
 <View
   style={
     {
-      "backgroundColor": "rgba(16, 185, 129, 0.06)",
-      "borderColor": "rgba(16, 185, 129, 0.3)",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(16, 163, 127, 0.36)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 6,
@@ -114,7 +114,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
     }
   >
     <View
-      color="#10b981"
+      color="#10a37f"
       size={14}
       testID="icon-hard-drive"
     />
@@ -122,7 +122,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       numberOfLines={1}
       style={
         {
-          "color": "#fff",
+          "color": "#f4f4f4",
           "flex": 1,
           "fontSize": 12,
           "fontWeight": "600",
@@ -135,8 +135,8 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
-          "borderColor": "#333",
+          "backgroundColor": "#171717",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 9999,
           "borderWidth": 1,
           "flexDirection": "row",
@@ -147,14 +147,14 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={10}
         testID="icon-lock"
       />
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 9,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -169,7 +169,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
   <Text
     style={
       {
-        "color": "#777",
+        "color": "rgba(244, 244, 244, 0.48)",
         "fontSize": 10,
       }
     }
@@ -179,13 +179,13 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
   <Text
     style={
       {
-        "color": "#aaa",
+        "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 11,
         "lineHeight": 15,
       }
     }
   >
-    Local turn. The model runs on your device and nothing is uploaded to AGI cloud or third-party providers.
+    The model runs on your device. Nothing is uploaded unless you choose Cloud.
   </Text>
   <View
     accessibilityLabel="Show send details"
@@ -229,14 +229,14 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
     }
   >
     <View
-      color="#777"
+      color="rgba(244, 244, 244, 0.48)"
       size={12}
       testID="icon-chevron-down"
     />
     <Text
       style={
         {
-          "color": "#777",
+          "color": "rgba(244, 244, 244, 0.48)",
           "fontSize": 9,
           "fontWeight": "700",
           "letterSpacing": 0.5,
@@ -254,8 +254,8 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
 <View
   style={
     {
-      "backgroundColor": "rgba(56, 189, 248, 0.06)",
-      "borderColor": "rgba(56, 189, 248, 0.3)",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(244, 244, 244, 0.24)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 6,
@@ -274,7 +274,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
     }
   >
     <View
-      color="#7dd3fc"
+      color="#60a5fa"
       size={14}
       testID="icon-cloud"
     />
@@ -282,7 +282,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       numberOfLines={1}
       style={
         {
-          "color": "#fff",
+          "color": "#f4f4f4",
           "flex": 1,
           "fontSize": 12,
           "fontWeight": "600",
@@ -295,8 +295,8 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       style={
         {
           "alignItems": "center",
-          "backgroundColor": "rgba(255, 255, 255, 0.04)",
-          "borderColor": "#333",
+          "backgroundColor": "#171717",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 9999,
           "borderWidth": 1,
           "flexDirection": "row",
@@ -307,14 +307,14 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
       }
     >
       <View
-        color="#aaa"
+        color="rgba(244, 244, 244, 0.74)"
         size={10}
         testID="icon-lock"
       />
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 9,
             "fontWeight": "700",
             "letterSpacing": 0.5,
@@ -329,7 +329,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
   <Text
     style={
       {
-        "color": "#777",
+        "color": "rgba(244, 244, 244, 0.48)",
         "fontSize": 10,
       }
     }
@@ -339,7 +339,7 @@ exports[`Mobile SendPreview snapshots locks the Managed turn rendered tree 1`] =
   <Text
     style={
       {
-        "color": "#aaa",
+        "color": "rgba(244, 244, 244, 0.74)",
         "fontSize": 11,
         "lineHeight": 15,
       }

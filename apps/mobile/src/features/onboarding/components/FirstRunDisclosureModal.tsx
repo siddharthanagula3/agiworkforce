@@ -29,7 +29,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             styles.sheet,
             {
               backgroundColor: colors.surfaceBase,
-              shadowColor: '#000',
+              shadowColor: colors.black,
               shadowOffset: { width: 0, height: -8 },
               shadowOpacity: 0.18,
               shadowRadius: 24,
@@ -37,7 +37,7 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             },
           ]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, { backgroundColor: colors.neutralBorder }]} />
 
           <ScrollView
             style={styles.scroll}
@@ -84,7 +84,9 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
               accessibilityLabel={copy.acceptLabel}
               style={[styles.acceptBtn, { backgroundColor: colors.teal }]}
             >
-              <Text style={styles.acceptBtnText}>{copy.acceptLabel}</Text>
+              <Text style={[styles.acceptBtnText, { color: colors.accentText }]}>
+                {copy.acceptLabel}
+              </Text>
             </Pressable>
             <Pressable
               testID="disclosure-decline-btn"
@@ -118,7 +120,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignSelf: 'center',
     marginTop: 12,
     marginBottom: 4,
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginBottom: 16,
-    letterSpacing: -0.5,
+    letterSpacing: 0,
   },
   summary: {
     fontSize: 15,
@@ -178,7 +179,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   acceptBtnText: {
-    color: '#000',
     fontWeight: '600',
     fontSize: 16,
   },
