@@ -182,10 +182,6 @@ jest.mock('../src/ui/theme', () => ({
   },
 }));
 
-jest.mock('../src/features/chat/components/AutoApproveToggle', () => ({
-  AutoApproveToggle: jest.fn().mockReturnValue(null),
-}));
-
 jest.mock('../src/features/chat/components/TemporaryChatToggle', () => ({
   TemporaryChatToggle: jest.fn().mockReturnValue(null),
 }));

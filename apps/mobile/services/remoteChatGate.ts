@@ -7,7 +7,7 @@ export interface RemoteChatFeatureFlags {
 }
 
 export const MOBILE_REMOTE_CHAT_DISABLED_MESSAGE =
-  'Remote chat is disabled while Mobile is in Local Mode. Mobile supports Local and Cloud Managed invite/waitlist only. Generated PDFs, docs, slides, code execution, and browser environments require Desktop or Cloud Managed access.';
+  'Mobile is using Local Mode for this chat. AGI Cloud chat opens with invite access; generated PDFs, docs, slides, code execution, and browser environments require Desktop or AGI Cloud.';
 
 export class RemoteChatDisabledError extends Error {
   readonly code = 'MOBILE_REMOTE_CHAT_DISABLED';

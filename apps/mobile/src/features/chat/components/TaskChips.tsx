@@ -1,45 +1,42 @@
 import { useCallback } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
-import {
-  Code2,
-  PenLine,
-  Search,
-  Image as ImageIcon,
-  Film,
-  Monitor,
-  ScanText,
-  Languages,
-} from 'lucide-react-native';
+import { Code2, PenLine, Search } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { FEATURES } from '@/lib/v1FeatureFlags';
 
-export type TaskChipType =
-  | 'code'
-  | 'write'
-  | 'research'
-  | 'image'
-  | 'video'
-  | 'computer'
-  | 'scan'
-  | 'translate';
+export type TaskChipType = 'code' | 'write' | 'research';
+
+export const TASK_CHIP_SEND_CONTEXT: Record<
+  TaskChipType,
+  { mode: 'create' | 'research'; taskInstruction: string }
+> = {
+  code: {
+    mode: 'create',
+    taskInstruction:
+      'Task: Code. Help with software development using precise steps, code examples when useful, and clear caveats for unverified assumptions.',
+  },
+  write: {
+    mode: 'create',
+    taskInstruction:
+      'Task: Write. Draft, edit, or structure writing with practical language and a polished final answer.',
+  },
+  research: {
+    mode: 'research',
+    taskInstruction:
+      'Task: Research. Analyze carefully, separate facts from uncertainty, and avoid claiming live web access unless a web-search tool is available.',
+  },
+};
 
 interface ChipDef {
   type: TaskChipType;
   label: string;
   Icon: React.ComponentType<{ size: number; color: string; strokeWidth?: number }>;
-  disabledReason?: 'desktop';
 }
 
 const CHIPS: ChipDef[] = [
-  { type: 'scan', label: 'Scan', Icon: ScanText },
   { type: 'code', label: 'Code', Icon: Code2 },
   { type: 'write', label: 'Write', Icon: PenLine },
   { type: 'research', label: 'Research', Icon: Search },
-  { type: 'image', label: 'Image', Icon: ImageIcon },
-  { type: 'video', label: 'Video', Icon: Film },
-  { type: 'computer', label: 'Computer', Icon: Monitor, disabledReason: 'desktop' },
-  { type: 'translate', label: 'Translate', Icon: Languages },
 ];
 
 interface TaskChipsProps {
@@ -64,18 +61,12 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
       contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
     >
       {CHIPS.map((chip) => {
-        const disabled = chip.type === 'computer' && !FEATURES.computerUse;
-        const active = !disabled && activeChip === chip.type;
-        const contentColor = active
-          ? colors.teal
-          : disabled
-            ? colors.textMuted
-            : colors.textSecondary;
+        const active = activeChip === chip.type;
+        const contentColor = active ? colors.teal : colors.textSecondary;
         return (
           <Pressable
             key={chip.type}
             onPress={() => handlePress(chip.type)}
-            disabled={disabled}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -84,7 +75,6 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
               paddingHorizontal: 12,
               borderWidth: 1,
               borderRadius: 999,
-              opacity: disabled ? 0.62 : 1,
               borderColor: active
                 ? `${colors.teal}66`
                 : pressed
@@ -96,9 +86,9 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
                   ? colors.surfaceHover
                   : 'transparent',
             })}
-            accessibilityLabel={`${chip.label} mode${disabled ? ', desktop required' : ''}`}
+            accessibilityLabel={`${chip.label} mode`}
             accessibilityRole="button"
-            accessibilityState={{ selected: active, disabled }}
+            accessibilityState={{ selected: active }}
           >
             <chip.Icon size={14} color={contentColor} strokeWidth={1.75} />
             <Text
@@ -110,17 +100,6 @@ export function TaskChips({ activeChip, onChipPress }: TaskChipsProps) {
             >
               {chip.label}
             </Text>
-            {disabled && chip.disabledReason === 'desktop' ? (
-              <Text
-                style={{
-                  fontSize: 10,
-                  color: colors.textMuted,
-                  fontWeight: '600',
-                }}
-              >
-                Desktop
-              </Text>
-            ) : null}
           </Pressable>
         );
       })}

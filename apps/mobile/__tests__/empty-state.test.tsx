@@ -6,8 +6,7 @@
  *   - Shows "Ask anything" headline when no display name
  *   - Shows personalized "Hi, {name}" when name is set
  *   - Shows "How can I help you?" subtitle only when no display name
- *   - Shows 3 prompt chip buttons (Code, Write, Research)
- *   - Tapping a chip calls onSelectPrompt with correct prompt text
+ *   - Does not render duplicate prompt chips
  *   - Does NOT show suggestion-style cards or multi-step wizard content
  *   - Shows pairing banner on first launch
  *   - Pairing banner is dismissible
@@ -38,18 +37,10 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
-  // Export real lucide names; TaskChips imports Image (not ImageIcon) and Code2
   return new Proxy(
     {
       Monitor: icon,
       X: icon,
-      Code2: icon,
-      PenLine: icon,
-      Search: icon,
-      Image: icon,
-      Film: icon,
-      ScanText: icon,
-      Languages: icon,
     },
     { get: (target, prop) => target[prop as keyof typeof target] ?? icon },
   );
@@ -197,35 +188,14 @@ describe('ChatEmptyState', () => {
   });
 
   describe('prompt chips', () => {
-    it('renders all prompt chip buttons', () => {
-      const { getByLabelText } = render(<ChatEmptyState />);
-      expect(getByLabelText('Scan mode')).toBeTruthy();
-      expect(getByLabelText('Code mode')).toBeTruthy();
-      expect(getByLabelText('Write mode')).toBeTruthy();
-      expect(getByLabelText('Research mode')).toBeTruthy();
-      expect(getByLabelText('Image mode')).toBeTruthy();
-      expect(getByLabelText('Video mode')).toBeTruthy();
-      expect(getByLabelText('Computer mode, desktop required')).toBeTruthy();
-      expect(getByLabelText('Translate mode')).toBeTruthy();
-    });
+    it('does not render duplicate prompt chips inside the centered empty state', () => {
+      const { queryByLabelText } = render(<ChatEmptyState />);
 
-    it('calls onSelectPrompt with correct text when Code chip is tapped', () => {
-      const onSelectPrompt = jest.fn();
-      const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
-      fireEvent.press(getByLabelText('Code mode'));
-      expect(onSelectPrompt).toHaveBeenCalledWith('Help me write a function that...');
-    });
-
-    it('calls onSelectPrompt with correct text when Write chip is tapped', () => {
-      const onSelectPrompt = jest.fn();
-      const { getByLabelText } = render(<ChatEmptyState onSelectPrompt={onSelectPrompt} />);
-      fireEvent.press(getByLabelText('Write mode'));
-      expect(onSelectPrompt).toHaveBeenCalledWith('Write a professional email about...');
-    });
-
-    it('does not crash when onSelectPrompt is not provided', () => {
-      const { getByLabelText } = render(<ChatEmptyState />);
-      expect(() => fireEvent.press(getByLabelText('Code mode'))).not.toThrow();
+      expect(queryByLabelText('Code mode')).toBeNull();
+      expect(queryByLabelText('Write mode')).toBeNull();
+      expect(queryByLabelText('Research mode')).toBeNull();
+      expect(queryByLabelText('Image mode')).toBeNull();
+      expect(queryByLabelText('Computer mode, desktop required')).toBeNull();
     });
   });
 

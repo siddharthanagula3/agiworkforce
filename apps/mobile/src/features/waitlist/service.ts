@@ -97,8 +97,8 @@ export async function joinWaitlist(input: JoinWaitlistInput): Promise<JoinWaitli
       '/api/waitlist/cloud-managed',
       {
         email,
-        // SEPARATE mobile cloud-waitlist list (rolls up into the shared total via
-        // the cloud_managed_waitlist `source` column) — mobile local-only funnel.
+        // Separate mobile AGI Cloud waitlist source; rolls up into the shared
+        // cloud_managed_waitlist table via the source column.
         source: 'mobile',
         country: input.country,
         deviceModel: input.deviceModel,

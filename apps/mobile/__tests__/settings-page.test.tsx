@@ -110,7 +110,7 @@ describe('Settings page', () => {
   });
 
   it('shows cloud rows as invite-gated instead of live account controls', () => {
-    const { getByText, getAllByText } = render(<SettingsTabScreen />);
+    const { getByText, getAllByText, queryByText } = render(<SettingsTabScreen />);
 
     expect(getAllByText('Cloud').length).toBeGreaterThan(0);
     expect(getByText('Email / Phone Number')).toBeTruthy();
@@ -119,6 +119,7 @@ describe('Settings page', () => {
     expect(getByText('Plugins')).toBeTruthy();
     expect(getByText('Skills')).toBeTruthy();
     expect(getAllByText('Invite').length).toBeGreaterThan(0);
+    expect(queryByText('Log Out')).toBeNull();
   });
 
   it('opens invite modal from a cloud row', () => {

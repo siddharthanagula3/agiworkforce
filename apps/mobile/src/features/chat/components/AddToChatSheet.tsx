@@ -1,5 +1,5 @@
 import { useCallback, useRef, forwardRef, useState } from 'react';
-import { View, Pressable, Switch, Alert, Platform } from 'react-native';
+import { View, Pressable, Alert } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -7,68 +7,36 @@ import {
   Camera,
   Image as ImageIcon,
   FileText,
-  Zap,
   Globe,
   Paintbrush,
-  Heart,
   FolderPlus,
   Palette,
-  Wrench,
   Link,
   ChevronRight,
-  Check,
   EyeOff,
-  Shield,
-  ShieldCheck,
-  ShieldAlert,
   Lock,
   Monitor,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/switch';
 import { useChatStore, type ChatMode } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProjectStore } from '@/src/features/projects/store';
-import { useAgentControlStore } from '@/stores/agentControlStore';
-import { useModelStore } from '@/src/features/model-picker/store';
 import { useTheme } from '@/src/ui/theme';
 import { colors } from '@/src/ui/theme';
 import { StyleSelector } from './StyleSelector';
-import { ToolAccessSelector } from './ToolAccessSelector';
-import {
-  isHealthAvailable,
-  requestHealthPermission,
-} from '@/src/features/integrations/services/healthData';
 import { useWaitlistStore } from '@/src/features/waitlist';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
-import { getModelById } from '@/src/features/model-picker/service';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import {
-  AGENT_MODE_LABEL,
-  AGENT_MODE_DESCRIPTION,
-  EFFORT_LABEL,
-  PROVIDER_DISPLAY,
-  type AgentMode,
-  type Effort,
-} from '@agiworkforce/types';
-
-const AUTO_APPROVE_MODES = ['ask', 'smart', 'full'] as const;
 
 interface AddToChatSheetProps {
   onCamera: () => void;
   onPhotos: () => void;
   onFile: () => void;
-  /** Current conversation ID — used to resolve per-conversation agent control state. */
-  conversationId?: string | null;
 }
 
 const SNAP_POINTS = ['75%'];
-
-const TOOL_ACCESS_LABELS: Record<string, string> = {
-  auto: 'Auto',
-  'on-demand': 'On demand',
-  always: 'Always available',
-};
 
 const MODE_OPTIONS: Array<{
   id: ChatMode;
@@ -80,39 +48,19 @@ const MODE_OPTIONS: Array<{
   { id: 'create', label: 'Create', description: 'Generate docs, slides & apps' },
 ];
 
-const AGENT_MODES: AgentMode[] = ['ask', 'auto', 'plan', 'bypass'];
-const EFFORT_LEVELS: Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-
-/** Auto-approve icon + color config keyed by mode from settingsStore. */
-const AUTO_APPROVE_CONFIG: Record<
-  string,
-  { icon: typeof Shield; color: string; label: string; sub: string }
-> = {
-  ask: {
-    icon: ShieldCheck,
-    color: '#10b981',
-    label: 'Ask always',
-    sub: 'Confirm every tool action',
-  },
-  smart: { icon: Shield, color: '#f59e0b', label: 'Smart auto', sub: 'Auto-approve safe actions' },
-  full: { icon: ShieldAlert, color: '#ef4444', label: 'Full auto', sub: 'Skip all approvals' },
-};
-
 /**
  * "Add to Chat" bottom sheet.
  * Opened by the [+] button in ChatInput.
  *
  * Sections:
- * 1. Attachment row (Camera, Photos, File, Skills)
+ * 1. Attachment row (Camera, Photos, File)
  * 2. Chat mode selector (Chat, Research, Create)
- * 3. Agent mode (Ask / Auto / Plan / Bypass)
- * 4. Effort (Low / Medium / High / X-High / Max — shown only when provider supports it)
- * 5. Session toggles (Auto-approve, Temporary chat)
- * 6. Tool availability (cloud-gated tools + local Health)
- * 7. Config links (Project, Style, Tool access, Connectors)
+ * 3. Session toggles (Temporary chat)
+ * 4. Tool availability (cloud-gated tools + desktop handoff)
+ * 5. Config links (Project, Style, Connectors)
  */
 export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(function AddToChatSheet(
-  { onCamera, onPhotos, onFile, conversationId },
+  { onCamera, onPhotos, onFile },
   ref,
 ) {
   const router = useRouter();
@@ -121,7 +69,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const chatMode = useChatStore((s) => s.chatMode);
   const chatStyle = useChatStore((s) => s.chatStyle);
-  const toolAccess = useChatStore((s) => s.toolAccess);
   const features = useChatStore((s) => s.features);
   const setChatMode = useChatStore((s) => s.setChatMode);
   const setFeature = useChatStore((s) => s.setFeature);
@@ -130,33 +77,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const projects = useProjectStore((s) => s.projects);
   const activeProject = activeProjectId ? projects.find((p) => p.id === activeProjectId) : null;
 
-  const resolveAgentControl = useAgentControlStore((s) => s.resolve);
-  const storeSetMode = useAgentControlStore((s) => s.setMode);
-  const storeSetEffort = useAgentControlStore((s) => s.setEffort);
-
-  // Resolve effective state for this conversation (falls back to project/global default)
-  const effectiveConversationId = conversationId ?? '__new__';
-  const resolved = resolveAgentControl(effectiveConversationId, activeProjectId);
-  const agentMode = resolved.mode;
-  const effort = resolved.effort;
-  const isOverridingProjectDefault = resolved.source === 'conversation-override';
-
-  const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
-  const setAutoApproveMode = useSettingsStore((s) => s.setAutoApproveMode);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
 
-  const selectedModel = useModelStore((s) => s.selectedModel);
-
-  // Determine if current model's provider supports effort axis.
-  const modelDef = getModelById(selectedModel);
-  const providerDisplay = modelDef?.provider
-    ? PROVIDER_DISPLAY[modelDef.provider as keyof typeof PROVIDER_DISPLAY]
-    : undefined;
-  const supportsEffort = providerDisplay?.supportsEffort ?? false;
-
   const styleSelectorRef = useRef<BottomSheet>(null);
-  const toolAccessSelectorRef = useRef<BottomSheet>(null);
   const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
@@ -191,12 +115,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onFile();
   }, [haptic, closeSheet, onFile]);
 
-  const handleSkills = useCallback(() => {
-    haptic();
-    closeSheet();
-    router.push('/(app)/skills' as Parameters<typeof router.push>[0]);
-  }, [haptic, closeSheet, router]);
-
   const handleModeChange = useCallback(
     (mode: ChatMode) => {
       haptic();
@@ -205,65 +123,10 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     [haptic, setChatMode],
   );
 
-  const handleAgentModeChange = useCallback(
-    (mode: AgentMode) => {
-      haptic();
-      storeSetMode(effectiveConversationId, mode);
-    },
-    [haptic, storeSetMode, effectiveConversationId],
-  );
-
-  const handleEffortChange = useCallback(
-    (level: Effort) => {
-      haptic();
-      storeSetEffort(effectiveConversationId, level);
-    },
-    [haptic, storeSetEffort, effectiveConversationId],
-  );
-
-  const cycleAutoApprove = useCallback(() => {
-    haptic();
-    const idx = AUTO_APPROVE_MODES.indexOf(autoApproveMode);
-    const next = AUTO_APPROVE_MODES[(idx + 1) % AUTO_APPROVE_MODES.length];
-    setAutoApproveMode(next);
-  }, [haptic, autoApproveMode, setAutoApproveMode]);
-
   const handleOpenStyleSelector = useCallback(() => {
     haptic();
     styleSelectorRef.current?.snapToIndex(0);
   }, [haptic]);
-
-  const handleOpenToolAccessSelector = useCallback(() => {
-    haptic();
-    toolAccessSelectorRef.current?.snapToIndex(0);
-  }, [haptic]);
-
-  const handleHealthToggle = useCallback(
-    async (enabled: boolean) => {
-      haptic();
-      if (enabled) {
-        if (Platform.OS !== 'ios' || !isHealthAvailable()) {
-          Alert.alert(
-            'Health Not Available',
-            'Health data integration is currently available on iOS only, via the HxF companion app.',
-            [{ text: 'OK' }],
-          );
-          return;
-        }
-        const hasAccess = await requestHealthPermission();
-        if (!hasAccess) {
-          Alert.alert(
-            'Health Data Unavailable',
-            'No health data found. Make sure the HxF app is installed and has synced your HealthKit data.',
-            [{ text: 'OK' }],
-          );
-          return;
-        }
-      }
-      setFeature('health', enabled);
-    },
-    [setFeature, haptic],
-  );
 
   const handleWebSearchToggle = useCallback(
     (enabled: boolean) => {
@@ -305,7 +168,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
   const handleConnectors = useCallback(() => {
     haptic();
-    if (!FEATURES.connectorsCloudOnly) {
+    if (!FEATURES.connectors) {
       if (waitlistJoined) {
         Alert.alert('Already on the waitlist', 'Cloud connectors are not enabled yet.');
         return;
@@ -409,13 +272,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               bg={cardBg}
               textColor={themeColors.textPrimary}
             />
-            <AttachmentCard
-              icon={<Zap size={22} color={colors.teal} />}
-              label="Skills"
-              onPress={handleSkills}
-              bg={cardBg}
-              textColor={themeColors.textPrimary}
-            />
           </View>
 
           {/* Divider */}
@@ -493,137 +349,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 3: Agent mode */}
-          <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 4,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '600',
-                  color: themeColors.textMuted,
-                  letterSpacing: 0.6,
-                  textTransform: 'uppercase',
-                }}
-              >
-                Agent mode
-              </Text>
-              {isOverridingProjectDefault && (
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '500',
-                    color: colors.teal,
-                    letterSpacing: 0.2,
-                  }}
-                  accessibilityLabel="Overriding project default"
-                >
-                  Overriding project default
-                </Text>
-              )}
-            </View>
-            {AGENT_MODES.map((mode) => {
-              const isSelected = agentMode === mode;
-              return (
-                <Pressable
-                  key={mode}
-                  onPress={() => handleAgentModeChange(mode)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'flex-start',
-                    justifyContent: 'space-between',
-                    paddingVertical: 12,
-                    paddingHorizontal: 4,
-                    minHeight: 44,
-                  }}
-                  accessibilityLabel={`${AGENT_MODE_LABEL[mode]}${isSelected ? ', selected' : ''}`}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: isSelected }}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: '500',
-                        color: isSelected ? colors.teal : themeColors.textPrimary,
-                      }}
-                    >
-                      {AGENT_MODE_LABEL[mode]}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 2 }}>
-                      {AGENT_MODE_DESCRIPTION[mode]}
-                    </Text>
-                  </View>
-                  {isSelected && <Check size={18} color={colors.teal} style={{ marginTop: 2 }} />}
-                </Pressable>
-              );
-            })}
-          </View>
-
-          {/* Divider */}
-          <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-
-          {/* Section 4: Effort (gated by supportsEffort) */}
-          {supportsEffort && (
-            <>
-              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '600',
-                    color: themeColors.textMuted,
-                    letterSpacing: 0.6,
-                    textTransform: 'uppercase',
-                    marginBottom: 4,
-                  }}
-                >
-                  Effort
-                </Text>
-                {EFFORT_LEVELS.map((level) => {
-                  const isSelected = effort === level;
-                  return (
-                    <Pressable
-                      key={level}
-                      onPress={() => handleEffortChange(level)}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingVertical: 12,
-                        paddingHorizontal: 4,
-                        minHeight: 44,
-                      }}
-                      accessibilityLabel={`${EFFORT_LABEL[level]} effort${isSelected ? ', selected' : ''}`}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: isSelected }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 15,
-                          fontWeight: '500',
-                          color: isSelected ? colors.teal : themeColors.textPrimary,
-                        }}
-                      >
-                        {EFFORT_LABEL[level]}
-                      </Text>
-                      {isSelected && <Check size={18} color={colors.teal} />}
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              {/* Divider */}
-              <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
-            </>
-          )}
-
-          {/* Section 5: AutoApprove + TempChat toggles */}
+          {/* Section 3: Session controls */}
           <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 }}>
             <Text
               style={{
@@ -637,40 +363,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             >
               Session
             </Text>
-
-            {/* Auto-approve row — cycles through ask / smart / full */}
-            {(() => {
-              const cfg = AUTO_APPROVE_CONFIG[autoApproveMode] ?? AUTO_APPROVE_CONFIG['ask'];
-              const Icon = cfg.icon;
-              return (
-                <Pressable
-                  onPress={cycleAutoApprove}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingVertical: 12,
-                    paddingHorizontal: 4,
-                    minHeight: 44,
-                  }}
-                  accessibilityLabel={`Auto-approve: ${cfg.label}. Tap to cycle.`}
-                  accessibilityRole="button"
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Icon size={18} color={cfg.color} />
-                    <View>
-                      <Text style={{ fontSize: 15, color: themeColors.textPrimary }}>
-                        Auto-approve
-                      </Text>
-                      <Text style={{ fontSize: 12, color: themeColors.textMuted, marginTop: 1 }}>
-                        {cfg.label} — {cfg.sub}
-                      </Text>
-                    </View>
-                  </View>
-                  <ChevronRight size={16} color={themeColors.textMuted} />
-                </Pressable>
-              );
-            })()}
 
             {/* Temporary chat row */}
             <View
@@ -700,9 +392,6 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                   haptic();
                   setTemporaryChat(v);
                 }}
-                trackColor={{ false: 'rgba(255,255,255,0.1)', true: '#a855f7' }}
-                thumbColor="#ffffff"
-                ios_backgroundColor="rgba(255,255,255,0.1)"
                 accessibilityLabel={`Temporary chat ${isTemporaryChat ? 'on' : 'off'}`}
               />
             </View>
@@ -711,47 +400,54 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 7: Tool availability */}
+          {/* Section 4: Tool availability */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
-            <CapabilityRow
-              icon={
-                <Globe size={18} color={FEATURES.webSearch ? colors.teal : themeColors.textMuted} />
-              }
-              label="Web search"
-              description={
-                FEATURES.webSearch
-                  ? 'Search current web results when needed'
-                  : 'Cloud search opens after waitlist'
-              }
-              enabled={FEATURES.webSearch ? features.webSearch : false}
-              onToggle={handleWebSearchToggle}
-              status={FEATURES.webSearch ? undefined : waitlistLabel}
-              statusTone="waitlist"
-              onStatusPress={FEATURES.webSearch ? undefined : handleOpenCloudWaitlist}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-            />
-            <CapabilityRow
-              icon={
-                <Paintbrush
-                  size={18}
-                  color={FEATURES.imageGen ? colors.teal : themeColors.textMuted}
-                />
-              }
-              label="Image generation"
-              description={
-                FEATURES.imageGen
-                  ? 'Create generated images in chat'
-                  : 'Cloud image generation opens after waitlist'
-              }
-              enabled={FEATURES.imageGen ? features.imageGen : false}
-              onToggle={handleImageGenerationToggle}
-              status={FEATURES.imageGen ? undefined : waitlistLabel}
-              statusTone="waitlist"
-              onStatusPress={FEATURES.imageGen ? undefined : handleOpenCloudWaitlist}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-            />
+            {FEATURES.webSearch ? (
+              <CapabilityRow
+                icon={<Globe size={18} color={colors.teal} />}
+                label="Web search"
+                description="Search current web results when needed"
+                enabled={features.webSearch}
+                onToggle={handleWebSearchToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : (
+              <CapabilityRow
+                icon={<Globe size={18} color={themeColors.textMuted} />}
+                label="Web search"
+                description="Cloud search opens after waitlist"
+                enabled={false}
+                status={waitlistLabel}
+                statusTone="waitlist"
+                onStatusPress={handleOpenCloudWaitlist}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            )}
+            {FEATURES.imageGen ? (
+              <CapabilityRow
+                icon={<Paintbrush size={18} color={colors.teal} />}
+                label="Image generation"
+                description="Create generated images in chat"
+                enabled={features.imageGen}
+                onToggle={handleImageGenerationToggle}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : (
+              <CapabilityRow
+                icon={<Paintbrush size={18} color={themeColors.textMuted} />}
+                label="Image generation"
+                description="Cloud image generation opens after waitlist"
+                enabled={false}
+                status={waitlistLabel}
+                statusTone="waitlist"
+                onStatusPress={handleOpenCloudWaitlist}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            )}
             <CapabilityRow
               icon={<Monitor size={18} color={themeColors.textMuted} />}
               label="Computer use"
@@ -763,32 +459,23 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
             />
-            <CapabilityRow
-              icon={<Heart size={18} color="#ef4444" />}
-              label="Health"
-              description="Use local HealthKit context when available"
-              badge="Beta"
-              enabled={features.health}
-              onToggle={handleHealthToggle}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-            />
           </View>
 
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: dividerColor, marginHorizontal: 20 }} />
 
-          {/* Section 8: Config Links */}
+          {/* Section 5: Config Links */}
           <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
             <ConfigLink
               icon={<FolderPlus size={18} color={themeColors.textMuted} />}
-              label="Add to project"
-              value={activeProject?.name ?? 'None'}
+              label="Project"
+              value={activeProject?.name ?? 'Choose'}
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
               onPress={() => {
                 haptic();
-                // Placeholder — Phase G will add project picker
+                closeSheet();
+                router.push('/(app)/(tabs)/projects' as Parameters<typeof router.push>[0]);
               }}
             />
             <ConfigLink
@@ -800,17 +487,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               onPress={handleOpenStyleSelector}
             />
             <ConfigLink
-              icon={<Wrench size={18} color={themeColors.textMuted} />}
-              label="Tool access"
-              value={TOOL_ACCESS_LABELS[toolAccess]}
-              textColor={themeColors.textPrimary}
-              mutedColor={themeColors.textMuted}
-              onPress={handleOpenToolAccessSelector}
-            />
-            <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
               label="Connectors"
-              value={FEATURES.connectorsCloudOnly ? undefined : waitlistLabel}
+              value={FEATURES.connectors ? undefined : waitlistLabel}
               statusTone="waitlist"
               textColor={themeColors.textPrimary}
               mutedColor={themeColors.textMuted}
@@ -820,9 +499,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
         </BottomSheetScrollView>
       </BottomSheet>
 
-      {/* Sub-sheets for style and tool access selection */}
+      {/* Sub-sheet for style selection */}
       <StyleSelector ref={styleSelectorRef} />
-      <ToolAccessSelector ref={toolAccessSelectorRef} />
       <InviteCodeModal
         open={waitlistSheetVisible}
         onClose={() => setWaitlistSheetVisible(false)}
@@ -871,65 +549,54 @@ function AttachmentCard({
   );
 }
 
-function CapabilityRow({
-  icon,
-  label,
-  description,
-  badge,
-  enabled,
-  onToggle,
-  status,
-  statusTone = 'neutral',
-  onStatusPress,
-  textColor,
-  mutedColor,
-}: {
+type CapabilityRowBaseProps = {
   icon: React.ReactNode;
   label: string;
   description: string;
   badge?: string;
   enabled: boolean;
-  onToggle?: (value: boolean) => void | Promise<void>;
-  status?: string;
   statusTone?: 'waitlist' | 'desktop' | 'neutral';
-  onStatusPress?: () => void;
   textColor: string;
   mutedColor: string;
-}) {
-  const rowContent = (
-    <>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
-        {icon}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
-            {badge && <StatusPill label={badge} tone="danger" />}
-          </View>
-          <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
-            {description}
-          </Text>
+};
+
+type CapabilityRowProps =
+  | (CapabilityRowBaseProps & {
+      status: string;
+      onStatusPress?: () => void;
+      onToggle?: never;
+    })
+  | (CapabilityRowBaseProps & {
+      status?: undefined;
+      onStatusPress?: never;
+      onToggle: (value: boolean) => void | Promise<void>;
+    });
+
+function CapabilityRow(props: CapabilityRowProps) {
+  const {
+    icon,
+    label,
+    description,
+    badge,
+    enabled,
+    statusTone = 'neutral',
+    textColor,
+    mutedColor,
+  } = props;
+
+  const leadingContent = (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+      {icon}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <Text style={{ fontSize: 15, color: textColor }}>{label}</Text>
+          {badge && <StatusPill label={badge} tone="danger" />}
         </View>
+        <Text style={{ fontSize: 12, color: mutedColor, marginTop: 1 }} numberOfLines={2}>
+          {description}
+        </Text>
       </View>
-      {status ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 10 }}>
-          <StatusPill label={status} tone={statusTone} />
-          {onStatusPress ? (
-            <ChevronRight size={16} color={mutedColor} />
-          ) : (
-            <Lock size={14} color={mutedColor} />
-          )}
-        </View>
-      ) : (
-        <Switch
-          value={enabled}
-          onValueChange={onToggle}
-          trackColor={{ false: 'rgba(255,255,255,0.1)', true: colors.teal }}
-          thumbColor="#ffffff"
-          ios_backgroundColor="rgba(255,255,255,0.1)"
-          accessibilityLabel={`${label} ${enabled ? 'on' : 'off'}`}
-        />
-      )}
-    </>
+    </View>
   );
 
   const rowStyle = {
@@ -941,20 +608,47 @@ function CapabilityRow({
     minHeight: 52,
   };
 
-  if (status) {
+  if ('status' in props && props.status !== undefined) {
+    const rowContent = (
+      <>
+        {leadingContent}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 10 }}>
+          <StatusPill label={props.status} tone={statusTone} />
+          {props.onStatusPress ? (
+            <ChevronRight size={16} color={mutedColor} />
+          ) : (
+            <Lock size={14} color={mutedColor} />
+          )}
+        </View>
+      </>
+    );
+
     return (
       <Pressable
-        onPress={onStatusPress}
-        disabled={!onStatusPress}
+        onPress={props.onStatusPress}
+        disabled={!props.onStatusPress}
         style={rowStyle}
-        accessibilityLabel={`${label}, ${status}`}
-        accessibilityRole={onStatusPress ? 'button' : 'text'}
-        accessibilityHint={onStatusPress ? 'Opens availability details' : undefined}
+        accessibilityLabel={`${label}, ${props.status}`}
+        accessibilityRole={props.onStatusPress ? 'button' : 'text'}
+        accessibilityHint={props.onStatusPress ? 'Opens availability details' : undefined}
       >
         {rowContent}
       </Pressable>
     );
   }
+
+  const rowContent = (
+    <>
+      {leadingContent}
+      <Switch
+        value={enabled}
+        onValueChange={(next) => {
+          void props.onToggle(next);
+        }}
+        accessibilityLabel={`${label} ${enabled ? 'on' : 'off'}`}
+      />
+    </>
+  );
 
   return <View style={rowStyle}>{rowContent}</View>;
 }

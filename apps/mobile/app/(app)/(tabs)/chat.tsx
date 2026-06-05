@@ -9,6 +9,10 @@ import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { summarizeSendPreview, type ProviderMode } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
+import {
+  TASK_CHIP_SEND_CONTEXT,
+  type TaskChipType,
+} from '@/src/features/chat/components/TaskChips';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
 import { SendPreview } from '@/src/features/chat/components/SendPreview';
@@ -49,7 +53,6 @@ export default function ChatTabScreen() {
   const loadConversations = useChatStore((s) => s.loadConversations);
   const createConversation = useChatStore((s) => s.createConversation);
   const sendMessage = useChatStore((s) => s.sendMessage);
-  const currentConversationId = useChatStore((s) => s.currentConversationId);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
 
@@ -80,6 +83,7 @@ export default function ChatTabScreen() {
     async (
       text: string,
       attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+      mode?: TaskChipType,
     ) => {
       try {
         const trimmed = text.trim();
@@ -89,7 +93,8 @@ export default function ChatTabScreen() {
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        sendMessage(conversationId, trimmed, selectedModel, attachments).catch(() => {
+        const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
+        sendMessage(conversationId, trimmed, selectedModel, attachments, sendOptions).catch(() => {
           // Message send failed — conversation was created, user can retry from chat screen
         });
       } catch {
@@ -108,7 +113,7 @@ export default function ChatTabScreen() {
   }, []);
 
   const handleOpenConnectors = useCallback(() => {
-    if (!FEATURES.connectorsCloudOnly) {
+    if (!FEATURES.connectors) {
       Alert.alert(
         'Connectors require Cloud Managed',
         'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
@@ -211,6 +216,10 @@ export default function ChatTabScreen() {
   const handleOpenVoiceMode = useCallback(() => {
     setVoiceModeVisible(true);
   }, []);
+
+  const handleOpenCompare = useCallback(() => {
+    router.push('/(app)/compare' as Parameters<typeof router.push>[0]);
+  }, [router]);
 
   const handleCloseVoiceMode = useCallback(() => {
     setVoiceModeVisible(false);
@@ -322,6 +331,7 @@ export default function ChatTabScreen() {
         onSend={handleSend}
         onOpenModelPicker={handleOpenModelPicker}
         onOpenVoiceMode={handleOpenVoiceMode}
+        onOpenCompare={handleOpenCompare}
         onOpenAddToChat={handleOpenAddToChat}
         onOpenConnectors={handleOpenConnectors}
         attachRef={chatInputAttachRef}
@@ -334,7 +344,6 @@ export default function ChatTabScreen() {
         onCamera={handleSheetCamera}
         onPhotos={handleSheetPhotos}
         onFile={handleSheetFile}
-        conversationId={currentConversationId}
       />
 
       {/* Model picker bottom sheet */}

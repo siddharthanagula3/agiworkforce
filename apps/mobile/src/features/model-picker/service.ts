@@ -253,7 +253,7 @@ function formatSize(bytes: number): string {
 function detailForLocalModel(model: OnDeviceModel): string {
   const parts = [runtimeLabel(model), formatSize(model.fileSizeBytes)];
   if (model.capabilities.visionIn) parts.push('Vision');
-  if (model.capabilities.toolCalls) parts.push('Tools');
+  if (model.capabilities.structuredOutput) parts.push('Structured');
   return parts.join(' - ');
 }
 
