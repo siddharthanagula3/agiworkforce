@@ -45,7 +45,7 @@ jobs:
   # ===========================================================================
   test:
     name: Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: ${{ env.SERVICE_DIR }}
@@ -80,7 +80,7 @@ jobs:
   # ===========================================================================
   build:
     name: Build Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: test
     permissions:
       contents: read
@@ -144,7 +144,7 @@ jobs:
   # ===========================================================================
   deploy-railway:
     name: Deploy to Railway
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main' ||
@@ -192,7 +192,7 @@ jobs:
   # ===========================================================================
   deploy-fly:
     name: Deploy to Fly.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     if: |
       github.event_name == 'workflow_dispatch' && (inputs.deploy_target == 'fly' || inputs.deploy_target == 'both')
@@ -242,7 +242,7 @@ jobs:
   # ===========================================================================
   cleanup:
     name: Cleanup Old Images (advisory — not part of deploy)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [build]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     continue-on-error: true
