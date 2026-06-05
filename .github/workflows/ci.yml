@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
@@ -245,7 +245,7 @@ jobs:
 
   desktop-e2e:
     name: Desktop E2E (deterministic mocks)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check
     timeout-minutes: 30
     env:
@@ -335,7 +335,7 @@ jobs:
 
   clippy-all-features:
     name: Clippy (all features)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: check
     timeout-minutes: 75
     steps:

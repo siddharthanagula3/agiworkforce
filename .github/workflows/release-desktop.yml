@@ -67,7 +67,7 @@ jobs:
   # ==========================================================================
   prepare-release:
     name: Prepare Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     outputs:
@@ -220,7 +220,7 @@ jobs:
   # ==========================================================================
   validate:
     needs: [prepare-release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - name: Checkout repository
@@ -346,7 +346,7 @@ jobs:
   update-database:
     name: Update Release Database
     needs: [prepare-release, build-linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -462,7 +462,7 @@ jobs:
   publish-release:
     name: Publish Release
     needs: [prepare-release, build-linux, update-database]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
@@ -503,7 +503,7 @@ jobs:
     name: Cleanup Failed Release
     needs: [prepare-release, build-linux]
     if: failure()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:
