@@ -1,8 +1,12 @@
 import React, { Suspense, lazy } from 'react';
-import { Check, Loader2, Server } from 'lucide-react';
+import { Check, Download, HardDrive, KeyRound, Loader2, Server, Zap } from 'lucide-react';
+import type { Provider } from '@agiworkforce/types';
 import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
+import { invoke } from '@/lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
+import { Button } from '@/components/ui/Button';
+import { Label } from '@/components/ui/Label';
 import {
   Select,
   SelectContent,
@@ -11,8 +15,6 @@ import {
   SelectValue,
 } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
-import { FavoriteModelsSelector } from '../../FavoriteModelsSelector';
-import { selectMode, useAppModeStore } from '../../../../stores/appModeStore';
 
 const LazyCustomModelsSettings = lazy(() =>
   import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),
@@ -27,7 +29,7 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-const BYOK_PROVIDERS = [
+const BYOK_PROVIDERS: ReadonlyArray<{ id: Provider; name: string; placeholder: string }> = [
   { id: 'anthropic', name: 'Anthropic', placeholder: 'sk-ant-...' },
   { id: 'openai', name: 'OpenAI', placeholder: 'sk-...' },
   { id: 'google', name: 'Google (Gemini)', placeholder: 'AIza...' },
@@ -35,16 +37,25 @@ const BYOK_PROVIDERS = [
   { id: 'deepseek', name: 'DeepSeek', placeholder: 'sk-...' },
   { id: 'mistral', name: 'Mistral', placeholder: 'API key...' },
   { id: 'perplexity', name: 'Perplexity', placeholder: 'pplx-...' },
-  { id: 'openrouter', name: 'OpenRouter', placeholder: 'sk-or-...' },
+  { id: 'open_router', name: 'OpenRouter', placeholder: 'sk-or-...' },
   { id: 'nvidia_nim', name: 'NVIDIA NIM', placeholder: 'nvapi-...' },
 ] as const;
+
+type ProviderHealth = {
+  provider: Provider;
+  available: boolean;
+  configured: boolean;
+  error?: string;
+};
 
 function BYOKApiKeysSection() {
   const [keys, setKeys] = React.useState<Record<string, string>>({});
   const [statuses, setStatuses] = React.useState<
-    Record<string, 'idle' | 'saving' | 'saved' | 'error'>
+    Record<string, 'idle' | 'saving' | 'saved' | 'testing' | 'error'>
   >({});
   const [errors, setErrors] = React.useState<Record<string, string>>({});
+  const [savedProviders, setSavedProviders] = React.useState<Record<string, boolean>>({});
+  const [health, setHealth] = React.useState<Partial<Record<Provider, ProviderHealth>>>({});
   const savedTimersRef = React.useRef<Record<string, number>>({});
 
   React.useEffect(() => {
@@ -56,16 +67,57 @@ function BYOKApiKeysSection() {
     };
   }, []);
 
+  const checkProvider = React.useCallback(async (providerId: Provider) => {
+    const result = await invoke<ProviderHealth>('llm_check_provider_status', {
+      provider: providerId,
+    });
+    setHealth((h) => ({ ...h, [providerId]: result }));
+    return result;
+  }, []);
+
+  const handleTest = React.useCallback(
+    async (providerId: Provider) => {
+      setStatuses((s) => ({ ...s, [providerId]: 'testing' }));
+      setErrors((e) => ({ ...e, [providerId]: '' }));
+      try {
+        const result = await checkProvider(providerId);
+        setStatuses((s) => ({ ...s, [providerId]: result.available ? 'saved' : 'idle' }));
+        if (!result.available) {
+          setErrors((e) => ({
+            ...e,
+            [providerId]:
+              result.error ||
+              'Provider is saved locally but did not verify as available. Check the key, model access, and network.',
+          }));
+        }
+      } catch (err) {
+        setStatuses((s) => ({ ...s, [providerId]: 'error' }));
+        setErrors((e) => ({ ...e, [providerId]: String(err) }));
+      }
+    },
+    [checkProvider],
+  );
+
   const handleSave = React.useCallback(
-    async (providerId: string) => {
+    async (providerId: Provider) => {
       const key = keys[providerId]?.trim();
       if (!key) return;
       setStatuses((s) => ({ ...s, [providerId]: 'saving' }));
       setErrors((e) => ({ ...e, [providerId]: '' }));
       try {
         await McpClient.saveApiKey(providerId, key);
-        setStatuses((s) => ({ ...s, [providerId]: 'saved' }));
+        setSavedProviders((s) => ({ ...s, [providerId]: true }));
         setKeys((k) => ({ ...k, [providerId]: '' }));
+        const result = await checkProvider(providerId).catch<ProviderHealth | null>(() => null);
+        setStatuses((s) => ({ ...s, [providerId]: 'saved' }));
+        if (result && !result.available) {
+          setErrors((e) => ({
+            ...e,
+            [providerId]:
+              result.error ||
+              'Key saved locally. Live availability was not confirmed yet; test again or start a BYOK chat.',
+          }));
+        }
         if (savedTimersRef.current[providerId]) {
           window.clearTimeout(savedTimersRef.current[providerId]);
         }
@@ -78,7 +130,7 @@ function BYOKApiKeysSection() {
         setErrors((e) => ({ ...e, [providerId]: String(err) }));
       }
     },
-    [keys],
+    [checkProvider, keys],
   );
 
   return (
@@ -90,34 +142,63 @@ function BYOKApiKeysSection() {
       <div className="rounded-lg border border-border bg-card divide-y divide-border">
         {BYOK_PROVIDERS.map(({ id, name, placeholder }) => {
           const status = statuses[id] ?? 'idle';
+          const providerHealth = health[id];
+          const isBusy = status === 'saving' || status === 'testing';
           return (
-            <div key={id} className="flex items-center gap-3 px-4 py-3">
-              <span className="w-36 shrink-0 text-sm font-medium">{name}</span>
-              <input
-                type="password"
-                value={keys[id] ?? ''}
-                onChange={(e) => setKeys((k) => ({ ...k, [id]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') void handleSave(id);
-                }}
-                placeholder={placeholder}
-                className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <button
-                type="button"
-                disabled={!keys[id]?.trim() || status === 'saving'}
-                onClick={() => void handleSave(id)}
-                className="shrink-0 h-8 px-3 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-              >
-                {status === 'saving' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : status === 'saved' ? (
-                  <Check className="h-3.5 w-3.5" />
-                ) : (
-                  'Save'
-                )}
-              </button>
-              {errors[id] && <p className="text-xs text-destructive mt-1">{errors[id]}</p>}
+            <div key={id} className="px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="w-36 shrink-0 text-sm font-medium">{name}</span>
+                <input
+                  type="password"
+                  value={keys[id] ?? ''}
+                  onChange={(e) => setKeys((k) => ({ ...k, [id]: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') void handleSave(id);
+                  }}
+                  placeholder={placeholder}
+                  className="flex-1 h-8 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <button
+                  type="button"
+                  disabled={!keys[id]?.trim() || isBusy}
+                  onClick={() => void handleSave(id)}
+                  className="shrink-0 h-8 w-16 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {status === 'saving' ? (
+                    <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                  ) : status === 'saved' ? (
+                    <Check className="mx-auto h-3.5 w-3.5" />
+                  ) : (
+                    'Save'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  disabled={isBusy || !savedProviders[id]}
+                  onClick={() => void handleTest(id)}
+                  className="shrink-0 h-8 w-14 rounded-md border border-border text-xs font-medium hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  {status === 'testing' ? (
+                    <Loader2 className="mx-auto h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    'Test'
+                  )}
+                </button>
+              </div>
+              {(providerHealth || errors[id]) && (
+                <p
+                  className={`mt-1.5 text-xs ${
+                    providerHealth?.available ? 'text-green-600' : 'text-muted-foreground'
+                  }`}
+                  style={{ marginLeft: 156 }}
+                >
+                  {providerHealth?.available
+                    ? 'Verified and ready.'
+                    : providerHealth?.configured
+                      ? 'Saved locally. Live availability is not confirmed yet.'
+                      : errors[id] || 'Not configured.'}
+                </p>
+              )}
             </div>
           );
         })}
@@ -132,6 +213,12 @@ export interface ModelsKeysTabProps {
     ollamaUrl?: string;
     defaultModels?: Record<string, string>;
   };
+  chatPreferences: {
+    alwaysUseAgentMode?: boolean;
+    autoApproveTools?: boolean;
+    compactMode?: boolean;
+    promptCompletionEnabled?: boolean;
+  } | null;
   ollamaModels: string[];
   selectedOllamaModel: string;
   checkingOllama: boolean;
@@ -141,10 +228,16 @@ export interface ModelsKeysTabProps {
   onOllamaUrlChange: (url: string) => void;
   onOllamaEnabledChange: (enabled: boolean) => void;
   onOllamaModelChange: (model: string) => void;
+  onAgentModeChange: (value: boolean) => void;
+  onAutoApproveToolsChange: (value: boolean) => void;
+  onCompactModeChange: (value: boolean) => void;
+  onPromptCompletionChange: (value: boolean) => void;
+  onExportSettings: () => void;
 }
 
 export function ModelsKeysTab({
   resolvedLLMConfig,
+  chatPreferences,
   ollamaModels,
   selectedOllamaModel,
   checkingOllama,
@@ -154,50 +247,69 @@ export function ModelsKeysTab({
   onOllamaUrlChange,
   onOllamaEnabledChange,
   onOllamaModelChange,
+  onAgentModeChange,
+  onAutoApproveToolsChange,
+  onCompactModeChange,
+  onPromptCompletionChange,
+  onExportSettings,
 }: ModelsKeysTabProps) {
-  const appMode = useAppModeStore(selectMode);
-  const selectedProviderMode =
-    appMode === 'local' && (resolvedLLMConfig.providerMode ?? 'auto') === 'auto'
-      ? 'local'
-      : (resolvedLLMConfig.providerMode ?? 'auto');
-  const providerModes =
-    appMode === 'cloud' ? (['auto', 'local', 'cloud'] as const) : (['local', 'cloud'] as const);
-
   return (
     <>
       <BYOKApiKeysSection />
 
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Model access</h3>
+        <h3 className="text-lg font-semibold mb-4">Local Models</h3>
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Model routing</label>
-            <div className="flex gap-2">
-              {providerModes.map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => onProviderModeChange(mode)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
-                    selectedProviderMode === mode
-                      ? 'bg-primary text-primary-foreground border-primary'
-                      : 'bg-background border-border hover:bg-accent'
-                  }`}
-                >
-                  {mode === 'auto' ? 'AGI Cloud' : mode === 'local' ? 'Local' : 'BYOK'}
-                </button>
-              ))}
+            <label className="text-sm font-medium">Request routing</label>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(['auto', 'local', 'cloud'] as const).map((mode) => {
+                const active = (resolvedLLMConfig.providerMode ?? 'auto') === mode;
+                const Icon = mode === 'auto' ? Zap : mode === 'local' ? HardDrive : KeyRound;
+                const label =
+                  mode === 'auto' ? 'Auto' : mode === 'local' ? 'Local models' : 'BYOK providers';
+                const description =
+                  mode === 'auto'
+                    ? 'Prefer local models, then your keys when selected.'
+                    : mode === 'local'
+                      ? 'Use Ollama only. Nothing leaves this device.'
+                      : 'Use your saved provider keys directly.';
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onProviderModeChange(mode)}
+                    className={`rounded-lg border px-3 py-3 text-left transition-colors ${
+                      active
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-accent'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold">
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </span>
+                    <span
+                      className={`mt-1 block text-xs ${
+                        active ? 'text-primary-foreground/75' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {description}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
             <p className="text-xs text-muted-foreground">
-              {selectedProviderMode === 'local'
+              {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
                 ? 'Always use local Ollama. No data leaves your machine.'
-                : selectedProviderMode === 'cloud'
-                  ? 'Use your configured provider keys directly. Requests go to the selected provider.'
-                  : 'Use AGI cloud routing and managed hosted models when Cloud Mode is enabled.'}
+                : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
+                  ? 'Always use configured BYOK providers (OpenAI, Anthropic, etc.).'
+                  : 'Automatically route to the best provider for each task.'}
             </p>
           </div>
 
-          {selectedProviderMode === 'local' && (
+          {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Ollama URL</label>
               <input
@@ -253,19 +365,27 @@ export function ModelsKeysTab({
                         <Check className="h-3 w-3" />
                         <span>Ollama is running and available</span>
                       </div>
-                      {ollamaEnabled && ollamaModels.length > 0 && (
-                        <Select value={selectedOllamaModel} onValueChange={onOllamaModelChange}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select model" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ollamaModels.map((model) => (
-                              <SelectItem key={model} value={model}>
-                                {model}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      {ollamaModels.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Select value={selectedOllamaModel} onValueChange={onOllamaModelChange}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select model" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {ollamaModels.map((model) => (
+                                <SelectItem key={model} value={model}>
+                                  {model}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {!ollamaEnabled && (
+                            <p className="text-xs text-muted-foreground">
+                              Detected locally. Turn on Local Ollama to use this as the default
+                              local model.
+                            </p>
+                          )}
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -287,11 +407,89 @@ export function ModelsKeysTab({
             </div>
           </div>
 
-          <FavoriteModelsSelector />
           <Suspense fallback={<Fallback label="Loading custom model settings..." />}>
             <LazyCustomModelsSettings />
           </Suspense>
         </div>
+      </div>
+
+      <div className="pt-6 border-t border-border">
+        <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          Export or import your settings configuration
+        </p>
+        <Button variant="outline" size="sm" onClick={onExportSettings}>
+          <Download className="mr-2 h-4 w-4" />
+          Export Settings
+        </Button>
+      </div>
+
+      <div className="pt-6 border-t border-border">
+        <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="agentMode">Always Use Agent Mode</Label>
+              <p className="text-xs text-muted-foreground">
+                Agent mode enables tool use, web browsing, and code execution
+              </p>
+            </div>
+            <Switch
+              id="agentMode"
+              checked={chatPreferences?.alwaysUseAgentMode ?? false}
+              onCheckedChange={onAgentModeChange}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically approve safe tool executions without confirmation
+              </p>
+            </div>
+            <Switch
+              id="autoApprove"
+              checked={chatPreferences?.autoApproveTools ?? false}
+              onCheckedChange={onAutoApproveToolsChange}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="compactMode">Compact Mode</Label>
+              <p className="text-xs text-muted-foreground">
+                Reduce spacing between messages for a denser view
+              </p>
+            </div>
+            <Switch
+              id="compactMode"
+              checked={chatPreferences?.compactMode ?? false}
+              onCheckedChange={onCompactModeChange}
+            />
+          </div>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label htmlFor="promptCompletion">Prompt Completion</Label>
+              <p className="text-xs text-muted-foreground">
+                Show AI-powered suggestions as you type
+              </p>
+            </div>
+            <Switch
+              id="promptCompletion"
+              checked={chatPreferences?.promptCompletionEnabled ?? true}
+              onCheckedChange={onPromptCompletionChange}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4 text-xs text-muted-foreground">
+        <h4 className="font-medium mb-2">Supported Providers</h4>
+        <ul className="list-disc list-inside space-y-1">
+          {BYOK_PROVIDERS.map(({ id, name }) => (
+            <li key={id}>{name}</li>
+          ))}
+          <li>Ollama (any local model)</li>
+        </ul>
       </div>
     </>
   );

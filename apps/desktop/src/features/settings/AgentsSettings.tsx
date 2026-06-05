@@ -1,9 +1,8 @@
 /**
  * AgentsSettings
  *
- * Configuration for agent behavior: default model, parallelism,
- * approval mode, sub-agents, execution preferences.
- * Also provides a UI for creating, editing, and deleting custom agent files.
+ * Configuration for proven agent behavior: approval mode, execution
+ * preferences, and custom agent files backed by Tauri commands.
  */
 
 import { useCallback, useMemo } from 'react';
@@ -17,29 +16,24 @@ import { CustomAgentsList } from './CustomAgentsList';
 export function AgentsSettings() {
   const chatPreferences = useSettingsStore(useShallow((state) => state.chatPreferences));
   const executionPreferences = useSettingsStore(useShallow((state) => state.executionPreferences));
-  const features = useSettingsStore(useShallow((state) => state.features));
 
   const {
     setAutoApproveTools,
     setAlwaysUseAgentMode,
-    setFeature,
     setMaxTimeoutMinutes,
     setEnableCheckpointing,
     setCheckpointInterval,
     setAutoResumeOnRestart,
     setEnableTimeoutWarnings,
-    setAutoInjectSkills,
   } = useSettingsStore(
     useShallow((s) => ({
       setAutoApproveTools: s.setAutoApproveTools,
       setAlwaysUseAgentMode: s.setAlwaysUseAgentMode,
-      setFeature: s.setFeature,
       setMaxTimeoutMinutes: s.setMaxTimeoutMinutes,
       setEnableCheckpointing: s.setEnableCheckpointing,
       setCheckpointInterval: s.setCheckpointInterval,
       setAutoResumeOnRestart: s.setAutoResumeOnRestart,
       setEnableTimeoutWarnings: s.setEnableTimeoutWarnings,
-      setAutoInjectSkills: s.setAutoInjectSkills,
     })),
   );
 
@@ -164,63 +158,6 @@ export function AgentsSettings() {
                 </div>
               </label>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Sub-agents & Teams */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4">Sub-agents &amp; Teams</h3>
-
-        <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="agents-subagents">Enable Sub-agents</Label>
-              <p className="text-xs text-muted-foreground">
-                Allow the orchestrator agent to spawn specialized sub-agents for complex tasks.
-                Sub-agents can work on separate subtasks concurrently.
-              </p>
-            </div>
-            <Switch
-              id="agents-subagents"
-              checked={features['subAgents'] ?? true}
-              onCheckedChange={(enabled) => setFeature('subAgents', enabled)}
-            />
-          </div>
-
-          <div className="border-t border-border" />
-
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="agents-teams">Enable Agent Teams</Label>
-              <p className="text-xs text-muted-foreground">
-                Allow multiple named agents (e.g. frontend-engineer, backend-engineer) to
-                collaborate on a shared task via the swarm orchestrator.
-              </p>
-            </div>
-            <Switch
-              id="agents-teams"
-              checked={features['agentTeams'] ?? true}
-              onCheckedChange={(enabled) => setFeature('agentTeams', enabled)}
-            />
-          </div>
-
-          <div className="border-t border-border" />
-
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label htmlFor="agents-autoInjectSkills">Auto-inject relevant skills</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically detect which skills are relevant to your message and inject their
-                instructions into the system prompt — no need to type{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">/skill-name</code> manually.
-              </p>
-            </div>
-            <Switch
-              id="agents-autoInjectSkills"
-              checked={chatPreferences.autoInjectSkills ?? true}
-              onCheckedChange={setAutoInjectSkills}
-            />
           </div>
         </div>
       </div>

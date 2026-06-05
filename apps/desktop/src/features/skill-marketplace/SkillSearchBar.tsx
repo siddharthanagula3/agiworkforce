@@ -17,22 +17,35 @@ export function SkillSearchBar() {
 
   const [localValue, setLocalValue] = useState(storeQuery);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingValueRef = useRef<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Sync local value when store is cleared externally (e.g. category change)
+  // Sync local value when the store changes externally. While the user is
+  // typing, the debounced commit owns the temporary local value.
   useEffect(() => {
-    if (storeQuery === '' && localValue !== '') {
-      setLocalValue('');
+    if (pendingValueRef.current !== null) {
+      return;
+    }
+    if (storeQuery !== localValue) {
+      setLocalValue(storeQuery);
     }
   }, [storeQuery, localValue]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
       setLocalValue(value);
+      pendingValueRef.current = value;
       if (timerRef.current !== null) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         setSearchQuery(value);
+        pendingValueRef.current = null;
       }, DEBOUNCE_MS);
     },
     [setSearchQuery],
@@ -40,6 +53,7 @@ export function SkillSearchBar() {
 
   const handleClear = useCallback(() => {
     if (timerRef.current !== null) clearTimeout(timerRef.current);
+    pendingValueRef.current = null;
     setLocalValue('');
     setSearchQuery('');
     inputRef.current?.focus();
@@ -69,7 +83,7 @@ export function SkillSearchBar() {
         onKeyDown={handleKeyDown}
         className={cn(
           'h-9 w-full rounded-md border border-input bg-background pl-9 pr-8 text-sm',
-          'placeholder:text-muted-foreground',
+          'text-foreground placeholder:text-muted-foreground',
           'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
           'disabled:cursor-not-allowed disabled:opacity-50',
         )}

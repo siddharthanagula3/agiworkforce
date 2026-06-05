@@ -7,6 +7,8 @@ import {
   getProviderDefaultModel,
   getModelMetadataById,
 } from '@agiworkforce/types';
+import { useAppModeStore } from '../../stores/appModeStore';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 // ---------------------------------------------------------------------------
 // Primary 3 — Anthropic models per design spec.
@@ -108,6 +110,8 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
   const thinkingEnabled = useChatModelStore((s) => s.thinkingEnabled);
   const toggleThinking = useChatModelStore((s) => s.toggleThinking);
   const storeModels = useChatModelStore((s) => s.models);
+  const appMode = useAppModeStore((s) => s.mode);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
 
   const [moreOpen, setMoreOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -136,6 +140,98 @@ export function ModelPopover({ onClose }: ModelPopoverProps) {
     const meta = getModelMetadataById(modelId);
     return meta?.name ?? modelId;
   };
+
+  const localModeRows = storeModels.filter((model) => {
+    const provider = model.provider.toLowerCase();
+    return (
+      model.isLocal ||
+      model.isByok ||
+      provider === 'ollama' ||
+      provider === 'local' ||
+      provider === 'lmstudio'
+    );
+  });
+
+  if (appMode === 'local') {
+    return (
+      <div
+        ref={ref}
+        className="absolute bottom-full right-0 z-50 mb-2 w-72 rounded-xl border py-2 shadow-lg"
+        style={{
+          background: 'var(--chat-surface-elevated)',
+          borderColor: 'var(--chat-border)',
+          boxShadow: 'var(--chat-shadow-lg, 0 8px 24px rgba(0,0,0,0.12))',
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div
+          className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--chat-text-muted)' }}
+        >
+          Local / BYOK
+        </div>
+        {localModeRows.length === 0 ? (
+          <div className="px-3 py-3">
+            <div className="text-sm font-medium" style={{ color: 'var(--chat-text-primary)' }}>
+              No local or BYOK models detected
+            </div>
+            <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--chat-text-muted)' }}>
+              Start Ollama, download a model, or add an API key in Models & Keys.
+            </p>
+            <button
+              type="button"
+              className="mt-3 rounded-lg border px-3 py-1.5 text-xs font-medium"
+              style={{
+                borderColor: 'var(--chat-border)',
+                color: 'var(--chat-text-primary)',
+              }}
+              onClick={() => {
+                openSettings('models-keys');
+                onClose();
+              }}
+            >
+              Open Models & Keys
+            </button>
+          </div>
+        ) : (
+          localModeRows.map((model) => {
+            const selected = selectedModelId === model.id;
+            return (
+              <button
+                key={model.id}
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-3 px-3 py-2.5 transition-colors',
+                  'hover:bg-[var(--chat-surface-hover)]',
+                  selected && 'bg-[var(--chat-surface-hover)]',
+                )}
+                onClick={() => handleSelect(model.id)}
+              >
+                <div className="flex-1 text-left">
+                  <div
+                    className="text-sm font-medium"
+                    style={{ color: 'var(--chat-text-primary)' }}
+                  >
+                    {model.name}
+                  </div>
+                  <div className="text-xs" style={{ color: 'var(--chat-text-muted)' }}>
+                    {model.isLocal ? 'Local model' : 'BYOK provider'}
+                  </div>
+                </div>
+                {selected && (
+                  <Check
+                    size={14}
+                    strokeWidth={2.4}
+                    style={{ color: 'var(--chat-accent-primary)' }}
+                  />
+                )}
+              </button>
+            );
+          })
+        )}
+      </div>
+    );
+  }
 
   // Deduplicate primary rows — e.g. if complex_reasoning and defaultModel resolve to same ID
   const seenPrimary = new Set<string>();

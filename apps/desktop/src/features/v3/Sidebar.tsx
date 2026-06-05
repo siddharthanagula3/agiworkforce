@@ -5,12 +5,14 @@ import {
   Plus,
   Search,
   FolderOpen,
-  Sliders,
+  Box,
+  RefreshCw,
+  GitBranch,
+  LogIn,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
   Settings,
-  LogIn,
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
@@ -18,10 +20,12 @@ import {
   useUnifiedAuthStore,
   selectUser,
   selectPlanDisplayName,
-  selectIsAuthenticated,
+  selectHasCloudAccountSession,
 } from '../../stores/auth';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
+import { AccountMenu } from './AccountMenu';
 
 // ─── recents grouping ────────────────────────────────────────────────────────
 
@@ -31,11 +35,11 @@ type RecentsGroup = {
 };
 
 function conversationUpdatedAtMs(conversation: ConversationSummary): number {
-  const value = conversation.updatedAt;
+  const value = conversation.updatedAt as unknown;
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'string' || typeof value === 'number') {
-    const parsed = new Date(value).getTime();
-    return Number.isFinite(parsed) ? parsed : 0;
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : 0;
   }
   return 0;
 }
@@ -82,7 +86,10 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
   void mode;
   return [
     { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
-    { id: 'settings', label: t('common.settings'), icon: Sliders },
+    { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
+    { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
+    { id: 'live-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
+    { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
   ];
 }
 
@@ -91,7 +98,7 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
 function railItems(t: TFunction): { id: string; icon: React.ElementType; title: string }[] {
   return [
     { id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') },
-    { id: 'settings', icon: Sliders, title: t('common.settings') },
+    { id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') },
   ];
 }
 
@@ -134,9 +141,10 @@ export function Sidebar({
   const conversations = useChatStore((s: ChatState) => s.conversations);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
-  const isAuthenticated = useUnifiedAuthStore(selectIsAuthenticated);
-  const accessToken = useUnifiedAuthStore((s) => s.accessToken);
-  const hasCloudSession = isAuthenticated && Boolean(accessToken);
+  const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
+  const openSettings = useSettingsDialogStore((s) => s.openSettings);
+  const isSignedIn = hasCloudAccountSession;
+  const showAccountMenu = accountMenuOpen && isSignedIn;
 
   const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
   const displayGroups = useMemo(() => {
@@ -162,15 +170,24 @@ export function Sidebar({
     (id: string) => {
       const viewMap: Record<string, string> = {
         projects: 'projects',
-        customize: 'customize',
-        settings: 'settings',
-        auth: 'auth',
+        artifacts: 'artifacts',
+        scheduled: 'cowork-scheduled',
+        'live-artifacts': 'cowork-artifacts',
+        dispatch: 'cowork-dispatch',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
     },
     [onNavigateView],
   );
+
+  const handleFooterPrimaryClick = useCallback(() => {
+    if (isSignedIn) {
+      onOpenAccountMenu?.();
+      return;
+    }
+    openSettings('account');
+  }, [isSignedIn, onOpenAccountMenu, openSettings]);
 
   const newLabel = t('sidebar.newChat');
 
@@ -345,8 +362,22 @@ export function Sidebar({
         </div>
       )}
 
+      {/* Account menu replaces recents while open, so it never overlays footer content. */}
+      {!collapsed && showAccountMenu && (
+        <div
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '8px',
+            minHeight: 0,
+          }}
+        >
+          <AccountMenu onClose={() => onOpenAccountMenu?.()} showHeader={false} />
+        </div>
+      )}
+
       {/* Recents (expanded only) */}
-      {!collapsed && (
+      {!collapsed && !showAccountMenu && (
         <div
           style={{
             flex: 1,
@@ -492,18 +523,11 @@ export function Sidebar({
           }}
         >
           <button
-            onClick={() => {
-              if (hasCloudSession) {
-                onOpenAccountMenu?.();
-                return;
-              }
-              handleNavClick('auth');
-            }}
-            data-open={accountMenuOpen}
-            title={hasCloudSession ? t('sidebar.account') : t('sidebar.signIn')}
+            onClick={handleFooterPrimaryClick}
+            data-open={showAccountMenu}
             style={{
+              flex: collapsed ? '0 0 auto' : 1,
               minWidth: 0,
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
               gap: 8,
@@ -520,9 +544,11 @@ export function Sidebar({
                 width: 28,
                 height: 28,
                 borderRadius: '50%',
-                background: hasCloudSession ? 'var(--chat-accent-primary)' : 'var(--chat-bg)',
-                color: hasCloudSession ? '#fff' : 'var(--chat-text-secondary)',
-                border: hasCloudSession ? 'none' : '1px solid var(--chat-border)',
+                background: isSignedIn
+                  ? 'var(--chat-accent-primary)'
+                  : 'var(--chat-surface-elevated)',
+                border: isSignedIn ? 'none' : '1px solid var(--chat-border)',
+                color: isSignedIn ? '#fff' : 'var(--chat-text-secondary)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -531,7 +557,7 @@ export function Sidebar({
                 flexShrink: 0,
               }}
             >
-              {hasCloudSession ? initials(user?.name, user?.email) : <LogIn size={14} />}
+              {isSignedIn ? initials(user?.name, user?.email) : <LogIn size={14} />}
             </div>
             {!collapsed && (
               <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
@@ -545,9 +571,7 @@ export function Sidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {hasCloudSession
-                    ? (user?.name ?? user?.email ?? t('sidebar.account'))
-                    : t('sidebar.signIn')}
+                  {isSignedIn ? (user?.name ?? user?.email) : t('sidebar.signIn')}
                 </div>
                 <div
                   style={{
@@ -558,36 +582,34 @@ export function Sidebar({
                     gap: 3,
                   }}
                 >
-                  {hasCloudSession ? planDisplayName : t('sidebar.signInSub')}
-                  {hasCloudSession && <ChevronDown size={9} />}
+                  {isSignedIn ? planDisplayName : t('sidebar.cloudSync')}
+                  {isSignedIn && <ChevronDown size={9} />}
                 </div>
               </div>
             )}
           </button>
           {!collapsed && (
             <button
-              onClick={() => handleNavClick('settings')}
+              type="button"
+              onClick={() => openSettings('general')}
               title={t('common.settings')}
               aria-label={t('common.settings')}
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 8,
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--chat-text-muted)',
+                width: 36,
+                height: 36,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                borderRadius: 8,
+                border: 'none',
+                background: 'transparent',
                 cursor: 'pointer',
+                color: 'var(--chat-text-muted)',
                 flexShrink: 0,
               }}
             >
-              <Settings size={14} />
+              <Settings size={15} />
             </button>
-          )}
-          {!collapsed && hasCloudSession && (
-            <ChevronDown size={12} style={{ color: 'var(--chat-text-muted)', flexShrink: 0 }} />
           )}
         </div>
       </div>

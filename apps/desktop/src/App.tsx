@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
-import { isTauri, invoke, listen, supportsLocalAppMode } from './lib/tauri-mock';
+import { isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
@@ -65,7 +65,7 @@ import {
 } from './stores/auth';
 import { initializeAuthOrchestrator } from './stores/authOrchestrator';
 import { initializeModelStoreFromSettings, useModelStore } from './stores/modelStore';
-import useErrorStore, { useSimpleModeStore, selectOnboardingCompleted } from './stores/ui';
+import useErrorStore from './stores/ui';
 import { useAppModeStore } from './stores/appModeStore';
 import { useSettingsDialogStore } from './stores/settingsStore';
 import { useSettingsStore, waitForSettingsHydration } from './stores/settingsStore';
@@ -199,7 +199,6 @@ const DesktopShell = () => {
   const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
   const [cloudWaitlistTab, setCloudWaitlistTab] = useState<InviteCodeTab>('waitlist');
-  const [authViewSignal, setAuthViewSignal] = useState(0);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
@@ -207,18 +206,14 @@ const DesktopShell = () => {
   const isSearchModalOpen = useSearchModal((state) => state.isOpen);
   const { theme, setTheme } = useThemeContext();
 
-  // Onboarding state - show mode picker only on first-ever launch
-  const onboardingCompleted = useSimpleModeStore(selectOnboardingCompleted);
+  // Onboarding state - mode selection is the trust-boundary gate.
   const hasSelectedMode = useAppModeStore((s) => s.hasSelectedMode);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [forceModeSelection, setForceModeSelection] = useState(false);
 
-  // Show mode picker only when neither onboarding nor mode selection has been persisted
+  // Show mode picker whenever no Local/BYOK/Cloud mode has been selected.
   useEffect(() => {
-    if (!onboardingCompleted && !hasSelectedMode) {
-      setShowOnboarding(true);
-    }
-  }, [onboardingCompleted, hasSelectedMode]);
+    setShowOnboarding(!hasSelectedMode);
+  }, [hasSelectedMode]);
 
   // Apply dyslexic font class from persisted settings on mount
   const dyslexicFont = useSettingsStore((s) => s.windowPreferences?.dyslexicFont ?? false);
@@ -248,24 +243,6 @@ const DesktopShell = () => {
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = appMode === 'cloud';
   const hasCloudSession = isAuthenticated && !!accessToken;
-  const shouldGateCloudAuth = isCloudMode && !supportsLocalAppMode;
-
-  useEffect(() => {
-    if (
-      !supportsLocalAppMode ||
-      !isCloudMode ||
-      hasCloudSession ||
-      isAuthLoading ||
-      !sessionValidated
-    ) {
-      return;
-    }
-
-    setForceModeSelection(true);
-    setShowOnboarding(true);
-    useAppModeStore.getState().setMode('local');
-    toast.info('Choose Local, BYOK, or request Cloud access.');
-  }, [hasCloudSession, isAuthLoading, isCloudMode, sessionValidated]);
 
   // Hard 8 s boot timeout: if sessionValidated is still false (for example,
   // cloud auth warm-up stalls), move to a recoverable state.
@@ -615,54 +592,86 @@ const DesktopShell = () => {
     ensureActiveConversation();
   }, [restoreSession, ensureActiveConversation]);
 
-  // Initialize cloud provider + load available models into the chat package's model store
+  // Initialize providers + load mode-appropriate models into the chat package's model store.
   useEffect(() => {
     async function initModels() {
-      interface RustModelInfo {
-        id: string;
-        name: string;
-        provider: string;
-        available: boolean;
-      }
-
+      const currentMode = appMode;
       try {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
-        if (useAppModeStore.getState().mode === 'cloud') {
+        if (currentMode === 'cloud') {
           await invoke<boolean>('llm_ensure_managed_cloud').catch(() => false);
         }
 
         const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-        const currentMode = useAppModeStore.getState().mode;
-        const localOnlyCatalog = supportsLocalAppMode && currentMode !== 'cloud';
-        const rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        interface RustModelInfo {
+          id: string;
+          name: string;
+          provider: string;
+          available: boolean;
+        }
+        let rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
+        if (
+          currentMode === 'local' &&
+          !rustModels.some((model) => model.provider.toLowerCase() === 'ollama')
+        ) {
+          try {
+            const directOllamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models');
+            const seenModelIds = new Set(rustModels.map((model) => model.id));
+            rustModels = [
+              ...rustModels,
+              ...directOllamaModels.filter((model) => {
+                if (seenModelIds.has(model.id)) return false;
+                seenModelIds.add(model.id);
+                return true;
+              }),
+            ];
+          } catch (error) {
+            console.warn('Failed to directly load Ollama models for local picker:', error);
+          }
+        }
         const validProviders = new Set([
           'anthropic',
           'openai',
           'google',
+          'managed_cloud',
           'mistral',
           'meta',
           'xai',
           'deepseek',
+          'qwen',
+          'moonshot',
+          'perplexity',
+          'zhipu',
+          'groq',
+          'together',
+          'fireworks',
+          'cerebras',
+          'deepinfra',
+          'nvidia_nim',
+          'open_router',
+          'cohere',
+          'ai21',
+          'sambanova',
+          'azure',
+          'bedrock',
+          'lmstudio',
           'local',
           'ollama',
-          'lmstudio',
-          'custom-openai-compatible',
         ]);
-        let visibleModels = localOnlyCatalog
-          ? rustModels.filter((m) => {
-              const provider = m.provider.toLowerCase();
-              return provider === 'ollama' || provider === 'local' || provider === 'lmstudio';
-            })
-          : rustModels;
-        if (localOnlyCatalog && visibleModels.length === 0) {
-          const ollamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models').catch(
-            () => [],
-          );
-          visibleModels = ollamaModels.filter((m) => {
-            const provider = m.provider.toLowerCase();
-            return provider === 'ollama' || provider === 'local';
-          });
-        }
+        const visibleModels = rustModels.filter((model) => {
+          const provider = model.provider.toLowerCase();
+          const isLocalProvider =
+            provider === 'ollama' || provider === 'local' || provider === 'lmstudio';
+          const isManagedProvider = provider === 'managed_cloud' || provider === 'managed-cloud';
+          const isConfiguredByok = model.available && !isLocalProvider && !isManagedProvider;
+
+          if (currentMode === 'local') {
+            return isLocalProvider || isConfiguredByok;
+          }
+
+          return isManagedProvider || model.id.startsWith('auto');
+        });
+
         const chatModels = visibleModels.map((m) => ({
           id: m.id,
           name: m.name,
@@ -684,7 +693,12 @@ const DesktopShell = () => {
           supportsTools: true,
           contextWindow: 128000,
           isLocal: m.provider.toLowerCase() === 'ollama' || m.provider.toLowerCase() === 'local',
-          isByok: m.available,
+          isByok:
+            currentMode === 'local' &&
+            m.available &&
+            !['ollama', 'local', 'lmstudio', 'managed_cloud', 'managed-cloud'].includes(
+              m.provider.toLowerCase(),
+            ),
         }));
         useChatModelStore.getState().setModels(chatModels);
       } catch {
@@ -723,32 +737,10 @@ const DesktopShell = () => {
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-          if (supportsLocalAppMode && useAppModeStore.getState().mode !== 'cloud') {
-            const ollamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models').catch(
-              () => [],
-            );
-            useChatModelStore.getState().setModels(
-              ollamaModels
-                .filter((m) => {
-                  const provider = m.provider.toLowerCase();
-                  return provider === 'ollama' || provider === 'local';
-                })
-                .map((m) => ({
-                  id: m.id,
-                  name: m.name,
-                  provider: 'ollama' as import('@agiworkforce/unified-chat').ModelInfo['provider'],
-                  tier: 'standard' as const,
-                  supportsThinking: false,
-                  supportsVision: true,
-                  supportsTools: true,
-                  contextWindow: 128000,
-                  isLocal: true,
-                  isByok: false,
-                })),
-            );
-            return;
-          }
-          const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
+          const fallbackProviders =
+            currentMode === 'local'
+              ? ['ollama']
+              : ['managed_cloud', 'anthropic', 'openai', 'google'];
           const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
               const defaultModelId = getProviderDefaultModel(
@@ -771,36 +763,25 @@ const DesktopShell = () => {
                   supportsTools: m.capabilities?.['tools'] ?? false,
                   contextWindow: m.contextWindow ?? 128000,
                   isLocal: p === 'ollama',
-                  isByok: p !== 'ollama',
+                  isByok: false,
                 },
               ];
             });
-          const visibleFallbackModels =
-            supportsLocalAppMode && useAppModeStore.getState().mode !== 'cloud'
-              ? fallbackModels.filter((model) => model.isLocal)
-              : fallbackModels;
-          useChatModelStore.getState().setModels(visibleFallbackModels);
-          toast.error('Could not load models from backend. Using defaults.');
+          useChatModelStore.getState().setModels(fallbackModels);
+          if (currentMode === 'local' && fallbackModels.length === 0) {
+            toast.info(
+              'No local or BYOK models detected yet. Add Ollama or an API key in Settings.',
+            );
+          } else {
+            toast.error('Could not load models from backend. Using mode-safe defaults.');
+          }
         } catch {
           // Even the fallback import failed — chat will use its own internal default
         }
       }
     }
     void initModels();
-    const localRefreshTimer = supportsLocalAppMode
-      ? window.setInterval(() => {
-          if (useAppModeStore.getState().mode !== 'cloud') {
-            void initModels();
-          }
-        }, 10_000)
-      : undefined;
-
-    return () => {
-      if (localRefreshTimer) {
-        window.clearInterval(localRefreshTimer);
-      }
-    };
-  }, []);
+  }, [appMode]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -887,9 +868,6 @@ const DesktopShell = () => {
       const detail = (e as CustomEvent).detail as { type: string; tab?: string };
       if (detail.type === 'open-settings') {
         openSettingsDialog((detail.tab as Parameters<typeof openSettingsDialog>[0]) ?? 'general');
-      } else if (detail.type === 'open-auth') {
-        closeSettingsDialog();
-        setAuthViewSignal((value) => value + 1);
       } else if (detail.type === 'keyboard-shortcuts') {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
@@ -902,7 +880,7 @@ const DesktopShell = () => {
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
-  }, [closeSettingsDialog, openCloudWaitlistModal, openSettingsDialog]);
+  }, [openCloudWaitlistModal, openSettingsDialog]);
 
   // Listen for native menu events from Tauri window menu
   useEffect(() => {
@@ -1355,7 +1333,7 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (shouldGateCloudAuth && (isAuthLoading || !sessionValidated)) {
+  if (isCloudMode && (isAuthLoading || !sessionValidated)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         {/* Skeleton layout — shown while the cloud session is being validated */}
@@ -1368,7 +1346,7 @@ const DesktopShell = () => {
     );
   }
 
-  if (shouldGateCloudAuth && !hasCloudSession) {
+  if (isCloudMode && !hasCloudSession) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <AuthPage />
@@ -1408,28 +1386,11 @@ const DesktopShell = () => {
             <VoiceInputOverlay />
           </Suspense>
         )}
-        {supportsLocalAppMode &&
-          (showOnboarding || forceModeSelection) &&
-          (!onboardingCompleted || forceModeSelection) && (
-            <Suspense fallback={null}>
-              <OnboardingWelcome
-                onComplete={() => {
-                  setShowOnboarding(false);
-                  setForceModeSelection(false);
-                }}
-                onCloudModeSelected={() => {
-                  setShowOnboarding(false);
-                  setForceModeSelection(false);
-                  setAuthViewSignal((value) => value + 1);
-                }}
-                onByokModeSelected={() => {
-                  setShowOnboarding(false);
-                  setForceModeSelection(false);
-                  openSettingsDialog('models-keys');
-                }}
-              />
-            </Suspense>
-          )}
+        {isTauri && showOnboarding && !hasSelectedMode && (
+          <Suspense fallback={null}>
+            <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
+          </Suspense>
+        )}
         <div className="flex flex-col gap-1">
           <Suspense fallback={null}>
             <StatusBanner />
@@ -1464,12 +1425,22 @@ const DesktopShell = () => {
         <main className="flex flex-1 min-h-0 min-w-0 bg-surface-base">
           <div className="flex-1 overflow-hidden">
             <ErrorBoundary
-              fallback={
+              fallback={(error, errorInfo) => (
                 <div className="flex h-full w-full items-center justify-center bg-surface-base">
-                  <div className="text-center">
+                  <div className="max-w-xl px-6 text-center">
                     <p className="mb-4 text-lg font-semibold text-foreground">
                       Chat interface encountered an error
                     </p>
+                    {error ? (
+                      <p className="mb-4 rounded-md border border-border bg-surface-panel px-3 py-2 text-left font-mono text-xs text-muted-foreground">
+                        {error.message || String(error)}
+                      </p>
+                    ) : null}
+                    {import.meta.env.DEV && errorInfo?.componentStack ? (
+                      <pre className="mb-4 max-h-48 overflow-auto rounded-md border border-border bg-surface-panel px-3 py-2 text-left font-mono text-xs text-muted-foreground">
+                        {errorInfo.componentStack}
+                      </pre>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => window.location.reload()}
@@ -1479,39 +1450,26 @@ const DesktopShell = () => {
                     </button>
                   </div>
                 </div>
-              }
+              )}
             >
               {isV3DesktopChatEnabled ? (
                 <DesktopShellV3
                   runtime={tauriRuntime}
                   className="h-full w-full"
                   hostBridge={chatHostBridge}
-                  openAuthSignal={authViewSignal}
-                  authSlot={
-                    <Suspense fallback={<LoadingFallback />}>
-                      <AuthPage
-                        onAuthSuccess={() => {
-                          useAppModeStore.getState().setMode('cloud');
-                        }}
-                      />
-                    </Suspense>
-                  }
                   onModelSelectorClick={() => openSettingsDialog('models-keys')}
                   onVoiceClick={() => {
                     const event = new CustomEvent('toggle-voice-input');
                     window.dispatchEvent(event);
                   }}
+                  onOpenSearch={() => useSearchModal.getState().open()}
                   onNavigateView={(view) => {
-                    if (view === 'customize') {
-                      openSettingsDialog('mcp-skills');
-                    } else if (view === 'connectors') {
+                    if (view === 'connectors') {
                       openSettingsDialog('connectors');
                     } else if (view === 'skills') {
-                      openSettingsDialog('mcp-skills');
+                      openSettingsDialog('skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
-                    } else if (view === 'settings') {
-                      openSettingsDialog('general');
                     } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
                       setPlansModalOpen(true);
                     }
@@ -1526,19 +1484,16 @@ const DesktopShell = () => {
                   enableShortcuts={true}
                   hostBridge={chatHostBridge}
                   onModelSelectorClick={() => openSettingsDialog('models-keys')}
-                  allowModelFallbackModels={false}
                   onVoiceClick={() => {
                     // Toggle voice input overlay
                     const event = new CustomEvent('toggle-voice-input');
                     window.dispatchEvent(event);
                   }}
                   onNavigateView={(view) => {
-                    if (view === 'customize') {
-                      openSettingsDialog('mcp-skills');
-                    } else if (view === 'connectors') {
+                    if (view === 'connectors') {
                       openSettingsDialog('connectors');
                     } else if (view === 'skills') {
-                      openSettingsDialog('mcp-skills');
+                      openSettingsDialog('skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
                     } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
@@ -1656,14 +1611,14 @@ const App = () => {
         if (cloudAccountAuth.isAuthenticated()) {
           console.debug('[App] Store hydrated, forcing account sync with backend...');
           await useAccountStore.getState().syncWithBackend();
-        } else if (isTauri && !useAuthStore.getState().accessToken) {
+        } else if (
+          isTauri &&
+          useAppModeStore.getState().mode === 'local' &&
+          !useAuthStore.getState().accessToken
+        ) {
           // W2a-PRO-00A: local-only users have no cloud session — synthesize a
           // stable user.id from the machine install ID so downstream chat stores
           // can own conversations without crashing on a null user.
-          if (useAppModeStore.getState().mode === 'cloud') {
-            useAppModeStore.getState().setMode('local');
-          }
-
           const applyLocalAccount = (id: string) => {
             useAuthStore.getState().setAccount({
               id,

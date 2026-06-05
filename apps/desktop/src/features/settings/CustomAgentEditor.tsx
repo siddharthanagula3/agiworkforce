@@ -308,11 +308,8 @@ export function CustomAgentEditor({ initialAgent, onClose }: CustomAgentEditorPr
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            Global agents are saved to{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">~/.claude/agents/</code>. Project
-            agents are saved to{' '}
-            <code className="rounded bg-muted px-1 py-0.5 text-xs">.claude/agents/</code> in the
-            current directory.
+            AGI stores global agents in your user agent directory and project agents in the current
+            workspace. Existing compatible agent files are loaded for continuity.
           </p>
         </div>
 
