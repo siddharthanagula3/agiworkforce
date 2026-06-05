@@ -21,7 +21,7 @@ export interface SearchResultGroup {
 
 const STATIC_SETTINGS: SearchResultItem[] = [
   { id: 'settings-general', title: 'General settings', subtitle: 'Settings' },
-  { id: 'settings-appearance', title: 'Appearance', subtitle: 'Settings' },
+  { id: 'settings-appearance', title: 'Personalization', subtitle: 'Settings' },
   { id: 'settings-voice', title: 'Voice settings', subtitle: 'Settings' },
   { id: 'settings-byok', title: 'BYOK & local models', subtitle: 'Settings' },
   { id: 'settings-providers', title: 'Providers', subtitle: 'Settings' },

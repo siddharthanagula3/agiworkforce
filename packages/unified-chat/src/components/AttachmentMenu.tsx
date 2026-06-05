@@ -245,7 +245,7 @@ export function AttachmentMenu({
             onClick={() => {
               window.dispatchEvent(
                 new CustomEvent('chat:action', {
-                  detail: { type: 'open-settings', tab: 'mcp-skills' },
+                  detail: { type: 'open-settings', tab: 'skills' },
                 }),
               );
               onOpenChange(false);

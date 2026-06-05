@@ -53,7 +53,7 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
-      "customize": "Settings",
+      "customize": "Customize",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
@@ -61,14 +61,16 @@
     },
     "account": "Account",
     "signIn": "Sign in",
-    "signInSub": "Cloud sync"
+    "cloudSync": "Cloud sync"
   },
   "emptyChat": {
-    "neutralHeadline": "What can I help with?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
     "fallbackName": "there",
+    "modeLabel": "Local Mode",
+    "cloudSyncAction": "Cloud Sync",
+    "cloudSyncAria": "Set up Cloud Managed sync",
     "chipPrompts": {
       "code": "Help me write code for ",
       "write": "Help me write ",
@@ -213,8 +215,8 @@
     "accountFallback": "Account"
   },
   "customize": {
-    "title": "Settings",
-    "subtitle": "Enable web-capable tools, provider connectors, and local plugins without changing your storage mode.",
+    "title": "Customize",
+    "subtitle": "Skills, connectors, and plugins extend what AGI can do.",
     "tabs": {
       "skills": "Skills",
       "connectors": "Connectors",
@@ -227,7 +229,7 @@
     "noneFound": "No skills found.",
     "addSkill": "Add skill",
     "noneInstalled": "No skills installed yet.",
-    "breadcrumb": "Settings / Skills / {{name}}",
+    "breadcrumb": "Customize / Skills / {{name}}",
     "allowedTools": "Allowed tools",
     "requirements": "Requirements",
     "binaries": "Binaries:",

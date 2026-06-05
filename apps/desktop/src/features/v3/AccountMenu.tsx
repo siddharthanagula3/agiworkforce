@@ -6,13 +6,12 @@ import {
   Sparkles,
   Cpu,
   Box,
-  Mail,
   LogOut,
   ChevronRight,
   HelpCircle,
 } from 'lucide-react';
 import { useUnifiedAuthStore } from '../../stores/auth';
-import { useSettingsDialogStore } from '../../stores/settingsStore';
+import { useSettingsDialogStore } from '../../stores/settingsDialogStore';
 
 type MenuItemDef =
   | { kind: 'header'; label: string; sub?: string }
@@ -29,9 +28,10 @@ type MenuItemDef =
 
 export interface AccountMenuProps {
   onClose: () => void;
+  showHeader?: boolean;
 }
 
-export function AccountMenu({ onClose }: AccountMenuProps) {
+export function AccountMenu({ onClose, showHeader = true }: AccountMenuProps) {
   const { t } = useTranslation('v3');
   const user = useUnifiedAuthStore((s) => s.user);
   const planDisplayName = useUnifiedAuthStore((s) => s.planDisplayName);
@@ -57,6 +57,7 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
       kind: 'item',
       icon: Globe,
       label: t('accountMenu.language'),
+      chev: true,
       action: () => {
         openSettings('general');
         onClose();
@@ -94,21 +95,9 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
       kind: 'item',
       icon: Box,
       label: t('accountMenu.appsExtensions'),
+      chev: true,
       action: () => {
         openSettings('connectors');
-        onClose();
-      },
-    },
-    {
-      kind: 'item',
-      icon: Mail,
-      label: t('accountMenu.giftAGI'),
-      action: () => {
-        window.open(
-          'https://agiworkforce.com/pricing?intent=gift',
-          '_blank',
-          'noopener,noreferrer',
-        );
         onClose();
       },
     },
@@ -135,116 +124,106 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
   ];
 
   return (
-    <>
-      <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={onClose} />
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'fixed',
-          bottom: 60,
-          left: 12,
-          width: 240,
-          background: 'var(--bg-elev)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-          zIndex: 50,
-          overflow: 'hidden',
-          padding: '4px 0',
-        }}
-      >
-        {items.map((it, i) => {
-          if (it.kind === 'header') {
-            return (
-              <div
-                key={i}
-                style={{
-                  padding: '10px 14px 8px',
-                  borderBottom: '1px solid var(--border)',
-                  marginBottom: 4,
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: 'var(--text-1)',
-                    fontWeight: 500,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {it.label}
-                </div>
-                {it.sub && (
-                  <div
-                    style={{
-                      fontSize: 11,
-                      color: 'var(--text-3)',
-                      fontFamily: 'var(--mono)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      marginTop: 2,
-                    }}
-                  >
-                    {it.sub}
-                  </div>
-                )}
-              </div>
-            );
-          }
-          if (it.kind === 'divider') {
-            return (
-              <div key={i} style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-            );
-          }
-          const { icon: Icon, label, kbd, chev, action, danger } = it;
+    <div
+      data-v3-account-menu=""
+      style={{
+        width: '100%',
+        overflow: 'hidden',
+        padding: '4px 0',
+      }}
+    >
+      {items.map((it, i) => {
+        if (it.kind === 'header') {
+          if (!showHeader) return null;
           return (
-            <button
+            <div
               key={i}
-              onClick={action}
               style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 9,
-                padding: '7px 14px',
-                border: 'none',
-                background: 'transparent',
-                color: danger ? '#e05c4a' : 'var(--text-2)',
-                fontSize: 13,
-                cursor: 'pointer',
-                textAlign: 'left',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-soft)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                padding: '10px 14px 8px',
+                borderBottom: '1px solid var(--border)',
+                marginBottom: 4,
               }}
             >
-              <Icon size={14} style={{ flexShrink: 0, opacity: danger ? 1 : 0.7 }} />
-              <span style={{ flex: 1 }}>{label}</span>
-              {kbd && (
-                <span
+              <div
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text-1)',
+                  fontWeight: 500,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {it.label}
+              </div>
+              {it.sub && (
+                <div
                   style={{
                     fontSize: 11,
                     color: 'var(--text-3)',
                     fontFamily: 'var(--mono)',
-                    background: 'var(--bg-soft)',
-                    padding: '1px 5px',
-                    borderRadius: 4,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginTop: 2,
                   }}
                 >
-                  {kbd}
-                </span>
+                  {it.sub}
+                </div>
               )}
-              {chev && <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />}
-            </button>
+            </div>
           );
-        })}
-      </div>
-    </>
+        }
+        if (it.kind === 'divider') {
+          return (
+            <div key={i} style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+          );
+        }
+        const { icon: Icon, label, kbd, chev, action, danger } = it;
+        return (
+          <button
+            key={i}
+            onClick={action}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 9,
+              padding: '7px 14px',
+              border: 'none',
+              background: 'transparent',
+              color: danger ? '#e05c4a' : 'var(--text-2)',
+              fontSize: 13,
+              cursor: 'pointer',
+              textAlign: 'left',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-soft)';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            <Icon size={14} style={{ flexShrink: 0, opacity: danger ? 1 : 0.7 }} />
+            <span style={{ flex: 1 }}>{label}</span>
+            {kbd && (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: 'var(--text-3)',
+                  fontFamily: 'var(--mono)',
+                  background: 'var(--bg-soft)',
+                  padding: '1px 5px',
+                  borderRadius: 4,
+                }}
+              >
+                {kbd}
+              </span>
+            )}
+            {chev && <ChevronRight size={13} style={{ color: 'var(--text-3)' }} />}
+          </button>
+        );
+      })}
+    </div>
   );
 }

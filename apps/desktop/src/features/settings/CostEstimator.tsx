@@ -266,7 +266,9 @@ export const CostEstimator: React.FC<CostEstimatorProps> = ({ className }) => {
               Cost Optimization Tips
             </h4>
             <ul className="space-y-1 text-sm text-yellow-800 dark:text-yellow-200">
-              <li>• Use Claude Haiku 4.5 for simple tasks (4x faster, 1/3 cost of Sonnet)</li>
+              <li>
+                • Use a smaller provider model for simple tasks when quality requirements allow it
+              </li>
               <li>• Use local models via Ollama for zero-cost inference</li>
               <li>• Enable response caching to reduce redundant API calls</li>
               <li>• Set a token budget limit in settings to control spending</li>

@@ -7,10 +7,13 @@ export type SettingsTab =
   | 'privacy'
   | 'models-keys'
   | 'agents'
-  | 'mcp-skills'
+  | 'skills'
   | 'connectors'
+  | 'plugins'
   | 'notifications'
   | 'voice'
+  | 'capabilities'
+  | 'memory'
   | 'team'
   | 'personalization'
   | 'features'
@@ -38,16 +41,17 @@ export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
   'api-keys': 'models-keys',
   'task-routing': 'models-keys',
   'agent-execution': 'agents',
-  mcp: 'mcp-skills',
-  'mcp-server': 'mcp-skills',
+  capabilities: 'agents',
+  mcp: 'connectors',
+  'mcp-server': 'connectors',
   extensions: 'connectors',
   analytics: 'privacy',
-  tools: 'mcp-skills',
-  research: 'mcp-skills',
+  tools: 'connectors',
+  research: 'connectors',
   keybindings: 'general',
   themes: 'appearance',
   'apps-integrations': 'connectors',
-  customize: 'mcp-skills',
+  customize: 'skills',
   billing: 'account',
 };
 

@@ -1264,6 +1264,11 @@ export const selectIsAuthReady = (state: UnifiedAuthStore): boolean =>
 
 export const selectUser = (state: UnifiedAuthStore) => state.user;
 export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthenticated;
+export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean => {
+  const hasCloudToken = Boolean(state.accessToken || state.refreshToken);
+  const hasCloudIdentity = Boolean(state.user?.email?.trim());
+  return state.plan !== 'local-only' && (hasCloudToken || hasCloudIdentity);
+};
 export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;
 export const selectAuthError = (state: UnifiedAuthStore) => state.error;
 

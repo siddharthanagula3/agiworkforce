@@ -142,6 +142,20 @@ function getProviderLabel(providerKey: string): string {
   return fallback[providerKey] ?? providerKey.charAt(0).toUpperCase() + providerKey.slice(1);
 }
 
+function readPersistedDesktopMode(): 'local' | 'cloud' | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem('app-mode-store');
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { state?: { mode?: unknown } };
+    return parsed.state?.mode === 'local' || parsed.state?.mode === 'cloud'
+      ? parsed.state.mode
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Provider logo — SVG inline or brand-color dot
 // ---------------------------------------------------------------------------
@@ -413,17 +427,11 @@ export function ModelSelector({
   onProPlusRequired,
 }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
+  const persistedDesktopMode = readPersistedDesktopMode();
+  const isDesktopLocalMode = persistedDesktopMode === 'local';
 
-  const hasHostModels = models.length > 0;
-  const usingFallback = allowFallbackModels && !hasHostModels;
+  const usingFallback = allowFallbackModels && models.length === 0 && !isDesktopLocalMode;
   const displayModels = usingFallback ? CLOUD_FALLBACK_MODELS : models;
-  const setupOnly = !allowFallbackModels && !hasHostModels;
-  const selectedModelIsVisible = displayModels.some((model) => model.id === selectedModelId);
-  const triggerLabel = setupOnly
-    ? 'Configure Local/BYOK'
-    : !allowFallbackModels && !selectedModelIsVisible
-      ? 'Select model'
-      : displayName;
 
   // Pro+ gate — when a non-Pro+ user picks a model from a different provider
   // than the conversation's current provider, fire onProPlusRequired instead
@@ -511,7 +519,7 @@ export function ModelSelector({
             className,
           )}
         >
-          <span className="max-w-[140px] truncate font-medium">{triggerLabel}</span>
+          <span className="max-w-[140px] truncate font-medium">{displayName}</span>
           <ChevronDown size={12} className="shrink-0 opacity-60" />
         </button>
       </Popover.Trigger>
@@ -534,12 +542,34 @@ export function ModelSelector({
               Model
             </span>
             <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary)]">
-              {!allowFallbackModels ? 'Local/BYOK' : '13+ Providers'}
+              {isDesktopLocalMode ? 'Local / BYOK' : '13+ Providers'}
             </span>
           </div>
 
           {/* Scrollable model list */}
           <div className="max-h-80 overflow-y-auto p-1">
+            {displayModels.length === 0 && (
+              <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
+                <div className="font-medium text-[var(--chat-text-primary)]">
+                  No local or BYOK models detected
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
+                  Start Ollama, download a model, or add an API key in Models & Keys.
+                </p>
+                {onSettingsClick && (
+                  <Popover.Close asChild>
+                    <button
+                      type="button"
+                      onClick={onSettingsClick}
+                      className="mt-3 rounded-lg border border-[var(--chat-border)] px-3 py-1.5 text-xs font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                    >
+                      Open Models & Keys
+                    </button>
+                  </Popover.Close>
+                )}
+              </div>
+            )}
+
             {/* Best (auto) synthetic option at top */}
             {autoModels.length > 0 && bestAutoId && (
               <div className="mb-1">
@@ -548,18 +578,6 @@ export function ModelSelector({
                   onSelect={() => guardedSelectModel(bestAutoId)}
                 />
                 <div className="mx-2 my-1 border-t border-[var(--chat-border)]" />
-              </div>
-            )}
-
-            {setupOnly && (
-              <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
-                <p className="font-medium text-[var(--chat-text-primary)]">
-                  No local or BYOK model is configured.
-                </p>
-                <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
-                  Start Ollama, install a local model, or add a provider API key to chat without AGI
-                  Cloud sign-in.
-                </p>
               </div>
             )}
 
@@ -623,31 +641,26 @@ export function ModelSelector({
                                     </span>
                                   )}
                                 </div>
-                                {!allowFallbackModels && m.isLocal ? (
-                                  <p className="mt-0.5 text-[10px] text-[var(--chat-text-muted)]">
-                                    Installed in Ollama
-                                  </p>
-                                ) : (
-                                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                                    <span
-                                      className={cn(
-                                        'text-[10px] font-medium',
-                                        isSelected
-                                          ? 'text-[var(--chat-accent-primary)]/80'
-                                          : 'text-[var(--chat-text-muted)]',
-                                      )}
-                                    >
-                                      {CAPABILITY_LABEL[capability]}
-                                    </span>
-                                    <span className="text-[var(--chat-text-muted)] text-[10px]">
-                                      ·
-                                    </span>
-                                    <TierBadge tier={m.tier} />
-                                    <span className="text-[10px] text-[var(--chat-text-muted)]">
-                                      {formatContext(m.contextWindow)} ctx
-                                    </span>
-                                  </div>
-                                )}
+                                {/* Capability sub-label + tier badge + context */}
+                                <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                                  <span
+                                    className={cn(
+                                      'text-[10px] font-medium',
+                                      isSelected
+                                        ? 'text-[var(--chat-accent-primary)]/80'
+                                        : 'text-[var(--chat-text-muted)]',
+                                    )}
+                                  >
+                                    {CAPABILITY_LABEL[capability]}
+                                  </span>
+                                  <span className="text-[var(--chat-text-muted)] text-[10px]">
+                                    ·
+                                  </span>
+                                  <TierBadge tier={m.tier} />
+                                  <span className="text-[10px] text-[var(--chat-text-muted)]">
+                                    {formatContext(m.contextWindow)} ctx
+                                  </span>
+                                </div>
                               </div>
 
                               {/* Selected checkmark */}

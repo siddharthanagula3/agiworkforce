@@ -186,6 +186,8 @@ pub fn get_tool_display_info(tool_name: &str, arguments_json: &str) -> ToolDispl
     } else if lower == "recent_chats" {
         let n = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10);
         ("RecentChats", format!("last {n}"))
+    } else if lower == "tool_search" {
+        ("ToolSearch", query.unwrap_or_default())
     } else if contains_any(
         &lower,
         &[

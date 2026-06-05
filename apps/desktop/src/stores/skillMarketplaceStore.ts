@@ -223,6 +223,7 @@ interface SkillMarketplaceState {
   slashCommands: SlashCommand[];
   skillCount: number;
   isLoading: boolean;
+  hasLoaded: boolean;
   error: string | null;
   selectedCategory: SkillCategory;
   searchQuery: string;
@@ -258,6 +259,7 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
       slashCommands: [],
       skillCount: 0,
       isLoading: false,
+      hasLoaded: false,
       error: null,
       selectedCategory: 'all',
       searchQuery: '',
@@ -274,11 +276,12 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
             category: inferCategory(s),
             isActive: false,
           }));
-          set({ skills, isLoading: false });
+          set({ skills, isLoading: false, hasLoaded: true });
         } catch (err) {
           set({
             error: err instanceof Error ? err.message : 'Failed to load skills',
             isLoading: false,
+            hasLoaded: true,
           });
         }
       },
@@ -289,7 +292,7 @@ export const useSkillMarketplaceStore = create<SkillMarketplaceState>()(
         } catch {
           // Non-fatal — proceed to re-fetch regardless
         }
-        set({ skills: [], isLoading: false, error: null });
+        set({ skills: [], isLoading: false, hasLoaded: false, error: null });
         await get().fetchSkills();
       },
 

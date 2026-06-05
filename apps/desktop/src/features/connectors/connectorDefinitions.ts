@@ -153,7 +153,7 @@ export const CONNECTORS: ConnectorDef[] = [
     name: 'Atlassian',
     icon: '\u{1F680}',
     iconUrl: 'https://www.google.com/s2/favicons?domain=atlassian.com&sz=32',
-    description: 'Access Jira & Confluence from Claude',
+    description: 'Access Jira and Confluence project context',
     provider: 'atlassian',
     category: 'Productivity',
     color: 'blue',
@@ -404,7 +404,7 @@ export const CONNECTORS: ConnectorDef[] = [
     name: 'Airtable',
     icon: '\u{1F4CA}',
     iconUrl: 'https://www.google.com/s2/favicons?domain=airtable.com&sz=32',
-    description: 'Bring your structured data to Claude',
+    description: 'Bring structured data into AGI workflows',
     provider: 'airtable',
     category: 'Productivity',
     color: 'blue',
@@ -539,7 +539,7 @@ export const CONNECTORS: ConnectorDef[] = [
     name: 'Attio',
     icon: '\u{1F4C7}',
     iconUrl: 'https://www.google.com/s2/favicons?domain=attio.com&sz=32',
-    description: 'Search, manage, and update your Attio CRM from Claude',
+    description: 'Search, manage, and update your Attio CRM',
     provider: 'attio',
     category: 'CRM & Sales',
     color: 'purple',
@@ -998,4 +998,6 @@ export const CONNECTORS: ConnectorDef[] = [
   },
 ];
 
-export const FEATURED_CONNECTORS = CONNECTORS.filter((c) => c.featured);
+export const CONNECTOR_DIRECTORY = CONNECTORS.filter((c) => !c.comingSoon);
+
+export const FEATURED_CONNECTORS = CONNECTOR_DIRECTORY.filter((c) => c.featured);
