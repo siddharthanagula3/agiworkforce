@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { Modal, Pressable, View } from 'react-native';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -20,8 +19,8 @@ export interface ModeSwitchModalProps {
 }
 
 function modeLabel(mode?: AppMode): string {
-  if (mode === 'local') return formatChatExecutionModeLabel('local_only');
-  if (mode === 'cloud') return formatChatExecutionModeLabel('cloud_managed');
+  if (mode === 'local') return 'Local Mode';
+  if (mode === 'cloud') return 'AGI Cloud';
   if (mode === 'agent') return 'Agent';
   if (mode === 'voice') return 'Voice';
   return 'Chat';
@@ -39,7 +38,7 @@ export function ModeSwitchModal({
   const targetsCloud = toMode === 'cloud';
 
   const title = useMemo(() => {
-    if (targetsCloud) return 'Cloud Managed is invite-only';
+    if (targetsCloud) return 'AGI Cloud is invite-only';
     return `Switch from ${modeLabel(fromMode)} to ${modeLabel(toMode)}?`;
   }, [fromMode, targetsCloud, toMode]);
 
@@ -61,7 +60,7 @@ export function ModeSwitchModal({
         style={{
           flex: 1,
           justifyContent: 'center',
-          backgroundColor: 'rgba(0,0,0,0.62)',
+          backgroundColor: colors.scrim,
           padding: 20,
         }}
       >
@@ -80,7 +79,7 @@ export function ModeSwitchModal({
           </Text>
           <Text style={{ marginTop: 8, color: colors.textSecondary, fontSize: 13, lineHeight: 20 }}>
             {targetsCloud
-              ? 'Mobile Cloud Managed is waitlist-gated. No local conversation is copied or routed unless you enter an invite code and explicitly start a Cloud Managed session.'
+              ? 'Cloud is available by invite. Your local chat stays on this device unless you choose to start a Cloud session.'
               : 'This changes the active model path for the conversation.'}
           </Text>
 
@@ -112,7 +111,7 @@ export function ModeSwitchModal({
                 paddingHorizontal: 16,
               }}
             >
-              <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+              <Text style={{ color: colors.accentText, fontSize: 14, fontWeight: '700' }}>
                 {targetsCloud ? 'Open invite' : 'Switch'}
               </Text>
             </Pressable>

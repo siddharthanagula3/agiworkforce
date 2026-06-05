@@ -1,8 +1,8 @@
 /**
  * Capabilities Settings Screen
  *
- * Mobile uses Local plus Cloud Managed invite/waitlist. Local LLM execution
- * is locked on and Cloud Managed capabilities are waitlisted.
+ * Mobile uses Local Mode plus AGI Cloud invite/waitlist. Local execution
+ * is locked on and cloud capabilities are waitlisted.
  */
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -43,11 +43,11 @@ interface CapabilityMeta {
 
 const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
   {
-    key: 'local-llms',
+    key: 'local-mode',
     icon: Brain,
     state: 'active',
-    label: 'Local LLMs',
-    description: 'On-device model execution is active for every Mobile v1 chat.',
+    label: 'Local Mode',
+    description: 'Private chat on this device is active.',
     stateLabel: 'Active',
   },
   {
@@ -108,7 +108,7 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     icon: Globe,
     state: 'waitlist',
     label: 'Web Search',
-    description: 'Requires Cloud Managed infrastructure and is waitlisted for Mobile v1.',
+    description: 'Available with AGI Cloud access.',
     stateLabel: 'Waitlist',
   },
   {
@@ -116,7 +116,7 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     icon: Paintbrush,
     state: 'waitlist',
     label: 'Image Generation',
-    description: 'Cloud image generation opens after managed quotas and cost controls ship.',
+    description: 'Available with AGI Cloud access.',
     stateLabel: 'Waitlist',
   },
   {
@@ -124,7 +124,7 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     icon: Monitor,
     state: 'waitlist',
     label: 'Desktop Control',
-    description: 'Computer-use and browser environments are Cloud Managed waitlist features.',
+    description: 'Available from paired Desktop sessions and future AGI Cloud environments.',
     stateLabel: 'Waitlist',
   },
 ];
@@ -134,17 +134,17 @@ function stateColors(state: CapabilityState, c: ReturnType<typeof useThemeColors
     case 'active':
     case 'toggle':
       return {
-        icon: c.teal,
-        text: c.teal,
-        background: `${c.teal}18`,
-        border: `${c.teal}33`,
+        icon: c.agentSuccess,
+        text: c.agentSuccess,
+        background: c.successSurface,
+        border: c.successBorder,
       };
     case 'waitlist':
       return {
         icon: c.agentWarning,
         text: c.agentWarning,
-        background: `${c.agentWarning}14`,
-        border: `${c.agentWarning}2E`,
+        background: c.warningSurface,
+        border: c.warningBorder,
       };
     case 'locked':
     case 'nav':
@@ -187,7 +187,8 @@ export default function CapabilitiesScreen() {
       <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
+          className="p-2 rounded-lg"
+          style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -209,21 +210,21 @@ export default function CapabilitiesScreen() {
             marginBottom: 14,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: `${c.teal}2E`,
-            backgroundColor: `${c.teal}12`,
+            borderColor: c.successBorder,
+            backgroundColor: c.successSurface,
             padding: 12,
           }}
           accessible
-          accessibilityLabel="Local Mode active. Local LLMs are active. Cloud Managed is waitlist only."
+          accessibilityLabel="Local Mode active. AGI Cloud is waitlist only."
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <Lock size={14} color={c.teal} />
-            <Text style={{ color: c.teal, fontSize: 13, fontWeight: '600' }}>
+            <Lock size={14} color={c.agentSuccess} />
+            <Text style={{ color: c.textPrimary, fontSize: 13, fontWeight: '600' }}>
               Local Mode active
             </Text>
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Local LLMs stay on for the current demo path. Cloud Managed is invite-only.
+            Chat runs on this device unless you choose to start an AGI Cloud session.
           </Text>
         </View>
 
@@ -346,7 +347,10 @@ function CapabilityRow({
 
   if (isNav && cap.onPress) {
     return (
-      <Pressable onPress={cap.onPress} className="active:bg-white/5">
+      <Pressable
+        onPress={cap.onPress}
+        style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
+      >
         {inner}
       </Pressable>
     );

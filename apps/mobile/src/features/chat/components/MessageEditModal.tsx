@@ -5,7 +5,7 @@
 
 import { View, Pressable, Modal, TextInput, StyleSheet } from 'react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface MessageEditModalProps {
   visible: boolean;
@@ -22,6 +22,8 @@ export function MessageEditModal({
   onClose,
   onSubmit,
 }: MessageEditModalProps) {
+  const colors = useThemeColors();
+
   return (
     <Modal
       visible={visible}
@@ -31,20 +33,36 @@ export function MessageEditModal({
       accessibilityViewIsModal
     >
       <Pressable
-        style={styles.backdrop}
+        style={[styles.backdrop, { backgroundColor: colors.scrim }]}
         onPress={onClose}
         accessibilityLabel="Dismiss edit dialog"
         accessibilityRole="button"
       >
-        <Pressable style={styles.dialog} onPress={() => undefined}>
-          <Text style={styles.dialogTitle}>Edit Message</Text>
+        <Pressable
+          style={[
+            styles.dialog,
+            {
+              backgroundColor: colors.surfaceBase,
+              borderColor: colors.border,
+            },
+          ]}
+          onPress={() => undefined}
+        >
+          <Text style={[styles.dialogTitle, { color: colors.textPrimary }]}>Edit Message</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              {
+                backgroundColor: colors.inputSurface,
+                borderColor: colors.border,
+                color: colors.textPrimary,
+              },
+            ]}
             value={text}
             onChangeText={onChangeText}
             multiline
             autoFocus
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor={colors.textMuted}
             placeholder="Edit your message…"
             accessibilityLabel="Edit message text"
             accessibilityHint="Modify your message then tap Send"
@@ -76,36 +94,29 @@ export function MessageEditModal({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
   },
   dialog: {
     width: '100%',
-    backgroundColor: '#1e2025',
     borderRadius: 14,
     padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
   },
   dialogTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
     marginBottom: 12,
   },
   input: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 8,
     padding: 12,
     fontSize: 15,
-    color: '#fff',
     minHeight: 80,
     maxHeight: 200,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
     marginBottom: 16,
   },
   buttonRow: {

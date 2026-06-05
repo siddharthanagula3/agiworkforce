@@ -27,7 +27,11 @@ export default function SharedLinksScreen() {
       <View className="flex-row items-center px-3 h-12">
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
+          style={({ pressed }) => ({
+            padding: 8,
+            borderRadius: 8,
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -49,8 +53,8 @@ export default function SharedLinksScreen() {
             marginBottom: 20,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: `${c.agentWarning}2E`,
-            backgroundColor: `${c.agentWarning}10`,
+            borderColor: c.warningBorder,
+            backgroundColor: c.warningSurface,
             padding: 14,
           }}
           accessible
@@ -64,7 +68,7 @@ export default function SharedLinksScreen() {
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
             Shared Links lets you publish conversations and invite collaborators. This feature opens
-            with Cloud Managed — join the waitlist to be notified.
+            with AGI Cloud access. Join the waitlist to be notified.
           </Text>
         </View>
 
@@ -76,7 +80,7 @@ export default function SharedLinksScreen() {
                 width: 56,
                 height: 56,
                 borderRadius: 14,
-                backgroundColor: `${c.teal}14`,
+                backgroundColor: c.accentSurface,
                 alignItems: 'center',
                 justifyContent: 'center',
               }}

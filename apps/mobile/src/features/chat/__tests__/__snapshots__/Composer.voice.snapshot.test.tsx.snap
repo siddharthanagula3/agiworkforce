@@ -175,7 +175,6 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
       }
     }
     accessible={true}
-    className="p-1.5 rounded-lg active:bg-white/5 z-10"
     collapsable={false}
     focusable={true}
     onBlur={[Function]}
@@ -188,13 +187,20 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks disable
     onResponderTerminationRequest={[Function]}
     onStartShouldSetResponder={[Function]}
     style={
-      {
-        "opacity": 0.5,
-      }
+      [
+        {
+          "backgroundColor": undefined,
+          "borderRadius": 8,
+          "padding": 6,
+        },
+        {
+          "opacity": 0.5,
+        },
+      ]
     }
   >
     <View
-      color="#777"
+      color="#aaa"
       size={20}
       testID="icon-mic"
     />
@@ -228,7 +234,6 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mi
       }
     }
     accessible={true}
-    className="p-1.5 rounded-lg active:bg-white/5 z-10"
     collapsable={false}
     focusable={true}
     onBlur={[Function]}
@@ -240,9 +245,19 @@ exports[`Composer — voice scaffolding snapshots VoiceInputButton locks idle mi
     onResponderTerminate={[Function]}
     onResponderTerminationRequest={[Function]}
     onStartShouldSetResponder={[Function]}
+    style={
+      [
+        {
+          "backgroundColor": undefined,
+          "borderRadius": 8,
+          "padding": 6,
+        },
+        undefined,
+      ]
+    }
   >
     <View
-      color="#777"
+      color="#aaa"
       size={20}
       testID="icon-mic"
     />

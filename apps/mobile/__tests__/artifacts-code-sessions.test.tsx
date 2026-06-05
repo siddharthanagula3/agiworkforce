@@ -150,7 +150,7 @@ describe('Code Sessions screens', () => {
 
     expect(getByTestId('code-environment-sheet')).toBeTruthy();
     expect(getByText('Use AGI Desktop')).toBeTruthy();
-    expect(getByText('Cloud Managed waitlist')).toBeTruthy();
+    expect(getByText('AGI Cloud waitlist')).toBeTruthy();
   });
 
   it('renders session-unavailable state for an unknown session id', () => {

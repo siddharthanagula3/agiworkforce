@@ -7,7 +7,6 @@ import { Text } from '@/components/ui/text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
-import { colors } from '@/src/ui/theme';
 
 const SNAP_POINTS = ['50%'];
 
@@ -23,7 +22,7 @@ const STYLE_OPTIONS: Array<{
 ];
 
 export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_props, ref) {
-  const { colors: themeColors, isDark } = useTheme();
+  const { colors: themeColors } = useTheme();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
   const chatStyle = useChatStore((s) => s.chatStyle);
@@ -56,8 +55,6 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
     ),
     [],
   );
-
-  const selectedBg = isDark ? 'rgba(33, 128, 141, 0.12)' : 'rgba(33, 128, 141, 0.08)';
 
   return (
     <BottomSheet
@@ -114,7 +111,7 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
                 paddingVertical: 12,
                 paddingHorizontal: 12,
                 borderRadius: 10,
-                backgroundColor: isSelected ? selectedBg : 'transparent',
+                backgroundColor: isSelected ? themeColors.accentSurface : themeColors.transparent,
               }}
               accessibilityLabel={`${option.label} style${isSelected ? ', selected' : ''}`}
               accessibilityRole="radio"
@@ -127,7 +124,7 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
                   height: 20,
                   borderRadius: 10,
                   borderWidth: 2,
-                  borderColor: isSelected ? colors.teal : themeColors.textMuted,
+                  borderColor: isSelected ? themeColors.teal : themeColors.textMuted,
                   alignItems: 'center',
                   justifyContent: 'center',
                   marginTop: 2,
@@ -139,7 +136,7 @@ export const StyleSelector = forwardRef<BottomSheet>(function StyleSelector(_pro
                       width: 10,
                       height: 10,
                       borderRadius: 5,
-                      backgroundColor: colors.teal,
+                      backgroundColor: themeColors.teal,
                     }}
                   />
                 )}

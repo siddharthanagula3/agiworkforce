@@ -12,6 +12,7 @@ import { secureFetch } from './secureFetch';
 import { ApiPaywallError } from './api';
 import { ensureLlmGateOpen } from './llmGate';
 import { assertRemoteChatAllowed } from './remoteChatGate';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 export interface StreamDelta {
   content?: string;
@@ -326,7 +327,9 @@ export async function streamChat(
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  assertRemoteChatAllowed();
+  assertRemoteChatAllowed(undefined, {
+    cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
+  });
   ensureLlmGateOpen(inferProviderFromModel(body.model));
 
   // Per-attempt timeout — each stream attempt gets a fresh timeout so backoff

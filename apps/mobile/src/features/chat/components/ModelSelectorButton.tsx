@@ -4,13 +4,8 @@ import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
-import {
-  getDisplayName,
-  isAutoMode,
-  getModelById,
-  PROVIDERS,
-} from '@/src/features/model-picker/service';
-import { colors } from '@/src/ui/theme';
+import { getDisplayName, isAutoMode, getModelById } from '@/src/features/model-picker/service';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ModelSelectorButtonProps {
   onPress: () => void;
@@ -22,6 +17,7 @@ interface ModelSelectorButtonProps {
  * Displays a small Brain badge when thinking mode is enabled for the selected model.
  */
 export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
+  const colors = useThemeColors();
   const selectedModel = useModelStore((s) => s.selectedModel);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
@@ -30,10 +26,8 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const label = getDisplayName(selectedModel);
   const thinkingOn = thinkingEnabledPerModel[selectedModel] ?? false;
 
-  // Get provider color for non-auto models.
   const model = isAuto ? null : getModelById(selectedModel);
-  const provider = model ? PROVIDERS.find((p) => p.id === model.provider) : null;
-  const iconColor = isAuto ? colors.textMuted : (provider?.color ?? colors.teal);
+  const iconColor = isAuto ? colors.textMuted : colors.teal;
 
   const handlePress = () => {
     if (hapticsEnabled) {
@@ -45,7 +39,10 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   return (
     <Pressable
       onPress={handlePress}
-      className="flex-row items-center gap-1 px-1.5 py-1.5 rounded-lg active:bg-white/5"
+      className="flex-row items-center gap-1 px-1.5 py-1.5 rounded-lg"
+      style={({ pressed }) => ({
+        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+      })}
       accessibilityLabel={`Model: ${label}${thinkingOn ? ', thinking mode on' : ''}`}
       accessibilityRole="button"
       accessibilityHint="Opens model picker"
@@ -56,15 +53,22 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
 
         {/* Per-model thinking indicator — small purple dot */}
         {thinkingOn && (
-          <View className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-purple-500 border border-surface-base items-center justify-center">
-            <Brain size={6} color="#fff" />
+          <View
+            className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border items-center justify-center"
+            style={{
+              backgroundColor: colors.purple,
+              borderColor: colors.surfaceBase,
+            }}
+          >
+            <Brain size={6} color={colors.accentText} />
           </View>
         )}
       </View>
 
       {/* Truncated label */}
       <Text
-        className={`text-xs font-medium max-w-[80px] ${isAuto ? 'text-white/50' : 'text-teal-400'}`}
+        className="text-xs font-medium max-w-[80px]"
+        style={{ color: model ? colors.teal : colors.textMuted }}
         numberOfLines={1}
       >
         {label}

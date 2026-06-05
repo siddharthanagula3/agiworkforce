@@ -5,10 +5,6 @@ import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
 
-/** Purple brand color used for the temporary-chat active state. */
-const TEMPORARY_PURPLE = '#a855f7';
-const TEMPORARY_PURPLE_BG = 'rgba(168, 85, 247, 0.15)';
-
 /**
  * Small icon button placed in the ChatInput toolbar.
  * When tapped, toggles temporary-chat mode in the settings store.
@@ -34,7 +30,7 @@ export function TemporaryChatToggle() {
         paddingHorizontal: isTemporaryChat ? 8 : 6,
         paddingVertical: 6,
         borderRadius: 10,
-        backgroundColor: isTemporaryChat ? TEMPORARY_PURPLE_BG : 'transparent',
+        backgroundColor: isTemporaryChat ? colors.purpleSurface : colors.transparent,
       }}
       accessible={true}
       accessibilityLabel={isTemporaryChat ? 'Temporary chat active' : 'Enable temporary chat'}
@@ -42,7 +38,7 @@ export function TemporaryChatToggle() {
       accessibilityRole="button"
       accessibilityState={{ selected: isTemporaryChat }}
     >
-      <EyeOff size={16} color={isTemporaryChat ? TEMPORARY_PURPLE : colors.textMuted} />
+      <EyeOff size={16} color={isTemporaryChat ? colors.purple : colors.textMuted} />
       {isTemporaryChat ? (
         <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)}>
           <View>
@@ -50,7 +46,7 @@ export function TemporaryChatToggle() {
               style={{
                 fontSize: 11,
                 fontWeight: '600',
-                color: TEMPORARY_PURPLE,
+                color: colors.purple,
                 letterSpacing: 0.2,
               }}
             >

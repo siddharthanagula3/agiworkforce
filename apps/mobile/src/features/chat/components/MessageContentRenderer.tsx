@@ -7,7 +7,7 @@ import { View, Linking } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { CodeBlockCopyButton } from './CodeBlockCopyButton';
 import { MathBlock } from './MathBlock';
-import { colors } from '@/src/ui/theme';
+import { colors as defaultColors, type ColorScheme } from '@/src/ui/theme';
 
 /**
  * Render inline math: $...$ (not $$)
@@ -44,7 +44,11 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
  * Handles inline formatting: **bold**, *italic*, ~~strikethrough~~,
  * `code`, [links](url), and $inline math$.
  */
-export function renderInlineMarkdown(text: string, keyBase = 'inline'): React.ReactNode[] {
+export function renderInlineMarkdown(
+  text: string,
+  keyBase = 'inline',
+  renderColors: ColorScheme = defaultColors,
+): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   // Order matters: bold (**) before italic (*), links before other patterns
   const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
@@ -77,7 +81,7 @@ export function renderInlineMarkdown(text: string, keyBase = 'inline'): React.Re
       parts.push(
         <Text
           key={`strike-${keyBase}-${inlineKey++}`}
-          style={{ textDecorationLine: 'line-through', color: 'rgba(245, 247, 251, 0.5)' }}
+          style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
         >
           {inlineMatch[4]}
         </Text>,
@@ -90,8 +94,8 @@ export function renderInlineMarkdown(text: string, keyBase = 'inline'): React.Re
           style={{
             fontFamily: 'Menlo',
             fontSize: 13,
-            backgroundColor: 'rgba(255, 255, 255, 0.08)',
-            color: colors.textPrimary,
+            backgroundColor: renderColors.surfaceHover,
+            color: renderColors.textPrimary,
           }}
         >
           {` ${inlineMatch[5]} `}
@@ -105,7 +109,7 @@ export function renderInlineMarkdown(text: string, keyBase = 'inline'): React.Re
         <Text
           key={`link-${keyBase}-${inlineKey++}`}
           style={{
-            color: colors.teal,
+            color: renderColors.teal,
             textDecorationLine: 'underline',
           }}
           onPress={() => {
@@ -140,7 +144,11 @@ export function renderInlineMarkdown(text: string, keyBase = 'inline'): React.Re
  * Renders a plain text segment (between block-level elements) with support for
  * headers, blockquotes, unordered lists, ordered lists, and inline markdown.
  */
-function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
+function renderTextSegment(
+  text: string,
+  keyBase: string,
+  renderColors: ColorScheme,
+): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const lines = text.split('\n');
   let idx = 0;
@@ -160,14 +168,14 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
           style={{
             fontSize: fontSizes[level] ?? 15,
             fontWeight: '700',
-            color: colors.textPrimary,
+            color: renderColors.textPrimary,
             marginTop: 8,
             marginBottom: 4,
             lineHeight: (fontSizes[level] ?? 15) * 1.35,
           }}
           selectable
         >
-          {renderInlineMarkdown(headerText, `${keyBase}-h${level}il-${idx}`)}
+          {renderInlineMarkdown(headerText, `${keyBase}-h${level}il-${idx}`, renderColors)}
         </Text>,
       );
       idx++;
@@ -200,11 +208,11 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
           key={`${keyBase}-bq-${idx}`}
           style={{
             borderLeftWidth: 3,
-            borderLeftColor: colors.teal,
+            borderLeftColor: renderColors.teal,
             paddingLeft: 10,
             paddingVertical: 4,
             marginVertical: 4,
-            backgroundColor: 'rgba(33, 128, 141, 0.06)',
+            backgroundColor: renderColors.surfaceBase,
             borderRadius: 4,
           }}
         >
@@ -212,12 +220,12 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
             style={{
               fontSize: 14,
               fontStyle: 'italic',
-              color: 'rgba(245, 247, 251, 0.7)',
+              color: renderColors.textSecondary,
               lineHeight: 21,
             }}
             selectable
           >
-            {renderInlineMarkdown(quoteLines.join('\n'), `${keyBase}-bqil-${idx}`)}
+            {renderInlineMarkdown(quoteLines.join('\n'), `${keyBase}-bqil-${idx}`, renderColors)}
           </Text>
         </View>,
       );
@@ -243,7 +251,7 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
               <Text
                 style={{
                   fontSize: 15,
-                  color: colors.teal,
+                  color: renderColors.teal,
                   lineHeight: 22,
                   width: 12,
                   textAlign: 'center',
@@ -252,10 +260,15 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
                 {'\u2022'}
               </Text>
               <Text
-                style={{ fontSize: 15, color: 'rgba(245, 247, 251, 0.9)', lineHeight: 22, flex: 1 }}
+                style={{
+                  fontSize: 15,
+                  color: renderColors.textPrimary,
+                  lineHeight: 22,
+                  flex: 1,
+                }}
                 selectable
               >
-                {renderInlineMarkdown(item, `${keyBase}-ulil-${idx}-${i}`)}
+                {renderInlineMarkdown(item, `${keyBase}-ulil-${idx}-${i}`, renderColors)}
               </Text>
             </View>
           ))}
@@ -283,7 +296,7 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
               <Text
                 style={{
                   fontSize: 15,
-                  color: colors.teal,
+                  color: renderColors.teal,
                   lineHeight: 22,
                   minWidth: 18,
                   textAlign: 'right',
@@ -292,10 +305,15 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
                 {item.num}.
               </Text>
               <Text
-                style={{ fontSize: 15, color: 'rgba(245, 247, 251, 0.9)', lineHeight: 22, flex: 1 }}
+                style={{
+                  fontSize: 15,
+                  color: renderColors.textPrimary,
+                  lineHeight: 22,
+                  flex: 1,
+                }}
                 selectable
               >
-                {renderInlineMarkdown(item.text, `${keyBase}-olil-${idx}-${i}`)}
+                {renderInlineMarkdown(item.text, `${keyBase}-olil-${idx}-${i}`, renderColors)}
               </Text>
             </View>
           ))}
@@ -311,7 +329,7 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
           key={`${keyBase}-hr-${idx}`}
           style={{
             height: 1,
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
+            backgroundColor: renderColors.border,
             marginVertical: 8,
           }}
         />,
@@ -325,10 +343,10 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          className="text-[15px] leading-relaxed text-white/90"
+          style={{ color: renderColors.textPrimary, fontSize: 15, lineHeight: 23 }}
           selectable
         >
-          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`)}
+          {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors)}
         </Text>,
       );
     } else if (idx > 0 && idx < lines.length - 1) {
@@ -354,7 +372,10 @@ function renderTextSegment(text: string, keyBase: string): React.ReactNode[] {
  *
  * Returns an array of React Native Text/View elements.
  */
-export function renderMarkdownContent(content: string): React.ReactNode[] {
+export function renderMarkdownContent(
+  content: string,
+  renderColors: ColorScheme = defaultColors,
+): React.ReactNode[] {
   if (!content) return [];
 
   const elements: React.ReactNode[] = [];
@@ -367,7 +388,7 @@ export function renderMarkdownContent(content: string): React.ReactNode[] {
   while ((match = blockRegex.exec(content)) !== null) {
     if (match.index > lastIndex) {
       const textBefore = content.slice(lastIndex, match.index);
-      elements.push(...renderTextSegment(textBefore, `seg-${keyCounter++}`));
+      elements.push(...renderTextSegment(textBefore, `seg-${keyCounter++}`, renderColors));
     }
 
     if (match[2] !== undefined) {
@@ -379,13 +400,13 @@ export function renderMarkdownContent(content: string): React.ReactNode[] {
         <View
           key={`code-${keyCounter++}`}
           style={{
-            backgroundColor: 'rgba(0, 0, 0, 0.3)',
+            backgroundColor: renderColors.surfaceHover,
             borderRadius: 8,
             padding: 10,
             paddingTop: 28,
             marginVertical: 6,
             borderWidth: 1,
-            borderColor: 'rgba(255, 255, 255, 0.06)',
+            borderColor: renderColors.border,
           }}
         >
           <CodeBlockCopyButton code={codeContent} />
@@ -394,7 +415,7 @@ export function renderMarkdownContent(content: string): React.ReactNode[] {
               fontSize: 13,
               lineHeight: 19,
               fontFamily: 'Menlo',
-              color: 'rgba(245, 247, 251, 0.85)',
+              color: renderColors.textPrimary,
             }}
             selectable
           >
@@ -409,11 +430,11 @@ export function renderMarkdownContent(content: string): React.ReactNode[] {
 
   if (lastIndex < content.length) {
     const remaining = content.slice(lastIndex);
-    elements.push(...renderTextSegment(remaining, `seg-tail-${keyCounter++}`));
+    elements.push(...renderTextSegment(remaining, `seg-tail-${keyCounter++}`, renderColors));
   }
 
   if (elements.length === 0 && content.length > 0) {
-    elements.push(...renderTextSegment(content, 'seg-0'));
+    elements.push(...renderTextSegment(content, 'seg-0', renderColors));
   }
 
   return elements;

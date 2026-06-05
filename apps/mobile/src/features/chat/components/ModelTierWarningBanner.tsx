@@ -30,9 +30,9 @@ export function ModelTierWarningBanner() {
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 8,
-        backgroundColor: `${colors.agentWarning}14`,
+        backgroundColor: colors.warningSurface,
         borderTopWidth: 1,
-        borderTopColor: `${colors.agentWarning}28`,
+        borderTopColor: colors.warningBorder,
         gap: 8,
       }}
       accessibilityRole="alert"

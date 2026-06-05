@@ -24,12 +24,13 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Shield } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ageGate';
 
 // ---------------------------------------------------------------------------
@@ -37,7 +38,7 @@ import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ag
 // ---------------------------------------------------------------------------
 
 export default function AgeGateScreen() {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
   const router = useRouter();
   const [ageText, setAgeText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +46,10 @@ export default function AgeGateScreen() {
   const inputRef = useRef<TextInput>(null);
 
   const threshold = getAgeThreshold();
+  const canContinue = ageText.trim().length > 0;
+  const primaryButtonTextColor = isDark ? colors.black : colors.white;
+  const disabledButtonBg = isDark ? colors.surfaceHover : colors.surfaceHover;
+  const disabledButtonTextColor = colors.textMuted;
 
   const handleContinue = useCallback(() => {
     const parsed = parseInt(ageText.trim(), 10);
@@ -71,8 +76,16 @@ export default function AgeGateScreen() {
         testID="age-gate-minor-notice"
         style={{ flex: 1, backgroundColor: colors.background }}
       >
-        <View style={[styles.root, { backgroundColor: colors.background }]}>
-          <View style={styles.iconWrap}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { backgroundColor: colors.background, justifyContent: 'center' },
+          ]}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: colors.accentSurface }]}>
             <Shield size={40} color={colors.teal} />
           </View>
 
@@ -87,7 +100,7 @@ export default function AgeGateScreen() {
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
             A parent or guardian can review these settings in{' '}
-            <Text style={{ color: colors.teal }}>Settings &gt; Privacy</Text>.
+            <Text style={{ color: colors.teal }}>Settings &gt; Parental Controls</Text>.
           </Text>
 
           <Pressable
@@ -97,9 +110,9 @@ export default function AgeGateScreen() {
             accessibilityLabel="Continue to app"
             style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
           >
-            <Text style={[styles.ctaBtnText, { color: colors.black }]}>Continue</Text>
+            <Text style={[styles.ctaBtnText, { color: primaryButtonTextColor }]}>Continue</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -110,8 +123,13 @@ export default function AgeGateScreen() {
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.root, { backgroundColor: colors.background }]}>
-          <View style={styles.iconWrap}>
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.scrollContent, { backgroundColor: colors.background }]}
+        >
+          <View style={[styles.iconWrap, { backgroundColor: colors.accentSurface }]}>
             <Shield size={40} color={colors.teal} />
           </View>
 
@@ -150,8 +168,8 @@ export default function AgeGateScreen() {
               styles.ageInput,
               {
                 color: colors.textPrimary,
-                borderColor: error ? '#ef4444' : colors.border,
-                backgroundColor: 'rgba(255,255,255,0.04)',
+                borderColor: error ? colors.agentError : colors.border,
+                backgroundColor: colors.inputSurface,
               },
             ]}
           />
@@ -159,7 +177,7 @@ export default function AgeGateScreen() {
           {error && (
             <Text
               testID="age-gate-error"
-              style={[styles.errorText, { color: '#ef4444' }]}
+              style={[styles.errorText, { color: colors.agentError }]}
               accessibilityRole="alert"
             >
               {error}
@@ -169,11 +187,23 @@ export default function AgeGateScreen() {
           <Pressable
             testID="age-gate-continue-btn"
             onPress={handleContinue}
+            disabled={!canContinue}
             accessibilityRole="button"
             accessibilityLabel="Continue"
-            style={[styles.ctaBtn, { backgroundColor: colors.teal }]}
+            accessibilityState={{ disabled: !canContinue }}
+            style={[
+              styles.ctaBtn,
+              { backgroundColor: canContinue ? colors.teal : disabledButtonBg },
+            ]}
           >
-            <Text style={[styles.ctaBtnText, { color: colors.black }]}>Continue</Text>
+            <Text
+              style={[
+                styles.ctaBtnText,
+                { color: canContinue ? primaryButtonTextColor : disabledButtonTextColor },
+              ]}
+            >
+              Continue
+            </Text>
           </Pressable>
 
           <Text
@@ -183,7 +213,7 @@ export default function AgeGateScreen() {
             Required by DPDP Act 2023, EU AI Act, and Google Play policy. Your age is stored only on
             this device and never shared.
           </Text>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -194,25 +224,27 @@ export default function AgeGateScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 36,
+    paddingBottom: 32,
   },
   iconWrap: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(62,184,196,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 28,
   },
   title: {
     fontSize: 28,
+    lineHeight: 36,
     fontWeight: '700',
-    letterSpacing: -0.5,
+    letterSpacing: 0,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -227,11 +259,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 24,
+    paddingVertical: 14,
+    minHeight: 64,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: '600',
     textAlign: 'center',
-    letterSpacing: 4,
+    letterSpacing: 2,
     marginBottom: 12,
   },
   errorText: {
@@ -250,6 +284,7 @@ const styles = StyleSheet.create({
   ctaBtnText: {
     fontWeight: '600',
     fontSize: 17,
+    lineHeight: 22,
   },
   policyNote: {
     fontSize: 12,

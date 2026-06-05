@@ -12,18 +12,13 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 import type { GeneratedFilePresentation } from '@agiworkforce/types';
 
-jest.mock('@/src/ui/theme', () => ({
-  colors: {
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    surfaceBase: '#000',
-    agentSuccess: '#10b981',
-    agentError: '#ef4444',
-    agentWarning: '#f59e0b',
-  },
-}));
+jest.mock('@/src/ui/theme', () => {
+  const actual = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...actual,
+    useThemeColors: () => actual.colors,
+  };
+});
 
 jest.mock('@/components/ui/text', () => {
   const RN = require('react-native');

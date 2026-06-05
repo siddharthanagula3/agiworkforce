@@ -27,4 +27,19 @@ describe('remoteChatGate', () => {
       getRemoteChatDisabledReason({ v1LocalOnly: false, cloudChat: false, byokKeys: false }),
     ).toBeNull();
   });
+
+  it('allows remote chat after explicit invite access', () => {
+    expect(
+      getRemoteChatDisabledReason(
+        { v1LocalOnly: true, cloudChat: false, byokKeys: false },
+        { cloudUnlocked: true },
+      ),
+    ).toBeNull();
+    expect(() =>
+      assertRemoteChatAllowed(
+        { v1LocalOnly: true, cloudChat: false, byokKeys: false },
+        { cloudUnlocked: true },
+      ),
+    ).not.toThrow();
+  });
 });

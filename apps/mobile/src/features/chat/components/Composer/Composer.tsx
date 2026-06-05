@@ -54,9 +54,9 @@ export function Composer({
   );
 
   return (
-    <View>
+    <View style={{ gap: 8 }}>
       {showChips && !isStreaming && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+        <View style={{ paddingHorizontal: 16 }}>
           <TaskChips activeChip={activeChip} onChipPress={handleChipPress} />
         </View>
       )}

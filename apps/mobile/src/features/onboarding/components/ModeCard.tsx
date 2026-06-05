@@ -4,7 +4,6 @@
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { ChevronDown, ChevronUp, Check } from 'lucide-react-native';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
@@ -21,20 +20,21 @@ const MODE_META: Record<
   { title: string; body: string; privacy: string; testIdPrefix: string }
 > = {
   local: {
-    title: formatChatExecutionModeLabel('local_only'),
-    body: 'Free local mode. No account required for local chats after model setup. Best for sensitive prompts.',
-    privacy: 'Your prompts never leave your device. AI runs locally using your phone hardware.',
+    title: 'Local Mode',
+    body: 'Start with private local chat on this device. No account is required for the local setup.',
+    privacy:
+      'Local chat runs on this device. Nothing is uploaded unless you choose to start a Cloud session.',
     testIdPrefix: 'mode-local',
   },
   cloud: {
-    title: `${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
-    body: 'Hosted compute, sync, generated files, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
-    privacy: 'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent.',
+    title: 'AGI Cloud waitlist',
+    body: 'Cloud adds hosted models, sync, connected sources, generated files, and larger tool workflows when access is available.',
+    privacy: 'Cloud sessions use AGI infrastructure only after you choose to start one.',
     testIdPrefix: 'mode-cloud',
   },
   decide_later: {
     title: 'Decide later',
-    body: 'Start in Local Mode now. Cloud Managed can be reviewed later from Settings when invite access is available.',
+    body: 'Start in Local Mode now. AGI Cloud can be reviewed later from Settings.',
     privacy: 'Local Mode remains active until you explicitly choose another available mode.',
     testIdPrefix: 'mode-decide-later',
   },
@@ -58,7 +58,7 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
         borderRadius: 16,
         borderWidth: isSelected ? 2 : 1,
         borderColor: isSelected ? colors.teal : colors.border,
-        backgroundColor: isSelected ? 'rgba(33, 128, 141, 0.08)' : colors.surfaceBase,
+        backgroundColor: isSelected ? colors.accentSurface : colors.surfaceBase,
         padding: 16,
         marginBottom: 10,
         opacity: disabled ? 0.64 : 1,
@@ -73,14 +73,14 @@ export function ModeCard({ mode, selected, onSelect }: ModeCardProps) {
             borderRadius: 10,
             borderWidth: isSelected ? 0 : 2,
             borderColor: colors.border,
-            backgroundColor: isSelected ? colors.teal : 'transparent',
+            backgroundColor: isSelected ? colors.teal : colors.transparent,
             alignItems: 'center',
             justifyContent: 'center',
             marginRight: 10,
             flexShrink: 0,
           }}
         >
-          {isSelected && <Check size={12} color="#000" strokeWidth={3} />}
+          {isSelected && <Check size={12} color={colors.accentText} strokeWidth={3} />}
         </View>
         <Text
           testID={`${meta.testIdPrefix}-title`}

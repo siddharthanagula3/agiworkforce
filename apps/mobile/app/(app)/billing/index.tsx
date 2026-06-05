@@ -30,7 +30,7 @@ const TIER_CONFIGS: TierDisplayConfig[] = [
     features: [
       'Access to local models',
       `${formatPrivacyModeLabel('local')} mode (your device)`,
-      'Cloud Managed invite/waitlist access',
+      'AGI Cloud invite access',
       'Community support',
     ],
     cta: 'Current plan',
@@ -105,7 +105,7 @@ function TierCard({
   const isFree = pricing.monthlyPriceUsd === 0;
 
   const borderColor = config.highlight ? c.teal : c.border;
-  const bgColor = config.highlight ? `${c.teal}0d` : c.surfaceElevated;
+  const bgColor = config.highlight ? c.accentSurface : c.surfaceElevated;
 
   return (
     <View
@@ -132,7 +132,9 @@ function TierCard({
             paddingVertical: 3,
           }}
         >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: '#fff', letterSpacing: 0.5 }}>
+          <Text
+            style={{ fontSize: 10, fontWeight: '700', color: c.accentText, letterSpacing: 0.5 }}
+          >
             POPULAR
           </Text>
         </View>
@@ -195,10 +197,10 @@ function TierCard({
         disabled={isCurrentTier}
         style={({ pressed }) => ({
           backgroundColor: isCurrentTier
-            ? 'rgba(255,255,255,0.06)'
+            ? c.neutralSurface
             : config.highlight
               ? c.teal
-              : `${c.teal}33`,
+              : c.accentSurface,
           borderRadius: 10,
           paddingVertical: 11,
           alignItems: 'center',
@@ -211,7 +213,7 @@ function TierCard({
           style={{
             fontSize: 14,
             fontWeight: '600',
-            color: isCurrentTier ? c.textMuted : config.highlight ? '#fff' : c.teal,
+            color: isCurrentTier ? c.textMuted : config.highlight ? c.accentText : c.teal,
           }}
         >
           {isCurrentTier ? 'Current plan' : config.cta}
@@ -261,7 +263,15 @@ export default function PricingScreen() {
       >
         <Pressable
           onPress={handleBack}
-          className="w-9 h-9 rounded-lg items-center justify-center active:bg-white/5 mr-2"
+          style={({ pressed }) => ({
+            width: 36,
+            height: 36,
+            borderRadius: 8,
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginRight: 8,
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
@@ -276,7 +286,7 @@ export default function PricingScreen() {
         style={{
           flexDirection: 'row',
           margin: 16,
-          backgroundColor: 'rgba(255,255,255,0.06)',
+          backgroundColor: c.neutralSurface,
           borderRadius: 10,
           padding: 3,
         }}
@@ -290,7 +300,7 @@ export default function PricingScreen() {
               paddingVertical: 8,
               borderRadius: 8,
               alignItems: 'center',
-              backgroundColor: interval === iv ? c.teal : 'transparent',
+              backgroundColor: interval === iv ? c.teal : c.transparent,
             }}
             accessibilityRole="radio"
             accessibilityState={{ selected: interval === iv }}
@@ -299,12 +309,12 @@ export default function PricingScreen() {
               style={{
                 fontSize: 13,
                 fontWeight: '600',
-                color: interval === iv ? '#fff' : c.textSecondary,
+                color: interval === iv ? c.accentText : c.textSecondary,
               }}
             >
               {iv === 'monthly' ? 'Monthly' : 'Yearly'}
               {iv === 'yearly' && (
-                <Text style={{ fontSize: 11, color: interval === iv ? '#ffffffcc' : c.teal }}>
+                <Text style={{ fontSize: 11, color: interval === iv ? c.accentText : c.teal }}>
                   {' '}
                   save ~17%
                 </Text>

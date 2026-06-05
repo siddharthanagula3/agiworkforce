@@ -7,7 +7,6 @@ import {
   Cloud,
   FolderOpen,
   HelpCircle,
-  Info,
   Plus,
   Search,
   Settings,
@@ -458,20 +457,24 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           onPress={() => navigate('/(app)/(tabs)/settings')}
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
-        <View
+        <Pressable
+          onPress={() => navigate('/(app)/profile')}
+          accessibilityLabel="Open profile"
+          accessibilityRole="button"
           style={{
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
             paddingHorizontal: 12,
             paddingTop: 8,
+            minHeight: 36,
           }}
         >
-          <Info size={14} color={colors.textMuted} />
+          <UserCircle size={14} color={colors.textMuted} />
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>
             {displayName}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <InviteCodeModal

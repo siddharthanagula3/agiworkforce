@@ -4,7 +4,7 @@ import { Lock, X, FileText } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, Layout } from 'react-native-reanimated';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 /**
@@ -58,10 +58,12 @@ function AttachmentThumbnail({
   attachment,
   onRemove,
   privacyShortLabel,
+  colors,
 }: {
   attachment: Attachment;
   onRemove: (id: string) => void;
   privacyShortLabel?: string;
+  colors: ColorScheme;
 }) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -110,11 +112,17 @@ function AttachmentThumbnail({
           }}
         >
           <FileText size={24} color={colors.textMuted} />
-          <Text className="text-[9px] text-white/50 mt-1 text-center" numberOfLines={2}>
+          <Text
+            className="text-[9px] mt-1 text-center"
+            style={{ color: colors.textMuted }}
+            numberOfLines={2}
+          >
             {attachment.fileName}
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-[8px] text-white/30">{formatFileSize(attachment.fileSize)}</Text>
+            <Text className="text-[8px]" style={{ color: colors.textMuted }}>
+              {formatFileSize(attachment.fileSize)}
+            </Text>
           ) : null}
         </View>
       )}
@@ -149,7 +157,7 @@ function AttachmentThumbnail({
             paddingHorizontal: 5,
             paddingVertical: 1,
             borderRadius: 9999,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backgroundColor: colors.scrim,
             borderWidth: 1,
             borderColor: colors.border,
           }}
@@ -177,6 +185,7 @@ export function AttachmentPreview({
   onRemove,
   privacyShortLabel,
 }: AttachmentPreviewProps) {
+  const colors = useThemeColors();
   if (attachments.length === 0) return null;
 
   return (
@@ -198,6 +207,7 @@ export function AttachmentPreview({
               attachment={attachment}
               onRemove={onRemove}
               privacyShortLabel={privacyShortLabel}
+              colors={colors}
             />
           ))}
         </ScrollView>
@@ -208,7 +218,9 @@ export function AttachmentPreview({
             className="ml-1 px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.surfaceOverlay }}
           >
-            <Text className="text-[10px] text-white/60 font-medium">{attachments.length}</Text>
+            <Text className="text-[10px] font-medium" style={{ color: colors.textSecondary }}>
+              {attachments.length}
+            </Text>
           </View>
         )}
       </View>

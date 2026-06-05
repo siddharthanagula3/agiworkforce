@@ -4,6 +4,7 @@ import { Copy, Check } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface CodeBlockCopyButtonProps {
   code: string;
@@ -14,6 +15,7 @@ interface CodeBlockCopyButtonProps {
  * Tapping copies the code to clipboard and briefly shows a checkmark.
  */
 export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
+  const colors = useThemeColors();
   const [copied, setCopied] = useState(false);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -37,15 +39,15 @@ export function CodeBlockCopyButton({ code }: CodeBlockCopyButtonProps) {
         right: 6,
         padding: 4,
         borderRadius: 4,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: colors.neutralSurface,
       }}
       accessibilityLabel={copied ? 'Copied' : 'Copy code'}
       accessibilityRole="button"
     >
       {copied ? (
-        <Check size={14} color="rgba(16, 185, 129, 0.9)" />
+        <Check size={14} color={colors.agentSuccess} />
       ) : (
-        <Copy size={14} color="rgba(255, 255, 255, 0.5)" />
+        <Copy size={14} color={colors.textMuted} />
       )}
     </Pressable>
   );

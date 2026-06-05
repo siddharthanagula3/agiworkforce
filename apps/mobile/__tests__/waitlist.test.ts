@@ -40,6 +40,7 @@ jest.mock('../services/api', () => {
 
 import {
   joinWaitlist,
+  redeemInviteCode,
   WaitlistValidationError,
   WaitlistNetworkError,
   useWaitlistStore,
@@ -67,6 +68,10 @@ function resetStore() {
     country: undefined,
     rank: undefined,
     joinedAt: undefined,
+    cloudUnlocked: false,
+    inviteId: undefined,
+    inviteCode: undefined,
+    cloudUnlockedAt: undefined,
   });
 }
 
@@ -193,6 +198,33 @@ describe('joinWaitlist — network errors', () => {
 });
 
 // ---------------------------------------------------------------------------
+// redeemInviteCode — local alpha unlock
+// ---------------------------------------------------------------------------
+
+describe('redeemInviteCode — alpha code', () => {
+  it('accepts ALPHATESTER and returns the local alpha invite id', async () => {
+    await expect(redeemInviteCode('ALPHATESTER', 'chat')).resolves.toEqual({
+      success: true,
+      inviteId: 'mobile-alpha-tester',
+    });
+  });
+
+  it('normalizes casing and whitespace', async () => {
+    await expect(redeemInviteCode('  alphatester  ', 'chat')).resolves.toEqual({
+      success: true,
+      inviteId: 'mobile-alpha-tester',
+    });
+  });
+
+  it('rejects unknown codes', async () => {
+    await expect(redeemInviteCode('WRONGCODE', 'chat')).resolves.toEqual({
+      success: false,
+      error: 'invalid_code',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // useWaitlistStore — defaults
 // ---------------------------------------------------------------------------
 
@@ -207,6 +239,10 @@ describe('useWaitlistStore — defaults', () => {
 
   it('starts with no rank', () => {
     expect(getStoreState().rank).toBeUndefined();
+  });
+
+  it('starts with cloud access locked', () => {
+    expect(getStoreState().cloudUnlocked).toBe(false);
   });
 });
 
@@ -245,6 +281,25 @@ describe('useWaitlistStore — markJoined', () => {
 });
 
 // ---------------------------------------------------------------------------
+// useWaitlistStore — markInviteRedeemed
+// ---------------------------------------------------------------------------
+
+describe('useWaitlistStore — markInviteRedeemed', () => {
+  it('unlocks cloud access and normalizes the invite code', () => {
+    getStoreState().markInviteRedeemed({
+      code: ' alphatester ',
+      inviteId: 'mobile-alpha-tester',
+    });
+
+    const state = getStoreState();
+    expect(state.cloudUnlocked).toBe(true);
+    expect(state.inviteCode).toBe('ALPHATESTER');
+    expect(state.inviteId).toBe('mobile-alpha-tester');
+    expect(state.cloudUnlockedAt).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // useWaitlistStore — clear
 // ---------------------------------------------------------------------------
 
@@ -257,6 +312,10 @@ describe('useWaitlistStore — clear', () => {
 
   it('clears email, country, rank, and joinedAt', () => {
     getStoreState().markJoined({ email: 'a@b.com', country: 'US' }, { rank: 7 });
+    getStoreState().markInviteRedeemed({
+      code: 'ALPHATESTER',
+      inviteId: 'mobile-alpha-tester',
+    });
     getStoreState().clear();
 
     const state = getStoreState();
@@ -264,5 +323,9 @@ describe('useWaitlistStore — clear', () => {
     expect(state.country).toBeUndefined();
     expect(state.rank).toBeUndefined();
     expect(state.joinedAt).toBeUndefined();
+    expect(state.cloudUnlocked).toBe(false);
+    expect(state.inviteCode).toBeUndefined();
+    expect(state.inviteId).toBeUndefined();
+    expect(state.cloudUnlockedAt).toBeUndefined();
   });
 });

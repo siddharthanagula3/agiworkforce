@@ -12,7 +12,7 @@ import {
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import type { Artifact } from '@/types/chat';
 
 interface InlineArtifactCardProps {
@@ -23,14 +23,12 @@ interface InlineArtifactCardProps {
 type ArtifactTypeConfig = {
   icon: typeof Code2;
   badgeColor: 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
-  bgColor: string;
   label: string;
 };
 
 const FALLBACK_CONFIG: ArtifactTypeConfig = {
   icon: FileText,
   badgeColor: 'gray',
-  bgColor: 'rgba(255, 255, 255, 0.05)',
   label: 'Content',
 };
 
@@ -38,40 +36,53 @@ const TYPE_CONFIG: Record<string, ArtifactTypeConfig> = {
   code: {
     icon: Code2,
     badgeColor: 'teal',
-    bgColor: 'rgba(33, 128, 141, 0.1)',
     label: 'Code',
   },
   email: {
     icon: Mail,
     badgeColor: 'blue',
-    bgColor: 'rgba(59, 130, 246, 0.1)',
     label: 'Email',
   },
   research: {
     icon: BookOpen,
     badgeColor: 'purple',
-    bgColor: 'rgba(168, 85, 247, 0.1)',
     label: 'Research',
   },
   image: {
     icon: ImageIcon,
     badgeColor: 'green',
-    bgColor: 'rgba(16, 185, 129, 0.1)',
     label: 'Image',
   },
   chart: {
     icon: BarChart3,
     badgeColor: 'yellow',
-    bgColor: 'rgba(245, 158, 11, 0.1)',
     label: 'Chart',
   },
   document: {
     icon: FileText,
     badgeColor: 'gray',
-    bgColor: 'rgba(255, 255, 255, 0.05)',
     label: 'Document',
   },
 };
+
+function artifactSurface(color: ArtifactTypeConfig['badgeColor'], colors: ColorScheme): string {
+  switch (color) {
+    case 'green':
+      return colors.successSurface;
+    case 'yellow':
+      return colors.warningSurface;
+    case 'red':
+    case 'terra-cotta':
+      return colors.dangerSurface;
+    case 'purple':
+      return colors.purpleSurface;
+    case 'blue':
+    case 'teal':
+      return colors.accentSurface;
+    case 'gray':
+      return colors.surfaceElevated;
+  }
+}
 
 /**
  * Generates a preview string for the artifact content.
@@ -116,6 +127,7 @@ function getPreview(artifact: Artifact): string {
  * Tappable to expand to full screen view.
  */
 export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardProps) {
+  const colors = useThemeColors();
   const config = TYPE_CONFIG[artifact.type] ?? FALLBACK_CONFIG;
   const Icon = config.icon;
   const preview = getPreview(artifact);
@@ -137,10 +149,10 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
     <Pressable
       onPress={() => onExpand(artifact)}
       style={{
-        backgroundColor: config.bgColor,
+        backgroundColor: artifactSurface(config.badgeColor, colors),
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: colors.border,
         marginVertical: 6,
         overflow: 'hidden',
       }}
@@ -181,7 +193,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
               borderRadius: 6,
               paddingHorizontal: 6,
               paddingVertical: 3,
-              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+              backgroundColor: colors.neutralSurface,
             }}
           >
             <Shield size={10} color={colors.textMuted} />
@@ -204,7 +216,7 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
           style={{
             fontSize: 12,
             lineHeight: 18,
-            color: 'rgba(245, 247, 251, 0.55)',
+            color: colors.textMuted,
             fontFamily:
               artifact.type === 'code'
                 ? Platform.select({ ios: 'Menlo', default: 'monospace' })

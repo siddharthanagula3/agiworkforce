@@ -79,26 +79,13 @@ jest.mock('@/components/ui/text', () => {
   return { Text };
 });
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
-    background: '#000',
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-    teal: '#10b981',
-  }),
-  colors: {
-    textPrimary: '#fff',
-    textSecondary: '#aaa',
-    textMuted: '#777',
-    border: '#333',
-    surfaceElevated: '#1a1a1a',
-    surfaceOverlay: '#0e0e0e',
-  },
-}));
+jest.mock('@/src/ui/theme', () => {
+  const actual = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...actual,
+    useThemeColors: () => actual.colors,
+  };
+});
 
 jest.mock('@/lib/v1FeatureFlags', () => ({
   get FEATURES() {

@@ -5,29 +5,52 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultSelectableModelId,
-  getModelById,
+  getModelByIdForCloudAccess,
   isAutoMode,
+  isCloudManagedModelId,
   isSelectableModelId,
+  isSelectableModelIdForCloudAccess,
 } from './service';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 
 /** Maximum number of entries kept in the recent-models list. */
 const MAX_RECENT = 5;
+const CLOUD_PROVIDER_ID = 'cloud_managed';
+
+function isCloudUnlocked(): boolean {
+  return useWaitlistStore.getState().cloudUnlocked;
+}
 
 function normalizeSelectableModelId(modelId: string): string | null {
   const resolvedModelId = normalizeModelId(modelId) ?? modelId;
-  return isSelectableModelId(resolvedModelId) ? resolvedModelId : null;
+  return isSelectableModelIdForCloudAccess(resolvedModelId, isCloudUnlocked())
+    ? resolvedModelId
+    : null;
 }
 
 function filterSelectableModelIds(ids: string[]): string[] {
-  return ids.filter((id) => isSelectableModelId(id));
+  const cloudUnlocked = isCloudUnlocked();
+  return ids.filter((id) => isSelectableModelIdForCloudAccess(id, cloudUnlocked));
 }
 
 function filterThinkingState(
   thinkingEnabledPerModel: Record<string, boolean> | undefined,
 ): Record<string, boolean> {
+  const cloudUnlocked = isCloudUnlocked();
   return Object.fromEntries(
-    Object.entries(thinkingEnabledPerModel ?? {}).filter(([id]) => isSelectableModelId(id)),
+    Object.entries(thinkingEnabledPerModel ?? {}).filter(([id]) =>
+      isSelectableModelIdForCloudAccess(id, cloudUnlocked),
+    ),
   );
+}
+
+function providerForModelId(modelId: string): string {
+  return isCloudManagedModelId(modelId) ? CLOUD_PROVIDER_ID : 'local';
+}
+
+function normalizeProvider(providerId: string): string {
+  if (providerId === CLOUD_PROVIDER_ID && isCloudUnlocked()) return CLOUD_PROVIDER_ID;
+  return 'local';
 }
 
 interface ModelState {
@@ -83,15 +106,14 @@ export const useModelStore = create<ModelState>()(
 
         set({
           selectedModel: resolvedModelId,
-          selectedProvider: 'local',
+          selectedProvider: providerForModelId(resolvedModelId),
           recentModels,
           thinkingModeEnabled,
         });
       },
 
       setProvider: (providerId: string) => {
-        void providerId;
-        set({ selectedProvider: 'local' });
+        set({ selectedProvider: normalizeProvider(providerId) });
       },
 
       toggleFavorite: (modelId: string) => {
@@ -109,7 +131,7 @@ export const useModelStore = create<ModelState>()(
         // Only allow enabling if the current model supports thinking.
         const { selectedModel } = get();
         if (enabled && !isAutoMode(selectedModel)) {
-          const model = getModelById(selectedModel);
+          const model = getModelByIdForCloudAccess(selectedModel, isCloudUnlocked());
           if (model && !model.supportsThinking) return;
         }
         set({ thinkingModeEnabled: enabled });
@@ -123,7 +145,7 @@ export const useModelStore = create<ModelState>()(
         if (isAutoMode(resolvedModelId)) return;
 
         // Only toggle for models that support thinking.
-        const model = getModelById(resolvedModelId);
+        const model = getModelByIdForCloudAccess(resolvedModelId, isCloudUnlocked());
         if (model && !model.supportsThinking) return;
 
         const current = get().thinkingEnabledPerModel;
@@ -147,14 +169,20 @@ export const useModelStore = create<ModelState>()(
       storage: createJSONStorage(() => mmkvStorage),
       merge: (persisted, current) => {
         const persistedState = (persisted ?? {}) as Partial<ModelState>;
-        const selectedModel = getDefaultSelectableModelId(persistedState.selectedModel);
+        const cloudUnlocked = isCloudUnlocked();
+        const selectedModel =
+          persistedState.selectedModel &&
+          isSelectableModelIdForCloudAccess(persistedState.selectedModel, cloudUnlocked)
+            ? persistedState.selectedModel
+            : getDefaultSelectableModelId(persistedState.selectedModel);
         const thinkingEnabledPerModel = filterThinkingState(persistedState.thinkingEnabledPerModel);
+        const selectedProvider = providerForModelId(selectedModel);
 
         return {
           ...current,
           ...persistedState,
           selectedModel,
-          selectedProvider: 'local',
+          selectedProvider,
           favorites: filterSelectableModelIds(persistedState.favorites ?? []),
           recentModels: filterSelectableModelIds(persistedState.recentModels ?? []).slice(
             0,

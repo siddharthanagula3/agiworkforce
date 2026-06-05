@@ -35,9 +35,8 @@ import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { getModelById, isAutoMode, PROVIDERS } from '@/src/features/model-picker/service';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import type { ChatMessage, Artifact } from '@/types/chat';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
@@ -59,20 +58,20 @@ function modelSupportsThinking(modelId?: string): boolean {
 function getProvenance(model?: string): { provider?: string; model?: string } | null {
   if (!model) return null;
   if (isAutoMode(model)) {
-    return { provider: formatChatExecutionModeLabel('local_only'), model: 'Auto' };
+    return { provider: 'Local Mode', model: 'Auto' };
   }
 
   const def = getModelById(model);
   if (!def) return null;
 
   if (def.surface === 'local') {
-    return { provider: 'On device' };
+    return { provider: 'Local Mode', model: def.name };
   }
 
   const providerDef = PROVIDERS.find((p) => p.id === def.provider);
   const providerLabel = providerDef?.name ?? def.providerLabel ?? def.provider;
 
-  return { provider: `${formatChatExecutionModeLabel('cloud_managed')} · ${providerLabel}` };
+  return { provider: `AGI Cloud · ${providerLabel}` };
 }
 
 interface MessageBubbleProps {
@@ -115,6 +114,7 @@ export const MessageBubble = memo(function MessageBubble({
   const { width } = useWindowDimensions();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const reducedMotion = useReducedMotion();
+  const themeColors = useThemeColors();
 
   const handleExpandArtifact = useCallback((artifact: Artifact) => {
     setExpandedArtifact(artifact);
@@ -267,7 +267,10 @@ export const MessageBubble = memo(function MessageBubble({
     handleOpenEditModal,
   ]);
 
-  const contentElements = useMemo(() => renderMarkdownContent(message.content), [message.content]);
+  const contentElements = useMemo(
+    () => renderMarkdownContent(message.content, themeColors),
+    [message.content, themeColors],
+  );
 
   // Compute image display width: full bubble width minus avatar + gap + padding
   const imageWidth = Math.min(width - 80, 320);
@@ -276,7 +279,8 @@ export const MessageBubble = memo(function MessageBubble({
     <Animated.View
       testID={isAssistant && message.isStreaming ? 'chat.message.assistant.streaming' : undefined}
       entering={reducedMotion ? undefined : FadeInDown.duration(200).springify()}
-      className={`px-4 py-3 ${isAssistant ? 'bg-white/[0.02]' : ''}`}
+      className="px-4 py-3"
+      style={{ backgroundColor: isAssistant ? themeColors.surfaceBase : undefined }}
     >
       <Pressable
         onLongPress={handleLongPress}
@@ -293,7 +297,7 @@ export const MessageBubble = memo(function MessageBubble({
           <View className="flex-1 gap-1">
             {/* Role label + offline queued badge */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text className="text-xs text-white/40 font-medium">
+              <Text style={{ color: themeColors.textMuted, fontSize: 12, fontWeight: '500' }}>
                 {isUser ? 'You' : (message.model ?? 'Assistant')}
               </Text>
               {isUser && message.isQueued && (
@@ -302,15 +306,15 @@ export const MessageBubble = memo(function MessageBubble({
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 3,
-                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    backgroundColor: themeColors.warningSurface,
                     paddingHorizontal: 5,
                     paddingVertical: 2,
                     borderRadius: 4,
                   }}
                   accessibilityLabel="Message queued offline"
                 >
-                  <Clock size={10} color="#f59e0b" />
-                  <Text style={{ fontSize: 10, color: '#f59e0b' }}>queued</Text>
+                  <Clock size={10} color={themeColors.agentWarning} />
+                  <Text style={{ fontSize: 10, color: themeColors.agentWarning }}>queued</Text>
                 </View>
               )}
             </View>
@@ -371,7 +375,7 @@ export const MessageBubble = memo(function MessageBubble({
               <View
                 style={{
                   borderLeftWidth: 1,
-                  borderLeftColor: colors.borderLight,
+                  borderLeftColor: themeColors.borderLight,
                   paddingLeft: 12,
                   marginLeft: 8,
                   gap: 4,
@@ -497,7 +501,7 @@ export const MessageBubble = memo(function MessageBubble({
         >
           <View
             style={{
-              backgroundColor: 'rgba(33, 128, 141, 0.15)',
+              backgroundColor: themeColors.accentSurface,
               borderRadius: 12,
               paddingHorizontal: 8,
               paddingVertical: 3,

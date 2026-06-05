@@ -73,9 +73,9 @@ export function ModelRow({
   };
 
   const iconBackground = isSelected
-    ? `${colors.teal}18`
+    ? colors.accentSurface
     : isLocked
-      ? `${colors.agentWarning}12`
+      ? colors.warningSurface
       : colors.surfaceHover;
 
   return (
@@ -108,7 +108,7 @@ export function ModelRow({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 12,
-          backgroundColor: isSelected ? `${colors.teal}10` : colors.transparent,
+          backgroundColor: isSelected ? colors.accentSurface : colors.transparent,
           opacity: disabled ? 0.62 : 1,
         }}
       >
@@ -193,7 +193,7 @@ export function ModelRow({
         >
           <Cloud size={13} color={colors.agentWarning} />
           <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12 }}>
-            {model.lockReason ?? 'Cloud Managed is invite-only on Mobile.'}
+            {model.lockReason ?? 'AGI Cloud is invite-only on mobile.'}
           </Text>
         </View>
       ) : null}
@@ -234,7 +234,7 @@ export function ModelRow({
           <Switch
             value={thinkingEnabled}
             onValueChange={handleThinkingToggle}
-            trackColor={{ false: colors.border, true: `${colors.agentThinking}66` }}
+            trackColor={{ false: colors.border, true: colors.purpleSurface }}
             thumbColor={thinkingEnabled ? colors.agentThinking : colors.textMuted}
             style={{ transform: [{ scaleX: 0.82 }, { scaleY: 0.82 }] }}
             accessibilityLabel={`Thinking mode for ${model.name}`}

@@ -454,7 +454,7 @@ function CodeSessionsEmptyState() {
         No code sessions yet
       </Text>
       <Text className="text-[14px] text-center leading-[20px]" style={{ color: c.textMuted }}>
-        Start a new session to run code on Desktop or Cloud Managed environments
+        Start a new session to run code on AGI Desktop or AGI Cloud environments.
       </Text>
     </View>
   );
