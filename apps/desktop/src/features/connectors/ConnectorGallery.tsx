@@ -1,23 +1,51 @@
-import { Check, Plus, Search, Unplug, Wifi } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Plug,
+  RefreshCw,
+  Search,
+  Settings,
+  Unplug,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ComponentType, ReactNode } from 'react';
+import {
+  siAtlassian,
+  siBox,
+  siDropbox,
+  siFigma,
+  siGithub,
+  siGmail,
+  siGooglecalendar,
+  siGoogledrive,
+  siHubspot,
+  siLinear,
+  siModelcontextprotocol,
+  siN8n,
+  siNotion,
+  siStripe,
+  siVercel,
+} from 'simple-icons';
 import { useShallow } from 'zustand/react/shallow';
 import { cn } from '@/lib/utils';
 import { useConnectorsStore } from '../../stores/connectorsStore';
 import {
   CONNECTORS,
   CONNECTOR_CATEGORIES,
-  FEATURED_CONNECTORS,
+  CONNECTOR_DIRECTORY,
   type ConnectorCategory,
   type ConnectorDef,
 } from './connectorDefinitions';
 import { isTauri } from '../../lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
-import { OAuthConnectorCard } from './OAuthConnectorCard';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
 import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
-import { BridgeStatusCard } from './BridgeStatusCard';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
+import { ConnectorDetailView } from './ConnectorDetailView';
 import {
   Select,
   SelectContent,
@@ -25,32 +53,289 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/Select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 
-type ViewTab = 'featured' | 'all';
-type StatusFilter = 'all' | 'connected' | 'available';
+interface BrandIconData {
+  path: string;
+  hex: string;
+  title: string;
+}
 
-/**
- * ConnectorGallery displays connectors as a visual grid of OAuthConnectorCard
- * components. Each card shows the connector icon, name, status (green/red),
- * and a Connect / Disconnect button.
- *
- * Features:
- * - Featured / All tabs
- * - All / Connected / Available status filter pills
- * - Search bar
- * - Category filter (Productivity, Development, Communication, Analytics, etc.)
- * - "+ Custom connector" button that opens a focused remote MCP connector modal
- * - OAuth flow dialog for in-progress connections
- * - API key dialog for API-key-based connectors
- */
+const CONNECTOR_BRAND_ICONS: Record<string, BrandIconData> = {
+  gmail: siGmail,
+  google_calendar: siGooglecalendar,
+  google_drive: siGoogledrive,
+  google: siGoogledrive,
+  notion: siNotion,
+  figma: siFigma,
+  atlassian: siAtlassian,
+  hubspot: siHubspot,
+  linear: siLinear,
+  github: siGithub,
+  vercel: siVercel,
+  stripe: siStripe,
+  context7: siModelcontextprotocol,
+  modelcontextprotocol: siModelcontextprotocol,
+  dropbox: siDropbox,
+  box: siBox,
+  n8n: siN8n,
+};
+
+function getConnectorBrandIcon(connector: ConnectorDef): BrandIconData | null {
+  return (
+    CONNECTOR_BRAND_ICONS[connector.id] ??
+    CONNECTOR_BRAND_ICONS[connector.provider] ??
+    CONNECTOR_BRAND_ICONS[connector.mcpPackage?.toLowerCase() ?? ''] ??
+    null
+  );
+}
+
+function brandFillColor(icon: BrandIconData): string {
+  const hex = icon.hex.toUpperCase();
+  if (hex === '000000' || hex === '181717') return '#F4F1EA';
+  return `#${icon.hex}`;
+}
+
+function connectorAuthLabel(connector: ConnectorDef): string {
+  switch (connector.authType) {
+    case 'oauth':
+      return 'OAuth';
+    case 'api_key':
+      return 'API key';
+    case 'mcp_remote':
+      return 'MCP';
+    case 'none':
+      return 'Built in';
+  }
+}
+
+function connectorById(id: string): ConnectorDef | null {
+  return CONNECTORS.find((connector) => connector.id === id) ?? null;
+}
+
+function ConnectorMark({
+  connector,
+  size = 'md',
+}: {
+  connector: ConnectorDef;
+  size?: 'sm' | 'md';
+}) {
+  const [failed, setFailed] = useState(false);
+  const brandIcon = getConnectorBrandIcon(connector);
+  const wrapperSize = size === 'sm' ? 'h-8 w-8 rounded-lg' : 'h-10 w-10 rounded-lg';
+  const imageSize = size === 'sm' ? 'h-5 w-5' : 'h-6 w-6';
+  const iconSize = size === 'sm' ? 18 : 22;
+  const source = connector.iconUrl && !failed ? 'image' : brandIcon ? 'brand' : 'neutral';
+
+  return (
+    <div
+      data-testid={`connector-mark-${connector.id}`}
+      data-brand-source={source}
+      className={cn(
+        'flex shrink-0 items-center justify-center border border-border/80 bg-muted/45',
+        wrapperSize,
+      )}
+    >
+      {connector.iconUrl && !failed ? (
+        <img
+          src={connector.iconUrl}
+          alt=""
+          className={cn('rounded-sm object-contain', imageSize)}
+          onError={() => setFailed(true)}
+        />
+      ) : brandIcon ? (
+        <svg
+          role="img"
+          aria-label={`${brandIcon.title} logo`}
+          viewBox="0 0 24 24"
+          width={iconSize}
+          height={iconSize}
+          style={{ fill: brandFillColor(brandIcon), flexShrink: 0 }}
+        >
+          <path d={brandIcon.path} />
+        </svg>
+      ) : (
+        <Plug className={cn('text-muted-foreground', size === 'sm' ? 'h-4 w-4' : 'h-5 w-5')} />
+      )}
+    </div>
+  );
+}
+
+function SettingsRowButton({
+  children,
+  disabled,
+  onClick,
+  className,
+  title,
+  ariaLabel,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+  onClick?: () => void;
+  className?: string;
+  title?: string;
+  ariaLabel?: string;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={ariaLabel}
+      className={cn(
+        'inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-border',
+        'bg-muted/45 px-3 text-sm font-medium text-foreground transition-colors',
+        'hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+interface ConnectedRowProps {
+  connector: ConnectorDef;
+  loading: boolean;
+  error: string | null;
+  expiresAt: number | null;
+  onConfigure: () => void;
+  onDisconnect: () => void;
+  onRefresh?: () => Promise<void> | void;
+}
+
+function ConnectedConnectorRow({
+  connector,
+  loading,
+  error,
+  expiresAt,
+  onConfigure,
+  onDisconnect,
+  onRefresh,
+}: ConnectedRowProps) {
+  const tokenExpired = typeof expiresAt === 'number' && expiresAt * 1000 < Date.now();
+
+  return (
+    <div className="flex items-center gap-3 border-b border-border/75 px-0 py-3 last:border-b-0">
+      <ConnectorMark connector={connector} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-medium text-foreground">{connector.name}</p>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/12 px-2 py-0.5 text-[11px] font-medium text-emerald-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Connected
+          </span>
+          <span className="rounded-full bg-muted/50 px-2 py-0.5 text-[11px] text-muted-foreground">
+            {connectorAuthLabel(connector)}
+          </span>
+        </div>
+        <p className="mt-0.5 truncate text-sm text-muted-foreground">{connector.description}</p>
+        {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {onRefresh && tokenExpired ? (
+          <SettingsRowButton disabled={loading} onClick={() => void onRefresh()}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Refresh
+          </SettingsRowButton>
+        ) : null}
+        <SettingsRowButton disabled={loading} onClick={onConfigure}>
+          <Settings className="h-3.5 w-3.5" />
+          Configure
+        </SettingsRowButton>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SettingsRowButton
+              disabled={loading}
+              onClick={onDisconnect}
+              ariaLabel={`Disconnect ${connector.name}`}
+              className="w-8 px-0"
+            >
+              {loading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <MoreHorizontal className="h-4 w-4" />
+              )}
+            </SettingsRowButton>
+          </TooltipTrigger>
+          <TooltipContent>Disconnect</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+interface AvailableCardProps {
+  connector: ConnectorDef;
+  loading: boolean;
+  error: string | null;
+  onConnect: () => void;
+}
+
+function AvailableConnectorCard({ connector, loading, error, onConnect }: AvailableCardProps) {
+  return (
+    <div className="group flex min-h-[112px] items-start gap-3 rounded-lg border border-border/80 bg-card/35 p-4 transition-colors hover:bg-card/55">
+      <ConnectorMark connector={connector} size="sm" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-medium text-foreground">{connector.name}</p>
+            </div>
+            <p className="mt-1 line-clamp-2 text-sm leading-5 text-muted-foreground">
+              {connector.description}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onConnect}
+            aria-label={`Connect ${connector.name}`}
+            className={cn(
+              'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground',
+              'transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+            )}
+          >
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          </button>
+        </div>
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{connectorAuthLabel(connector)}</span>
+          {connector.mcpPackage ? <span aria-hidden>·</span> : null}
+          {connector.mcpPackage ? <span>MCP</span> : null}
+        </div>
+        {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+}) {
+  return (
+    <div className="rounded-lg border border-border/80 bg-card/25 px-4 py-6 text-center">
+      <Icon className="mx-auto h-5 w-5 text-muted-foreground" />
+      <p className="mt-3 text-sm font-medium text-foreground">{title}</p>
+      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
 export function ConnectorGallery() {
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<ViewTab>('featured');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<ConnectorCategory | 'all'>('all');
   const [oauthState, setOauthState] = useState<OAuthFlowState>({ status: 'idle' });
   const [apiKeyDialogConnector, setApiKeyDialogConnector] = useState<ConnectorDef | null>(null);
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
+  const [detailConnectorId, setDetailConnectorId] = useState<string | null>(null);
 
   const {
     connectedIds,
@@ -76,19 +361,12 @@ export function ConnectorGallery() {
     })),
   );
 
-  // Per-provider OAuth token expiry (unix seconds). Populated after
-  // `fetchConnected` so the OAuthConnectorCard can render an
-  // "Expires in X" badge and optionally a Refresh action.
   const [expiresAtByProvider, setExpiresAtByProvider] = useState<Record<string, number | null>>({});
 
-  // Fetch connected status on mount
   useEffect(() => {
     void fetchConnected();
   }, [fetchConnected]);
 
-  // After connected ids are known, batch-fetch oauth status for each so we
-  // can surface token expiry to the user. Best-effort — failures are logged
-  // but do not block rendering since the badge is optional UX.
   useEffect(() => {
     if (connectedIds.length === 0) {
       setExpiresAtByProvider({});
@@ -117,18 +395,12 @@ export function ConnectorGallery() {
   }, [connectedIds]);
 
   const handleRefreshToken = useCallback(async (connectorId: string) => {
-    try {
-      const refreshed = await McpClient.oauthRefresh(
-        connectorId as Parameters<typeof McpClient.oauthRefresh>[0],
-      );
-      setExpiresAtByProvider((prev) => ({ ...prev, [connectorId]: refreshed.expiresAt ?? null }));
-    } catch (err) {
-      // Surface via thrown error so OAuthConnectorCard's toast handler shows it.
-      throw err instanceof Error ? err : new Error('Token refresh failed');
-    }
+    const refreshed = await McpClient.oauthRefresh(
+      connectorId as Parameters<typeof McpClient.oauthRefresh>[0],
+    );
+    setExpiresAtByProvider((prev) => ({ ...prev, [connectorId]: refreshed.expiresAt ?? null }));
   }, []);
 
-  // Listen for OAuth callbacks from Tauri
   useEffect(() => {
     if (!isTauri) return;
 
@@ -172,40 +444,45 @@ export function ConnectorGallery() {
     };
   }, [completeOAuth]);
 
-  // Determine which source list to use
-  const sourceList = activeTab === 'featured' ? FEATURED_CONNECTORS : CONNECTORS;
+  const visibleCategories = useMemo(
+    () => CONNECTOR_CATEGORIES.filter((cat) => CONNECTOR_DIRECTORY.some((c) => c.category === cat)),
+    [],
+  );
 
-  // Filter by search text, category, and connection status
-  const filtered = useMemo(() => {
-    return sourceList.filter((c) => {
+  const connectedConnectors = useMemo(
+    () =>
+      connectedIds
+        .map(connectorById)
+        .filter((connector): connector is ConnectorDef => Boolean(connector)),
+    [connectedIds],
+  );
+
+  const availableConnectors = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return CONNECTOR_DIRECTORY.filter((connector) => {
+      if (connectedIds.includes(connector.id)) return false;
       const matchesSearch =
-        !search ||
-        c.name.toLowerCase().includes(search.toLowerCase()) ||
-        c.description.toLowerCase().includes(search.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || c.category === categoryFilter;
-      const isConnected = connectedIds.includes(c.id);
-      const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'connected' && isConnected) ||
-        (statusFilter === 'available' && !isConnected && !c.comingSoon);
-      return matchesSearch && matchesCategory && matchesStatus;
+        query.length === 0 ||
+        connector.name.toLowerCase().includes(query) ||
+        connector.description.toLowerCase().includes(query) ||
+        connector.category.toLowerCase().includes(query);
+      const matchesCategory = categoryFilter === 'all' || connector.category === categoryFilter;
+      return matchesSearch && matchesCategory;
     });
-  }, [sourceList, search, categoryFilter, statusFilter, connectedIds]);
+  }, [categoryFilter, connectedIds, search]);
 
-  const connectedCount = connectedIds.length;
+  const detailConnector = detailConnectorId ? connectorById(detailConnectorId) : null;
+  const connectorListError = error['__list'] ?? null;
 
-  // Start connection flow
   const handleConnect = useCallback(
     async (id: string) => {
-      const connector = CONNECTORS.find((c) => c.id === id);
+      const connector = connectorById(id);
       if (!connector) return;
 
       setOauthState({ status: 'connecting', connectorName: connector.name });
       try {
         await connect(id);
         if (connector.authType === 'oauth') {
-          // OAuth opens browser — close the connecting dialog; the card will
-          // remain in "+" state until the OAuth callback is received.
           setOauthState({ status: 'idle' });
         } else {
           setOauthState({ status: 'success', connectorName: connector.name });
@@ -216,13 +493,6 @@ export function ConnectorGallery() {
       }
     },
     [connect],
-  );
-
-  const handleDisconnect = useCallback(
-    async (id: string) => {
-      await disconnect(id);
-    },
-    [disconnect],
   );
 
   const handleConnectClick = useCallback(
@@ -253,17 +523,12 @@ export function ConnectorGallery() {
   );
 
   const lastConnectorName = oauthState.status !== 'idle' ? oauthState.connectorName : '';
-
   const handleRetry = useCallback(() => {
     const connector = CONNECTORS.find((c) => c.name === lastConnectorName);
     if (connector) {
       void handleConnect(connector.id);
     }
-  }, [lastConnectorName, handleConnect]);
-
-  const handleAddCustomConnector = useCallback(() => {
-    setCustomConnectorOpen(true);
-  }, []);
+  }, [handleConnect, lastConnectorName]);
 
   const handleCustomConnectorSaved = useCallback(
     (serverName: string) => {
@@ -273,148 +538,132 @@ export function ConnectorGallery() {
     [fetchConnected],
   );
 
-  // Grid content — shared between tab panels
-  const GridContent = useCallback(
-    ({ items }: { items: ConnectorDef[] }) => {
-      if (items.length === 0) {
-        return <EmptyState statusFilter={statusFilter} />;
-      }
-      return (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {items.map((connector) => (
-            <OAuthConnectorCard
-              key={connector.id}
-              connector={connector}
-              connected={connectedIds.includes(connector.id)}
-              loading={Boolean(loading[connector.id])}
-              error={error[connector.id] ?? null}
-              onConnect={() => handleConnectClick(connector)}
-              onDisconnect={() => void handleDisconnect(connector.id)}
-              expiresAt={expiresAtByProvider[connector.id] ?? null}
-              onRefresh={
-                connector.authType === 'oauth' ? () => handleRefreshToken(connector.id) : undefined
-              }
-            />
-          ))}
-        </div>
-      );
-    },
-    [
-      connectedIds,
-      loading,
-      error,
-      handleConnectClick,
-      handleDisconnect,
-      statusFilter,
-      expiresAtByProvider,
-      handleRefreshToken,
-    ],
+  const dialogs = (
+    <>
+      <ConnectorOAuthFlow
+        state={oauthState}
+        onClose={() => setOauthState({ status: 'idle' })}
+        onRetry={handleRetry}
+      />
+      <ConnectorApiKeyDialog
+        connector={apiKeyDialogConnector}
+        open={apiKeyDialogConnector !== null}
+        onClose={() => setApiKeyDialogConnector(null)}
+        onConnect={handleApiKeyConnect}
+      />
+      <CustomRemoteMcpConnectorDialog
+        open={customConnectorOpen}
+        onClose={() => setCustomConnectorOpen(false)}
+        onSaved={handleCustomConnectorSaved}
+      />
+    </>
   );
 
+  if (detailConnector) {
+    return (
+      <>
+        <ConnectorDetailView
+          connector={detailConnector}
+          tools={undefined}
+          onBack={() => setDetailConnectorId(null)}
+        />
+        {dialogs}
+      </>
+    );
+  }
+
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
+    <div className="space-y-6">
+      <div className="flex items-start justify-between gap-4 border-b border-border/80 pb-4">
         <div>
-          <h3 className="text-lg font-semibold">Connectors</h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            Connect to your apps, files, and services via OAuth or API keys.
+          <h3 className="text-lg font-semibold text-foreground">Connectors</h3>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Allow AGI to interact with apps, data, and tools on your computer with your approval.
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {connectedCount > 0 && (
-            <div className="flex items-center gap-1.5 rounded-full bg-green-500/15 px-3 py-1 text-xs font-medium text-green-500">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-              {connectedCount} connected
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={handleAddCustomConnector}
-            className="flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5
-              text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent
-              transition-colors"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Custom connector
-          </button>
+        <SettingsRowButton onClick={() => setCustomConnectorOpen(true)} className="shrink-0">
+          <Plus className="h-3.5 w-3.5" />
+          Add custom
+        </SettingsRowButton>
+      </div>
+
+      {connectorListError ? (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{connectorListError}</span>
         </div>
-      </div>
+      ) : null}
 
-      {/* Chrome + VS Code developer bridges */}
-      <BridgeStatusCard />
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-foreground">Connected</h4>
+          {connectedConnectors.length > 0 ? (
+            <span className="text-xs text-muted-foreground">
+              {connectedConnectors.length} active
+            </span>
+          ) : null}
+        </div>
 
-      {/* Status filter pills */}
-      <div className="flex items-center gap-1.5">
-        {(
-          [
-            { value: 'all', label: 'All' },
-            { value: 'connected', label: 'Connected' },
-            { value: 'available', label: 'Available' },
-          ] as { value: StatusFilter; label: string }[]
-        ).map(({ value, label }) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setStatusFilter(value)}
-            className={cn(
-              'rounded-full px-3 py-1 text-xs font-medium transition-colors',
-              statusFilter === value
-                ? 'bg-foreground text-background'
-                : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground',
-            )}
-          >
-            {label}
-            {value === 'connected' && connectedCount > 0 && (
-              <span className="ml-1.5 tabular-nums">{connectedCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
+        {connectedConnectors.length === 0 ? (
+          <EmptyState
+            icon={Unplug}
+            title="No connectors connected yet"
+            description="Connect an app below to let AGI use its tools after you approve the connection."
+          />
+        ) : (
+          <div className="rounded-xl border border-border bg-card/35 px-4">
+            {connectedConnectors.map((connector) => (
+              <ConnectedConnectorRow
+                key={connector.id}
+                connector={connector}
+                loading={Boolean(loading[connector.id])}
+                error={error[connector.id] ?? null}
+                expiresAt={expiresAtByProvider[connector.id] ?? null}
+                onConfigure={() => setDetailConnectorId(connector.id)}
+                onDisconnect={() => void disconnect(connector.id)}
+                onRefresh={
+                  connector.authType === 'oauth'
+                    ? () => handleRefreshToken(connector.id)
+                    : undefined
+                }
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-      {/* Tabs + Search + Category filter */}
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as ViewTab)}
-        className="space-y-4"
-      >
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          {/* Left: tab switches */}
-          <TabsList className="h-9">
-            <TabsTrigger value="featured" className="text-xs px-3 py-1">
-              Featured
-            </TabsTrigger>
-            <TabsTrigger value="all" className="text-xs px-3 py-1">
-              All
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Right: search + category */}
-          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-            <div className="relative max-w-[220px] flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+      <section className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">Available to connect</h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Supported connectors only. Upcoming integrations stay hidden until they have a real
+              backend path.
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+            <div className="relative min-w-[220px] max-w-[340px] flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Search connectors..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 text-xs rounded-md border border-border bg-background
-                  placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                onChange={(event) => setSearch(event.target.value)}
+                className="h-9 w-full rounded-lg border border-border bg-muted/35 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
-
             <Select
               value={categoryFilter}
-              onValueChange={(v) => setCategoryFilter(v as ConnectorCategory | 'all')}
+              onValueChange={(value) => setCategoryFilter(value as ConnectorCategory | 'all')}
             >
-              <SelectTrigger className="h-8 w-[160px] text-xs">
-                <SelectValue placeholder="All Categories" />
+              <SelectTrigger className="h-9 w-[156px] rounded-lg border-border bg-muted/35 text-sm">
+                <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {CONNECTOR_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
+                <SelectItem value="all">All types</SelectItem>
+                {visibleCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -422,73 +671,43 @@ export function ConnectorGallery() {
           </div>
         </div>
 
-        {/* Featured tab content */}
-        <TabsContent value="featured">
-          <GridContent items={filtered} />
-        </TabsContent>
+        {availableConnectors.length === 0 ? (
+          <EmptyState
+            icon={Check}
+            title="No connectors in this view"
+            description="Clear the search or choose another type."
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+            {availableConnectors.map((connector) => (
+              <AvailableConnectorCard
+                key={connector.id}
+                connector={connector}
+                loading={Boolean(loading[connector.id])}
+                error={error[connector.id] ?? null}
+                onConnect={() => handleConnectClick(connector)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-        {/* All tab content */}
-        <TabsContent value="all">
-          <GridContent items={filtered} />
-        </TabsContent>
-      </Tabs>
-
-      {/* OAuth flow dialog */}
-      <ConnectorOAuthFlow
-        state={oauthState}
-        onClose={() => setOauthState({ status: 'idle' })}
-        onRetry={handleRetry}
-      />
-
-      {/* API key dialog (initial connect) */}
-      <ConnectorApiKeyDialog
-        connector={apiKeyDialogConnector}
-        open={apiKeyDialogConnector !== null}
-        onClose={() => setApiKeyDialogConnector(null)}
-        onConnect={handleApiKeyConnect}
-      />
-
-      <CustomRemoteMcpConnectorDialog
-        open={customConnectorOpen}
-        onClose={() => setCustomConnectorOpen(false)}
-        onSaved={handleCustomConnectorSaved}
-      />
-    </div>
-  );
-}
-
-interface EmptyStateProps {
-  statusFilter: StatusFilter;
-}
-
-function EmptyState({ statusFilter }: EmptyStateProps) {
-  if (statusFilter === 'connected') {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <Wifi className="h-10 w-10 mb-3 opacity-40" />
-        <p className="text-sm font-medium">No connected apps yet</p>
-        <p className="text-xs mt-1 opacity-70">
-          Switch to "Available" to browse and connect your first app.
-        </p>
+      <div className="border-t border-border/80 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Advanced MCP configuration</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Use custom connectors for remote MCP servers or provider-specific API keys.
+            </p>
+          </div>
+          <SettingsRowButton onClick={() => setCustomConnectorOpen(true)}>
+            <ExternalLink className="h-3.5 w-3.5" />
+            Add custom
+          </SettingsRowButton>
+        </div>
       </div>
-    );
-  }
 
-  if (statusFilter === 'available') {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <Check className="h-10 w-10 mb-3 opacity-40" />
-        <p className="text-sm font-medium">All connectors are connected</p>
-        <p className="text-xs mt-1 opacity-70">You've connected everything in this view.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-      <Unplug className="h-10 w-10 mb-3 opacity-40" />
-      <p className="text-sm font-medium">No connectors found</p>
-      <p className="text-xs mt-1 opacity-70">Try a different search or category.</p>
+      {dialogs}
     </div>
   );
 }

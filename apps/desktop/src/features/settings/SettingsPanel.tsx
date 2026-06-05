@@ -1,19 +1,22 @@
-import { isCloudWeb } from '@/lib/tauri-mock';
+import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
 import { notifications, models as modelsApi } from '@agiworkforce/api';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bell,
+  BookOpen,
   Brain,
   CreditCard,
   Mic,
-  Palette,
   Plug,
+  Puzzle,
   Search,
   Server,
   Settings2,
   Shield,
-  Wrench,
+  UserRound,
   Zap,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -49,8 +52,9 @@ import { AppearanceTab } from './tabs/Appearance';
 import { PrivacyTab } from './tabs/Privacy';
 import { ModelsKeysTab } from './tabs/ModelsKeys';
 import { AgentsTab } from './tabs/Agents';
-import { McpSkillsTab } from './tabs/McpSkills';
+import { SkillsTab } from './tabs/Skills';
 import { ConnectorsTab } from './tabs/Connectors';
+import { PluginsTab } from './tabs/Plugins';
 import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
 import { MemoryTab } from './tabs/Memory';
@@ -62,8 +66,9 @@ type CanonicalTab =
   | 'privacy'
   | 'models-keys'
   | 'agents'
-  | 'mcp-skills'
+  | 'skills'
   | 'connectors'
+  | 'plugins'
   | 'notifications'
   | 'voice'
   | 'memory';
@@ -75,18 +80,19 @@ function resolveTab(tab: SettingsTab): CanonicalTab {
 const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType }[] = [
   { key: 'general', label: 'General', icon: Settings2 },
   { key: 'account', label: 'Account', icon: CreditCard },
-  { key: 'appearance', label: 'Personalization', icon: Palette },
+  { key: 'appearance', label: 'Personalization', icon: UserRound },
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'mcp-skills', label: 'Tools & Skills', icon: Wrench },
-  { key: 'connectors', label: 'Apps', icon: Plug },
+  { key: 'skills', label: 'Skills', icon: BookOpen },
+  { key: 'connectors', label: 'Connectors', icon: Plug },
+  { key: 'plugins', label: 'Plugins', icon: Puzzle },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
 ];
 
-const SELF_SAVING_TABS = new Set<CanonicalTab>(['mcp-skills', 'connectors']);
+const SELF_SAVING_TABS = new Set<CanonicalTab>(['skills', 'connectors', 'plugins']);
 const WEB_HIDDEN_TABS = new Set<CanonicalTab>(['models-keys', 'voice']);
 const visibleNav = isCloudWeb
   ? SETTINGS_NAV.filter((t) => !WEB_HIDDEN_TABS.has(t.key))
@@ -98,7 +104,7 @@ const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
   },
   {
     label: 'Tools',
-    keys: ['agents', 'mcp-skills', 'connectors', 'memory'],
+    keys: ['skills', 'connectors', 'plugins', 'agents', 'memory'],
   },
   {
     label: 'Desktop app',
@@ -122,6 +128,22 @@ function stableSerialize(value: unknown): string {
   return JSON.stringify(sortRecursively(value));
 }
 
+type OllamaModelListItem = string | { id?: unknown; name?: unknown; model?: unknown };
+
+function normalizeOllamaModelList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: OllamaModelListItem) => {
+      if (typeof item === 'string') return item;
+      const id = typeof item.id === 'string' ? item.id : null;
+      const model = typeof item.model === 'string' ? item.model : null;
+      const name = typeof item.name === 'string' ? item.name : null;
+      return id ?? model ?? name ?? '';
+    })
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+}
+
 interface SettingsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -140,6 +162,10 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const features = useSettingsStore(useShallow((state) => state.features));
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
+  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
+  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
+  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
+  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
   const globalHotkeyPreferences = useSettingsStore(
     useShallow((state) => state.globalHotkeyPreferences),
   );
@@ -177,7 +203,8 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   };
 
   const ollamaStatus = providerStatuses.ollama;
-  const isOllamaAvailable = ollamaStatus?.available && ollamaStatus?.ollamaRunning;
+  const isOllamaAvailable =
+    Boolean(ollamaStatus?.available && ollamaStatus?.ollamaRunning) || ollamaModels.length > 0;
   const ollamaEnabled = Boolean(resolvedLLMConfig.defaultModels?.ollama);
   const isBusy = loading || isSaving || notificationLoading;
   const normalizedNavQuery = navQuery.trim().toLowerCase();
@@ -199,17 +226,45 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     })).filter((group) => group.items.length > 0);
   }, [normalizedNavQuery]);
 
+  const handleExportSettings = useCallback(async () => {
+    try {
+      const storeState = useSettingsStore.getState();
+      const exportData = JSON.stringify(
+        {
+          llmConfig: storeState.llmConfig,
+          windowPreferences: storeState.windowPreferences,
+          chatPreferences: storeState.chatPreferences,
+          executionPreferences: storeState.executionPreferences,
+          globalHotkeyPreferences: storeState.globalHotkeyPreferences,
+          customModels: storeState.customModels,
+        },
+        null,
+        2,
+      );
+      if (!isTauri) {
+        const blob = new Blob([exportData], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        return;
+      }
+      const savePath = await save({
+        defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      });
+      if (savePath) await writeTextFile(savePath, exportData);
+    } catch (err) {
+      console.error('Failed to export settings:', err);
+    }
+  }, []);
+
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
       if (enabled) {
-        const modelToSet = selectedOllamaModel || ollamaModels[0];
-        if (!modelToSet) {
-          setDefaultModel('ollama', '');
-          setSelectedOllamaModel('');
-          toast.warning('No local Ollama models detected. Install or pull a model first.');
-          setHasUnsavedChanges(true);
-          return;
-        }
+        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
         setDefaultModel('ollama', modelToSet);
         setSelectedOllamaModel(modelToSet);
       } else {
@@ -259,8 +314,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     setCheckingOllama(true);
     try {
       await checkProviderStatus('ollama');
-      const models =
-        ((await modelsApi.llmGetOllamaModels().catch(() => [] as string[])) as string[]) || [];
+      const models = normalizeOllamaModelList(await modelsApi.llmGetOllamaModels().catch(() => []));
       setOllamaModels(models);
       setSelectedOllamaModel((currentModel) => {
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
@@ -370,6 +424,38 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setHasUnsavedChanges(true);
     },
     [setLanguage],
+  );
+
+  const handleAgentModeChange = useCallback(
+    (value: boolean) => {
+      setAlwaysUseAgentMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAlwaysUseAgentMode],
+  );
+
+  const handleAutoApproveToolsChange = useCallback(
+    (value: boolean) => {
+      setAutoApproveTools(value);
+      setHasUnsavedChanges(true);
+    },
+    [setAutoApproveTools],
+  );
+
+  const handleCompactModeChange = useCallback(
+    (value: boolean) => {
+      setCompactMode(value);
+      setHasUnsavedChanges(true);
+    },
+    [setCompactMode],
+  );
+
+  const handlePromptCompletionChange = useCallback(
+    (value: boolean) => {
+      setPromptCompletionEnabled(value);
+      setHasUnsavedChanges(true);
+    },
+    [setPromptCompletionEnabled],
   );
 
   const handleGlobalHotkeyEnabledChange = useCallback(
@@ -491,6 +577,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return (
           <ModelsKeysTab
             resolvedLLMConfig={resolvedLLMConfig}
+            chatPreferences={chatPreferences}
             ollamaModels={ollamaModels}
             selectedOllamaModel={selectedOllamaModel}
             checkingOllama={checkingOllama}
@@ -500,14 +587,21 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             onOllamaUrlChange={handleOllamaUrlChange}
             onOllamaEnabledChange={handleOllamaEnabledChange}
             onOllamaModelChange={handleOllamaModelChange}
+            onAgentModeChange={handleAgentModeChange}
+            onAutoApproveToolsChange={handleAutoApproveToolsChange}
+            onCompactModeChange={handleCompactModeChange}
+            onPromptCompletionChange={handlePromptCompletionChange}
+            onExportSettings={() => void handleExportSettings()}
           />
         );
       case 'agents':
-        return <AgentsTab onSettingsChange={() => setHasUnsavedChanges(true)} />;
-      case 'mcp-skills':
-        return <McpSkillsTab isBusy={isBusy} onOpenConnectors={() => setActiveTab('connectors')} />;
+        return <AgentsTab />;
+      case 'skills':
+        return <SkillsTab />;
       case 'connectors':
-        return <ConnectorsTab isBusy={isBusy} onOpenMcpSkills={() => setActiveTab('mcp-skills')} />;
+        return <ConnectorsTab />;
+      case 'plugins':
+        return <PluginsTab />;
       case 'notifications':
         return (
           <NotificationsTab

@@ -32,7 +32,11 @@ export function EmptyChat() {
   return (
     <div className="flex h-full flex-col items-center justify-center px-6">
       <div className="w-full">
-        <EmptyState headline={headline} />
+        <EmptyState
+          headline={headline}
+          planBadgeLabel={t('emptyChat.modeLabel')}
+          showPlanBadgeNoun={false}
+        />
       </div>
     </div>
   );

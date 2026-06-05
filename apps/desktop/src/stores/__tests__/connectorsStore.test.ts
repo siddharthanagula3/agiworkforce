@@ -93,4 +93,17 @@ describe('connectorsStore', () => {
     expect(state.pendingOAuth['gmail']).toBe(false);
     expect(state.connectedIds).toContain('gmail');
   });
+
+  it('does not mark OAuth connectors connected when the MCP provider is inactive', async () => {
+    await useConnectorsStore.getState().connect('gmail');
+    mcpMock.listConnectedProviders.mockResolvedValue([]);
+
+    await expect(useConnectorsStore.getState().completeOAuth('gmail')).rejects.toThrow(
+      /not active/i,
+    );
+
+    const state = useConnectorsStore.getState();
+    expect(state.connectedIds).not.toContain('gmail');
+    expect(state.error['gmail']).toMatch(/not active/i);
+  });
 });

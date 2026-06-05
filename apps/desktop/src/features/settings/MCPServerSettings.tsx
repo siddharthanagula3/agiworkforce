@@ -78,7 +78,7 @@ export function MCPServerSettings() {
         <div>
           <h3 className="text-lg font-semibold">MCP Server</h3>
           <p className="text-sm text-muted-foreground">
-            Expose AGI Workforce as an MCP server for Claude Desktop, Cursor, and other tools.
+            Expose AGI Workforce as an MCP server for desktop clients, IDEs, and local tools.
           </p>
         </div>
       </div>
@@ -169,14 +169,14 @@ export function MCPServerSettings() {
         </div>
       </div>
 
-      {/* Copy .mcp.json snippet */}
+      {/* Copy MCP client snippet */}
       <button
         type="button"
         onClick={copySnippet}
         className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:bg-muted/50 transition-colors"
       >
         {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
-        {copied ? 'Copied!' : 'Copy Claude Desktop .mcp.json snippet'}
+        {copied ? 'Copied!' : 'Copy MCP client config snippet'}
       </button>
     </div>
   );

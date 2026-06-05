@@ -6,7 +6,7 @@ import { errorReportingService } from '../../services/errorReporting';
 interface Props {
   children: ReactNode;
   /** Custom fallback UI to show when an error occurs */
-  fallback?: ReactNode;
+  fallback?: ReactNode | ((error: Error | null, errorInfo: ErrorInfo | null) => ReactNode);
   /** Callback when an error is caught */
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
   /** Name to identify which boundary caught the error */
@@ -46,6 +46,23 @@ class ErrorBoundary extends Component<Props, State> {
       ? `ErrorBoundary(${this.props.boundaryName})`
       : 'ErrorBoundary';
     console.error(`${boundaryLabel} caught an error:`, error, errorInfo);
+
+    try {
+      window.localStorage.setItem(
+        'agi-last-error-boundary',
+        JSON.stringify({
+          boundaryName: this.props.boundaryName ?? null,
+          message: error.message,
+          name: error.name,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    } catch {
+      // Diagnostics must never make the error boundary itself fail.
+    }
+
     this.setState({
       error,
       errorInfo,
@@ -148,6 +165,10 @@ class ErrorBoundary extends Component<Props, State> {
   override render() {
     if (this.state.hasError) {
       if (this.props.fallback) {
+        if (typeof this.props.fallback === 'function') {
+          return this.props.fallback(this.state.error, this.state.errorInfo);
+        }
+
         return this.props.fallback;
       }
 

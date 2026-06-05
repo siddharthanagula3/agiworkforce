@@ -620,15 +620,6 @@ pub async fn llm_check_provider_status(
 ) -> Result<ProviderStatus, String> {
     let router = state.router.read().await;
 
-    let provider_enum = resolve_provider_for_routing(&provider)
-        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
-    let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
-    let configured = match provider_enum {
-        Provider::ManagedCloud => managed_cloud_available,
-        Provider::Ollama => router.has_provider(Provider::Ollama),
-        _ => router.has_provider(provider_enum),
-    };
-
     let mut ollama_running = None;
     if provider == "ollama" {
         let client = reqwest::Client::builder()
@@ -650,8 +641,20 @@ pub async fn llm_check_provider_status(
         }
     }
 
+    let provider_enum = resolve_provider_for_routing(&provider)
+        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+    let managed_cloud_available = router.has_provider(Provider::ManagedCloud);
+    let configured = if provider == "ollama" {
+        ollama_running.unwrap_or(false)
+    } else {
+        match provider_enum {
+            Provider::ManagedCloud => managed_cloud_available,
+            _ => router.has_provider(provider_enum),
+        }
+    };
+
     let available = if provider == "ollama" {
-        configured && ollama_running.unwrap_or(false)
+        ollama_running.unwrap_or(false)
     } else {
         configured
     };

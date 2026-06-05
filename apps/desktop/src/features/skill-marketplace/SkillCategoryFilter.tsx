@@ -16,6 +16,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { cn } from '../../lib/utils';
 import {
   selectCategoryCounts,
@@ -57,7 +58,7 @@ const ORDERED_CATEGORIES: SkillCategory[] = [
 export function SkillCategoryFilter() {
   const selectedCategory = useSkillMarketplaceStore((s) => s.selectedCategory);
   const setCategory = useSkillMarketplaceStore((s) => s.setCategory);
-  const counts = useSkillMarketplaceStore(selectCategoryCounts);
+  const counts = useSkillMarketplaceStore(useShallow(selectCategoryCounts));
 
   return (
     <div role="tablist" aria-label="Filter skills by category" className="flex flex-wrap gap-1.5">

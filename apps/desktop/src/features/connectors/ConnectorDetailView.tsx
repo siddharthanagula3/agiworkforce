@@ -30,32 +30,17 @@ import {
 import { getConnectorPermissionStore } from '@agiworkforce/unified-chat';
 import type { ConnectorDef } from './connectorDefinitions';
 
-// ── Synthetic tool shape for connectors without live MCP introspection ────────
-
 export interface ConnectorTool {
   name: string;
   description: string;
   destructive: boolean;
 }
 
-// Default tool stubs derived from connector category when MCP introspection
-// is not yet available. In production these will come from `mcp_get_tool_schemas`.
-function getDefaultTools(connector: ConnectorDef): ConnectorTool[] {
-  const base: ConnectorTool[] = [
-    { name: 'read', description: `Read data from ${connector.name}`, destructive: false },
-    { name: 'search', description: `Search ${connector.name}`, destructive: false },
-    { name: 'create', description: `Create items in ${connector.name}`, destructive: true },
-    { name: 'update', description: `Update items in ${connector.name}`, destructive: true },
-    { name: 'delete', description: `Delete items from ${connector.name}`, destructive: true },
-  ];
-  return base;
-}
-
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ConnectorDetailViewProps {
   connector: ConnectorDef;
-  /** Tools exposed by this connector. When null a loading state is shown. */
+  /** Tools exposed by this connector. Null means loading; undefined means no live schema. */
   tools?: ConnectorTool[] | null;
   onBack: () => void;
 }
@@ -131,7 +116,8 @@ function PermissionRow({ tool, level, onChange, saving }: PermissionRowProps) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetailViewProps) {
-  const resolvedTools: ConnectorTool[] = tools ?? getDefaultTools(connector);
+  const resolvedTools: ConnectorTool[] = tools ?? [];
+  const toolSchemaUnavailable = tools === undefined || (Array.isArray(tools) && tools.length === 0);
 
   // Map: toolName → permission level
   const [permissions, setPermissions] = useState<Record<string, ConnectorPermissionLevel>>({});
@@ -261,9 +247,18 @@ export function ConnectorDetailView({ connector, tools, onBack }: ConnectorDetai
       )}
 
       {/* Tool list */}
-      {!loaded ? (
+      {tools === null || !loaded ? (
         <div className="flex items-center justify-center py-8 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      ) : toolSchemaUnavailable ? (
+        <div className="rounded-lg border border-border bg-muted/30 px-4 py-6 text-center">
+          <Puzzle className="mx-auto h-6 w-6 text-muted-foreground" />
+          <p className="mt-3 text-sm font-medium">No live tool schema available</p>
+          <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+            Connect the MCP server and refresh MCP Tools before changing per-tool permissions for
+            this connector.
+          </p>
         </div>
       ) : (
         <div className="space-y-0.5">
