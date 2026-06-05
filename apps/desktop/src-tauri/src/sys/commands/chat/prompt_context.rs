@@ -217,7 +217,8 @@ pub fn build_coding_system_prompt(folder: &std::path::Path) -> String {
          - Use `grep_search` instead of running grep via terminal.\n\
          - Use `glob_search` instead of running find via terminal.\n\
          - Use `edit_exact_replace` instead of sed for file edits.\n\
-         - Always read a file before editing it.\n",
+         - Always read a file before editing it, then pass the returned `file_version.sha256` as `expected_sha256` to edit or overwrite existing files.\n\
+         - Before broad or risky multi-file edits, use `coding_checkpoint_create` for explicit recovery; use `undo_get_changes`, `undo_last`, or `coding_checkpoint_rewind` only with user-approved scope.\n",
         project_type, folder_display
     );
 

@@ -26,7 +26,7 @@ function buildCspWithNonce(nonce: string): string {
     default-src 'self';
     script-src 'self' 'nonce-${nonce}'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
-    img-src 'self' data: blob: https://img.clerk.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://stripe.com https://www.google-analytics.com;
+    img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
     connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
@@ -50,6 +50,7 @@ export const proxy = clerkMiddleware((_auth, request: NextRequest) => {
   // Forward nonce to Server Components via request header (readable via next/headers)
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
 
   // Create new pass-through response with the modified request headers
   const response = NextResponse.next({ request: { headers: requestHeaders } });

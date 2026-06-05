@@ -357,8 +357,16 @@ describe('perf settings MMKV keys', () => {
 // Tests — PerformanceScreen rendering
 // ---------------------------------------------------------------------------
 
-import { render } from '@testing-library/react-native';
+import { act, render } from '@testing-library/react-native';
 import PerformanceScreen from '../app/(app)/settings/performance';
+
+async function renderSettledPerformanceScreen() {
+  const result = render(<PerformanceScreen />);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  return result;
+}
 
 describe('PerformanceScreen rendering', () => {
   beforeEach(() => {
@@ -367,65 +375,65 @@ describe('PerformanceScreen rendering', () => {
   });
 
   // 10. Renders header
-  it('renders the "Performance" header', () => {
-    const { getAllByText } = render(<PerformanceScreen />);
+  it('renders the "Performance" header', async () => {
+    const { getAllByText } = await renderSettledPerformanceScreen();
     expect(getAllByText('Performance').length).toBeGreaterThanOrEqual(1);
   });
 
   // 11. Renders Device Tier card
-  it('renders the Device Tier card heading', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders the Device Tier card heading', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Device Tier')).toBeTruthy();
   });
 
   // 12. Renders Active Model card
-  it('renders the Active Model card heading', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders the Active Model card heading', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Active Model')).toBeTruthy();
   });
 
   // 13. Renders Benchmark CTA
-  it('renders "Benchmark This Device" card', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders "Benchmark This Device" card', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Benchmark This Device')).toBeTruthy();
   });
 
   // 14. Renders Thermal State card
-  it('renders Thermal State card heading', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders Thermal State card heading', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Thermal State')).toBeTruthy();
   });
 
   // 15. Renders Inference Settings section
-  it('renders the "Inference Settings" section label', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders the "Inference Settings" section label', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Inference Settings')).toBeTruthy();
   });
 
   // 16. Renders toggle labels
-  it('renders the three toggle labels', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders the three toggle labels', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Pause at serious thermal')).toBeTruthy();
     expect(getByText('Pause at 15% battery')).toBeTruthy();
     expect(getByText('Show performance chip in chat')).toBeTruthy();
   });
 
   // 17. Renders Run Benchmark button text
-  it('renders the Run Benchmark button', () => {
-    const { getByText } = render(<PerformanceScreen />);
+  it('renders the Run Benchmark button', async () => {
+    const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Run Benchmark')).toBeTruthy();
   });
 
   // 18. Run Benchmark has correct accessibility role
-  it('Run Benchmark button has correct accessibility role', () => {
-    const { getByRole } = render(<PerformanceScreen />);
+  it('Run Benchmark button has correct accessibility role', async () => {
+    const { getByRole } = await renderSettledPerformanceScreen();
     const btn = getByRole('button', { name: 'Run Benchmark' });
     expect(btn).toBeTruthy();
   });
 
   // 19. Three switches
-  it('switches have accessibilityRole switch (3 total)', () => {
-    const { getAllByRole } = render(<PerformanceScreen />);
+  it('switches have accessibilityRole switch (3 total)', async () => {
+    const { getAllByRole } = await renderSettledPerformanceScreen();
     const switches = getAllByRole('switch');
     expect(switches.length).toBe(3);
   });

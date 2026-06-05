@@ -51,7 +51,7 @@ Scope: verified by reading implementation, not by accepting keyword counts as ev
 ## 2026-05-22 R25 — Failure-Mode Verification Sweep (close-out)
 
 7-lane parallel verification of R18-R24 commits against failure modes
-11-17. Full synthesis at `docs/audit/2026-05-22-r25-summary.md`.
+11-17. Full synthesis archived at `docs/archive/2026-06-05-doc-reset/docs/audit/2026-05-22-r25-summary.md`.
 
 - [x] V1 cli orphan-tree salvage — ~118 files removed, tui module ownership rule locked (`c8f5f95b9` + `e3a316d39` + `5c4e623c1` + `1960799ad`)
 - [x] V2 model-ID drift — 4 corrections + 8 regression tests (`20bdd9cba`)
@@ -201,7 +201,7 @@ EXEC-SUMMARY-r2 P0 #3 (composer drag-drop, 39h) and P0 #9 (Artifacts: versioning
 
 ## 2026-05-21 Suite Transformation Session — Shipped (~165h, 25 commits)
 
-Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full per-commit trace + remaining ~3,613h inventory in `docs/plans/2026-05-21-suite-transformation-handoff.md`.
+Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Historical per-commit trace + remaining ~3,613h inventory moved to `docs/archive/2026-06-05-doc-reset/docs/plans/2026-05-21-suite-transformation-handoff.md`.
 
 - [x] Mobile v1 local-only blank-screen launch fix (auth-guard + login redirect + handleUnrecoverableAuth) — `f6d6eeac8`
 - [x] `packages/unified-chat` shadcn token aliases for 6 consumers — `a84fae8a3`
@@ -297,7 +297,7 @@ Branch `fix/extension-typecheck-and-c02-sync-2026-05-20`, HEAD `5ff6b26d4`. Full
 - [x] Create generated artifact policy.
 - [x] Create full package/service/crate ownership ledger and CODEOWNERS map.
 - [x] Decide root `ios/` belongs at root for tracked Xcode-consumed output, with `apps/mobile/native/ios` for custom native modules.
-- [x] Move raw `reference-index/` under `audit/repo-organization/reference-index/` as historical evidence.
+- [x] Move raw `reference-index/` under `docs/archive/2026-06-05-doc-reset/audit/repo-organization/reference-index/` as historical evidence.
 - [x] Move root scratch markdown files to a dated archive/report folder.
 - [x] Move root scratch image files to a dated report folder.
 - [x] Move root `downloads/` scratch artifact to the dated archive/report folder.

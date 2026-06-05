@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Docs/platform
-Last updated: 2026-05-21
+Last updated: 2026-06-05
 
 This directory contains durable AGI Workforce documentation. The active docs graph is intentionally small: start in `docs/current`, then follow links to decisions, agent context, surface guides, enterprise docs, or audit evidence only when needed.
 
@@ -35,7 +35,7 @@ This directory contains durable AGI Workforce documentation. The active docs gra
 | [`plans/`](./plans/)                 | Active or recent implementation plans.                                                                              |
 | [`decisions/`](./decisions/)         | ADRs and current decision index.                                                                                    |
 | [`security/`](./security/)           | Security reviews, findings, and red-team notes.                                                                     |
-| [`api/`](./api/)                     | OpenAPI, Postman collection, and API examples.                                                                      |
+| [`api/`](./api/)                     | OpenAPI, Postman collection, and API examples. Rebuild-required until verified against current routes.              |
 | [`launch/`](./launch/)               | Launch copy, store listings, and channel drafts.                                                                    |
 | [`marketing/`](./marketing/)         | Marketing and GTM operator workspace.                                                                               |
 | [`support/`](./support/)             | Support operations and customer feedback workspace.                                                                 |
@@ -44,7 +44,7 @@ This directory contains durable AGI Workforce documentation. The active docs gra
 
 ## Archived Docs
 
-Older long-form PRD, roadmap, pricing, hosting, scaling, ownership, handoff, and strategy docs were moved to [`archive/2026-05-21-docs-consolidation/`](./archive/2026-05-21-docs-consolidation/).
+Older long-form PRD, roadmap, pricing, hosting, scaling, ownership, handoff, strategy, audit, screenshot, and prototype docs were moved to [`archive/2026-05-21-docs-consolidation/`](./archive/2026-05-21-docs-consolidation/) and [`archive/2026-06-05-doc-reset/`](./archive/2026-06-05-doc-reset/).
 
 Archived docs are source material only. They can explain why older decisions happened, but they do not override `docs/current`, root `PLAN.md`, root `TODO.md`, or `docs/decisions/CURRENT_DECISIONS.md`.
 

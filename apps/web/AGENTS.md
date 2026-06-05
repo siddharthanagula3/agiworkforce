@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Web lead
-Last updated: 2026-05-21
+Last updated: 2026-06-03
 
 Read root `AGENTS.md`, then this file, then `apps/web/README.md`.
 
@@ -21,6 +21,9 @@ Read root `AGENTS.md`, then this file, then `apps/web/README.md`.
 ## High-Risk Areas
 
 - Do not put shared schemas, provider adapters, or desktop/CLI behavior in the web app.
+- Public pages, chat, connectors, plugins, auth, pricing, and settings must pass the unusual-behavior loop before handoff: readable UI in light/dark contexts, no dead primary controls, no confusing waitlist copy for usable Local/BYOK/plan-entitled features, no unexpected auth redirects, no signed-out API spam, and no visible console errors except intentional development-key warnings.
+- Connector UI must use official product icons where available. Gmail, Google Calendar, Google Drive, Google Sheets, and other Google surfaces are separate connectors unless product requirements explicitly merge them.
+- Hosted cloud upgrades may use request-access/waitlist flows, but signed-in Local/BYOK and plan-entitled hosted features should be shown as usable rather than globally waitlisted.
 
 ## Verification
 

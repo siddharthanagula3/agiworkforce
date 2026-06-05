@@ -3,67 +3,27 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatPrivacyModeLabel } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
+import { CONNECTORS as CONNECTOR_CATALOG } from '@/features/connectors/data/connectors';
 
 /**
- * /settings/connections — OAuth-backed connectors (Google Drive, GitHub, Slack...)
- * Cloud Managed only; waitlisted in v1. Round-2 audit P0 #7 (web settings
- * depth). Round-20: added last-connected timestamp display pattern and
- * disconnect button stub, consistent with the connectedAt contract in
- * features/connectors/pages/ConnectorsPage.tsx. Activates when waitlist opens.
+ * /settings/connections — account connector status for hosted cloud.
+ * Local-mode and BYOK users can attach equivalent tools through MCP without
+ * granting AGI-hosted cloud access.
  */
+const SETTINGS_CONNECTOR_IDS = [
+  'google-drive',
+  'github',
+  'slack',
+  'gmail',
+  'google-calendar',
+  'google-sheets',
+  'notion',
+] as const;
 
-interface ConnectorSpec {
-  id: string;
-  label: string;
-  description: string;
-  iconText: string;
-  phase: number;
-}
-
-const CONNECTORS: ReadonlyArray<ConnectorSpec> = [
-  {
-    id: 'google-drive',
-    label: 'Google Drive',
-    description: 'Read documents, sheets, and slides into chat context.',
-    iconText: 'GD',
-    phase: 2,
-  },
-  {
-    id: 'github',
-    label: 'GitHub',
-    description: 'Browse repos, issues, and PRs; attach code to messages.',
-    iconText: 'GH',
-    phase: 2,
-  },
-  {
-    id: 'slack',
-    label: 'Slack',
-    description: 'Search channels and DMs; summarize threads.',
-    iconText: 'SL',
-    phase: 2,
-  },
-  {
-    id: 'gmail',
-    label: 'Gmail',
-    description: 'Read recent threads; draft replies.',
-    iconText: 'GM',
-    phase: 2,
-  },
-  {
-    id: 'google-calendar',
-    label: 'Google Calendar',
-    description: 'Check availability; draft event invites.',
-    iconText: 'GC',
-    phase: 2,
-  },
-  {
-    id: 'notion',
-    label: 'Notion',
-    description: 'Search workspace and attach pages.',
-    iconText: 'NO',
-    phase: 2,
-  },
-];
+const SETTINGS_CONNECTORS = SETTINGS_CONNECTOR_IDS.map((connectorId) =>
+  CONNECTOR_CATALOG.find((connector) => connector.id === connectorId),
+).filter((connector): connector is (typeof CONNECTOR_CATALOG)[number] => Boolean(connector));
 
 /**
  * Formats a connection timestamp as a relative string ("3d ago", "2h ago", etc.).
@@ -163,8 +123,8 @@ export default function ConnectionsSettingsPage() {
           Connections
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          External services the assistant can read on your behalf. Cloud Managed only; local-mode
-          and BYOK installs use MCP connectors instead (see Capabilities).
+          External services the assistant can read on your behalf. Enabled providers connect from
+          the connector directory; local-mode and BYOK installs use MCP connectors instead.
         </p>
         <p style={{ margin: '8px 0 0', fontSize: 12, color: 'var(--text-3)' }} role="status">
           {loading ? 'Loading connectors...' : error ? `Error: ${error}` : 'Connector state loaded'}
@@ -201,8 +161,8 @@ export default function ConnectionsSettingsPage() {
         >
           !
         </span>
-        OAuth connect flows are part of the {managedLabel} waitlist. Existing connected connectors
-        can be reviewed and disconnected here.
+        Connector access follows your {managedLabel} plan. Existing connections can be reviewed and
+        disconnected here; unconnected providers open in the connector directory.
       </div>
 
       <section
@@ -214,7 +174,7 @@ export default function ConnectionsSettingsPage() {
           overflow: 'hidden',
         }}
       >
-        {CONNECTORS.map((connector, idx) => {
+        {SETTINGS_CONNECTORS.map((connector, idx) => {
           const connectedAt = connectedAtMap[connector.id] ?? null;
           const isConnected = connectedAt !== null;
 
@@ -232,29 +192,10 @@ export default function ConnectionsSettingsPage() {
             >
               {/* Icon + info */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div
-                  aria-hidden="true"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 8,
-                    background: 'var(--bg-base)',
-                    border: '1px solid var(--settings-border)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: 'var(--text-3)',
-                    flexShrink: 0,
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  {connector.iconText}
-                </div>
+                <OfficialConnectorLogo connector={connector} className="h-9 w-9 rounded-lg" />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
-                    {connector.label}
+                    {connector.name}
                   </span>
                   <span style={{ fontSize: 12, color: 'var(--text-3)' }}>
                     {connector.description}
@@ -274,7 +215,7 @@ export default function ConnectionsSettingsPage() {
                     type="button"
                     disabled={disconnectingId === connector.id}
                     onClick={() => void disconnect(connector.id)}
-                    aria-label={`Disconnect ${connector.label}`}
+                    aria-label={`Disconnect ${connector.name}`}
                     style={{
                       padding: '5px 12px',
                       fontSize: 11,
@@ -290,10 +231,9 @@ export default function ConnectionsSettingsPage() {
                     {disconnectingId === connector.id ? 'Disconnecting...' : 'Disconnect'}
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    disabled
-                    aria-label={`${connector.label}: waitlist required`}
+                  <a
+                    href="/connectors"
+                    aria-label={`Manage ${connector.name} connector`}
                     style={{
                       padding: '5px 12px',
                       fontSize: 11,
@@ -302,12 +242,12 @@ export default function ConnectionsSettingsPage() {
                       background: 'transparent',
                       border: '1px solid var(--settings-border)',
                       borderRadius: 'var(--radius-md)',
-                      cursor: 'not-allowed',
-                      opacity: 0.7,
+                      cursor: 'pointer',
+                      textDecoration: 'none',
                     }}
                   >
-                    Waitlist
-                  </button>
+                    Manage
+                  </a>
                 )}
               </div>
             </div>

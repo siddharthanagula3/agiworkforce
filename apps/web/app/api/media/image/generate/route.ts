@@ -12,16 +12,18 @@ import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { randomUUID } from 'crypto';
-import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getModelsForProvider,
+  getRoutingSlotModel,
+} from '@agiworkforce/types';
 
 /**
  * Image Generation API
  * Endpoint: POST /api/media/image/generate
  *
- * This provides a unified interface for image generation using multiple providers:
- * - Google Imagen 4 (default if GOOGLE_API_KEY is set)
- * - OpenAI GPT Image 2
- * - Stability AI Stable Image Core (v2beta)
+ * This provides a unified interface for catalog-selected image generation
+ * models across configured providers.
  *
  * Users authenticate with Clerk and must have an active subscription.
  */
@@ -78,24 +80,49 @@ interface ImageGenerationResponse {
   error?: string;
 }
 
-// Cost estimates in cents (rough estimates based on public pricing)
-const COST_ESTIMATES: Record<ImageProvider, Record<string, number>> = {
-  openai: {
-    'gpt-image-2-medium': 5, // ~$0.053/image from OpenAI pricing calculator examples
-    'gpt-image-2-high': 21, // ~$0.211/image from OpenAI pricing calculator examples
-  },
-  google: {
-    // Imagen 4 pricing (estimated, similar to Imagen 3)
-    'imagen-4.0-generate-001': 3, // $0.03 per image (estimated)
-    'imagen-4.0-fast-generate-001': 2, // $0.02 per image (estimated, fast variant)
-  },
-  stability: {
-    // Stable Image Core: 3 credits = ~$0.03
-    'stable-image-core': 3,
-    // Stable Image Ultra: 8 credits = ~$0.08
-    'stable-image-ultra': 8,
-  },
+const OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY = {
+  medium: 5,
+  high: 21,
+} as const;
+
+const FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER: Record<ImageProvider, number> = {
+  openai: OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY.high,
+  google: 3,
+  stability: 8,
 };
+
+function resolveGoogleImageModel() {
+  const googleImageModels = getModelsForProvider('google', {
+    includeDeprecated: false,
+    modelTypes: ['image'],
+  });
+
+  return (
+    googleImageModels.find((model) => model.qualityTier === 'balanced') ??
+    googleImageModels[0] ??
+    null
+  );
+}
+
+function estimateImageCostCents(
+  provider: ImageProvider,
+  imageCount: number,
+  quality: string | undefined,
+): number {
+  if (provider === 'openai') {
+    const qualityKey = quality === 'hd' ? 'high' : 'medium';
+    return OPENAI_IMAGE_ESTIMATE_CENTS_BY_QUALITY[qualityKey] * imageCount;
+  }
+
+  if (provider === 'google') {
+    const perImageUsd = resolveGoogleImageModel()?.imagePerImageCost;
+    if (typeof perImageUsd === 'number' && perImageUsd > 0) {
+      return Math.ceil(perImageUsd * 100) * imageCount;
+    }
+  }
+
+  return FALLBACK_IMAGE_ESTIMATE_CENTS_BY_PROVIDER[provider] * imageCount;
+}
 
 /**
  * Determine the default provider based on available API keys
@@ -142,7 +169,7 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 }
 
 /**
- * Generate image using OpenAI GPT Image 2
+ * Generate images using the catalog-selected OpenAI image slot.
  * Endpoint: POST https://api.openai.com/v1/images/generations
  */
 async function generateWithOpenAIImage(
@@ -152,7 +179,8 @@ async function generateWithOpenAIImage(
   n: number,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('openai');
-  const model = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
+  const catalogModelId = getRoutingSlotModel('image_generation');
+  const model = getModelMetadataById(catalogModelId)?.apiModelId ?? catalogModelId;
   const validSizes = ['1024x1024', '1536x1024', '1024x1536', 'auto'];
   const imageSize = validSizes.includes(size) ? size : '1024x1024';
   const imageQuality = quality === 'hd' ? 'high' : 'medium';
@@ -194,11 +222,8 @@ async function generateWithOpenAIImage(
 }
 
 /**
- * Generate image using Google Imagen 4
+ * Generate images using the catalog-selected Google image model.
  * Endpoint: POST https://generativelanguage.googleapis.com/v1beta/models/{model}:predict
- *
- * Imagen 3 (imagen-3.0-generate-001) was shut down; now using Imagen 4.
- * Model: imagen-4.0-generate-001 (GA, released 2025)
  */
 async function generateWithImagen(
   prompt: string,
@@ -208,7 +233,11 @@ async function generateWithImagen(
   negativePrompt?: string,
 ): Promise<{ images: GeneratedImage[]; model: string }> {
   const apiKey = getApiKey('google');
-  const model = 'imagen-4.0-generate-001';
+  const catalogModel = resolveGoogleImageModel();
+  if (!catalogModel) {
+    throw new Error('No active Google image model is configured in the catalog');
+  }
+  const model = catalogModel.apiModelId ?? catalogModel.id;
 
   // Parse size to aspect ratio - validate exactly 2 positive integer parts
   const sizeParts = size.split('x').map(Number);
@@ -578,9 +607,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // We use the per-image cost for the chosen provider * requested image count.
   // The model isn't determined until after generation, so we use the most expensive
   // model for the provider as the upper bound estimate.
-  const providerCostMap = COST_ESTIMATES[provider];
-  const maxProviderCost = Math.max(...Object.values(providerCostMap));
-  const estimatedCostCents = maxProviderCost * n;
+  const estimatedCostCents = estimateImageCostCents(provider, n, quality);
 
   // Check credits BEFORE invoking the provider (402 if insufficient)
   const hasCredits = await CreditService.checkAvailable(userId, estimatedCostCents);
@@ -744,8 +771,7 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   }
 
   // Calculate actual cost and reconcile with the reservation
-  const actualBaseCost = providerCostMap[result.model] ?? 3;
-  const costEstimate = actualBaseCost * result.images.length;
+  const costEstimate = estimateImageCostCents(provider, result.images.length, quality);
   const costDifference = costEstimate - estimatedCostCents;
 
   if (costDifference !== 0) {

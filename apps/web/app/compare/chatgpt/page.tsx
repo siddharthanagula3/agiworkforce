@@ -4,7 +4,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI vs OpenAI ChatGPT | AGI',
+  title: 'AGI vs OpenAI ChatGPT',
   description:
     'Honest review of OpenAI ChatGPT. Where ChatGPT wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/chatgpt' },

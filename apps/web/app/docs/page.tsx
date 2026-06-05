@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Documentation | AGI',
+  title: 'Documentation',
   description:
     'Reference material for every surface — desktop, mobile, CLI, web, Chrome extension, VS Code extension.',
   alternates: { canonical: 'https://agiworkforce.com/docs' },

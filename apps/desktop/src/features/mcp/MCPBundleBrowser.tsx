@@ -15,7 +15,6 @@ import { ScrollArea } from '@/components/ui/ScrollArea';
 import {
   Search,
   Download,
-  Star,
   Package,
   Code,
   Database,
@@ -282,26 +281,17 @@ function BundleDetailsModal({
             {/* Description */}
             <p className="text-foreground mb-6">{bundle.description}</p>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
-              <div className="bg-surface-base p-3 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Rating</div>
-                <div className="flex items-center gap-1">
-                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                  <span className="font-semibold text-foreground">{bundle.rating.toFixed(1)}</span>
-                </div>
-              </div>
-              <div className="bg-surface-base p-3 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Downloads</div>
-                <div className="font-semibold text-foreground">
-                  {bundle.downloads >= 1000
-                    ? `${(bundle.downloads / 1000).toFixed(1)}k`
-                    : bundle.downloads}
-                </div>
-              </div>
+            {/* Details */}
+            <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-surface-base p-3 rounded-lg">
                 <div className="text-xs text-muted-foreground mb-1">Tools</div>
                 <div className="font-semibold text-foreground">{bundle.tools.length}</div>
+              </div>
+              <div className="bg-surface-base p-3 rounded-lg">
+                <div className="text-xs text-muted-foreground mb-1">Package</div>
+                <div className="font-semibold text-foreground truncate">
+                  {bundle.npmPackage ?? bundle.configTemplate.command}
+                </div>
               </div>
             </div>
 
@@ -488,22 +478,11 @@ function BundleCard({
 
       <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{bundle.description}</p>
 
-      <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
-        <div className="flex items-center gap-1">
-          <Star className="w-3.5 h-3.5 text-yellow-500 fill-current" />
-          <span>{bundle.rating.toFixed(1)}</span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Download className="w-3.5 h-3.5" />
-          <span>
-            {bundle.downloads >= 1000
-              ? `${(bundle.downloads / 1000).toFixed(1)}k`
-              : bundle.downloads}
-          </span>
-        </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
         <Badge variant="secondary" className="text-xs">
           {bundle.tools.length} tools
         </Badge>
+        <span>{CATEGORY_CONFIG[bundle.category]?.name || bundle.category}</span>
       </div>
 
       <div className="flex gap-2">

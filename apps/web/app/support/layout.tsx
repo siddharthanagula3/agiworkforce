@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'contact support',
   ],
   openGraph: {
-    title: 'Support | AGI',
+    title: 'Support',
     description:
       'Need help? Contact our support team, report bugs, or request features. We respond fast.',
     type: 'website',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Support | AGI',
+    title: 'Support',
     description:
       'Need help? Contact our support team, report bugs, or request features. We respond fast.',
     images: ['/app-preview.png'],

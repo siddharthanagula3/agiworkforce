@@ -5,7 +5,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'MCP Directory | AGI',
+  title: 'MCP Directory',
   description:
     'Browse community-built MCP servers for databases, APIs, developer tools, and more. Connect any MCP-compatible server to AGI.',
   alternates: { canonical: 'https://agiworkforce.com/connectors/mcp-directory' },
@@ -15,37 +15,37 @@ const FEATURED_MCPS = [
   {
     name: 'Filesystem',
     description: 'Read and write files on your local machine.',
-    url: 'https://modelcontextprotocol.io/docs/servers/filesystem',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'local'],
   },
   {
     name: 'GitHub',
     description: 'Repos, issues, PRs, and code search via GitHub API.',
-    url: 'https://modelcontextprotocol.io/docs/servers/github',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'developer'],
   },
   {
     name: 'Postgres',
     description: 'Query and manage PostgreSQL databases.',
-    url: 'https://modelcontextprotocol.io/docs/servers/postgres',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'database'],
   },
   {
     name: 'Brave Search',
     description: 'Web and local search powered by Brave.',
-    url: 'https://modelcontextprotocol.io/docs/servers/brave-search',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'search'],
   },
   {
     name: 'Slack',
     description: 'Post messages and read channels via Slack API.',
-    url: 'https://modelcontextprotocol.io/docs/servers/slack',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'productivity'],
   },
   {
     name: 'Puppeteer',
     description: 'Browser automation and web scraping via Puppeteer.',
-    url: 'https://modelcontextprotocol.io/docs/servers/puppeteer',
+    url: 'https://github.com/modelcontextprotocol/servers',
     tags: ['official', 'automation'],
   },
 ];
@@ -88,7 +88,7 @@ export default function McpDirectoryPage() {
                   className="agi-cta-ghost"
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 18 }}
                 >
-                  View server
+                  View reference repo
                   <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                 </span>
               </a>
@@ -107,7 +107,7 @@ export default function McpDirectoryPage() {
               </p>
             </div>
             <a
-              href="https://modelcontextprotocol.io"
+              href="https://modelcontextprotocol.io/registry/about"
               target="_blank"
               rel="noopener noreferrer"
               className="agi-cta-primary"

@@ -12,7 +12,7 @@ import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zus
 import { toast } from 'sonner';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { storageFallback } from '../lib/storageFallback';
-import { isTauri } from '../lib/tauri-mock';
+import { supportsLocalAppMode } from '../lib/tauri-mock';
 import { useAuthStore } from './auth';
 import { isChatStoreStreaming } from './chat/chatStoreRef';
 
@@ -47,15 +47,15 @@ export const useAppModeStore = create<AppModeState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        mode: isTauri ? 'local' : 'cloud',
+        mode: supportsLocalAppMode ? 'local' : 'cloud',
         planTier: 'free',
         hasOnboarded: false,
         hasSelectedMode: false,
         isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
 
         setMode: (mode: AppMode) => {
-          // Web mode is always cloud — cannot switch to local
-          if (!isTauri && mode === 'local') {
+          // Production web mode is always cloud; Tauri and explicit local UI QA builds can use local.
+          if (!supportsLocalAppMode && mode === 'local') {
             toast.info('Local mode requires the desktop app');
             return;
           }
@@ -115,8 +115,8 @@ export const useAppModeStore = create<AppModeState>()(
         }),
         migrate: (persistedState: unknown, _version: number) => {
           const state = persistedState as AppModeState;
-          // Web builds must always be in cloud mode
-          if (!isTauri && state.mode === 'local') {
+          // Production web builds must always be in cloud mode.
+          if (!supportsLocalAppMode && state.mode === 'local') {
             return { ...state, mode: 'cloud' };
           }
           return state;

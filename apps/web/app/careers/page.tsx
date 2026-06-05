@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Careers | AGI',
+  title: 'Careers',
   description: 'AGI Automation LLC is small and intentional. We do not have open roles right now.',
   alternates: { canonical: 'https://agiworkforce.com/careers' },
 };

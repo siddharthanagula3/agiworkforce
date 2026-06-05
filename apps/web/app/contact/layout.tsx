@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Contact Us | AGI',
+  title: 'Contact Us',
   description:
     'Get in touch with AGI Automation LLC. Have questions about AGI? Our support team in Austin, TX is ready to help you with any inquiries.',
   keywords: [
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     canonical: 'https://agiworkforce.com/contact',
   },
   openGraph: {
-    title: 'Contact Us | AGI',
+    title: 'Contact Us',
     description: 'Have questions about AGI? Our support team is ready to help. Contact us today.',
     url: 'https://agiworkforce.com/contact',
     siteName: 'AGI',
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Contact Us | AGI',
+    title: 'Contact Us',
     description: 'Have questions about AGI? Get in touch with our team.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',

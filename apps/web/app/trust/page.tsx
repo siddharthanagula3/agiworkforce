@@ -57,7 +57,7 @@ const SECURITY: { item: string; detail: string }[] = [
   { item: 'Transit', detail: 'TLS 1.3 everywhere. HSTS preload.' },
   {
     item: 'Code signing',
-    detail: `macOS DMG signed with Apple Developer ID D2PR62RLT4 and notarized. Windows public release aligned to ${LAUNCH.date}.`,
+    detail: `Desktop installers are published through verified GitHub release assets or configured signed-asset URLs. Windows public release remains aligned to ${LAUNCH.date}.`,
   },
   {
     item: 'Privacy',

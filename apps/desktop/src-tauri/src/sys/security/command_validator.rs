@@ -344,10 +344,8 @@ pub fn validate_command(command: &str, config: &ValidationConfig) -> ValidationR
 
     // Check dangerous patterns (ALWAYS blocked, even in interactive mode).
     // NOTE: This is a defense-in-depth blocklist layer. It can be bypassed via shell variable
-    // expansion ($'\x72\x6d'), aliases, or unicode homoglyphs. It is NOT the sole security
-    // boundary — the sandbox-policy crate (Seatbelt/Bubblewrap/Landlock) provides the
-    // authoritative OS-level enforcement. This validator reduces the attack surface but
-    // does not eliminate it.
+    // expansion ($'\x72\x6d'), aliases, or unicode homoglyphs. It is not an OS sandbox.
+    // Terminal sandboxing is handled separately by the configured runtime wrapper.
     for pattern in DANGEROUS_PATTERNS.iter() {
         let lower_pattern = pattern.to_lowercase();
         if normalized.contains(lower_pattern.as_str()) {
@@ -504,12 +502,11 @@ pub fn write_security_audit_log(command: &str, cwd: Option<&str>) {
     }
 }
 
-/// RT-02 fix: Reject execution if the current process is running as root/admin.
+/// RT-02 fix: Reject execution if the current process reports `$USER == "root"`.
 ///
-/// On Unix, checks `$USER == "root"`. This is safe (no unsafe code) and
-/// adequate as a defence-in-depth layer — the sandbox policy is the
-/// authoritative enforcement for root detection.  On Windows this is a no-op
-/// because terminal commands are sandboxed by the session ACL.
+/// This is a Unix defense-in-depth preflight, not an OS sandbox or a complete
+/// privilege detector. On Windows this no-ops until a platform privilege check is
+/// wired at the command boundary.
 pub fn reject_if_root() -> ValidationResult {
     let user = std::env::var("USER").unwrap_or_default();
     if user == "root" {

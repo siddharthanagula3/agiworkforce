@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-05-28
+Last updated: 2026-06-03
 
 Claude-specific notes for Claude Code. `AGENTS.md` is the canonical tool-neutral agent entry point - read it first; `docs/current/source-of-truth.md` is the compact product source of truth, `docs/current/agi-product-requirements.md` is the long-form PRD and Mobile-first release spec, `docs/current/parity-implementation-matrix.md` is the feature-by-feature implementation map, and `docs/current/byok-open-model-provider-strategy.md` is the BYOK/open-model provider map. The repo map, locked product rules, hook policy, and bug-finding workflow live in `AGENTS.md`, `docs/current/`, and `docs/agent-context/`. This file mirrors critical safety/product rules so Claude Code sees them directly, while detailed maps and command inventories stay in `AGENTS.md` and `docs/agent-context/`.
 
@@ -34,6 +34,7 @@ These rules must stay mirrored in `AGENTS.md` and guarded by `pnpm check:agent-c
 - Managed cloud, compute credits, top-ups, subscriptions, and provider-funded compute stay waitlist/private beta until ledgering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls are proven.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
+- Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.
 - Do not treat generated audit/report markdown as remediation. Audit files are triage queues: open the cited source files, confirm the issue in implementation, patch production paths when safe, and only summarize after code changes or explicit blocked risks are recorded.
 - Use the nearest path-scoped `AGENTS.md` before editing high-risk areas.
 - Follow `AGENTS.md` LLM Failure Prevention Rules and `docs/agent-context/llm-failure-taxonomy.json`. In particular, do not leave fake tests, swallowed mock assertions, production stubs, vulnerable dependency ranges, or unvalidated tool/LLM/API/IPC inputs; `pnpm check:llm-failures` is the fast guardrail, `pnpm check:llm-failures:staged` protects new staged work, and `pnpm check:llm-failures:strict` applies the broader taxonomy scan.

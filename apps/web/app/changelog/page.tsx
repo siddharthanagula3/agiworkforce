@@ -53,8 +53,8 @@ const RELEASES: Release[] = [
     date: '2026-02 — 2026-05',
     headline: 'Desktop · early releases',
     body: [
-      `Tauri + React. macOS DMG signed (Apple Developer ID D2PR62RLT4). Linux AppImage. Windows aligned to the ${LAUNCH.date} public release.`,
-      'Linux build live; macOS notarization re-enabled once the missing CI secret is restored.',
+      `Tauri + React desktop with release signing and installer publishing aligned to the ${LAUNCH.date} public release path.`,
+      'Public download links open only after verified GitHub release assets or configured signed-asset URLs are available.',
     ],
   },
 ];

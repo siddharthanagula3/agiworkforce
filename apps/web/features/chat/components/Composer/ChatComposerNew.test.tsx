@@ -209,7 +209,7 @@ describe('ChatComposerNew', () => {
     fireEvent.click(screen.getByRole('button', { name: /more options/i }));
     fireEvent.click(screen.getByText('Connectors'));
 
-    const gmailToggle = screen.getByRole('switch', { name: /toggle gmail & calendar/i });
+    const gmailToggle = screen.getByRole('switch', { name: /toggle gmail/i });
     expect(gmailToggle).toBeDisabled();
 
     fireEvent.click(gmailToggle);

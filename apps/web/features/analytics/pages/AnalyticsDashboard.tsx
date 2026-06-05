@@ -32,7 +32,7 @@ import { ActivityTable, type ActivityRow } from '../components/ActivityTable';
 type DateRange = '7d' | '30d' | '90d';
 
 // ---------------------------------------------------------------------------
-// Mock data generators
+// Local preview data generators. Replace with API data when telemetry is enabled.
 // ---------------------------------------------------------------------------
 
 function generateUsageTimeSeries(days: number): Array<{ date: string; value: number }> {
@@ -53,7 +53,7 @@ function generateUsageTimeSeries(days: number): Array<{ date: string; value: num
   return result;
 }
 
-function buildMockData(range: DateRange) {
+function buildAnalyticsPreviewData(range: DateRange) {
   const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
   const multiplier = days / 7;
 
@@ -109,7 +109,7 @@ function buildMockData(range: DateRange) {
     { label: 'email_send', value: Math.round(720 * multiplier), color: 'bg-teal-500' },
   ];
 
-  // Recent activity mock data — display labels read from catalog, not hardcoded IDs
+  // Recent activity preview data — display labels read from catalog, not hardcoded IDs
 
   const agents = ['Research Bot', 'Code Assistant', 'Data Analyst', 'Email Writer', 'SEO Agent'];
   const models = [
@@ -221,6 +221,51 @@ function buildMockData(range: DateRange) {
   };
 }
 
+type AnalyticsDashboardData = ReturnType<typeof buildAnalyticsPreviewData>;
+
+function csvValue(value: string | number): string {
+  const raw = String(value);
+  if (/[",\n\r]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+  return raw;
+}
+
+function downloadAnalyticsCsv(data: AnalyticsDashboardData, range: DateRange): void {
+  const rows: Array<Array<string | number>> = [
+    ['section', 'label', 'value', 'extra'],
+    ['summary', 'total_executions', data.totalExecutions, range],
+    ['summary', 'total_tokens', data.totalTokens, range],
+    ['summary', 'total_cost_usd', data.totalCost, range],
+    ['summary', 'active_users', data.activeUsers, range],
+    ...data.modelDistribution.map((item) => ['model_distribution', item.label, item.value, '']),
+    ...data.topTools.map((item) => ['top_tools', item.label, item.value, '']),
+    ...data.leaderboard.map((item) => [
+      'leaderboard',
+      item.name,
+      item.executions,
+      `${item.tokens} tokens / $${item.cost}`,
+    ]),
+    ...data.recentActivity.map((item) => [
+      'recent_activity',
+      item.taskName,
+      item.status,
+      `${item.agent} / ${item.model} / ${item.durationMs}ms / $${item.cost}`,
+    ]),
+  ];
+
+  const csv = rows.map((row) => row.map(csvValue).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `agi-analytics-${range}.csv`;
+  document.body.append(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 // ---------------------------------------------------------------------------
 // Range picker
 // ---------------------------------------------------------------------------
@@ -260,7 +305,7 @@ const AnalyticsDashboard: React.FC = () => {
   const [range, setRange] = useState<DateRange>('30d');
   const [refreshing, setRefreshing] = useState(false);
 
-  const data = useMemo(() => buildMockData(range), [range]);
+  const data = useMemo(() => buildAnalyticsPreviewData(range), [range]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -271,9 +316,8 @@ const AnalyticsDashboard: React.FC = () => {
   };
 
   const handleExport = () => {
-    toast.info(
-      'Export is coming soon — analytics CSV export will be available in the next release.',
-    );
+    downloadAnalyticsCsv(data, range);
+    toast.success('Analytics CSV exported');
   };
 
   const formatTokens = (n: number) => {

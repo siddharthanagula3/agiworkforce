@@ -9,9 +9,14 @@ import {
   updateCloudConversationTitle,
 } from '../api/cloudApi';
 import { getTaskModelForProvider } from '../constants/llm';
-import { isCloudWeb, isTauri, isTestEnvironment } from './runtimeEnvironment';
+import { isCloudWeb, isDesktopUiDevLocal, isTauri, isTestEnvironment } from './runtimeEnvironment';
 
-export { isCloudWeb, isTauri } from './runtimeEnvironment';
+export {
+  isCloudWeb,
+  isDesktopUiDevLocal,
+  isTauri,
+  supportsLocalAppMode,
+} from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
 const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
@@ -222,8 +227,8 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     // Fall through to test-mode mock values for desktop-only commands
   }
 
-  // Test environment / cloud web fallthrough: return mock values
-  if (!isTestEnvironment && !isCloudWeb) {
+  // Test environment / cloud web fallthrough / explicit desktop UI QA: return mock values.
+  if (!isTestEnvironment && !isCloudWeb && !isDesktopUiDevLocal) {
     const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
     console.error(`[Tauri] ${errorMessage}`, { command, args });
     throw new Error(errorMessage);
@@ -1183,15 +1188,26 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return (Date.now() + 3600000) as T;
 
     // ── Background agent commands ───────────────────────────────────
-    case 'background_agent_push':
+    case 'background_agent_push': {
+      const input = args?.['input'] as Record<string, unknown> | undefined;
+      if (
+        !input ||
+        typeof input['conversationId'] !== 'string' ||
+        input['conversationId'].trim().length === 0 ||
+        typeof input['goal'] !== 'string' ||
+        input['goal'].trim().length === 0
+      ) {
+        throw new Error('background_agent_push requires input.conversationId and input.goal');
+      }
       return {
         agentId: `bg_mock_${Date.now()}`,
         queuePosition: null,
         started: true,
       } as T;
+    }
 
     case 'background_agent_list':
-      return { agents: [], activeCount: 0, maxAgents: 10 } as T;
+      return { agents: [], activeCount: 0, maxAgents: 8 } as T;
 
     case 'background_agent_list_active':
       return [] as T;
@@ -1215,7 +1231,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
         pausedCount: 0,
         completedCount: 0,
         failedCount: 0,
-        maxAgents: 10,
+        maxAgents: 8,
         atCapacity: false,
       } as T;
 

@@ -236,16 +236,96 @@ export async function executeLSPCommand(args: string): Promise<InlinePanel> {
 
   try {
     const trimmed = args.trim();
+    const parts = trimmed.split(/\s+/).filter(Boolean);
+    const action = parts[0]?.toLowerCase() ?? 'diagnostics';
+    const servers = await invoke<string[]>('lsp_list_servers');
     let response: Record<string, unknown>;
 
-    if (trimmed.toLowerCase().startsWith('symbols ')) {
-      const query = trimmed.slice('symbols '.length).trim();
-      response = await invoke<Record<string, unknown>>('lsp_workspace_symbol', { query });
+    const resolveLanguage = (values: string[]) => {
+      const maybeLanguage = values[0];
+      if (maybeLanguage && servers.includes(maybeLanguage)) {
+        return { language: maybeLanguage, remaining: values.slice(1) };
+      }
+      if (servers.length === 1 && servers[0]) {
+        return { language: servers[0], remaining: values };
+      }
+      return { language: undefined, remaining: values };
+    };
+
+    if (action === 'servers' || action === 'status') {
+      response = {
+        action,
+        status: servers.length > 0 ? 'running' : 'unavailable',
+        servers,
+        count: servers.length,
+      };
+    } else if (servers.length === 0) {
+      response = {
+        action,
+        status: 'unavailable',
+        message: 'No running LSP server. Open a code file with LSP enabled first.',
+        servers,
+      };
+    } else if (action === 'symbols') {
+      const { language, remaining } = resolveLanguage(parts.slice(1));
+      const query = remaining.join(' ').trim();
+
+      if (!language) {
+        throw new Error(`Multiple LSP servers are running. Specify one of: ${servers.join(', ')}`);
+      }
+      if (!query) {
+        throw new Error('Usage: /lsp symbols [language] <query>');
+      }
+
+      const symbols = await invoke<unknown[]>('lsp_workspace_symbol', { language, query });
+      response = {
+        action: 'symbols',
+        language,
+        query,
+        symbols,
+        count: symbols.length,
+      };
+    } else if (action === 'diagnostics') {
+      const { language, remaining } = resolveLanguage(parts.slice(1));
+      const uri = remaining.join(' ').trim();
+
+      if (!language) {
+        throw new Error(`Multiple LSP servers are running. Specify one of: ${servers.join(', ')}`);
+      }
+
+      if (uri) {
+        const diagnostics = await invoke<unknown[]>('lsp_get_diagnostics', { language, uri });
+        response = {
+          action: 'diagnostics',
+          language,
+          uri,
+          diagnostics,
+          count: diagnostics.length,
+        };
+      } else {
+        const diagnosticsByUri = await invoke<Record<string, unknown[]>>(
+          'lsp_get_all_diagnostics',
+          {
+            language,
+          },
+        );
+        response = {
+          action: 'diagnostics',
+          language,
+          diagnosticsByUri,
+          count: Object.values(diagnosticsByUri).reduce(
+            (total, diagnostics) => total + diagnostics.length,
+            0,
+          ),
+        };
+      }
     } else {
-      response = await invoke<Record<string, unknown>>('lsp_get_diagnostics');
+      throw new Error(
+        'Usage: /lsp servers, /lsp diagnostics [language] [uri], or /lsp symbols [language] <query>',
+      );
     }
 
-    panel.content.data = { ...response };
+    panel.content.data = response;
     panel.metadata = { status: 'success' };
   } catch (error) {
     panel.content.data = {

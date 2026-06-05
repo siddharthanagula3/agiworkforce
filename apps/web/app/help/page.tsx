@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Help | AGI',
+  title: 'Help',
   description: 'Quick links into the parts of the product most people ask about.',
   alternates: { canonical: 'https://agiworkforce.com/help' },
 };

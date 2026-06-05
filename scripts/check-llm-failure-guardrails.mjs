@@ -24,6 +24,7 @@ const SKIP_DIRS = new Set([
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
 const EXEMPT_FILES = new Set(['scripts/check-llm-failure-guardrails.mjs']);
+const EXEMPT_PATH_PREFIXES = ['docs/archive/'];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
 
 const TEST_THEATER_PATTERNS = [
@@ -154,6 +155,10 @@ function isProductionPath(relativePath) {
   );
 }
 
+function isExemptPath(relativePath) {
+  return EXEMPT_PATH_PREFIXES.some((prefix) => relativePath.startsWith(prefix));
+}
+
 function lineForOffset(text, offset) {
   return text.slice(0, offset).split('\n').length;
 }
@@ -163,6 +168,7 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
   for (const file of files) {
     const relativePath = rel(file);
     if (EXEMPT_FILES.has(relativePath)) continue;
+    if (isExemptPath(relativePath)) continue;
     if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
     if (productionOnly && !isProductionPath(relativePath)) continue;
     const text = readFileSync(file, 'utf8');

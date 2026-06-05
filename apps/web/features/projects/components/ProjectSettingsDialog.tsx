@@ -111,15 +111,15 @@ export function ProjectSettingsDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="shrink-0 px-6 pt-6">
             <DialogTitle>Project Settings</DialogTitle>
             <DialogDescription>
               Configure the project name, description, and custom instructions.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-2">
             {/* Name */}
             <div className="space-y-2">
               <Label htmlFor="project-name">Name</Label>
@@ -266,7 +266,7 @@ export function ProjectSettingsDialog({
             </div>
           </div>
 
-          <DialogFooter className="flex items-center justify-between sm:justify-between">
+          <DialogFooter className="shrink-0 border-t px-6 py-4 sm:justify-between">
             <Button
               variant="ghost"
               size="sm"

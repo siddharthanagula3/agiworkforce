@@ -72,4 +72,4 @@ Every PR must state:
 - Remaining risk.
 - Whether an agent drafted or implemented the change.
 
-High-risk PRs require the relevant secondary owner from `audit/repo-organization/ownership-model-2026-05-20.md`.
+High-risk PRs require the relevant secondary owner from `docs/agent-context/risk-map.json`, `.github/CODEOWNERS`, or the scoped owner `AGENTS.md`.

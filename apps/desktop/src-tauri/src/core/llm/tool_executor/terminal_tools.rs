@@ -6,6 +6,71 @@ const MAX_CODE_LENGTH: usize = 1024 * 1024;
 /// Maximum code length allowed for analysis (500KB) — mirrors core/agi/executors/code_executor.rs.
 const MAX_ANALYSIS_CODE_LENGTH: usize = 512 * 1024;
 
+const TERMINAL_DEFAULT_TIMEOUT_MS: u64 = 60_000;
+const TERMINAL_MAX_TIMEOUT_MS: u64 = 300_000;
+const TERMINAL_DEFAULT_OUTPUT_BYTES: u64 = 30_000;
+const TERMINAL_MAX_OUTPUT_BYTES: u64 = 150_000;
+
+#[derive(Debug, Default)]
+struct TerminalStreamCapture {
+    bytes: Vec<u8>,
+    bytes_read: usize,
+    truncated: bool,
+}
+
+fn parse_positive_bounded_u64_arg(
+    args: &HashMap<String, serde_json::Value>,
+    name: &str,
+    default: u64,
+    max: u64,
+) -> Result<u64> {
+    let Some(value) = args.get(name) else {
+        return Ok(default);
+    };
+    let requested = value
+        .as_u64()
+        .ok_or_else(|| anyhow!("{name} must be a positive integer"))?;
+    if requested == 0 {
+        return Err(anyhow!("{name} must be greater than 0"));
+    }
+    Ok(requested.min(max))
+}
+
+fn append_capped_terminal_output(
+    capture: &mut TerminalStreamCapture,
+    chunk: &[u8],
+    max_output_bytes: usize,
+) -> usize {
+    capture.bytes_read = capture.bytes_read.saturating_add(chunk.len());
+    if capture.bytes.len() >= max_output_bytes {
+        capture.truncated = true;
+        return 0;
+    }
+
+    let remaining = max_output_bytes - capture.bytes.len();
+    let to_keep = remaining.min(chunk.len());
+    capture.bytes.extend_from_slice(&chunk[..to_keep]);
+    if to_keep < chunk.len() {
+        capture.truncated = true;
+    }
+    to_keep
+}
+
+fn format_terminal_output(
+    capture: &TerminalStreamCapture,
+    stream_name: &str,
+    max_output_bytes: usize,
+) -> String {
+    let mut output = String::from_utf8_lossy(&capture.bytes).to_string();
+    if capture.truncated {
+        output.push_str(&format!(
+            "\n\n... [{stream_name} truncated after {max_output_bytes} bytes; {} bytes were produced]",
+            capture.bytes_read
+        ));
+    }
+    output
+}
+
 impl ToolExecutor {
     pub(crate) async fn execute_terminal_tool(
         &self,
@@ -41,10 +106,40 @@ impl ToolExecutor {
             ShellType::GitBash => "gitbash",
         }
         .to_string();
-        let timeout_ms = args
-            .get("timeout_ms")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(60_000);
+        let timeout_ms = match parse_positive_bounded_u64_arg(
+            &args,
+            "timeout_ms",
+            TERMINAL_DEFAULT_TIMEOUT_MS,
+            TERMINAL_MAX_TIMEOUT_MS,
+        ) {
+            Ok(value) => value,
+            Err(e) => {
+                let err = e.to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err.clone(), "success": false }),
+                    error: Some(err),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
+        let max_output_bytes = match parse_positive_bounded_u64_arg(
+            &args,
+            "max_output_bytes",
+            TERMINAL_DEFAULT_OUTPUT_BYTES,
+            TERMINAL_MAX_OUTPUT_BYTES,
+        ) {
+            Ok(value) => value as usize,
+            Err(e) => {
+                let err = e.to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err.clone(), "success": false }),
+                    error: Some(err),
+                    metadata: HashMap::new(),
+                });
+            }
+        };
 
         // Validate command using centralized validator (one-shot mode)
         let validation = ValidationConfig::oneshot().with_correlation_id(tool_id);
@@ -78,8 +173,8 @@ impl ToolExecutor {
             }
         }
 
-        // AUDIT-TERMINAL-065/068 fix: Proper shell routing that honors requested shell
-        // and doesn't select powershell.exe on non-Windows for unknown shells
+        // Route through the user/system default shell selected above. The model-facing
+        // terminal tool intentionally does not accept a shell override.
         let (program, mut shell_args): (String, Vec<String>) = match shell.as_str() {
             "cmd" => (
                 "cmd.exe".to_string(),
@@ -230,7 +325,8 @@ impl ToolExecutor {
         let stdout_app_handle = self.app_handle.clone();
         let stdout_tool_id = tool_id.to_string();
         let stdout_task = tokio::spawn(async move {
-            let mut collected = Vec::new();
+            let mut capture = TerminalStreamCapture::default();
+            let mut emitted_truncation_notice = false;
             if let Some(mut stdout) = stdout_handle {
                 let mut chunk = vec![0u8; 1024];
                 loop {
@@ -238,9 +334,13 @@ impl ToolExecutor {
                     if read == 0 {
                         break;
                     }
-                    collected.extend_from_slice(&chunk[..read]);
+                    let captured_len = append_capped_terminal_output(
+                        &mut capture,
+                        &chunk[..read],
+                        max_output_bytes,
+                    );
                     if let Some(app_handle) = &stdout_app_handle {
-                        let text = String::from_utf8_lossy(&chunk[..read]).to_string();
+                        let text = String::from_utf8_lossy(&chunk[..captured_len]).to_string();
                         if !text.is_empty() {
                             emit_tool_output_chunk(
                                 app_handle,
@@ -250,16 +350,29 @@ impl ToolExecutor {
                                 false,
                             );
                         }
+                        if capture.truncated && !emitted_truncation_notice {
+                            emitted_truncation_notice = true;
+                            emit_tool_output_chunk(
+                                app_handle,
+                                &stdout_tool_id,
+                                &format!(
+                                    "\n... [stdout truncated after {max_output_bytes} bytes]\n"
+                                ),
+                                OutputChunkType::Stdout,
+                                false,
+                            );
+                        }
                     }
                 }
             }
-            Ok::<Vec<u8>, std::io::Error>(collected)
+            Ok::<TerminalStreamCapture, std::io::Error>(capture)
         });
 
         let stderr_app_handle = self.app_handle.clone();
         let stderr_tool_id = tool_id.to_string();
         let stderr_task = tokio::spawn(async move {
-            let mut collected = Vec::new();
+            let mut capture = TerminalStreamCapture::default();
+            let mut emitted_truncation_notice = false;
             if let Some(mut stderr) = stderr_handle {
                 let mut chunk = vec![0u8; 1024];
                 loop {
@@ -267,9 +380,13 @@ impl ToolExecutor {
                     if read == 0 {
                         break;
                     }
-                    collected.extend_from_slice(&chunk[..read]);
+                    let captured_len = append_capped_terminal_output(
+                        &mut capture,
+                        &chunk[..read],
+                        max_output_bytes,
+                    );
                     if let Some(app_handle) = &stderr_app_handle {
-                        let text = String::from_utf8_lossy(&chunk[..read]).to_string();
+                        let text = String::from_utf8_lossy(&chunk[..captured_len]).to_string();
                         if !text.is_empty() {
                             emit_tool_output_chunk(
                                 app_handle,
@@ -279,10 +396,22 @@ impl ToolExecutor {
                                 false,
                             );
                         }
+                        if capture.truncated && !emitted_truncation_notice {
+                            emitted_truncation_notice = true;
+                            emit_tool_output_chunk(
+                                app_handle,
+                                &stderr_tool_id,
+                                &format!(
+                                    "\n... [stderr truncated after {max_output_bytes} bytes]\n"
+                                ),
+                                OutputChunkType::Stderr,
+                                false,
+                            );
+                        }
                     }
                 }
             }
-            Ok::<Vec<u8>, std::io::Error>(collected)
+            Ok::<TerminalStreamCapture, std::io::Error>(capture)
         });
 
         let start = Instant::now();
@@ -335,25 +464,20 @@ impl ToolExecutor {
             }
         };
 
-        let stdout = stdout_task
+        let stdout_capture = stdout_task
             .await
             .map_err(|e| anyhow!("Failed to join stdout reader: {}", e))?
             .map_err(|e| anyhow!("Failed to read stdout: {}", e))?;
-        let stderr = stderr_task
+        let stderr_capture = stderr_task
             .await
             .map_err(|e| anyhow!("Failed to join stderr reader: {}", e))?
             .map_err(|e| anyhow!("Failed to read stderr: {}", e))?;
-        let output = std::process::Output {
-            status,
-            stdout,
-            stderr,
-        };
 
         let duration_ms = start.elapsed().as_millis() as u64;
-        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-        let exit_code = output.status.code();
-        let success = output.status.success();
+        let stdout = format_terminal_output(&stdout_capture, "stdout", max_output_bytes);
+        let stderr = format_terminal_output(&stderr_capture, "stderr", max_output_bytes);
+        let exit_code = status.code();
+        let success = status.success();
 
         // Emit progress: command completed, processing output
         if let Some(app_handle) = &self.app_handle {
@@ -389,6 +513,18 @@ impl ToolExecutor {
         let mut metadata = HashMap::new();
         metadata.insert("shell".to_string(), json!(shell));
         metadata.insert("program".to_string(), json!(program));
+        metadata.insert("timeout_ms".to_string(), json!(timeout_ms));
+        metadata.insert("max_output_bytes".to_string(), json!(max_output_bytes));
+        metadata.insert("stdout_bytes".to_string(), json!(stdout_capture.bytes_read));
+        metadata.insert("stderr_bytes".to_string(), json!(stderr_capture.bytes_read));
+        metadata.insert(
+            "stdout_truncated".to_string(),
+            json!(stdout_capture.truncated),
+        );
+        metadata.insert(
+            "stderr_truncated".to_string(),
+            json!(stderr_capture.truncated),
+        );
         if let Some(dir) = &cwd {
             metadata.insert("cwd".to_string(), json!(dir));
         }
@@ -442,6 +578,11 @@ impl ToolExecutor {
                 "stderr": stderr,
                 "exitCode": exit_code,
                 "durationMs": duration_ms,
+                "stdoutBytes": stdout_capture.bytes_read,
+                "stderrBytes": stderr_capture.bytes_read,
+                "stdoutTruncated": stdout_capture.truncated,
+                "stderrTruncated": stderr_capture.truncated,
+                "maxOutputBytes": max_output_bytes,
             }),
             error: error_message,
             metadata,
@@ -550,12 +691,23 @@ impl ToolExecutor {
         args: HashMap<String, serde_json::Value>,
         action_id: &str,
     ) -> Result<ToolResult> {
-        let project_root = args
+        let project_root_input = args
             .get("project_root")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| self.project_folder.clone())
             .unwrap_or_else(|| ".".to_string());
+        let project_root = self.resolve_path(&project_root_input);
+
+        if let Err(e) = self.validate_path(&project_root).await {
+            let err = e.to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": err.clone(), "success": false }),
+                error: Some(err),
+                metadata: HashMap::from([("project_root".to_string(), json!(project_root))]),
+            });
+        }
 
         let runner = args
             .get("runner")
@@ -567,10 +719,18 @@ impl ToolExecutor {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let timeout_secs = args
-            .get("timeout_secs")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(120);
+        let timeout_secs = match parse_positive_bounded_u64_arg(&args, "timeout_secs", 120, 300) {
+            Ok(value) => value,
+            Err(e) => {
+                let err = e.to_string();
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": err.clone(), "success": false }),
+                    error: Some(err),
+                    metadata: HashMap::from([("project_root".to_string(), json!(project_root))]),
+                });
+            }
+        };
 
         let root = std::path::Path::new(&project_root);
 
@@ -652,7 +812,12 @@ impl ToolExecutor {
         let mut terminal_args = HashMap::new();
         terminal_args.insert("command".to_string(), json!(command));
         terminal_args.insert("cwd".to_string(), json!(project_root));
-        terminal_args.insert("timeout_ms".to_string(), json!(timeout_secs * 1000));
+        terminal_args.insert(
+            "timeout_ms".to_string(),
+            json!(timeout_secs
+                .saturating_mul(1000)
+                .min(TERMINAL_MAX_TIMEOUT_MS)),
+        );
 
         self.execute_terminal_tool(terminal_args, action_id).await
     }

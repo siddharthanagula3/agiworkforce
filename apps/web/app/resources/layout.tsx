@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     'AI productivity tips',
   ],
   openGraph: {
-    title: 'Resources | AGI',
+    title: 'Resources',
     description:
       'Guides, tutorials, and resources to master AI automation with AGI. From beginner to expert.',
     type: 'website',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Resources | AGI',
+    title: 'Resources',
     description:
       'Guides, tutorials, and resources to master AI automation with AGI. From beginner to expert.',
     images: ['/app-preview.png'],

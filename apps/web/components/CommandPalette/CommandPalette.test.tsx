@@ -15,6 +15,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 import { CommandPalette } from './CommandPalette';
 
+const modelFixtureIds = vi.hoisted(() => ({
+  primary: 'test-command-model-primary',
+  secondary: 'test-command-model-secondary',
+}));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -51,16 +56,16 @@ vi.mock('@/stores/chatStore', () => ({
 vi.mock('@/shared/stores/model-store', () => ({
   AVAILABLE_MODELS: [
     {
-      id: 'gpt-5.5',
-      name: 'GPT-5.4',
-      provider: 'OpenAI',
-      description: 'Most capable GPT model',
+      id: modelFixtureIds.primary,
+      name: 'Fixture Primary Model',
+      provider: 'Provider A',
+      description: 'Primary command palette fixture model',
     },
     {
-      id: 'claude-sonnet-4.6',
-      name: 'Claude Sonnet 4.6',
-      provider: 'Anthropic',
-      description: 'Balanced intelligence',
+      id: modelFixtureIds.secondary,
+      name: 'Fixture Secondary Model',
+      provider: 'Provider B',
+      description: 'Secondary command palette fixture model',
     },
   ],
 }));
@@ -237,12 +242,12 @@ describe('CommandPalette', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
 
-    it('navigates to /chat on Go to Settings click', () => {
+    it('navigates to /settings/general on Go to Settings click', () => {
       const onOpenChange = vi.fn();
       renderPalette(true, onOpenChange);
 
       fireEvent.click(screen.getByText('Go to Settings'));
-      expect(mockPush).toHaveBeenCalledWith('/chat');
+      expect(mockPush).toHaveBeenCalledWith('/settings/general');
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
@@ -282,8 +287,8 @@ describe('CommandPalette', () => {
       // Sub-menu title should appear
       expect(screen.getByText('Switch AI Model')).toBeInTheDocument();
       // Model options should appear
-      expect(screen.getByText('GPT-5.4')).toBeInTheDocument();
-      expect(screen.getByText('Claude Sonnet 4.6')).toBeInTheDocument();
+      expect(screen.getByText('Fixture Primary Model')).toBeInTheDocument();
+      expect(screen.getByText('Fixture Secondary Model')).toBeInTheDocument();
     });
 
     it('closes palette when a model is selected', () => {
@@ -291,7 +296,7 @@ describe('CommandPalette', () => {
       renderPalette(true, onOpenChange);
 
       fireEvent.click(screen.getByText('Switch AI Model'));
-      fireEvent.click(screen.getByText('GPT-5.4'));
+      fireEvent.click(screen.getByText('Fixture Primary Model'));
 
       expect(onOpenChange).toHaveBeenCalledWith(false);
     });
@@ -303,12 +308,12 @@ describe('CommandPalette', () => {
       fireEvent.click(screen.getByText('Switch AI Model'));
 
       // Now in sub-menu
-      expect(screen.getByText('GPT-5.4')).toBeInTheDocument();
+      expect(screen.getByText('Fixture Primary Model')).toBeInTheDocument();
 
       fireEvent.keyDown(input, { key: 'Escape' });
 
-      // Back to main menu — GPT-5.4 should be gone
-      expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument();
+      // Back to main menu — model options should be gone
+      expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
       // Main commands should be back
       expect(screen.getByText('New Chat')).toBeInTheDocument();
     });
@@ -325,7 +330,7 @@ describe('CommandPalette', () => {
 
       fireEvent.click(screen.getByLabelText('Back to main menu'));
 
-      expect(screen.queryByText('GPT-5.4')).not.toBeInTheDocument();
+      expect(screen.queryByText('Fixture Primary Model')).not.toBeInTheDocument();
       expect(screen.getByText('New Chat')).toBeInTheDocument();
     });
   });

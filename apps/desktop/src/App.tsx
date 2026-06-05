@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ChatHostBridge } from '@agiworkforce/unified-chat';
-import { isTauri, invoke, listen } from './lib/tauri-mock';
+import { isTauri, invoke, listen, supportsLocalAppMode } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { API_BASE_URL } from './api/client';
@@ -199,6 +199,7 @@ const DesktopShell = () => {
   const [plansModalOpen, setPlansModalOpen] = useState(false);
   const [cloudWaitlistOpen, setCloudWaitlistOpen] = useState(false);
   const [cloudWaitlistTab, setCloudWaitlistTab] = useState<InviteCodeTab>('waitlist');
+  const [authViewSignal, setAuthViewSignal] = useState(0);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [timeoutWarning, setTimeoutWarning] = useState<TimeoutWarningData | null>(null);
   const [isTimeoutWarningOpen, setIsTimeoutWarningOpen] = useState(false);
@@ -210,6 +211,7 @@ const DesktopShell = () => {
   const onboardingCompleted = useSimpleModeStore(selectOnboardingCompleted);
   const hasSelectedMode = useAppModeStore((s) => s.hasSelectedMode);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [forceModeSelection, setForceModeSelection] = useState(false);
 
   // Show mode picker only when neither onboarding nor mode selection has been persisted
   useEffect(() => {
@@ -246,6 +248,24 @@ const DesktopShell = () => {
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = appMode === 'cloud';
   const hasCloudSession = isAuthenticated && !!accessToken;
+  const shouldGateCloudAuth = isCloudMode && !supportsLocalAppMode;
+
+  useEffect(() => {
+    if (
+      !supportsLocalAppMode ||
+      !isCloudMode ||
+      hasCloudSession ||
+      isAuthLoading ||
+      !sessionValidated
+    ) {
+      return;
+    }
+
+    setForceModeSelection(true);
+    setShowOnboarding(true);
+    useAppModeStore.getState().setMode('local');
+    toast.info('Choose Local, BYOK, or request Cloud access.');
+  }, [hasCloudSession, isAuthLoading, isCloudMode, sessionValidated]);
 
   // Hard 8 s boot timeout: if sessionValidated is still false (for example,
   // cloud auth warm-up stalls), move to a recoverable state.
@@ -598,6 +618,13 @@ const DesktopShell = () => {
   // Initialize cloud provider + load available models into the chat package's model store
   useEffect(() => {
     async function initModels() {
+      interface RustModelInfo {
+        id: string;
+        name: string;
+        provider: string;
+        available: boolean;
+      }
+
       try {
         // Enable ManagedCloud provider if user is authenticated (subscription-based models)
         if (useAppModeStore.getState().mode === 'cloud') {
@@ -605,12 +632,8 @@ const DesktopShell = () => {
         }
 
         const { useChatModelStore } = await import('@agiworkforce/unified-chat');
-        interface RustModelInfo {
-          id: string;
-          name: string;
-          provider: string;
-          available: boolean;
-        }
+        const currentMode = useAppModeStore.getState().mode;
+        const localOnlyCatalog = supportsLocalAppMode && currentMode !== 'cloud';
         const rustModels = await invoke<RustModelInfo[]>('llm_get_available_models');
         const validProviders = new Set([
           'anthropic',
@@ -621,8 +644,26 @@ const DesktopShell = () => {
           'xai',
           'deepseek',
           'local',
+          'ollama',
+          'lmstudio',
+          'custom-openai-compatible',
         ]);
-        const chatModels = rustModels.map((m) => ({
+        let visibleModels = localOnlyCatalog
+          ? rustModels.filter((m) => {
+              const provider = m.provider.toLowerCase();
+              return provider === 'ollama' || provider === 'local' || provider === 'lmstudio';
+            })
+          : rustModels;
+        if (localOnlyCatalog && visibleModels.length === 0) {
+          const ollamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models').catch(
+            () => [],
+          );
+          visibleModels = ollamaModels.filter((m) => {
+            const provider = m.provider.toLowerCase();
+            return provider === 'ollama' || provider === 'local';
+          });
+        }
+        const chatModels = visibleModels.map((m) => ({
           id: m.id,
           name: m.name,
           provider: (validProviders.has(m.provider.toLowerCase())
@@ -682,6 +723,31 @@ const DesktopShell = () => {
         // Build fallback models from the shared catalog helpers (single source of truth)
         try {
           const { useChatModelStore } = await import('@agiworkforce/unified-chat');
+          if (supportsLocalAppMode && useAppModeStore.getState().mode !== 'cloud') {
+            const ollamaModels = await invoke<RustModelInfo[]>('llm_list_ollama_models').catch(
+              () => [],
+            );
+            useChatModelStore.getState().setModels(
+              ollamaModels
+                .filter((m) => {
+                  const provider = m.provider.toLowerCase();
+                  return provider === 'ollama' || provider === 'local';
+                })
+                .map((m) => ({
+                  id: m.id,
+                  name: m.name,
+                  provider: 'ollama' as import('@agiworkforce/unified-chat').ModelInfo['provider'],
+                  tier: 'standard' as const,
+                  supportsThinking: false,
+                  supportsVision: true,
+                  supportsTools: true,
+                  contextWindow: 128000,
+                  isLocal: true,
+                  isByok: false,
+                })),
+            );
+            return;
+          }
           const fallbackProviders = ['anthropic', 'openai', 'google', 'xai', 'deepseek', 'ollama'];
           const fallbackModels: import('@agiworkforce/unified-chat').ModelInfo[] =
             fallbackProviders.flatMap((p) => {
@@ -709,7 +775,11 @@ const DesktopShell = () => {
                 },
               ];
             });
-          useChatModelStore.getState().setModels(fallbackModels);
+          const visibleFallbackModels =
+            supportsLocalAppMode && useAppModeStore.getState().mode !== 'cloud'
+              ? fallbackModels.filter((model) => model.isLocal)
+              : fallbackModels;
+          useChatModelStore.getState().setModels(visibleFallbackModels);
           toast.error('Could not load models from backend. Using defaults.');
         } catch {
           // Even the fallback import failed — chat will use its own internal default
@@ -717,6 +787,19 @@ const DesktopShell = () => {
       }
     }
     void initModels();
+    const localRefreshTimer = supportsLocalAppMode
+      ? window.setInterval(() => {
+          if (useAppModeStore.getState().mode !== 'cloud') {
+            void initModels();
+          }
+        }, 10_000)
+      : undefined;
+
+    return () => {
+      if (localRefreshTimer) {
+        window.clearInterval(localRefreshTimer);
+      }
+    };
   }, []);
 
   // Sync desktop auth user profile → chat package's settingsStore
@@ -804,6 +887,9 @@ const DesktopShell = () => {
       const detail = (e as CustomEvent).detail as { type: string; tab?: string };
       if (detail.type === 'open-settings') {
         openSettingsDialog((detail.tab as Parameters<typeof openSettingsDialog>[0]) ?? 'general');
+      } else if (detail.type === 'open-auth') {
+        closeSettingsDialog();
+        setAuthViewSignal((value) => value + 1);
       } else if (detail.type === 'keyboard-shortcuts') {
         useSettingsDialogStore.getState().openShortcuts();
       } else if (detail.type === 'logout') {
@@ -816,7 +902,7 @@ const DesktopShell = () => {
     };
     window.addEventListener('chat:action', handleChatAction);
     return () => window.removeEventListener('chat:action', handleChatAction);
-  }, [openCloudWaitlistModal, openSettingsDialog]);
+  }, [closeSettingsDialog, openCloudWaitlistModal, openSettingsDialog]);
 
   // Listen for native menu events from Tauri window menu
   useEffect(() => {
@@ -1269,7 +1355,7 @@ const DesktopShell = () => {
     ];
   }, [actions, openSettings, startNewChat, state.maximized, theme, toggleTheme, isMac]);
 
-  if (isCloudMode && (isAuthLoading || !sessionValidated)) {
+  if (shouldGateCloudAuth && (isAuthLoading || !sessionValidated)) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         {/* Skeleton layout — shown while the cloud session is being validated */}
@@ -1282,7 +1368,7 @@ const DesktopShell = () => {
     );
   }
 
-  if (isCloudMode && !hasCloudSession) {
+  if (shouldGateCloudAuth && !hasCloudSession) {
     return (
       <Suspense fallback={<LoadingFallback />}>
         <AuthPage />
@@ -1322,11 +1408,28 @@ const DesktopShell = () => {
             <VoiceInputOverlay />
           </Suspense>
         )}
-        {isTauri && showOnboarding && !onboardingCompleted && (
-          <Suspense fallback={null}>
-            <OnboardingWelcome onComplete={() => setShowOnboarding(false)} />
-          </Suspense>
-        )}
+        {supportsLocalAppMode &&
+          (showOnboarding || forceModeSelection) &&
+          (!onboardingCompleted || forceModeSelection) && (
+            <Suspense fallback={null}>
+              <OnboardingWelcome
+                onComplete={() => {
+                  setShowOnboarding(false);
+                  setForceModeSelection(false);
+                }}
+                onCloudModeSelected={() => {
+                  setShowOnboarding(false);
+                  setForceModeSelection(false);
+                  setAuthViewSignal((value) => value + 1);
+                }}
+                onByokModeSelected={() => {
+                  setShowOnboarding(false);
+                  setForceModeSelection(false);
+                  openSettingsDialog('models-keys');
+                }}
+              />
+            </Suspense>
+          )}
         <div className="flex flex-col gap-1">
           <Suspense fallback={null}>
             <StatusBanner />
@@ -1383,6 +1486,16 @@ const DesktopShell = () => {
                   runtime={tauriRuntime}
                   className="h-full w-full"
                   hostBridge={chatHostBridge}
+                  openAuthSignal={authViewSignal}
+                  authSlot={
+                    <Suspense fallback={<LoadingFallback />}>
+                      <AuthPage
+                        onAuthSuccess={() => {
+                          useAppModeStore.getState().setMode('cloud');
+                        }}
+                      />
+                    </Suspense>
+                  }
                   onModelSelectorClick={() => openSettingsDialog('models-keys')}
                   onVoiceClick={() => {
                     const event = new CustomEvent('toggle-voice-input');
@@ -1397,6 +1510,8 @@ const DesktopShell = () => {
                       openSettingsDialog('mcp-skills');
                     } else if (view === 'projects') {
                       openSettingsDialog('account');
+                    } else if (view === 'settings') {
+                      openSettingsDialog('general');
                     } else if (view === 'pricing' || view === 'billing' || view === 'byok') {
                       setPlansModalOpen(true);
                     }
@@ -1411,6 +1526,7 @@ const DesktopShell = () => {
                   enableShortcuts={true}
                   hostBridge={chatHostBridge}
                   onModelSelectorClick={() => openSettingsDialog('models-keys')}
+                  allowModelFallbackModels={false}
                   onVoiceClick={() => {
                     // Toggle voice input overlay
                     const event = new CustomEvent('toggle-voice-input');
@@ -1540,14 +1656,14 @@ const App = () => {
         if (cloudAccountAuth.isAuthenticated()) {
           console.debug('[App] Store hydrated, forcing account sync with backend...');
           await useAccountStore.getState().syncWithBackend();
-        } else if (
-          isTauri &&
-          useAppModeStore.getState().mode === 'local' &&
-          !useAuthStore.getState().accessToken
-        ) {
+        } else if (isTauri && !useAuthStore.getState().accessToken) {
           // W2a-PRO-00A: local-only users have no cloud session — synthesize a
           // stable user.id from the machine install ID so downstream chat stores
           // can own conversations without crashing on a null user.
+          if (useAppModeStore.getState().mode === 'cloud') {
+            useAppModeStore.getState().setMode('local');
+          }
+
           const applyLocalAccount = (id: string) => {
             useAuthStore.getState().setAccount({
               id,

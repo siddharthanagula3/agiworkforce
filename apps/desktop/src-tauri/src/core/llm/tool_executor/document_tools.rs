@@ -26,6 +26,63 @@ fn created_document_tool_result(
     })
 }
 
+fn required_non_empty_string_array(
+    args: &HashMap<String, Value>,
+    name: &str,
+) -> Result<Vec<String>> {
+    let values = args
+        .get(name)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow!("Missing or invalid {name} parameter"))?;
+
+    let mut parsed = Vec::with_capacity(values.len());
+    for (index, value) in values.iter().enumerate() {
+        match value.as_str().map(str::trim) {
+            Some(text) if !text.is_empty() => parsed.push(text.to_string()),
+            _ => return Err(anyhow!("{name}[{index}] must be a non-empty string")),
+        }
+    }
+
+    if parsed.is_empty() {
+        return Err(anyhow!("{name} must contain at least one item"));
+    }
+
+    Ok(parsed)
+}
+
+fn required_string_matrix(args: &HashMap<String, Value>, name: &str) -> Result<Vec<Vec<String>>> {
+    let rows = args
+        .get(name)
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| anyhow!("Missing or invalid {name} parameter"))?;
+
+    let mut parsed_rows = Vec::with_capacity(rows.len());
+    for (row_index, row) in rows.iter().enumerate() {
+        let cells = row
+            .as_array()
+            .ok_or_else(|| anyhow!("{name}[{row_index}] must be an array"))?;
+
+        let mut parsed_cells = Vec::with_capacity(cells.len());
+        for (cell_index, cell) in cells.iter().enumerate() {
+            let value = match cell {
+                Value::String(text) => text.clone(),
+                Value::Number(number) => number.to_string(),
+                Value::Bool(boolean) => boolean.to_string(),
+                Value::Null => String::new(),
+                _ => {
+                    return Err(anyhow!(
+                    "{name}[{row_index}][{cell_index}] must be a string, number, boolean, or null"
+                ))
+                }
+            };
+            parsed_cells.push(value);
+        }
+        parsed_rows.push(parsed_cells);
+    }
+
+    Ok(parsed_rows)
+}
+
 impl ToolExecutor {
     pub(crate) async fn execute_document_read_tool(
         &self,
@@ -145,10 +202,7 @@ impl ToolExecutor {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let paragraphs: Vec<String> = args
-                .get("paragraphs")
-                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
+            let paragraphs = required_non_empty_string_array(args, "paragraphs")?;
 
             match document_create_word_simple(output_path.clone(), title, author, paragraphs).await
             {
@@ -192,15 +246,8 @@ impl ToolExecutor {
                 .unwrap_or("Sheet1")
                 .to_string();
 
-            let headers: Vec<String> = args
-                .get("headers")
-                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
-
-            let rows: Vec<Vec<String>> = args
-                .get("rows")
-                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
+            let headers = required_non_empty_string_array(args, "headers")?;
+            let rows = required_string_matrix(args, "rows")?;
 
             match document_create_excel_simple(output_path.clone(), sheet_name, headers, rows).await
             {
@@ -248,10 +295,7 @@ impl ToolExecutor {
                 .and_then(|v| v.as_str())
                 .map(|s| s.to_string());
 
-            let paragraphs: Vec<String> = args
-                .get("paragraphs")
-                .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
-                .unwrap_or_default();
+            let paragraphs = required_non_empty_string_array(args, "paragraphs")?;
 
             match document_create_pdf_simple(output_path.clone(), title, author, paragraphs).await {
                 Ok(path) => {
@@ -272,5 +316,42 @@ impl ToolExecutor {
                 metadata: HashMap::new(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rejects_invalid_paragraph_payloads() {
+        let mut args = HashMap::new();
+        args.insert("paragraphs".to_string(), json!(["valid", {"bad": true}]));
+
+        let error = required_non_empty_string_array(&args, "paragraphs")
+            .expect_err("object paragraph must be rejected");
+
+        assert!(error.to_string().contains("paragraphs[1]"));
+    }
+
+    #[test]
+    fn parses_explicit_empty_excel_rows_without_silent_default() {
+        let mut args = HashMap::new();
+        args.insert("rows".to_string(), json!([]));
+
+        let rows = required_string_matrix(&args, "rows").expect("empty explicit rows are valid");
+
+        assert!(rows.is_empty());
+    }
+
+    #[test]
+    fn rejects_nested_excel_cell_values() {
+        let mut args = HashMap::new();
+        args.insert("rows".to_string(), json!([["ok", {"bad": true}]]));
+
+        let error =
+            required_string_matrix(&args, "rows").expect_err("nested object cell must be rejected");
+
+        assert!(error.to_string().contains("rows[0][1]"));
     }
 }

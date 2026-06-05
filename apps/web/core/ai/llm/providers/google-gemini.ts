@@ -6,7 +6,7 @@
 
 import { logger } from '@shared/lib/logger';
 import { getAuthToken } from '@shared/lib/get-auth-token';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 // All API calls use Netlify proxy functions for security
 // Proxy endpoints: /.netlify/functions/llm-proxies/google-proxy
@@ -87,7 +87,7 @@ export class GoogleProvider {
 
   constructor(config?: Partial<GoogleConfig>) {
     this.config = {
-      model: (getProviderDefaultModel('google') ?? 'gemini-3.5-flash') as GoogleModel,
+      model: requireProviderDefaultModel('google') as GoogleModel,
       maxTokens: 4096,
       temperature: 0.7,
       systemPrompt: 'You are a helpful AI assistant.',

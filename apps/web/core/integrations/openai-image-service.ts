@@ -1,5 +1,5 @@
 /**
- * OpenAI GPT Image Generation Service
+ * OpenAI image generation service
  * Implements real image generation using OpenAI's current image API through secure proxy
  *
  * SECURITY: All API calls are routed through Netlify proxy functions
@@ -8,6 +8,11 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
+
+const IMAGE_GENERATION_MODEL_ID = getRoutingSlotModel('image_generation');
+const OPENAI_IMAGE_API_MODEL_ID =
+  getModelMetadataById(IMAGE_GENERATION_MODEL_ID)?.apiModelId ?? IMAGE_GENERATION_MODEL_ID;
 
 export interface OpenAIImageGenerationRequest {
   prompt: string;
@@ -23,7 +28,7 @@ export interface OpenAIImageGenerationRequest {
   quality?: 'standard' | 'hd';
   style?: 'vivid' | 'natural';
   n?: number;
-  model?: 'gpt-image-2';
+  model?: string;
 }
 
 export interface OpenAIImageGenerationResponse {
@@ -48,7 +53,7 @@ export interface ImageGenerationResult {
 }
 
 /**
- * GPT Image Generation Service
+ * OpenAI image generation service
  * SECURITY: Routes through Netlify proxy to keep API keys secure
  */
 export class OpenAIImageService {
@@ -76,7 +81,7 @@ export class OpenAIImageService {
       quality = 'standard',
       style = 'vivid',
       n = 1,
-      model = 'gpt-image-2',
+      model = OPENAI_IMAGE_API_MODEL_ID,
     } = request;
     const apiSize = normalizeImageSize(size);
     const apiQuality = quality === 'hd' ? 'high' : 'medium';

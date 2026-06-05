@@ -47,6 +47,12 @@ pub enum ToolEvent {
         display_name: String,
         display_args: String,
         iteration: usize,
+        execution_source: String,
+        safety_tier: String,
+        requires_confirmation: bool,
+        timeout_secs: u64,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        model_capability: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         parallel_group: Option<String>,
     },

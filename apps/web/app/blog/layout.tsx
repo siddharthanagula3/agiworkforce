@@ -6,7 +6,7 @@ export const metadata: Metadata = {
     'News, tutorials, and updates from the AGI team. Learn about AI automation, desktop agents, and the latest features.',
   keywords: ['AI blog', 'AI automation news', 'AGI updates', 'AI agent tutorials', 'desktop AI'],
   openGraph: {
-    title: 'Blog | AGI',
+    title: 'Blog',
     description:
       'News, tutorials, and updates from the AGI team. AI automation insights and feature announcements.',
     type: 'website',
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Blog | AGI',
+    title: 'Blog',
     description: 'News, tutorials, and updates about AI automation from the AGI team.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',

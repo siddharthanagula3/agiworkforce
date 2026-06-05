@@ -71,7 +71,7 @@ export function McpSkillsTab({ isBusy, onOpenConnectors }: McpSkillsTabProps) {
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
           <div>
-            <h3 className="text-lg font-semibold">Customize your workforce</h3>
+            <h3 className="text-lg font-semibold">Configure your workforce</h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Manage the skills, tools, research defaults, and integrations your agents can use.
             </p>

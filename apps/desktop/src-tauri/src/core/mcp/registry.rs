@@ -178,9 +178,12 @@ impl McpToolRegistry {
             .collect()
     }
 
+    pub fn tool_id_for(&self, server_name: &str, tool_name: &str) -> String {
+        create_safe_tool_id(server_name, tool_name)
+    }
+
     pub fn mcp_tool_to_schema(&self, server_name: &str, mcp_tool: &McpTool) -> Tool {
-        // HIGH-004 fix: Use helper for safe tool ID creation
-        let tool_id = create_safe_tool_id(server_name, &mcp_tool.name);
+        let tool_id = self.tool_id_for(server_name, &mcp_tool.name);
 
         let parameters = self.extract_parameters(&mcp_tool.input_schema);
 
@@ -469,8 +472,7 @@ impl McpToolRegistry {
             .filter(|s| !s.trim().is_empty())
             .unwrap_or("(no description)");
         crate::core::llm::ToolDefinition {
-            // HIGH-004 fix: Use helper for safe tool ID creation
-            name: create_safe_tool_id(server_name, &mcp_tool.name),
+            name: self.tool_id_for(server_name, &mcp_tool.name),
             description: sanitize_mcp_description(raw_desc, server_name),
             parameters: mcp_tool.input_schema.clone(),
             strict: None,
@@ -494,8 +496,7 @@ impl McpToolRegistry {
         serde_json::json!({
             "type": "function",
             "function": {
-                // HIGH-004 fix: Use helper for safe tool ID creation
-                "name": create_safe_tool_id(server_name, &mcp_tool.name),
+                "name": self.tool_id_for(server_name, &mcp_tool.name),
                 "description": sanitize_mcp_description(raw_desc, server_name),
                 "parameters": mcp_tool.input_schema
             }

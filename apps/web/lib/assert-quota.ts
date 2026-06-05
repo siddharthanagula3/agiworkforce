@@ -109,13 +109,10 @@ export interface ReconcileUsageOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Internal: the workhorse model to fall back to when pctUsed >= downgradeAt.
+// Internal: the workhorse slot model to fall back to when pctUsed >= downgradeAt.
 // Source: auto-routing-spec.md §2 Pool B workhorse slot.
-// Model IDs are read from SLOT_REGISTRY at runtime in production code, but
-// for the quota helper the constant lives here to avoid a circular dep on
-// resolveAutoModeModel. Update this if Pool B workhorse changes.
 // ---------------------------------------------------------------------------
-const DOWNGRADE_MODEL_OVERRIDE = 'gemini-3.1-flash-lite';
+const DOWNGRADE_MODEL_OVERRIDE = getRoutingSlotModel('workhorse_general');
 
 // ---------------------------------------------------------------------------
 // Flagship → non-flagship downgrade map (Pro+ daily-cap enforcement).

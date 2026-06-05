@@ -49,7 +49,8 @@ impl ToolExecutor {
                     // If response body is HTML, extract readable text instead of
                     // returning raw HTML that would be useless to the LLM
                     let raw_body = &response.body;
-                    let (processed_body, was_html) = process_response_body(raw_body, 15000);
+                    let (processed_body, was_html, truncated) =
+                        process_response_body(raw_body, 15000);
                     let title = if was_html {
                         extract_title(raw_body)
                     } else {
@@ -62,6 +63,7 @@ impl ToolExecutor {
                         "url": url,
                         "method": method.to_uppercase(),
                         "body": processed_body,
+                        "truncated": truncated,
                         "success": response.success,
                     });
 

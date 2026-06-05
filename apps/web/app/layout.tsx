@@ -37,6 +37,29 @@ const jetbrainsMono = JetBrains_Mono({
 
 const APP_URL = process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
+function serializeJsonLd(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+const clerkLocalization = {
+  signIn: {
+    start: {
+      title: 'Sign in to AGI',
+      titleCombined: 'Sign in or create an AGI account',
+      subtitle: 'Welcome back. Continue to your AGI workspace.',
+      subtitleCombined: 'Use your AGI account to continue.',
+    },
+  },
+  signUp: {
+    start: {
+      title: 'Create your AGI account',
+      titleCombined: 'Create or sign in to AGI',
+      subtitle: 'Start with the hosted web trial, then move serious work to Local or BYOK.',
+      subtitleCombined: 'Use your AGI account to continue.',
+    },
+  },
+};
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -161,31 +184,22 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* Organization Schema */}
-        <script
-          nonce={nonce}
-          suppressHydrationWarning
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationSchema) }}
-        />
+        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
+          {serializeJsonLd(organizationSchema)}
+        </script>
         {/* SoftwareApplication Schema */}
-        <script
-          nonce={nonce}
-          suppressHydrationWarning
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareAppSchema) }}
-        />
+        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
+          {serializeJsonLd(softwareAppSchema)}
+        </script>
         {/* WebSite Schema */}
-        <script
-          nonce={nonce}
-          suppressHydrationWarning
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteSchema) }}
-        />
+        <script nonce={nonce} suppressHydrationWarning type="application/ld+json">
+          {serializeJsonLd(webSiteSchema)}
+        </script>
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
-        <ClerkProvider>
+        <ClerkProvider localization={clerkLocalization}>
           <SkipLinks />
           <Providers nonce={nonce}>{children}</Providers>
           {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}

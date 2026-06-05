@@ -53,15 +53,18 @@
     "nav": {
       "projects": "Projects",
       "artifacts": "Artifacts",
-      "customize": "Customize",
+      "customize": "Settings",
       "scheduled": "Scheduled",
       "liveArtifacts": "Live artifacts",
       "dispatch": "Dispatch",
       "routines": "Routines"
     },
-    "account": "Account"
+    "account": "Account",
+    "signIn": "Sign in",
+    "signInSub": "Cloud sync"
   },
   "emptyChat": {
+    "neutralHeadline": "What can I help with?",
     "greetMorning": "Good morning, {{name}}",
     "greetDay": "What can I help with, {{name}}?",
     "greetNight": "It's late-night, {{name}}",
@@ -210,8 +213,8 @@
     "accountFallback": "Account"
   },
   "customize": {
-    "title": "Customize",
-    "subtitle": "Skills, connectors, and plugins extend what AGI can do.",
+    "title": "Settings",
+    "subtitle": "Enable web-capable tools, provider connectors, and local plugins without changing your storage mode.",
     "tabs": {
       "skills": "Skills",
       "connectors": "Connectors",
@@ -224,7 +227,7 @@
     "noneFound": "No skills found.",
     "addSkill": "Add skill",
     "noneInstalled": "No skills installed yet.",
-    "breadcrumb": "Customize / Skills / {{name}}",
+    "breadcrumb": "Settings / Skills / {{name}}",
     "allowedTools": "Allowed tools",
     "requirements": "Requirements",
     "binaries": "Binaries:",

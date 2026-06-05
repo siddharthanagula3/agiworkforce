@@ -110,7 +110,7 @@ function OverrideDot({ show }: OverrideDotProps) {
 
 function chipClass(active?: boolean) {
   return cn(
-    'relative inline-flex items-center gap-1 rounded-full px-2.5 py-1',
+    'relative inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-1',
     'text-[11px] font-medium transition-colors duration-150 select-none',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
     active
@@ -143,7 +143,7 @@ function ModeChip({ conversationId, projectId }: ModeChipProps) {
           className={chipClass()}
         >
           <OverrideDot show={isOverride} />
-          <span>{AGENT_MODE_LABEL[state.mode]}</span>
+          <span className="max-w-[8.5rem] truncate">{AGENT_MODE_LABEL[state.mode]}</span>
           <ChevronDown size={10} className="opacity-60 shrink-0" />
         </button>
       </Popover.Trigger>
@@ -242,7 +242,7 @@ function EffortChip({ conversationId, projectId }: EffortChipProps) {
           className={chipClass()}
         >
           <OverrideDot show={isOverride} />
-          <span>Effort: {EFFORT_LABEL[state.effort]}</span>
+          <span className="max-w-[8rem] truncate">Effort: {EFFORT_LABEL[state.effort]}</span>
           <ChevronDown size={10} className="opacity-60 shrink-0" />
         </button>
       </Popover.Trigger>
@@ -383,7 +383,7 @@ export function AgentControl({
 
   return (
     <div
-      className={cn('flex items-center gap-1', className)}
+      className={cn('flex items-center gap-1 overflow-hidden', className)}
       role="group"
       aria-label="Agent controls"
     >

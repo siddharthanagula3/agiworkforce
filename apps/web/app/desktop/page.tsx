@@ -18,7 +18,7 @@ const SPECS: { k: string; v: string }[] = [
   { k: 'Computer use', v: 'Browser · files · terminal · screen' },
   { k: 'MCP plugins', v: 'stdio · SSE · streamable HTTP' },
   { k: 'Skills', v: 'Markdown + frontmatter, layered precedence' },
-  { k: 'Code signing', v: 'Apple Developer ID D2PR62RLT4' },
+  { k: 'Release signing', v: 'Apple Developer ID route prepared for public installers' },
   { k: 'Launch', v: LAUNCH.date },
 ];
 
@@ -66,20 +66,21 @@ export default function DesktopPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">macOS</h3>
               <p className="agi-reason-p">
-                Universal DMG for Apple Silicon and Intel, signed with Apple Developer ID
-                D2PR62RLT4.
+                Universal DMG route for Apple Silicon and Intel. The signed public installer link
+                appears here when release assets are published.
               </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Download →
+                Check availability →
               </Link>
             </li>
             <li className="agi-reason">
               <h3 className="agi-reason-h">Linux</h3>
               <p className="agi-reason-p">
-                AppImage for modern Linux distributions. Drop it anywhere on your path and run.
+                AppImage/package route for modern Linux distributions. The public installer opens
+                when the release asset is published.
               </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>
-                Download →
+                Check availability →
               </Link>
             </li>
             <li className="agi-reason">

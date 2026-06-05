@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     'AI automation guide',
   ],
   openGraph: {
-    title: 'Help Center | AGI',
+    title: 'Help Center',
     description:
       'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
     type: 'website',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Help Center | AGI',
+    title: 'Help Center',
     description:
       'Find answers fast. Guides, troubleshooting articles, and community support for AGI.',
     images: ['/app-preview.png'],

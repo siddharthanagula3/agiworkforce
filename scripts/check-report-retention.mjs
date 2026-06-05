@@ -10,17 +10,7 @@ const reportRoots = [
   {
     path: 'reports',
     purpose: 'product, parity, screenshot, and generated evidence reports',
-    // Named canonical control documents that intentionally live at the reports/
-    // root (referenced by the recon→goal mission and the goal-loop verifier).
-    // They are tracked artifacts, not scratch dumps, so each must still carry
-    // ownership/status metadata (enforced below).
-    allowedRootFiles: [
-      'README.md',
-      'BLOCKERS.md',
-      'DEFINITION_OF_DONE.md',
-      'ARCHITECTURE.md',
-      'LAUNCH_ESTIMATE.md',
-    ],
+    allowedRootFiles: ['README.md'],
   },
   {
     path: 'audit/reports',

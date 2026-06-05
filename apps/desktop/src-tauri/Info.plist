@@ -10,9 +10,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.agiworkforce.desktop</string>
     <key>CFBundleName</key>
-    <string>AGI Workforce</string>
+    <string>AGI</string>
     <key>CFBundleDisplayName</key>
-    <string>AGI Workforce</string>
+    <string>AGI</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -45,7 +45,7 @@
     <array>
         <dict>
             <key>CFBundleURLName</key>
-            <string>AGI Workforce</string>
+            <string>AGI</string>
             <key>CFBundleURLSchemes</key>
             <array>
                 <string>agiworkforce</string>
@@ -55,28 +55,28 @@
 
     <!-- Privacy Usage Descriptions - Required for macOS permissions -->
     <key>NSCameraUsageDescription</key>
-    <string>AGI Workforce uses your camera to capture visual content for AI-powered automation tasks. You can disable this in Privacy settings.</string>
+    <string>AGI uses your camera to capture visual content for AI-powered automation tasks. You can disable this in Privacy settings.</string>
 
     <key>NSMicrophoneUsageDescription</key>
-    <string>AGI Workforce uses your microphone to accept voice commands and transcribe speech for hands-free automation. You can disable this in Privacy settings.</string>
+    <string>AGI uses your microphone to accept voice commands and transcribe speech for hands-free automation. You can disable this in Privacy settings.</string>
 
     <key>NSAccessibilityUsageDescription</key>
-    <string>AGI Workforce requires accessibility access to automate tasks by interacting with applications, reading screen content, and controlling UI elements on your behalf.</string>
+    <string>AGI requires accessibility access to automate tasks by interacting with applications, reading screen content, and controlling UI elements on your behalf.</string>
 
     <key>NSAppleEventsUsageDescription</key>
-    <string>AGI Workforce uses Apple Events to automate other applications and complete tasks across your Mac.</string>
+    <string>AGI uses Apple Events to automate other applications and complete tasks across your Mac.</string>
 
     <key>NSDesktopFolderUsageDescription</key>
-    <string>AGI Workforce may access your Desktop folder to organize files and complete automation tasks you request.</string>
+    <string>AGI may access your Desktop folder to organize files and complete automation tasks you request.</string>
 
     <key>NSDocumentsFolderUsageDescription</key>
-    <string>AGI Workforce may access your Documents folder to read, create, or modify files as part of automation tasks you request.</string>
+    <string>AGI may access your Documents folder to read, create, or modify files as part of automation tasks you request.</string>
 
     <key>NSDownloadsFolderUsageDescription</key>
-    <string>AGI Workforce may access your Downloads folder to process downloaded files or save exported data.</string>
+    <string>AGI may access your Downloads folder to process downloaded files or save exported data.</string>
 
     <key>NSScreenCaptureUsageDescription</key>
-    <string>AGI Workforce captures screen content to understand what you're working on and provide intelligent automation assistance.</string>
+    <string>AGI captures screen content to understand what you're working on and provide intelligent automation assistance.</string>
 
     <!-- ATS: allow plaintext HTTP only to loopback addresses (Ollama, LM Studio, local servers) -->
     <key>NSAppTransportSecurity</key>

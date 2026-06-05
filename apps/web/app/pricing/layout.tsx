@@ -1,9 +1,9 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Pricing Plans | AGI',
+  title: 'Pricing Plans',
   description:
-    'AGI pricing: local and BYOK are the MVP paths. Managed cloud remains waitlisted until metering, abuse controls, and provider terms are proven.',
+    'AGI pricing: local and BYOK stay free, web trial includes a small Auto Economy cap, and higher hosted cloud capacity opens through account-bound request access.',
   keywords: [
     'AI pricing',
     'AI agent plans',
@@ -13,9 +13,9 @@ export const metadata: Metadata = {
     'AI subscription',
   ],
   openGraph: {
-    title: 'Pricing Plans | AGI',
+    title: 'Pricing Plans',
     description:
-      'Local and BYOK first. Managed cloud stays waitlisted while production controls are proven.',
+      'Local and BYOK first, a capped hosted web trial, and request access for higher AGI Cloud capacity.',
     type: 'website',
     url: 'https://agiworkforce.com/pricing',
     images: [
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Pricing Plans | AGI',
+    title: 'Pricing Plans',
     description:
-      'Local and BYOK first. Managed cloud stays waitlisted while production controls are proven.',
+      'Local and BYOK first, a capped hosted web trial, and request access for higher AGI Cloud capacity.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',
   },

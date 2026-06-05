@@ -5,7 +5,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { AgiChatDemo } from '../../components/agi/AgiChatDemo';
 
 export const metadata: Metadata = {
-  title: 'Providers — Twelve brains, one thread | AGI',
+  title: 'Providers — Twelve brains, one thread',
   description:
     'Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LM Studio, plus any OpenAI-compatible BYO endpoint. Switch mid-conversation with token-level handoff.',
   alternates: { canonical: 'https://agiworkforce.com/providers' },

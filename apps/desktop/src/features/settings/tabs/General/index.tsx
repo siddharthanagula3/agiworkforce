@@ -140,17 +140,19 @@ function AppModeSection() {
 }
 
 function RestartOnboardingSection() {
+  const restartOnboarding = () => {
+    useSimpleModeStore.setState({ onboardingCompleted: false });
+    useAppModeStore.getState().setHasSelectedMode(false);
+    useAppModeStore.getState().setMode('local');
+  };
+
   return (
     <div>
       <h3 className="text-lg font-semibold mb-1">Onboarding</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Re-run the first-run setup wizard to reconfigure API keys, model selection, and tour.
+        Re-run the first-run setup to choose Local Mode, BYOK, or Cloud Mode.
       </p>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => useSimpleModeStore.setState({ onboardingCompleted: false })}
-      >
+      <Button variant="outline" size="sm" onClick={restartOnboarding}>
         Restart Onboarding Wizard
       </Button>
     </div>

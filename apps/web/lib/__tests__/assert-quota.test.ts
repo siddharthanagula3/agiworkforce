@@ -135,6 +135,7 @@ vi.mock('@agiworkforce/types', () => {
   // flagship-downgrade path uses. Returning synthetic strings for any other
   // slot is fine because assertQuota only resolves these specific identifiers.
   const SLOT_MODELS: Record<string, string> = {
+    workhorse_general: 'gemini-3.1-flash-lite',
     coding_premium_pro: 'claude-sonnet-4.6',
     general_balanced_pro: 'gpt-5.4-mini',
   };

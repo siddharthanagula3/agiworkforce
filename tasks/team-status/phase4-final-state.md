@@ -62,7 +62,7 @@ What Phase 4 verified: **`node:async_hooks` is no longer pulled by Metro** (conf
 
 ### Web build (`pnpm --filter @agiworkforce/web build`)
 
-Status: **failed at pre-existing baseline TS2740 error** in `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:118` (DOM FormData vs Node FormData type mismatch). This is NOT a Phase 4 regression — it pre-exists in base branch (line 1 of `tasks/team-status/phase4-baseline-web-errors.txt`).
+Status: **failed at pre-existing baseline TS2740 error** in `apps/web/app/api/llm/v1/audio/transcriptions/route.ts:118` (DOM FormData vs Node FormData type mismatch). This is NOT a Phase 4 regression — it pre-exists in base branch (line 1 of archived `docs/archive/2026-06-05-doc-reset/tasks/team-status/phase4-baseline-web-errors.txt`).
 
 What Phase 4 verified: the Vite-built desktop SPA + Vite copy step succeed; Next.js compilation succeeds (`Compiled successfully in 8.9s`); only the TypeScript step fails at a pre-existing line.
 

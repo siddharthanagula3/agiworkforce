@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Sign In | AGI',
+  title: 'Sign In',
   description: 'Sign in to your AGI account to access your AI assistant and manage billing.',
   robots: {
     index: false, // Don't index login page

@@ -14,7 +14,7 @@
 /CONTRIBUTING.md @siddhartha
 /docs/agent-context/ @siddhartha
 /docs/engineering/ @siddhartha
-/audit/repo-organization/ @siddhartha
+/audit/ @siddhartha
 /scripts/check-*.mjs @siddhartha
 
 # Product surfaces.

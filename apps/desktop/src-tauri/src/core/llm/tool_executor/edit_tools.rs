@@ -6,6 +6,15 @@ const MULTI_EDIT_MAX_EDITS: usize = 50;
 /// Maximum file size for edit operations (10 MB).
 const EDIT_MAX_FILE_BYTES: u64 = 10 * 1024 * 1024;
 
+struct ValidatedEdit {
+    path: String,
+    old_text: String,
+    new_text: String,
+    replace_all: bool,
+    expected_replacements: Option<usize>,
+    expected_sha256: String,
+}
+
 impl ToolExecutor {
     /// Execute the `multi_edit` tool: atomic batch find-and-replace across one or more files.
     ///
@@ -53,7 +62,7 @@ impl ToolExecutor {
         }
 
         // Phase 1: Parse and validate all edit entries
-        let mut validated: Vec<(String, String, String)> = Vec::with_capacity(edits.len());
+        let mut validated: Vec<ValidatedEdit> = Vec::with_capacity(edits.len());
         for (i, edit) in edits.iter().enumerate() {
             let raw_path = match edit.get("path").and_then(|v| v.as_str()) {
                 Some(p) => p,
@@ -83,6 +92,75 @@ impl ToolExecutor {
                 Some(t) => t,
                 None => {
                     let msg = format!("Edit #{} missing 'new_text'", i);
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": &msg, "success": false }),
+                        error: Some(msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            };
+
+            if old_text.is_empty() {
+                let msg = format!("Edit #{}: old_text cannot be empty", i);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+
+            if old_text == new_text {
+                let msg = format!(
+                    "Edit #{}: no changes to make because old_text and new_text are identical",
+                    i
+                );
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": &msg, "success": false }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+
+            let replace_all = edit
+                .get("replace_all")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let expected_replacements = edit
+                .get("expected_replacements")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as usize);
+            let expected_sha256 = match edit.get(file_tools::EXPECTED_SHA256_PARAM) {
+                Some(value) => match value.as_str() {
+                    Some(raw) => match Self::validate_expected_sha256(raw) {
+                        Ok(hash) => hash,
+                        Err(error) => {
+                            let msg = format!("Edit #{}: {}", i, error);
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": &msg, "success": false }),
+                                error: Some(msg),
+                                metadata: HashMap::new(),
+                            });
+                        }
+                    },
+                    None => {
+                        let msg = format!("Edit #{}: expected_sha256 must be a string", i);
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": &msg, "success": false }),
+                            error: Some(msg),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                },
+                None => {
+                    let msg = format!(
+                        "Edit #{}: expected_sha256 is required. Read the file first and pass file_version.sha256.",
+                        i
+                    );
                     return Ok(ToolResult {
                         success: false,
                         data: json!({ "error": &msg, "success": false }),
@@ -125,11 +203,14 @@ impl ToolExecutor {
                         }
                         _ => {}
                     }
-                    validated.push((
-                        canonical.to_string_lossy().to_string(),
-                        old_text.to_string(),
-                        new_text.to_string(),
-                    ));
+                    validated.push(ValidatedEdit {
+                        path: canonical.to_string_lossy().to_string(),
+                        old_text: old_text.to_string(),
+                        new_text: new_text.to_string(),
+                        replace_all,
+                        expected_replacements,
+                        expected_sha256,
+                    });
                 }
                 Err(e) => {
                     let msg = format!(
@@ -148,16 +229,30 @@ impl ToolExecutor {
 
         // Phase 2: Snapshot all unique files for rollback
         let mut snapshots: HashMap<String, String> = HashMap::new();
-        for (path, _, _) in &validated {
-            if snapshots.contains_key(path) {
+        for edit in &validated {
+            if snapshots.contains_key(&edit.path) {
                 continue;
             }
-            match fs::read_to_string(path).await {
+            match fs::read_to_string(&edit.path).await {
                 Ok(content) => {
-                    snapshots.insert(path.clone(), content);
+                    if let Err(error) = Self::validate_file_sha256_guard(
+                        Path::new(&edit.path),
+                        &edit.expected_sha256,
+                    )
+                    .await
+                    {
+                        let msg = format!("Stale-read guard failed for '{}': {}", edit.path, error);
+                        return Ok(ToolResult {
+                            success: false,
+                            data: json!({ "error": &msg, "success": false }),
+                            error: Some(msg),
+                            metadata: HashMap::new(),
+                        });
+                    }
+                    snapshots.insert(edit.path.clone(), content);
                 }
                 Err(e) => {
-                    let msg = format!("Failed to read '{}' for snapshot: {}", path, e);
+                    let msg = format!("Failed to read '{}' for snapshot: {}", edit.path, e);
                     return Ok(ToolResult {
                         success: false,
                         data: json!({ "error": &msg, "success": false }),
@@ -172,14 +267,15 @@ impl ToolExecutor {
         // Track which files have been written so we know what to roll back.
         let mut written_files: HashMap<String, bool> = HashMap::new();
         let mut applied = 0usize;
+        let mut replacements_made = 0usize;
 
-        for (i, (path, old_text, new_text)) in validated.iter().enumerate() {
-            let content = match fs::read_to_string(path).await {
+        for (i, edit) in validated.iter().enumerate() {
+            let content = match fs::read_to_string(&edit.path).await {
                 Ok(c) => c,
                 Err(e) => {
                     // Rollback all previously written files
                     Self::rollback_files(&snapshots, &written_files).await;
-                    let msg = format!("Edit #{}: failed to re-read '{}': {}", i, path, e);
+                    let msg = format!("Edit #{}: failed to re-read '{}': {}", i, edit.path, e);
                     return Ok(ToolResult {
                         success: false,
                         data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
@@ -189,23 +285,25 @@ impl ToolExecutor {
                 }
             };
 
-            if !content.contains(old_text.as_str()) {
+            let occurrence_count = content.matches(edit.old_text.as_str()).count();
+            if occurrence_count == 0 {
                 // Rollback all previously written files
                 Self::rollback_files(&snapshots, &written_files).await;
-                let preview = if old_text.len() > 60 {
-                    let truncate_at = old_text
+                let preview = if edit.old_text.len() > 60 {
+                    let truncate_at = edit
+                        .old_text
                         .char_indices()
                         .map(|(i, _)| i)
                         .take_while(|&i| i <= 57)
                         .last()
                         .unwrap_or(0);
-                    format!("{}...", &old_text[..truncate_at])
+                    format!("{}...", &edit.old_text[..truncate_at])
                 } else {
-                    old_text.clone()
+                    edit.old_text.clone()
                 };
                 let msg = format!(
                     "Edit #{}: old_text not found in '{}': '{}'",
-                    i, path, preview
+                    i, edit.path, preview
                 );
                 return Ok(ToolResult {
                     success: false,
@@ -215,11 +313,58 @@ impl ToolExecutor {
                 });
             }
 
-            let updated = content.replacen(old_text.as_str(), new_text.as_str(), 1);
-            if let Err(e) = fs::write(path, &updated).await {
+            if let Some(expected) = edit.expected_replacements {
+                if occurrence_count != expected {
+                    Self::rollback_files(&snapshots, &written_files).await;
+                    let msg = format!(
+                        "Edit #{}: expected {} replacement(s) in '{}' but found {}",
+                        i, expected, edit.path, occurrence_count
+                    );
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
+                        error: Some(msg),
+                        metadata: HashMap::new(),
+                    });
+                }
+            }
+
+            if occurrence_count > 1 && !edit.replace_all {
+                Self::rollback_files(&snapshots, &written_files).await;
+                let line_numbers = find_occurrence_line_numbers(&content, &edit.old_text);
+                let lines_str = line_numbers
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let msg = format!(
+                    "Edit #{}: found {} occurrences of old_text in '{}' at lines {}. Set replace_all=true or provide more context.",
+                    i, occurrence_count, edit.path, lines_str
+                );
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "error": &msg,
+                        "success": false,
+                        "rolled_back": applied,
+                        "occurrences": occurrence_count,
+                        "line_numbers": line_numbers
+                    }),
+                    error: Some(msg),
+                    metadata: HashMap::new(),
+                });
+            }
+
+            let updated = if edit.replace_all {
+                content.replace(edit.old_text.as_str(), edit.new_text.as_str())
+            } else {
+                content.replacen(edit.old_text.as_str(), edit.new_text.as_str(), 1)
+            };
+
+            if let Err(e) = fs::write(&edit.path, &updated).await {
                 // Rollback all previously written files
                 Self::rollback_files(&snapshots, &written_files).await;
-                let msg = format!("Edit #{}: failed to write '{}': {}", i, path, e);
+                let msg = format!("Edit #{}: failed to write '{}': {}", i, edit.path, e);
                 return Ok(ToolResult {
                     success: false,
                     data: json!({ "error": &msg, "success": false, "rolled_back": applied }),
@@ -228,8 +373,13 @@ impl ToolExecutor {
                 });
             }
 
-            written_files.insert(path.clone(), true);
+            written_files.insert(edit.path.clone(), true);
             applied += 1;
+            replacements_made += if edit.replace_all {
+                occurrence_count
+            } else {
+                1
+            };
         }
 
         // Collect unique paths for metadata
@@ -240,20 +390,23 @@ impl ToolExecutor {
             data: json!({
                 "success": true,
                 "applied": applied,
+                "replacements_made": replacements_made,
                 "files": affected_files,
                 "message": format!("Successfully applied {} edit(s) across {} file(s)", applied, affected_files.len())
             }),
             error: None,
-            metadata: HashMap::from([("applied".to_string(), json!(applied))]),
+            metadata: HashMap::from([
+                ("applied".to_string(), json!(applied)),
+                ("replacements_made".to_string(), json!(replacements_made)),
+            ]),
         })
     }
 
     /// Execute the `apply_patch` tool: apply a unified diff patch to a single file.
     ///
     /// Accepts a `path` and a `patch` string in unified diff format (`@@ -a,b +c,d @@`
-    /// with context/removal/addition lines). Applies hunks sequentially, backing up the
-    /// original file content. Partial application is allowed: if some hunks succeed and
-    /// others fail, the successfully-applied hunks are kept and a summary is returned.
+    /// with context/removal/addition lines). All hunks must apply cleanly before the file
+    /// is written; if any hunk fails, no changes are written.
     pub(crate) async fn execute_apply_patch_tool(
         &self,
         args: &HashMap<String, Value>,
@@ -297,6 +450,38 @@ impl ToolExecutor {
         };
         let path_string = validated_path.to_string_lossy().to_string();
 
+        let file_exists = fs::metadata(&validated_path).await.is_ok();
+        if file_exists {
+            let expected_sha256 = match Self::parse_required_expected_sha256(args) {
+                Ok(expected_sha256) => expected_sha256,
+                Err(error) => {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": error.clone(), "success": false, "path": &path_string }),
+                        error: Some(error),
+                        metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+                    });
+                }
+            };
+            if let Err(error) =
+                Self::validate_file_sha256_guard(&validated_path, &expected_sha256).await
+            {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false, "path": &path_string }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+                });
+            }
+        } else if let Err(error) = Self::parse_expected_sha256(args) {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": error.clone(), "success": false, "path": &path_string }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+            });
+        }
+
         // Read original content (empty string for new files)
         let original = fs::read_to_string(&validated_path)
             .await
@@ -325,7 +510,7 @@ impl ToolExecutor {
             });
         }
 
-        // Apply hunks sequentially
+        // Apply hunks to an in-memory copy first. Do not write partial patches.
         let mut content = original.clone();
         let mut applied = 0usize;
         let mut failed = 0usize;
@@ -344,15 +529,24 @@ impl ToolExecutor {
             }
         }
 
-        if failed > 0 && applied == 0 {
+        if failed > 0 {
             let msg = format!(
-                "All {} hunk(s) failed to apply: {}",
+                "Patch rejected: {} of {} hunk(s) failed; no changes were written. Failures: {}",
                 failed,
+                applied + failed,
                 errors.join("; ")
             );
             return Ok(ToolResult {
                 success: false,
-                data: json!({ "error": &msg, "success": false, "failed": failed }),
+                data: json!({
+                    "error": &msg,
+                    "success": false,
+                    "applied": applied,
+                    "failed": failed,
+                    "total_hunks": applied + failed,
+                    "path": &path_string,
+                    "written": false
+                }),
                 error: Some(msg),
                 metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
             });
@@ -369,16 +563,7 @@ impl ToolExecutor {
             });
         }
 
-        let message = if failed > 0 {
-            format!(
-                "Partially applied: {}/{} hunks succeeded. Failures: {}",
-                applied,
-                applied + failed,
-                errors.join("; ")
-            )
-        } else {
-            format!("Successfully applied all {} hunk(s)", applied)
-        };
+        let message = format!("Successfully applied all {} hunk(s)", applied);
 
         Ok(ToolResult {
             success: true,
@@ -451,6 +636,26 @@ impl ToolExecutor {
             }
         };
 
+        if old_text.is_empty() {
+            let msg = "old_text cannot be empty".to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": &msg, "success": false }),
+                error: Some(msg),
+                metadata: HashMap::new(),
+            });
+        }
+
+        if old_text == new_text {
+            let msg = "No changes to make: old_text and new_text are identical".to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": &msg, "success": false }),
+                error: Some(msg),
+                metadata: HashMap::new(),
+            });
+        }
+
         let replace_all = args
             .get("replace_all")
             .and_then(|v| v.as_bool())
@@ -500,6 +705,36 @@ impl ToolExecutor {
             _ => {}
         }
 
+        let expected_sha256 = match Self::parse_required_expected_sha256(args) {
+            Ok(expected_sha256) => expected_sha256,
+            Err(error) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "error": error.clone(),
+                        "success": false,
+                        "path": &path_string,
+                    }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+                });
+            }
+        };
+        if let Err(error) =
+            Self::validate_file_sha256_guard(&validated_path, &expected_sha256).await
+        {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": error.clone(),
+                    "success": false,
+                    "path": &path_string,
+                }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&path_string))]),
+            });
+        }
+
         // Read file content
         let content = match fs::read_to_string(&validated_path).await {
             Ok(c) => c,
@@ -532,14 +767,7 @@ impl ToolExecutor {
 
         if occurrence_count > 1 && !replace_all {
             // Find line numbers of each occurrence
-            let mut line_numbers: Vec<usize> = Vec::new();
-            let mut search_start = 0usize;
-            while let Some(pos) = content[search_start..].find(&old_text) {
-                let absolute_pos = search_start + pos;
-                let line_number = content[..absolute_pos].lines().count() + 1;
-                line_numbers.push(line_number);
-                search_start = absolute_pos + old_text.len();
-            }
+            let line_numbers = find_occurrence_line_numbers(&content, &old_text);
 
             let lines_str = line_numbers
                 .iter()
@@ -667,6 +895,22 @@ impl ToolExecutor {
             }
         }
     }
+}
+
+fn find_occurrence_line_numbers(content: &str, needle: &str) -> Vec<usize> {
+    if needle.is_empty() {
+        return Vec::new();
+    }
+
+    let mut line_numbers = Vec::new();
+    let mut search_start = 0usize;
+    while let Some(pos) = content[search_start..].find(needle) {
+        let absolute_pos = search_start + pos;
+        let line_number = content[..absolute_pos].lines().count() + 1;
+        line_numbers.push(line_number);
+        search_start = absolute_pos + needle.len();
+    }
+    line_numbers
 }
 
 // ── Unified Diff Parser ──────────────────────────────────────────────────────

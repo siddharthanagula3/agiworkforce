@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, Zap, Shield, Bot, CheckCircle2, Loader2 } from 'lucide-react';
+import { Bot, CheckCircle2, KeyRound, Laptop, Loader2, Shield } from 'lucide-react';
 import { AuthForm } from './AuthForm';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { Button } from '@/components/ui/Button';
@@ -12,21 +12,21 @@ interface AuthPageProps {
 
 type PageState = 'auth' | 'verifying' | 'verified' | 'error';
 
-const features = [
+const cloudSyncPoints = [
   {
     icon: Bot,
-    title: 'AI-Powered Automation',
-    description: 'Let AI agents handle repetitive tasks while you focus on what matters.',
+    title: 'Cloud workspace',
+    description: 'Chats and projects sync across AGI web, desktop, and mobile.',
   },
   {
-    icon: Zap,
-    title: 'Lightning Fast',
-    description: 'Execute workflows in seconds with our optimized automation engine.',
+    icon: Laptop,
+    title: 'Local remains available',
+    description: 'Desktop local mode keeps working with local models when you are signed out.',
   },
   {
-    icon: Shield,
-    title: 'Enterprise Security',
-    description: 'Your data stays private with local processing and encrypted storage.',
+    icon: KeyRound,
+    title: 'BYOK stays yours',
+    description: 'Provider keys remain user-controlled; AGI Cloud is a separate account mode.',
   },
 ];
 
@@ -161,7 +161,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
   if (pageState === 'verified') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-8">
+      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -171,14 +171,13 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.2 }}
-            className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-linear-to-br from-green-500 to-emerald-500 mb-6"
+            className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500"
           >
-            <CheckCircle2 className="w-12 h-12 text-white" />
+            <CheckCircle2 className="h-10 w-10 text-white" />
           </motion.div>
-          <h1 className="text-3xl font-bold text-foreground mb-4">Email Verified!</h1>
+          <h1 className="mb-4 text-3xl font-bold text-foreground">Email verified</h1>
           <p className="text-muted-foreground mb-6">
-            Your account has been verified successfully. You'll be redirected to AGI Workforce
-            shortly.
+            Your account has been verified successfully. You'll be redirected to AGI shortly.
           </p>
           <div className="flex items-center justify-center gap-2 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -191,9 +190,9 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
   if (pageState === 'verifying') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-8">
+      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
-          <Loader2 className="w-12 h-12 text-violet-500 animate-spin mx-auto mb-4" />
+          <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-foreground" />
           <p className="text-muted-foreground">Verifying your account...</p>
         </motion.div>
       </div>
@@ -202,16 +201,16 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
   if (pageState === 'error') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-8">
+      <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center max-w-md bg-card/80 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-2xl"
+          className="max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10 mb-6">
-            <span className="text-3xl">⚠️</span>
+          <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
+            <Shield className="h-7 w-7 text-destructive" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground mb-4">Something went wrong</h1>
+          <h1 className="mb-4 text-2xl font-bold text-foreground">Something went wrong</h1>
           <p className="text-muted-foreground mb-6">
             {errorMessage || 'An error occurred during authentication.'}
           </p>
@@ -221,7 +220,7 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
               setErrorMessage(null);
               window.history.replaceState(null, '', window.location.pathname);
             }}
-            className="w-full bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            className="w-full bg-foreground text-background hover:bg-foreground/90"
           >
             Try again
           </Button>
@@ -231,130 +230,90 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   }
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
-        {}
-        <div className="absolute inset-0 bg-linear-to-br from-violet-600 via-fuchsia-600 to-pink-600" />
-
-        {}
-        <div className="absolute inset-0">
-          <motion.div
-            animate={{
-              scale: [1, 1.2, 1],
-              opacity: [0.3, 0.5, 0.3],
-            }}
-            transition={{
-              duration: 8,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-            className="absolute top-20 left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"
-          />
-          <motion.div
-            animate={{
-              scale: [1.2, 1, 1.2],
-              opacity: [0.2, 0.4, 0.2],
-            }}
-            transition={{
-              duration: 10,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            }}
-            className="absolute bottom-20 right-20 w-80 h-80 bg-white/10 rounded-full blur-3xl"
-          />
-        </div>
-
-        {}
-        <div className="relative z-10 flex flex-col justify-center p-12 text-white">
-          {}
+    <div className="flex h-full min-h-full bg-background">
+      <aside className="hidden w-[42%] min-w-[360px] border-r border-border bg-muted/20 lg:flex">
+        <div className="flex w-full flex-col justify-center px-12 py-10 text-foreground">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="flex items-center gap-3 mb-12"
+            className="mb-10 flex items-center gap-3"
           >
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center">
-              <Sparkles className="w-6 h-6" />
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-foreground text-background">
+              <Bot className="h-5 w-5" />
             </div>
-            <span className="text-2xl font-bold">AGI Workforce</span>
+            <span className="text-xl font-semibold tracking-tight">AGI</span>
           </motion.div>
 
-          {}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="mb-12"
+            className="mb-10"
           >
-            <h1 className="text-4xl font-bold mb-4 leading-tight">
-              Automate your work
-              <br />
-              with AI agents
+            <h1 className="mb-4 max-w-md text-4xl font-semibold leading-tight tracking-tight">
+              Sign in to sync your AGI workspace.
             </h1>
-            <p className="text-lg text-white/80 max-w-md">
-              Transform how you work with intelligent automation. Create, deploy, and manage AI
-              agents that work for you 24/7.
+            <p className="max-w-md text-base leading-7 text-muted-foreground">
+              Cloud mode stores chats, projects, and account settings in your AGI workspace so the
+              same context follows you across surfaces.
             </p>
           </motion.div>
 
-          {}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="space-y-6"
+            className="space-y-4"
           >
-            {features.map((feature, index) => (
+            {cloudSyncPoints.map((feature, index) => (
               <motion.div
                 key={feature.title}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.5 + index * 0.1 }}
-                className="flex items-start gap-4"
+                className="flex items-start gap-3"
               >
-                <div className="w-10 h-10 rounded-lg bg-white/20 backdrop-blur-xs flex items-center justify-center shrink-0">
-                  <feature.icon className="w-5 h-5" />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
+                  <feature.icon className="h-4 w-4" />
                 </div>
                 <div>
-                  <h3 className="font-semibold mb-1">{feature.title}</h3>
-                  <p className="text-sm text-white/70">{feature.description}</p>
+                  <h3 className="mb-1 text-sm font-medium text-foreground">{feature.title}</h3>
+                  <p className="text-sm leading-6 text-muted-foreground">{feature.description}</p>
                 </div>
               </motion.div>
             ))}
           </motion.div>
 
-          {}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8 }}
-            className="mt-12 pt-8 border-t border-white/20"
+            className="mt-10 border-t border-border pt-6"
           >
-            <div className="flex items-center gap-3">
-              <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-              <span className="text-sm text-white/80">
-                Currently in beta — free to use during early access
+            <div className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
+              <Shield className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                Local and BYOK work remain available without signing in. Managed cloud features use
+                your signed-in AGI account.
               </span>
             </div>
           </motion.div>
         </div>
-      </div>
+      </aside>
 
-      {}
-      <div className="flex-1 flex items-center justify-center p-8 relative">
-        {}
-        <div className="lg:hidden absolute top-6 left-6">
+      <main className="relative flex flex-1 items-center justify-center p-8">
+        <div className="absolute left-6 top-6 lg:hidden">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-linear-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
+              <Bot className="h-4 w-4" />
             </div>
-            <span className="font-bold text-foreground">AGI Workforce</span>
+            <span className="font-bold text-foreground">AGI</span>
           </div>
         </div>
 
-        <AuthForm onSuccess={onAuthSuccess} className="w-full" />
-      </div>
+        <AuthForm onSuccess={onAuthSuccess} className="w-full max-w-md" />
+      </main>
     </div>
   );
 }

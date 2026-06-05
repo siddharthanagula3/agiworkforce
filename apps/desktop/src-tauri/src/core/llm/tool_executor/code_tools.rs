@@ -3,6 +3,21 @@ use super::*;
 /// Maximum number of results to return from code search.
 const CODE_SEARCH_MAX_RESULTS: usize = 50;
 
+fn parse_optional_usize_arg(args: &HashMap<String, Value>, key: &str) -> Result<Option<usize>> {
+    match args.get(key) {
+        Some(value) => {
+            let number = value
+                .as_u64()
+                .ok_or_else(|| anyhow!("'{key}' must be a positive integer"))?;
+            if number == 0 && key == "limit" {
+                return Err(anyhow!("'limit' must be greater than 0"));
+            }
+            Ok(Some(number as usize))
+        }
+        None => Ok(None),
+    }
+}
+
 impl ToolExecutor {
     /// Execute an AST-aware code symbol search using ripgrep with language-specific patterns.
     ///
@@ -41,6 +56,17 @@ impl ToolExecutor {
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| ".".to_string()),
         };
+        if let Err(e) = self.validate_path(&root).await {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": e.to_string(), "success": false }),
+                error: Some(e.to_string()),
+                metadata: HashMap::from([
+                    ("query".to_string(), json!(query)),
+                    ("root".to_string(), json!(&root)),
+                ]),
+            });
+        }
 
         let pattern = build_search_pattern(query, symbol_type, language);
 
@@ -155,6 +181,19 @@ impl ToolExecutor {
             .or_else(|| self.project_folder.clone());
 
         let root = raw_root.map(|r| self.resolve_path(&r));
+        if let Some(root_path) = &root {
+            if let Err(e) = self.validate_path(root_path).await {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        }
 
         let include_pattern = args
             .get("include_pattern")
@@ -173,6 +212,35 @@ impl ToolExecutor {
             .and_then(|v| v.as_u64())
             .map(|n| n as u32);
 
+        let limit = match parse_optional_usize_arg(args, "limit") {
+            Ok(value) => value,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        };
+        let offset = match parse_optional_usize_arg(args, "offset") {
+            Ok(value) => value,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        };
+
         match crate::sys::commands::code_search::grep_search(
             pattern.clone(),
             root.clone(),
@@ -180,6 +248,8 @@ impl ToolExecutor {
             case_insensitive,
             output_mode.clone(),
             context_lines,
+            limit,
+            offset,
         )
         .await
         {
@@ -192,6 +262,11 @@ impl ToolExecutor {
                         "matches": serde_json::to_value(&result.matches)
                             .unwrap_or_else(|_| json!([])),
                         "total_files_searched": result.total_files_searched,
+                        "total_matches": result.total_matches,
+                        "returned": result.returned,
+                        "limit": result.limit,
+                        "offset": result.offset,
+                        "has_more": result.truncated,
                         "truncated": result.truncated,
                     }),
                     error: None,
@@ -245,14 +320,56 @@ impl ToolExecutor {
             .or_else(|| self.project_folder.clone());
 
         let root = raw_root.map(|r| self.resolve_path(&r));
+        if let Some(root_path) = &root {
+            if let Err(e) = self.validate_path(root_path).await {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        }
 
-        let limit = args
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .map(|n| n as usize);
+        let limit = match parse_optional_usize_arg(args, "limit") {
+            Ok(value) => value,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        };
+        let offset = match parse_optional_usize_arg(args, "offset") {
+            Ok(value) => value,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([
+                        ("pattern".to_string(), json!(pattern)),
+                        ("root".to_string(), json!(root)),
+                    ]),
+                });
+            }
+        };
 
-        match crate::sys::commands::code_search::glob_search(pattern.clone(), root.clone(), limit)
-            .await
+        match crate::sys::commands::code_search::glob_search(
+            pattern.clone(),
+            root.clone(),
+            limit,
+            offset,
+        )
+        .await
         {
             Ok(result) => {
                 let match_count = result.matches.len();
@@ -262,6 +379,11 @@ impl ToolExecutor {
                         "success": true,
                         "matches": serde_json::to_value(&result.matches)
                             .unwrap_or_else(|_| json!([])),
+                        "total_matches": result.total_matches,
+                        "returned": result.returned,
+                        "limit": result.limit,
+                        "offset": result.offset,
+                        "has_more": result.truncated,
                         "truncated": result.truncated,
                     }),
                     error: None,

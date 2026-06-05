@@ -1,21 +1,18 @@
 /**
  * Onboarding Wizard — single-step mode selection flow
  *
- * One screen: Cloud Managed waitlist vs Local Mode + Local LLMs/BYOK setup
- * with inline API key paste and Ollama auto-detection. Replaces the previous
- * 6-step wizard.
+ * One screen: Local Mode, BYOK, and Cloud Mode with inline API key paste and
+ * Ollama auto-detection. Cloud is the only path that asks for AGI account auth.
  *
  * Persisted via useSimpleModeStore (onboardingCompleted flag in ui.ts).
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Cloud, HardDrive, X, CheckCircle2, ChevronRight, Key } from 'lucide-react';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { useSimpleModeStore } from '../../stores/ui';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { OllamaClient } from '../../api/ollama';
-import { openExternalUrl } from '../../utils/navigation';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -23,6 +20,8 @@ import { openExternalUrl } from '../../utils/navigation';
 
 interface OnboardingWizardProps {
   onComplete: () => void;
+  onCloudModeSelected?: () => void;
+  onByokModeSelected?: () => void;
 }
 
 interface OllamaStatus {
@@ -75,7 +74,11 @@ function detectProvider(apiKey: string): DetectedProvider | null {
 // Main OnboardingWizard
 // ---------------------------------------------------------------------------
 
-export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }) => {
+export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
+  onComplete,
+  onCloudModeSelected,
+  onByokModeSelected,
+}) => {
   const completeOnboarding = useSimpleModeStore((s) => s.completeOnboarding);
   const setMode = useAppModeStore((s) => s.setMode);
   const setHasSelectedMode = useAppModeStore((s) => s.setHasSelectedMode);
@@ -121,9 +124,12 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     onComplete();
   }, [completeOnboarding, setHasSelectedMode, onComplete]);
 
-  const handleCloudWaitlist = useCallback(() => {
-    void openExternalUrl('https://agiworkforce.com/waitlist');
-  }, []);
+  const handleCloudMode = useCallback(() => {
+    completeOnboarding();
+    setHasSelectedMode(true);
+    onComplete();
+    onCloudModeSelected?.();
+  }, [completeOnboarding, setHasSelectedMode, onComplete, onCloudModeSelected]);
 
   const handleLocal = useCallback(() => {
     setMode('local');
@@ -154,9 +160,30 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
     onComplete();
   }, [detected, saving, apiKey, setMode, completeOnboarding, setHasSelectedMode, onComplete]);
 
+  const handleByokSetup = useCallback(() => {
+    if (detected) {
+      void handleByokSubmit();
+      return;
+    }
+
+    setMode('local');
+    completeOnboarding();
+    setHasSelectedMode(true);
+    onComplete();
+    onByokModeSelected?.();
+  }, [
+    detected,
+    handleByokSubmit,
+    setMode,
+    completeOnboarding,
+    setHasSelectedMode,
+    onComplete,
+    onByokModeSelected,
+  ]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-lg mx-4 bg-background rounded-2xl shadow-2xl border border-border overflow-hidden">
+      <div className="relative mx-4 max-h-[calc(100vh-48px)] w-full max-w-4xl overflow-y-auto rounded-2xl border border-border bg-background shadow-2xl">
         {/* Dismiss button */}
         <button
           type="button"
@@ -171,76 +198,35 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
           {/* Header */}
           <div className="text-center space-y-2 mb-6">
             <div className="flex justify-center">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary to-purple-500 flex items-center justify-center shadow-lg shadow-primary/20">
-                <img
-                  src="/icon.png"
-                  alt="AGI Workforce"
-                  className="w-8 h-8"
-                  onError={(e) => {
-                    // Fallback: hide broken image and let gradient show through
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
+              <div
+                className="w-14 h-14 rounded-2xl bg-foreground text-background flex items-center justify-center shadow-lg"
+                aria-label="AGI"
+              >
+                <span className="text-sm font-semibold">AGI</span>
               </div>
             </div>
-            <h2 className="text-2xl font-bold text-foreground">
-              How do you want to use AGI Workforce?
-            </h2>
+            <h2 className="text-2xl font-bold text-foreground">How do you want to use AGI?</h2>
+            <p className="mx-auto max-w-2xl text-sm text-muted-foreground">
+              Pick the trust boundary first. You can change this later, but AGI will never move a
+              Local chat into BYOK or Cloud without an explicit handoff.
+            </p>
           </div>
 
           {/* Mode cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-            {/* Cloud Managed waitlist card */}
-            <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
-              <div className="flex items-center gap-2 w-full">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
-                  <Cloud className="w-5 h-5 text-blue-400" />
-                </div>
-                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                  Waitlist
-                </span>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  {formatChatExecutionModeLabel('cloud_managed')}
-                </p>
-                <p className="text-xs text-blue-400 font-medium">Hosted compute and sync</p>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  AGI-managed hosted compute, storage, provider routing, and credits. Opens after
-                  cost, billing, fraud, and quota controls are ready.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleCloudWaitlist}
-                className={cn(
-                  'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                  'bg-primary text-white hover:bg-primary/90',
-                )}
-              >
-                Join Cloud Managed waitlist
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Local / BYOK card */}
+          <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-3">
+            {/* Local card */}
             <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
                 <HardDrive className="w-5 h-5 text-amber-400" />
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">
-                  {formatChatExecutionModeLabel('local_only')}
-                </p>
-                <p className="text-xs text-amber-300 font-medium">
-                  or {formatChatExecutionModeLabel('byok')}
-                </p>
+                <p className="text-sm font-semibold text-foreground">Local Mode</p>
+                <p className="text-xs text-amber-300 font-medium">Stored on this device</p>
                 <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  Use Ollama or LM Studio locally. Paste your own API key to keep the desktop app
-                  local while sending model requests directly to your provider account.
+                  Use local models such as Ollama or LM Studio. Chats, files, and settings stay on
+                  your Mac unless you explicitly export or hand off.
                 </p>
               </div>
-              {/* Ollama status */}
               {ollama.checked && (
                 <div className="w-full">
                   {ollama.available ? (
@@ -263,6 +249,63 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({ onComplete }
                 )}
               >
                 Start Local Mode
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* BYOK card */}
+            <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                <Key className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">BYOK</p>
+                <p className="text-xs text-emerald-300 font-medium">Your provider key</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  Keep AGI storage local while sending selected requests directly to your OpenAI,
+                  Anthropic, Google, or compatible provider account.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleByokSetup}
+                className={cn(
+                  'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20',
+                )}
+              >
+                {detected ? `Save ${detected.name} key` : 'Configure BYOK'}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Managed cloud card */}
+            <div className="flex flex-col items-start gap-3 rounded-xl border border-white/10 p-5 bg-card">
+              <div className="flex items-center gap-2 w-full">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                  <Cloud className="w-5 h-5 text-blue-400" />
+                </div>
+                <span className="ml-auto text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 font-medium">
+                  Account
+                </span>
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-foreground">Cloud Mode</p>
+                <p className="text-xs text-blue-400 font-medium">Cloud storage and compute</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  Use AGI subscriptions, top-ups, hosted storage, and synced chats. This mode
+                  requires an AGI account before anything is stored in the cloud.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloudMode}
+                className={cn(
+                  'mt-auto w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  'bg-primary text-white hover:bg-primary/90',
+                )}
+              >
+                Continue to sign in
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>

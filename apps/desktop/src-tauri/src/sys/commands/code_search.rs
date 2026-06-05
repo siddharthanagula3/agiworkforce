@@ -44,6 +44,10 @@ pub struct GrepMatch {
 pub struct GrepSearchResult {
     pub matches: Vec<GrepMatch>,
     pub total_files_searched: usize,
+    pub total_matches: usize,
+    pub returned: usize,
+    pub limit: usize,
+    pub offset: usize,
     pub truncated: bool,
 }
 
@@ -63,6 +67,10 @@ pub struct GlobMatch {
 #[serde(rename_all = "camelCase")]
 pub struct GlobSearchResult {
     pub matches: Vec<GlobMatch>,
+    pub total_matches: usize,
+    pub returned: usize,
+    pub limit: usize,
+    pub offset: usize,
     pub truncated: bool,
 }
 
@@ -90,7 +98,9 @@ pub struct FormatResult {
 // Constants
 // ─────────────────────────────────────────────
 
-const MAX_GREP_MATCHES: usize = 500;
+const DEFAULT_GREP_LIMIT: usize = 250;
+const MAX_GREP_MATCHES: usize = 1000;
+const MAX_SEARCH_OFFSET: usize = 100_000;
 const MAX_GLOB_MATCHES: usize = 1000;
 const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10 MB — skip binary blobs
 
@@ -146,6 +156,52 @@ fn resolve_root(root_hint: Option<String>) -> PathBuf {
         .unwrap_or_else(|_| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
 }
 
+fn resolve_existing_search_root(root_hint: Option<String>) -> Result<PathBuf, String> {
+    if let Some(r) = root_hint {
+        let p = PathBuf::from(&r);
+        if !p.exists() {
+            return Err(format!("Search root does not exist: {}", p.display()));
+        }
+        if !p.is_dir() {
+            return Err(format!("Search root is not a directory: {}", p.display()));
+        }
+        return Ok(p);
+    }
+
+    if let Ok(proj) = std::env::var("AGI_PROJECT_FOLDER") {
+        let p = PathBuf::from(&proj);
+        if p.exists() && p.is_dir() {
+            return Ok(p);
+        }
+    }
+
+    std::env::current_dir()
+        .or_else(|_| {
+            dirs::home_dir().ok_or_else(|| std::io::Error::other("home directory unavailable"))
+        })
+        .map_err(|e| format!("Cannot resolve search root: {}", e))
+}
+
+fn normalize_search_window(
+    limit: Option<usize>,
+    offset: Option<usize>,
+    default_limit: usize,
+    max_limit: usize,
+) -> Result<(usize, usize), String> {
+    let limit = limit.unwrap_or(default_limit);
+    if limit == 0 {
+        return Err("Search limit must be greater than 0".to_string());
+    }
+    let offset = offset.unwrap_or(0);
+    if offset > MAX_SEARCH_OFFSET {
+        return Err(format!(
+            "Search offset too large: {} (max {})",
+            offset, MAX_SEARCH_OFFSET
+        ));
+    }
+    Ok((limit.min(max_limit), offset))
+}
+
 /// Naively detect if a file looks binary (contains NUL bytes in the first 8 KB).
 fn is_likely_binary(path: &Path) -> bool {
     use std::io::Read;
@@ -185,11 +241,15 @@ pub async fn grep_search(
     case_insensitive: Option<bool>,
     output_mode: Option<String>,
     context_lines: Option<u32>,
+    limit: Option<usize>,
+    offset: Option<usize>,
 ) -> Result<GrepSearchResult, String> {
-    let root = resolve_root(root);
+    let root = resolve_existing_search_root(root)?;
     let ci = case_insensitive.unwrap_or(false);
     let mode = output_mode.unwrap_or_else(|| "content".to_string());
     let ctx = context_lines.unwrap_or(0);
+    let (limit, offset) =
+        normalize_search_window(limit, offset, DEFAULT_GREP_LIMIT, MAX_GREP_MATCHES)?;
 
     // Validate output_mode upfront.
     if !matches!(mode.as_str(), "content" | "files_with_matches" | "count") {
@@ -214,12 +274,12 @@ pub async fn grep_search(
     };
 
     info!(
-        "[grep_search] pattern={:?} root={:?} include={:?} ci={} mode={} ctx={}",
-        pattern, root, include_pattern, ci, mode, ctx
+        "[grep_search] pattern={:?} root={:?} include={:?} ci={} mode={} ctx={} limit={} offset={}",
+        pattern, root, include_pattern, ci, mode, ctx, limit, offset
     );
 
     let result = tokio::task::spawn_blocking(move || {
-        grep_blocking(&root, &re, file_glob.as_ref(), &mode, ctx)
+        grep_blocking(&root, &re, file_glob.as_ref(), &mode, ctx, limit, offset)
     })
     .await
     .map_err(|e| format!("grep_search task panicked: {}", e))?;
@@ -233,9 +293,13 @@ fn grep_blocking(
     file_glob: Option<&Pattern>,
     output_mode: &str,
     context_lines: u32,
+    limit: usize,
+    offset: usize,
 ) -> Result<GrepSearchResult, String> {
     let mut matches = Vec::new();
     let mut total_files_searched = 0usize;
+    let mut total_matches = 0usize;
+    let mut returned = 0usize;
     let mut truncated = false;
 
     // For "count" mode we accumulate per-file counts.
@@ -298,20 +362,30 @@ fn grep_blocking(
             "files_with_matches" => {
                 // Only need to know if there is at least one match in the file.
                 if re.is_match(&content) {
-                    if seen_files.len() >= MAX_GREP_MATCHES {
+                    total_matches += 1;
+                    if total_matches <= offset {
+                        continue;
+                    }
+                    if returned >= limit {
                         truncated = true;
                         break 'outer;
                     }
+                    returned += 1;
                     seen_files.push(path_str);
                 }
             }
             "count" => {
                 let count = content.lines().filter(|line| re.is_match(line)).count();
                 if count > 0 {
-                    if file_counts.len() >= MAX_GREP_MATCHES {
+                    total_matches += 1;
+                    if total_matches <= offset {
+                        continue;
+                    }
+                    if returned >= limit {
                         truncated = true;
                         break 'outer;
                     }
+                    returned += 1;
                     file_counts.push((path_str, count));
                 }
             }
@@ -322,10 +396,15 @@ fn grep_blocking(
 
                 for (line_idx, line) in lines_vec.iter().enumerate() {
                     if let Some(m) = re.find(line) {
-                        if matches.len() >= MAX_GREP_MATCHES {
+                        total_matches += 1;
+                        if total_matches <= offset {
+                            continue;
+                        }
+                        if returned >= limit {
                             truncated = true;
                             break 'outer;
                         }
+                        returned += 1;
 
                         let context = if context_lines > 0 {
                             let ctx = context_lines as usize;
@@ -386,8 +465,12 @@ fn grep_blocking(
     }
 
     Ok(GrepSearchResult {
+        returned: matches.len(),
         matches,
         total_files_searched,
+        total_matches,
+        limit,
+        offset,
         truncated,
     })
 }
@@ -412,30 +495,35 @@ pub async fn glob_search(
     pattern: String,
     root: Option<String>,
     limit: Option<usize>,
+    offset: Option<usize>,
 ) -> Result<GlobSearchResult, String> {
-    let root = resolve_root(root);
-    let limit = limit.unwrap_or(200).min(MAX_GLOB_MATCHES);
+    let root = resolve_existing_search_root(root)?;
+    let (limit, offset) = normalize_search_window(limit, offset, 200, MAX_GLOB_MATCHES)?;
 
     // Validate glob pattern upfront.
     let _ =
         Pattern::new(&pattern).map_err(|e| format!("Invalid glob pattern '{}': {}", pattern, e))?;
 
     info!(
-        "[glob_search] pattern={:?} root={:?} limit={}",
-        pattern, root, limit
+        "[glob_search] pattern={:?} root={:?} limit={} offset={}",
+        pattern, root, limit, offset
     );
 
-    let result = tokio::task::spawn_blocking(move || glob_blocking(&root, &pattern, limit))
+    let result = tokio::task::spawn_blocking(move || glob_blocking(&root, &pattern, limit, offset))
         .await
         .map_err(|e| format!("glob_search task panicked: {}", e))?;
 
     result
 }
 
-fn glob_blocking(root: &Path, pattern: &str, limit: usize) -> Result<GlobSearchResult, String> {
+fn glob_blocking(
+    root: &Path,
+    pattern: &str,
+    limit: usize,
+    offset: usize,
+) -> Result<GlobSearchResult, String> {
     let pat = Pattern::new(pattern).map_err(|e| format!("Pattern error: {}", e))?;
     let mut matches: Vec<(GlobMatch, std::time::SystemTime)> = Vec::new();
-    let mut truncated = false;
 
     for entry in WalkDir::new(root)
         .follow_links(false)
@@ -496,13 +584,21 @@ fn glob_blocking(root: &Path, pattern: &str, limit: usize) -> Result<GlobSearchR
     // Sort by most-recently modified first.
     matches.sort_by(|a, b| b.1.cmp(&a.1));
 
-    if matches.len() > limit {
-        truncated = true;
-        matches.truncate(limit);
-    }
+    let total_matches = matches.len();
+    let end = offset.saturating_add(limit).min(total_matches);
+    let truncated = total_matches > end;
 
     Ok(GlobSearchResult {
-        matches: matches.into_iter().map(|(m, _)| m).collect(),
+        matches: matches
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(m, _)| m)
+            .collect::<Vec<_>>(),
+        total_matches,
+        returned: end.saturating_sub(offset.min(total_matches)),
+        limit,
+        offset,
         truncated,
     })
 }

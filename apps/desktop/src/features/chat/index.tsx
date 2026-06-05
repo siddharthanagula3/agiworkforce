@@ -655,7 +655,21 @@ export const UnifiedAgenticChat: React.FC<{
               panel = await executeRecallCommand(slashCommand.args);
               break;
             case 'agents':
-              panel = await executeAgentsCommand(slashCommand.args);
+              {
+                const activeConversationId = useUnifiedChatStore.getState().activeConversationId;
+                const conversationInstructions = useUnifiedChatStore
+                  .getState()
+                  .getConversationCustomInstructions(activeConversationId ?? undefined);
+                const mergedCustomInstructions = useCustomInstructionsStore
+                  .getState()
+                  .getMergedInstructions(conversationInstructions);
+                panel = await executeAgentsCommand(slashCommand.args, {
+                  conversationId: activeConversationId,
+                  messages: useChatStore.getState().messages,
+                  workingDirectory: useProjectStore.getState().currentFolder,
+                  customInstructions: mergedCustomInstructions,
+                });
+              }
               break;
             case 'git':
               panel = await executeGitCommand(slashCommand.args);
