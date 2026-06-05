@@ -281,7 +281,7 @@ CLI /agents palette command. All verification gates green.
 - Total session-local commits ahead of origin/main: 14 (R18-R20 work).
 - NOT pushed — awaiting daily 22:00-local user authorization per sprint
   push policy.
-- Full handoff state in `docs/plans/2026-05-21-suite-transformation-handoff.md`
+- Full handoff state archived at `docs/archive/2026-06-05-doc-reset/docs/plans/2026-05-21-suite-transformation-handoff.md`
   §"Round 20 — /goal-activated 3-lane sprint."
 
 ## [Unreleased — autonomous suite transformation, round 10] — 2026-05-21

@@ -24,10 +24,49 @@ pub(super) async fn execute_tool_calls_batch(
     let mut tool_failure_summaries = Vec::new();
 
     for tool_call in tool_calls {
+        let display_info = get_tool_display_info(&tool_call.name, &tool_call.arguments);
+        let tool_exec_id = format!("{}_{}", tool_call.id, uuid::Uuid::new_v4().as_simple());
+        let tool_started_at = std::time::Instant::now();
+        let exposure = tools::describe_chat_tool_exposure(&tool_call.name);
+        let timeout_secs = resolve_tool_execution_timeout_secs(&tool_call.name);
+
+        emit_tool_event(
+            app_handle,
+            &ToolEvent::Started {
+                id: tool_exec_id.clone(),
+                conversation_id,
+                message_id: frontend_message_id.to_string(),
+                tool_name: tool_call.name.clone(),
+                display_name: display_info.display_name.clone(),
+                display_args: display_info.display_args.clone(),
+                iteration,
+                execution_source: exposure.execution_source.to_string(),
+                safety_tier: exposure.safety_tier.to_string(),
+                requires_confirmation: exposure.requires_confirmation,
+                timeout_secs,
+                model_capability: exposure.model_capability.map(str::to_string),
+                parallel_group: None,
+            },
+        );
+
         if tool_call.name.starts_with("__server__") {
             info!(
                 "[Chat] Skipping server-side tool: {} (id: {})",
                 tool_call.name, tool_call.id
+            );
+            emit_tool_event(
+                app_handle,
+                &ToolEvent::Completed {
+                    id: tool_exec_id,
+                    conversation_id,
+                    message_id: frontend_message_id.to_string(),
+                    success: true,
+                    duration_ms: tool_started_at.elapsed().as_millis() as u64,
+                    result_preview: Some(
+                        "Tool executed server-side by provider; no local output.".to_string(),
+                    ),
+                    error: None,
+                },
             );
             let _ = app_handle.emit(
                 "chat:tool-result",
@@ -62,24 +101,6 @@ pub(super) async fn execute_tool_calls_batch(
                 "tool_name": tool_call.name,
                 "arguments": tool_call.arguments
             }),
-        );
-
-        let display_info = get_tool_display_info(&tool_call.name, &tool_call.arguments);
-        let tool_exec_id = format!("{}_{}", tool_call.id, uuid::Uuid::new_v4().as_simple());
-        let tool_started_at = std::time::Instant::now();
-
-        emit_tool_event(
-            app_handle,
-            &ToolEvent::Started {
-                id: tool_exec_id.clone(),
-                conversation_id,
-                message_id: frontend_message_id.to_string(),
-                tool_name: tool_call.name.clone(),
-                display_name: display_info.display_name.clone(),
-                display_args: display_info.display_args.clone(),
-                iteration,
-                parallel_group: None,
-            },
         );
 
         tracing::info!(

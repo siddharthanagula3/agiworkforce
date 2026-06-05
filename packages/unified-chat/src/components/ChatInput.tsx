@@ -31,6 +31,7 @@ export interface ChatInputProps {
   onStop: () => void;
   onPlusClick: () => void;
   onModelSelectorClick: () => void;
+  allowModelFallbackModels?: boolean;
   onVoiceClick?: () => void;
   hasMessages: boolean;
   className?: string;
@@ -57,6 +58,7 @@ export function ChatInput({
   onStop,
   onPlusClick: _onPlusClick,
   onModelSelectorClick,
+  allowModelFallbackModels = true,
   onVoiceClick: _onVoiceClick,
   hasMessages,
   className,
@@ -366,7 +368,7 @@ export function ChatInput({
         />
 
         {/* Bottom toolbar */}
-        <div className="relative flex items-center justify-between px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2">
           {/* Left: Plus button — opens attachment menu */}
           <input
             ref={fileInputRef}
@@ -382,54 +384,60 @@ export function ChatInput({
               e.target.value = '';
             }}
           />
-          <AttachmentMenu
-            open={attachmentMenuOpen}
-            onOpenChange={setAttachmentMenuOpen}
-            onAddFiles={() => fileInputRef.current?.click()}
-            webSearchEnabled={webSearchEnabled}
-            onWebSearchToggle={() => setWebSearchEnabled((v) => !v)}
-            researchEnabled={researchEnabled}
-            onResearchToggle={() => setResearchEnabled((v) => !v)}
-            activeStyle={activeStyle}
-            onStyleChange={setActiveStyle}
-            onScreenshot={(file) => setAttachedFiles((prev) => [...prev, file])}
-          >
-            <button
-              ref={plusButtonRef}
-              type="button"
-              aria-label="Add attachment"
-              aria-expanded={attachmentMenuOpen}
-              className={cn(
-                'relative flex h-8 w-8 items-center justify-center rounded-lg',
-                'text-[var(--chat-text-secondary)] transition-colors duration-150',
-                'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
-                (attachedFiles.length > 0 || attachmentMenuOpen) &&
-                  'text-[var(--chat-accent-primary)]',
-              )}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <AttachmentMenu
+              open={attachmentMenuOpen}
+              onOpenChange={setAttachmentMenuOpen}
+              onAddFiles={() => fileInputRef.current?.click()}
+              webSearchEnabled={webSearchEnabled}
+              onWebSearchToggle={() => setWebSearchEnabled((v) => !v)}
+              researchEnabled={researchEnabled}
+              onResearchToggle={() => setResearchEnabled((v) => !v)}
+              activeStyle={activeStyle}
+              onStyleChange={setActiveStyle}
+              onScreenshot={(file) => setAttachedFiles((prev) => [...prev, file])}
             >
-              <Plus size={16} />
-              {attachedFiles.length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
-                  {attachedFiles.length}
-                </span>
-              )}
-            </button>
-          </AttachmentMenu>
+              <button
+                ref={plusButtonRef}
+                type="button"
+                aria-label="Add attachment"
+                aria-expanded={attachmentMenuOpen}
+                className={cn(
+                  'relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                  'text-[var(--chat-text-secondary)] transition-colors duration-150',
+                  'hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-secondary)]',
+                  (attachedFiles.length > 0 || attachmentMenuOpen) &&
+                    'text-[var(--chat-accent-primary)]',
+                )}
+              >
+                <Plus size={16} />
+                {attachedFiles.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-[var(--chat-accent-primary)] text-[8px] font-bold text-white">
+                    {attachedFiles.length}
+                  </span>
+                )}
+              </button>
+            </AttachmentMenu>
 
-          {/* Center: Agent control chips — only when a conversation is active */}
-          {showAgentControl && conversationId && (
-            <AgentControl
-              conversationId={conversationId}
-              projectId={projectId ?? null}
-              modelProviderId={modelProviderId}
-            />
-          )}
+            {/* Agent control chips — only when a conversation is active */}
+            {showAgentControl && conversationId && (
+              <AgentControl
+                conversationId={conversationId}
+                projectId={projectId ?? null}
+                modelProviderId={modelProviderId}
+                className="min-w-0 flex-wrap"
+              />
+            )}
+          </div>
 
           {/* Right: Model selector + mic + send */}
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             {/* Inline model selector popover */}
-            <ModelSelector onSettingsClick={onModelSelectorClick} />
+            <ModelSelector
+              onSettingsClick={onModelSelectorClick}
+              allowFallbackModels={allowModelFallbackModels}
+            />
 
             {/* Mic button — ghost, hidden when streaming */}
             {!isStreaming && voiceState !== 'unsupported' && (
@@ -479,12 +487,7 @@ export function ChatInput({
             )}
           </div>
 
-          {/* Cmd/Ctrl+Enter shortcut helper — visible only when focused */}
-          {focused && !isStreaming && (
-            <span className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-[var(--chat-text-muted)] pointer-events-none select-none whitespace-nowrap">
-              {modKey}+Enter to send
-            </span>
-          )}
+          <span className="sr-only">{modKey}+Enter sends the message.</span>
         </div>
       </div>
     </div>

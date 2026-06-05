@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { ExternalLink, Loader2, Lock, MoreHorizontal, Plus } from 'lucide-react';
-import Image from 'next/image';
+import { Loader2, Lock, Plus } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
-import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
 import type { Connector } from '../data/connectors';
+import { getConnectorAvailabilityLabel, isConnectorReady } from '../data/connectors';
+import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 
 // ─── Time helper ──────────────────────────────────────────────────────────────
 
@@ -24,47 +24,6 @@ export function formatRelativeTime(isoString: string | null | undefined): string
   return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// ─── ConnectorLogo ────────────────────────────────────────────────────────────
-
-interface ConnectorLogoProps {
-  connector: Connector;
-}
-
-export const ConnectorLogo: React.FC<ConnectorLogoProps> = ({ connector }) => {
-  const logoInfo = getConnectorLogo(connector.id);
-  const [imageError, setImageError] = React.useState(false);
-
-  if (logoInfo && !imageError && hasOfficialLogo(connector.id)) {
-    return (
-      <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 shadow-lg overflow-hidden"
-        style={logoInfo.bgColor ? { backgroundColor: logoInfo.bgColor } : {}}
-      >
-        <Image
-          src={logoInfo.url}
-          alt={connector.name}
-          width={logoInfo.width || 28}
-          height={logoInfo.height || 28}
-          className="object-contain"
-          onError={() => setImageError(true)}
-          unoptimized={logoInfo.url.startsWith('http')}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-lg',
-        connector.iconBg,
-      )}
-    >
-      {connector.iconEmoji ?? connector.iconText}
-    </div>
-  );
-};
-
 // ─── ConnectorCard ────────────────────────────────────────────────────────────
 
 export interface ConnectorCardProps {
@@ -74,6 +33,7 @@ export interface ConnectorCardProps {
   connectedAt?: string | null;
   onConnect: () => void;
   onDisconnect: () => void;
+  onUpgrade: () => void;
 }
 
 export const ConnectorCard: React.FC<ConnectorCardProps> = ({
@@ -83,11 +43,11 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
   connectedAt,
   onConnect,
   onDisconnect,
+  onUpgrade,
 }) => {
-  const isComingSoon = connector.phase > 1;
-  const isOAuth = connector.authType === 'oauth';
-  const isAvailable = !isComingSoon && !isOAuth && !connector.exclusive;
+  const isAvailable = isConnectorReady(connector);
   const hasRealCredentials = connected && isAvailable;
+  const availabilityLabel = getConnectorAvailabilityLabel(connector);
 
   return (
     <div
@@ -98,33 +58,20 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
           : 'border-white/[0.06] hover:border-white/[0.12] hover:bg-white/[0.02]',
       )}
     >
-      {/* Coming Soon badge for future connectors */}
-      {isComingSoon && (
+      {!isAvailable && (
         <div className="absolute right-3 top-3">
           <Badge
             variant="outline"
             className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
           >
-            Phase {connector.phase}
-          </Badge>
-        </div>
-      )}
-
-      {/* Coming Soon badge for phase-1 OAuth connectors */}
-      {!isComingSoon && isOAuth && (
-        <div className="absolute right-3 top-3">
-          <Badge
-            variant="outline"
-            className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
-          >
-            Coming Soon
+            {availabilityLabel}
           </Badge>
         </div>
       )}
 
       {/* Icon + Name */}
       <div className="mb-3 flex items-start gap-3">
-        <ConnectorLogo connector={connector} />
+        <OfficialConnectorLogo connector={connector} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-foreground">{connector.name}</h3>
           <p className="text-xs text-muted-foreground">{connector.actionCount} actions</p>
@@ -159,20 +106,11 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                aria-label="Open in new tab"
-              >
-                <ExternalLink className="h-3 w-3" aria-hidden="true" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
                 className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                 onClick={onDisconnect}
                 disabled={mutating}
-                aria-label="More options"
               >
-                <MoreHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                Disconnect
               </Button>
             </div>
           </>
@@ -180,11 +118,11 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 w-full cursor-not-allowed text-xs text-muted-foreground opacity-50"
-            disabled
+            className="h-7 w-full text-xs text-muted-foreground hover:text-foreground"
+            onClick={onUpgrade}
           >
             <Lock className="mr-1.5 h-3 w-3" />
-            Coming Soon
+            Request access
           </Button>
         ) : (
           <Button

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Switch } from '@shared/ui/switch';
 import { getCsrfToken } from '@/lib/client/csrf';
+import { useBillingStore } from '@/stores/unified/auth';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
@@ -44,7 +45,7 @@ const TOGGLES: ReadonlyArray<ToggleSpec> = [
     id: 'improveModelTraining',
     label: 'Help improve AGI models',
     description:
-      'Cloud Managed only: share anonymized conversations to improve future models. Off by default. Local Mode and BYOK conversations are never used regardless of this setting.',
+      'Hosted cloud only: share anonymized conversations to improve future models. Off by default. Local Mode and BYOK conversations are never used regardless of this setting.',
     defaultValue: false,
     managedOnly: true,
   },
@@ -126,6 +127,8 @@ function ExpandableSection({ title, children }: { title: string; children: React
 }
 
 export default function PrivacySettingsPage() {
+  const subscription = useBillingStore((s) => s.subscription);
+  const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
   const [state, setState] = useState<Record<ToggleKey, boolean>>(() => defaultPrivacyState());
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [preferenceError, setPreferenceError] = useState<string | null>(null);
@@ -297,7 +300,7 @@ export default function PrivacySettingsPage() {
             These are disabled by default and can be turned off at any time below.
           </p>
           <p style={{ margin: 0 }}>
-            If you opt into model-improvement sharing (Cloud Managed only), your anonymized
+            If you opt into model-improvement sharing for hosted cloud, your anonymized
             conversations may be reviewed by our team to improve future models.
           </p>
         </ExpandableSection>
@@ -333,7 +336,7 @@ export default function PrivacySettingsPage() {
               alignItems: 'flex-start',
               justifyContent: 'space-between',
               gap: 16,
-              opacity: spec.managedOnly ? 0.65 : 1,
+              opacity: spec.managedOnly && !hasHostedCloud ? 0.65 : 1,
             }}
           >
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1 }}>
@@ -350,7 +353,7 @@ export default function PrivacySettingsPage() {
                       letterSpacing: '0.06em',
                     }}
                   >
-                    Cloud Managed
+                    {hasHostedCloud ? 'Hosted cloud' : 'Upgrade'}
                   </span>
                 ) : null}
               </span>
@@ -360,7 +363,7 @@ export default function PrivacySettingsPage() {
             </div>
             <Switch
               checked={state[spec.id]}
-              disabled={spec.managedOnly}
+              disabled={spec.managedOnly && !hasHostedCloud}
               onCheckedChange={() => toggle(spec.id)}
               aria-label={spec.label}
             />

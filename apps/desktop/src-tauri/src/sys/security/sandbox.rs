@@ -344,7 +344,7 @@ pub enum SandboxProfile {
         /// Additional bwrap CLI flags beyond the minimal read-only base set.
         extra_args: Vec<String>,
     },
-    /// Windows AppContainer — SID and capability list (ships as of v1.7.0).
+    /// Windows AppContainer profile metadata — not applied until runtime wiring ships.
     WindowsAppContainer {
         /// Capability SIDs granted to the container.
         capability_sids: Vec<String>,
@@ -420,15 +420,16 @@ impl SandboxProfile {
     /// Windows AppContainer with no extra capabilities beyond the default set.
     #[cfg(target_os = "windows")]
     pub fn windows_default() -> Self {
-        // Reuses the AppContainer model already shipped in the v1.7.0 stub at
-        // crates/agiworkforce-protocol (windows_sandbox.rs 121-LOC pattern).
         Self::WindowsAppContainer {
             capability_sids: vec![],
         }
     }
 
-    /// Returns `true` when the profile implies kernel-enforced isolation.
-    pub fn is_enforced(&self) -> bool {
+    /// Returns `true` when an OS profile has been selected.
+    ///
+    /// This does not mean the profile is enforced; feature gates below remain
+    /// false until the invocation paths are wired.
+    pub fn has_os_profile(&self) -> bool {
         !matches!(self, Self::None)
     }
 }

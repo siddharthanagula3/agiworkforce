@@ -10,7 +10,6 @@ import {
   Lock,
   Mail,
   MailCheck,
-  GitBranch,
   RefreshCw,
   ShieldCheck,
   Sparkles,
@@ -45,6 +44,37 @@ interface AuthFormState {
   error: string | null;
   success: boolean;
   mode?: AuthMode;
+}
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M21.6 12.23c0-.78-.07-1.54-.2-2.27H12v4.29h5.37a4.59 4.59 0 0 1-1.99 3.01v2.5h3.22c1.88-1.73 3-4.28 3-7.53z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 22c2.7 0 4.96-.89 6.61-2.42l-3.22-2.5c-.89.6-2.03.95-3.39.95-2.61 0-4.82-1.76-5.61-4.13H3.06v2.58A10 10 0 0 0 12 22z"
+      />
+      <path
+        fill="#FBBC04"
+        d="M6.39 13.9a6.01 6.01 0 0 1 0-3.8V7.52H3.06a10 10 0 0 0 0 8.96l3.33-2.58z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 5.97c1.47 0 2.79.51 3.82 1.5l2.86-2.86A9.6 9.6 0 0 0 12 2 10 10 0 0 0 3.06 7.52l3.33 2.58C7.18 7.73 9.39 5.97 12 5.97z"
+      />
+    </svg>
+  );
+}
+
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12 .5C5.65.5.8 5.35.8 11.32c0 4.78 3.1 8.83 7.4 10.26.55.1.75-.23.75-.51 0-.25-.01-.93-.01-1.82-3.01.62-3.65-1.24-3.65-1.24-.49-1.18-1.2-1.49-1.2-1.49-.98-.64.07-.63.07-.63 1.08.07 1.65 1.07 1.65 1.07.96 1.58 2.52 1.12 3.14.86.1-.67.38-1.12.68-1.38-2.4-.26-4.93-1.15-4.93-5.12 0-1.13.42-2.06 1.1-2.79-.11-.26-.48-1.32.11-2.75 0 0 .9-.28 2.94 1.06.86-.23 1.77-.35 2.68-.35.91 0 1.82.12 2.68.35 2.04-1.34 2.94-1.06 2.94-1.06.59 1.43.22 2.49.11 2.75.68.73 1.1 1.66 1.1 2.79 0 3.98-2.54 4.85-4.96 5.11.39.32.73.96.73 1.94 0 1.4-.01 2.53-.01 2.87 0 .28.2.61.75.51 4.3-1.43 7.39-5.48 7.39-10.25C23.2 5.35 18.35.5 12 .5z" />
+    </svg>
+  );
 }
 
 export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthFormProps) {
@@ -199,7 +229,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
       case 'signin':
         return {
           title: 'Welcome back',
-          subtitle: 'Sign in to your AGI Workforce account',
+          subtitle: 'Sign in to your AGI account',
           buttonText: 'Sign in',
         };
       case 'signup':
@@ -245,13 +275,13 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative bg-card/80 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-2xl text-center"
+          className="relative rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-green-500 to-emerald-500 mb-6"
+            className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500"
           >
             <MailCheck className="w-10 h-10 text-white" />
           </motion.div>
@@ -262,7 +292,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             {email}
           </p>
           <p className="text-sm text-muted-foreground mb-6">
-            Click the link in the email to verify your account and get started with AGI Workforce.
+            Click the link in the email to verify your account and get started with AGI.
           </p>
 
           <div className="space-y-3">
@@ -310,15 +340,15 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative bg-card/80 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-2xl text-center"
+          className="relative rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-violet-500 to-fuchsia-500 mb-6"
+            className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-foreground text-background"
           >
-            <Mail className="w-10 h-10 text-white" />
+            <Mail className="h-8 w-8" />
           </motion.div>
 
           <h1 className="text-2xl font-bold text-foreground mb-2">Magic link sent!</h1>
@@ -368,13 +398,13 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative bg-card/80 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-2xl text-center"
+          className="relative rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
         >
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-linear-to-br from-amber-500 to-orange-500 mb-6"
+            className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-500"
           >
             <KeyRound className="w-10 h-10 text-white" />
           </motion.div>
@@ -422,29 +452,22 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
 
   return (
     <div className={cn('w-full max-w-md mx-auto', className)}>
-      {}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-linear-to-br from-violet-500/20 to-fuchsia-500/20 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-linear-to-tr from-cyan-500/20 to-blue-500/20 rounded-full blur-3xl" />
-      </div>
-
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative bg-card/80 backdrop-blur-xl border border-border/50 rounded-2xl p-8 shadow-2xl"
+        className="relative rounded-2xl border border-border bg-card p-8 shadow-xl"
       >
-        {}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
             transition={{ type: 'spring', delay: 0.1 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-linear-to-br from-violet-500 to-fuchsia-500 mb-4"
+            className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-foreground text-background"
           >
             {mode === 'set-new-password' ? (
-              <ShieldCheck className="w-8 h-8 text-white" />
+              <ShieldCheck className="h-7 w-7" />
             ) : (
-              <Sparkles className="w-8 h-8 text-white" />
+              <Sparkles className="h-7 w-7" />
             )}
           </motion.div>
           <AnimatePresence mode="wait">
@@ -461,10 +484,8 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           </AnimatePresence>
         </div>
 
-        {/* React 19: Using form action prop for native form submission handling */}
         <form action={submitAction} className="space-y-4">
           <AnimatePresence mode="wait">
-            {}
             {mode === 'signup' && (
               <motion.div
                 key="name"
@@ -492,7 +513,6 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             )}
           </AnimatePresence>
 
-          {}
           {mode !== 'set-new-password' && (
             <div>
               <Label htmlFor="email" className="text-sm font-medium">
@@ -515,7 +535,6 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           )}
 
           <AnimatePresence mode="wait">
-            {}
             {(mode === 'signin' || mode === 'signup' || mode === 'set-new-password') && (
               <motion.div
                 key="password"
@@ -556,7 +575,6 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
               </motion.div>
             )}
 
-            {}
             {mode === 'set-new-password' && (
               <motion.div
                 key="confirm-password"
@@ -597,7 +615,6 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             )}
           </AnimatePresence>
 
-          {}
           <AnimatePresence>
             {displayError && (
               <motion.div
@@ -611,11 +628,10 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
             )}
           </AnimatePresence>
 
-          {}
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full h-11 bg-linear-to-r from-violet-500 to-fuchsia-500 hover:from-violet-600 hover:to-fuchsia-600 text-white border-0"
+            className="h-11 w-full border-0 bg-foreground text-background hover:bg-foreground/90"
           >
             {isLoading ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -628,7 +644,6 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
           </Button>
         </form>
 
-        {}
         {(mode === 'signin' || mode === 'signup') && (
           <div className="mt-6 space-y-3">
             <div className="relative">
@@ -658,7 +673,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   }
                 }}
               >
-                <GitBranch className="w-4 h-4" />
+                <GitHubIcon className="h-4 w-4" />
                 GitHub
               </Button>
               <Button
@@ -678,14 +693,13 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   }
                 }}
               >
-                <Mail className="w-4 h-4" />
+                <GoogleIcon className="h-4 w-4" />
                 Google
               </Button>
             </div>
           </div>
         )}
 
-        {}
         <div className="mt-6 space-y-3">
           {mode === 'signin' && (
             <>
@@ -728,7 +742,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                     setMode('signup');
                     setLocalError(null);
                   }}
-                  className="text-violet-500 hover:text-violet-400 font-medium transition-colors"
+                  className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
                 >
                   Create account
                 </button>
@@ -745,7 +759,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   setMode('signin');
                   setLocalError(null);
                 }}
-                className="text-violet-500 hover:text-violet-400 font-medium transition-colors"
+                className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
               >
                 Sign in
               </button>
@@ -759,7 +773,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                 href="https://app.agiworkforce.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-violet-500 hover:text-violet-400 transition-colors"
+                className="text-foreground underline-offset-4 transition-colors hover:underline"
               >
                 Sign up on our website
               </a>
@@ -774,7 +788,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
                   setMode('signin');
                   setLocalError(null);
                 }}
-                className="text-violet-500 hover:text-violet-400 font-medium transition-colors flex items-center justify-center gap-1 mx-auto"
+                className="mx-auto flex items-center justify-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:underline"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to sign in
@@ -792,7 +806,7 @@ export function AuthForm({ onSuccess, defaultMode = 'signin', className }: AuthF
 
                   window.history.replaceState(null, '', window.location.pathname);
                 }}
-                className="text-violet-500 hover:text-violet-400 font-medium transition-colors flex items-center justify-center gap-1 mx-auto"
+                className="mx-auto flex items-center justify-center gap-1 font-medium text-foreground underline-offset-4 transition-colors hover:underline"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Back to sign in

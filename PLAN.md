@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped on origin/main, 42 commits, 137 files, +14267/-808. See `CHANGELOG.md` R27 entry and `docs/audit/2026-05-23-r27-v1-backlog.md`).
+Last updated: 2026-05-23 (post R27-PARITY Phase D complete — 5 stages shipped on origin/main, 42 commits, 137 files, +14267/-808. See `CHANGELOG.md` R27 entry and archived `docs/archive/2026-06-05-doc-reset/docs/audit/2026-05-23-r27-v1-backlog.md`).
 
 ## Mission
 
@@ -302,7 +302,7 @@ Deliverables:
 - `audit/anthropic-apps-parity/competitive-baseline-2026-05-20.md`
 - `audit/anthropic-apps-parity/sdk-strategy-2026-05-20.md`
 - `audit/anthropic-apps-parity/compute-artifacts-2026-05-20.md`
-- Agentic development outlook: `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+- Agentic development outlook: archived at `docs/archive/2026-05-30/audit/repo-organization/agentic-development-outlook-2026-05-20.md`
 - Parallel-agent lane map: `docs/agent-context/lanes.json`
 - Shared-file collision policy: `docs/agent-context/shared-files.md`
 - Parallel-agent workflow: `docs/engineering/parallel-agent-playbook.md`
@@ -372,7 +372,7 @@ Rules:
 
 Deliverable:
 
-- `audit/repo-organization/agentic-development-outlook-2026-05-20.md`
+- `docs/archive/2026-05-30/audit/repo-organization/agentic-development-outlook-2026-05-20.md`
 - `docs/engineering/agent-native-development.md`
 
 ### 1D. Parallel Agent Operating Model

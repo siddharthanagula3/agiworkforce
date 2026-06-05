@@ -1,7 +1,7 @@
 /**
  * SkillMarketplace
  *
- * Full-panel browser for the 140+ AGI Workforce AI skills.
+ * Full-panel browser for AGI Workforce skills.
  * Features: grid/list toggle, category filter tabs, debounced search,
  * expandable skill cards with active/inactive toggle.
  *

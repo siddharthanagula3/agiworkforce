@@ -6,6 +6,11 @@ use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::sync::Mutex;
+use tokio::time::{timeout, Duration};
+
+const LSP_INITIALIZE_TIMEOUT: Duration = Duration::from_secs(45);
+const LSP_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const JSONRPC_VERSION: &str = "2.0";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LSPServer {
@@ -130,9 +135,10 @@ impl LSPClient {
     }
 
     async fn initialize(&mut self, root_uri: &str) -> Result<(), String> {
+        let request_id = self.next_request_id();
         let init_request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "initialize",
             "params": {
                 "processId": std::process::id(),
@@ -159,19 +165,26 @@ impl LSPClient {
         });
 
         self.send_request(&init_request).await?;
-        let _response = self.read_response().await?;
+        let _response = self
+            .wait_for_response(request_id, LSP_INITIALIZE_TIMEOUT)
+            .await?;
 
         let initialized = serde_json::json!({
-            "jsonrpc": "2.0",
+            "jsonrpc": JSONRPC_VERSION,
             "method": "initialized",
             "params": {}
         });
 
         self.send_notification(&initialized).await?;
         self.server_info.initialized = true;
-        self.request_id += 1;
 
         Ok(())
+    }
+
+    fn next_request_id(&mut self) -> u32 {
+        let request_id = self.request_id;
+        self.request_id = self.request_id.saturating_add(1);
+        request_id
     }
 
     async fn send_request(&mut self, request: &serde_json::Value) -> Result<(), String> {
@@ -208,25 +221,56 @@ impl LSPClient {
         Ok(())
     }
 
-    async fn read_response(&mut self) -> Result<serde_json::Value, String> {
-        let mut header = String::new();
-        self.stdout
-            .read_line(&mut header)
-            .await
-            .map_err(|e| format!("Failed to read header: {}", e))?;
+    async fn send_response(&mut self, response: &serde_json::Value) -> Result<(), String> {
+        let content = response.to_string();
+        let message = format!("Content-Length: {}\r\n\r\n{}", content.len(), content);
 
-        let content_length = header
-            .trim()
-            .strip_prefix("Content-Length: ")
-            .ok_or("Invalid header")?
-            .parse::<usize>()
-            .map_err(|e| format!("Invalid content length: {}", e))?;
-
-        let mut empty = String::new();
-        self.stdout
-            .read_line(&mut empty)
+        self.stdin
+            .write_all(message.as_bytes())
             .await
-            .map_err(|e| format!("Failed to read empty line: {}", e))?;
+            .map_err(|e| format!("Failed to send response: {}", e))?;
+
+        self.stdin
+            .flush()
+            .await
+            .map_err(|e| format!("Failed to flush response: {}", e))?;
+
+        Ok(())
+    }
+
+    async fn read_message(&mut self) -> Result<serde_json::Value, String> {
+        let mut content_length: Option<usize> = None;
+
+        loop {
+            let mut header = String::new();
+            let bytes_read = self
+                .stdout
+                .read_line(&mut header)
+                .await
+                .map_err(|e| format!("Failed to read header: {}", e))?;
+
+            if bytes_read == 0 {
+                return Err("LSP server closed stdout".to_string());
+            }
+
+            let trimmed = header.trim();
+            if trimmed.is_empty() {
+                break;
+            }
+
+            if let Some((name, value)) = trimmed.split_once(':') {
+                if name.eq_ignore_ascii_case("content-length") {
+                    content_length = Some(
+                        value
+                            .trim()
+                            .parse::<usize>()
+                            .map_err(|e| format!("Invalid content length: {}", e))?,
+                    );
+                }
+            }
+        }
+
+        let content_length = content_length.ok_or("Missing Content-Length header")?;
 
         let mut buffer = vec![0u8; content_length];
         tokio::io::AsyncReadExt::read_exact(&mut self.stdout, &mut buffer)
@@ -238,19 +282,79 @@ impl LSPClient {
         serde_json::from_str(&content).map_err(|e| format!("Invalid JSON: {}", e))
     }
 
+    async fn wait_for_response(
+        &mut self,
+        request_id: u32,
+        timeout_duration: Duration,
+    ) -> Result<serde_json::Value, String> {
+        timeout(timeout_duration, async {
+            loop {
+                let message = self.read_message().await?;
+
+                if message.get("id").and_then(|id| id.as_u64()) == Some(request_id as u64)
+                    && (message.get("result").is_some() || message.get("error").is_some())
+                {
+                    if let Some(error) = message.get("error") {
+                        return Err(format_lsp_error(error));
+                    }
+                    return Ok(message);
+                }
+
+                if let Some(method) = message.get("method").and_then(|method| method.as_str()) {
+                    if message.get("id").is_some() {
+                        let response = build_server_request_response(&message, method);
+                        self.send_response(&response).await?;
+                    } else if let Err(error) = self
+                        .handle_notification(method, message.get("params"))
+                        .await
+                    {
+                        tracing::warn!(
+                            "[LSP] Dropped invalid server notification {}: {}",
+                            method,
+                            error
+                        );
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| format!("Timed out waiting for LSP response {}", request_id))?
+    }
+
+    async fn handle_notification(
+        &self,
+        method: &str,
+        params: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
+        if method != "textDocument/publishDiagnostics" {
+            return Ok(());
+        }
+
+        let params = params.ok_or("publishDiagnostics missing params")?;
+        let (uri, diagnostics) = parse_publish_diagnostics(params)?;
+
+        let mut diagnostic_store = self.diagnostics.lock().await;
+        diagnostic_store.insert(uri, diagnostics);
+
+        Ok(())
+    }
+
     pub async fn shutdown(&mut self) -> Result<(), String> {
+        let request_id = self.next_request_id();
         let shutdown_request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "shutdown",
             "params": null
         });
 
         self.send_request(&shutdown_request).await?;
-        let _response = self.read_response().await?;
+        let _response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         let exit_notification = serde_json::json!({
-            "jsonrpc": "2.0",
+            "jsonrpc": JSONRPC_VERSION,
             "method": "exit"
         });
 
@@ -271,7 +375,7 @@ impl LSPClient {
         content: &str,
     ) -> Result<(), String> {
         let notification = serde_json::json!({
-            "jsonrpc": "2.0",
+            "jsonrpc": JSONRPC_VERSION,
             "method": "textDocument/didOpen",
             "params": {
                 "textDocument": {
@@ -292,10 +396,10 @@ impl LSPClient {
         line: u32,
         character: u32,
     ) -> Result<Vec<CompletionItem>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/completion",
             "params": {
                 "textDocument": {
@@ -309,7 +413,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if let Some(items) = result.get("items") {
@@ -328,10 +434,10 @@ impl LSPClient {
         line: u32,
         character: u32,
     ) -> Result<Option<Hover>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/hover",
             "params": {
                 "textDocument": {
@@ -345,7 +451,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if !result.is_null() {
@@ -367,10 +475,10 @@ impl LSPClient {
         line: u32,
         character: u32,
     ) -> Result<Vec<Location>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/definition",
             "params": {
                 "textDocument": {
@@ -384,7 +492,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
@@ -419,10 +529,10 @@ impl LSPClient {
         line: u32,
         character: u32,
     ) -> Result<Vec<Location>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/references",
             "params": {
                 "textDocument": {
@@ -439,7 +549,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
@@ -459,7 +571,7 @@ impl LSPClient {
         content: &str,
     ) -> Result<(), String> {
         let notification = serde_json::json!({
-            "jsonrpc": "2.0",
+            "jsonrpc": JSONRPC_VERSION,
             "method": "textDocument/didChange",
             "params": {
                 "textDocument": {
@@ -477,7 +589,7 @@ impl LSPClient {
 
     pub async fn text_document_did_close(&mut self, uri: &str) -> Result<(), String> {
         let notification = serde_json::json!({
-            "jsonrpc": "2.0",
+            "jsonrpc": JSONRPC_VERSION,
             "method": "textDocument/didClose",
             "params": {
                 "textDocument": {
@@ -496,10 +608,10 @@ impl LSPClient {
         character: u32,
         new_name: &str,
     ) -> Result<Option<WorkspaceEdit>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/rename",
             "params": {
                 "textDocument": {
@@ -514,7 +626,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if !result.is_null() {
@@ -528,10 +642,10 @@ impl LSPClient {
     }
 
     pub async fn text_document_formatting(&mut self, uri: &str) -> Result<Vec<TextEdit>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/formatting",
             "params": {
                 "textDocument": {
@@ -545,7 +659,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
@@ -559,10 +675,10 @@ impl LSPClient {
     }
 
     pub async fn workspace_symbol(&mut self, query: &str) -> Result<Vec<WorkspaceSymbol>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "workspace/symbol",
             "params": {
                 "query": query
@@ -570,7 +686,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
@@ -589,10 +707,10 @@ impl LSPClient {
         range: Range,
         diagnostics: Vec<Diagnostic>,
     ) -> Result<Vec<CodeAction>, String> {
-        self.request_id += 1;
+        let request_id = self.next_request_id();
         let request = serde_json::json!({
-            "jsonrpc": "2.0",
-            "id": self.request_id,
+            "jsonrpc": JSONRPC_VERSION,
+            "id": request_id,
             "method": "textDocument/codeAction",
             "params": {
                 "textDocument": {
@@ -606,7 +724,9 @@ impl LSPClient {
         });
 
         self.send_request(&request).await?;
-        let response = self.read_response().await?;
+        let response = self
+            .wait_for_response(request_id, LSP_REQUEST_TIMEOUT)
+            .await?;
 
         if let Some(result) = response.get("result") {
             if result.is_array() {
@@ -628,6 +748,138 @@ impl LSPClient {
         let diagnostics = self.diagnostics.lock().await;
         Ok(diagnostics.clone())
     }
+}
+
+fn build_server_request_response(message: &serde_json::Value, method: &str) -> serde_json::Value {
+    let id = message
+        .get("id")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+
+    match method {
+        "workspace/configuration" => {
+            let item_count = message
+                .get("params")
+                .and_then(|params| params.get("items"))
+                .and_then(|items| items.as_array())
+                .map_or(0, |items| items.len());
+
+            serde_json::json!({
+                "jsonrpc": JSONRPC_VERSION,
+                "id": id,
+                "result": vec![serde_json::Value::Null; item_count],
+            })
+        }
+        "workspace/workspaceFolders" => serde_json::json!({
+            "jsonrpc": JSONRPC_VERSION,
+            "id": id,
+            "result": serde_json::Value::Null,
+        }),
+        "window/workDoneProgress/create"
+        | "client/registerCapability"
+        | "client/unregisterCapability"
+        | "workspace/diagnostic/refresh" => serde_json::json!({
+            "jsonrpc": JSONRPC_VERSION,
+            "id": id,
+            "result": serde_json::Value::Null,
+        }),
+        _ => serde_json::json!({
+            "jsonrpc": JSONRPC_VERSION,
+            "id": id,
+            "error": {
+                "code": -32601,
+                "message": format!("Unsupported LSP server request: {}", method),
+            },
+        }),
+    }
+}
+
+fn format_lsp_error(error: &serde_json::Value) -> String {
+    let message = error
+        .get("message")
+        .and_then(|message| message.as_str())
+        .unwrap_or("LSP request failed");
+
+    if let Some(code) = error.get("code").and_then(|code| code.as_i64()) {
+        format!("{} ({})", message, code)
+    } else {
+        message.to_string()
+    }
+}
+
+fn parse_publish_diagnostics(
+    params: &serde_json::Value,
+) -> Result<(String, Vec<Diagnostic>), String> {
+    let uri = params
+        .get("uri")
+        .and_then(|uri| uri.as_str())
+        .ok_or("publishDiagnostics missing uri")?
+        .to_string();
+
+    let diagnostics_value = params
+        .get("diagnostics")
+        .and_then(|diagnostics| diagnostics.as_array())
+        .ok_or("publishDiagnostics diagnostics must be an array")?;
+
+    let diagnostics = diagnostics_value
+        .iter()
+        .map(parse_diagnostic)
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok((uri, diagnostics))
+}
+
+fn parse_diagnostic(value: &serde_json::Value) -> Result<Diagnostic, String> {
+    let range = parse_range(value.get("range").ok_or("diagnostic missing range")?)?;
+    let message = value
+        .get("message")
+        .and_then(|message| message.as_str())
+        .ok_or("diagnostic missing message")?
+        .to_string();
+    let severity = value
+        .get("severity")
+        .and_then(|severity| severity.as_u64())
+        .and_then(|severity| u32::try_from(severity).ok())
+        .unwrap_or(1);
+    let source = value
+        .get("source")
+        .and_then(|source| source.as_str())
+        .map(str::to_string);
+    let code = value.get("code").and_then(|code| match code {
+        serde_json::Value::String(value) => Some(value.clone()),
+        serde_json::Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    });
+
+    Ok(Diagnostic {
+        range,
+        severity,
+        message,
+        source,
+        code,
+    })
+}
+
+fn parse_range(value: &serde_json::Value) -> Result<Range, String> {
+    Ok(Range {
+        start: parse_position(value.get("start").ok_or("range missing start")?)?,
+        end: parse_position(value.get("end").ok_or("range missing end")?)?,
+    })
+}
+
+fn parse_position(value: &serde_json::Value) -> Result<Position, String> {
+    let line = value
+        .get("line")
+        .and_then(|line| line.as_u64())
+        .and_then(|line| u32::try_from(line).ok())
+        .ok_or("position missing valid line")?;
+    let character = value
+        .get("character")
+        .and_then(|character| character.as_u64())
+        .and_then(|character| u32::try_from(character).ok())
+        .ok_or("position missing valid character")?;
+
+    Ok(Position { line, character })
 }
 
 pub struct LSPState {
@@ -934,4 +1186,97 @@ pub async fn lsp_detect_language(file_path: String) -> Result<String, String> {
     };
 
     Ok(language.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn parse_publish_diagnostics_accepts_numeric_codes() {
+        let params = json!({
+            "uri": "file:///workspace/src/main.rs",
+            "version": 2,
+            "diagnostics": [
+                {
+                    "range": {
+                        "start": { "line": 4, "character": 2 },
+                        "end": { "line": 4, "character": 9 }
+                    },
+                    "severity": 1,
+                    "code": 7006,
+                    "source": "rust-analyzer",
+                    "message": "expected identifier"
+                }
+            ]
+        });
+
+        let (uri, diagnostics) = parse_publish_diagnostics(&params).unwrap();
+
+        assert_eq!(uri, "file:///workspace/src/main.rs");
+        assert_eq!(diagnostics.len(), 1);
+        assert_eq!(diagnostics[0].severity, 1);
+        assert_eq!(diagnostics[0].code.as_deref(), Some("7006"));
+        assert_eq!(diagnostics[0].range.start.line, 4);
+    }
+
+    #[test]
+    fn parse_publish_diagnostics_rejects_invalid_shape() {
+        let params = json!({
+            "uri": "file:///workspace/src/main.rs",
+            "diagnostics": [
+                {
+                    "range": {
+                        "start": { "line": "bad", "character": 0 },
+                        "end": { "line": 1, "character": 0 }
+                    },
+                    "message": "bad diagnostic"
+                }
+            ]
+        });
+
+        let error = parse_publish_diagnostics(&params).unwrap_err();
+
+        assert!(error.contains("position missing valid line"));
+    }
+
+    #[test]
+    fn workspace_configuration_request_returns_one_null_per_item() {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 11,
+            "method": "workspace/configuration",
+            "params": {
+                "items": [
+                    { "section": "typescript" },
+                    { "section": "rust-analyzer" }
+                ]
+            }
+        });
+
+        let response = build_server_request_response(&request, "workspace/configuration");
+
+        assert_eq!(response["jsonrpc"], JSONRPC_VERSION);
+        assert_eq!(response["id"], 11);
+        assert_eq!(response["result"], json!([null, null]));
+    }
+
+    #[test]
+    fn unknown_server_request_returns_method_not_found() {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "custom/unsupported"
+        });
+
+        let response = build_server_request_response(&request, "custom/unsupported");
+
+        assert_eq!(response["id"], 4);
+        assert_eq!(response["error"]["code"], -32601);
+        assert!(response["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("Unsupported LSP server request"));
+    }
 }

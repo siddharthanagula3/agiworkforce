@@ -4,7 +4,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI vs Anthropic Claude | AGI',
+  title: 'AGI vs Anthropic Claude',
   description:
     'Honest review of Anthropic Claude. Where Claude wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/claude' },

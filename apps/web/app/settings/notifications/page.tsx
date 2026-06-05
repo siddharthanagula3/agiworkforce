@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useBillingStore } from '@/stores/unified/auth';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '../_lib/preferences-client';
 
 /**
@@ -60,7 +61,7 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
   },
   {
     heading: 'Email',
-    subheading: 'Sent to your account email address. Cloud Managed only.',
+    subheading: 'Sent to your account email address when hosted cloud is active.',
     managedOnly: true,
     items: [
       {
@@ -90,7 +91,7 @@ const CHANNEL_GROUPS: ReadonlyArray<ChannelGroup> = [
   },
   {
     heading: 'Mobile push',
-    subheading: 'Requires the AGI mobile app and Cloud Managed.',
+    subheading: 'Requires the AGI mobile app and hosted cloud.',
     managedOnly: true,
     items: [
       {
@@ -121,6 +122,8 @@ function defaultNotificationState(): Record<NotifKey, boolean> {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationsSettingsPage() {
+  const subscription = useBillingStore((s) => s.subscription);
+  const hasHostedCloud = subscription?.status === 'active' && subscription.tier !== 'free';
   const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -229,7 +232,7 @@ export default function NotificationsSettingsPage() {
                     borderRadius: 4,
                   }}
                 >
-                  Cloud Managed
+                  {hasHostedCloud ? 'Hosted cloud' : 'Upgrade'}
                 </span>
               )}
             </div>
@@ -240,22 +243,26 @@ export default function NotificationsSettingsPage() {
           {group.items.map((spec, idx) => (
             <label
               key={spec.id}
-              title={spec.managedOnly ? 'Available with Cloud Managed' : undefined}
+              title={
+                spec.managedOnly && !hasHostedCloud
+                  ? 'Available with hosted cloud upgrades'
+                  : undefined
+              }
               style={{
                 padding: '14px 20px',
                 borderTop: idx === 0 ? 'none' : '1px solid var(--settings-border)',
                 display: 'flex',
                 alignItems: 'flex-start',
                 gap: 14,
-                cursor: spec.managedOnly ? 'not-allowed' : 'pointer',
-                opacity: spec.managedOnly ? 0.55 : 1,
+                cursor: spec.managedOnly && !hasHostedCloud ? 'not-allowed' : 'pointer',
+                opacity: spec.managedOnly && !hasHostedCloud ? 0.55 : 1,
               }}
             >
               <input
                 type="checkbox"
                 checked={state[spec.id]}
-                disabled={spec.managedOnly}
-                onChange={() => toggle(spec.id, spec.managedOnly)}
+                disabled={spec.managedOnly && !hasHostedCloud}
+                onChange={() => toggle(spec.id, spec.managedOnly && !hasHostedCloud)}
                 style={{ marginTop: 2, flexShrink: 0 }}
               />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>

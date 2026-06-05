@@ -189,12 +189,11 @@ async function handleDownload(request: NextRequest) {
 }
 
 function fallbackToStatic(platform: string, request: Request) {
-  // WEB-DOWNLOAD-PLACEHOLDERS fix (2026-05-05): Windows and Linux placeholder files
-  // must be removed via git rm commit (they are git-tracked). The route no longer
-  // falls back to the placeholder paths when env vars are unset. Windows/Linux
-  // real binaries are tied to the July 12, 2026 public launch plan.
+  // Do not fall back to local static placeholders. `public/downloads/` is ignored
+  // and not deployed, so every platform needs either a trusted release asset or
+  // an explicit NEXT_PUBLIC_DOWNLOAD_URL_* value.
   const downloadUrls: Record<string, string | undefined> = {
-    mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || '/downloads/agiworkforce.dmg',
+    mac: process.env['NEXT_PUBLIC_DOWNLOAD_URL_MAC'] || undefined,
     windows: process.env['NEXT_PUBLIC_DOWNLOAD_URL_WINDOWS'] || undefined,
     linux: process.env['NEXT_PUBLIC_DOWNLOAD_URL_LINUX'] || undefined,
   };
@@ -202,10 +201,7 @@ function fallbackToStatic(platform: string, request: Request) {
   const url = downloadUrls[platform];
 
   if (!url) {
-    if (platform === 'windows' || platform === 'linux') {
-      return NextResponse.json({ error: 'Coming soon', platform }, { status: 503 });
-    }
-    throw createError.notFound(`Download for ${platform} is currently unavailable.`);
+    return NextResponse.json({ error: 'Installer unavailable', platform }, { status: 503 });
   }
 
   if (!url.startsWith('/') && !isExternalRedirectAllowed(url)) {

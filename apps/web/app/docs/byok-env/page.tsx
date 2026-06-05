@@ -5,9 +5,9 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 
 export const metadata: Metadata = {
-  title: 'Env-based BYOK in v1 | AGI Docs',
+  title: 'Env-based BYOK in v1',
   description:
-    'How to configure provider API keys via environment variables in AGI Workforce v1. Self-hosted .env.local setup and desktop OS keychain reference.',
+    'How to configure provider API keys via environment variables in AGI v1. Self-hosted .env.local setup and desktop OS keychain reference.',
   alternates: { canonical: 'https://agiworkforce.com/docs/byok-env' },
 };
 
@@ -30,8 +30,8 @@ export default function ByokEnvDocsPage() {
           </nav>
           <h1 className="agi-page-h1">Env-based BYOK in v1</h1>
           <p className="agi-page-lede">
-            AGI Workforce v1 supports bring-your-own-key via environment variables. Set the provider
-            key in your environment and AGI picks it up automatically. No UI form required.
+            AGI v1 supports bring-your-own-key via environment variables. Set the provider key in
+            your environment and AGI picks it up automatically. No UI form required.
           </p>
         </section>
 
@@ -70,7 +70,7 @@ export default function ByokEnvDocsPage() {
                     <code style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{p.envVar}</code>
                   </td>
                   <td style={{ color: 'var(--text-3)', fontSize: 13 }}>
-                    {p.pendingAdapter ? 'Adapter pending (lane D)' : 'Active in v1'}
+                    {p.pendingAdapter ? 'Planned adapter' : 'Active in v1'}
                   </td>
                 </tr>
               ))}
@@ -120,13 +120,13 @@ GOOGLE_API_KEY=AIza...
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">UI key entry is coming</p>
+          <p className="agi-section-eyebrow">Private-beta key entry</p>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
-            UI key entry, OS-keychain write, and revoke-all are launching in Cloud Managed private
-            beta. Until then, env vars are the supported path.
+            UI key entry, OS-keychain write, and revoke-all are private-beta flows. Until those
+            routes are public, env vars are the supported path.
           </p>
           <Link
-            href="/byok"
+            href="/waitlist"
             style={{ fontSize: 14, color: 'var(--agi-amber)', textDecoration: 'underline' }}
           >
             Join the Cloud Managed waitlist &rarr;

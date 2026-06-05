@@ -42,7 +42,7 @@ pub struct CodeExecutionResponse {
     pub timed_out: bool,
 }
 
-/// Execute code in a sandboxed environment.
+/// Execute code in a temporary AGI workspace.
 ///
 /// Supported languages: python, javascript, typescript, bash, powershell, ruby, perl, r
 #[tauri::command]
@@ -57,11 +57,12 @@ pub async fn execute_code(
     files: Option<HashMap<String, String>>,
 ) -> Result<CodeExecutionResponse, String> {
     // FIX-F5 (audit 2026-05-19): require HITL before running arbitrary LLM-
-    // supplied code in 8 supported languages. The OS sandbox
-    // (Seatbelt/Bubblewrap/Landlock via SandboxManager) is the security
-    // boundary; this gate ensures the user sees what the agent is about to
-    // run and can refuse. Goes through request_confirmation_simple →
-    // request_tool_confirmation so Safe/Plan agent modes can also block.
+    // supplied code in 8 supported languages. SandboxManager creates a
+    // temporary workspace and applies path/env checks, but it is not an
+    // OS-level Seatbelt/Bubblewrap/Landlock boundary. This gate ensures the
+    // user sees what the agent is about to run and can refuse. Goes through
+    // request_confirmation_simple -> request_tool_confirmation so Safe/Plan
+    // agent modes can also block.
     let code_preview: String = code.chars().take(400).collect();
     if !crate::sys::commands::tool_confirmation::request_confirmation_simple(
         &app,

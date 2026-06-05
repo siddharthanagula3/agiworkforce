@@ -81,7 +81,6 @@ const allowedRootDirs = new Set([
   'crates',
   'dev-scripts',
   'docs',
-  'docs-hardening',
   'examples',
   'ios',
   'node_modules',

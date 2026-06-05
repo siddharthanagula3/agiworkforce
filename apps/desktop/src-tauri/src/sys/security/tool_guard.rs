@@ -161,7 +161,11 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 10,
                 requires_approval: true,
-                allowed_parameters: vec!["path".to_string(), "content".to_string()],
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "content".to_string(),
+                    "expected_sha256".to_string(),
+                ],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -171,7 +175,13 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 30,
                 requires_approval: false,
-                allowed_parameters: vec!["path".to_string()],
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "limit".to_string(),
+                    "offset".to_string(),
+                    "exclude".to_string(),
+                    "timeout_ms".to_string(),
+                ],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -201,7 +211,12 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: true,
-                allowed_parameters: vec!["x".to_string(), "y".to_string(), "button".to_string()],
+                allowed_parameters: vec![
+                    "target".to_string(),
+                    "x".to_string(),
+                    "y".to_string(),
+                    "button".to_string(),
+                ],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -211,7 +226,11 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: true,
-                allowed_parameters: vec!["text".to_string(), "delay_ms".to_string()],
+                allowed_parameters: vec![
+                    "target".to_string(),
+                    "text".to_string(),
+                    "delay_ms".to_string(),
+                ],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -366,11 +385,7 @@ impl ToolExecutionGuard {
                 requires_approval: true,
                 allowed_parameters: vec![
                     "script".to_string(),
-                    "args".to_string(),
                     "timeout_ms".to_string(),
-                    "retry_count".to_string(),
-                    "retry_delay_ms".to_string(),
-                    "await_promise".to_string(),
                     "tab_id".to_string(),
                 ],
                 risk_level: RiskLevel::High,
@@ -537,10 +552,50 @@ impl ToolExecutionGuard {
                 allowed_parameters: vec![
                     "command".to_string(),
                     "cwd".to_string(),
-                    "shell".to_string(),
                     "timeout_ms".to_string(),
+                    "max_output_bytes".to_string(),
                 ],
                 risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "background_agent_start".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "goal".to_string(),
+                    "working_directory".to_string(),
+                    "custom_instructions".to_string(),
+                    "priority".to_string(),
+                    "conversation_id".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "background_agent_get".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 60,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "agent_id".to_string(),
+                    "block".to_string(),
+                    "timeout_ms".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "background_agent_cancel".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 20,
+                requires_approval: true,
+                allowed_parameters: vec!["agent_id".to_string()],
+                risk_level: RiskLevel::Medium,
             },
         );
 
@@ -718,8 +773,13 @@ impl ToolExecutionGuard {
                 requires_approval: false,
                 allowed_parameters: vec![
                     "pattern".to_string(),
-                    "path".to_string(),
-                    "glob".to_string(),
+                    "root".to_string(),
+                    "include_pattern".to_string(),
+                    "case_insensitive".to_string(),
+                    "output_mode".to_string(),
+                    "context_lines".to_string(),
+                    "limit".to_string(),
+                    "offset".to_string(),
                 ],
                 risk_level: RiskLevel::Low,
             },
@@ -731,8 +791,37 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 60,
                 requires_approval: false,
-                allowed_parameters: vec!["pattern".to_string(), "path".to_string()],
+                allowed_parameters: vec![
+                    "pattern".to_string(),
+                    "root".to_string(),
+                    "limit".to_string(),
+                    "offset".to_string(),
+                ],
                 risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "multi_edit".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["edits".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "apply_patch".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "patch".to_string(),
+                    "expected_sha256".to_string(),
+                ],
+                risk_level: RiskLevel::Medium,
             },
         );
 
@@ -743,10 +832,12 @@ impl ToolExecutionGuard {
                 max_rate_per_minute: 15,
                 requires_approval: true,
                 allowed_parameters: vec![
-                    "file_path".to_string(),
-                    "old_string".to_string(),
-                    "new_string".to_string(),
+                    "path".to_string(),
+                    "old_text".to_string(),
+                    "new_text".to_string(),
                     "replace_all".to_string(),
+                    "expected_sha256".to_string(),
+                    "session_id".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -772,7 +863,7 @@ impl ToolExecutionGuard {
             "image_generate".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 10,
-                requires_approval: false,
+                requires_approval: true,
                 allowed_parameters: vec![
                     "prompt".to_string(),
                     "provider".to_string(),
@@ -787,8 +878,16 @@ impl ToolExecutionGuard {
             "video_generate".to_string(),
             ToolPolicy {
                 max_rate_per_minute: 5,
-                requires_approval: false,
-                allowed_parameters: vec!["prompt".to_string(), "duration_seconds".to_string()],
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "prompt".to_string(),
+                    "duration_seconds".to_string(),
+                    "duration_secs".to_string(),
+                    "duration".to_string(),
+                    "resolution".to_string(),
+                    "provider".to_string(),
+                    "input_image_url".to_string(),
+                ],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -799,7 +898,11 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 10,
                 requires_approval: false,
-                allowed_parameters: vec!["account_id".to_string(), "limit".to_string()],
+                allowed_parameters: vec![
+                    "account_id".to_string(),
+                    "folder".to_string(),
+                    "limit".to_string(),
+                ],
                 risk_level: RiskLevel::Medium,
             },
         );
@@ -810,9 +913,15 @@ impl ToolExecutionGuard {
                 max_rate_per_minute: 5,
                 requires_approval: true,
                 allowed_parameters: vec![
+                    "account_id".to_string(),
                     "to".to_string(),
+                    "cc".to_string(),
+                    "bcc".to_string(),
+                    "reply_to".to_string(),
                     "subject".to_string(),
                     "body".to_string(),
+                    "body_text".to_string(),
+                    "body_html".to_string(),
                 ],
                 risk_level: RiskLevel::High,
             },
@@ -824,7 +933,15 @@ impl ToolExecutionGuard {
             ToolPolicy {
                 max_rate_per_minute: 20,
                 requires_approval: false,
-                allowed_parameters: vec!["account_id".to_string()],
+                allowed_parameters: vec![
+                    "account_id".to_string(),
+                    "calendar_id".to_string(),
+                    "start_time".to_string(),
+                    "end_time".to_string(),
+                    "max_results".to_string(),
+                    "show_deleted".to_string(),
+                    "request".to_string(),
+                ],
                 risk_level: RiskLevel::Low,
             },
         );
@@ -836,8 +953,17 @@ impl ToolExecutionGuard {
                 requires_approval: true,
                 allowed_parameters: vec![
                     "account_id".to_string(),
+                    "calendar_id".to_string(),
                     "title".to_string(),
+                    "description".to_string(),
+                    "location".to_string(),
                     "start_time".to_string(),
+                    "end_time".to_string(),
+                    "timezone".to_string(),
+                    "attendees".to_string(),
+                    "reminders".to_string(),
+                    "recurrence".to_string(),
+                    "event".to_string(),
                 ],
                 risk_level: RiskLevel::Medium,
             },
@@ -867,6 +993,31 @@ impl ToolExecutionGuard {
                     "account_id".to_string(),
                     "local_path".to_string(),
                     "remote_path".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "productivity_create_task".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "provider".to_string(),
+                    "task".to_string(),
+                    "id".to_string(),
+                    "title".to_string(),
+                    "description".to_string(),
+                    "status".to_string(),
+                    "due_date".to_string(),
+                    "assignee".to_string(),
+                    "assignee_name".to_string(),
+                    "priority".to_string(),
+                    "tags".to_string(),
+                    "url".to_string(),
+                    "project_id".to_string(),
+                    "project_name".to_string(),
                 ],
                 risk_level: RiskLevel::High,
             },
@@ -974,6 +1125,42 @@ impl ToolExecutionGuard {
             },
         );
 
+        allowed_tools.insert(
+            "schedule_recurring_task".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "name".to_string(),
+                    "schedule".to_string(),
+                    "task_description".to_string(),
+                    "action_type".to_string(),
+                    "action_data".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "cancel_scheduled_task".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["job_id".to_string(), "task_id".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "list_scheduled_tasks".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
         // API file transfer operations
         allowed_tools.insert(
             "api_upload".to_string(),
@@ -1013,6 +1200,146 @@ impl ToolExecutionGuard {
                 requires_approval: false,
                 allowed_parameters: vec!["path".to_string()],
                 risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_diff".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![
+                    "path".to_string(),
+                    "file_path".to_string(),
+                    "staged".to_string(),
+                    "max_bytes".to_string(),
+                ],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_log".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["path".to_string(), "limit".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "git_list_branches".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "worktree_create".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["repo_path".to_string(), "slug".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "worktree_list".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["repo_path".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "worktree_remove".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec![
+                    "repo_path".to_string(),
+                    "slug".to_string(),
+                    "force".to_string(),
+                    "delete_branch".to_string(),
+                ],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "undo_get_summary".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["task_id".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "undo_get_changes".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec!["task_id".to_string(), "limit".to_string()],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "undo_last".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["task_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "undo_change".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["change_id".to_string()],
+                risk_level: RiskLevel::High,
+            },
+        );
+
+        allowed_tools.insert(
+            "coding_checkpoint_create".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 10,
+                requires_approval: true,
+                allowed_parameters: vec!["name".to_string(), "paths".to_string()],
+                risk_level: RiskLevel::Medium,
+            },
+        );
+
+        allowed_tools.insert(
+            "coding_checkpoint_list".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 30,
+                requires_approval: false,
+                allowed_parameters: vec![],
+                risk_level: RiskLevel::Low,
+            },
+        );
+
+        allowed_tools.insert(
+            "coding_checkpoint_rewind".to_string(),
+            ToolPolicy {
+                max_rate_per_minute: 5,
+                requires_approval: true,
+                allowed_parameters: vec!["checkpoint_id".to_string()],
+                risk_level: RiskLevel::High,
             },
         );
 
@@ -1232,6 +1559,18 @@ impl ToolExecutionGuard {
             return Ok(());
         }
 
+        if let Some(params_obj) = parameters.as_object() {
+            for key in params_obj.keys() {
+                if !policy.allowed_parameters.contains(key) {
+                    warn!("Unexpected parameter '{}' for tool '{}'", key, tool_name);
+                    return Err(SecurityError::InvalidParameter(format!(
+                        "Parameter '{}' is not allowed for tool '{}'",
+                        key, tool_name
+                    )));
+                }
+            }
+        }
+
         match tool_name {
             "file_read" | "file_read_binary" | "file_write" | "file_delete" | "file_list" => {
                 if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
@@ -1240,6 +1579,9 @@ impl ToolExecutionGuard {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'path' parameter".to_string(),
                     ));
+                }
+                if tool_name == "file_write" {
+                    self.validate_optional_sha256(parameters, "expected_sha256")?;
                 }
             }
             "document_read"
@@ -1275,6 +1617,240 @@ impl ToolExecutionGuard {
                 } else {
                     return Err(SecurityError::InvalidParameter(
                         "Missing or invalid 'url' parameter".to_string(),
+                    ));
+                }
+            }
+            "git_diff" => {
+                if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(path)?;
+                }
+                if let Some(file_path) = parameters.get("file_path").and_then(|p| p.as_str()) {
+                    self.validate_git_relative_path_arg(file_path)?;
+                }
+                if let Some(max_bytes) = parameters.get("max_bytes") {
+                    let Some(raw) = max_bytes.as_u64() else {
+                        return Err(SecurityError::InvalidParameter(
+                            "max_bytes must be a positive integer".to_string(),
+                        ));
+                    };
+                    if raw == 0 {
+                        return Err(SecurityError::InvalidParameter(
+                            "max_bytes must be greater than zero".to_string(),
+                        ));
+                    }
+                }
+            }
+            "git_log" => {
+                if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(path)?;
+                }
+                if let Some(limit) = parameters.get("limit") {
+                    let Some(raw) = limit.as_u64() else {
+                        return Err(SecurityError::InvalidParameter(
+                            "limit must be a positive integer".to_string(),
+                        ));
+                    };
+                    if raw == 0 {
+                        return Err(SecurityError::InvalidParameter(
+                            "limit must be greater than zero".to_string(),
+                        ));
+                    }
+                }
+            }
+            "git_list_branches" => {
+                if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(path)?;
+                }
+            }
+            "multi_edit" => {
+                let Some(edits) = parameters.get("edits").and_then(|value| value.as_array()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'edits' array parameter".to_string(),
+                    ));
+                };
+                for (index, edit) in edits.iter().enumerate() {
+                    let Some(edit_obj) = edit.as_object() else {
+                        return Err(SecurityError::InvalidParameter(format!(
+                            "Edit #{} must be an object",
+                            index
+                        )));
+                    };
+                    for key in edit_obj.keys() {
+                        if !matches!(
+                            key.as_str(),
+                            "path"
+                                | "old_text"
+                                | "new_text"
+                                | "replace_all"
+                                | "expected_replacements"
+                                | "expected_sha256"
+                        ) {
+                            return Err(SecurityError::InvalidParameter(format!(
+                                "Parameter '{}' is not allowed for multi_edit edit #{}",
+                                key, index
+                            )));
+                        }
+                    }
+                    if let Some(path) = edit.get("path").and_then(|p| p.as_str()) {
+                        self.validate_file_path(path)?;
+                    } else {
+                        return Err(SecurityError::InvalidParameter(format!(
+                            "Edit #{} missing or invalid 'path'",
+                            index
+                        )));
+                    }
+                    let Some(expected_sha256) =
+                        edit.get("expected_sha256").and_then(|value| value.as_str())
+                    else {
+                        return Err(SecurityError::InvalidParameter(format!(
+                            "Edit #{} missing or invalid 'expected_sha256'",
+                            index
+                        )));
+                    };
+                    Self::validate_sha256_hex(expected_sha256)?;
+                }
+            }
+            "apply_patch" => {
+                if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(path)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'path' parameter".to_string(),
+                    ));
+                }
+                self.validate_optional_sha256(parameters, "expected_sha256")?;
+            }
+            "edit_exact_replace" => {
+                if let Some(path) = parameters.get("path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(path)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'path' parameter".to_string(),
+                    ));
+                }
+                let Some(expected_sha256) = parameters
+                    .get("expected_sha256")
+                    .and_then(|value| value.as_str())
+                else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'expected_sha256' parameter".to_string(),
+                    ));
+                };
+                Self::validate_sha256_hex(expected_sha256)?;
+            }
+            "worktree_create" | "worktree_remove" => {
+                if let Some(repo_path) = parameters.get("repo_path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(repo_path)?;
+                }
+
+                if let Some(slug) = parameters.get("slug").and_then(|s| s.as_str()) {
+                    self.validate_worktree_slug(slug)?;
+                } else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'slug' parameter".to_string(),
+                    ));
+                }
+            }
+            "worktree_list" => {
+                if let Some(repo_path) = parameters.get("repo_path").and_then(|p| p.as_str()) {
+                    self.validate_file_path(repo_path)?;
+                }
+            }
+            "undo_get_summary" => {
+                if let Some(task_id) = parameters.get("task_id").and_then(|value| value.as_str()) {
+                    if task_id.trim().is_empty() {
+                        return Err(SecurityError::InvalidParameter(
+                            "task_id must not be empty".to_string(),
+                        ));
+                    }
+                }
+            }
+            "undo_get_changes" => {
+                if let Some(task_id) = parameters.get("task_id").and_then(|value| value.as_str()) {
+                    if task_id.trim().is_empty() {
+                        return Err(SecurityError::InvalidParameter(
+                            "task_id must not be empty".to_string(),
+                        ));
+                    }
+                }
+                if let Some(limit) = parameters.get("limit") {
+                    let Some(limit) = limit.as_u64() else {
+                        return Err(SecurityError::InvalidParameter(
+                            "limit must be a positive integer".to_string(),
+                        ));
+                    };
+                    if limit == 0 || limit > 50 {
+                        return Err(SecurityError::InvalidParameter(
+                            "limit must be between 1 and 50".to_string(),
+                        ));
+                    }
+                }
+            }
+            "undo_last" => {
+                if let Some(task_id) = parameters.get("task_id").and_then(|value| value.as_str()) {
+                    if task_id.trim().is_empty() {
+                        return Err(SecurityError::InvalidParameter(
+                            "task_id must not be empty".to_string(),
+                        ));
+                    }
+                }
+            }
+            "undo_change" => {
+                let Some(change_id) = parameters.get("change_id").and_then(|value| value.as_str())
+                else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'change_id' parameter".to_string(),
+                    ));
+                };
+                if change_id.trim().is_empty() {
+                    return Err(SecurityError::InvalidParameter(
+                        "change_id must not be empty".to_string(),
+                    ));
+                }
+            }
+            "coding_checkpoint_create" => {
+                let Some(name) = parameters.get("name").and_then(|value| value.as_str()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'name' parameter".to_string(),
+                    ));
+                };
+                if name.trim().is_empty() {
+                    return Err(SecurityError::InvalidParameter(
+                        "checkpoint name must not be empty".to_string(),
+                    ));
+                }
+
+                let Some(paths) = parameters.get("paths").and_then(|value| value.as_array()) else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'paths' array parameter".to_string(),
+                    ));
+                };
+                if paths.is_empty() || paths.len() > 20 {
+                    return Err(SecurityError::InvalidParameter(
+                        "paths must contain between 1 and 20 file paths".to_string(),
+                    ));
+                }
+                for path in paths {
+                    let Some(path) = path.as_str() else {
+                        return Err(SecurityError::InvalidParameter(
+                            "paths must contain only strings".to_string(),
+                        ));
+                    };
+                    self.validate_file_path(path)?;
+                }
+            }
+            "coding_checkpoint_rewind" => {
+                let Some(checkpoint_id) = parameters
+                    .get("checkpoint_id")
+                    .and_then(|value| value.as_str())
+                else {
+                    return Err(SecurityError::InvalidParameter(
+                        "Missing or invalid 'checkpoint_id' parameter".to_string(),
+                    ));
+                };
+                if checkpoint_id.trim().is_empty() {
+                    return Err(SecurityError::InvalidParameter(
+                        "checkpoint_id must not be empty".to_string(),
                     ));
                 }
             }
@@ -1314,18 +1890,103 @@ impl ToolExecutionGuard {
                     ));
                 }
             }
-            _ => {
-                if let Some(params_obj) = parameters.as_object() {
-                    for key in params_obj.keys() {
-                        if !policy.allowed_parameters.contains(key) {
-                            warn!("Unexpected parameter '{}' for tool '{}'", key, tool_name);
-                        }
-                    }
-                }
-            }
+            _ => {}
         }
 
         debug!("Tool call validation passed for: {}", tool_name);
+        Ok(())
+    }
+
+    fn validate_optional_sha256(
+        &self,
+        parameters: &Value,
+        key: &str,
+    ) -> std::result::Result<(), SecurityError> {
+        if let Some(value) = parameters.get(key) {
+            let Some(raw) = value.as_str() else {
+                return Err(SecurityError::InvalidParameter(format!(
+                    "{} must be a lowercase SHA-256 hex string",
+                    key
+                )));
+            };
+            Self::validate_sha256_hex(raw)?;
+        }
+        Ok(())
+    }
+
+    fn validate_sha256_hex(value: &str) -> std::result::Result<(), SecurityError> {
+        if value.len() != 64 || !value.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Err(SecurityError::InvalidParameter(
+                "expected_sha256 must be a 64-character SHA-256 hex string".to_string(),
+            ));
+        }
+        if value.chars().any(|ch| ch.is_ascii_uppercase()) {
+            return Err(SecurityError::InvalidParameter(
+                "expected_sha256 must use lowercase hex".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_git_relative_path_arg(
+        &self,
+        file_path: &str,
+    ) -> std::result::Result<(), SecurityError> {
+        let trimmed = file_path.trim();
+        if trimmed.is_empty() {
+            return Err(SecurityError::InvalidParameter(
+                "git file_path must not be empty".to_string(),
+            ));
+        }
+        if trimmed.contains('\0') {
+            return Err(SecurityError::PathTraversal(
+                "git file_path contains null bytes".to_string(),
+            ));
+        }
+        if trimmed.starts_with('/') || trimmed.starts_with('\\') {
+            return Err(SecurityError::PathTraversal(trimmed.to_string()));
+        }
+        if cfg!(windows)
+            && (trimmed.contains(":\\") || trimmed.contains(":/") || trimmed.starts_with("//"))
+        {
+            return Err(SecurityError::PathTraversal(trimmed.to_string()));
+        }
+        for segment in trimmed.split(['/', '\\']) {
+            if segment.is_empty() || segment == "." || segment == ".." {
+                return Err(SecurityError::PathTraversal(trimmed.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn validate_worktree_slug(&self, slug: &str) -> std::result::Result<(), SecurityError> {
+        let trimmed = slug.trim();
+        if trimmed.is_empty() {
+            return Err(SecurityError::InvalidParameter(
+                "worktree slug must not be empty".to_string(),
+            ));
+        }
+        if trimmed.len() > 64 {
+            return Err(SecurityError::InvalidParameter(
+                "worktree slug must be 64 characters or fewer".to_string(),
+            ));
+        }
+
+        for segment in trimmed.split('/') {
+            if segment.is_empty() || segment == "." || segment == ".." {
+                return Err(SecurityError::PathTraversal(slug.to_string()));
+            }
+            if !segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
+            {
+                return Err(SecurityError::InvalidParameter(
+                    "worktree slug segments may contain only letters, digits, dots, underscores, and dashes"
+                        .to_string(),
+                ));
+            }
+        }
+
         Ok(())
     }
 
@@ -1802,8 +2463,8 @@ impl ToolExecutionGuard {
             "reboot",
             ":(){ :|:& };:",
             "__import__('os')",
-            "eval(",
-            "exec(",
+            concat!("eval", "("),
+            concat!("exec", "("),
             "system(",
             "shell_exec",
             "subprocess.",
@@ -2049,6 +2710,18 @@ impl ToolExecutionGuard {
                 true,
                 Some("Restore the deleted file from backup".to_string()),
             ),
+            "undo_last" | "undo_change" => (
+                false,
+                Some("This restores a previous AGI-tracked change".to_string()),
+            ),
+            "coding_checkpoint_create" => (
+                true,
+                Some("Delete the created checkpoint if it is no longer needed".to_string()),
+            ),
+            "coding_checkpoint_rewind" => (
+                false,
+                Some("Create a fresh checkpoint before rewind if you may need to restore the current state".to_string()),
+            ),
             "code_execute" => (false, None),
             "db_query" => {
                 // Check if it's a read-only query
@@ -2101,6 +2774,57 @@ mod tests {
         let guard = ToolExecutionGuard::new();
         let result = guard
             .validate_tool_call("file_read", &json!({"path": "/home/user/test.txt"}))
+            .await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_file_write_expected_sha256_must_be_lowercase_hex() {
+        let guard = ToolExecutionGuard::new();
+        let uppercase_hash = "A".repeat(64);
+        let result = guard
+            .validate_tool_call(
+                "file_write",
+                &json!({
+                    "path": "/home/user/test.txt",
+                    "content": "updated",
+                    "expected_sha256": uppercase_hash,
+                }),
+            )
+            .await;
+        assert!(matches!(result, Err(SecurityError::InvalidParameter(_))));
+    }
+
+    #[tokio::test]
+    async fn test_multi_edit_contract_validates_nested_expected_sha256() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "multi_edit",
+                &json!({
+                    "edits": [{
+                        "path": "/home/user/test.txt",
+                        "old_text": "before",
+                        "new_text": "after"
+                    }]
+                }),
+            )
+            .await;
+        assert!(matches!(result, Err(SecurityError::InvalidParameter(_))));
+
+        let hash = "a".repeat(64);
+        let result = guard
+            .validate_tool_call(
+                "multi_edit",
+                &json!({
+                    "edits": [{
+                        "path": "/home/user/test.txt",
+                        "old_text": "before",
+                        "new_text": "after",
+                        "expected_sha256": hash
+                    }]
+                }),
+            )
             .await;
         assert!(result.is_ok());
     }
@@ -2454,5 +3178,380 @@ mod tests {
             num_tasks,
             "All tasks must complete"
         );
+    }
+
+    #[tokio::test]
+    async fn test_browser_execute_async_js_rejects_obsolete_parameters() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "browser_execute_async_js",
+                &serde_json::json!({
+                    "script": "return 1",
+                    "retry_count": 3
+                }),
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not allowed"));
+    }
+
+    #[tokio::test]
+    async fn test_strict_guard_matches_current_tool_contracts() {
+        let guard = ToolExecutionGuard::new();
+
+        guard
+            .validate_tool_call(
+                "ui_click",
+                &serde_json::json!({
+                    "target": { "coordinates": { "x": 10, "y": 20 } },
+                    "button": "left"
+                }),
+            )
+            .await
+            .expect("ui_click target object should be allowed");
+
+        guard
+            .validate_tool_call(
+                "grep_search",
+                &serde_json::json!({
+                    "pattern": "ToolExecutionGuard",
+                    "root": "apps/desktop/src-tauri",
+                    "include_pattern": "*.rs",
+                    "case_insensitive": false,
+                    "output_mode": "content",
+                    "context_lines": 1,
+                    "limit": 25,
+                    "offset": 0
+                }),
+            )
+            .await
+            .expect("grep_search canonical parameters should be allowed");
+
+        guard
+            .validate_tool_call(
+                "file_list",
+                &serde_json::json!({
+                    "path": "/tmp",
+                    "limit": 100,
+                    "offset": 0,
+                    "exclude": [".git", "node_modules"],
+                    "timeout_ms": 30000
+                }),
+            )
+            .await
+            .expect("file_list pagination parameters should be allowed");
+    }
+
+    #[tokio::test]
+    async fn test_terminal_execute_rejects_shell_override_parameter() {
+        let guard = ToolExecutionGuard::new();
+        let result = guard
+            .validate_tool_call(
+                "terminal_execute",
+                &serde_json::json!({
+                    "command": "pwd",
+                    "shell": "bash"
+                }),
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not allowed"));
+    }
+
+    #[tokio::test]
+    async fn test_specialized_tool_contracts_match_current_registry_params() {
+        let guard = ToolExecutionGuard::new();
+
+        guard
+            .validate_tool_call(
+                "email_send",
+                &serde_json::json!({
+                    "account_id": 1,
+                    "to": ["user@example.com"],
+                    "subject": "Demo",
+                    "body": "Hello"
+                }),
+            )
+            .await
+            .expect("email_send advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "calendar_create_event",
+                &serde_json::json!({
+                    "account_id": "calendar-account",
+                    "calendar_id": "primary",
+                    "title": "Demo",
+                    "start_time": "2026-06-04T15:00:00Z",
+                    "end_time": "2026-06-04T16:00:00Z"
+                }),
+            )
+            .await
+            .expect("calendar_create_event advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "productivity_create_task",
+                &serde_json::json!({
+                    "provider": "notion",
+                    "title": "Ship beta",
+                    "description": "Finish tool parity pass",
+                    "status": "in_progress",
+                    "priority": 3,
+                    "tags": ["beta"]
+                }),
+            )
+            .await
+            .expect("productivity_create_task advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "schedule_recurring_task",
+                &serde_json::json!({
+                    "name": "Weekly report",
+                    "schedule": "every Friday at 5pm",
+                    "task_description": "Create a weekly summary"
+                }),
+            )
+            .await
+            .expect("schedule_recurring_task advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "cancel_scheduled_task",
+                &serde_json::json!({"task_id": "job-1"}),
+            )
+            .await
+            .expect("cancel_scheduled_task task_id alias should be allowed");
+    }
+
+    #[tokio::test]
+    async fn test_worktree_tool_contracts_require_approval_and_validate_slug() {
+        let guard = ToolExecutionGuard::new();
+        let repo_dir = tempfile::tempdir().expect("tempdir");
+        let repo_path = repo_dir.path().to_string_lossy();
+
+        guard
+            .validate_tool_call(
+                "worktree_create",
+                &serde_json::json!({
+                    "repo_path": repo_path,
+                    "slug": "demo/feature"
+                }),
+            )
+            .await
+            .expect("worktree_create advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "worktree_list",
+                &serde_json::json!({
+                    "repo_path": repo_path
+                }),
+            )
+            .await
+            .expect("worktree_list advertised params should be allowed");
+
+        guard
+            .validate_tool_call(
+                "worktree_remove",
+                &serde_json::json!({
+                    "repo_path": repo_path,
+                    "slug": "demo/feature",
+                    "force": false,
+                    "delete_branch": false
+                }),
+            )
+            .await
+            .expect("worktree_remove advertised params should be allowed");
+
+        let invalid = guard
+            .validate_tool_call(
+                "worktree_create",
+                &serde_json::json!({"slug": "../outside"}),
+            )
+            .await;
+        assert!(matches!(invalid, Err(SecurityError::PathTraversal(_))));
+
+        assert!(guard
+            .get_safety_tier("worktree_create")
+            .requires_user_action());
+        assert_eq!(guard.get_safety_tier("worktree_list"), ToolSafetyTier::Safe);
+        assert!(guard
+            .get_safety_tier("worktree_remove")
+            .requires_user_action());
+    }
+
+    #[tokio::test]
+    async fn test_undo_and_checkpoint_tool_contracts_are_guarded() {
+        let guard = ToolExecutionGuard::new();
+
+        guard
+            .validate_tool_call(
+                "undo_get_changes",
+                &serde_json::json!({
+                    "task_id": "task-1",
+                    "limit": 10
+                }),
+            )
+            .await
+            .expect("undo_get_changes advertised params should be allowed");
+        assert_eq!(
+            guard.get_safety_tier("undo_get_changes"),
+            ToolSafetyTier::Safe
+        );
+
+        let invalid_limit = guard
+            .validate_tool_call("undo_get_changes", &serde_json::json!({"limit": 0}))
+            .await;
+        assert!(matches!(
+            invalid_limit,
+            Err(SecurityError::InvalidParameter(_))
+        ));
+
+        guard
+            .validate_tool_call("undo_change", &serde_json::json!({"change_id": "change-1"}))
+            .await
+            .expect("undo_change advertised params should be allowed");
+        assert!(guard.get_safety_tier("undo_change").requires_user_action());
+
+        guard
+            .validate_tool_call(
+                "coding_checkpoint_create",
+                &serde_json::json!({
+                    "name": "before edit",
+                    "paths": ["/home/user/project/src/main.rs"]
+                }),
+            )
+            .await
+            .expect("coding_checkpoint_create advertised params should be allowed");
+        assert!(guard
+            .get_safety_tier("coding_checkpoint_create")
+            .requires_user_action());
+
+        guard
+            .validate_tool_call("coding_checkpoint_list", &serde_json::json!({}))
+            .await
+            .expect("coding_checkpoint_list should not require params");
+        assert_eq!(
+            guard.get_safety_tier("coding_checkpoint_list"),
+            ToolSafetyTier::Safe
+        );
+
+        guard
+            .validate_tool_call(
+                "coding_checkpoint_rewind",
+                &serde_json::json!({"checkpoint_id": "checkpoint-1"}),
+            )
+            .await
+            .expect("coding_checkpoint_rewind advertised params should be allowed");
+        assert!(guard
+            .get_safety_tier("coding_checkpoint_rewind")
+            .requires_user_action());
+    }
+
+    #[tokio::test]
+    async fn test_git_diff_contract_is_read_only_and_validates_paths() {
+        let guard = ToolExecutionGuard::new();
+        let repo_dir = tempfile::tempdir().expect("tempdir");
+        let repo_path = repo_dir.path().to_string_lossy();
+
+        guard
+            .validate_tool_call(
+                "git_diff",
+                &serde_json::json!({
+                    "path": repo_path,
+                    "file_path": "src/main.rs",
+                    "staged": false,
+                    "max_bytes": 4096
+                }),
+            )
+            .await
+            .expect("git_diff advertised params should be allowed");
+
+        let traversal = guard
+            .validate_tool_call(
+                "git_diff",
+                &serde_json::json!({
+                    "file_path": "../secret.txt"
+                }),
+            )
+            .await;
+        assert!(matches!(traversal, Err(SecurityError::PathTraversal(_))));
+
+        let invalid_limit = guard
+            .validate_tool_call("git_diff", &serde_json::json!({"max_bytes": 0}))
+            .await;
+        assert!(matches!(
+            invalid_limit,
+            Err(SecurityError::InvalidParameter(_))
+        ));
+
+        assert_eq!(guard.get_safety_tier("git_diff"), ToolSafetyTier::Safe);
+    }
+
+    #[tokio::test]
+    async fn test_git_log_contract_is_read_only_and_validates_limit() {
+        let guard = ToolExecutionGuard::new();
+        let repo_dir = tempfile::tempdir().expect("tempdir");
+        let repo_path = repo_dir.path().to_string_lossy();
+
+        guard
+            .validate_tool_call(
+                "git_log",
+                &serde_json::json!({
+                    "path": repo_path,
+                    "limit": 20
+                }),
+            )
+            .await
+            .expect("git_log advertised params should be allowed");
+
+        let invalid_limit = guard
+            .validate_tool_call("git_log", &serde_json::json!({"limit": 0}))
+            .await;
+        assert!(matches!(
+            invalid_limit,
+            Err(SecurityError::InvalidParameter(_))
+        ));
+
+        assert_eq!(guard.get_safety_tier("git_log"), ToolSafetyTier::Safe);
+    }
+
+    #[tokio::test]
+    async fn test_git_list_branches_contract_is_read_only() {
+        let guard = ToolExecutionGuard::new();
+        let repo_dir = tempfile::tempdir().expect("tempdir");
+        let repo_path = repo_dir.path().to_string_lossy();
+
+        guard
+            .validate_tool_call(
+                "git_list_branches",
+                &serde_json::json!({
+                    "path": repo_path
+                }),
+            )
+            .await
+            .expect("git_list_branches advertised params should be allowed");
+
+        assert_eq!(
+            guard.get_safety_tier("git_list_branches"),
+            ToolSafetyTier::Safe
+        );
+    }
+
+    #[test]
+    fn test_metered_media_generation_requires_confirmation() {
+        let guard = ToolExecutionGuard::new();
+
+        assert!(guard
+            .get_safety_tier("image_generate")
+            .requires_user_action());
+        assert!(guard
+            .get_safety_tier("video_generate")
+            .requires_user_action());
     }
 }

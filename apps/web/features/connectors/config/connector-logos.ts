@@ -1,7 +1,6 @@
 /**
- * Official connector logos mapping
- * Uses official SVG/PNG logos from brand repositories and CDNs
- * Fallback to placeholder if logo unavailable
+ * Official connector logo sources used when a local Simple Icons glyph is unavailable.
+ * These are rendered with safe image attributes and are gated by the app CSP's img-src.
  */
 
 export const CONNECTOR_LOGOS: Record<
@@ -29,7 +28,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   slack: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/7/76/Slack_icon.svg',
+    url: 'https://www.google.com/s2/favicons?domain=slack.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -43,12 +42,12 @@ export const CONNECTOR_LOGOS: Record<
     bgColor: '#0F9D58',
   },
   outlook: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018–present%29.svg',
+    url: 'https://www.google.com/s2/favicons?domain=outlook.live.com&sz=64',
     width: 32,
     height: 32,
   },
   onedrive: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/5/5f/OneDrive_icon.svg',
+    url: 'https://www.google.com/s2/favicons?domain=onedrive.live.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -65,7 +64,7 @@ export const CONNECTOR_LOGOS: Record<
 
   // Collaboration
   teams: {
-    url: 'https://upload.wikimedia.org/wikipedia/commons/c/c9/Microsoft_Office_Teams_%282018%E2%80%93present%29.svg',
+    url: 'https://www.google.com/s2/favicons?domain=teams.microsoft.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -92,7 +91,7 @@ export const CONNECTOR_LOGOS: Record<
     height: 32,
   },
   salesforce: {
-    url: 'https://www.salesforce.com/content/dam/web/en_us/www/images/icons/logo-salesforce.svg',
+    url: 'https://www.google.com/s2/favicons?domain=salesforce.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -150,7 +149,7 @@ export const CONNECTOR_LOGOS: Record<
 
   // AI
   openai: {
-    url: 'https://cdn.openai.com/API/favicon.png',
+    url: 'https://www.google.com/s2/favicons?domain=openai.com&sz=64',
     width: 32,
     height: 32,
   },
@@ -519,6 +518,13 @@ export function hasOfficialLogo(connectorId: string): boolean {
 export const CONNECTOR_TOOLS: Record<string, string[]> = {
   // Productivity
   gmail: ['Read emails', 'Send email', 'Search inbox', 'Manage labels', 'Create draft'],
+  'google-calendar': [
+    'List events',
+    'Create event',
+    'Update event',
+    'Find availability',
+    'Cancel event',
+  ],
   'google-drive': ['List files', 'Read file', 'Upload file', 'Create folder', 'Share file'],
   notion: ['Read pages', 'Create page', 'Update page', 'Search', 'Delete page'],
   slack: ['Read messages', 'Send message', 'List channels', 'Upload file', 'Manage reactions'],

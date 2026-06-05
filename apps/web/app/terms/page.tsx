@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Terms of service | AGI',
+  title: 'Terms of service',
   description:
     'Terms of service for AGI — license, account responsibilities, payment, termination.',
   alternates: { canonical: 'https://agiworkforce.com/terms' },

@@ -407,15 +407,18 @@ pub struct McpToolInfo {
 pub struct RegistryPackage {
     pub id: String,
     pub name: String,
-    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
     pub description: String,
     pub author: String,
     pub category: String,
     pub npm_package: Option<String>,
     pub github: Option<String>,
     pub tools: Vec<String>,
-    pub rating: f64,
-    pub downloads: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rating: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<u32>,
     pub installed: bool,
 }
 
@@ -428,13 +431,13 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
     let config = state.config.lock();
     let installed_servers: HashSet<String> = config.mcp_servers.keys().cloned().collect();
 
-    // Define well-known MCP servers available for installation
-    // This is a curated catalog, not mock data - it represents real packages
+    // Define well-known MCP server templates available for installation.
+    // Do not attach marketplace metrics here; the desktop app has no live source
+    // for package ratings, download counts, or current package versions.
     let available_servers = vec![
         (
             "filesystem",
             "Filesystem",
-            "0.6.2",
             "Secure read/write access to local filesystem",
             "@modelcontextprotocol/server-filesystem",
             vec![
@@ -453,13 +456,10 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "list_allowed_directories",
             ],
             "automation",
-            4.9,
-            45000,
         ),
         (
             "git",
             "Git",
-            "0.6.2",
             "Git repository operations and version control",
             "mcp-server-git",
             vec![
@@ -477,13 +477,10 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "git_branch",
             ],
             "development",
-            4.8,
-            142000,
         ),
         (
             "github",
             "GitHub",
-            "0.3.1",
             "Interact with GitHub repositories, issues, and pull requests",
             "@modelcontextprotocol/server-github",
             vec![
@@ -495,13 +492,10 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "push_files",
             ],
             "development",
-            4.9,
-            38000,
         ),
         (
             "google-drive",
             "Google Drive",
-            "0.1.5",
             "Access and manage Google Drive files and folders",
             "@modelcontextprotocol/server-gdrive",
             vec![
@@ -512,13 +506,10 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "search_files",
             ],
             "data",
-            4.7,
-            12000,
         ),
         (
             "slack",
             "Slack",
-            "0.1.2",
             "Send messages and interact with Slack channels",
             "@modelcontextprotocol/server-slack",
             vec![
@@ -528,46 +519,34 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "create_channel",
             ],
             "productivity",
-            4.6,
-            15200,
         ),
         (
             "terminal",
             "Terminal",
-            "0.1.0",
-            "Execute shell commands safely in a sandboxed environment",
+            "Execute shell commands through an MCP terminal server",
             "@modelcontextprotocol/server-shell",
             vec!["execute_command", "run_script"],
             "automation",
-            4.5,
-            28000,
         ),
         (
             "stripe",
             "Stripe",
-            "0.1.0",
             "Access Stripe payment data and manage subscriptions",
             "@modelcontextprotocol/server-stripe",
             vec!["list_customers", "get_payment", "list_subscriptions"],
             "integration",
-            4.4,
-            8900,
         ),
         (
             "postgres",
             "PostgreSQL",
-            "0.1.1",
             "Query PostgreSQL databases with read-only access",
             "@modelcontextprotocol/server-postgres",
             vec!["query", "list_tables", "describe_table", "get_schema"],
             "data",
-            4.5,
-            9700,
         ),
         (
             "memory",
             "Memory",
-            "0.1.0",
             "Persistent knowledge graph storage for long-term context",
             "@modelcontextprotocol/server-memory",
             vec![
@@ -577,13 +556,10 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "search_knowledge",
             ],
             "data",
-            4.3,
-            5400,
         ),
         (
             "time",
             "Time",
-            "0.1.0",
             "Current time, timezones, and date calculations",
             "@modelcontextprotocol/server-time",
             vec![
@@ -593,29 +569,25 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
                 "format_date",
             ],
             "productivity",
-            4.1,
-            3200,
         ),
     ];
 
     let mut registry: Vec<RegistryPackage> = available_servers
         .into_iter()
         .map(
-            |(id, name, version, description, npm_package, tools, category, rating, downloads)| {
-                RegistryPackage {
-                    id: format!("mcp-{}", id),
-                    name: name.to_string(),
-                    version: version.to_string(),
-                    description: description.to_string(),
-                    author: "Model Context Protocol".to_string(),
-                    category: category.to_string(),
-                    npm_package: Some(npm_package.to_string()),
-                    github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
-                    tools: tools.into_iter().map(String::from).collect(),
-                    rating,
-                    downloads,
-                    installed: installed_servers.contains(id),
-                }
+            |(id, name, description, npm_package, tools, category)| RegistryPackage {
+                id: format!("mcp-{}", id),
+                name: name.to_string(),
+                version: None,
+                description: description.to_string(),
+                author: "Model Context Protocol".to_string(),
+                category: category.to_string(),
+                npm_package: Some(npm_package.to_string()),
+                github: Some("https://github.com/modelcontextprotocol/servers".to_string()),
+                tools: tools.into_iter().map(String::from).collect(),
+                rating: None,
+                downloads: None,
+                installed: installed_servers.contains(id),
             },
         )
         .collect();
@@ -631,7 +603,7 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
         registry.push(RegistryPackage {
             id,
             name: name.clone(),
-            version: "local".to_string(),
+            version: None,
             description: format!(
                 "User-configured MCP server (command: {} {})",
                 server_config.command,
@@ -642,8 +614,8 @@ pub async fn mcp_get_registry(state: State<'_, McpState>) -> Result<Vec<Registry
             npm_package: None,
             github: None,
             tools: Vec::new(),
-            rating: 0.0,
-            downloads: 0,
+            rating: None,
+            downloads: None,
             installed: true,
         });
     }
@@ -837,12 +809,7 @@ pub async fn mcp_list_tools(state: State<'_, McpState>) -> Result<Vec<McpToolInf
                 .unwrap_or_default();
 
             McpToolInfo {
-                // Use reversible encoding to preserve original server/tool names.
-                id: format!(
-                    "mcp__hex:{}__hex:{}",
-                    hex::encode(&server_name),
-                    hex::encode(&tool.name)
-                ),
+                id: state.registry.tool_id_for(&server_name, &tool.name),
                 name: tool.name.clone(),
                 description: tool.description.unwrap_or_default(),
                 server: server_name,
@@ -872,8 +839,7 @@ pub async fn mcp_search_tools(
                 .unwrap_or_default();
 
             McpToolInfo {
-                // Use double underscore format to match registry's expected format
-                id: format!("mcp__{}__{}", server_name, tool.name),
+                id: state.registry.tool_id_for(&server_name, &tool.name),
                 name: tool.name.clone(),
                 description: tool.description.unwrap_or_default(),
                 server: server_name,

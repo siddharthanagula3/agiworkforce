@@ -1013,7 +1013,7 @@ export class LLMClientFactory {
  * directly rather than inline objects to get cache hits.
  *
  * Example usage in a Server Component or API route:
- *   const client = getCachedLLMClient('openai', 'gpt-5.5', 4000, 0.7);
+ *   const client = getCachedLLMClient(provider, modelId, 4000, 0.7);
  */
 export const getCachedLLMClient = cache(
   (

@@ -1,11 +1,8 @@
 import React, { Suspense, lazy } from 'react';
-import { Check, Loader2, Download, Server } from 'lucide-react';
-import { formatProviderModeLabel } from '@agiworkforce/types';
+import { Check, Loader2, Server } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
 import { McpClient } from '@/api/mcp';
-import { Button } from '@/components/ui/Button';
-import { Label } from '@/components/ui/Label';
 import {
   Select,
   SelectContent,
@@ -15,12 +12,10 @@ import {
 } from '@/components/ui/Select';
 import { Switch } from '@/components/ui/Switch';
 import { FavoriteModelsSelector } from '../../FavoriteModelsSelector';
+import { selectMode, useAppModeStore } from '../../../../stores/appModeStore';
 
 const LazyCustomModelsSettings = lazy(() =>
   import('../../CustomModelsSettings').then((m) => ({ default: m.CustomModelsSettings })),
-);
-const LazyTaskRoutingSettings = lazy(() =>
-  import('../../TaskRoutingSettings').then((m) => ({ default: m.TaskRoutingSettings })),
 );
 
 function Fallback({ label }: { label: string }) {
@@ -137,12 +132,6 @@ export interface ModelsKeysTabProps {
     ollamaUrl?: string;
     defaultModels?: Record<string, string>;
   };
-  chatPreferences: {
-    alwaysUseAgentMode?: boolean;
-    autoApproveTools?: boolean;
-    compactMode?: boolean;
-    promptCompletionEnabled?: boolean;
-  } | null;
   ollamaModels: string[];
   selectedOllamaModel: string;
   checkingOllama: boolean;
@@ -152,16 +141,10 @@ export interface ModelsKeysTabProps {
   onOllamaUrlChange: (url: string) => void;
   onOllamaEnabledChange: (enabled: boolean) => void;
   onOllamaModelChange: (model: string) => void;
-  onAgentModeChange: (value: boolean) => void;
-  onAutoApproveToolsChange: (value: boolean) => void;
-  onCompactModeChange: (value: boolean) => void;
-  onPromptCompletionChange: (value: boolean) => void;
-  onExportSettings: () => void;
 }
 
 export function ModelsKeysTab({
   resolvedLLMConfig,
-  chatPreferences,
   ollamaModels,
   selectedOllamaModel,
   checkingOllama,
@@ -171,51 +154,50 @@ export function ModelsKeysTab({
   onOllamaUrlChange,
   onOllamaEnabledChange,
   onOllamaModelChange,
-  onAgentModeChange,
-  onAutoApproveToolsChange,
-  onCompactModeChange,
-  onPromptCompletionChange,
-  onExportSettings,
 }: ModelsKeysTabProps) {
+  const appMode = useAppModeStore(selectMode);
+  const selectedProviderMode =
+    appMode === 'local' && (resolvedLLMConfig.providerMode ?? 'auto') === 'auto'
+      ? 'local'
+      : (resolvedLLMConfig.providerMode ?? 'auto');
+  const providerModes =
+    appMode === 'cloud' ? (['auto', 'local', 'cloud'] as const) : (['local', 'cloud'] as const);
+
   return (
     <>
       <BYOKApiKeysSection />
 
       <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Local Models</h3>
+        <h3 className="text-lg font-semibold mb-4">Model access</h3>
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Provider Mode</label>
+            <label className="text-sm font-medium">Model routing</label>
             <div className="flex gap-2">
-              {(['auto', 'local', 'cloud'] as const).map((mode) => (
+              {providerModes.map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => onProviderModeChange(mode)}
                   className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
-                    (resolvedLLMConfig.providerMode ?? 'auto') === mode
+                    selectedProviderMode === mode
                       ? 'bg-primary text-primary-foreground border-primary'
                       : 'bg-background border-border hover:bg-accent'
                   }`}
                 >
-                  {mode === 'auto'
-                    ? '⚡ Auto'
-                    : mode === 'local'
-                      ? `🖥️ ${formatProviderModeLabel('Local')}`
-                      : `☁️ ${formatProviderModeLabel('DirectByok')}`}
+                  {mode === 'auto' ? 'AGI Cloud' : mode === 'local' ? 'Local' : 'BYOK'}
                 </button>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
+              {selectedProviderMode === 'local'
                 ? 'Always use local Ollama. No data leaves your machine.'
-                : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
-                  ? 'Always use configured BYOK providers (OpenAI, Anthropic, etc.).'
-                  : 'Automatically route to the best provider for each task.'}
+                : selectedProviderMode === 'cloud'
+                  ? 'Use your configured provider keys directly. Requests go to the selected provider.'
+                  : 'Use AGI cloud routing and managed hosted models when Cloud Mode is enabled.'}
             </p>
           </div>
 
-          {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
+          {selectedProviderMode === 'local' && (
             <div className="flex flex-col gap-2">
               <label className="text-sm font-medium">Ollama URL</label>
               <input
@@ -310,100 +292,6 @@ export function ModelsKeysTab({
             <LazyCustomModelsSettings />
           </Suspense>
         </div>
-      </div>
-
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Task Routing</h3>
-        <Suspense fallback={<Fallback label="Loading task routing settings..." />}>
-          <LazyTaskRoutingSettings />
-        </Suspense>
-      </div>
-
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Settings Management</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Export or import your settings configuration
-        </p>
-        <Button variant="outline" size="sm" onClick={onExportSettings}>
-          <Download className="mr-2 h-4 w-4" />
-          Export Settings
-        </Button>
-      </div>
-
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="agentMode">Always Use Agent Mode</Label>
-              <p className="text-xs text-muted-foreground">
-                Agent mode enables tool use, web browsing, and code execution
-              </p>
-            </div>
-            <Switch
-              id="agentMode"
-              checked={chatPreferences?.alwaysUseAgentMode ?? false}
-              onCheckedChange={onAgentModeChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically approve safe tool executions without confirmation
-              </p>
-            </div>
-            <Switch
-              id="autoApprove"
-              checked={chatPreferences?.autoApproveTools ?? false}
-              onCheckedChange={onAutoApproveToolsChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="compactMode">Compact Mode</Label>
-              <p className="text-xs text-muted-foreground">
-                Reduce spacing between messages for a denser view
-              </p>
-            </div>
-            <Switch
-              id="compactMode"
-              checked={chatPreferences?.compactMode ?? false}
-              onCheckedChange={onCompactModeChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="promptCompletion">Prompt Completion</Label>
-              <p className="text-xs text-muted-foreground">
-                Show AI-powered suggestions as you type
-              </p>
-            </div>
-            <Switch
-              id="promptCompletion"
-              checked={chatPreferences?.promptCompletionEnabled ?? true}
-              onCheckedChange={onPromptCompletionChange}
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="pt-4 text-xs text-muted-foreground">
-        <h4 className="font-medium mb-2">Supported Providers</h4>
-        <ul className="list-disc list-inside space-y-1">
-          <li>OpenAI</li>
-          <li>Anthropic</li>
-          <li>Google</li>
-          <li>xAI</li>
-          <li>DeepSeek</li>
-          <li>Mistral (Large, Codestral)</li>
-          <li>Qwen</li>
-          <li>Kimi</li>
-          <li>Perplexity (Sonar Pro, Sonar Reasoning)</li>
-          <li>NVIDIA NIM (Nemotron Ultra, Super, Nano — free tier)</li>
-          <li>OpenRouter (200+ models, generous free tier)</li>
-          <li>Ollama (any local model)</li>
-        </ul>
       </div>
     </>
   );

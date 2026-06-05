@@ -1,8 +1,7 @@
-// TODO(task-1.3): migrate to packages/runtime/state (see AppStateStore.ts domain mapping)
 /**
  * Skill Marketplace Store
  *
- * Manages the 140+ AGI Workforce skills loaded via the `skill_list` Tauri command.
+ * Manages AGI Workforce skills loaded via the `skill_list` Tauri command.
  * Skills are categorized client-side by inferring category from the skill name/description.
  */
 import { create } from 'zustand';

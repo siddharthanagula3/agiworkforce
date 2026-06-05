@@ -254,6 +254,62 @@
   --blur-2xl: 40px;
 }
 
+/* Clerk auth pages need a hard contrast floor. Clerk can change nested class
+   behavior across releases, so this scoped block protects login/signup from
+   unreadable text while keeping the rest of the marketing shell untouched. */
+[data-design='agi'] .agi-auth-page :where(.cl-card) {
+  background: #161713 !important;
+  border: 1px solid rgb(255 255 255 / 0.12) !important;
+  color: #f2eadc !important;
+  box-shadow: 0 28px 80px rgb(0 0 0 / 0.36) !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-headerTitle, .cl-identityPreviewText) {
+  color: #f2eadc !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-headerSubtitle, .cl-formFieldLabel) {
+  color: #c8c0b2 !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-dividerText, .cl-footerActionText) {
+  color: #938b7d !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-socialButtonsBlockButton) {
+  background: #202119 !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  color: #f2eadc !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-socialButtonsBlockButtonText) {
+  color: #f2eadc !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-formFieldInput) {
+  background: #f7f2e8 !important;
+  border-color: rgb(226 220 207 / 0.28) !important;
+  color: #1b1c18 !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-formFieldInput::placeholder) {
+  color: #6f685e !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-formButtonPrimary) {
+  background: #d4b06d !important;
+  color: #181914 !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-footer) {
+  background: #141511 !important;
+  color: #938b7d !important;
+}
+
+[data-design='agi'] .agi-auth-page :where(.cl-footerActionLink, .cl-identityPreviewEditButton) {
+  color: #d4a85f !important;
+}
+
 @keyframes hero-fade-up {
   from {
     opacity: 0;

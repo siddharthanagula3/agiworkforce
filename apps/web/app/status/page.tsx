@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Status | AGI',
+  title: 'Status',
   description: 'Operational status of AGI services — gateway, web, signaling, providers.',
   alternates: { canonical: 'https://agiworkforce.com/status' },
 };

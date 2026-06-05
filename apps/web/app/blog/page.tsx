@@ -3,7 +3,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Writing | AGI',
+  title: 'Writing',
   description:
     'We post when we have something to say. Engineering deep-dives, security postures, design notes.',
   alternates: { canonical: 'https://agiworkforce.com/blog' },

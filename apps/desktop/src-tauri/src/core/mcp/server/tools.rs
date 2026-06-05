@@ -34,7 +34,7 @@ impl McpServerToolRegistry {
             }),
             json!({
                 "name": "agi_execute_skill",
-                "description": "Execute one of 140+ AGI Workforce AI skills by name (e.g., 'legal-contract-review', 'code-refactor', 'email-compose').",
+                "description": "Execute an available AGI Workforce skill by name.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

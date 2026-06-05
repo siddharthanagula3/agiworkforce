@@ -38,7 +38,7 @@ if (!exists(codeownersPath)) {
     '/CHANGELOG.md',
     '/docs/agent-context/',
     '/docs/engineering/',
-    '/audit/repo-organization/',
+    '/audit/',
     '/scripts/check-*.mjs',
     '/apps/cli/',
     '/apps/desktop/',

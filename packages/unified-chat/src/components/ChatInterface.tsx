@@ -241,6 +241,8 @@ export interface ChatInterfaceProps {
   onPlusClick?: () => void;
   /** Called when the user clicks the model selector */
   onModelSelectorClick?: () => void;
+  /** When false, the model selector does not fall back to cloud catalog rows if host models are empty. */
+  allowModelFallbackModels?: boolean;
   /** Called when the user clicks the voice/mic button */
   onVoiceClick?: () => void;
   /** Called when the user navigates to a sidebar view (customize, projects, skills, connectors) */
@@ -288,6 +290,7 @@ export function ChatInterface({
   enableShortcuts = true,
   onPlusClick: onPlusClickProp,
   onModelSelectorClick: onModelSelectorClickProp,
+  allowModelFallbackModels = true,
   onVoiceClick: onVoiceClickProp,
   onNavigateView,
   hostBridge = null,
@@ -491,6 +494,7 @@ export function ChatInterface({
                 onStop={stopGeneration}
                 onPlusClick={handlePlusClick}
                 onModelSelectorClick={handleModelSelectorClick}
+                allowModelFallbackModels={allowModelFallbackModels}
                 onVoiceClick={handleVoiceClick}
                 hasMessages={hasMessages}
                 disabled={!runtime}

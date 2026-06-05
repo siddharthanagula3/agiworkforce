@@ -5,10 +5,10 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { PERKS } from '../../lib/perks';
 
 export const metadata: Metadata = {
-  title: 'Partner Perks | AGI',
+  title: 'Partner Perks',
   description: 'Exclusive perks and credits from AGI partners. AWS, Linear, Vercel, and more.',
   openGraph: {
-    title: 'Partner Perks | AGI',
+    title: 'Partner Perks',
     description: 'Exclusive perks and credits from AGI partners. AWS, Linear, Vercel, and more.',
     url: 'https://agiworkforce.com/partner-perks',
     siteName: 'AGI',

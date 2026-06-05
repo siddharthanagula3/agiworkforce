@@ -7,6 +7,7 @@ use crate::core::agi::tools::{ParameterType, Tool, ToolRegistry};
 use crate::core::llm::ToolDefinition;
 use crate::sys::commands::chat::prompt_context::escape_xml;
 use crate::sys::commands::mcp::McpState;
+use crate::sys::security::{ToolExecutionGuard, ToolSafetyTier};
 use anyhow::{anyhow, Result};
 use serde_json::json;
 use std::collections::HashSet;
@@ -15,6 +16,90 @@ use std::sync::Arc;
 /// Excluded tools for chat schema generation.
 /// We intentionally hide legacy aliases to reduce duplicate tool choices.
 const CHAT_TOOL_SCHEMA_EXCLUSIONS: &[&str] = &["media_generate_image", "media_generate_video"];
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ChatToolExposure {
+    pub execution_source: &'static str,
+    pub safety_tier: &'static str,
+    pub requires_confirmation: bool,
+    pub model_capability: Option<&'static str>,
+}
+
+fn safety_tier_label(tier: ToolSafetyTier) -> &'static str {
+    match tier {
+        ToolSafetyTier::Safe => "safe",
+        ToolSafetyTier::RequiresNotification => "notify",
+        ToolSafetyTier::RequiresConfirmation => "confirm",
+        ToolSafetyTier::RequiresExplicitApproval => "explicit_approval",
+    }
+}
+
+fn required_model_capability(tool_name: &str) -> Option<&'static str> {
+    let normalized = tool_name.to_lowercase();
+
+    if normalized.starts_with("browser_")
+        || normalized.starts_with("ui_")
+        || normalized.starts_with("computer_use_")
+    {
+        return Some("computer_use");
+    }
+
+    if normalized == "search_web" || normalized == "web_search" {
+        return Some("search");
+    }
+
+    if normalized == "image_generate" || normalized == "video_generate" {
+        return Some("image_gen");
+    }
+
+    if normalized == "image_ocr" || normalized == "image_analyze" {
+        return Some("vision");
+    }
+
+    if normalized == "terminal_execute"
+        || normalized == "code_execute"
+        || normalized == "test_run"
+        || normalized.starts_with("git_")
+        || normalized.starts_with("undo_")
+        || normalized.starts_with("coding_checkpoint_")
+    {
+        return Some("code_execution");
+    }
+
+    None
+}
+
+pub(super) fn describe_chat_tool_exposure(tool_name: &str) -> ChatToolExposure {
+    let normalized = tool_name.to_lowercase();
+
+    if normalized.starts_with("__server__") {
+        return ChatToolExposure {
+            execution_source: "provider_server",
+            safety_tier: "provider_controlled",
+            requires_confirmation: false,
+            model_capability: required_model_capability(tool_name),
+        };
+    }
+
+    if normalized.starts_with("mcp__") {
+        return ChatToolExposure {
+            execution_source: "mcp_server",
+            safety_tier: "mcp_policy",
+            requires_confirmation: true,
+            model_capability: None,
+        };
+    }
+
+    let guard = ToolExecutionGuard::new();
+    let safety_tier = guard.get_safety_tier(tool_name);
+
+    ChatToolExposure {
+        execution_source: "desktop_local",
+        safety_tier: safety_tier_label(safety_tier),
+        requires_confirmation: safety_tier.requires_user_action(),
+        model_capability: required_model_capability(tool_name),
+    }
+}
 
 fn build_registry_tool_definitions(registry: &ToolRegistry) -> Vec<ToolDefinition> {
     let mut tools: Vec<ToolDefinition> = registry
@@ -96,33 +181,15 @@ pub fn filter_tools_by_capabilities(
         .filter(|tool| {
             let name = tool.name.as_str();
 
-            // Browser/UI automation tools require explicit computer-use capability.
-            if name.starts_with("browser_")
-                || name.starts_with("ui_")
-                || name.starts_with("computer_use_")
-            {
-                return capabilities.computer_use;
+            match required_model_capability(name) {
+                Some("computer_use") => capabilities.computer_use,
+                Some("search") => capabilities.search,
+                Some("image_gen") => capabilities.image_gen,
+                Some("vision") => capabilities.vision,
+                Some("code_execution") => capabilities.code_execution,
+                Some(_) => false,
+                None => true,
             }
-
-            // Search tools require search capability
-            if name == "search_web" {
-                return capabilities.search;
-            }
-
-            // Image/video generation tools require image generation capability.
-            if name == "image_generate" || name == "video_generate" {
-                return capabilities.image_gen;
-            }
-
-            // Terminal/code execution tools require code execution capability.
-            if name == "terminal_execute" || name == "code_execute" {
-                return capabilities.code_execution;
-            }
-
-            // Document generation requires tools (already checked above)
-            // File operations are always allowed if tools is true
-
-            true
         })
         .collect()
 }
@@ -185,7 +252,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
         // File Read
         ToolDefinition {
             name: "file_read".to_string(),
-            description: "Read the contents of a file. Use this when the user asks to read, view, show, or look at a file.".to_string(),
+            description: "Read the contents of a file. Use this when the user asks to read, view, show, or look at a file. Returns file_version.sha256; pass that value as expected_sha256 before editing or overwriting an existing file.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -201,7 +268,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
         // File Write
         ToolDefinition {
             name: "file_write".to_string(),
-            description: "Write content to a file. Creates the file if it doesn't exist, overwrites if it does.".to_string(),
+            description: "Write content to a file. Creates the file if it does not exist. For an existing file, expected_sha256 is required and must match file_version.sha256 returned by file_read or file_read_range.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -212,6 +279,10 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                     "content": {
                         "type": "string",
                         "description": "The content to write to the file"
+                    },
+                    "expected_sha256": {
+                        "type": "string",
+                        "description": "Required for existing files: file_version.sha256 from the latest read of the file"
                     }
                 },
                 "required": ["path", "content"]
@@ -281,13 +352,13 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
         // UI Click
         ToolDefinition {
             name: "ui_click".to_string(),
-            description: "Click on a UI element using coordinates, UIA, image matching, or text targeting.".to_string(),
+            description: "Click on a desktop UI target by coordinates, native element_id, or visible text.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "target": {
                         "type": "object",
-                        "description": "Target element (coordinates, UIA, image, or text)."
+                        "description": "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}."
                     },
                     "button": {
                         "type": "string",
@@ -302,13 +373,13 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
         // UI Type
         ToolDefinition {
             name: "ui_type".to_string(),
-            description: "Type text into a UI element specified by a target selector or coordinates.".to_string(),
+            description: "Type text into a desktop UI target by coordinates, native element_id, or visible text.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
                     "target": {
                         "type": "object",
-                        "description": "Target element."
+                        "description": "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}."
                     },
                     "text": {
                         "type": "string",
@@ -344,10 +415,9 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
             strict: None,
         },
         // Terminal Execute
-        // AUDIT-TERMINAL-055 fix: Expose timeout_ms and shell parameters to the model
         ToolDefinition {
             name: "terminal_execute".to_string(),
-            description: "Execute a shell command. Use this when the user asks to run a command, script, or terminal operation.".to_string(),
+            description: "Execute a shell command in the user's system default shell. Use this when the user asks to run a command, script, or terminal operation.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -359,13 +429,13 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "type": "string",
                         "description": "Working directory for the command (optional)"
                     },
-                    "shell": {
-                        "type": "string",
-                        "description": "Shell to use: bash, zsh, fish, sh, powershell, cmd, wsl, gitbash (default: system default shell)"
-                    },
                     "timeout_ms": {
                         "type": "integer",
                         "description": "Timeout in milliseconds for command execution (default: 60000, max: 300000)"
+                    },
+                    "max_output_bytes": {
+                        "type": "integer",
+                        "description": "Maximum stdout/stderr bytes captured and returned (default: 30000, max: 150000)"
                     }
                 },
                 "required": ["command"]
@@ -679,7 +749,7 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
         // Browser Execute Async JS
         ToolDefinition {
             name: "browser_execute_async_js".to_string(),
-            description: "Execute async JavaScript in the browser and return the result.".to_string(),
+            description: "Execute JavaScript in the browser and return the result. The script runs as an async function body, so use return to send a value back.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -687,25 +757,9 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "type": "string",
                         "description": "JavaScript to execute"
                     },
-                    "args": {
-                        "type": "array",
-                        "description": "Arguments passed to the script"
-                    },
                     "timeout_ms": {
                         "type": "integer",
-                        "description": "Timeout in milliseconds (default: 30000)"
-                    },
-                    "retry_count": {
-                        "type": "integer",
-                        "description": "Retry attempts (default: 3)"
-                    },
-                    "retry_delay_ms": {
-                        "type": "integer",
-                        "description": "Delay between retries in milliseconds (default: 1000)"
-                    },
-                    "await_promise": {
-                        "type": "boolean",
-                        "description": "Await promise results (default: true)"
+                        "description": "Timeout in milliseconds (default: 30000, max: 120000)"
                     },
                     "tab_id": {
                         "type": "string",
@@ -1082,6 +1136,24 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "type": "boolean",
                         "description": "Case-insensitive search (default false)",
                         "default": false
+                    },
+                    "output_mode": {
+                        "type": "string",
+                        "description": "Output mode: content, files_with_matches, or count (default content)"
+                    },
+                    "context_lines": {
+                        "type": "integer",
+                        "description": "Lines of context before and after each content match"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum entries to return (default 250, max 1000)",
+                        "default": 250
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of matching entries to skip before returning results (default 0)",
+                        "default": 0
                     }
                 },
                 "required": ["pattern"]
@@ -1111,6 +1183,11 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                         "type": "integer",
                         "description": "Max results (default 200, max 1000)",
                         "default": 200
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Number of matches to skip before returning results (default 0)",
+                        "default": 0
                     }
                 },
                 "required": ["pattern"]
@@ -1125,7 +1202,9 @@ fn create_builtin_tool_definitions() -> Vec<ToolDefinition> {
                 prefixed with its 1-based line number, e.g. \"42: content\". Use `offset` to \
                 start from a specific line and `limit` to control how many lines to return \
                 (default 2000). Essential for navigating large files. When a file has more \
-                lines, set has_more=true so you should call again with a higher offset.".to_string(),
+                lines, set has_more=true so you should call again with a higher offset. Returns \
+                file_version.sha256; pass the latest hash as expected_sha256 before editing or \
+                overwriting the file.".to_string(),
             parameters: json!({
                 "type": "object",
                 "properties": {
@@ -1390,6 +1469,85 @@ mod tests {
     }
 
     #[test]
+    fn build_chat_tools_terminal_schema_has_no_shell_override() {
+        let tools = build_chat_tools(None, None);
+        let terminal = tools
+            .iter()
+            .find(|tool| tool.name == "terminal_execute")
+            .expect("terminal_execute should be present");
+        let properties = terminal
+            .parameters
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("terminal schema should expose properties");
+
+        assert!(properties.contains_key("command"));
+        assert!(properties.contains_key("cwd"));
+        assert!(properties.contains_key("timeout_ms"));
+        assert!(properties.contains_key("max_output_bytes"));
+        assert!(!properties.contains_key("shell"));
+    }
+
+    #[test]
+    fn build_chat_tools_search_schemas_expose_pagination() {
+        let tools = build_chat_tools(None, None);
+        let grep = tools
+            .iter()
+            .find(|tool| tool.name == "grep_search")
+            .expect("grep_search should be present");
+        let grep_properties = grep
+            .parameters
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("grep schema should expose properties");
+        assert!(grep_properties.contains_key("limit"));
+        assert!(grep_properties.contains_key("offset"));
+
+        let glob = tools
+            .iter()
+            .find(|tool| tool.name == "glob_search")
+            .expect("glob_search should be present");
+        let glob_properties = glob
+            .parameters
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("glob schema should expose properties");
+        assert!(glob_properties.contains_key("limit"));
+        assert!(glob_properties.contains_key("offset"));
+    }
+
+    #[test]
+    fn build_chat_tools_browser_ui_schemas_match_desktop_executor() {
+        let tools = build_chat_tools(None, None);
+        let js_tool = tools
+            .iter()
+            .find(|tool| tool.name == "browser_execute_async_js")
+            .expect("browser_execute_async_js should be present");
+        let js_properties = js_tool
+            .parameters
+            .get("properties")
+            .and_then(|value| value.as_object())
+            .expect("browser_execute_async_js schema should expose properties");
+
+        assert!(js_properties.contains_key("script"));
+        assert!(js_properties.contains_key("timeout_ms"));
+        assert!(js_properties.contains_key("tab_id"));
+        assert!(!js_properties.contains_key("args"));
+        assert!(!js_properties.contains_key("retry_count"));
+        assert!(!js_properties.contains_key("retry_delay_ms"));
+        assert!(!js_properties.contains_key("await_promise"));
+
+        let ui_click = tools
+            .iter()
+            .find(|tool| tool.name == "ui_click")
+            .expect("ui_click should be present");
+        assert!(ui_click.description.contains("coordinates"));
+        assert!(ui_click.description.contains("element_id"));
+        assert!(ui_click.description.contains("visible text"));
+        assert!(!ui_click.description.contains("image matching"));
+    }
+
+    #[test]
     fn filter_hides_media_generation_when_image_gen_disabled() {
         let tools = vec![test_tool("image_generate"), test_tool("video_generate")];
         let caps = ModelCapabilitiesDto {
@@ -1418,6 +1576,114 @@ mod tests {
 
         assert!(!names.contains("browser_navigate"));
         assert!(!names.contains("ui_click"));
+    }
+
+    #[test]
+    fn filter_hides_vision_tools_without_vision_capability() {
+        let tools = vec![test_tool("image_ocr"), test_tool("image_analyze")];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            vision: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn filter_hides_git_and_test_tools_without_code_execution() {
+        let tools = vec![
+            test_tool("git_status"),
+            test_tool("git_diff"),
+            test_tool("git_log"),
+            test_tool("git_list_branches"),
+            test_tool("git_commit"),
+            test_tool("test_run"),
+            test_tool("file_read"),
+        ];
+        let caps = ModelCapabilitiesDto {
+            tools: true,
+            code_execution: false,
+            ..Default::default()
+        };
+
+        let filtered = filter_tools_by_capabilities(tools, &caps);
+        let names: HashSet<&str> = filtered.iter().map(|tool| tool.name.as_str()).collect();
+
+        assert!(!names.contains("git_status"));
+        assert!(!names.contains("git_diff"));
+        assert!(!names.contains("git_log"));
+        assert!(!names.contains("git_list_branches"));
+        assert!(!names.contains("git_commit"));
+        assert!(!names.contains("test_run"));
+        assert!(names.contains("file_read"));
+    }
+
+    #[test]
+    fn tool_exposure_metadata_distinguishes_sources_and_safety() {
+        let file_read = describe_chat_tool_exposure("file_read");
+        assert_eq!(file_read.execution_source, "desktop_local");
+        assert_eq!(file_read.safety_tier, "safe");
+        assert!(!file_read.requires_confirmation);
+
+        let file_write = describe_chat_tool_exposure("file_write");
+        assert_eq!(file_write.execution_source, "desktop_local");
+        assert_eq!(file_write.safety_tier, "confirm");
+        assert!(file_write.requires_confirmation);
+
+        let mcp_tool = describe_chat_tool_exposure("mcp__filesystem__read_text_file");
+        assert_eq!(mcp_tool.execution_source, "mcp_server");
+        assert_eq!(mcp_tool.safety_tier, "mcp_policy");
+        assert!(mcp_tool.requires_confirmation);
+
+        let server_tool = describe_chat_tool_exposure("__server__web_search");
+        assert_eq!(server_tool.execution_source, "provider_server");
+        assert_eq!(server_tool.safety_tier, "provider_controlled");
+    }
+
+    #[test]
+    fn builtin_file_tools_expose_stale_read_contract() {
+        let tools = create_builtin_tool_definitions();
+        let file_read = tools
+            .iter()
+            .find(|tool| tool.name == "file_read")
+            .expect("file_read built-in");
+        assert!(file_read.description.contains("file_version.sha256"));
+
+        let file_write = tools
+            .iter()
+            .find(|tool| tool.name == "file_write")
+            .expect("file_write built-in");
+        assert!(file_write.description.contains("expected_sha256"));
+        assert!(file_write.parameters["properties"]
+            .as_object()
+            .expect("properties object")
+            .contains_key("expected_sha256"));
+    }
+
+    #[test]
+    fn default_chat_tools_have_exposure_metadata() {
+        let tools = build_chat_tools(None, None);
+        assert!(!tools.is_empty());
+
+        for tool in tools {
+            let exposure = describe_chat_tool_exposure(&tool.name);
+            assert!(
+                matches!(
+                    exposure.execution_source,
+                    "desktop_local" | "mcp_server" | "provider_server"
+                ),
+                "tool '{}' has unknown execution source: {:?}",
+                tool.name,
+                exposure
+            );
+            assert!(
+                !exposure.safety_tier.is_empty(),
+                "tool '{}' should have a safety tier label",
+                tool.name
+            );
+        }
     }
 
     #[test]

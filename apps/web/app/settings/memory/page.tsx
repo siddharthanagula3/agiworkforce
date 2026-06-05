@@ -6,10 +6,8 @@ import { MemoryEditor } from '@agiworkforce/unified-chat';
  * /settings/memory — surfaces the shared MemoryEditor primitive on the web,
  * matching the Claude.ai Settings → Memory section.
  *
- * Round-2 audit P0 #8 (2026-05-21). v1 LOCAL-ONLY POSTURE: memory facts
- * are stored device-locally via the unified-chat memoryStore (zustand/persist).
- * Cloud sync of memory arrives with the Cloud Managed waitlist and is NOT
- * wired here.
+ * Memory facts are stored device-locally via the unified-chat memoryStore
+ * (zustand/persist). Hosted memory sync is a separate cloud upgrade path.
  */
 export default function MemorySettingsPage() {
   return (
@@ -27,8 +25,8 @@ export default function MemorySettingsPage() {
           Memory
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Facts the assistant should remember about you across conversations. Stored on this device
-          only — cloud sync arrives with Cloud Managed.
+          Facts the assistant should remember about you across conversations. Stored on this device;
+          hosted memory sync is available through cloud upgrades.
         </p>
       </div>
 

@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Subprocessors | AGI',
+  title: 'Subprocessors',
   description:
     'Third parties that process customer data on AGI&rsquo;s behalf, with their purpose and region.',
   alternates: { canonical: 'https://agiworkforce.com/subprocessors' },

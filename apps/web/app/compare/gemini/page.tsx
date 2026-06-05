@@ -4,7 +4,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI vs Google Gemini | AGI',
+  title: 'AGI vs Google Gemini',
   description:
     'Honest review of Google Gemini. Where Gemini wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/gemini' },

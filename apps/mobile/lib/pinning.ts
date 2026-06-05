@@ -176,8 +176,8 @@ export function pinningStartupState(opts: {
  * on-device; the pinned hosts are gated). It now WARNS instead of throwing;
  * fail-closed behaviour is preserved at the `secureFetch` layer (placeholder
  * pins can never match a real certificate). Provisioning real SPKI pins before
- * public launch remains a tracked release/ops task (see reports/BLOCKERS.md and
- * the runbook above).
+ * public launch remains a tracked release/ops task (see
+ * docs/current/commercial-and-launch.md and the runbook above).
  */
 function reportPinningStatusAtStartup(): PinningStartupState {
   const isDev = typeof __DEV__ !== 'undefined' && __DEV__;

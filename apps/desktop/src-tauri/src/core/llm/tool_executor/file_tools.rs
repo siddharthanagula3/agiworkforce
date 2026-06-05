@@ -1,5 +1,7 @@
 use super::*;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use sha2::{Digest, Sha256};
+use std::time::UNIX_EPOCH;
 
 pub(super) const FILE_LIST_TIMEOUT_MS: u64 = 30_000; // Increased from 10s: large dirs and network filesystems
 pub(super) const FILE_LIST_MAX_LIMIT: usize = 2_000;
@@ -7,6 +9,8 @@ pub(super) const FILE_LIST_DEFAULT_LIMIT: usize = 500;
 pub(super) const FILE_LIST_MAX_OFFSET: usize = 100_000;
 pub(super) const FILE_READ_MAX_CHARS: usize = 200_000;
 pub(super) const FILE_READ_MAX_BYTES: u64 = 50 * 1024 * 1024;
+pub(super) const FILE_READ_RANGE_DEFAULT_LIMIT: usize = 2_000;
+pub(super) const FILE_READ_RANGE_MAX_LIMIT: usize = 5_000;
 /// Maximum size for binary file reads (50 MB). Binary files are base64-encoded
 /// in the response, so the actual JSON payload will be ~33% larger than the
 /// raw file. Keeping the same limit as text reads avoids surprise OOMs.
@@ -15,7 +19,106 @@ pub(super) const FILE_WRITE_MAX_BYTES: usize = 10 * 1024 * 1024;
 pub(super) const FILE_LIST_DEFAULT_EXCLUDES: &[&str] =
     &[".git", "node_modules", "dist", "build", ".next", "target"];
 
+pub(super) const EXPECTED_SHA256_PARAM: &str = "expected_sha256";
+
+#[derive(Debug, Clone)]
+pub(super) struct FileVersionMetadata {
+    pub sha256: String,
+    pub modified_ms: Option<u64>,
+    pub size_bytes: u64,
+}
+
 impl ToolExecutor {
+    pub(super) fn sha256_hex(bytes: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hex::encode(hasher.finalize())
+    }
+
+    pub(super) fn file_version_json(version: &FileVersionMetadata) -> Value {
+        json!({
+            "sha256": version.sha256,
+            "modified_ms": version.modified_ms,
+            "size_bytes": version.size_bytes,
+        })
+    }
+
+    pub(super) fn file_version_from_bytes(
+        metadata: &std::fs::Metadata,
+        bytes: &[u8],
+    ) -> FileVersionMetadata {
+        let modified_ms = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
+
+        FileVersionMetadata {
+            sha256: Self::sha256_hex(bytes),
+            modified_ms,
+            size_bytes: metadata.len(),
+        }
+    }
+
+    pub(super) fn parse_expected_sha256(
+        args: &HashMap<String, Value>,
+    ) -> std::result::Result<Option<String>, String> {
+        let Some(value) = args.get(EXPECTED_SHA256_PARAM) else {
+            return Ok(None);
+        };
+        let Some(raw) = value.as_str() else {
+            return Err("expected_sha256 must be a lowercase SHA-256 hex string".to_string());
+        };
+        Self::validate_expected_sha256(raw).map(Some)
+    }
+
+    pub(super) fn parse_required_expected_sha256(
+        args: &HashMap<String, Value>,
+    ) -> std::result::Result<String, String> {
+        Self::parse_expected_sha256(args)?.ok_or_else(|| {
+            "expected_sha256 is required when modifying an existing file. Read the file first and pass file_version.sha256.".to_string()
+        })
+    }
+
+    pub(super) fn validate_expected_sha256(raw: &str) -> std::result::Result<String, String> {
+        let value = raw.trim();
+        if value.len() != 64 || !value.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Err("expected_sha256 must be a 64-character SHA-256 hex string".to_string());
+        }
+        if value.chars().any(|ch| ch.is_ascii_uppercase()) {
+            return Err("expected_sha256 must use lowercase hex".to_string());
+        }
+        Ok(value.to_string())
+    }
+
+    pub(super) async fn validate_file_sha256_guard(
+        path: &Path,
+        expected_sha256: &str,
+    ) -> std::result::Result<FileVersionMetadata, String> {
+        let metadata = fs::metadata(path).await.map_err(|e| {
+            format!(
+                "Cannot stat '{}' for stale-read guard: {}",
+                path.display(),
+                e
+            )
+        })?;
+        let bytes = fs::read(path).await.map_err(|e| {
+            format!(
+                "Cannot read '{}' for stale-read guard: {}",
+                path.display(),
+                e
+            )
+        })?;
+        let version = Self::file_version_from_bytes(&metadata, &bytes);
+        if version.sha256 != expected_sha256 {
+            return Err(format!(
+                "File has changed since it was read. Expected sha256 {}, found {}. Read the file again before editing.",
+                expected_sha256, version.sha256
+            ));
+        }
+        Ok(version)
+    }
+
     pub(super) fn parse_string_array_param(
         args: &HashMap<String, Value>,
         key: &str,
@@ -61,10 +164,19 @@ impl ToolExecutor {
         };
         let validated_path_string = validated_path.to_string_lossy().to_string();
 
-        let file_size = match fs::metadata(&validated_path).await {
-            Ok(metadata) => metadata.len(),
-            Err(_) => 0,
+        let metadata = match fs::metadata(&validated_path).await {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                let error = format!("Failed to stat file: {}", e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                });
+            }
         };
+        let file_size = metadata.len();
         if file_size > FILE_READ_MAX_BYTES {
             let error = format!(
                 "File too large to read: {} bytes (max {} bytes).",
@@ -78,19 +190,34 @@ impl ToolExecutor {
             });
         }
 
-        match fs::read_to_string(&validated_path).await {
-            Ok(content) => {
-                let content = if content.len() > FILE_READ_MAX_CHARS {
+        let bytes = match fs::read(&validated_path).await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                let error = format!("Failed to read file: {}", e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                });
+            }
+        };
+        let file_version = Self::file_version_from_bytes(&metadata, &bytes);
+
+        match std::str::from_utf8(&bytes) {
+            Ok(raw_content) => {
+                let content_was_truncated = raw_content.len() > FILE_READ_MAX_CHARS;
+                let content = if content_was_truncated {
                     let safe_end =
-                        crate::core::agi::floor_char_boundary(&content, FILE_READ_MAX_CHARS);
+                        crate::core::agi::floor_char_boundary(raw_content, FILE_READ_MAX_CHARS);
                     format!(
                         "{}\n\n... [truncated to first {} chars out of {}]",
-                        &content[..safe_end],
+                        &raw_content[..safe_end],
                         safe_end,
-                        content.len()
+                        raw_content.len()
                     )
                 } else {
-                    content
+                    raw_content.to_string()
                 };
 
                 if let Some(app_handle) = &self.app_handle {
@@ -106,12 +233,21 @@ impl ToolExecutor {
 
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "content": content, "path": &validated_path_string }),
+                    data: json!({
+                        "content": content,
+                        "path": &validated_path_string,
+                        "file_version": Self::file_version_json(&file_version),
+                        "truncated": content_was_truncated,
+                        "is_partial_view": content_was_truncated,
+                    }),
                     error: None,
-                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                    metadata: HashMap::from([
+                        ("path".to_string(), json!(&validated_path_string)),
+                        ("sha256".to_string(), json!(&file_version.sha256)),
+                    ]),
                 })
             }
-            Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+            Err(_) => {
                 let is_pdf = validated_path
                     .extension()
                     .and_then(|ext| ext.to_str())
@@ -128,7 +264,8 @@ impl ToolExecutor {
 
                     match pdf_extract_result {
                         Ok(extracted_text) => {
-                            let content = if extracted_text.len() > FILE_READ_MAX_CHARS {
+                            let content_was_truncated = extracted_text.len() > FILE_READ_MAX_CHARS;
+                            let content = if content_was_truncated {
                                 let safe_end = crate::core::agi::floor_char_boundary(
                                     &extracted_text,
                                     FILE_READ_MAX_CHARS,
@@ -156,11 +293,18 @@ impl ToolExecutor {
 
                             Ok(ToolResult {
                                 success: true,
-                                data: json!({ "content": content, "path": &validated_path_string }),
+                                data: json!({
+                                    "content": content,
+                                    "path": &validated_path_string,
+                                    "file_version": Self::file_version_json(&file_version),
+                                    "truncated": content_was_truncated,
+                                    "is_partial_view": content_was_truncated,
+                                }),
                                 error: None,
                                 metadata: HashMap::from([
                                     ("path".to_string(), json!(&validated_path_string)),
                                     ("source".to_string(), json!("pdf_extract")),
+                                    ("sha256".to_string(), json!(&file_version.sha256)),
                                 ]),
                             })
                         }
@@ -182,7 +326,11 @@ impl ToolExecutor {
 
                             Ok(ToolResult {
                                 success: false,
-                                data: json!({ "error": error.clone(), "success": false }),
+                                data: json!({
+                                    "error": error.clone(),
+                                    "success": false,
+                                    "file_version": Self::file_version_json(&file_version),
+                                }),
                                 error: Some(error),
                                 metadata: HashMap::from([(
                                     "path".to_string(),
@@ -209,7 +357,11 @@ impl ToolExecutor {
 
                     Ok(ToolResult {
                         success: false,
-                        data: json!({ "error": error.clone(), "success": false }),
+                        data: json!({
+                            "error": error.clone(),
+                            "success": false,
+                            "file_version": Self::file_version_json(&file_version),
+                        }),
                         error: Some(error),
                         metadata: HashMap::from([(
                             "path".to_string(),
@@ -218,26 +370,180 @@ impl ToolExecutor {
                     })
                 }
             }
-            Err(e) => {
-                if let Some(app_handle) = &self.app_handle {
-                    let file_op = create_file_read_event(
-                        &validated_path_string,
-                        "",
-                        false,
-                        Some(e.to_string()),
-                        session_id.clone(),
-                    );
-                    emit_file_operation(app_handle, file_op);
-                }
-
-                Ok(ToolResult {
-                    success: false,
-                    data: json!({ "error": format!("Failed to read file: {}", e), "success": false }),
-                    error: Some(format!("Failed to read file: {}", e)),
-                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
-                })
-            }
         }
+    }
+
+    pub(crate) async fn execute_file_read_range_tool(
+        &self,
+        args: &HashMap<String, Value>,
+    ) -> Result<ToolResult> {
+        let raw_path = args
+            .get("path")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| anyhow!("Missing path parameter"))?
+            .to_string();
+        let path = self.resolve_path(&raw_path);
+        let offset = args
+            .get("offset")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(1);
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(FILE_READ_RANGE_DEFAULT_LIMIT)
+            .min(FILE_READ_RANGE_MAX_LIMIT);
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if offset == 0 {
+            let error = "offset must be a 1-indexed line number".to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            });
+        }
+
+        if limit == 0 {
+            let error = "limit must be greater than zero".to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&path))]),
+            });
+        }
+
+        let validated_path = match self.canonicalize_validated_path(&path).await {
+            Ok(validated_path) => validated_path,
+            Err(e) => {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": e.to_string(), "success": false }),
+                    error: Some(e.to_string()),
+                    metadata: HashMap::from([("path".to_string(), json!(&path))]),
+                });
+            }
+        };
+        let validated_path_string = validated_path.to_string_lossy().to_string();
+
+        let metadata = match fs::metadata(&validated_path).await {
+            Ok(metadata) => metadata,
+            Err(e) => {
+                let error = format!("Failed to stat file: {}", e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                });
+            }
+        };
+        let file_size = metadata.len();
+        if file_size > FILE_READ_MAX_BYTES {
+            let error = format!(
+                "File too large to read: {} bytes (max {} bytes).",
+                file_size, FILE_READ_MAX_BYTES
+            );
+            return Ok(ToolResult {
+                success: false,
+                data: json!({ "error": error.clone(), "success": false }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+            });
+        }
+
+        let bytes = match fs::read(&validated_path).await {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                let error = format!("Failed to read file: {}", e);
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": error.clone(), "success": false }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                });
+            }
+        };
+
+        let file_version = Self::file_version_from_bytes(&metadata, &bytes);
+        let content = String::from_utf8_lossy(&bytes);
+        let lines = content.lines().collect::<Vec<_>>();
+        let total_lines = lines.len();
+
+        if total_lines > 0 && offset > total_lines {
+            let error = "offset exceeds file length".to_string();
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": error.clone(),
+                    "success": false,
+                    "path": &validated_path_string,
+                    "offset": offset,
+                    "total_lines": total_lines,
+                }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+            });
+        }
+
+        let start_index = offset.saturating_sub(1);
+        let selected = lines
+            .iter()
+            .enumerate()
+            .skip(start_index)
+            .take(limit)
+            .map(|(idx, line)| format!("{}: {}", idx + 1, line))
+            .collect::<Vec<_>>();
+        let numbered_content = selected.join("\n");
+        let line_count = selected.len();
+        let has_more = start_index + line_count < total_lines;
+        let next_offset = if has_more {
+            Some(offset + line_count)
+        } else {
+            None
+        };
+
+        if let Some(app_handle) = &self.app_handle {
+            let file_op = create_file_read_event(
+                &validated_path_string,
+                &numbered_content,
+                true,
+                None,
+                session_id.clone(),
+            );
+            emit_file_operation(app_handle, file_op);
+        }
+
+        Ok(ToolResult {
+            success: true,
+            data: json!({
+                "content": numbered_content,
+                "path": &validated_path_string,
+                "offset": offset,
+                "limit": limit,
+                "line_count": line_count,
+                "start_line": offset,
+                "total_lines": total_lines,
+                "has_more": has_more,
+                "next_offset": next_offset,
+                "line_numbers": true,
+                "file_version": Self::file_version_json(&file_version),
+                "is_partial_view": true,
+            }),
+            error: None,
+            metadata: HashMap::from([
+                ("path".to_string(), json!(&validated_path_string)),
+                ("line_count".to_string(), json!(line_count)),
+                ("total_lines".to_string(), json!(total_lines)),
+                ("sha256".to_string(), json!(&file_version.sha256)),
+            ]),
+        })
     }
 
     pub(crate) async fn execute_file_write_tool(
@@ -287,7 +593,54 @@ impl ToolExecutor {
         };
         let validated_path_string = validated_path.to_string_lossy().to_string();
 
+        let file_exists = fs::metadata(&validated_path).await.is_ok();
         let old_content = fs::read_to_string(&validated_path).await.ok();
+        if file_exists {
+            let expected_sha256 = match Self::parse_required_expected_sha256(args) {
+                Ok(expected_sha256) => expected_sha256,
+                Err(error) => {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({
+                            "error": error.clone(),
+                            "success": false,
+                            "path": &validated_path_string,
+                        }),
+                        error: Some(error),
+                        metadata: HashMap::from([(
+                            "path".to_string(),
+                            json!(&validated_path_string),
+                        )]),
+                    });
+                }
+            };
+            if let Err(error) =
+                Self::validate_file_sha256_guard(&validated_path, &expected_sha256).await
+            {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "error": error.clone(),
+                        "success": false,
+                        "path": &validated_path_string,
+                    }),
+                    error: Some(error),
+                    metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+                });
+            }
+        } else if let Err(error) = Self::parse_expected_sha256(args) {
+            return Ok(ToolResult {
+                success: false,
+                data: json!({
+                    "error": error.clone(),
+                    "success": false,
+                    "path": &validated_path_string,
+                }),
+                error: Some(error),
+                metadata: HashMap::from([("path".to_string(), json!(&validated_path_string))]),
+            });
+        }
+
         if let Some(parent) = validated_path.parent() {
             let _ = fs::create_dir_all(parent).await;
         }
@@ -510,21 +863,12 @@ impl ToolExecutor {
         let started = Instant::now();
         let list_result = timeout(TokioDuration::from_millis(timeout_ms), async {
             let mut entries = fs::read_dir(&path).await?;
-            let mut matched = 0usize;
             let mut items = Vec::new();
 
             while let Some(entry) = entries.next_entry().await? {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if Self::should_exclude_file_list_entry(&name, &excludes) {
                     continue;
-                }
-
-                matched += 1;
-                if matched <= offset {
-                    continue;
-                }
-                if items.len() > limit {
-                    break;
                 }
 
                 let file_type = entry.file_type().await.ok();
@@ -550,11 +894,14 @@ impl ToolExecutor {
                 name_a.cmp(name_b)
             });
 
-            let has_more = items.len() > limit;
-            if has_more {
-                items.truncate(limit);
-            }
+            let total_matched = items.len();
+            let items = items
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .collect::<Vec<_>>();
             let returned = items.len();
+            let has_more = offset + returned < total_matched;
             let next_offset = if has_more {
                 Some(offset + returned)
             } else {
@@ -569,6 +916,7 @@ impl ToolExecutor {
                 "limit": limit,
                 "has_more": has_more,
                 "next_offset": next_offset,
+                "total_matched": total_matched,
                 "path": &path,
                 "excluded": excludes,
                 "max_depth": 1

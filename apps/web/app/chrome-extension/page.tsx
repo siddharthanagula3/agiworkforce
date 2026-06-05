@@ -150,7 +150,7 @@ export default function ChromeExtensionPage() {
             {POSITIONING.trustBoundary}
           </p>
           <div className="agi-cta-row">
-            <Link href="/download" className="agi-cta-primary">
+            <Link href="/waitlist" className="agi-cta-primary">
               {LAUNCH.ctaLabel}
             </Link>
             <Link href="/desktop" className="agi-cta-ghost">

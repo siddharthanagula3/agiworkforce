@@ -57,8 +57,8 @@ function findCheaperFallbackModel(
 
   // Try each fallback model and find the cheapest one that's cheaper than current
   for (const fallback of fallbackModels) {
-    // Skip only if it's the exact same model (not same provider - cheaper same-provider
-    // models like claude-haiku should be valid fallbacks for claude-opus)
+    // Skip only if it resolves to the exact same model. Cheaper alternatives
+    // from the same provider remain valid fallbacks when the catalog allows them.
     if (fallback.model === canonicalCurrentModel || fallback.model === modelLower) {
       continue;
     }

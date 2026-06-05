@@ -20,7 +20,7 @@ describe('CloudUpgradeWaitlistDialog', () => {
   it('renders the mobile Cloud waitlist entry copy', () => {
     render(<CloudUpgradeWaitlistDialog open onOpenChange={vi.fn()} />);
 
-    expect(screen.getAllByText('Managed cloud waitlist.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Upgrade hosted cloud.').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
         /website trial uses AGI managed Auto Economy.*larger hosted models, search, tools, files, and computer-use/i,
@@ -37,7 +37,7 @@ describe('CloudUpgradeWaitlistDialog', () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'Test@Example.COM' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /join waitlist/i }));
+    fireEvent.click(screen.getByRole('button', { name: /request upgrade access/i }));
 
     await waitFor(() => {
       expect(mockJoinWaitlist).toHaveBeenCalledWith({
@@ -59,9 +59,9 @@ describe('CloudUpgradeWaitlistDialog', () => {
     fireEvent.change(screen.getByLabelText(/email/i), {
       target: { value: 'test@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /join waitlist/i }));
+    fireEvent.click(screen.getByRole('button', { name: /request upgrade access/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Failed to join waitlist.');
-    expect(screen.getAllByText('Managed cloud waitlist.').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Upgrade hosted cloud.').length).toBeGreaterThan(0);
   });
 });

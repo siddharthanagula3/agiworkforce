@@ -5,7 +5,7 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 import { LAUNCH } from '../../../lib/marketing-constants';
 
 export const metadata: Metadata = {
-  title: 'EU Representative | AGI',
+  title: 'EU Representative',
   description: 'EU representative status for AGI mobile and web users before the public launch.',
   alternates: { canonical: 'https://agiworkforce.com/legal/eu-representative' },
 };

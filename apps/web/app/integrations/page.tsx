@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Integrations | AGI',
+  title: 'Integrations',
   description:
     'How AGI connects to other tools — MCP plugins, native messaging bridge, BYOK against any cloud provider.',
   alternates: { canonical: 'https://agiworkforce.com/integrations' },
@@ -31,8 +31,9 @@ export default function IntegrationsPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">MCP plugins</h3>
               <p className="agi-reason-p">
-                Plug any Model Context Protocol server into the agent. stdio, SSE, and streamable
-                HTTP transports supported. Discover plugins, mount them, scope their access.
+                Plug Model Context Protocol servers into the agent. stdio is the first shipped
+                transport; SSE and streamable HTTP stay on the planned public-release path. Discover
+                plugins, mount them, scope their access.
               </p>
             </li>
             <li className="agi-reason">
@@ -65,7 +66,9 @@ export default function IntegrationsPage() {
               </tr>
               <tr>
                 <td>MCP transports</td>
-                <td>stdio (shipped) · SSE + streamable HTTP (in flight).</td>
+                <td>
+                  stdio shipped first. SSE + streamable HTTP are planned for the release path.
+                </td>
               </tr>
               <tr>
                 <td>Native messaging</td>

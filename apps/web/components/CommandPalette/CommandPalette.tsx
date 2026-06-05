@@ -35,7 +35,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { AVAILABLE_MODELS } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
-import { getProviderDefaultModel, normalizeModelId } from '@agiworkforce/types';
+import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -57,7 +57,7 @@ export interface CommandOption {
 
 type ActiveSubMenu = 'model' | null;
 
-const DEFAULT_COMMAND_PALETTE_MODEL = getProviderDefaultModel('anthropic') ?? 'claude-sonnet-4.6';
+const DEFAULT_COMMAND_PALETTE_MODEL = requireProviderDefaultModel('anthropic');
 
 // ---------------------------------------------------------------------------
 // Hook: build the full command list
@@ -112,7 +112,7 @@ function useCommands(
 
     // ---------- Navigate ----------
     {
-      id: 'go-chat',
+      id: 'go-chat-dashboard',
       title: 'Go to Chat',
       group: 'Navigate',
       icon: LayoutDashboard,
@@ -132,7 +132,7 @@ function useCommands(
       title: 'Go to Settings',
       group: 'Navigate',
       icon: Settings,
-      action: () => router.push('/chat'),
+      action: () => router.push('/settings/general'),
     },
     {
       id: 'go-billing',

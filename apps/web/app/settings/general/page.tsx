@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@/stores/unified/auth';
@@ -325,25 +326,23 @@ export default function GeneralSettingsPage() {
                 {accountEmail || 'Account email unavailable'}
               </span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <button
-                  type="button"
-                  disabled
-                  title="Avatar upload requires Cloud Managed"
+                <Link
+                  href="/pricing"
+                  title="Avatar upload is available with hosted cloud upgrades"
                   style={{
                     padding: '4px 10px',
                     fontSize: 11,
                     fontWeight: 600,
-                    color: 'var(--text-3)',
+                    color: 'var(--text-2)',
                     background: 'transparent',
                     border: '1px solid var(--settings-border)',
                     borderRadius: 'var(--radius-md)',
-                    cursor: 'not-allowed',
-                    opacity: 0.6,
+                    textDecoration: 'none',
                   }}
                 >
-                  Change photo
-                </button>
-                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Cloud Managed only</span>
+                  Upgrade for photo upload
+                </Link>
+                <span style={{ fontSize: 11, color: 'var(--text-3)' }}>Hosted cloud upgrade</span>
               </div>
             </div>
           </div>

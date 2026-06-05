@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     'enterprise AI automation',
   ],
   openGraph: {
-    title: 'Use Cases | AGI',
+    title: 'Use Cases',
     description:
       'How real teams use AGI across consulting, sales, healthcare, legal, finance, and IT.',
     type: 'website',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Use Cases | AGI',
+    title: 'Use Cases',
     description:
       'How real teams use AGI across consulting, sales, healthcare, legal, finance, and IT.',
     images: ['/app-preview.png'],

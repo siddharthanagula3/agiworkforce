@@ -1,5 +1,40 @@
 use super::*;
 
+fn parse_ui_coordinates(target: &Value) -> Result<Option<(i32, i32)>> {
+    let coordinate_source = target.get("coordinates").unwrap_or(target);
+    let Some(x) = coordinate_source.get("x").and_then(Value::as_i64) else {
+        return Ok(None);
+    };
+    let Some(y) = coordinate_source.get("y").and_then(Value::as_i64) else {
+        return Err(anyhow!("Target coordinates must include both x and y"));
+    };
+    const MIN_COORD: i64 = -16_000;
+    const MAX_COORD: i64 = 32_000;
+    if !(MIN_COORD..=MAX_COORD).contains(&x) || !(MIN_COORD..=MAX_COORD).contains(&y) {
+        return Err(anyhow!(
+            "Target coordinates out of bounds: ({x}, {y}). Must be between {MIN_COORD} and {MAX_COORD}"
+        ));
+    }
+    Ok(Some((x as i32, y as i32)))
+}
+
+fn parse_ui_mouse_button(
+    args: &HashMap<String, Value>,
+) -> Result<(crate::automation::input::MouseButton, &'static str)> {
+    let button = args
+        .get("button")
+        .and_then(Value::as_str)
+        .unwrap_or("left")
+        .trim()
+        .to_ascii_lowercase();
+    match button.as_str() {
+        "" | "left" => Ok((crate::automation::input::MouseButton::Left, "left")),
+        "right" => Ok((crate::automation::input::MouseButton::Right, "right")),
+        "middle" => Ok((crate::automation::input::MouseButton::Middle, "middle")),
+        _ => Err(anyhow!("button must be one of: left, right, middle")),
+    }
+}
+
 impl ToolExecutor {
     pub(super) async fn execute_ui_screenshot_tool(
         &self,
@@ -70,7 +105,7 @@ impl ToolExecutor {
         args: &HashMap<String, Value>,
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
-            use crate::automation::{input::MouseButton, types::ElementQuery, AutomationService};
+            use crate::automation::{types::ElementQuery, AutomationService};
             use tauri::Manager;
 
             let automation_opt = app.state::<std::sync::Arc<Option<AutomationService>>>();
@@ -98,13 +133,12 @@ impl ToolExecutor {
             let target = args
                 .get("target")
                 .ok_or_else(|| anyhow!("Missing target parameter"))?;
+            let (button, button_name) = parse_ui_mouse_button(args)?;
 
-            if let Some(coords) = target.get("coordinates") {
-                let x = coords.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                let y = coords.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+            if let Some((x, y)) = parse_ui_coordinates(target)? {
                 let mut mouse_guard = automation.mouse.lock().await;
                 let mouse_result = match mouse_guard.as_mut() {
-                    Some(mouse) => mouse.click(x, y, MouseButton::Left),
+                    Some(mouse) => mouse.click(x, y, button),
                     None => Err(anyhow!(
                         "Mouse automation requires Input Monitoring permission. \
                          Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
@@ -113,9 +147,12 @@ impl ToolExecutor {
                 match mouse_result {
                     Ok(_) => Ok(ToolResult {
                         success: true,
-                        data: json!({ "success": true, "action": "clicked", "x": x, "y": y }),
+                        data: json!({ "success": true, "action": "clicked", "x": x, "y": y, "button": button_name }),
                         error: None,
-                        metadata: HashMap::new(),
+                        metadata: HashMap::from([
+                            ("target_kind".to_string(), json!("coordinates")),
+                            ("button".to_string(), json!(button_name)),
+                        ]),
                     }),
                     Err(e) => Ok(ToolResult {
                         success: false,
@@ -125,12 +162,20 @@ impl ToolExecutor {
                     }),
                 }
             } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
+                if button_name != "left" {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": "element_id targets support only left-button invocation; use coordinates for right or middle click", "success": false }),
+                        error: Some("element_id targets support only left-button invocation; use coordinates for right or middle click".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
                 match automation.native.invoke(element_id) {
                     Ok(_) => Ok(ToolResult {
                         success: true,
                         data: json!({ "success": true, "action": "invoked", "element_id": element_id }),
                         error: None,
-                        metadata: HashMap::new(),
+                        metadata: HashMap::from([("target_kind".to_string(), json!("element_id"))]),
                     }),
                     Err(e) => Ok(ToolResult {
                         success: false,
@@ -140,6 +185,14 @@ impl ToolExecutor {
                     }),
                 }
             } else if let Some(text) = target.get("text").and_then(|v| v.as_str()) {
+                if button_name != "left" {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": "text targets support only left-button invocation; use coordinates for right or middle click", "success": false }),
+                        error: Some("text targets support only left-button invocation; use coordinates for right or middle click".to_string()),
+                        metadata: HashMap::new(),
+                    });
+                }
                 let query = ElementQuery {
                     window: None,
                     window_class: None,
@@ -157,7 +210,10 @@ impl ToolExecutor {
                                     success: true,
                                     data: json!({ "success": true, "action": "invoked", "element_id": element.id, "found_by": "text", "text": text }),
                                     error: None,
-                                    metadata: HashMap::new(),
+                                    metadata: HashMap::from([(
+                                        "target_kind".to_string(),
+                                        json!("text"),
+                                    )]),
                                 }),
                                 Err(e) => Ok(ToolResult {
                                     success: false,
@@ -206,7 +262,9 @@ impl ToolExecutor {
     ) -> Result<ToolResult> {
         if let Some(ref app) = self.app_handle {
             use crate::automation::{
-                input::KeyboardSimulator, types::ElementQuery, AutomationService,
+                input::{KeyboardSimulator, MouseButton},
+                types::ElementQuery,
+                AutomationService,
             };
             use tauri::Manager;
 
@@ -239,8 +297,35 @@ impl ToolExecutor {
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| anyhow!("Missing text parameter"))?;
+            if text.is_empty() {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Text must not be empty", "success": false }),
+                    error: Some("Text must not be empty".to_string()),
+                    metadata: HashMap::new(),
+                });
+            }
 
-            if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
+            let target_kind = if let Some((x, y)) = parse_ui_coordinates(target)? {
+                let mut mouse_guard = automation.mouse.lock().await;
+                let click_result = match mouse_guard.as_mut() {
+                    Some(mouse) => mouse.click(x, y, MouseButton::Left),
+                    None => Err(anyhow!(
+                        "Mouse automation requires Input Monitoring permission. \
+                         Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
+                    )),
+                };
+                if let Err(e) = click_result {
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": format!("Failed to focus coordinates before typing: {}", e), "success": false }),
+                        error: Some(format!("Failed to focus coordinates before typing: {}", e)),
+                        metadata: HashMap::new(),
+                    });
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                "coordinates"
+            } else if let Some(element_id) = target.get("element_id").and_then(|v| v.as_str()) {
                 if let Err(e) = automation.native.set_focus(element_id) {
                     return Ok(ToolResult {
                         success: false,
@@ -250,6 +335,7 @@ impl ToolExecutor {
                     });
                 }
                 tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                "element_id"
             } else if let Some(target_text) = target.get("text").and_then(|v| v.as_str()) {
                 let query = ElementQuery {
                     window: None,
@@ -272,6 +358,16 @@ impl ToolExecutor {
                                 });
                             }
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        } else {
+                            return Ok(ToolResult {
+                                success: false,
+                                data: json!({ "error": format!("Element with text '{}' not found", target_text), "success": false }),
+                                error: Some(format!(
+                                    "Element with text '{}' not found",
+                                    target_text
+                                )),
+                                metadata: HashMap::new(),
+                            });
                         }
                     }
                     Err(e) => {
@@ -283,7 +379,18 @@ impl ToolExecutor {
                         });
                     }
                 }
-            }
+                "text"
+            } else {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({ "error": "Invalid target format for ui_type - need coordinates, element_id, or text", "success": false }),
+                    error: Some(
+                        "Invalid target format for ui_type - need coordinates, element_id, or text"
+                            .to_string(),
+                    ),
+                    metadata: HashMap::new(),
+                });
+            };
 
             let mut keyboard = KeyboardSimulator::new()
                 .map_err(|e| anyhow!("Failed to create keyboard simulator: {}", e))?;
@@ -291,9 +398,9 @@ impl ToolExecutor {
             match send_result {
                 Ok(_) => Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "action": "typed", "text": text }),
+                    data: json!({ "success": true, "action": "typed", "text": text, "target_kind": target_kind }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("target_kind".to_string(), json!(target_kind))]),
                 }),
                 Err(e) => Ok(ToolResult {
                     success: false,

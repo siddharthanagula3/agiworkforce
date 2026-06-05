@@ -1,9 +1,7 @@
-import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
+import { isCloudWeb } from '@/lib/tauri-mock';
 import { notifications, models as modelsApi } from '@agiworkforce/api';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { toast } from 'sonner';
-import { save } from '@tauri-apps/plugin-dialog';
-import { writeTextFile } from '@tauri-apps/plugin-fs';
 import {
   Bell,
   Brain,
@@ -55,7 +53,6 @@ import { McpSkillsTab } from './tabs/McpSkills';
 import { ConnectorsTab } from './tabs/Connectors';
 import { NotificationsTab } from './tabs/Notifications';
 import { VoiceTab } from './tabs/Voice';
-import { CapabilitiesTab } from './tabs/Capabilities';
 import { MemoryTab } from './tabs/Memory';
 
 type CanonicalTab =
@@ -69,7 +66,6 @@ type CanonicalTab =
   | 'connectors'
   | 'notifications'
   | 'voice'
-  | 'capabilities'
   | 'memory';
 
 function resolveTab(tab: SettingsTab): CanonicalTab {
@@ -79,13 +75,12 @@ function resolveTab(tab: SettingsTab): CanonicalTab {
 const SETTINGS_NAV: { key: CanonicalTab; label: string; icon: React.ElementType }[] = [
   { key: 'general', label: 'General', icon: Settings2 },
   { key: 'account', label: 'Account', icon: CreditCard },
-  { key: 'appearance', label: 'Appearance', icon: Palette },
+  { key: 'appearance', label: 'Personalization', icon: Palette },
   { key: 'privacy', label: 'Privacy', icon: Shield },
   { key: 'models-keys', label: 'Models & Keys', icon: Server },
   { key: 'agents', label: 'Agents', icon: Zap },
-  { key: 'mcp-skills', label: 'MCP & Skills', icon: Wrench },
-  { key: 'connectors', label: 'Apps & Integrations', icon: Plug },
-  { key: 'capabilities', label: 'Capabilities', icon: Zap },
+  { key: 'mcp-skills', label: 'Tools & Skills', icon: Wrench },
+  { key: 'connectors', label: 'Apps', icon: Plug },
   { key: 'memory', label: 'Memory', icon: Brain },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'voice', label: 'Voice', icon: Mic },
@@ -102,8 +97,8 @@ const NAV_GROUPS: { label?: string; keys: CanonicalTab[] }[] = [
     keys: ['general', 'account', 'appearance', 'privacy', 'models-keys'],
   },
   {
-    label: 'Customize',
-    keys: ['agents', 'mcp-skills', 'connectors', 'capabilities', 'memory'],
+    label: 'Tools',
+    keys: ['agents', 'mcp-skills', 'connectors', 'memory'],
   },
   {
     label: 'Desktop app',
@@ -145,10 +140,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const features = useSettingsStore(useShallow((state) => state.features));
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
-  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
-  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
-  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
-  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
   const globalHotkeyPreferences = useSettingsStore(
     useShallow((state) => state.globalHotkeyPreferences),
   );
@@ -208,45 +199,17 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     })).filter((group) => group.items.length > 0);
   }, [normalizedNavQuery]);
 
-  const handleExportSettings = useCallback(async () => {
-    try {
-      const storeState = useSettingsStore.getState();
-      const exportData = JSON.stringify(
-        {
-          llmConfig: storeState.llmConfig,
-          windowPreferences: storeState.windowPreferences,
-          chatPreferences: storeState.chatPreferences,
-          executionPreferences: storeState.executionPreferences,
-          globalHotkeyPreferences: storeState.globalHotkeyPreferences,
-          customModels: storeState.customModels,
-        },
-        null,
-        2,
-      );
-      if (!isTauri) {
-        const blob = new Blob([exportData], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`;
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        return;
-      }
-      const savePath = await save({
-        defaultPath: `agi-workforce-settings-${new Date().toISOString().split('T')[0]}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      });
-      if (savePath) await writeTextFile(savePath, exportData);
-    } catch (err) {
-      console.error('Failed to export settings:', err);
-    }
-  }, []);
-
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
       if (enabled) {
-        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
+        const modelToSet = selectedOllamaModel || ollamaModels[0];
+        if (!modelToSet) {
+          setDefaultModel('ollama', '');
+          setSelectedOllamaModel('');
+          toast.warning('No local Ollama models detected. Install or pull a model first.');
+          setHasUnsavedChanges(true);
+          return;
+        }
         setDefaultModel('ollama', modelToSet);
         setSelectedOllamaModel(modelToSet);
       } else {
@@ -409,38 +372,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     [setLanguage],
   );
 
-  const handleAgentModeChange = useCallback(
-    (value: boolean) => {
-      setAlwaysUseAgentMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAlwaysUseAgentMode],
-  );
-
-  const handleAutoApproveToolsChange = useCallback(
-    (value: boolean) => {
-      setAutoApproveTools(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAutoApproveTools],
-  );
-
-  const handleCompactModeChange = useCallback(
-    (value: boolean) => {
-      setCompactMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setCompactMode],
-  );
-
-  const handlePromptCompletionChange = useCallback(
-    (value: boolean) => {
-      setPromptCompletionEnabled(value);
-      setHasUnsavedChanges(true);
-    },
-    [setPromptCompletionEnabled],
-  );
-
   const handleGlobalHotkeyEnabledChange = useCallback(
     (value: boolean) => {
       setGlobalHotkeyEnabled(value);
@@ -560,7 +491,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return (
           <ModelsKeysTab
             resolvedLLMConfig={resolvedLLMConfig}
-            chatPreferences={chatPreferences}
             ollamaModels={ollamaModels}
             selectedOllamaModel={selectedOllamaModel}
             checkingOllama={checkingOllama}
@@ -570,11 +500,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             onOllamaUrlChange={handleOllamaUrlChange}
             onOllamaEnabledChange={handleOllamaEnabledChange}
             onOllamaModelChange={handleOllamaModelChange}
-            onAgentModeChange={handleAgentModeChange}
-            onAutoApproveToolsChange={handleAutoApproveToolsChange}
-            onCompactModeChange={handleCompactModeChange}
-            onPromptCompletionChange={handlePromptCompletionChange}
-            onExportSettings={() => void handleExportSettings()}
           />
         );
       case 'agents':
@@ -594,8 +519,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         );
       case 'voice':
         return <VoiceTab />;
-      case 'capabilities':
-        return <CapabilitiesTab />;
       case 'memory':
         return <MemoryTab />;
       default:

@@ -1,7 +1,6 @@
 /**
  * Media Generation Service
- * Integrates Google Imagen for image generation and Google Veo 3.1 for video generation
- * with Google AI Studio (Gemini) APIs
+ * Integrates catalog-selected image and video generation models.
  */
 
 import { googleImagenService } from './google-imagen-service';
@@ -10,11 +9,14 @@ import {
   type VeoGenerationRequest as GoogleVeoRequest,
 } from './google-veo-service';
 import { openAIImageService, type OpenAIImageGenerationRequest } from './openai-image-service';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
-/** Resolve veo-3's apiModelId from the catalog (rule-models-json.md). */
-const VEO_API_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
-const GPT_IMAGE_API_MODEL_ID = getModelMetadataById('gpt-image-2')?.apiModelId ?? 'gpt-image-2';
+const VIDEO_GENERATION_MODEL_ID = getRoutingSlotModel('video_generation');
+const IMAGE_GENERATION_MODEL_ID = getRoutingSlotModel('image_generation');
+const VEO_API_MODEL_ID =
+  getModelMetadataById(VIDEO_GENERATION_MODEL_ID)?.apiModelId ?? VIDEO_GENERATION_MODEL_ID;
+const GPT_IMAGE_API_MODEL_ID =
+  getModelMetadataById(IMAGE_GENERATION_MODEL_ID)?.apiModelId ?? IMAGE_GENERATION_MODEL_ID;
 
 export interface ImageGenerationRequest {
   prompt: string;
@@ -42,7 +44,7 @@ export interface VideoGenerationRequest {
   fps?: number;
   seed?: number;
   /**
-   * Wire-protocol model id; defaults to models.json's apiModelId for veo-3.
+   * Wire-protocol model id; defaults to the catalog-selected video slot apiModelId.
    * Accepts any string so apiModelId shifts don't require a type bump.
    */
   model?: string;
@@ -96,7 +98,7 @@ export class MediaGenerationService {
     return MediaGenerationService.instance;
   }
 
-  /** Generate image using OpenAI GPT Image 2 through the secure image proxy. */
+  /** Generate images through the secure OpenAI image proxy. */
   async generateImage(request: ImageGenerationRequest): Promise<MediaGenerationResult> {
     try {
       const openAIImageRequest: OpenAIImageGenerationRequest = {
@@ -106,7 +108,7 @@ export class MediaGenerationService {
         style:
           request.style === 'realistic' || request.style === 'photographic' ? 'natural' : 'vivid',
         n: request.numberOfImages ?? 1,
-        model: GPT_IMAGE_API_MODEL_ID as 'gpt-image-2',
+        model: GPT_IMAGE_API_MODEL_ID,
       };
 
       const openAIImageResults = await openAIImageService.generateImage(openAIImageRequest);

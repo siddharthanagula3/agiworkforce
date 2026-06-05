@@ -400,7 +400,7 @@ export async function processRequest(
         {
           error: {
             message:
-              'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, join the managed cloud waitlist, or use local/BYOK.',
+              'Free managed cloud access currently supports Auto Economy only. Select Auto Economy, upgrade your plan, or use local/BYOK.',
             type: 'invalid_request_error',
             code: 'free_trial_auto_economy_only',
           },
@@ -816,7 +816,7 @@ export async function processRequest(
           {
             error: {
               message:
-                'You have used the 3 free Auto Economy prompts for this account. Join the managed cloud waitlist or use local/BYOK to continue.',
+                'You have used the 3 free Auto Economy prompts for this account. Upgrade your plan or use local/BYOK to continue.',
               type: 'insufficient_quota',
               code: 'website_trial_prompt_limit_reached',
               trial: {

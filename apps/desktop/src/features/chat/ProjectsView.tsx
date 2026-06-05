@@ -1,7 +1,7 @@
 /**
  * Projects View
  *
- * Main view for managing projects in the AGI Workforce desktop app.
+ * Main view for managing projects in the AGI desktop app.
  * Features:
  * - List all projects with search/filter
  * - Create new project dialog
@@ -169,9 +169,34 @@ export function ProjectsView() {
     );
   }, [projects, activeProjects, archivedProjects, filterMode, searchQuery]);
 
+  useEffect(() => {
+    if (filteredProjects.length === 0) {
+      if (selectedProjectId !== null) {
+        setSelectedProjectId(null);
+      }
+      return;
+    }
+
+    if (
+      !selectedProjectId ||
+      !filteredProjects.some((project) => project.id === selectedProjectId)
+    ) {
+      const nextProject = filteredProjects[0];
+      if (nextProject) {
+        setSelectedProjectId(nextProject.id);
+      }
+    }
+  }, [filteredProjects, selectedProjectId]);
+
   // Handlers
   const handleCreateProject = () => {
     setIsCreateDialogOpen(true);
+  };
+
+  const handleProjectCreated = (project: Project) => {
+    setSelectedProjectId(project.id);
+    setActiveProject(project.id);
+    setFilterMode(project.isArchived ? 'archived' : 'active');
   };
 
   const handleEditProjectDetails = (project: Project) => {
@@ -220,30 +245,35 @@ export function ProjectsView() {
   };
 
   const handleProjectClick = (project: Project) => {
-    setSelectedProjectId(selectedProjectId === project.id ? null : project.id);
+    setSelectedProjectId(project.id);
   };
 
   // Empty state
   if (!isLoading && projects.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-center p-8 bg-background/50">
-        <div className="w-20 h-20 bg-linear-to-br from-blue-500/20 to-purple-500/20 rounded-3xl flex items-center justify-center mb-6">
-          <Layers className="w-10 h-10 text-blue-400" />
+      <div className="flex h-full flex-col items-center justify-center bg-background/50 p-8 text-center">
+        <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground">
+          <Layers className="h-8 w-8" />
         </div>
-        <h2 className="text-2xl font-semibold text-foreground mb-3">Welcome to Projects</h2>
-        <p className="text-muted-foreground max-w-md mb-6">
-          Organize your work with projects. Group conversations, files, and custom instructions
-          together for seamless context across sessions.
+        <h2 className="mb-3 text-2xl font-semibold tracking-tight text-foreground">
+          Keep related work together
+        </h2>
+        <p className="mb-6 max-w-md text-sm leading-6 text-muted-foreground">
+          Projects give AGI shared context across chats, files, instructions, and memory.
         </p>
-        <Button onClick={handleCreateProject} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button
+          onClick={handleCreateProject}
+          className="bg-foreground text-background hover:bg-foreground/90"
+        >
           <Plus className="w-4 h-4 mr-2" />
-          Create Your First Project
+          Create project
         </Button>
 
         <ProjectSettingsDialog
           open={isCreateDialogOpen}
           onOpenChange={setIsCreateDialogOpen}
           mode="create"
+          onCreated={handleProjectCreated}
         />
       </div>
     );
@@ -267,6 +297,7 @@ export function ProjectsView() {
             <Button
               onClick={handleCreateProject}
               size="sm"
+              aria-label="Create project"
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               <Plus className="w-4 h-4" />
@@ -366,6 +397,7 @@ export function ProjectsView() {
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         mode="create"
+        onCreated={handleProjectCreated}
       />
 
       <ProjectEditDetailsDialog

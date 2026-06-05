@@ -37,9 +37,7 @@ export function Header() {
     <header className="agi-top" style={{ position: 'relative' }}>
       <Link href="/" className="agi-mark" aria-label={t('agiHome')}>
         <AgiMark size={20} />
-        <span style={{ marginLeft: 8 }}>
-          agi<span className="agi-mark-dot">.</span>workforce
-        </span>
+        <span style={{ marginLeft: 8 }}>AGI</span>
       </Link>
 
       <nav

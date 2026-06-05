@@ -638,6 +638,7 @@ describe('security — declarative tool discovery does not execute scripts', () 
   it('callTool uses CSS.escape when querying form by tool-name to prevent selector injection', async () => {
     // If the tool name contains characters like " or ] the CSS.escape call prevents
     // selector injection. We verify callTool still works correctly with such names.
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
     const form = addDeclarativeForm({ toolName: 'tool-with-"quotes"', toolDescription: 'Tricky' });
     form.requestSubmit = vi.fn();
 

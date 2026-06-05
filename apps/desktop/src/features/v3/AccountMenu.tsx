@@ -53,7 +53,15 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
         onClose();
       },
     },
-    { kind: 'item', icon: Globe, label: t('accountMenu.language'), chev: true },
+    {
+      kind: 'item',
+      icon: Globe,
+      label: t('accountMenu.language'),
+      action: () => {
+        openSettings('general');
+        onClose();
+      },
+    },
     {
       kind: 'item',
       icon: Lock,
@@ -82,8 +90,28 @@ export function AccountMenu({ onClose }: AccountMenuProps) {
         onClose();
       },
     },
-    { kind: 'item', icon: Box, label: t('accountMenu.appsExtensions'), chev: true },
-    { kind: 'item', icon: Mail, label: t('accountMenu.giftAGI'), chev: true },
+    {
+      kind: 'item',
+      icon: Box,
+      label: t('accountMenu.appsExtensions'),
+      action: () => {
+        openSettings('connectors');
+        onClose();
+      },
+    },
+    {
+      kind: 'item',
+      icon: Mail,
+      label: t('accountMenu.giftAGI'),
+      action: () => {
+        window.open(
+          'https://agiworkforce.com/pricing?intent=gift',
+          '_blank',
+          'noopener,noreferrer',
+        );
+        onClose();
+      },
+    },
     {
       kind: 'item',
       icon: HelpCircle,

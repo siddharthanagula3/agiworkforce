@@ -8,6 +8,9 @@ const { listenMock, invokeMock } = vi.hoisted(() => ({
 
 vi.mock('../../lib/tauri-mock', () => ({
   isTauri: true,
+  isDesktopUiDevLocal: false,
+  supportsLocalAppMode: true,
+  isCloudWeb: false,
   listen: listenMock,
   invoke: invokeMock,
 }));

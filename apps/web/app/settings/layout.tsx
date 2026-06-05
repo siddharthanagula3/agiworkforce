@@ -1,4 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { SettingsNavClient } from './SettingsNavClient';
@@ -22,7 +23,9 @@ export default async function SettingsLayout({ children }: { children: ReactNode
   const { userId } = await auth();
 
   if (!userId) {
-    redirect('/login?redirectTo=/settings/general');
+    const requestHeaders = await headers();
+    const requestedPath = requestHeaders.get('x-agi-pathname') ?? '/settings/general';
+    redirect(`/login?redirectTo=${encodeURIComponent(requestedPath)}`);
   }
 
   return (

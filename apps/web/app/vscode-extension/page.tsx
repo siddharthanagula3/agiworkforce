@@ -144,14 +144,9 @@ export default function VscodeExtensionPage() {
             </strong>
           </p>
           <div className="agi-cta-row">
-            <a
-              href="https://github.com/siddharthanagula3/agiworkforce/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="agi-cta-primary"
-            >
-              Install via VSIX
-            </a>
+            <Link href="/waitlist" className="agi-cta-primary">
+              Get VSIX access
+            </Link>
             <Link href="/providers" className="agi-cta-ghost">
               See the providers &rarr;
             </Link>
@@ -243,7 +238,9 @@ export default function VscodeExtensionPage() {
             <tbody>
               <tr>
                 <td>Marketplace</td>
-                <td>Public release aligned to {LAUNCH.date}; VSIX route remains available</td>
+                <td>
+                  Public release aligned to {LAUNCH.date}; VSIX route opens with the release asset
+                </td>
               </tr>
               <tr>
                 <td>Cursor / forks</td>

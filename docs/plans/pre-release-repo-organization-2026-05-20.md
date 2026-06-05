@@ -365,7 +365,7 @@ Rules:
 - [x] Create docs status ledger.
 - [x] Create package/service/crate owner ledger.
 - [x] Decide `ios/` stays at root as the canonical tracked Xcode-consumed output.
-- [x] Decide raw `reference-index/` belongs under `audit/repo-organization/reference-index/`.
+- [x] Archive raw `reference-index/` under `docs/archive/2026-06-05-doc-reset/audit/repo-organization/reference-index/`.
 - [x] Move root scratch markdown files to a dated archive/report folder.
 - [x] Move root scratch image files to a dated report folder.
 - [x] Add root clutter allowlist check.

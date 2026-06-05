@@ -47,6 +47,10 @@ const SAFE_PSEUDO_CLASSES: &[&str] = &[
     "::marker",
 ];
 
+const BROWSER_DEFAULT_TIMEOUT_MS: u64 = 30_000;
+const BROWSER_MAX_TIMEOUT_MS: u64 = 120_000;
+const BROWSER_SCRIPT_MAX_BYTES: usize = 100_000;
+
 /// Validates a CSS selector for safety before it reaches the browser DOM query API.
 ///
 /// Uses a layered defense:
@@ -74,11 +78,11 @@ fn validate_css_selector(selector: &str) -> Result<(), String> {
 
     let lower = trimmed.to_lowercase();
 
-    // 2. Characters that break out of a JS string literal when interpolated.
-    //    Note: `>` is the CSS child combinator and is intentionally NOT blocked here.
-    //    Backtick (`) is blocked to prevent template literal injection if the
-    //    interpolation context ever changes from single-quoted to template strings.
-    for ch in ['<', '\'', '"', '\\', '`'] {
+    // 2. Characters that should not appear in selector input. Quotes are allowed
+    // because real selectors often need [aria-label="..."]; script interpolation
+    // below must use JSON string literals, not raw single-quoted insertion.
+    // Note: `>` is the CSS child combinator and is intentionally NOT blocked here.
+    for ch in ['<', '\\', '`', ';'] {
         if trimmed.contains(ch) {
             return Err(format!("contains disallowed character '{}'", ch));
         }
@@ -240,6 +244,85 @@ fn require_safe_selector(selector: &str) -> Result<()> {
     Ok(())
 }
 
+fn js_string_literal(value: &str) -> Result<String> {
+    serde_json::to_string(value)
+        .map_err(|error| anyhow!("Failed to encode JavaScript string: {error}"))
+}
+
+fn parse_browser_timeout_ms(args: &HashMap<String, Value>, key: &str, default: u64) -> Result<u64> {
+    let Some(value) = args.get(key) else {
+        return Ok(default);
+    };
+    let Some(raw) = value.as_u64() else {
+        return Err(anyhow!("{key} must be a positive integer"));
+    };
+    if raw == 0 {
+        return Err(anyhow!("{key} must be greater than zero"));
+    }
+    Ok(raw.min(BROWSER_MAX_TIMEOUT_MS))
+}
+
+fn parse_optional_browser_bool(
+    args: &HashMap<String, Value>,
+    key: &str,
+    default: bool,
+) -> Result<bool> {
+    let Some(value) = args.get(key) else {
+        return Ok(default);
+    };
+    value
+        .as_bool()
+        .ok_or_else(|| anyhow!("{key} must be a boolean"))
+}
+
+fn parse_browser_extract_type(args: &HashMap<String, Value>) -> Result<&'static str> {
+    let raw = args
+        .get("extract_type")
+        .and_then(Value::as_str)
+        .unwrap_or("text")
+        .trim()
+        .to_ascii_lowercase();
+    match raw.as_str() {
+        "" | "text" => Ok("text"),
+        "attribute" => Ok("attribute"),
+        "all" => Ok("all"),
+        _ => Err(anyhow!("extract_type must be one of: text, attribute, all")),
+    }
+}
+
+fn validate_browser_attribute_name(attribute: &str) -> Result<()> {
+    let trimmed = attribute.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow!("attribute must not be empty"));
+    }
+    if trimmed.len() > 128 {
+        return Err(anyhow!(
+            "attribute exceeds maximum length ({} > 128)",
+            trimmed.len()
+        ));
+    }
+    if !trimmed
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' || ch == ':')
+    {
+        return Err(anyhow!(
+            "attribute contains unsupported characters; use letters, digits, '-', '_', or ':'"
+        ));
+    }
+    Ok(())
+}
+
+fn ensure_no_unsupported_async_js_options(args: &HashMap<String, Value>) -> Result<()> {
+    for key in ["args", "retry_count", "retry_delay_ms", "await_promise"] {
+        if args.contains_key(key) {
+            return Err(anyhow!(
+                "browser_execute_async_js does not support '{key}' in Desktop tool execution; pass script, timeout_ms, and tab_id only"
+            ));
+        }
+    }
+    Ok(())
+}
+
 impl ToolExecutor {
     pub(crate) async fn execute_browser_tool(
         &self,
@@ -347,10 +430,8 @@ impl ToolExecutor {
             }
             "browser_wait_for_navigation" => {
                 let (client, tab_id) = get_client().await?;
-                let timeout_ms = args
-                    .get("timeout_ms")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(30000);
+                let timeout_ms =
+                    parse_browser_timeout_ms(&args, "timeout_ms", BROWSER_DEFAULT_TIMEOUT_MS)?;
                 let script = format!(
                     r#"
                     new Promise((resolve, reject) => {{
@@ -384,39 +465,52 @@ impl ToolExecutor {
                 let result = client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "result": result, "tab_id": tab_id }),
+                    data: json!({ "result": result, "tab_id": tab_id, "timeout_ms": timeout_ms }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("timeout_ms".to_string(), json!(timeout_ms))]),
                 })
             }
             "browser_execute_async_js" => {
+                ensure_no_unsupported_async_js_options(&args)?;
                 let (client, tab_id) = get_client().await?;
                 let script = args
                     .get("script")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing script parameter"))?;
-                // For async JS, wrap it in a Promise and await it
-                let await_promise = args
-                    .get("await_promise")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true);
-                let wrapped_script = if await_promise {
-                    format!(
-                        "new Promise((resolve) => {{ {}; resolve(undefined); }})",
-                        script
-                    )
-                } else {
-                    script.to_string()
-                };
-                let result = client
-                    .evaluate(&wrapped_script)
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                let script = script.trim();
+                if script.is_empty() {
+                    return Err(anyhow!("script must not be empty"));
+                }
+                if script.len() > BROWSER_SCRIPT_MAX_BYTES {
+                    return Err(anyhow!(
+                        "script exceeds maximum length ({} > {})",
+                        script.len(),
+                        BROWSER_SCRIPT_MAX_BYTES
+                    ));
+                }
+                let timeout_ms =
+                    parse_browser_timeout_ms(&args, "timeout_ms", BROWSER_DEFAULT_TIMEOUT_MS)?;
+                let wrapped_script = format!("Promise.resolve().then(async () => {{ {script} }})");
+                let result = timeout(
+                    TokioDuration::from_millis(timeout_ms),
+                    client.evaluate(&wrapped_script),
+                )
+                .await
+                .map_err(|_| anyhow!("Script execution timed out after {timeout_ms}ms"))?
+                .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "result": result, "tab_id": tab_id }),
+                    data: json!({
+                        "result": result,
+                        "tab_id": tab_id,
+                        "timeout_ms": timeout_ms,
+                        "script_length": script.len()
+                    }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([
+                        ("timeout_ms".to_string(), json!(timeout_ms)),
+                        ("script_length".to_string(), json!(script.len())),
+                    ]),
                 })
             }
             "browser_get_element_state" => {
@@ -426,10 +520,11 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
                 require_safe_selector(selector)?;
+                let selector_literal = js_string_literal(selector)?;
                 let script = format!(
                     r#"
                     (function() {{
-                        const el = document.querySelector('{}');
+                        const el = document.querySelector({});
                         if (!el) return {{ error: 'Element not found' }};
                         const rect = el.getBoundingClientRect();
                         return {{
@@ -444,7 +539,7 @@ impl ToolExecutor {
                         }};
                     }})()
                     "#,
-                    selector
+                    selector_literal
                 );
                 let result = client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
@@ -461,10 +556,9 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
                 require_safe_selector(selector)?;
-                let timeout_ms = args
-                    .get("timeout_ms")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(30000);
+                let timeout_ms =
+                    parse_browser_timeout_ms(&args, "timeout_ms", BROWSER_DEFAULT_TIMEOUT_MS)?;
+                let selector_literal = js_string_literal(selector)?;
                 let script = format!(
                     r#"
                     new Promise((resolve, reject) => {{
@@ -473,7 +567,7 @@ impl ToolExecutor {
                         let elapsed = 0;
 
                         const check = () => {{
-                            const el = document.querySelector('{}');
+                            const el = document.querySelector({});
                             if (!el) {{
                                 elapsed += interval;
                                 if (elapsed >= timeout) {{
@@ -506,14 +600,14 @@ impl ToolExecutor {
                         check();
                     }})
                     "#,
-                    timeout_ms, selector
+                    timeout_ms, selector_literal
                 );
                 client.evaluate(&script).await.map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "tab_id": tab_id }),
+                    data: json!({ "success": true, "tab_id": tab_id, "timeout_ms": timeout_ms }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("timeout_ms".to_string(), json!(timeout_ms))]),
                 })
             }
             "browser_click" => {
@@ -535,21 +629,52 @@ impl ToolExecutor {
             }
             "browser_extract" => {
                 let (client, tab_id) = get_client().await?;
-                let text = if let Some(selector) = args.get("selector").and_then(|v| v.as_str()) {
-                    require_safe_selector(selector)?;
-                    DomOperations::get_text(&client, selector)
-                        .await
-                        .map_err(anyhow::Error::msg)?
-                } else {
-                    DomOperations::get_text(&client, "body")
-                        .await
-                        .map_err(anyhow::Error::msg)?
+                let selector = args
+                    .get("selector")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("body");
+                require_safe_selector(selector)?;
+                let extract_type = parse_browser_extract_type(&args)?;
+                let data = match extract_type {
+                    "text" => {
+                        let text = DomOperations::get_text(&client, selector)
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        json!({ "content": text })
+                    }
+                    "attribute" => {
+                        let attribute =
+                            args.get("attribute")
+                                .and_then(|v| v.as_str())
+                                .ok_or_else(|| {
+                                    anyhow!("Missing attribute parameter for attribute extraction")
+                                })?;
+                        validate_browser_attribute_name(attribute)?;
+                        let value = DomOperations::get_attribute(&client, selector, attribute)
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        json!({ "attribute": attribute, "value": value })
+                    }
+                    "all" => {
+                        let info = DomOperations::get_element_info(&client, selector)
+                            .await
+                            .map_err(anyhow::Error::msg)?;
+                        json!({ "element": info })
+                    }
+                    _ => unreachable!("extract type is validated"),
                 };
+                let mut data = data;
+                data["selector"] = json!(selector);
+                data["extract_type"] = json!(extract_type);
+                data["tab_id"] = json!(tab_id);
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "content": text, "tab_id": tab_id }),
+                    data,
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([
+                        ("selector".to_string(), json!(selector)),
+                        ("extract_type".to_string(), json!(extract_type)),
+                    ]),
                 })
             }
             "browser_type" => {
@@ -562,15 +687,24 @@ impl ToolExecutor {
                     .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing text parameter"))?;
+                let clear_first = parse_optional_browser_bool(&args, "clear_first", true)?;
                 let (client, tab_id) = get_client().await?;
-                DomOperations::type_text(&client, selector, text, TypeOptions::default())
-                    .await
-                    .map_err(anyhow::Error::msg)?;
+                DomOperations::type_text(
+                    &client,
+                    selector,
+                    text,
+                    TypeOptions {
+                        clear_first,
+                        ..TypeOptions::default()
+                    },
+                )
+                .await
+                .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id, "clear_first": clear_first }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("clear_first".to_string(), json!(clear_first))]),
                 })
             }
             "browser_wait_for_selector" => {
@@ -579,19 +713,20 @@ impl ToolExecutor {
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow!("Missing selector parameter"))?;
                 require_safe_selector(selector)?;
-                let timeout_ms = args
-                    .get("timeout")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(120_000);
+                let timeout_ms = if args.contains_key("timeout_ms") {
+                    parse_browser_timeout_ms(&args, "timeout_ms", BROWSER_DEFAULT_TIMEOUT_MS)?
+                } else {
+                    parse_browser_timeout_ms(&args, "timeout", BROWSER_DEFAULT_TIMEOUT_MS)?
+                };
                 let (client, tab_id) = get_client().await?;
                 DomOperations::wait_for_selector(&client, selector, timeout_ms)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id }),
+                    data: json!({ "success": true, "selector": selector, "tab_id": tab_id, "timeout_ms": timeout_ms }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("timeout_ms".to_string(), json!(timeout_ms))]),
                 })
             }
             "browser_get_text" => {
@@ -659,16 +794,17 @@ impl ToolExecutor {
             }
             "browser_screenshot" => {
                 let (client, tab_id) = get_client().await?;
+                let full_page = parse_optional_browser_bool(&args, "full_page", false)?;
                 let bytes = client
-                    .capture_screenshot(false)
+                    .capture_screenshot(full_page)
                     .await
                     .map_err(anyhow::Error::msg)?;
                 use base64::{engine::general_purpose::STANDARD, Engine};
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "image_base64": STANDARD.encode(bytes), "tab_id": tab_id }),
+                    data: json!({ "image_base64": STANDARD.encode(bytes), "tab_id": tab_id, "full_page": full_page }),
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([("full_page".to_string(), json!(full_page))]),
                 })
             }
             "browser_hover" => {
@@ -732,10 +868,18 @@ impl ToolExecutor {
                 let elements = DomOperations::query_all(&client, selector)
                     .await
                     .map_err(anyhow::Error::msg)?;
-                let texts: Vec<String> = elements.into_iter().map(|e| e.text).collect();
+                let texts: Vec<String> = elements
+                    .iter()
+                    .map(|element| element.text.clone())
+                    .collect();
                 Ok(ToolResult {
                     success: true,
-                    data: json!({ "results": texts, "selector": selector, "tab_id": tab_id }),
+                    data: json!({
+                        "results": elements,
+                        "texts": texts,
+                        "selector": selector,
+                        "tab_id": tab_id
+                    }),
                     error: None,
                     metadata: HashMap::new(),
                 })
@@ -1209,6 +1353,12 @@ mod tests {
     #[test]
     fn test_safe_data_testid_attribute() {
         assert!(validate_css_selector("input[data-testid=foo]").is_ok());
+    }
+
+    #[test]
+    fn test_safe_quoted_attribute_selector() {
+        assert!(validate_css_selector(r#"input[aria-label="Search"]"#).is_ok());
+        assert!(validate_css_selector("input[aria-label='Search']").is_ok());
     }
 
     #[test]

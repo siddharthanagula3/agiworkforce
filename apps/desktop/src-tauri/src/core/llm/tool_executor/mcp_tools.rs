@@ -34,6 +34,18 @@ impl ToolExecutor {
         }
     }
 
+    pub(super) fn split_mcp_control_args(
+        mut args: HashMap<String, Value>,
+    ) -> (u64, HashMap<String, Value>) {
+        let timeout_ms = args
+            .get("timeout_ms")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(MCP_TOOL_TIMEOUT_MS)
+            .min(MCP_TOOL_MAX_TIMEOUT_MS);
+        args.remove("timeout_ms");
+        (timeout_ms, args)
+    }
+
     pub(crate) async fn execute_mcp_tool(
         &self,
         tool_call: &ToolCall,
@@ -50,13 +62,8 @@ impl ToolExecutor {
             .as_ref()
             .and_then(|h| h.try_state::<McpState>())
             .ok_or_else(|| anyhow!("MCP state not available"))?;
-        let normalization_args = args.clone();
-
-        let timeout_ms = args
-            .get("timeout_ms")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(MCP_TOOL_TIMEOUT_MS)
-            .min(MCP_TOOL_MAX_TIMEOUT_MS);
+        let (timeout_ms, server_args) = Self::split_mcp_control_args(args);
+        let normalization_args = server_args.clone();
         let started = Instant::now();
 
         tracing::info!(
@@ -66,12 +73,14 @@ impl ToolExecutor {
         );
 
         // Debug: log the arguments
-        tracing::debug!("[ToolExecutor] MCP tool arguments: {:?}", args);
+        tracing::debug!("[ToolExecutor] MCP tool arguments: {:?}", server_args);
 
         // Execute with timeout
         let result = timeout(
             TokioDuration::from_millis(timeout_ms),
-            mcp_state.registry.execute_tool(&tool_call.name, args),
+            mcp_state
+                .registry
+                .execute_tool(&tool_call.name, server_args),
         )
         .await;
 
@@ -91,7 +100,11 @@ impl ToolExecutor {
                     success: true,
                     data: normalized_result,
                     error: None,
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("tool_source".to_string(), json!("mcp")),
+                        ("timeout_ms".to_string(), json!(timeout_ms)),
+                    ]),
                 })
             }
             Ok(Err(e)) => {
@@ -105,7 +118,11 @@ impl ToolExecutor {
                     success: false,
                     data: json!({ "error": format!("MCP tool execution failed: {}", e), "success": false }),
                     error: Some(format!("MCP tool execution failed: {}", e)),
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("tool_source".to_string(), json!("mcp")),
+                        ("timeout_ms".to_string(), json!(timeout_ms)),
+                    ]),
                 })
             }
             Err(_) => {
@@ -125,7 +142,11 @@ impl ToolExecutor {
                         "MCP tool '{}' timed out after {}ms. Check MCP server health/access and retry.",
                         tool_call.name, timeout_ms
                     )),
-                    metadata: HashMap::new(),
+                    metadata: HashMap::from([
+                        ("tool_name".to_string(), json!(tool_call.name)),
+                        ("tool_source".to_string(), json!("mcp")),
+                        ("timeout_ms".to_string(), json!(timeout_ms)),
+                    ]),
                 })
             }
         }

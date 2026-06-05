@@ -17,7 +17,7 @@
 //!
 //! ```ignore
 //! // Push current conversation to background (from frontend)
-//! await invoke('background_agent_push', { conversationId: '...', goal: '...' });
+//! await invoke('background_agent_push', { input: { conversationId: '...', goal: '...' } });
 //!
 //! // List all background agents
 //! await invoke('background_agent_list');

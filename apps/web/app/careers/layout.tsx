@@ -13,7 +13,7 @@ export const metadata: Metadata = {
     'work at AGI',
   ],
   openGraph: {
-    title: 'Careers | AGI',
+    title: 'Careers',
     description:
       'Build the future of AI-powered work. Open roles in AI engineering, product, and operations.',
     type: 'website',
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Careers | AGI',
+    title: 'Careers',
     description:
       'Build the future of AI-powered work. Open roles in AI engineering, product, and operations.',
     images: ['/app-preview.png'],

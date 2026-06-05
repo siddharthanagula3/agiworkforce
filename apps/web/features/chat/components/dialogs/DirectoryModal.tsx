@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Search, Loader2, ChevronDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@shared/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@shared/ui/tabs';
@@ -202,7 +203,7 @@ function SkillsTab({ query }: { query: string }) {
 
 // ─── Connectors Tab ───────────────────────────────────────────────────────────
 
-function ConnectorsTab({ query }: { query: string }) {
+function ConnectorsTab({ query, onUpgrade }: { query: string; onUpgrade: () => void }) {
   const { connectedIds, connectedAtMap, loading, mutatingIds, connect, disconnect } =
     useConnectors();
 
@@ -242,6 +243,7 @@ function ConnectorsTab({ query }: { query: string }) {
           connectedAt={connectedAtMap[connector.id]}
           onConnect={() => void connect(connector.id, connector.authType)}
           onDisconnect={() => void disconnect(connector.id)}
+          onUpgrade={onUpgrade}
         />
       ))}
     </div>
@@ -251,6 +253,7 @@ function ConnectorsTab({ query }: { query: string }) {
 // ─── DirectoryModal ───────────────────────────────────────────────────────────
 
 export function DirectoryModal() {
+  const router = useRouter();
   const { open, setOpen } = useDirectoryStore();
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState('skills');
@@ -298,7 +301,13 @@ export function DirectoryModal() {
               <SkillsTab query={query} />
             </TabsContent>
             <TabsContent value="connectors" tabIndex={-1} className="mt-0">
-              <ConnectorsTab query={query} />
+              <ConnectorsTab
+                query={query}
+                onUpgrade={() => {
+                  setOpen(false);
+                  router.push('/pricing');
+                }}
+              />
             </TabsContent>
           </div>
         </Tabs>

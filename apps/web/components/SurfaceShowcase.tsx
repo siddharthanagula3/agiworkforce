@@ -148,7 +148,7 @@ function WebMockup() {
             <div className="flex items-center gap-2 border-b border-white/5 px-3 py-1.5">
               <div className="flex items-center gap-1 rounded-md bg-cyan-500/10 px-2 py-0.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
-                <span className="text-[8px] font-medium text-cyan-300">GPT-4o</span>
+                <span className="text-[8px] font-medium text-cyan-300">Auto Economy</span>
               </div>
               <span className="text-[7px] text-zinc-600">New conversation</span>
             </div>
@@ -210,7 +210,7 @@ function CliMockup() {
         <div className="h-80 space-y-1 p-4 font-mono text-[11px] leading-relaxed">
           <div>
             <span className="text-emerald-400">❯ </span>
-            <span className="text-white/80">agiworkforce chat --model claude-opus</span>
+            <span className="text-white/80">agi chat</span>
           </div>
           <div className="text-zinc-600">───────────────────────────────────────</div>
           <div className="text-purple-300/80">⣾ Analyzing repository structure...</div>
@@ -548,7 +548,7 @@ const surfaces: Surface[] = [
   {
     icon: '⌨️',
     label: 'CLI',
-    tech: 'Rust binary · agiworkforce',
+    tech: 'Rust binary · agi',
     color: '#a855f7',
     features: [
       'Terminal-native agent with streaming output',
@@ -657,8 +657,7 @@ function SurfaceShowcaseStatic() {
                     <span className="mt-0.5" style={{ color: s.color }}>
                       &#8226;
                     </span>
-                    {}
-                    <span dangerouslySetInnerHTML={{ __html: f }} />
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>
@@ -796,8 +795,7 @@ export function SurfaceShowcase() {
                         <span className="mt-0.5" style={{ color: active.color }}>
                           &#8226;
                         </span>
-                        {}
-                        <span dangerouslySetInnerHTML={{ __html: f }} />
+                        <span>{f}</span>
                       </motion.li>
                     ))}
                   </ul>

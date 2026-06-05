@@ -5,8 +5,8 @@
 // packages/types/src/models.json. This guard fails if NON-TEST TypeScript
 // shipping code OR hand-maintained doc files (.md/.mdx) reference a model ID
 // that is NOT in the canonical catalog (i.e. a removed/ghost/drifted ID). It
-// is the durable backstop that stops the recurring catalog-drift class (see
-// reports/audit/RECONCILED.md).
+// is the durable backstop that stops the recurring catalog-drift class recorded
+// in archived recon notes under docs/archive/2026-06-05-doc-reset/reports/audit/.
 //
 // Scope:
 //   - .ts/.tsx under apps/ packages/ services/ (excluding tests, specs,

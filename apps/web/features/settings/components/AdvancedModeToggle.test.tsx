@@ -12,6 +12,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
 
+const modelFixtureIds = vi.hoisted(() => ({
+  fast: 'test-model-fast',
+  balanced: 'test-model-balanced',
+  premium: 'test-model-premium',
+  image: 'test-model-image',
+}));
+
 // ---------------------------------------------------------------------------
 // Mock @agiworkforce/types
 // We mock getTierPolicy and SLOT_REGISTRY at the module boundary so the
@@ -85,37 +92,37 @@ vi.mock('@agiworkforce/types', () => {
     workhorse_general: {
       slot: 'workhorse_general',
       label: 'Workhorse (general)',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: modelFixtureIds.fast,
     },
     general_balanced_pro: {
       slot: 'general_balanced_pro',
       label: 'Pro balanced',
-      modelId: 'claude-sonnet-4.6',
+      modelId: modelFixtureIds.balanced,
     },
     coding_premium_pro: {
       slot: 'coding_premium_pro',
       label: 'Pro coding',
-      modelId: 'claude-sonnet-4.6',
+      modelId: modelFixtureIds.balanced,
     },
     general_fast: {
       slot: 'general_fast',
       label: 'General fast',
-      modelId: 'gemini-3.1-flash-lite',
+      modelId: modelFixtureIds.fast,
     },
     general_balanced: {
       slot: 'general_balanced',
       label: 'General balanced',
-      modelId: 'claude-sonnet-4.6',
+      modelId: modelFixtureIds.balanced,
     },
     general_premium: {
       slot: 'general_premium',
       label: 'General premium',
-      modelId: 'claude-opus-4.8',
+      modelId: modelFixtureIds.premium,
     },
     image_generation: {
       slot: 'image_generation',
       label: 'Image generation',
-      modelId: 'imagen-4-fast',
+      modelId: modelFixtureIds.image,
     },
   };
 
@@ -129,10 +136,10 @@ vi.mock('@agiworkforce/types', () => {
 vi.mock('@/constants/llm', () => ({
   getModelMetadata: (modelId: string) => {
     const names: Record<string, string> = {
-      'gemini-3.1-flash-lite': 'Gemini 3.1 Flash-Lite',
-      'claude-sonnet-4.6': 'Claude Sonnet 4.6',
-      'claude-opus-4.8': 'Claude Opus 4.7',
-      'imagen-4-fast': 'Imagen 4 Fast',
+      [modelFixtureIds.fast]: 'Fixture Fast Model',
+      [modelFixtureIds.balanced]: 'Fixture Balanced Model',
+      [modelFixtureIds.premium]: 'Fixture Premium Model',
+      [modelFixtureIds.image]: 'Fixture Image Model',
     };
     return names[modelId] ? { name: names[modelId] } : null;
   },
@@ -381,35 +388,34 @@ describe('AdvancedModeToggle', () => {
     mockSettingsState.advancedMode = true;
     render(<AdvancedModeToggle tier="pro" />);
     // Pro allowedSlots: ['workhorse_general', 'general_balanced_pro', 'coding_premium_pro']
-    // coding_premium_pro resolves to claude-sonnet-4.6 (same as general_balanced_pro)
-    // — deduplication means only 2 items appear (workhorse_general + one claude-sonnet-4.6)
-    expect(screen.getByTestId('select-item-gemini-3.1-flash-lite')).toBeDefined();
-    expect(screen.getByTestId('select-item-claude-sonnet-4.6')).toBeDefined();
+    // coding_premium_pro resolves to the same fixture model as general_balanced_pro.
+    expect(screen.getByTestId(`select-item-${modelFixtureIds.fast}`)).toBeDefined();
+    expect(screen.getByTestId(`select-item-${modelFixtureIds.balanced}`)).toBeDefined();
   });
 
   it('shows model friendly name in dropdown for pro tier', () => {
     mockSettingsState.advancedMode = true;
     render(<AdvancedModeToggle tier="pro" />);
-    expect(screen.getByText('Gemini 3.1 Flash-Lite')).toBeDefined();
-    expect(screen.getByText('Claude Sonnet 4.6')).toBeDefined();
+    expect(screen.getByText('Fixture Fast Model')).toBeDefined();
+    expect(screen.getByText('Fixture Balanced Model')).toBeDefined();
   });
 
   it('renders dropdown items for max tier, excluding image_generation slot', () => {
     mockSettingsState.advancedMode = true;
     render(<AdvancedModeToggle tier="max" />);
     // Max allowedSlots include image_generation but it should be excluded from picker
-    expect(screen.queryByTestId('select-item-imagen-4-fast')).toBeNull();
+    expect(screen.queryByTestId(`select-item-${modelFixtureIds.image}`)).toBeNull();
     // Other slots should be present (deduped by modelId)
-    expect(screen.getByTestId('select-item-gemini-3.1-flash-lite')).toBeDefined();
-    expect(screen.getByTestId('select-item-claude-sonnet-4.6')).toBeDefined();
-    expect(screen.getByTestId('select-item-claude-opus-4.8')).toBeDefined();
+    expect(screen.getByTestId(`select-item-${modelFixtureIds.fast}`)).toBeDefined();
+    expect(screen.getByTestId(`select-item-${modelFixtureIds.balanced}`)).toBeDefined();
+    expect(screen.getByTestId(`select-item-${modelFixtureIds.premium}`)).toBeDefined();
   });
 
   it('shows model friendly names for max tier', () => {
     mockSettingsState.advancedMode = true;
     render(<AdvancedModeToggle tier="max" />);
-    expect(screen.getByText('Gemini 3.1 Flash-Lite')).toBeDefined();
-    expect(screen.getByText('Claude Sonnet 4.6')).toBeDefined();
-    expect(screen.getByText('Claude Opus 4.7')).toBeDefined();
+    expect(screen.getByText('Fixture Fast Model')).toBeDefined();
+    expect(screen.getByText('Fixture Balanced Model')).toBeDefined();
+    expect(screen.getByText('Fixture Premium Model')).toBeDefined();
   });
 });

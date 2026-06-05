@@ -37,7 +37,7 @@ The audit's P0 #2 (token alias path) and P0 #6 (shared settings shell) called th
 
 ## Verification of this decision
 
-- Round-2 audit P0 #2 + #6 + composer drag-drop (P0 #3) all shipped during the 2026-05-21 session by editing only `packages/unified-chat` + `packages/types` and a thin consumer-side wire. See `docs/plans/2026-05-21-suite-transformation-handoff.md` for the per-commit trace.
+- Round-2 audit P0 #2 + #6 + composer drag-drop (P0 #3) all shipped during the 2026-05-21 session by editing only `packages/unified-chat` + `packages/types` and a thin consumer-side wire. Historical trace: `docs/archive/2026-06-05-doc-reset/docs/plans/2026-05-21-suite-transformation-handoff.md`.
 - The same pattern will apply to the next big items: Artifacts versioning (P0 #9, 186h estimated), shared Projects component (32h), and the eventual Memory cloud-sync layer when Cloud Managed opens.
 
 ## Sources

@@ -347,7 +347,7 @@ const UserProfileArea = React.memo(function UserProfileArea({
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onUpgradeRequest}>
             <CreditCard className="mr-2 h-4 w-4" />
-            Join cloud waitlist
+            Upgrade
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => router.push('/download')}>
             <Download className="mr-2 h-4 w-4" />

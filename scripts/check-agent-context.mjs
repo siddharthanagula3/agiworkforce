@@ -84,6 +84,8 @@ const requiredFiles = [
   'docs/agent-context/task-manifest.schema.json',
   'docs/agent-context/commands.json',
   'docs/agent-context/doc-status.json',
+  'docs/agent-context/non-md-artifact-status.json',
+  'docs/AGENTS.md',
   'docs/current/README.md',
   'docs/current/product-suite.md',
   'docs/current/technical-architecture.md',
@@ -144,6 +146,10 @@ requireIncludes('AGENTS.md', 'docs/engineering/agent-harness-rollout.md');
 requireIncludes('AGENTS.md', 'docs/engineering/service-layer-architecture.md');
 requireIncludes('AGENTS.md', 'Hooks And Local Gates');
 requireIncludes('AGENTS.md', 'docs/agent-context/lanes.json');
+requireIncludes('docs/AGENTS.md', 'Read root `AGENTS.md`');
+requireIncludes('docs/AGENTS.md', 'Lane Contract');
+requireIncludes('docs/AGENTS.md', 'High-Risk Areas');
+requireIncludes('docs/AGENTS.md', 'Verification');
 
 const agentCriticalRules = [
   'These rules must stay mirrored in `CLAUDE.md`',
@@ -233,6 +239,10 @@ const staleToolAgentPhrases = [
   '~/.claude/projects',
   '~/.Codex/projects',
   'private memory',
+  'Hobby+ unlocks Cloud',
+  'Mobile BYOK',
+  'Local (private, BYOK)',
+  'User can transfer Local↔Cloud',
 ];
 for (const file of [
   ...listFilesRecursive('.claude/agents', (filePath) => filePath.endsWith('.md')),
@@ -336,6 +346,7 @@ if (commands) {
     'laneOwnership',
     'generatedArtifacts',
     'reportRetention',
+    'nonMdArtifacts',
     'neonMigrations',
     'ciGuardrails',
     'codeowners',

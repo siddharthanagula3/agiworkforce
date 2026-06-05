@@ -212,7 +212,7 @@ export function OAuthConnectorCard({
       <div className="w-full mt-auto pt-1">
         {connector.comingSoon ? (
           <div className="w-full py-1.5 text-center text-xs text-muted-foreground bg-muted/40 rounded-lg">
-            Coming Soon
+            Request access
           </div>
         ) : isLoading ? (
           <button

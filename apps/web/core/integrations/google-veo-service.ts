@@ -1,13 +1,12 @@
 /**
- * Google Veo Service
- * Official integration with Google AI Studio Veo 3.1 API for video generation
+ * Google video generation service
+ * Official integration with Google AI Studio video-generation APIs
  * Uses Gemini API endpoints: https://ai.google.dev/gemini-api/docs/video
  *
  * SECURITY: All API calls are routed through Netlify proxy functions
  * to keep API keys secure on the server side. Never expose API keys client-side.
  *
- * Supported models:
- * - veo-3.1-generate-preview (8-second 720p or 1080p videos with audio)
+ * Supported model selection is resolved through the shared model catalog.
  *
  * Features:
  * - Text-to-video generation
@@ -19,21 +18,18 @@
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { logger } from '@shared/lib/logger';
 import { DEFAULT_GOOGLE_FAST_MODEL } from '@shared/config/supported-models';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 
-/**
- * Resolve the wire-protocol apiModelId for veo-3 from models.json. Falls
- * back to the legacy literal when the catalog is missing the entry. This
- * centralizes the rule-models-json.md "never hardcode model IDs" rule.
- */
-const VEO_API_MODEL_ID = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
+const VIDEO_GENERATION_MODEL_ID = getRoutingSlotModel('video_generation');
+const VEO_MODEL_METADATA = getModelMetadataById(VIDEO_GENERATION_MODEL_ID);
+const VEO_API_MODEL_ID = VEO_MODEL_METADATA?.apiModelId ?? VIDEO_GENERATION_MODEL_ID;
 
 export interface VeoGenerationRequest {
   prompt: string;
   /**
-   * Wire-protocol model id. Defaults to whatever models.json maps `veo-3` to
-   * via apiModelId. Accepts any string so future Veo iterations don't require
-   * a type change here (rule-models-json.md).
+   * Wire-protocol model id. Defaults to the catalog-selected video slot
+   * apiModelId. Accepts any string so future video models do not require a
+   * type change here.
    */
   model?: string;
   resolution?: '720p' | '1080p';
@@ -528,9 +524,9 @@ export class GoogleVeoService {
   }> {
     return [
       {
-        id: 'veo-3.1-generate-preview',
-        name: 'Veo 3.1',
-        description: 'State-of-the-art 8-second video generation with audio',
+        id: VEO_API_MODEL_ID,
+        name: VEO_MODEL_METADATA?.name ?? 'Catalog video model',
+        description: VEO_MODEL_METADATA?.bestFor[0] ?? 'Video generation with audio',
         features: [
           '720p or 1080p resolution',
           'Native audio generation',

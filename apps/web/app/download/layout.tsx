@@ -1,7 +1,7 @@
 import { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Download | AGI',
+  title: 'Download',
   description:
     'Download AGI for macOS, Windows, and Linux. A native desktop AI assistant with browser automation, multi-model chat, and AI skills. Free during early access.',
   keywords: [

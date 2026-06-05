@@ -30,18 +30,18 @@ export default function GetStartedPage() {
             <pre className="agi-terminal-pre">
               <span className="agi-terminal-comment"># Homebrew (macOS, Linux)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>brew install
+              <span className="agi-terminal-prompt">$ </span>brew install
               siddharthanagula3/tap/agiworkforce
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># cargo (any platform)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>cargo install agiworkforce-cli
+              <span className="agi-terminal-prompt">$ </span>cargo install agiworkforce-cli
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># curl (macOS, Linux, WSL)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>curl -fsSL
+              <span className="agi-terminal-prompt">$ </span>curl -fsSL
               https://agiworkforce.com/install.sh | sh
             </pre>
           </div>
@@ -76,10 +76,10 @@ export default function GetStartedPage() {
           <div className="agi-terminal">
             <div className="agi-terminal-bar">first command</div>
             <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$</span>agi exec &quot;sketch a Rust HTTP
+              <span className="agi-terminal-prompt">$ </span>agi exec &quot;sketch a Rust HTTP
               router&quot;
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi
+              <span className="agi-terminal-prompt">$ </span>agi
               {'\n'}
               <span className="agi-terminal-comment"># interactive TUI</span>
             </pre>
