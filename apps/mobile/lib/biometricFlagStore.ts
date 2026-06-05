@@ -23,8 +23,8 @@
  *
  * The flag is read synchronously from a Zustand store after `hydrate()`
  * has resolved at app startup; until then the app behaves as if the
- * gate is **enabled** (fail-closed) — any access before hydration
- * shows the lock screen.
+ * gate is **enabled** (fail-closed). After hydration, app lock is opt-in:
+ * only a persisted "true" enables it for normal first-run users.
  */
 import * as SecureStore from 'expo-secure-store';
 import { create } from 'zustand';
@@ -51,20 +51,17 @@ interface BiometricFlagState {
   setEnabled: (next: boolean) => Promise<void>;
 }
 
-// AUDIT-FIX: H-10 — fail-CLOSED default. The in-memory `enabled` field starts
-// at `true` so any UI rendered before hydration completes treats the device
-// as locked. Hydration may downgrade the flag to `false` only when the user
-// previously opted out (SecureStore returns the literal string 'false').
+// AUDIT-FIX: H-10 — fail-CLOSED before hydration. The in-memory `enabled`
+// field starts at `true` so any UI rendered before hydration completes treats
+// the device as locked. Hydration enables app lock only when the user
+// explicitly opted in (SecureStore returns the literal string 'true').
 export const useBiometricFlag = create<BiometricFlagState>((set) => ({
   hydrated: false,
   enabled: true,
   hydrate: async () => {
     try {
       const stored = await SecureStore.getItemAsync(STORAGE_KEY);
-      // The flag is enabled by default. A persisted 'false' is the only way
-      // to disable it. Null / unparseable values are treated as enabled so
-      // a corrupt write can never silently unlock the app.
-      set({ hydrated: true, enabled: stored !== 'false' });
+      set({ hydrated: true, enabled: stored === 'true' });
     } catch (err) {
       console.warn('[biometricFlag] SecureStore read failed:', err);
       // Fail-CLOSED: keep enabled=true so the gate stays up. Mark hydrated

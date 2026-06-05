@@ -55,7 +55,7 @@ export async function selectTier(opts: {
   }
 
   throw new Error(
-    'No local runtime available. Download a model first, or add a cloud provider key.',
+    'No local runtime is ready. Download a local model first, or join AGI Cloud when it is available.',
   );
 }
 
@@ -155,7 +155,9 @@ export async function localGenerate(
     throw new Error(`No runnable local package is configured for model ${ref.modelId}.`);
   }
 
-  throw new Error('No local model is ready. Download a model first, or add a cloud provider key.');
+  throw new Error(
+    'No local model is ready. Download a local model first, or join AGI Cloud when it is available.',
+  );
 }
 
 export type {

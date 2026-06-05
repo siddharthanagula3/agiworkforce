@@ -4,7 +4,7 @@ import { Plus, Link as LinkIcon } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendButton } from './SendButton';
-import { CommandPalette } from './CommandPalette';
+import { CommandPalette, type ChatCommand } from './CommandPalette';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
 import * as VoiceService from '@/src/features/voice/services/voice';
@@ -24,6 +24,8 @@ interface ChatInputProps {
   onStop?: () => void;
   onOpenModelPicker?: () => void;
   onOpenVoiceMode?: () => void;
+  onOpenCompare?: () => void;
+  onOpenExport?: () => void;
   onOpenAddToChat?: () => void;
   onOpenConnectors?: () => void;
   /** When false, send button shows queued state and placeholder reflects offline status */
@@ -48,6 +50,8 @@ export function ChatInput({
   onStop,
   onOpenModelPicker,
   onOpenVoiceMode,
+  onOpenCompare,
+  onOpenExport,
   onOpenAddToChat,
   onOpenConnectors,
   isOnline = true,
@@ -198,10 +202,27 @@ export function ChatInput({
 
   const showCommandPalette = text.startsWith('/') && !isStreaming;
 
-  const handleSelectCommand = useCallback((command: string) => {
-    setText(command + ' ');
-    inputRef.current?.focus();
-  }, []);
+  const availableCommands: ChatCommand[] = [
+    '/image',
+    ...(onOpenVoiceMode ? (['/voice'] as const) : []),
+    ...(onOpenCompare ? (['/compare'] as const) : []),
+    ...(onOpenExport ? (['/export'] as const) : []),
+  ];
+
+  const handleSelectCommand = useCallback(
+    (command: ChatCommand) => {
+      if (command === '/image') {
+        setText('/image ');
+        inputRef.current?.focus();
+        return;
+      }
+      setText('');
+      if (command === '/voice') onOpenVoiceMode?.();
+      if (command === '/compare') onOpenCompare?.();
+      if (command === '/export') onOpenExport?.();
+    },
+    [onOpenCompare, onOpenExport, onOpenVoiceMode],
+  );
 
   const sendButtonState = isStreaming
     ? ('streaming' as const)
@@ -262,6 +283,7 @@ export function ChatInput({
       <CommandPalette
         visible={showCommandPalette}
         query={text}
+        availableCommands={availableCommands}
         onSelectCommand={handleSelectCommand}
       />
 

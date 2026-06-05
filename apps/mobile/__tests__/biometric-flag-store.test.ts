@@ -1,9 +1,9 @@
 /**
  * Regression tests for LOW-MOB-1 — biometric-lock flag in SecureStore.
  *
- * AUDIT-FIX: H-10 — flag defaults to ENABLED. Only a persisted 'false'
- * disables the gate, and SecureStore failures keep enabled=true. This
- * prevents a fail-open race during the SecureStore read.
+ * AUDIT-FIX: H-10 — the in-memory flag defaults to ENABLED until hydration
+ * completes, but first-run users are not app-locked. Only a persisted 'true'
+ * enables the gate after hydration. SecureStore failures keep enabled=true.
  */
 
 const mockGetItemAsync = jest.fn();
@@ -41,26 +41,26 @@ describe('biometricFlagStore — hydrate', () => {
     expect(mockGetItemAsync).toHaveBeenCalledWith('agi_biometric_lock_enabled_v1');
   });
 
-  it('reads "false" → enabled=false (only persisted opt-out disables the gate)', async () => {
+  it('reads "false" → enabled=false', async () => {
     mockGetItemAsync.mockResolvedValueOnce('false');
     await useBiometricFlag.getState().hydrate();
     expect(useBiometricFlag.getState().enabled).toBe(false);
     expect(useBiometricFlag.getState().hydrated).toBe(true);
   });
 
-  it('treats null (never set) as enabled=true (fail-closed default)', async () => {
+  it('treats null (never set) as enabled=false so first-run users are not app-locked', async () => {
     mockGetItemAsync.mockResolvedValueOnce(null);
     await useBiometricFlag.getState().hydrate();
-    expect(useBiometricFlag.getState().enabled).toBe(true);
+    expect(useBiometricFlag.getState().enabled).toBe(false);
     expect(useBiometricFlag.getState().hydrated).toBe(true);
   });
 
   it.each(['TRUE', 'True', '1', 'yes', 'on', 'enabled', ''])(
-    'treats non-literal "%s" as enabled=true (only literal "false" disables)',
+    'treats non-literal "%s" as enabled=false (only literal "true" enables)',
     async (stored) => {
       mockGetItemAsync.mockResolvedValueOnce(stored);
       await useBiometricFlag.getState().hydrate();
-      expect(useBiometricFlag.getState().enabled).toBe(true);
+      expect(useBiometricFlag.getState().enabled).toBe(false);
     },
   );
 

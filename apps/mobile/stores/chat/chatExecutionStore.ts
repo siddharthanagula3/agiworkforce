@@ -15,6 +15,7 @@ import { isSelectableModelId } from '@/src/features/model-picker/service';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore';
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
 import { consolidateFactsFromTurn } from '@/src/features/memory/services/consolidation';
@@ -28,6 +29,12 @@ export interface PaywallErrorState {
   feature: string;
   requiredTier: string;
   reason: string;
+}
+
+export interface SendMessageOptions {
+  mode?: ChatMode;
+  style?: ChatStyle;
+  taskInstruction?: string;
 }
 
 interface ExecutionState {
@@ -44,6 +51,7 @@ interface ExecutionState {
     content: string,
     model: string,
     attachments?: Attachment[],
+    options?: SendMessageOptions,
   ) => Promise<void>;
   stopStreaming: () => void;
   retryMessage: (conversationId: string, messageId: string) => void;
@@ -62,6 +70,21 @@ const thinkingStartTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
 const DEFAULT_LOCAL_SYSTEM_PROMPT =
   'You are AGI, a concise helpful assistant running locally on this device. Keep final answers separate from any thinking or reasoning text.';
+
+const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
+  chat: null,
+  research:
+    'Mode: Research. Give careful analysis, note uncertainty, and do not claim live web access unless a web-search tool is actually available in this turn.',
+  create:
+    'Mode: Create. Produce usable drafts, code, plans, or structured outputs with clear next steps.',
+};
+
+const CHAT_STYLE_PROMPTS: Record<ChatStyle, string | null> = {
+  normal: null,
+  concise: 'Style: Concise. Keep the answer short, direct, and easy to scan.',
+  detailed: 'Style: Detailed. Explain reasoning and tradeoffs clearly without padding.',
+  creative: 'Style: Creative. Offer more original phrasing or options while staying accurate.',
+};
 
 function generateId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
@@ -102,6 +125,17 @@ function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[]
   );
   if (hasBase) return messages;
   return [{ role: 'system', content: DEFAULT_LOCAL_SYSTEM_PROMPT }, ...messages];
+}
+
+function buildChatViewSystemPrompt(
+  mode: ChatMode,
+  style: ChatStyle,
+  taskInstruction?: string,
+): string | null {
+  const parts = [CHAT_MODE_PROMPTS[mode], CHAT_STYLE_PROMPTS[style], taskInstruction].filter(
+    (part): part is string => Boolean(part),
+  );
+  return parts.length > 0 ? parts.join('\n') : null;
 }
 
 interface ParsedLocalThinking {
@@ -272,7 +306,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   clearError: () => set({ error: null }),
   clearPaywallError: () => set({ paywallError: null }),
 
-  sendMessage: async (conversationId, content, model, attachments) => {
+  sendMessage: async (conversationId, content, model, attachments, options) => {
     const queue = getMobileSendQueue();
     try {
       queue.enqueue({ value: content, mode: 'prompt' });
@@ -405,8 +439,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
-    // Resolve the per-conversation reasoning effort (UI sets it via AddToChatSheet →
-    // agentControlStore). Forwarded to the API so the selected effort actually takes effect.
+    const chatViewState = useChatViewStore.getState();
+    const viewSystemPrompt = buildChatViewSystemPrompt(
+      options?.mode ?? chatViewState.chatMode,
+      options?.style ?? chatViewState.chatStyle,
+      options?.taskInstruction,
+    );
+    if (viewSystemPrompt) {
+      historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
+    }
+
+    // Resolve per-conversation reasoning effort for the remote API path.
+    // Local model execution ignores this value because mobile local runtimes do
+    // not expose an equivalent effort axis.
     const agentControl = useAgentControlStore
       .getState()
       .resolve(conversationId, projectState.activeProjectId);

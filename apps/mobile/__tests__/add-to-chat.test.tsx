@@ -2,16 +2,15 @@
 /**
  * Tests for AddToChatSheet component.
  *
- * Validates the four sections of the "Add to Chat" bottom sheet:
- * 1. Attachment row (Camera, Photos, File, Skills)
+ * Validates the local-mode "Add to Chat" bottom sheet:
+ * 1. Attachment row (Camera, Photos, File)
  * 2. Mode selector radio buttons (Chat, Research, Create)
- * 3. Tool availability rows (cloud-gated + local Health)
- * 4. Config links (Add to project, Choose style, Tool access, Connectors)
+ * 3. Tool availability rows (cloud-gated + desktop handoff)
+ * 4. Config links (Project, Choose style, Connectors)
  */
 
 import React from 'react';
-import { Alert } from 'react-native';
-import { render, fireEvent, act } from '@testing-library/react-native';
+import { render, fireEvent } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — declared before imports
@@ -94,22 +93,13 @@ jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
 }));
 
-jest.mock('../src/features/integrations/services/healthData', () => ({
-  isHealthAvailable: jest.fn().mockReturnValue(false),
-  requestHealthPermission: jest.fn().mockResolvedValue(false),
-}));
-
-const mockJoinWaitlist = jest.fn().mockResolvedValue({ rank: 0 });
-const mockMarkWaitlistJoined = jest.fn();
 const mockWaitlistStoreState = {
   joined: false,
   rank: undefined as number | undefined,
-  markJoined: mockMarkWaitlistJoined,
 };
 
 jest.mock('../src/features/waitlist', () => {
   return {
-    joinWaitlist: mockJoinWaitlist,
     useWaitlistStore: (selector: (state: typeof mockWaitlistStoreState) => unknown) =>
       selector(mockWaitlistStoreState),
   };
@@ -132,16 +122,6 @@ jest.mock('../src/features/chat/components/StyleSelector', () => {
   return {
     StyleSelector: React.forwardRef((_props: unknown, _ref: React.Ref<unknown>) => (
       <View testID="style-selector" />
-    )),
-  };
-});
-
-jest.mock('../src/features/chat/components/ToolAccessSelector', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-  return {
-    ToolAccessSelector: React.forwardRef((_props: unknown, _ref: React.Ref<unknown>) => (
-      <View testID="tool-access-selector" />
     )),
   };
 });
@@ -196,13 +176,13 @@ describe('AddToChatSheet', () => {
   // ---- Section 1: Attachment Row ----
 
   describe('attachment row', () => {
-    it('renders 4 attachment cards: Camera, Photos, File, Skills', () => {
-      const { getByText } = renderSheet();
+    it('renders 3 attachment cards: Camera, Photos, File', () => {
+      const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Camera')).toBeTruthy();
       expect(getByText('Photos')).toBeTruthy();
       expect(getByText('File')).toBeTruthy();
-      expect(getByText('Skills')).toBeTruthy();
+      expect(queryByText('Skills')).toBeNull();
     });
   });
 
@@ -246,19 +226,14 @@ describe('AddToChatSheet', () => {
 
   describe('feature toggles', () => {
     it('renders local and cloud-gated tool rows', () => {
-      const { getByText } = renderSheet();
+      const { getByText, queryByText } = renderSheet();
 
       expect(getByText('Web search')).toBeTruthy();
       expect(getByText('Image generation')).toBeTruthy();
       expect(getByText('Computer use')).toBeTruthy();
       expect(getByText('Desktop required')).toBeTruthy();
-      expect(getByText('Health')).toBeTruthy();
-    });
-
-    it('Health toggle shows Beta badge', () => {
-      const { getByText } = renderSheet();
-
-      expect(getByText('Beta')).toBeTruthy();
+      expect(queryByText('Health')).toBeNull();
+      expect(queryByText('Beta')).toBeNull();
     });
 
     it('shows cloud rows as waitlist-gated instead of live switches', () => {
@@ -268,7 +243,6 @@ describe('AddToChatSheet', () => {
       expect(getByLabelText('Image generation, Waitlist')).toBeTruthy();
       expect(queryByLabelText('Web search on')).toBeNull();
       expect(queryByLabelText('Image generation on')).toBeNull();
-      expect(getByLabelText('Health off').props.value).toBe(false);
     });
 
     it('opens the waitlist instead of enabling cloud web search', () => {
@@ -283,46 +257,27 @@ describe('AddToChatSheet', () => {
       expect(useChatStore.getState().features.webSearch).toBe(false);
       expect(getByTestId('invite-code-modal')).toBeTruthy();
     });
-
-    it('keeps health disabled and alerts when Health data is unavailable', async () => {
-      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
-      const { getByLabelText } = renderSheet();
-
-      await act(async () => {
-        fireEvent(getByLabelText('Health off'), 'valueChange', true);
-      });
-
-      expect(useChatStore.getState().features.health).toBe(false);
-      expect(alertSpy).toHaveBeenCalledWith(
-        'Health Not Available',
-        expect.stringContaining('available on iOS only'),
-        [{ text: 'OK' }],
-      );
-      alertSpy.mockRestore();
-    });
   });
 
   // ---- Section 4: Config Links ----
 
   describe('config links', () => {
-    it('renders all 4 config links', () => {
-      const { getByText } = renderSheet();
+    it('renders the local-safe config links', () => {
+      const { getByText, queryByText } = renderSheet();
 
-      expect(getByText('Add to project')).toBeTruthy();
+      expect(getByText('Project')).toBeTruthy();
       expect(getByText('Choose style')).toBeTruthy();
-      expect(getByText('Tool access')).toBeTruthy();
       expect(getByText('Connectors')).toBeTruthy();
+      expect(queryByText('Tool access')).toBeNull();
     });
 
     it('shows current values on config links', () => {
       const { getByText } = renderSheet();
 
-      // Project defaults to "None"
-      expect(getByText('None')).toBeTruthy();
+      // Project defaults to "Choose"
+      expect(getByText('Choose')).toBeTruthy();
       // Style defaults to "Normal"
       expect(getByText('Normal')).toBeTruthy();
-      // Tool access defaults to "Auto"
-      expect(getByText('Auto')).toBeTruthy();
     });
 
     it('shows project name when a project is active', () => {

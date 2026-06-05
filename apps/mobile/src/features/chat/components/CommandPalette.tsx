@@ -11,9 +11,11 @@ import { colors } from '@/src/ui/theme';
  * Tapping a command calls onSelectCommand with the command string (e.g. "/image").
  */
 
+export type ChatCommand = '/image' | '/voice' | '/compare' | '/export';
+
 interface Command {
   label: string;
-  command: string;
+  command: ChatCommand;
   description: string;
   icon: React.ReactNode;
 }
@@ -48,11 +50,20 @@ const COMMANDS: Command[] = [
 export interface CommandPaletteProps {
   visible: boolean;
   query: string;
-  onSelectCommand: (command: string) => void;
+  availableCommands: ChatCommand[];
+  onSelectCommand: (command: ChatCommand) => void;
 }
 
-export function CommandPalette({ visible, query, onSelectCommand }: CommandPaletteProps) {
-  const filtered = COMMANDS.filter((cmd) => cmd.label.startsWith(query.slice(1).toLowerCase()));
+export function CommandPalette({
+  visible,
+  query,
+  availableCommands,
+  onSelectCommand,
+}: CommandPaletteProps) {
+  const filtered = COMMANDS.filter(
+    (cmd) =>
+      availableCommands.includes(cmd.command) && cmd.label.startsWith(query.slice(1).toLowerCase()),
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: Command }) => (

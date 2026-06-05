@@ -1,9 +1,9 @@
 /**
- * Skills store — local-only, MMKV-persisted.
+ * Skills store — reserved local persistence for future cloud skills.
  *
- * Tracks: installed skills + the active skill ID (at most one active at a
- * time; injected into chat as system context). Catalog fetch state is
- * ephemeral (not persisted) — re-fetched on each browse session.
+ * Tracks installed skills + the active skill ID. Mobile does not inject these
+ * records into chat while the public skills surface is Cloud-gated.
+ * Catalog fetch state is ephemeral and not persisted.
  */
 
 import { create } from 'zustand';
@@ -14,7 +14,7 @@ import type { InstalledSkill, SkillCatalogEntry } from '@/src/features/skills/se
 interface SkillsState {
   /** MMKV-persisted: installed skill bundles keyed by skill ID */
   installedSkills: Record<string, InstalledSkill>;
-  /** MMKV-persisted: active skill ID — injected into chat context */
+  /** MMKV-persisted: active skill ID, reserved until skills execution ships */
   activeSkillId: string | null;
 
   /** Ephemeral: remote catalog (not persisted) */

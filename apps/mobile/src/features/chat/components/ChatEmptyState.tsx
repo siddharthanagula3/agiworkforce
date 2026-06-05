@@ -2,45 +2,20 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
-import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
-import { TaskChips, type TaskChipType } from '@/src/features/chat/components/TaskChips';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { colors } from '@/src/ui/theme';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
-const CHIP_PROMPTS: Record<TaskChipType, string> = {
-  scan: '',
-  code: 'Help me write a function that...',
-  write: 'Write a professional email about...',
-  research: 'Research and summarize the latest on...',
-  image: '',
-  video: 'Create a video script for...',
-  computer: 'Help me automate a task on my computer...',
-  translate: '',
-};
-
 interface ChatEmptyStateProps {
   /** Whether to show the desktop pairing banner (first launch). */
   showPairingBanner?: boolean;
   onPairDesktop?: () => void;
-  /** Called when a task chip is tapped — prefills the composer with a starter prompt */
-  onSelectPrompt?: (prompt: string) => void;
-  /** Called when a chip is tapped — reports the active chip type */
-  onChipSelect?: (chip: TaskChipType) => void;
-  activeChip?: TaskChipType | null;
 }
 
-export function ChatEmptyState({
-  showPairingBanner,
-  onPairDesktop,
-  onSelectPrompt,
-  onChipSelect,
-  activeChip,
-}: ChatEmptyStateProps) {
-  const router = useRouter();
+export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptyStateProps) {
   const nickname = useSettingsStore((s) => s.personalization.nickname);
   const fullName = useSettingsStore((s) => s.personalization.fullName);
   const displayName = nickname || fullName?.split(' ')[0] || '';
@@ -141,32 +116,6 @@ export function ChatEmptyState({
           </Text>
         </Animated.View>
       )}
-
-      {/* Task chips — image chip navigates to the image-with-question screen */}
-      <Animated.View
-        entering={reducedMotion ? undefined : FadeIn.duration(500).delay(300)}
-        style={{ marginTop: 32, width: '100%' }}
-      >
-        <TaskChips
-          activeChip={activeChip}
-          onChipPress={(chip) => {
-            if (chip === 'scan') {
-              router.push('/(app)/scan' as Parameters<typeof router.push>[0]);
-              return;
-            }
-            if (chip === 'image') {
-              router.push('/(app)/image' as Parameters<typeof router.push>[0]);
-              return;
-            }
-            if (chip === 'translate') {
-              router.push('/(app)/translate' as Parameters<typeof router.push>[0]);
-              return;
-            }
-            onChipSelect?.(chip);
-            onSelectPrompt?.(CHIP_PROMPTS[chip]);
-          }}
-        />
-      </Animated.View>
     </View>
   );
 }
