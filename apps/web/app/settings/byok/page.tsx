@@ -2,7 +2,8 @@
  * /settings/byok — API keys (BYOK) settings section.
  *
  * Shows which env-based provider keys are configured (presence only, never value).
- * UI key entry is Cloud Managed waitlist-gated in v1.
+ * Browser-managed key entry is a hosted upgrade capability; env-based BYOK
+ * remains available without exposing secret values client-side.
  *
  * Server component: passes static provider list to client EnvKeyStatusList
  * which fetches /api/byok/env-key-status at render time.
@@ -30,7 +31,7 @@ export default function ByokSettingsPage() {
           API keys (BYOK)
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Env-based keys are active in v1. UI key entry is coming in Cloud Managed private beta.{' '}
+          Env-based keys are active now. Browser-managed key storage arrives with hosted upgrades.{' '}
           <Link href="/docs/byok-env" style={{ color: 'var(--amber, #c8892a)' }}>
             How to set env keys &rarr;
           </Link>
@@ -90,7 +91,7 @@ export default function ByokSettingsPage() {
         <EnvKeyStatusList providers={BYOK_PROVIDERS} />
       </section>
 
-      {/* Waitlist CTA card */}
+      {/* Hosted key vault CTA card */}
       <section
         style={{
           border: '1px solid color-mix(in srgb, var(--amber, #c8892a) 35%, transparent)',
@@ -122,18 +123,18 @@ export default function ByokSettingsPage() {
               color: 'var(--amber, #c8892a)',
             }}
           >
-            Coming soon
+            Hosted upgrade
           </span>
-          Save your keys via UI
+          Managed key vault
         </div>
 
         {/* Card body */}
         <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>
-            Currently only env-based keys are supported in v1. UI key entry, OS-keychain storage,
-            and revoke-all are launching in Cloud Managed private beta.
+            Keep using env-based BYOK for local and server deployments. Request hosted key vault
+            access when you want per-account provider keys, revoke-all, and managed rotation.
           </p>
-          <WaitlistForm source="byok" ctaLabel="Join Cloud Managed waitlist →" />
+          <WaitlistForm source="byok" ctaLabel="Request hosted key vault access" />
         </div>
       </section>
     </div>

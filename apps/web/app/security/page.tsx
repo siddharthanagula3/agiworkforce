@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Security | AGI',
+  title: 'Security',
   description: 'How AGI protects your keys, your data, and your tool execution.',
   alternates: { canonical: 'https://agiworkforce.com/security' },
 };
@@ -114,8 +114,8 @@ export default function SecurityPage() {
               <tr>
                 <td>Code signing</td>
                 <td>
-                  macOS DMG signed with Apple Developer ID D2PR62RLT4 and notarized. Windows EV cert
-                  pending.
+                  Public desktop installers are released only through verified GitHub or configured
+                  signed-asset URLs. Windows EV signing remains part of the public release path.
                 </td>
               </tr>
             </tbody>

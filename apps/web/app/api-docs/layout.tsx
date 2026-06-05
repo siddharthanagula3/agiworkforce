@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     'webhooks',
   ],
   openGraph: {
-    title: 'API Documentation | AGI',
+    title: 'API Documentation',
     description:
       'Complete REST API reference for AGI. Authentication, endpoints, webhooks, and SDK guides.',
     type: 'website',
@@ -30,7 +30,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'API Documentation | AGI',
+    title: 'API Documentation',
     description:
       'Complete REST API reference for AGI. Authentication, endpoints, webhooks, and SDK guides.',
     images: ['/app-preview.png'],

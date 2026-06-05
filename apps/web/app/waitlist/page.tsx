@@ -4,7 +4,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { WaitlistForm } from '../byok/WaitlistForm';
 
 export const metadata: Metadata = {
-  title: 'Join the AGI Cloud Waitlist | AGI Workforce',
+  title: 'Join the AGI Cloud Waitlist',
   description:
     'Request invite access for AGI Cloud. Cloud Managed remains waitlist-only while subscription, usage, abuse, retention, and provider-cost controls are proven.',
   alternates: { canonical: 'https://agiworkforce.com/waitlist' },

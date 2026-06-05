@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 import {
   Search,
   Download,
-  Star,
   Package,
   Code,
   Database,
@@ -49,7 +48,7 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
           <div>
             <h2 className="text-2xl font-bold mb-2">{server.name}</h2>
             <p className="text-gray-600">
-              v{server.version} by {server.author}
+              {server.version ? `v${server.version} by ${server.author}` : `by ${server.author}`}
             </p>
           </div>
           <Badge variant="secondary" className="bg-blue-100 text-blue-800">
@@ -58,20 +57,6 @@ function ServerDetailsDialog({ server, open, onClose, onInstall }: ServerDetails
         </div>
 
         <p className="text-gray-700 mb-6">{server.description}</p>
-
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-gray-50 p-3 rounded">
-            <div className="text-sm text-gray-600">Rating</div>
-            <div className="flex items-center gap-1 mt-1">
-              <Star className="w-4 h-4 text-yellow-500 fill-current" />
-              <span className="font-semibold">{server.rating}/5.0</span>
-            </div>
-          </div>
-          <div className="bg-gray-50 p-3 rounded">
-            <div className="text-sm text-gray-600">Downloads</div>
-            <div className="font-semibold mt-1">{server.downloads.toLocaleString()}</div>
-          </div>
-        </div>
 
         <div className="mb-6">
           <h3 className="font-semibold mb-3">Available Tools ({server.tools.length})</h3>
@@ -151,15 +136,8 @@ function ServerPackageCard({ server, onViewDetails, onInstall }: ServerPackageCa
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-4 text-sm text-gray-600">
-          <div className="flex items-center gap-1">
-            <Star className="w-4 h-4 text-yellow-500 fill-current" />
-            {server.rating}
-          </div>
-          <div className="flex items-center gap-1">
-            <Download className="w-4 h-4" />
-            {(server.downloads / 1000).toFixed(1)}k
-          </div>
           <Badge variant="secondary">{server.tools.length} tools</Badge>
+          {server.npm_package && <span>{server.npm_package}</span>}
         </div>
       </div>
 

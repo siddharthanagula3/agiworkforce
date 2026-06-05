@@ -18,6 +18,9 @@ import { useSettingsStore } from '../settingsStore';
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
   isTauri: false,
+  isDesktopUiDevLocal: false,
+  supportsLocalAppMode: false,
+  isCloudWeb: false,
   isTauriContext: vi.fn(() => false),
 }));
 

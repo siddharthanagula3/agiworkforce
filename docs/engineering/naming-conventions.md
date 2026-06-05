@@ -48,7 +48,7 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 
 ## Directory Names
 
-- Use lowercase kebab-case for new documentation, report, and audit directories: `docs/current`, `docs/agent-context`, `audit/repo-organization`.
+- Use lowercase kebab-case for new documentation, report, and audit directories: `docs/current`, `docs/agent-context`, `audit/tool-parity`.
 - Use existing ecosystem casing where the platform requires it: `.github`, `CODEOWNERS`, `Cargo.toml`, `package.json`, Expo/Tauri/native folders.
 - Apps live in `apps/<surface>`.
 - Shared TypeScript packages live in `packages/<domain>`.

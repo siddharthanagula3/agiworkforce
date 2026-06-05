@@ -13,7 +13,11 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
-import { getTaskModelForProvider, getProviderDefaultModel } from '@agiworkforce/types';
+import {
+  getProviderDefaultModel,
+  getTaskModelForProvider,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
 
 /**
  * Prompt Completion API
@@ -106,7 +110,7 @@ async function handleCompletion(request: NextRequest): Promise<NextResponse> {
   const completionModel =
     getTaskModelForProvider('anthropic', 'fast_completion') ??
     getProviderDefaultModel('anthropic') ??
-    'claude-haiku-4-5'; // last-resort fallback — should never be reached
+    requireProviderDefaultModel('anthropic');
   const provider = LLMProviderFactory.getProviderFromModel(completionModel);
 
   // WEB-19: static system prompt. Untrusted `context` (e.g., editor buffer

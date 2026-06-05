@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "lastUpdated": "2026-05-28",
+  "lastUpdated": "2026-06-05",
   "currentSourcesOfTruth": [
     "AGENTS.md",
     "AGI_WORKFORCE.md",
@@ -12,6 +12,7 @@
     "docs/current/agi-product-requirements.md",
     "docs/current/parity-implementation-matrix.md",
     "docs/current/byok-open-model-provider-strategy.md",
+    "docs/current/provider-capability-matrix.md",
     "docs/current/product-suite.md",
     "docs/current/technical-architecture.md",
     "docs/current/commercial-and-launch.md",
@@ -21,10 +22,10 @@
     "docs/agent-context/known-flaws.md"
   ],
   "currentEvidence": [
-    "audit/GAPS.md",
-    "audit/FLAWS.md",
-    "audit/COVERAGE.md",
     "audit/INDEX.md",
+    "audit/tool-parity/desktop-tool-parity-ledger.md",
+    "audit/desktop-ui-computer-use/README.md",
+    "audit/reports/README.md",
     "docs/intentional-divergences.md",
     "docs/reference/REFERENCE_INDEX.md",
     "docs/reference/REFERENCE_STRUCTURE.md"
@@ -32,6 +33,7 @@
   "supportingRules": [
     "docs/agent-context/repo-map.json",
     "docs/agent-context/commands.json",
+    "docs/agent-context/non-md-artifact-status.json",
     "docs/agent-context/risk-map.json",
     "docs/agent-context/lanes.json",
     "docs/agent-context/shared-files.md",
@@ -63,14 +65,39 @@
       "rule": "Promote durable conclusions to docs/current, docs/decisions, or audit before using as source of truth."
     },
     {
-      "path": "audit",
-      "status": "evidence",
-      "rule": "Use only compact indexes such as GAPS.md, FLAWS.md, COVERAGE.md, and INDEX.md as current evidence unless a current doc points to a deeper dated report."
+      "path": "docs/archive/2026-06-05-doc-reset/docs-hardening",
+      "status": "historical-working-notes",
+      "rule": "Former hardening working notes. Use only as rebuild input; promote verified durable conclusions to docs/current, docs/decisions, or audit."
     },
     {
-      "path": "reports/root-scratch-archive",
+      "path": "audit",
+      "status": "evidence",
+      "rule": "Use only audit/INDEX.md and explicitly listed current audit ledgers as current evidence. Dated audit reports must be re-verified against source before reuse."
+    },
+    {
+      "path": "docs/archive/2026-06-05-doc-reset/audit",
+      "status": "historical-audit-inputs",
+      "rule": "Former May 2026 audit corpus. Use only as rebuild input after re-verifying against current implementation files."
+    },
+    {
+      "path": "docs/archive/2026-06-05-doc-reset/reports/root-scratch-archive",
       "status": "historical-evidence",
       "rule": "Archived root scratch markdown/images/downloads are evidence only, not current source."
+    },
+    {
+      "path": "docs/archive/2026-06-05-doc-reset/reports/frontend-reference-comparison",
+      "status": "historical-evidence",
+      "rule": "Archived frontend reference screenshots and comparison notes. Use only as visual evidence after re-verifying against current code."
+    },
+    {
+      "path": "docs/archive/2026-06-05-doc-reset/reports/playwright-mcp-archive",
+      "status": "historical-evidence",
+      "rule": "Archived Playwright MCP captures. Use only as historical evidence."
+    },
+    {
+      "path": "docs/archive/2026-06-05-doc-reset/audit/reports",
+      "status": "historical-raw-scans",
+      "rule": "Archived raw audit scans. Use compact current audit indexes first."
     },
     {
       "path": "/Users/siddhartha/Desktop/claude_reference",

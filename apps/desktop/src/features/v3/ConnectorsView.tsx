@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Loader2, Plus } from 'lucide-react';
@@ -27,6 +27,41 @@ function permColors(s: ConnectorPermState): string {
     return 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100';
   if (s === 'ask') return 'border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100';
   return 'border-red-200 bg-red-50 text-red-600 hover:bg-red-100';
+}
+
+function ConnectorLogo({
+  connector,
+  fallback,
+  bgColor,
+}: {
+  connector: ConnectorDef;
+  fallback: string;
+  bgColor: string;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (connector.iconUrl && !failed) {
+    return (
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white">
+        <img
+          src={connector.iconUrl}
+          alt=""
+          className="h-7 w-7 rounded object-contain"
+          loading="lazy"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex h-9 w-9 items-center justify-center rounded-lg text-white text-sm font-semibold"
+      style={{ background: bgColor }}
+    >
+      {fallback}
+    </div>
+  );
 }
 
 /** Default tool definitions per connector */
@@ -237,12 +272,7 @@ export function ConnectorsView() {
               disabled={loading}
               className="flex flex-col items-center gap-2 rounded-xl border border-[var(--chat-border,#e8e3db)] bg-[var(--chat-bg,#fcfaf6)] p-4 text-center hover:bg-[var(--chat-bg-soft,#f5f0e8)] transition-colors group disabled:opacity-60"
             >
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-white text-sm font-semibold"
-                style={{ background: bgColor }}
-              >
-                {abbr}
-              </div>
+              <ConnectorLogo connector={c} fallback={abbr} bgColor={bgColor} />
               <div className="text-xs font-medium text-[var(--chat-text-primary,#1a1a1a)]">
                 {c.name}
               </div>

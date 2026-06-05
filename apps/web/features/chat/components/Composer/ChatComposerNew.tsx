@@ -389,7 +389,7 @@ const ChatComposerNewComponent = ({
     setPrevDroppedFiles(droppedFiles);
     if (isFreeAutoEconomyTrial) {
       setLocalNotice(
-        'File upload is waitlisted for hosted cloud. Free web chat accepts text prompts only.',
+        'File upload is available on hosted cloud upgrades. Free web chat accepts text prompts only.',
       );
     } else {
       addFiles(droppedFiles);
@@ -487,7 +487,7 @@ const ChatComposerNewComponent = ({
         setShowSlashMenu(false);
         setShowMentions(false);
         setLocalNotice(
-          'Slash commands are waitlisted for hosted cloud. Free web chat accepts plain text prompts.',
+          'Slash commands are available on hosted cloud upgrades. Free web chat accepts plain text prompts.',
         );
         return;
       }
@@ -567,7 +567,7 @@ const ChatComposerNewComponent = ({
         setMessage('');
         setShowSlashMenu(false);
         setLocalNotice(
-          'Skills are waitlisted for hosted cloud. Use plain text prompts in the free web trial.',
+          'Skills are available on hosted cloud upgrades. Use plain text prompts in the free web trial.',
         );
         setTimeout(() => textareaRef.current?.focus(), 0);
         return;
@@ -598,13 +598,13 @@ const ChatComposerNewComponent = ({
       }
       if (isFreeAutoEconomyTrial && attachments.length > 0) {
         setLocalNotice(
-          'The website free trial is text-only. Join the cloud waitlist for file and image uploads.',
+          'The website free trial is text-only. Upgrade for hosted file and image uploads.',
         );
         return;
       }
       if (isFreeAutoEconomyTrial && message.trim().length > AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS) {
         setLocalNotice(
-          'This prompt is too large for the website free trial. Shorten it or join the cloud waitlist.',
+          'This prompt is too large for the website free trial. Shorten it or upgrade for larger hosted prompts.',
         );
         return;
       }
@@ -692,7 +692,7 @@ const ChatComposerNewComponent = ({
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
   const footerHint = trialExhausted
-    ? 'Free web prompts used · Join the cloud waitlist for more'
+    ? 'Free web prompts used · Upgrade for more hosted usage'
     : isFreeAutoEconomyTrial
       ? `${trialPromptsRemaining} of ${trialPromptLimit} Auto Economy prompts remaining`
       : showSlashMenu
@@ -705,7 +705,7 @@ const ChatComposerNewComponent = ({
     (files: File[]) => {
       if (isFreeAutoEconomyTrial) {
         setLocalNotice(
-          'File upload is waitlisted for hosted cloud. Free web chat accepts text prompts only.',
+          'File upload is available on hosted cloud upgrades. Free web chat accepts text prompts only.',
         );
         return;
       }
@@ -732,7 +732,7 @@ const ChatComposerNewComponent = ({
             onClick={onUpgradeRequest}
             className="font-medium text-[var(--chat-accent-primary)] hover:underline"
           >
-            Join cloud waitlist
+            Upgrade
           </button>
         </div>
       )}
@@ -872,7 +872,7 @@ const ChatComposerNewComponent = ({
                 {isFreeAutoEconomyTrial ? (
                   <div className="px-3 py-2 text-sm text-muted-foreground">
                     Free web chat is text-only Auto Economy. Search, files, tools, connectors, and
-                    styles are part of the hosted cloud waitlist.
+                    styles are available on hosted cloud upgrades.
                   </div>
                 ) : (
                   <>

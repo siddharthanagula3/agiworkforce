@@ -149,9 +149,9 @@ cargo run -p agiworkforce-cli --bin agi -- exec "hello"
 - [docs/README.md](docs/README.md) — organized documentation map
 - [docs/design/design-spec-2026-05-15.md](docs/design/design-spec-2026-05-15.md) — canonical 2026-05-15 design spec (composer, sidebar, inline tool-call, icons) shipped across all 6 surfaces
 - [apps/cli/ARCHITECTURE.md](apps/cli/ARCHITECTURE.md) — CLI deep-dive
-- [docs/audit/](docs/audit/) — security audits (P0/P1 status)
+- [audit/INDEX.md](audit/INDEX.md) — compact current audit evidence index
 - [docs/plans/](docs/plans/) — active sprint plans
-- [docs/api/](docs/api/) — Postman + OpenAPI 3.0
+- [docs/api/](docs/api/) — Postman + OpenAPI artifacts, marked rebuild-required until verified against current routes
 
 ## License
 

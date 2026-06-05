@@ -23,8 +23,6 @@
     "claude-sonnet": "Claude Sonnet",
     "claude-opus": "Claude Opus",
     "claude-haiku": "Claude Haiku",
-    "gpt-5.5": "GPT-5.5",
-    "gpt-5.5-mini": "GPT-5.5 Mini",
     "gemini-pro": "Gemini Pro",
     "gemini-flash": "Gemini Flash"
   },

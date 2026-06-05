@@ -105,12 +105,12 @@ export function CloudUpgradeWaitlistDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="w-[min(94vw,30rem)] overflow-hidden border-border/70 bg-background p-0 sm:rounded-2xl"
-        closeButtonLabel="Close cloud waitlist"
+        closeButtonLabel="Close cloud upgrade dialog"
       >
         <DialogHeader className="sr-only">
-          <DialogTitle>{confirmed ? "You're confirmed." : 'Cloud is coming.'}</DialogTitle>
+          <DialogTitle>{confirmed ? "You're confirmed." : 'Upgrade hosted cloud.'}</DialogTitle>
           <DialogDescription>
-            Join the Cloud Managed waitlist without leaving the chat.
+            Request hosted cloud upgrade access without leaving the chat.
           </DialogDescription>
         </DialogHeader>
 
@@ -148,7 +148,7 @@ export function CloudUpgradeWaitlistDialog({
                   Joining...
                 </>
               ) : (
-                'Join waitlist'
+                'Request upgrade access'
               )}
             </Button>
           )}
@@ -189,10 +189,10 @@ function EntryState({
       </div>
 
       <h2 className="mt-4 text-3xl font-semibold leading-tight tracking-normal text-foreground">
-        Managed cloud waitlist.
+        Upgrade hosted cloud.
       </h2>
       <p className="mt-2 text-sm leading-6 text-muted-foreground">
-        Your website trial uses AGI managed Auto Economy. Join the waitlist for larger hosted
+        Your website trial uses AGI managed Auto Economy. Request upgrade access for larger hosted
         models, search, tools, files, and computer-use without leaving the browser.
       </p>
 

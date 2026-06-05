@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useAuth } from '@clerk/nextjs';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import {
   Search,
@@ -25,1176 +26,31 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@shared/ui/dialog';
-import { getConnectorLogo, hasOfficialLogo } from '../config/connector-logos';
+import { getConnectorTools } from '../config/connector-logos';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
+import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
 import { getCsrfToken } from '@/lib/client/csrf';
-import Image from 'next/image';
 
-// ─── Connector Data ────────────────────────────────────────────────────────────
-
-type ConnectorCategory =
-  | 'Productivity'
-  | 'Developer'
-  | 'CRM'
-  | 'Marketing'
-  | 'Finance'
-  | 'Social'
-  | 'AI'
-  | 'Communication'
-  | 'Cloud'
-  | 'Data'
-  | 'Design'
-  | 'Storage'
-  | 'Healthcare'
-  | 'Exclusive';
-type AuthType = 'oauth' | 'api_key' | 'connection_string' | 'pat';
-type Phase = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
-
-interface Connector {
-  id: string;
-  name: string;
-  description: string;
-  category: ConnectorCategory;
-  authType: AuthType;
-  actionCount: number;
-  phase: Phase;
-  iconBg: string;
-  iconText: string;
-  iconEmoji?: string;
-  exclusive?: boolean;
-}
-
-const CONNECTORS: Connector[] = [
-  // Phase 1 — Core Productivity
-  {
-    id: 'gmail',
-    name: 'Gmail & Calendar',
-    description: 'Search, send emails, create calendar events, and manage your Google Workspace.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 1,
-    iconBg: 'from-red-500 to-red-600',
-    iconText: 'G',
-    iconEmoji: '📧',
-  },
-  {
-    id: 'google-drive',
-    name: 'Google Drive',
-    description: 'Read, write, search, and upload files across your entire Google Drive.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 1,
-    iconBg: 'from-yellow-500 to-green-500',
-    iconText: '▲',
-    iconEmoji: '📁',
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    description: 'Search pages, create and update content, manage databases and workspaces.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 7,
-    phase: 1,
-    iconBg: 'from-gray-800 to-gray-900',
-    iconText: 'N',
-    iconEmoji: '📝',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    description: 'Post messages, search conversations, read channels, and manage workspaces.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 1,
-    iconBg: 'from-purple-500 to-purple-700',
-    iconText: 'S',
-    iconEmoji: '💬',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    description: 'Search repos, create PRs, manage issues, push code, and review changes.',
-    category: 'Developer',
-    authType: 'oauth',
-    actionCount: 10,
-    phase: 1,
-    iconBg: 'from-gray-700 to-gray-900',
-    iconText: 'GH',
-    iconEmoji: '🐙',
-  },
-  {
-    id: 'google-sheets',
-    name: 'Google Sheets',
-    description: 'Read and write cells, create spreadsheets, and run formulas programmatically.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 1,
-    iconBg: 'from-green-500 to-green-700',
-    iconText: '▦',
-    iconEmoji: '📊',
-  },
-  {
-    id: 'outlook',
-    name: 'Outlook',
-    description: 'Search email, manage calendar events, and send messages via Microsoft.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 1,
-    iconBg: 'from-blue-500 to-blue-700',
-    iconText: 'O',
-    iconEmoji: '📮',
-  },
-  {
-    id: 'onedrive',
-    name: 'OneDrive',
-    description: 'Read, write, and search files in your Microsoft OneDrive storage.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 1,
-    iconBg: 'from-sky-400 to-blue-600',
-    iconText: '☁',
-    iconEmoji: '☁️',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    description: 'Create and manage issues, projects, cycles, and engineering workflows.',
-    category: 'Developer',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 1,
-    iconBg: 'from-violet-500 to-indigo-600',
-    iconText: 'L',
-    iconEmoji: '⚡',
-  },
-  {
-    id: 'jira',
-    name: 'Jira',
-    description: 'Create and manage issues, sprints, epics, and project boards.',
-    category: 'Developer',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 1,
-    iconBg: 'from-blue-500 to-indigo-600',
-    iconText: 'J',
-    iconEmoji: '🎯',
-  },
-
-  // Phase 2 — Collaboration
-  {
-    id: 'teams',
-    name: 'Microsoft Teams',
-    description: 'Send messages, manage channels, and search conversations in Teams.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 2,
-    iconBg: 'from-indigo-500 to-purple-600',
-    iconText: 'T',
-    iconEmoji: '👥',
-  },
-  {
-    id: 'confluence',
-    name: 'Confluence',
-    description: 'Search and create pages, manage spaces and knowledge bases.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 2,
-    iconBg: 'from-blue-600 to-indigo-700',
-    iconText: 'C',
-    iconEmoji: '📚',
-  },
-  {
-    id: 'asana',
-    name: 'Asana',
-    description: 'Create and manage tasks, projects, and team workflows.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 7,
-    phase: 2,
-    iconBg: 'from-pink-500 to-red-500',
-    iconText: 'A',
-    iconEmoji: '✅',
-  },
-  {
-    id: 'zoom',
-    name: 'Zoom',
-    description: 'Schedule meetings, retrieve recordings, and manage participants.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 4,
-    phase: 2,
-    iconBg: 'from-blue-500 to-blue-600',
-    iconText: 'Z',
-    iconEmoji: '📹',
-  },
-
-  // Phase 3 — CRM
-  {
-    id: 'hubspot',
-    name: 'HubSpot',
-    description: 'Manage contacts, companies, deals, and notes in your CRM.',
-    category: 'CRM',
-    authType: 'oauth',
-    actionCount: 9,
-    phase: 3,
-    iconBg: 'from-orange-500 to-orange-600',
-    iconText: 'H',
-    iconEmoji: '🎯',
-  },
-  {
-    id: 'salesforce',
-    name: 'Salesforce',
-    description: 'CRUD on CRM objects, manage leads, opportunities, and accounts.',
-    category: 'CRM',
-    authType: 'oauth',
-    actionCount: 10,
-    phase: 3,
-    iconBg: 'from-cyan-500 to-blue-600',
-    iconText: 'SF',
-    iconEmoji: '☁️',
-  },
-  {
-    id: 'calendly',
-    name: 'Calendly',
-    description: 'Schedule meetings, manage event types, and track bookings.',
-    category: 'CRM',
-    authType: 'oauth',
-    actionCount: 4,
-    phase: 3,
-    iconBg: 'from-teal-500 to-cyan-600',
-    iconText: 'CL',
-    iconEmoji: '📅',
-  },
-  {
-    id: 'intercom',
-    name: 'Intercom',
-    description: 'Manage conversations, customers, tickets, and support workflows.',
-    category: 'CRM',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 3,
-    iconBg: 'from-blue-600 to-indigo-700',
-    iconText: 'IC',
-    iconEmoji: '💬',
-  },
-
-  // Phase 5 — Marketing
-  {
-    id: 'google-analytics',
-    name: 'Google Analytics',
-    description: 'Query reports, audience data, conversions, and traffic sources.',
-    category: 'Marketing',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 5,
-    iconBg: 'from-orange-500 to-amber-600',
-    iconText: 'GA',
-    iconEmoji: '📈',
-  },
-  {
-    id: 'mailchimp',
-    name: 'Mailchimp',
-    description: 'Manage audiences, campaigns, email templates, and analytics.',
-    category: 'Marketing',
-    authType: 'oauth',
-    actionCount: 7,
-    phase: 5,
-    iconBg: 'from-yellow-500 to-amber-600',
-    iconText: 'MC',
-    iconEmoji: '🐒',
-  },
-
-  // Phase 6 — Finance
-  {
-    id: 'stripe',
-    name: 'Stripe',
-    description: 'Manage payments, subscriptions, customers, and financial reports.',
-    category: 'Finance',
-    authType: 'api_key',
-    actionCount: 8,
-    phase: 6,
-    iconBg: 'from-violet-500 to-indigo-600',
-    iconText: 'S',
-    iconEmoji: '💳',
-  },
-  {
-    id: 'shopify',
-    name: 'Shopify',
-    description: 'Manage products, orders, customers, and inventory in your store.',
-    category: 'Finance',
-    authType: 'oauth',
-    actionCount: 9,
-    phase: 6,
-    iconBg: 'from-green-500 to-emerald-600',
-    iconText: 'SH',
-    iconEmoji: '🛍️',
-  },
-
-  // Phase 7 — Social
-  {
-    id: 'linkedin',
-    name: 'LinkedIn',
-    description: 'Post content, manage your profile, and engage with your network.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 7,
-    iconBg: 'from-blue-600 to-blue-800',
-    iconText: 'in',
-    iconEmoji: '💼',
-  },
-  {
-    id: 'twitter',
-    name: 'Twitter / X',
-    description: 'Post tweets, search content, and manage your X account.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 7,
-    iconBg: 'from-gray-800 to-black',
-    iconText: 'X',
-    iconEmoji: '🐦',
-  },
-  {
-    id: 'discord',
-    name: 'Discord',
-    description: 'Post messages, manage servers, channels, and community.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 7,
-    iconBg: 'from-indigo-500 to-violet-600',
-    iconText: 'DC',
-    iconEmoji: '🎮',
-  },
-
-  // Phase 8 — AI
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'Run completions, manage assistants, and work with GPT models.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 8,
-    iconBg: 'from-emerald-500 to-teal-600',
-    iconText: 'AI',
-    iconEmoji: '🤖',
-  },
-  {
-    id: 'elevenlabs',
-    name: 'ElevenLabs',
-    description: 'Generate speech, clone voices, and create audio content.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 8,
-    iconBg: 'from-violet-500 to-purple-700',
-    iconText: '11',
-    iconEmoji: '🎙️',
-  },
-
-  {
-    id: 'local-filesystem',
-    name: 'Local Filesystem',
-    description: 'Read and write any file on your computer. No cloud required.',
-    category: 'Exclusive',
-    authType: 'pat',
-    actionCount: 8,
-    phase: 1,
-    iconBg: 'from-amber-500 to-orange-600',
-    iconText: 'FS',
-    iconEmoji: '💾',
-    exclusive: true,
-  },
-  {
-    id: 'terminal',
-    name: 'Terminal / Shell',
-    description: 'Execute commands, run scripts, manage processes, and automate tasks.',
-    category: 'Exclusive',
-    authType: 'pat',
-    actionCount: 6,
-    phase: 1,
-    iconBg: 'from-gray-700 to-gray-900',
-    iconText: '>_',
-    iconEmoji: '⚡',
-    exclusive: true,
-  },
-  {
-    id: 'browser-automation',
-    name: 'Browser Automation',
-    description: 'Control Chrome, Firefox, and Safari via CDP. Fill forms, scrape, navigate.',
-    category: 'Exclusive',
-    authType: 'pat',
-    actionCount: 10,
-    phase: 1,
-    iconBg: 'from-blue-500 to-cyan-600',
-    iconText: '◎',
-    iconEmoji: '🌐',
-    exclusive: true,
-  },
-  {
-    id: 'screen-vision',
-    name: 'Screen Vision',
-    description: 'OCR, screenshots, and computer use. AI sees and controls your screen.',
-    category: 'Exclusive',
-    authType: 'pat',
-    actionCount: 7,
-    phase: 1,
-    iconBg: 'from-pink-500 to-rose-600',
-    iconText: '👁',
-    iconEmoji: '👁️',
-    exclusive: true,
-  },
-  {
-    id: 'ollama',
-    name: 'Local LLMs (Ollama)',
-    description: 'Route tasks to local models: Llama, Mistral, Qwen, and more. Zero cloud cost.',
-    category: 'Exclusive',
-    authType: 'pat',
-    actionCount: 4,
-    phase: 1,
-    iconBg: 'from-teal-500 to-emerald-600',
-    iconText: '🦙',
-    iconEmoji: '🦙',
-    exclusive: true,
-  },
-
-  // ── Productivity (additional) ──────────────────────────────────────────────
-  {
-    id: 'airtable',
-    name: 'Airtable',
-    description: 'Manage tables, records, and views in your Airtable bases programmatically.',
-    category: 'Productivity',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 2,
-    iconBg: 'from-yellow-400 to-orange-500',
-    iconText: 'AT',
-    iconEmoji: '🗂️',
-  },
-  {
-    id: 'monday',
-    name: 'Monday.com',
-    description: 'Create boards, items, and automations in your Monday.com workspace.',
-    category: 'Productivity',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 2,
-    iconBg: 'from-rose-500 to-pink-600',
-    iconText: 'M',
-    iconEmoji: '📋',
-  },
-  {
-    id: 'clickup',
-    name: 'ClickUp',
-    description: 'Manage tasks, docs, goals, and workspaces in ClickUp.',
-    category: 'Productivity',
-    authType: 'api_key',
-    actionCount: 7,
-    phase: 2,
-    iconBg: 'from-purple-500 to-pink-500',
-    iconText: 'CU',
-    iconEmoji: '✅',
-  },
-  {
-    id: 'trello',
-    name: 'Trello',
-    description: 'Create and move cards, manage boards and lists in Trello.',
-    category: 'Productivity',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 2,
-    iconBg: 'from-blue-500 to-cyan-500',
-    iconText: 'TR',
-    iconEmoji: '📌',
-  },
-  {
-    id: 'todoist',
-    name: 'Todoist',
-    description: 'Create tasks, manage projects, and sync your Todoist inbox.',
-    category: 'Productivity',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 2,
-    iconBg: 'from-red-500 to-rose-600',
-    iconText: 'TD',
-    iconEmoji: '✅',
-  },
-  {
-    id: 'basecamp',
-    name: 'Basecamp',
-    description: 'Access projects, to-dos, messages, and schedules in Basecamp.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-green-600 to-emerald-700',
-    iconText: 'BC',
-    iconEmoji: '⛺',
-  },
-  {
-    id: 'evernote',
-    name: 'Evernote',
-    description: 'Search, create, and manage notes and notebooks in Evernote.',
-    category: 'Productivity',
-    authType: 'oauth',
-    actionCount: 4,
-    phase: 3,
-    iconBg: 'from-green-500 to-green-700',
-    iconText: 'EN',
-    iconEmoji: '🐘',
-  },
-
-  // ── Developer (additional) ─────────────────────────────────────────────────
-  {
-    id: 'vercel',
-    name: 'Vercel',
-    description: 'Trigger deployments, inspect logs, and manage projects on Vercel.',
-    category: 'Developer',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 2,
-    iconBg: 'from-gray-700 to-black',
-    iconText: 'VL',
-    iconEmoji: '▲',
-  },
-  {
-    id: 'sentry',
-    name: 'Sentry',
-    description: 'Query errors, manage issues, and inspect stack traces in Sentry.',
-    category: 'Developer',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 2,
-    iconBg: 'from-violet-600 to-purple-800',
-    iconText: 'SN',
-    iconEmoji: '🐛',
-  },
-  {
-    id: 'datadog',
-    name: 'Datadog',
-    description: 'Query metrics, logs, and traces; manage monitors and dashboards.',
-    category: 'Developer',
-    authType: 'api_key',
-    actionCount: 7,
-    phase: 3,
-    iconBg: 'from-purple-500 to-violet-700',
-    iconText: 'DD',
-    iconEmoji: '📊',
-  },
-  {
-    id: 'pagerduty',
-    name: 'PagerDuty',
-    description: 'Acknowledge incidents, manage on-call schedules, and view alerts.',
-    category: 'Developer',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-green-500 to-emerald-700',
-    iconText: 'PD',
-    iconEmoji: '🚨',
-  },
-  {
-    id: 'circleci',
-    name: 'CircleCI',
-    description: 'Trigger pipelines, inspect job results, and manage workflows.',
-    category: 'Developer',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-gray-700 to-gray-900',
-    iconText: 'CI',
-    iconEmoji: '🔄',
-  },
-  {
-    id: 'gitlab',
-    name: 'GitLab',
-    description: 'Manage repos, merge requests, pipelines, and issues in GitLab.',
-    category: 'Developer',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 2,
-    iconBg: 'from-orange-500 to-red-600',
-    iconText: 'GL',
-    iconEmoji: '🦊',
-  },
-  {
-    id: 'bitbucket',
-    name: 'Bitbucket',
-    description: 'Manage pull requests, pipelines, and repositories in Bitbucket.',
-    category: 'Developer',
-    authType: 'oauth',
-    actionCount: 7,
-    phase: 3,
-    iconBg: 'from-blue-500 to-indigo-700',
-    iconText: 'BB',
-    iconEmoji: '🪣',
-  },
-
-  // ── Communication ──────────────────────────────────────────────────────────
-  {
-    id: 'telegram',
-    name: 'Telegram',
-    description: 'Send messages, manage bots, and interact with Telegram channels.',
-    category: 'Communication',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-sky-400 to-blue-600',
-    iconText: 'TG',
-    iconEmoji: '✈️',
-  },
-  {
-    id: 'whatsapp',
-    name: 'WhatsApp Business',
-    description: 'Send messages and notifications via the WhatsApp Business API.',
-    category: 'Communication',
-    authType: 'api_key',
-    actionCount: 4,
-    phase: 4,
-    iconBg: 'from-green-500 to-emerald-600',
-    iconText: 'WA',
-    iconEmoji: '💬',
-  },
-  {
-    id: 'twilio',
-    name: 'Twilio',
-    description: 'Send SMS, WhatsApp messages, and make voice calls via Twilio.',
-    category: 'Communication',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-red-600 to-rose-700',
-    iconText: 'TW',
-    iconEmoji: '📱',
-  },
-  {
-    id: 'sendgrid',
-    name: 'SendGrid',
-    description: 'Send transactional and marketing emails via SendGrid.',
-    category: 'Communication',
-    authType: 'api_key',
-    actionCount: 4,
-    phase: 3,
-    iconBg: 'from-blue-500 to-cyan-600',
-    iconText: 'SG',
-    iconEmoji: '📧',
-  },
-
-  // ── Cloud / Infra ──────────────────────────────────────────────────────────
-  {
-    id: 'aws',
-    name: 'Amazon Web Services',
-    description: 'Manage S3 buckets, Lambda functions, EC2 instances, and more via AWS APIs.',
-    category: 'Cloud',
-    authType: 'api_key',
-    actionCount: 10,
-    phase: 4,
-    iconBg: 'from-orange-400 to-amber-600',
-    iconText: 'AWS',
-    iconEmoji: '☁️',
-  },
-  {
-    id: 'gcp',
-    name: 'Google Cloud',
-    description: 'Manage GCS, Pub/Sub, BigQuery, and Cloud Run via GCP APIs.',
-    category: 'Cloud',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 4,
-    iconBg: 'from-blue-400 to-green-500',
-    iconText: 'GCP',
-    iconEmoji: '☁️',
-  },
-  {
-    id: 'azure',
-    name: 'Microsoft Azure',
-    description: 'Manage Blob Storage, Functions, VMs, and Azure services.',
-    category: 'Cloud',
-    authType: 'oauth',
-    actionCount: 8,
-    phase: 4,
-    iconBg: 'from-blue-500 to-cyan-600',
-    iconText: 'AZ',
-    iconEmoji: '☁️',
-  },
-  {
-    id: 'cloudflare',
-    name: 'Cloudflare',
-    description: 'Manage DNS, Workers, Pages, KV storage, and CDN rules via Cloudflare API.',
-    category: 'Cloud',
-    authType: 'api_key',
-    actionCount: 7,
-    phase: 4,
-    iconBg: 'from-orange-500 to-amber-500',
-    iconText: 'CF',
-    iconEmoji: '🔥',
-  },
-  {
-    id: 'digitalocean',
-    name: 'DigitalOcean',
-    description: 'Create and manage Droplets, Spaces, databases, and apps on DigitalOcean.',
-    category: 'Cloud',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 4,
-    iconBg: 'from-blue-500 to-indigo-600',
-    iconText: 'DO',
-    iconEmoji: '🌊',
-  },
-
-  // ── Data ──────────────────────────────────────────────────────────────────
-  {
-    id: 'snowflake',
-    name: 'Snowflake',
-    description: 'Run queries, manage warehouses, and access data in Snowflake.',
-    category: 'Data',
-    authType: 'connection_string',
-    actionCount: 6,
-    phase: 4,
-    iconBg: 'from-sky-400 to-blue-600',
-    iconText: 'SF',
-    iconEmoji: '❄️',
-  },
-  {
-    id: 'bigquery',
-    name: 'BigQuery',
-    description: 'Run SQL queries and manage datasets in Google BigQuery.',
-    category: 'Data',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 4,
-    iconBg: 'from-blue-400 to-indigo-500',
-    iconText: 'BQ',
-    iconEmoji: '📊',
-  },
-  {
-    id: 'databricks',
-    name: 'Databricks',
-    description: 'Run notebooks, manage clusters, and query Delta tables in Databricks.',
-    category: 'Data',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 5,
-    iconBg: 'from-red-500 to-orange-600',
-    iconText: 'DB',
-    iconEmoji: '🧱',
-  },
-  {
-    id: 'postgresql',
-    name: 'PostgreSQL',
-    description: 'Connect to any PostgreSQL database and run queries directly.',
-    category: 'Data',
-    authType: 'connection_string',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-blue-600 to-indigo-800',
-    iconText: 'PG',
-    iconEmoji: '🐘',
-  },
-  {
-    id: 'mongodb',
-    name: 'MongoDB',
-    description: 'Query collections, insert documents, and manage indexes in MongoDB.',
-    category: 'Data',
-    authType: 'connection_string',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-green-500 to-emerald-700',
-    iconText: 'MG',
-    iconEmoji: '🍃',
-  },
-  {
-    id: 'redis',
-    name: 'Redis',
-    description: 'Get, set, and manage keys in Redis or Upstash.',
-    category: 'Data',
-    authType: 'connection_string',
-    actionCount: 4,
-    phase: 3,
-    iconBg: 'from-red-500 to-rose-700',
-    iconText: 'RD',
-    iconEmoji: '⚡',
-  },
-  {
-    id: 'elasticsearch',
-    name: 'Elasticsearch',
-    description: 'Index documents, run full-text queries, and manage Elasticsearch clusters.',
-    category: 'Data',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 4,
-    iconBg: 'from-yellow-400 to-amber-600',
-    iconText: 'ES',
-    iconEmoji: '🔍',
-  },
-
-  // ── CRM (additional) ───────────────────────────────────────────────────────
-  {
-    id: 'pipedrive',
-    name: 'Pipedrive',
-    description: 'Manage deals, contacts, and pipelines in your Pipedrive CRM.',
-    category: 'CRM',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 3,
-    iconBg: 'from-green-500 to-teal-600',
-    iconText: 'PD',
-    iconEmoji: '🎯',
-  },
-  {
-    id: 'zendesk',
-    name: 'Zendesk',
-    description: 'Manage tickets, users, and support workflows in Zendesk.',
-    category: 'CRM',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 3,
-    iconBg: 'from-green-600 to-teal-700',
-    iconText: 'ZD',
-    iconEmoji: '💬',
-  },
-  {
-    id: 'freshdesk',
-    name: 'Freshdesk',
-    description: 'Create and update tickets, contacts, and agents in Freshdesk.',
-    category: 'CRM',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 4,
-    iconBg: 'from-teal-500 to-cyan-600',
-    iconText: 'FD',
-    iconEmoji: '🎧',
-  },
-
-  // ── Design ────────────────────────────────────────────────────────────────
-  {
-    id: 'figma',
-    name: 'Figma',
-    description: 'Read files, inspect components, and export assets from Figma.',
-    category: 'Design',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 5,
-    iconBg: 'from-purple-500 to-pink-500',
-    iconText: 'FG',
-    iconEmoji: '🎨',
-  },
-  {
-    id: 'canva',
-    name: 'Canva',
-    description: 'Create designs, access brand assets, and manage Canva templates.',
-    category: 'Design',
-    authType: 'oauth',
-    actionCount: 4,
-    phase: 5,
-    iconBg: 'from-cyan-400 to-blue-500',
-    iconText: 'CV',
-    iconEmoji: '🖼️',
-  },
-  {
-    id: 'adobe',
-    name: 'Adobe Creative Cloud',
-    description: 'Access Creative Cloud assets, fonts, and collaborate on projects.',
-    category: 'Design',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 5,
-    iconBg: 'from-red-600 to-rose-800',
-    iconText: 'Ae',
-    iconEmoji: '🎨',
-  },
-
-  // ── Finance (additional) ───────────────────────────────────────────────────
-  {
-    id: 'quickbooks',
-    name: 'QuickBooks',
-    description: 'Manage invoices, expenses, and financial reports in QuickBooks.',
-    category: 'Finance',
-    authType: 'oauth',
-    actionCount: 7,
-    phase: 6,
-    iconBg: 'from-green-600 to-emerald-700',
-    iconText: 'QB',
-    iconEmoji: '💰',
-  },
-  {
-    id: 'xero',
-    name: 'Xero',
-    description: 'Manage accounts, invoices, and payroll in Xero accounting.',
-    category: 'Finance',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 6,
-    iconBg: 'from-sky-400 to-blue-600',
-    iconText: 'XR',
-    iconEmoji: '💵',
-  },
-  {
-    id: 'paypal',
-    name: 'PayPal',
-    description: 'Send payments, manage invoices, and query transactions via PayPal.',
-    category: 'Finance',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 6,
-    iconBg: 'from-blue-600 to-indigo-700',
-    iconText: 'PP',
-    iconEmoji: '💳',
-  },
-  {
-    id: 'square',
-    name: 'Square',
-    description: 'Manage payments, inventory, and customers via the Square API.',
-    category: 'Finance',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 6,
-    iconBg: 'from-gray-700 to-gray-900',
-    iconText: 'SQ',
-    iconEmoji: '⬛',
-  },
-  {
-    id: 'plaid',
-    name: 'Plaid',
-    description: 'Connect bank accounts and access financial data via Plaid.',
-    category: 'Finance',
-    authType: 'api_key',
-    actionCount: 4,
-    phase: 7,
-    iconBg: 'from-indigo-500 to-blue-700',
-    iconText: 'PL',
-    iconEmoji: '🏦',
-  },
-
-  // ── Storage ───────────────────────────────────────────────────────────────
-  {
-    id: 'dropbox',
-    name: 'Dropbox',
-    description: 'Upload, download, and manage files in your Dropbox account.',
-    category: 'Storage',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 3,
-    iconBg: 'from-blue-500 to-indigo-600',
-    iconText: 'DX',
-    iconEmoji: '📦',
-  },
-  {
-    id: 'box',
-    name: 'Box',
-    description: 'Manage files, folders, and collaborations in Box cloud storage.',
-    category: 'Storage',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 4,
-    iconBg: 'from-blue-600 to-blue-800',
-    iconText: 'BX',
-    iconEmoji: '📦',
-  },
-  {
-    id: 'sharepoint',
-    name: 'SharePoint',
-    description: 'Read, write, and manage files and sites in Microsoft SharePoint.',
-    category: 'Storage',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 4,
-    iconBg: 'from-blue-500 to-indigo-700',
-    iconText: 'SP',
-    iconEmoji: '📁',
-  },
-
-  // ── Social (additional) ────────────────────────────────────────────────────
-  {
-    id: 'instagram',
-    name: 'Instagram',
-    description: 'Post content, manage media, and retrieve insights via the Instagram Graph API.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 4,
-    phase: 7,
-    iconBg: 'from-purple-500 to-pink-500',
-    iconText: 'IG',
-    iconEmoji: '📸',
-  },
-  {
-    id: 'facebook',
-    name: 'Facebook',
-    description: 'Manage pages, posts, ads, and audience insights via Facebook API.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 7,
-    iconBg: 'from-blue-600 to-blue-800',
-    iconText: 'FB',
-    iconEmoji: '👤',
-  },
-  {
-    id: 'youtube',
-    name: 'YouTube',
-    description: 'Search videos, manage playlists, and access channel analytics.',
-    category: 'Social',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 7,
-    iconBg: 'from-red-500 to-red-700',
-    iconText: 'YT',
-    iconEmoji: '▶️',
-  },
-
-  // ── Marketing (additional) ─────────────────────────────────────────────────
-  {
-    id: 'posthog',
-    name: 'PostHog',
-    description: 'Query events, funnels, feature flags, and analytics in PostHog.',
-    category: 'Marketing',
-    authType: 'api_key',
-    actionCount: 6,
-    phase: 5,
-    iconBg: 'from-orange-500 to-red-600',
-    iconText: 'PH',
-    iconEmoji: '🦔',
-  },
-  {
-    id: 'segment',
-    name: 'Segment',
-    description: 'Track events, manage audiences, and configure destinations in Segment.',
-    category: 'Marketing',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 5,
-    iconBg: 'from-green-500 to-teal-600',
-    iconText: 'SG',
-    iconEmoji: '📡',
-  },
-  {
-    id: 'mixpanel',
-    name: 'Mixpanel',
-    description: 'Query events, funnels, and retention data in Mixpanel.',
-    category: 'Marketing',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 5,
-    iconBg: 'from-purple-500 to-indigo-600',
-    iconText: 'MX',
-    iconEmoji: '📊',
-  },
-
-  // ── AI / ML (additional) ──────────────────────────────────────────────────
-  {
-    id: 'huggingface',
-    name: 'Hugging Face',
-    description: 'Run inference on hosted models and browse the Hub via the Hugging Face API.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 8,
-    iconBg: 'from-yellow-400 to-amber-600',
-    iconText: 'HF',
-    iconEmoji: '🤗',
-  },
-  {
-    id: 'wandb',
-    name: 'Weights and Biases',
-    description: 'Log experiments, compare runs, and manage ML artifacts in W&B.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 5,
-    phase: 8,
-    iconBg: 'from-amber-500 to-yellow-600',
-    iconText: 'WB',
-    iconEmoji: '📈',
-  },
-  {
-    id: 'anthropic-api',
-    name: 'Anthropic',
-    description: 'Run Claude models and manage API usage directly via the Anthropic API.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 4,
-    phase: 8,
-    iconBg: 'from-orange-400 to-amber-600',
-    iconText: 'AN',
-    iconEmoji: '🤖',
-  },
-  {
-    id: 'replicate',
-    name: 'Replicate',
-    description: 'Run open-source ML models in the cloud via the Replicate API.',
-    category: 'AI',
-    authType: 'api_key',
-    actionCount: 4,
-    phase: 8,
-    iconBg: 'from-gray-700 to-gray-900',
-    iconText: 'RC',
-    iconEmoji: '🔁',
-  },
-
-  // ── Healthcare ─────────────────────────────────────────────────────────────
-  {
-    id: 'epic-fhir',
-    name: 'Epic FHIR',
-    description: 'Access patient records, appointments, and clinical data via Epic FHIR R4.',
-    category: 'Healthcare',
-    authType: 'oauth',
-    actionCount: 6,
-    phase: 9,
-    iconBg: 'from-red-500 to-rose-700',
-    iconText: 'EP',
-    iconEmoji: '🏥',
-  },
-  {
-    id: 'cerner',
-    name: 'Cerner',
-    description: 'Query patient data, clinical events, and care plans via Cerner FHIR APIs.',
-    category: 'Healthcare',
-    authType: 'oauth',
-    actionCount: 5,
-    phase: 9,
-    iconBg: 'from-blue-600 to-indigo-800',
-    iconText: 'CN',
-    iconEmoji: '🏥',
-  },
-];
-
-const CATEGORIES: { label: string; value: ConnectorCategory | 'All' }[] = [
-  { label: 'All', value: 'All' },
-  { label: 'Productivity', value: 'Productivity' },
-  { label: 'Developer', value: 'Developer' },
-  { label: 'Communication', value: 'Communication' },
-  { label: 'CRM', value: 'CRM' },
-  { label: 'Marketing', value: 'Marketing' },
-  { label: 'Finance', value: 'Finance' },
-  { label: 'Social', value: 'Social' },
-  { label: 'Cloud', value: 'Cloud' },
-  { label: 'Data', value: 'Data' },
-  { label: 'Design', value: 'Design' },
-  { label: 'Storage', value: 'Storage' },
-  { label: 'AI', value: 'AI' },
-  { label: 'Healthcare', value: 'Healthcare' },
-];
+import {
+  CATEGORIES,
+  CONNECTORS,
+  getConnectorAvailabilityLabel,
+  isConnectorReady,
+  type Connector,
+  type ConnectorCategory,
+} from '../data/connectors';
 
 const VISIBLE_CONNECTORS = CONNECTORS.filter((connector) => !connector.exclusive);
 
 // ─── Connection status filter ──────────────────────────────────────────────────
 
-type StatusFilter = 'all' | 'connected' | 'available';
+type StatusFilter = 'all' | 'connected' | 'ready' | 'request_access';
 
 const STATUS_FILTERS: { label: string; value: StatusFilter }[] = [
   { label: 'All', value: 'all' },
   { label: 'Connected', value: 'connected' },
-  { label: 'Available', value: 'available' },
+  { label: 'Ready', value: 'ready' },
+  { label: 'Request access', value: 'request_access' },
 ];
 
 // ─── InspectMcpServerDialog ───────────────────────────────────────────────────
@@ -1411,48 +267,6 @@ function InspectMcpServerDialog({ open, onOpenChange }: InspectMcpServerDialogPr
   );
 }
 
-// ─── ConnectorLogo ─────────────────────────────────────────────────────────────
-
-interface ConnectorLogoProps {
-  connector: Connector;
-}
-
-const ConnectorLogo: React.FC<ConnectorLogoProps> = ({ connector }) => {
-  const logoInfo = getConnectorLogo(connector.id);
-  const [imageError, setImageError] = React.useState(false);
-
-  if (logoInfo && !imageError && hasOfficialLogo(connector.id)) {
-    return (
-      <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/10 shadow-lg overflow-hidden"
-        style={logoInfo.bgColor ? { backgroundColor: logoInfo.bgColor } : {}}
-      >
-        <Image
-          src={logoInfo.url}
-          alt={connector.name}
-          width={logoInfo.width || 28}
-          height={logoInfo.height || 28}
-          className="object-contain"
-          onError={() => setImageError(true)}
-          unoptimized={logoInfo.url.startsWith('http')}
-        />
-      </div>
-    );
-  }
-
-  // Fallback to gradient background with emoji/text
-  return (
-    <div
-      className={cn(
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-lg',
-        connector.iconBg,
-      )}
-    >
-      {connector.iconEmoji ?? connector.iconText}
-    </div>
-  );
-};
-
 function formatRelativeTime(isoString: string | null | undefined): string {
   if (!isoString) return 'Never';
   const diff = Date.now() - new Date(isoString).getTime();
@@ -1492,7 +306,7 @@ const ConnectorListRow: React.FC<ConnectorListRowProps> = ({
         : 'text-muted-foreground hover:bg-white/[0.04] hover:text-foreground',
     )}
   >
-    <ConnectorLogo connector={connector} />
+    <OfficialConnectorLogo connector={connector} />
     <span className="min-w-0 flex-1 truncate text-xs font-medium">{connector.name}</span>
     {connected ? <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" /> : null}
   </button>
@@ -1509,18 +323,11 @@ interface ConnectorDetailPanelProps {
   onBack: () => void;
   onConnect: () => void;
   onDisconnect: () => void;
+  onUpgrade: () => void;
 }
 
-// Inline tool lookup — avoids a second import statement at top-level that
-// would duplicate the existing `getConnectorTools` used by ToolPermissionsPanel.
 function useConnectorTools(connectorId: string): string[] {
-  return React.useMemo(() => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const mod = require('../config/connector-logos') as {
-      getConnectorTools: (id: string) => string[];
-    };
-    return mod.getConnectorTools(connectorId);
-  }, [connectorId]);
+  return React.useMemo(() => getConnectorTools(connectorId), [connectorId]);
 }
 
 const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
@@ -1531,11 +338,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
   onBack,
   onConnect,
   onDisconnect,
+  onUpgrade,
 }) => {
-  const isComingSoon = connector.phase > 1;
-  const isOAuth = connector.authType === 'oauth';
-  const isAvailable = !isComingSoon && !isOAuth && !connector.exclusive;
+  const isAvailable = isConnectorReady(connector);
   const hasRealCredentials = connected && isAvailable;
+  const availabilityLabel = getConnectorAvailabilityLabel(connector);
   const tools = useConnectorTools(connector.id);
 
   return (
@@ -1551,24 +358,16 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
 
       {/* Header row */}
       <div className="mb-4 flex flex-wrap items-start gap-3">
-        <ConnectorLogo connector={connector} />
+        <OfficialConnectorLogo connector={connector} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-semibold text-foreground">{connector.name}</h2>
-            {isComingSoon && (
+            {!isAvailable && (
               <Badge
                 variant="outline"
                 className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
               >
-                Phase {connector.phase}
-              </Badge>
-            )}
-            {!isComingSoon && isOAuth && (
-              <Badge
-                variant="outline"
-                className="border-white/10 px-1.5 py-0 text-[10px] text-muted-foreground"
-              >
-                Coming Soon
+                {availabilityLabel}
               </Badge>
             )}
           </div>
@@ -1602,11 +401,11 @@ const ConnectorDetailPanel: React.FC<ConnectorDetailPanelProps> = ({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 cursor-not-allowed px-3 text-xs text-muted-foreground opacity-50"
-              disabled
+              className="h-7 px-3 text-xs text-muted-foreground hover:text-foreground"
+              onClick={onUpgrade}
             >
               <Lock className="mr-1.5 h-3 w-3" />
-              Coming Soon
+              Request access
             </Button>
           ) : (
             <Button
@@ -1666,6 +465,7 @@ export function ConnectorsPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const { isLoaded: authLoaded, isSignedIn } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<ConnectorCategory | 'All'>('All');
@@ -1685,7 +485,9 @@ export function ConnectorsPage() {
   // Status filter is stored in URL search params so it persists on refresh/share
   const rawStatus = searchParams.get('status');
   const activeStatus: StatusFilter =
-    rawStatus === 'connected' || rawStatus === 'available' ? rawStatus : 'all';
+    rawStatus === 'connected' || rawStatus === 'ready' || rawStatus === 'request_access'
+      ? rawStatus
+      : 'all';
 
   const setActiveStatus = useCallback(
     (status: StatusFilter) => {
@@ -1700,10 +502,19 @@ export function ConnectorsPage() {
     [router, pathname, searchParams],
   );
 
-  // Fetch connected connectors from Neon on mount
+  // Fetch connected connectors only for signed-in users. Public visitors can
+  // browse the directory without generating 401 console noise.
   useEffect(() => {
     let cancelled = false;
     async function fetchConnectors() {
+      if (!authLoaded) return;
+      if (!isSignedIn) {
+        setConnectedIds(new Set());
+        setConnectedAtMap({});
+        setLoading(false);
+        return;
+      }
+
       try {
         const res = await fetch('/api/connectors');
         if (!res.ok) {
@@ -1732,7 +543,7 @@ export function ConnectorsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authLoaded, isSignedIn]);
 
   // Reset to page 1 whenever filters change
   const prevFiltersRef = React.useRef({ searchQuery, activeCategory, activeStatus });
@@ -1758,93 +569,126 @@ export function ConnectorsPage() {
       const matchesStatus =
         activeStatus === 'all' ||
         (activeStatus === 'connected' && connectedIds.has(c.id)) ||
-        (activeStatus === 'available' && !connectedIds.has(c.id));
+        (activeStatus === 'ready' && !connectedIds.has(c.id) && isConnectorReady(c)) ||
+        (activeStatus === 'request_access' && !connectedIds.has(c.id) && !isConnectorReady(c));
       return matchesCategory && matchesSearch && matchesStatus;
     });
   }, [searchQuery, activeCategory, activeStatus, connectedIds]);
 
   const connectedConnectors = filteredConnectors.filter((c) => connectedIds.has(c.id));
-  const availableConnectors = filteredConnectors.filter((c) => !connectedIds.has(c.id));
+  const readyConnectors = filteredConnectors.filter(
+    (c) => !connectedIds.has(c.id) && isConnectorReady(c),
+  );
+  const requestAccessConnectors = filteredConnectors.filter(
+    (c) => !connectedIds.has(c.id) && !isConnectorReady(c),
+  );
   const visibleConnectedCount = useMemo(
     () => VISIBLE_CONNECTORS.filter((connector) => connectedIds.has(connector.id)).length,
     [connectedIds],
   );
 
-  const totalAvailablePages = Math.ceil(availableConnectors.length / ITEMS_PER_PAGE);
-  const pagedAvailableConnectors = availableConnectors.slice(
+  const browseConnectors =
+    activeStatus === 'ready'
+      ? readyConnectors
+      : activeStatus === 'request_access'
+        ? requestAccessConnectors
+        : filteredConnectors.filter((c) => !connectedIds.has(c.id));
+  const browseGroupLabel =
+    activeStatus === 'ready'
+      ? 'Ready'
+      : activeStatus === 'request_access'
+        ? 'Request access'
+        : 'Browse';
+  const totalBrowsePages = Math.ceil(browseConnectors.length / ITEMS_PER_PAGE);
+  const pagedBrowseConnectors = browseConnectors.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE,
   );
 
-  const handleConnect = useCallback(async (id: string) => {
-    const connector = VISIBLE_CONNECTORS.find((c) => c.id === id);
-    if (!connector) return;
+  const handleConnect = useCallback(
+    async (id: string) => {
+      const connector = VISIBLE_CONNECTORS.find((c) => c.id === id);
+      if (!connector) return;
+      if (!isSignedIn) {
+        router.push(`/login?redirectTo=${encodeURIComponent(pathname || '/connectors')}`);
+        return;
+      }
 
-    // Optimistic update
-    setConnectedIds((prev) => new Set([...prev, id]));
-    setMutatingIds((prev) => new Set([...prev, id]));
+      // Optimistic update
+      setConnectedIds((prev) => new Set([...prev, id]));
+      setMutatingIds((prev) => new Set([...prev, id]));
 
-    try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch('/api/connectors', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
-        body: JSON.stringify({ connectorId: id, authType: connector.authType }),
-      });
-      if (!res.ok) {
-        // Revert optimistic update on failure
+      try {
+        const csrfToken = await getCsrfToken();
+        const res = await fetch('/api/connectors', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrfToken },
+          body: JSON.stringify({ connectorId: id, authType: connector.authType }),
+        });
+        if (!res.ok) {
+          // Revert optimistic update on failure
+          setConnectedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+      } catch {
+        // Revert on network error
         setConnectedIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
           return next;
         });
+      } finally {
+        setMutatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-    } catch {
-      // Revert on network error
+    },
+    [isSignedIn, pathname, router],
+  );
+
+  const handleDisconnect = useCallback(
+    async (id: string) => {
+      if (!isSignedIn) {
+        router.push(`/login?redirectTo=${encodeURIComponent(pathname || '/connectors')}`);
+        return;
+      }
+
+      // Optimistic update
       setConnectedIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
         return next;
       });
-    } finally {
-      setMutatingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
-  }, []);
+      setMutatingIds((prev) => new Set([...prev, id]));
 
-  const handleDisconnect = useCallback(async (id: string) => {
-    // Optimistic update
-    setConnectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
-    setMutatingIds((prev) => new Set([...prev, id]));
-
-    try {
-      const csrfToken = await getCsrfToken();
-      const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        headers: { 'x-csrf-token': csrfToken },
-      });
-      if (!res.ok) {
-        // Revert on failure
+      try {
+        const csrfToken = await getCsrfToken();
+        const res = await fetch(`/api/connectors?connectorId=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          headers: { 'x-csrf-token': csrfToken },
+        });
+        if (!res.ok) {
+          // Revert on failure
+          setConnectedIds((prev) => new Set([...prev, id]));
+        }
+      } catch {
+        // Revert on network error
         setConnectedIds((prev) => new Set([...prev, id]));
+      } finally {
+        setMutatingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-    } catch {
-      // Revert on network error
-      setConnectedIds((prev) => new Set([...prev, id]));
-    } finally {
-      setMutatingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    }
-  }, []);
+    },
+    [isSignedIn, pathname, router],
+  );
 
   return (
     <ErrorBoundary componentName="ConnectorsPage" compact>
@@ -1969,16 +813,16 @@ export function ConnectorsPage() {
                   </div>
                 )}
 
-                {/* Available group */}
-                {availableConnectors.length > 0 && (
+                {/* Ready/request-access group */}
+                {browseConnectors.length > 0 && (
                   <div className="mb-4">
                     <div className="mb-1.5 px-1">
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        Available ({availableConnectors.length})
+                        {browseGroupLabel} ({browseConnectors.length})
                       </span>
                     </div>
                     <div className="space-y-0.5">
-                      {pagedAvailableConnectors.map((connector) => (
+                      {pagedBrowseConnectors.map((connector) => (
                         <ConnectorListRow
                           key={connector.id}
                           connector={connector}
@@ -1990,7 +834,7 @@ export function ConnectorsPage() {
                     </div>
 
                     {/* Pagination */}
-                    {totalAvailablePages > 1 && (
+                    {totalBrowsePages > 1 && (
                       <div className="mt-3 flex items-center justify-between px-1">
                         <Button
                           variant="outline"
@@ -2002,16 +846,14 @@ export function ConnectorsPage() {
                           Prev
                         </Button>
                         <span className="text-[11px] text-muted-foreground">
-                          {currentPage}/{totalAvailablePages}
+                          {currentPage}/{totalBrowsePages}
                         </span>
                         <Button
                           variant="outline"
                           size="sm"
                           className="h-7 border-white/[0.08] px-2 text-[11px] disabled:opacity-40"
-                          onClick={() =>
-                            setCurrentPage((p) => Math.min(totalAvailablePages, p + 1))
-                          }
-                          disabled={currentPage >= totalAvailablePages}
+                          onClick={() => setCurrentPage((p) => Math.min(totalBrowsePages, p + 1))}
+                          disabled={currentPage >= totalBrowsePages}
                         >
                           Next
                         </Button>
@@ -2050,6 +892,7 @@ export function ConnectorsPage() {
                     onBack={() => setSelectedConnector(null)}
                     onConnect={() => setOverviewConnector(selectedConnector)}
                     onDisconnect={() => void handleDisconnect(selectedConnector.id)}
+                    onUpgrade={() => router.push('/pricing#waitlist')}
                   />
                 ) : (
                   /* Placeholder shown on desktop when nothing is selected */
@@ -2076,12 +919,12 @@ export function ConnectorsPage() {
                   <Zap className="h-5 w-5 text-primary" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-sm font-semibold text-foreground">105+ Connectors Planned</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Connector roadmap</h3>
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     We&apos;re rolling out connectors in phases, starting from core productivity
-                    tools to AI models, marketing platforms, and enterprise apps. Phase 1 (10 core
-                    connectors) ships first, followed by CRM, marketing, finance, and social in
-                    subsequent phases.
+                    tools to AI models, marketing platforms, and enterprise apps. Phase labels show
+                    the planned rollout order; request-access connectors are visible for demos and
+                    account-bound upgrade planning.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {[
@@ -2108,7 +951,7 @@ export function ConnectorsPage() {
                       variant="outline"
                       className="border-white/[0.08] px-2 py-0 text-[10px] text-muted-foreground"
                     >
-                      +95 more
+                      More planned
                     </Badge>
                   </div>
                 </div>

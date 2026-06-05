@@ -225,26 +225,26 @@ export default function CliPage() {
             <pre className="agi-terminal-pre">
               <span className="agi-terminal-comment"># Homebrew (macOS, Linux)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>brew install
+              <span className="agi-terminal-prompt">$ </span>brew install
               siddharthanagula3/tap/agiworkforce
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># cargo (any platform)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>cargo install agiworkforce-cli
+              <span className="agi-terminal-prompt">$ </span>cargo install agiworkforce-cli
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># curl (macOS, Linux, WSL)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>curl -fsSL
+              <span className="agi-terminal-prompt">$ </span>curl -fsSL
               https://agiworkforce.com/install.sh | sh
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># first run</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi login
+              <span className="agi-terminal-prompt">$ </span>agi login
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi exec &quot;your first task&quot;
+              <span className="agi-terminal-prompt">$ </span>agi exec &quot;your first task&quot;
             </pre>
           </div>
         </section>

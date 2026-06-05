@@ -13,13 +13,14 @@ import { CreditService } from '@/lib/services/credit-service';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
-import { getTaskModelForProvider } from '@agiworkforce/types';
+import { getTaskModelForProvider, requireProviderDefaultModel } from '@agiworkforce/types';
 
 export function OPTIONS(request: NextRequest) {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });
 }
 
-const DEFAULT_EMPLOYEE_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? 'claude-sonnet-4.6';
+const DEFAULT_EMPLOYEE_MODEL =
+  getTaskModelForProvider('anthropic', 'chat') ?? requireProviderDefaultModel('anthropic');
 
 // H9: Zod validation schema for execute requests
 const ExecuteRequestSchema = z.object({

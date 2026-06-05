@@ -158,7 +158,7 @@ const ArtifactGalleryPage: React.FC = () => {
               <div className="text-sm text-muted-foreground">
                 {searchQuery
                   ? 'Try adjusting your search or filters'
-                  : 'Community artifacts coming soon — create artifacts in chat to see them here.'}
+                  : 'Create artifacts in chat to see them here.'}
               </div>
             </div>
           </div>
@@ -235,15 +235,6 @@ const ArtifactGalleryPage: React.FC = () => {
             })}
           </div>
         )}
-
-        {/* Coming Soon Message */}
-        <div className="mt-12 rounded-lg border border-primary/30 bg-primary/5 p-6 text-center">
-          <h3 className="mb-2 text-lg font-semibold">✨ Gallery Coming Soon</h3>
-          <p className="text-sm text-muted-foreground">
-            The Artifact Gallery is currently in development. Soon you&apos;ll be able to share your
-            creations with the community and discover amazing artifacts from other users!
-          </p>
-        </div>
       </div>
     </div>
   );

@@ -20,8 +20,10 @@ use crate::core::agi::ExecutionContext;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
 
 /// EXE-005 fix: Maximum file write size (10 MB) to prevent resource exhaustion
 const MAX_FILE_WRITE_SIZE: usize = 10 * 1024 * 1024; // 10 MB
@@ -31,6 +33,8 @@ const MAX_FILE_READ_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
 
 /// EXE-002 fix: Maximum path length to prevent path-based attacks
 const MAX_PATH_LENGTH: usize = 4096;
+
+const EXPECTED_SHA256_PARAM: &str = "expected_sha256";
 
 /// Executor for file system operations.
 ///
@@ -42,6 +46,76 @@ impl FileExecutor {
     /// Create a new file executor.
     pub fn new() -> Self {
         Self
+    }
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hex::encode(hasher.finalize())
+    }
+
+    fn file_version_json(metadata: &std::fs::Metadata, bytes: &[u8]) -> Value {
+        let modified_ms = metadata
+            .modified()
+            .ok()
+            .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
+
+        json!({
+            "sha256": Self::sha256_hex(bytes),
+            "modified_ms": modified_ms,
+            "size_bytes": metadata.len(),
+        })
+    }
+
+    fn validate_expected_sha256(raw: &str) -> Result<String> {
+        let value = raw.trim();
+        if value.len() != 64 || !value.chars().all(|ch| ch.is_ascii_hexdigit()) {
+            return Err(anyhow!(
+                "expected_sha256 must be a 64-character SHA-256 hex string"
+            ));
+        }
+        if value.chars().any(|ch| ch.is_ascii_uppercase()) {
+            return Err(anyhow!("expected_sha256 must use lowercase hex"));
+        }
+        Ok(value.to_string())
+    }
+
+    fn parse_expected_sha256(parameters: &HashMap<String, Value>) -> Result<Option<String>> {
+        let Some(value) = parameters.get(EXPECTED_SHA256_PARAM) else {
+            return Ok(None);
+        };
+        let raw = value
+            .as_str()
+            .ok_or_else(|| anyhow!("expected_sha256 must be a lowercase SHA-256 hex string"))?;
+        Self::validate_expected_sha256(raw).map(Some)
+    }
+
+    fn parse_required_expected_sha256(parameters: &HashMap<String, Value>) -> Result<String> {
+        Self::parse_expected_sha256(parameters)?.ok_or_else(|| {
+            anyhow!(
+                "expected_sha256 is required when modifying an existing file. Read the file first and pass file_version.sha256."
+            )
+        })
+    }
+
+    fn validate_current_sha256(path: &Path, expected_sha256: &str) -> Result<()> {
+        let bytes = std::fs::read(path).map_err(|e| {
+            anyhow!(
+                "Cannot read '{}' for stale-read guard: {}",
+                path.display(),
+                e
+            )
+        })?;
+        let current_sha256 = Self::sha256_hex(&bytes);
+        if current_sha256 != expected_sha256 {
+            return Err(anyhow!(
+                "File has changed since it was read. Expected sha256 {}, found {}. Read the file again before editing.",
+                expected_sha256,
+                current_sha256
+            ));
+        }
+        Ok(())
     }
 
     /// Validate an existing path is within allowed directories.
@@ -298,9 +372,8 @@ impl FileExecutor {
         let canonical_path = Self::validate_path(Path::new(path), context, "file_read")?;
 
         // EXE-005 fix: Check file size before reading to prevent memory exhaustion
-        let file_size = std::fs::metadata(&canonical_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let metadata = std::fs::metadata(&canonical_path)?;
+        let file_size = metadata.len();
         if file_size > MAX_FILE_READ_SIZE {
             return Err(anyhow!(
                 "File too large to read: {} bytes (max {} bytes). Consider reading in chunks.",
@@ -312,12 +385,16 @@ impl FileExecutor {
         // EXE-002 fix: Re-validate path immediately before read to detect TOCTOU attacks
         Self::verify_path_unchanged(Path::new(path), &canonical_path, "file_read")?;
 
-        let result = std::fs::read_to_string(&canonical_path);
+        let bytes_result = std::fs::read(&canonical_path);
+        let content_result = bytes_result
+            .as_ref()
+            .map(|bytes| String::from_utf8(bytes.clone()).map_err(std::io::Error::other))
+            .unwrap_or_else(|e| Err(std::io::Error::new(e.kind(), e.to_string())));
 
         // Emit file operation event for UI
         if let Some(ref app_handle) = context.app_handle {
             let display_path = canonical_path.to_string_lossy().to_string();
-            let file_op = match &result {
+            let file_op = match &content_result {
                 Ok(content) => crate::ui::events::create_file_read_event(
                     &display_path,
                     content,
@@ -336,7 +413,9 @@ impl FileExecutor {
             crate::ui::events::emit_file_operation(app_handle, file_op);
         }
 
-        let content = result?;
+        let bytes = bytes_result?;
+        let content = content_result?;
+        let file_version = Self::file_version_json(&metadata, &bytes);
 
         tracing::info!(
             "[FileExecutor] file_read completed: path='{}' size={} bytes",
@@ -346,7 +425,10 @@ impl FileExecutor {
 
         Ok(json!({
             "content": content,
-            "path": canonical_path.to_string_lossy()
+            "path": canonical_path.to_string_lossy(),
+            "file_version": file_version,
+            "truncated": false,
+            "is_partial_view": false,
         }))
     }
 
@@ -397,13 +479,18 @@ impl FileExecutor {
         let canonical_path = Self::validate_new_path(Path::new(path), context, "file_write")?;
 
         // Store old content for undo capability (CRITICAL for safety model)
+        let file_exists = canonical_path.exists();
         let old_content = std::fs::read_to_string(&canonical_path).ok();
-        let was_new_file = old_content.is_none();
+        let was_new_file = !file_exists;
 
         // EXE-002 fix: For existing files, re-validate path immediately before write
         // to detect TOCTOU attacks where a symlink is swapped in between validation and write
-        if !was_new_file {
+        if file_exists {
+            let expected_sha256 = Self::parse_required_expected_sha256(parameters)?;
+            Self::validate_current_sha256(&canonical_path, &expected_sha256)?;
             Self::verify_path_unchanged(Path::new(path), &canonical_path, "file_write")?;
+        } else {
+            let _ = Self::parse_expected_sha256(parameters)?;
         }
 
         let result = std::fs::write(&canonical_path, content);
@@ -752,7 +839,8 @@ mod tests {
     async fn test_file_write_existing_file() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("existing.txt");
-        fs::write(&test_file, "Original content").unwrap();
+        let original = "Original content";
+        fs::write(&test_file, original).unwrap();
 
         let context = create_test_context();
 
@@ -766,6 +854,10 @@ mod tests {
             "content".to_string(),
             Value::String("Modified content".to_string()),
         );
+        params.insert(
+            "expected_sha256".to_string(),
+            Value::String(FileExecutor::sha256_hex(original.as_bytes())),
+        );
 
         let exec_context = create_test_execution_context();
 
@@ -777,6 +869,37 @@ mod tests {
         assert_eq!(result["success"], true);
         assert_eq!(result["created"], false);
         assert_eq!(fs::read_to_string(&test_file).unwrap(), "Modified content");
+    }
+
+    #[tokio::test]
+    async fn test_file_write_existing_file_requires_expected_sha256() {
+        let temp_dir = TempDir::new().unwrap();
+        let test_file = temp_dir.path().join("existing-requires-hash.txt");
+        fs::write(&test_file, "Original content").unwrap();
+
+        let context = create_test_context();
+        let executor = FileExecutor::new();
+        let mut params = HashMap::new();
+        params.insert(
+            "path".to_string(),
+            Value::String(test_file.to_string_lossy().to_string()),
+        );
+        params.insert(
+            "content".to_string(),
+            Value::String("Modified content".to_string()),
+        );
+
+        let exec_context = create_test_execution_context();
+        let result = executor
+            .execute("file_write", &params, &context, &exec_context)
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("expected_sha256 is required"));
+        assert_eq!(fs::read_to_string(&test_file).unwrap(), "Original content");
     }
 
     #[tokio::test]

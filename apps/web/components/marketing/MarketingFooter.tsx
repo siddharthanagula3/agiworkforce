@@ -55,9 +55,7 @@ export function MarketingFooter() {
       <div className="agi-footer-row">
         <Link href="/" className="agi-footer-mark" aria-label="AGI home">
           <AgiMark size={18} />
-          <span style={{ marginLeft: 8 }}>
-            agi<span className="agi-mark-dot">.</span>workforce
-          </span>
+          <span style={{ marginLeft: 8 }}>AGI</span>
         </Link>
         <ul className="agi-footer-col">
           <li className="agi-footer-col-title">Product</li>
@@ -101,7 +99,7 @@ export function MarketingFooter() {
         </ul>
       </div>
       <div className="agi-footer-strip">
-        <span>© 2026 AGI Workforce. Proprietary.</span>
+        <span>© 2026 AGI. Proprietary.</span>
         <span>{POSITIONING.trustBoundary}</span>
       </div>
     </footer>

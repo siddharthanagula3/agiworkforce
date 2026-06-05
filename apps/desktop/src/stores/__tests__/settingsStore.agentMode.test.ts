@@ -15,6 +15,9 @@ describe('settingsStore agent mode backend sync', () => {
     vi.doMock('../../lib/tauri-mock', () => ({
       invoke: invokeMock,
       isTauri: true,
+      isDesktopUiDevLocal: false,
+      supportsLocalAppMode: true,
+      isCloudWeb: false,
       isTauriContext: () => true,
     }));
 
@@ -34,6 +37,9 @@ describe('settingsStore agent mode backend sync', () => {
     vi.doMock('../../lib/tauri-mock', () => ({
       invoke: invokeMock,
       isTauri: true,
+      isDesktopUiDevLocal: false,
+      supportsLocalAppMode: true,
+      isCloudWeb: false,
       isTauriContext: () => true,
     }));
 
@@ -73,6 +79,9 @@ describe('settingsStore agent mode backend sync', () => {
     vi.doMock('../../lib/tauri-mock', () => ({
       invoke: invokeMock,
       isTauri: true,
+      isDesktopUiDevLocal: false,
+      supportsLocalAppMode: true,
+      isCloudWeb: false,
       isTauriContext: () => true,
     }));
 

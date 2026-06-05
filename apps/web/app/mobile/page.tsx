@@ -183,7 +183,7 @@ export default function MobilePage() {
           >
             {COPY.heroEyebrow}
           </p>
-          <h1 className="agi-h1">
+          <h1 className="agi-h1" aria-label={`${COPY.heroHeadline} ${COPY.heroSubline}`}>
             <span className="agi-h1-line">{COPY.heroHeadline}</span>
             <span className="agi-h1-line agi-h1-line--quiet">{COPY.heroSubline}</span>
           </h1>

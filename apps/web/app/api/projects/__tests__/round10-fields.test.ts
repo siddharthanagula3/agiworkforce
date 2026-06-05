@@ -91,6 +91,8 @@ const BASE_DB_ROW = {
   updated_at: '2026-05-01T00:00:00Z',
 };
 
+const PROJECT_DEFAULT_MODEL_FIXTURE = 'test-project-default-model';
+
 function makePutRequest(id: string, body: unknown): NextRequest {
   return new NextRequest(`http://localhost/api/projects/${id}`, {
     method: 'PUT',
@@ -169,7 +171,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
       default_privacy_mode: 'byok',
       default_provider_mode: 'DirectByok',
       allowed_surfaces: ['web', 'mobile'],
-      default_model_id: 'claude-opus-4-8',
+      default_model_id: PROJECT_DEFAULT_MODEL_FIXTURE,
       imported_from: 'claude',
     };
     setupUpdateChain({ data: dbRow, error: null });
@@ -178,7 +180,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
       defaultPrivacyMode: 'byok',
       defaultProviderMode: 'DirectByok',
       allowedSurfaces: ['web', 'mobile'],
-      defaultModelId: 'claude-opus-4-8',
+      defaultModelId: PROJECT_DEFAULT_MODEL_FIXTURE,
       importedFrom: 'claude',
     });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });
@@ -188,7 +190,7 @@ describe('PUT /api/projects/[id] — round-10 fields', () => {
     expect(json.project['defaultPrivacyMode']).toBe('byok');
     expect(json.project['defaultProviderMode']).toBe('DirectByok');
     expect(json.project['allowedSurfaces']).toEqual(['web', 'mobile']);
-    expect(json.project['defaultModelId']).toBe('claude-opus-4-8');
+    expect(json.project['defaultModelId']).toBe(PROJECT_DEFAULT_MODEL_FIXTURE);
     expect(json.project['importedFrom']).toBe('claude');
   });
 

@@ -2,6 +2,7 @@ import { SignUp } from '@clerk/nextjs';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 import { Header } from '../../components/layout/Header';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
+import { agiClerkAppearance } from '../auth/clerkAppearance';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -18,7 +19,7 @@ export default async function SignupPage({
       <main className="agi-shell">
         <Header />
         <section
-          className="agi-section"
+          className="agi-section agi-auth-page"
           style={{
             minHeight: 'calc(100vh - 220px)',
             display: 'grid',
@@ -31,6 +32,7 @@ export default async function SignupPage({
             signInUrl="/login"
             fallbackRedirectUrl={redirectTo}
             signInFallbackRedirectUrl={redirectTo}
+            appearance={agiClerkAppearance}
           />
         </section>
         <MarketingFooter />

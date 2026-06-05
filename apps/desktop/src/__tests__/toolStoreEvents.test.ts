@@ -223,6 +223,9 @@ describe('initializeToolEventListener double-init guard', () => {
       const eventApi = await import('@tauri-apps/api/event');
       return {
         isTauri: true,
+        isDesktopUiDevLocal: false,
+        supportsLocalAppMode: true,
+        isCloudWeb: false,
         invoke: vi.fn(),
         isTauriContext: () => true,
         listen: eventApi.listen,
@@ -251,6 +254,9 @@ describe('initializeToolEventListener double-init guard', () => {
       const eventApi = await import('@tauri-apps/api/event');
       return {
         isTauri: true,
+        isDesktopUiDevLocal: false,
+        supportsLocalAppMode: true,
+        isCloudWeb: false,
         invoke: vi.fn(),
         isTauriContext: () => true,
         listen: eventApi.listen,

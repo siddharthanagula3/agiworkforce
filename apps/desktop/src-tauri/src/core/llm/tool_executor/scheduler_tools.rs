@@ -146,15 +146,18 @@ impl ToolExecutor {
                 .ok_or_else(|| anyhow!("Missing schedule parameter"))?
                 .to_string();
 
+            let task_description = args
+                .get("task_description")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| anyhow!("Missing task_description parameter"))?
+                .to_string();
+
             let action_type_str = args
                 .get("action_type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("agi_task");
-
-            let action_data = args
-                .get("action_data")
-                .cloned()
-                .unwrap_or_else(|| json!({}));
 
             // Parse the natural language schedule expression
             let parsed = parse_schedule(&schedule_expr).map_err(|e| {
@@ -188,18 +191,48 @@ impl ToolExecutor {
                 }
             };
 
-            // Parse action type
+            // Recurring model-created tasks are limited to AGI task prompts. More
+            // privileged scheduler actions are created through explicit UI flows.
             let action_type = match action_type_str.to_lowercase().as_str() {
-                "workflow" => SchedulerActionType::Workflow,
                 "agi_task" | "agitask" | "agi-task" => SchedulerActionType::AgiTask,
-                "shell_command" | "shellcommand" | "shell-command" | "shell" => {
-                    SchedulerActionType::ShellCommand
+                other => {
+                    let err_msg = format!(
+                        "schedule_recurring_task supports only action_type='agi_task' from chat, got '{other}'"
+                    );
+                    return Ok(ToolResult {
+                        success: false,
+                        data: json!({ "error": err_msg.clone(), "success": false }),
+                        error: Some(err_msg),
+                        metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                    });
                 }
-                "notification" | "notify" => SchedulerActionType::Notification,
-                "webhook" => SchedulerActionType::Webhook,
-                "script" => SchedulerActionType::Script,
-                _ => SchedulerActionType::AgiTask,
             };
+
+            let mut action_data = args
+                .get("action_data")
+                .cloned()
+                .unwrap_or_else(|| json!({}));
+
+            if !action_data.is_object() {
+                return Ok(ToolResult {
+                    success: false,
+                    data: json!({
+                        "error": "action_data must be a JSON object when provided",
+                        "success": false
+                    }),
+                    error: Some("action_data must be a JSON object when provided".to_string()),
+                    metadata: HashMap::from([("tool".to_string(), json!(tool_id))]),
+                });
+            }
+
+            if let Some(action_object) = action_data.as_object_mut() {
+                action_object
+                    .entry("prompt".to_string())
+                    .or_insert_with(|| json!(task_description.clone()));
+                action_object
+                    .entry("task_description".to_string())
+                    .or_insert_with(|| json!(task_description.clone()));
+            }
 
             let state = app.state::<SchedulerState>();
 
@@ -277,8 +310,9 @@ impl ToolExecutor {
 
             let job_id = args
                 .get("job_id")
+                .or_else(|| args.get("task_id"))
                 .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow!("Missing job_id parameter"))?
+                .ok_or_else(|| anyhow!("Missing job_id or task_id parameter"))?
                 .to_string();
 
             let state = app.state::<SchedulerState>();

@@ -7,7 +7,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
-import { getModelMetadataById } from '@agiworkforce/types';
+import { getModelMetadataById, getRoutingSlotModel } from '@agiworkforce/types';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
@@ -190,8 +190,7 @@ async function generateWithRunway(
  * Endpoint: POST /models/{model}:predictLongRunning
  * Auth: x-goog-api-key header
  *
- * Current model (as of 2025-10): veo-3.1-generate-preview
- *   - Previous model veo-2.0-generate-001 is outdated
+ * Model selection is resolved from the shared catalog's video-generation slot.
  * Duration: "4", "6", or "8" (string seconds - Veo does not accept arbitrary integers)
  * Polling: GET /v1beta/{operation_name} until done === true
  */
@@ -226,9 +225,8 @@ async function generateWithGoogleVeo(
     veoResolution = '720p';
   }
 
-  // Read the wire-protocol apiModelId from the catalog so the literal can
-  // shift in models.json without redeploying this route (rule-models-json.md).
-  const model = getModelMetadataById('veo-3')?.apiModelId ?? 'veo-3.1-generate-preview';
+  const catalogModelId = getRoutingSlotModel('video_generation');
+  const model = getModelMetadataById(catalogModelId)?.apiModelId ?? catalogModelId;
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:predictLongRunning`;
 
   const response = await fetch(endpoint, {

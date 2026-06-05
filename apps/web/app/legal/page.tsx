@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Legal | AGI',
+  title: 'Legal',
   description:
     'Index of legal documents — terms, privacy, DPA, SLA, subprocessors, refund policy, accessibility, and trust posture.',
   alternates: { canonical: 'https://agiworkforce.com/legal' },

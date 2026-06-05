@@ -4,7 +4,7 @@ import { Header } from '../../../components/layout/Header';
 import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'AGI vs Perplexity | AGI',
+  title: 'AGI vs Perplexity',
   description:
     'Honest review of Perplexity. Where Perplexity wins, where AGI wins, and how the two products differ.',
   alternates: { canonical: 'https://agiworkforce.com/compare/perplexity' },

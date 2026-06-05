@@ -129,7 +129,8 @@ device**.
 - Items #3, #4, and the privacy-label blocker were re-verified by direct
   source read in this session; the rest are single-pass agent findings
   reconciled against the prior multi-agent audit rollup
-  (`audit/completed-audits-2026-05-31.md`) and should be re-read before being
-  turned into hard buyer-facing commitments.
+  (`docs/archive/2026-06-05-doc-reset/audit/completed-audits-2026-05-31.md`)
+  and should be re-read against current source before being turned into hard
+  buyer-facing commitments.
 - "Gated-by-design" (cloud, dispatch, billing, BYOK) is correct for v1 and is
   not counted as incompleteness.

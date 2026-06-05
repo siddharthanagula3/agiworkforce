@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 /**
- * New canonical tab IDs (10 tabs).
+ * New canonical tab IDs.
  * Legacy IDs (old tabs that got merged) are kept so external callers
  * that pass them to openSettings() still work — they are silently
  * redirected to their parent tab inside SettingsPanel.
@@ -18,9 +18,9 @@ export type SettingsTab =
   | 'connectors' // Connectors + OAuth + Extensions
   | 'notifications' // Notifications (unchanged)
   | 'voice' // Voice Settings
-  | 'capabilities' // Tool access + Visuals
   | 'memory' // Cross-conversation memory (P0 #8 audit 2026-05-21)
   // ── Legacy aliases — kept for backward-compat, map to parent tab ───
+  | 'capabilities' // → mcp-skills
   | 'team' // → account
   | 'personalization' // → appearance
   | 'features' // → agents
@@ -59,6 +59,7 @@ export const LEGACY_TAB_MAP: Partial<Record<SettingsTab, SettingsTab>> = {
   themes: 'appearance',
   'apps-integrations': 'connectors',
   customize: 'mcp-skills',
+  capabilities: 'mcp-skills',
   billing: 'account',
 };
 

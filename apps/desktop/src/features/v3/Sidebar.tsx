@@ -5,18 +5,21 @@ import {
   Plus,
   Search,
   FolderOpen,
-  Box,
   Sliders,
-  RefreshCw,
-  GitBranch,
   PanelLeftClose,
   PanelLeftOpen,
   ChevronDown,
   Settings,
+  LogIn,
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
-import { useUnifiedAuthStore, selectUser, selectPlanDisplayName } from '../../stores/auth';
+import {
+  useUnifiedAuthStore,
+  selectUser,
+  selectPlanDisplayName,
+  selectIsAuthenticated,
+} from '../../stores/auth';
 import type { V3Mode } from './DesktopShellV3';
 import { UpdatePill } from '../updates';
 
@@ -27,13 +30,23 @@ type RecentsGroup = {
   items: ConversationSummary[];
 };
 
+function conversationUpdatedAtMs(conversation: ConversationSummary): number {
+  const value = conversation.updatedAt;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 function groupConversations(convos: ConversationSummary[], t: TFunction): RecentsGroup[] {
   const now = Date.now();
   const HOUR = 3_600_000;
   const DAY = 86_400_000;
 
   const sorted = [...convos]
-    .sort((a, b) => (b.updatedAt?.getTime() ?? 0) - (a.updatedAt?.getTime() ?? 0))
+    .sort((a, b) => conversationUpdatedAtMs(b) - conversationUpdatedAtMs(a))
     .slice(0, 30);
 
   const groups: RecentsGroup[] = [
@@ -45,7 +58,7 @@ function groupConversations(convos: ConversationSummary[], t: TFunction): Recent
   ];
 
   for (const c of sorted) {
-    const age = now - (c.updatedAt?.getTime() ?? 0);
+    const age = now - conversationUpdatedAtMs(c);
     if (age < HOUR) groups[0]!.items.push(c);
     else if (age < DAY) groups[1]!.items.push(c);
     else if (age < 2 * DAY) groups[2]!.items.push(c);
@@ -69,11 +82,7 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
   void mode;
   return [
     { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
-    { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
-    { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
-    { id: 'live-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
-    { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
-    { id: 'customize', label: t('sidebar.nav.customize'), icon: Sliders },
+    { id: 'settings', label: t('common.settings'), icon: Sliders },
   ];
 }
 
@@ -82,9 +91,7 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
 function railItems(t: TFunction): { id: string; icon: React.ElementType; title: string }[] {
   return [
     { id: 'projects', icon: FolderOpen, title: t('sidebar.nav.projects') },
-    { id: 'artifacts', icon: Box, title: t('sidebar.nav.artifacts') },
-    { id: 'customize', icon: Sliders, title: t('sidebar.nav.customize') },
-    { id: 'settings', icon: Settings, title: t('common.settings') },
+    { id: 'settings', icon: Sliders, title: t('common.settings') },
   ];
 }
 
@@ -127,6 +134,9 @@ export function Sidebar({
   const conversations = useChatStore((s: ChatState) => s.conversations);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
+  const isAuthenticated = useUnifiedAuthStore(selectIsAuthenticated);
+  const accessToken = useUnifiedAuthStore((s) => s.accessToken);
+  const hasCloudSession = isAuthenticated && Boolean(accessToken);
 
   const groups = useMemo(() => groupConversations(conversations, t), [conversations, t]);
   const displayGroups = useMemo(() => {
@@ -152,12 +162,9 @@ export function Sidebar({
     (id: string) => {
       const viewMap: Record<string, string> = {
         projects: 'projects',
-        artifacts: 'artifacts',
-        scheduled: 'cowork-scheduled',
-        'live-artifacts': 'cowork-artifacts',
-        dispatch: 'cowork-dispatch',
-        customize: 'customize-home',
-        settings: 'voice-settings',
+        customize: 'customize',
+        settings: 'settings',
+        auth: 'auth',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
@@ -476,41 +483,57 @@ export function Sidebar({
           padding: '8px',
         }}
       >
-        <button
-          onClick={onOpenAccountMenu}
-          data-open={accountMenuOpen}
+        <div
           style={{
             width: '100%',
             display: 'flex',
             alignItems: 'center',
             gap: 8,
-            padding: collapsed ? '6px 0' : '6px 8px',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            borderRadius: 8,
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
           }}
         >
-          <div
+          <button
+            onClick={() => {
+              if (hasCloudSession) {
+                onOpenAccountMenu?.();
+                return;
+              }
+              handleNavClick('auth');
+            }}
+            data-open={accountMenuOpen}
+            title={hasCloudSession ? t('sidebar.account') : t('sidebar.signIn')}
             style={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: 'var(--chat-accent-primary)',
-              color: '#fff',
+              minWidth: 0,
+              flex: 1,
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 11,
-              fontWeight: 700,
-              flexShrink: 0,
+              gap: 8,
+              padding: collapsed ? '6px 0' : '6px 8px',
+              justifyContent: collapsed ? 'center' : 'flex-start',
+              borderRadius: 8,
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
             }}
           >
-            {initials(user?.name, user?.email)}
-          </div>
-          {!collapsed && (
-            <>
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: hasCloudSession ? 'var(--chat-accent-primary)' : 'var(--chat-bg)',
+                color: hasCloudSession ? '#fff' : 'var(--chat-text-secondary)',
+                border: hasCloudSession ? 'none' : '1px solid var(--chat-border)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 11,
+                fontWeight: 700,
+                flexShrink: 0,
+              }}
+            >
+              {hasCloudSession ? initials(user?.name, user?.email) : <LogIn size={14} />}
+            </div>
+            {!collapsed && (
               <div style={{ flex: 1, textAlign: 'left', minWidth: 0 }}>
                 <div
                   style={{
@@ -522,7 +545,9 @@ export function Sidebar({
                     textOverflow: 'ellipsis',
                   }}
                 >
-                  {user?.name ?? user?.email ?? t('sidebar.account')}
+                  {hasCloudSession
+                    ? (user?.name ?? user?.email ?? t('sidebar.account'))
+                    : t('sidebar.signIn')}
                 </div>
                 <div
                   style={{
@@ -533,14 +558,38 @@ export function Sidebar({
                     gap: 3,
                   }}
                 >
-                  {planDisplayName}
-                  <ChevronDown size={9} />
+                  {hasCloudSession ? planDisplayName : t('sidebar.signInSub')}
+                  {hasCloudSession && <ChevronDown size={9} />}
                 </div>
               </div>
-              <ChevronDown size={12} style={{ color: 'var(--chat-text-muted)', flexShrink: 0 }} />
-            </>
+            )}
+          </button>
+          {!collapsed && (
+            <button
+              onClick={() => handleNavClick('settings')}
+              title={t('common.settings')}
+              aria-label={t('common.settings')}
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--chat-text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <Settings size={14} />
+            </button>
           )}
-        </button>
+          {!collapsed && hasCloudSession && (
+            <ChevronDown size={12} style={{ color: 'var(--chat-text-muted)', flexShrink: 0 }} />
+          )}
+        </div>
       </div>
     </aside>
   );

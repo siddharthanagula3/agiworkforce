@@ -33,6 +33,10 @@ vi.mock('next/navigation', () => {
   };
 });
 
+vi.mock('@clerk/nextjs', () => ({
+  useAuth: () => ({ isLoaded: true, isSignedIn: true }),
+}));
+
 vi.mock('@shared/lib/utils', () => ({
   cn: (...args: (string | boolean | undefined | null)[]) => args.filter(Boolean).join(' '),
 }));
@@ -193,10 +197,10 @@ describe('ConnectorsPage', () => {
     // Select the first connector from the list to show the detail panel
     const listRows = screen.getAllByRole('button');
     const firstConnectorRow = listRows.find((btn) => {
-      // ConnectorListRow buttons don't have 'All', 'Connected', 'Available' labels
+      // ConnectorListRow buttons do not use filter/header labels.
       const label = btn.textContent ?? '';
       return (
-        !['All', 'Connected', 'Available', 'Connectors'].includes(label) &&
+        !['All', 'Connected', 'Ready', 'Request access', 'Browse', 'Connectors'].includes(label) &&
         !label.startsWith('0') &&
         label.length > 0
       );
@@ -221,12 +225,12 @@ describe('ConnectorsPage', () => {
     }
   });
 
-  // 6. Shows "Available" section header
-  it('shows the Available section', async () => {
+  // 6. Shows a neutral browse section and explicit readiness filters
+  it('shows browse and connector readiness filters', async () => {
     await renderConnectorsPage();
-    // Multiple "Available" strings now appear (section header + per-tile badges).
-    // The section heading is sufficient to prove the section renders.
-    expect(screen.getAllByText(/Available/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Browse \(\d+\)/)).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Ready' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Request access' })).toBeDefined();
   });
 
   // 7. Shows search input placeholder
@@ -246,8 +250,9 @@ describe('ConnectorsPage', () => {
     // "GitHub" connector should still be visible
     expect(screen.getByText('GitHub')).toBeDefined();
 
-    // "Gmail" should NOT appear because "Github" doesn't match "gmail"
-    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+    // Gmail and Calendar should NOT appear because "Github" doesn't match them
+    expect(screen.queryByText('Gmail')).toBeNull();
+    expect(screen.queryByText('Google Calendar')).toBeNull();
   });
 
   // 9. Search with no match shows empty state
@@ -274,6 +279,12 @@ describe('ConnectorsPage', () => {
       'Marketing',
       'Finance',
       'Social',
+      'Communication',
+      'Cloud',
+      'Data',
+      'Design',
+      'Storage',
+      'Healthcare',
       'AI',
     ];
 
@@ -295,8 +306,9 @@ describe('ConnectorsPage', () => {
     // GitHub is in the Developer category — should be visible
     expect(screen.getByText('GitHub')).toBeDefined();
 
-    // Gmail is in Productivity — should NOT be visible
-    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+    // Gmail and Calendar are in Productivity — should NOT be visible
+    expect(screen.queryByText('Gmail')).toBeNull();
+    expect(screen.queryByText('Google Calendar')).toBeNull();
   });
 
   // 12. Clicking "All" category tab shows all connectors
@@ -305,7 +317,8 @@ describe('ConnectorsPage', () => {
 
     // First switch to Developer
     fireEvent.click(screen.getByText('Developer'));
-    expect(screen.queryByText('Gmail & Calendar')).toBeNull();
+    expect(screen.queryByText('Gmail')).toBeNull();
+    expect(screen.queryByText('Google Calendar')).toBeNull();
 
     // Then switch back to All. The page renders two "All" buttons: a tri-state
     // status filter (first in DOM order) and the category tab (second). Clicking
@@ -313,7 +326,8 @@ describe('ConnectorsPage', () => {
     const allButtons = screen.getAllByRole('button', { name: 'All' });
     expect(allButtons.length).toBeGreaterThanOrEqual(2);
     fireEvent.click(allButtons[1]!);
-    expect(screen.getByText('Gmail & Calendar')).toBeDefined();
+    expect(screen.getByText('Gmail')).toBeDefined();
+    expect(screen.getByText('Google Calendar')).toBeDefined();
     expect(screen.getByText('GitHub')).toBeDefined();
   });
 
@@ -352,9 +366,9 @@ describe('ConnectorsPage', () => {
   });
 
   // 14. Roadmap callout is visible in "All" category view
-  it('shows the 105+ Connectors Planned callout in All view', async () => {
+  it('shows the connector roadmap callout in All view', async () => {
     await renderConnectorsPage();
-    expect(screen.getByText('105+ Connectors Planned')).toBeDefined();
+    expect(screen.getByText('Connector roadmap')).toBeDefined();
   });
 
   // 15. Exclusive/local connectors are hidden until enforcement exists

@@ -67,7 +67,7 @@ export function buildAutoEconomyTrialPaywallSlot(
       requiredTier: 'hobby',
       reason:
         fallbackReason ||
-        'The website free trial is text-only Auto Economy. Join the cloud waitlist for search, tools, files, and thinking.',
+        'The website free trial is text-only Auto Economy. Upgrade for search, tools, files, and thinking.',
     };
   }
 
@@ -76,7 +76,7 @@ export function buildAutoEconomyTrialPaywallSlot(
     requiredTier: 'hobby',
     reason:
       fallbackReason ||
-      'This account has used its three website Auto Economy prompts. Join the cloud waitlist to unlock more hosted usage.',
+      'This account has used its three website Auto Economy prompts. Upgrade to unlock more hosted usage.',
   };
 }
 

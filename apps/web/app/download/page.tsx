@@ -51,8 +51,8 @@ const SURFACES: Surface[] = [
     icon: Monitor,
     body: 'The local AGI host for chat, local models, BYOK keys, computer use, and cowork tasks in one shell.',
     bullets: ['macOS, Windows, Linux', 'Local and BYOK modes', 'Chat and cowork together'],
-    primaryLabel: 'Download for macOS',
-    primaryHref: '/api/download?platform=mac',
+    primaryLabel: 'Desktop details',
+    primaryHref: '/desktop',
     secondaryLabel: 'Desktop details',
     secondaryHref: '/desktop',
     status: LAUNCH.publicLabel,
@@ -95,9 +95,9 @@ const SURFACES: Surface[] = [
 const DESKTOP_DOWNLOADS = [
   {
     platform: 'macOS',
-    detail: 'Universal desktop installer route',
-    href: '/api/download?platform=mac',
-    action: 'Download',
+    detail: 'Signed installer route opens when release assets are available',
+    href: '/desktop',
+    action: 'Check availability',
   },
   {
     platform: 'Windows',
@@ -209,12 +209,12 @@ export default function DownloadPage() {
           <div className="agi-terminal">
             <div className="agi-terminal-bar">~/agi-workforce — install</div>
             <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$</span>curl -fsSL
+              <span className="agi-terminal-prompt">$ </span>curl -fsSL
               https://agiworkforce.com/install.sh | sh
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi login
+              <span className="agi-terminal-prompt">$ </span>agi login
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi exec &quot;review this repo&quot;
+              <span className="agi-terminal-prompt">$ </span>agi exec &quot;review this repo&quot;
             </pre>
           </div>
         </section>

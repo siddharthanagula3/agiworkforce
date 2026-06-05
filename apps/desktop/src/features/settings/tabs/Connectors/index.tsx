@@ -45,7 +45,7 @@ export function ConnectorsTab({ isBusy, onOpenMcpSkills }: ConnectorsTabProps) {
           </div>
           <Button variant="outline" size="sm" onClick={onOpenMcpSkills} disabled={isBusy}>
             <Wrench className="mr-2 h-4 w-4" />
-            Open customize
+            Open tools
           </Button>
         </div>
       </div>

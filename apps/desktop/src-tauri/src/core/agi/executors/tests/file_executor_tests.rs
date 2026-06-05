@@ -11,11 +11,18 @@ mod tests {
     use crate::core::agi::executors::{ExecutorContext, FileExecutor, ToolExecutor};
     use crate::core::agi::{ExecutionContext, Goal, Priority, ResourceState};
     use serde_json::{json, Value};
+    use sha2::{Digest, Sha256};
     use std::collections::HashMap;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::Arc;
     use tempfile::TempDir;
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hex::encode(hasher.finalize())
+    }
 
     // ============================================================================
     // Test Fixtures
@@ -378,7 +385,8 @@ mod tests {
     async fn test_file_write_existing_file_success() {
         let temp_dir = TempDir::new().unwrap();
         let test_file = temp_dir.path().join("existing.txt");
-        fs::write(&test_file, "Original content").unwrap();
+        let original = "Original content";
+        fs::write(&test_file, original).unwrap();
 
         let executor = FileExecutor;
         let context = create_test_context();
@@ -391,6 +399,10 @@ mod tests {
         params.insert(
             "content".to_string(),
             Value::String("Modified content".to_string()),
+        );
+        params.insert(
+            "expected_sha256".to_string(),
+            Value::String(sha256_hex(original.as_bytes())),
         );
 
         let result = executor
@@ -773,6 +785,10 @@ mod tests {
         write_params.insert(
             "content".to_string(),
             Value::String("Modified content".to_string()),
+        );
+        write_params.insert(
+            "expected_sha256".to_string(),
+            Value::String(sha256_hex(b"Initial content")),
         );
         let result = executor
             .execute("file_write", &write_params, &context, &exec_context)

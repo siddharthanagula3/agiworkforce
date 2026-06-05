@@ -12,6 +12,7 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorTools } from '../config/connector-logos';
+import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -149,15 +150,7 @@ export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPerm
       <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            <div
-              className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br text-sm font-bold text-white',
-                connector.iconBg,
-              )}
-              aria-hidden="true"
-            >
-              {connector.iconEmoji ?? connector.iconText}
-            </div>
+            <OfficialConnectorLogo connector={connector} className="h-9 w-9 rounded-lg" />
             <div>
               <DialogTitle className="text-base font-semibold text-foreground">
                 {connector.name} - Tool Permissions

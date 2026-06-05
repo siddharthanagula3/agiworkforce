@@ -15,6 +15,7 @@ import {
   getModelMetadataById,
   getProviderDefaultModel,
   providerLabels,
+  requireProviderDefaultModel,
 } from '@agiworkforce/types';
 import { useThinkingStore } from './thinking-store';
 
@@ -297,7 +298,9 @@ const DEFAULT_MODELS: ChatModel[] = getPickerModels({ includeSearchModels: true 
 });
 
 const DEFAULT_SELECTED_MODEL =
-  getProviderDefaultModel('openai') ?? DEFAULT_MODELS[0]?.id ?? 'gpt-5.5';
+  getProviderDefaultModel('openai') ??
+  DEFAULT_MODELS[0]?.id ??
+  requireProviderDefaultModel('openai');
 
 const DEFAULT_SETTINGS: Conversation['settings'] = {
   temperature: 0.7,

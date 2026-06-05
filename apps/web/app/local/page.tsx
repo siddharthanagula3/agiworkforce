@@ -35,16 +35,16 @@ export default function LocalPage() {
                 # macOS — install Ollama, pull any open-weight model, connect
               </span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>brew install ollama
+              <span className="agi-terminal-prompt">$ </span>brew install ollama
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>ollama pull &lt;your-model&gt;
+              <span className="agi-terminal-prompt">$ </span>ollama pull &lt;your-model&gt;
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi --provider ollama
+              <span className="agi-terminal-prompt">$ </span>agi --provider ollama
               {'\n'}
               {'\n'}
               <span className="agi-terminal-comment"># or with LM Studio (GUI)</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$</span>agi --provider lmstudio
+              <span className="agi-terminal-prompt">$ </span>agi --provider lmstudio
             </pre>
           </div>
         </section>

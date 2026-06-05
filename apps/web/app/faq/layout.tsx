@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Frequently Asked Questions | AGI',
+  title: 'Frequently Asked Questions',
   description:
     'Find answers to common questions about AGI. Learn about features, pricing, platform support, security, and how to get started with AI automation.',
   keywords: [
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     canonical: 'https://agiworkforce.com/faq',
   },
   openGraph: {
-    title: 'FAQ | AGI',
+    title: 'FAQ',
     description: 'Find answers to common questions about AGI features, pricing, and security.',
     url: 'https://agiworkforce.com/faq',
     siteName: 'AGI',
@@ -31,7 +31,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'FAQ | AGI',
+    title: 'FAQ',
     description: 'Find answers to common questions about AGI.',
     images: ['/app-preview.png'],
     creator: '@agiworkforce',

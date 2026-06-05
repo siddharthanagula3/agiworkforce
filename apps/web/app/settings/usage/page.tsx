@@ -252,7 +252,7 @@ export default function UsageSettingsPage() {
             label="Daily included routine runs"
             percent={0}
             value="0 runs today"
-            detail="Routines are private beta until managed execution controls are proven"
+            detail="Hosted routines unlock when managed execution controls are enabled for your account"
           />
         </div>
       </section>

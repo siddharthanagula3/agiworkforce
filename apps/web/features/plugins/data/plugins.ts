@@ -1,15 +1,14 @@
 import type { Plugin } from '../types';
 
 /**
- * Example plugin catalogue.
- * Used by the Plugin Marketplace page and the plugin detail page for previews.
- * Real plugins will be served from the API; this data is preview-only.
+ * Demo-ready plugin catalogue used by the marketplace and detail pages.
+ * Keep connector IDs aligned with features/connectors/data/connectors.ts.
  */
-export const EXAMPLE_PLUGINS: Plugin[] = [
+export const PLUGIN_CATALOG: Plugin[] = [
   {
     id: 'github-automation',
     name: 'GitHub Automation',
-    author: 'AGI Workforce',
+    author: 'AGI',
     version: '1.0.0',
     description:
       'Automate pull request reviews, issue triage, and CI/CD status checks directly from your chat interface.',
@@ -22,7 +21,7 @@ export const EXAMPLE_PLUGINS: Plugin[] = [
   {
     id: 'calendar-assistant',
     name: 'Calendar Assistant',
-    author: 'AGI Workforce',
+    author: 'AGI',
     version: '1.2.0',
     description:
       'Smart scheduling, meeting preparation summaries, and follow-up action item extraction from your calendar events.',
@@ -30,12 +29,12 @@ export const EXAMPLE_PLUGINS: Plugin[] = [
     source: 'builtin',
     downloadCount: 7310,
     skills: ['Meeting Summarizer', 'Action Item Extractor', 'Scheduler'],
-    connectors: ['gmail'],
+    connectors: ['gmail', 'google-calendar'],
   },
   {
     id: 'research-pack',
     name: 'Research Pack',
-    author: 'AGI Workforce',
+    author: 'AGI',
     version: '0.9.1',
     description:
       'Deep web research with source citation, structured literature review, and fact-check verification against live sources.',
@@ -48,7 +47,7 @@ export const EXAMPLE_PLUGINS: Plugin[] = [
   {
     id: 'crm-sync',
     name: 'CRM Sync',
-    author: 'AGI Workforce',
+    author: 'AGI',
     version: '1.1.0',
     description:
       'Summarize sales calls, auto-update CRM records, draft follow-up emails, and surface deal insights.',

@@ -1,4 +1,5 @@
 mod api_tools;
+mod background_agent_tools;
 mod browser_tools;
 mod code_tools;
 mod communication_tools;
@@ -18,6 +19,8 @@ mod scheduler_tools;
 mod search_tools;
 mod terminal_tools;
 mod ui_automation_tools;
+mod undo_tools;
+mod worktree_tools;
 
 #[cfg(test)]
 mod tests;
@@ -98,7 +101,8 @@ impl ToolTimeoutConfig {
             | "grep_search"
             | "glob_search"
             | "conversation_search"
-            | "recent_chats" => self.fast,
+            | "recent_chats"
+            | "background_agent_get" => self.fast,
 
             // Medium tools (60s)
             "file_read"
@@ -107,6 +111,9 @@ impl ToolTimeoutConfig {
             | "file_delete"
             | "file_list"
             | "git_status"
+            | "git_diff"
+            | "git_log"
+            | "git_list_branches"
             | "git_init"
             | "git_add"
             | "git_commit"
@@ -118,7 +125,16 @@ impl ToolTimeoutConfig {
             | "db_transaction_rollback"
             | "multi_edit"
             | "apply_patch"
-            | "edit_exact_replace" => self.medium,
+            | "edit_exact_replace"
+            | "undo_get_summary"
+            | "undo_get_changes"
+            | "undo_last"
+            | "undo_change"
+            | "coding_checkpoint_create"
+            | "coding_checkpoint_list"
+            | "coding_checkpoint_rewind"
+            | "background_agent_start"
+            | "background_agent_cancel" => self.medium,
 
             // Slow tools (180s)
             "terminal_execute"
@@ -165,6 +181,12 @@ const DANGEROUS_TOOLS: &[&str] = &[
     "terminal_execute",
     "git_push",
     "github_create_repo",
+    "worktree_create",
+    "worktree_remove",
+    "undo_last",
+    "undo_change",
+    "coding_checkpoint_create",
+    "coding_checkpoint_rewind",
     "api_call",
     "api_upload",
     "cloud_upload",
@@ -237,6 +259,9 @@ impl ToolExecutor {
 
     fn promote_alias_arg(args: &mut HashMap<String, Value>, canonical: &str, aliases: &[&str]) {
         if Self::has_present_arg(args, canonical) {
+            for alias in aliases {
+                args.remove(*alias);
+            }
             return;
         }
 
@@ -244,6 +269,9 @@ impl ToolExecutor {
             if let Some(candidate) = args.get(*alias).cloned() {
                 if Self::value_is_present(&candidate) {
                     args.insert(canonical.to_string(), candidate);
+                    for consumed_alias in aliases {
+                        args.remove(*consumed_alias);
+                    }
                     return;
                 }
             }
@@ -261,7 +289,6 @@ impl ToolExecutor {
                 &["workdir", "working_directory", "directory", "path"],
             );
             Self::promote_alias_arg(args, "timeout_ms", &["timeout", "max_time_ms"]);
-            Self::promote_alias_arg(args, "shell", &["shell_type"]);
         }
 
         if normalized.starts_with("file_") {
@@ -306,7 +333,7 @@ impl ToolExecutor {
         }
 
         if normalized == "browser_wait_for_selector" {
-            Self::promote_alias_arg(args, "timeout", &["timeout_ms", "max_wait_ms"]);
+            Self::promote_alias_arg(args, "timeout_ms", &["timeout", "max_wait_ms"]);
         }
 
         if normalized == "browser_select_option" {
@@ -343,11 +370,15 @@ impl ToolExecutor {
             Self::promote_alias_arg(args, "pattern", &["query", "regex", "search", "text"]);
             Self::promote_alias_arg(args, "root", &["directory", "path", "cwd", "folder"]);
             Self::promote_alias_arg(args, "include_pattern", &["glob", "file_pattern", "filter"]);
+            Self::promote_alias_arg(args, "limit", &["head_limit", "max_results"]);
+            Self::promote_alias_arg(args, "offset", &["skip"]);
         }
 
         if normalized == "glob_search" {
             Self::promote_alias_arg(args, "pattern", &["query", "glob", "search"]);
             Self::promote_alias_arg(args, "root", &["directory", "path", "cwd", "folder"]);
+            Self::promote_alias_arg(args, "limit", &["head_limit", "max_results"]);
+            Self::promote_alias_arg(args, "offset", &["skip"]);
         }
 
         if normalized == "edit_exact_replace" {
@@ -1572,6 +1603,7 @@ impl ToolExecutor {
         match tool.id.as_str() {
             "file_read" => self.execute_file_read_tool(&args).await,
             "file_read_binary" => self.execute_file_read_binary_tool(&args).await,
+            "file_read_range" => self.execute_file_read_range_tool(&args).await,
             "file_write" => self.execute_file_write_tool(&args).await,
             "file_delete" => self.execute_file_delete_tool(&args).await,
             "ui_screenshot" => self.execute_ui_screenshot_tool(&args).await,
@@ -1627,9 +1659,22 @@ impl ToolExecutor {
             "document_create_pdf" => self.execute_document_create_pdf_tool(&args, &tool.id).await,
             "image_analyze" => self.execute_image_analyze_tool(&args).await,
             "git_status" => self.execute_git_status_tool(&args).await,
+            "git_diff" => self.execute_git_diff_tool(&args).await,
+            "git_log" => self.execute_git_log_tool(&args).await,
+            "git_list_branches" => self.execute_git_list_branches_tool(&args).await,
             "git_commit" => self.execute_git_commit_tool(&args).await,
             "git_clone" => self.execute_git_clone_tool(&args).await,
             "git_add" => self.execute_git_add_tool(&args).await,
+            "worktree_create" => self.execute_worktree_create_tool(&args).await,
+            "worktree_list" => self.execute_worktree_list_tool(&args).await,
+            "worktree_remove" => self.execute_worktree_remove_tool(&args).await,
+            "undo_get_summary" => self.execute_undo_get_summary_tool(&args).await,
+            "undo_get_changes" => self.execute_undo_get_changes_tool(&args).await,
+            "undo_last" => self.execute_undo_last_tool(&args).await,
+            "undo_change" => self.execute_undo_change_tool(&args).await,
+            "coding_checkpoint_create" => self.execute_coding_checkpoint_create_tool(&args).await,
+            "coding_checkpoint_list" => self.execute_coding_checkpoint_list_tool(&args).await,
+            "coding_checkpoint_rewind" => self.execute_coding_checkpoint_rewind_tool(&args).await,
             "schedule_reminder" => self.execute_schedule_reminder_tool(&args, &tool.id).await,
             "schedule_recurring_task" => {
                 self.execute_schedule_recurring_task_tool(&args, &tool.id)
@@ -1650,6 +1695,12 @@ impl ToolExecutor {
             "memory_forget" => self.execute_memory_forget_tool(&args, &tool.id).await,
             "conversation_search" => self.execute_conversation_search_tool(&args, &tool.id).await,
             "recent_chats" => self.execute_recent_chats_tool(&args, &tool.id).await,
+            "background_agent_start" => {
+                self.execute_background_agent_start_tool(&args, action_id)
+                    .await
+            }
+            "background_agent_get" => self.execute_background_agent_get_tool(&args).await,
+            "background_agent_cancel" => self.execute_background_agent_cancel_tool(&args).await,
             "browser_click" => self.execute_browser_tool("browser_click", args).await,
             "browser_extract" => self.execute_browser_tool("browser_extract", args).await,
             "api_download" => self.execute_api_download_tool(&args).await,

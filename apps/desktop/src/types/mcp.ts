@@ -58,15 +58,15 @@ export interface McpConfigLocation {
 export interface McpRegistryPackage {
   id: string;
   name: string;
-  version: string;
+  version?: string;
   description: string;
   author: string;
   category: 'automation' | 'data' | 'search' | 'productivity' | 'development' | 'integration';
   npm_package?: string;
   github?: string;
   tools: string[];
-  rating: number;
-  downloads: number;
+  rating?: number;
+  downloads?: number;
   installed: boolean;
 }
 
@@ -262,8 +262,8 @@ export interface McpBundle {
   tools: BundleTool[];
   configTemplate: DesktopMcpServerConfig;
   requiredCredentials: RequiredCredential[];
-  rating: number;
-  downloads: number;
+  rating?: number;
+  downloads?: number;
   verified: boolean;
   featured: boolean;
   tags: string[];

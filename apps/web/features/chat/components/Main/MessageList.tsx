@@ -225,7 +225,7 @@ function PlanBadgeEmptyState({
         <div className="w-16 h-16 mx-auto bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
           <Bot className="h-8 w-8 text-white" aria-hidden="true" />
         </div>
-        <h2 className="text-2xl font-semibold text-foreground">Welcome to AGI Workforce</h2>
+        <h2 className="text-2xl font-semibold text-foreground">Welcome to AGI</h2>
         <p className="text-muted-foreground">Start a conversation by typing a message below...</p>
         <div className="space-y-2 text-sm text-left">
           <p className="font-medium text-foreground">Try asking me to:</p>

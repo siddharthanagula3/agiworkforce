@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-05-21",
+  "lastUpdated": "2026-06-05",
   "repoWide": {
     "install": "pnpm install",
     "lint": "pnpm lint",
@@ -20,6 +20,7 @@
     "laneOwnershipPathPreview": "node scripts/check-lane-ownership.mjs --lane <lane-id> --changed-file <path>",
     "generatedArtifacts": "pnpm check:generated-artifacts",
     "reportRetention": "pnpm check:report-retention",
+    "nonMdArtifacts": "pnpm check:non-md-artifacts",
     "neonMigrations": "pnpm check:neon-migrations",
     "ciGuardrails": "pnpm check:ci-guardrails",
     "codeowners": "pnpm check:codeowners",

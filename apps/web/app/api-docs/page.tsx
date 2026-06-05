@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'API docs | AGI',
+  title: 'API docs',
   description:
     'API reference for the AGI gateway. OpenAI-compatible endpoints, BYOK across providers.',
   alternates: { canonical: 'https://agiworkforce.com/api-docs' },
@@ -28,10 +28,13 @@ export default function ApiDocsPage() {
           <div className="agi-terminal">
             <div className="agi-terminal-bar">curl example</div>
             <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$</span>curl
-              https://agiworkforce.com/api/llm/v1/chat/completions \{'\n'}
-              {'    '}-H &quot;Authorization: Bearer $YOUR_KEY&quot; \{'\n'}
-              {'    '}-H &quot;Content-Type: application/json&quot; \{'\n'}
+              <span className="agi-terminal-prompt">$ </span>curl
+              https://agiworkforce.com/api/llm/v1/chat/completions {'\\'}
+              {'\n'}
+              {'    '}-H &quot;Authorization: Bearer $YOUR_KEY&quot; {'\\'}
+              {'\n'}
+              {'    '}-H &quot;Content-Type: application/json&quot; {'\\'}
+              {'\n'}
               {'    '}-d &apos;{'{'} &quot;model&quot;: &quot;auto&quot;, &quot;messages&quot;: [
               {'{'}&quot;role&quot;:&quot;user&quot;,&quot;content&quot;:&quot;hello&quot;{'}'}]{' '}
               {'}'}&apos;
@@ -41,19 +44,15 @@ export default function ApiDocsPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Reference</p>
           <p className="agi-page-lede" style={{ marginTop: 0, marginBottom: 24 }}>
-            Full OpenAPI spec, Postman collection, and SDK examples are on GitHub.
+            The public OpenAPI bundle, Postman collection, and SDK examples open with the July 12
+            release. For now, use the quick-start route and BYOK setup guide.
           </p>
           <div className="agi-cta-row">
-            <a
-              href="https://github.com/siddharthanagula3/agiworkforce/tree/main/docs/api"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="agi-cta-primary"
-            >
-              View on GitHub
-            </a>
-            <Link href="/byok" className="agi-cta-ghost">
-              How BYOK works →
+            <Link href="/docs/byok-env" className="agi-cta-primary">
+              BYOK setup
+            </Link>
+            <Link href="/waitlist" className="agi-cta-ghost">
+              Join API waitlist →
             </Link>
           </div>
         </section>

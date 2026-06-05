@@ -5,7 +5,10 @@ Good. The web supabase.ts doesn't exist (codebase may have been refactored). Let
 > (see CLAUDE.md / AGENTS.md critical rules). The red-team applied pre-Next-16 knowledge; renaming would
 > BREAK routing. Do NOT action CRIT-1. The remaining still-open findings below stand.
 > Several CRIT/HIGH items reference Supabase (CRIT-3/6, HIGH-1/2) — those are now N/A: Supabase was fully
-> removed (cloud = Clerk+Neon), confirmed by audit/supabase-hunt.md + clerk-neon-completeness.md.
+> removed (cloud = Clerk+Neon), per the dated May 2026 audit inputs now archived at
+> `docs/archive/2026-06-05-doc-reset/audit/supabase-hunt.md` and
+> `docs/archive/2026-06-05-doc-reset/audit/clerk-neon-completeness.md`.
+> Re-verify source before treating those claims as current.
 
 ## SECURITY-SUMMARY-2026-05-30.md
 

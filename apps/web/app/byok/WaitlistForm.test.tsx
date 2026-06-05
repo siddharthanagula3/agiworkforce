@@ -31,7 +31,7 @@ function submitForm() {
   fireEvent.change(screen.getByRole('textbox'), {
     target: { value: 'user@example.com' },
   });
-  fireEvent.click(screen.getByRole('button', { name: /join/i }));
+  fireEvent.click(screen.getByRole('button', { name: /request cloud access/i }));
 }
 
 // ---------------------------------------------------------------------------

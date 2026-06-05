@@ -37,6 +37,7 @@ function isUndefinedTable(error: unknown): boolean {
 // Allowlist of valid connector IDs to prevent arbitrary data injection
 const VALID_CONNECTOR_IDS = new Set([
   'gmail',
+  'google-calendar',
   'google-drive',
   'notion',
   'slack',

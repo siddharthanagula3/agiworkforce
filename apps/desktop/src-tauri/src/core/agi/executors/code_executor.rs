@@ -1,17 +1,21 @@
 //! Code execution executor.
 //!
-//! Handles code execution in isolated sandbox environments and code analysis
-//! operations. This executor provides a safe way for the AGI to run code
-//! while preventing dangerous operations.
+//! Handles code execution in temporary AGI workspaces and code analysis
+//! operations. This executor reduces risk with approval, path/env checks,
+//! bounded execution, and dangerous-pattern validation.
 //!
 //! # Security Model
 //!
-//! Code execution is performed in an isolated sandbox with:
-//! - Restricted file system access (sandbox workspace only)
-//! - Optional network isolation
-//! - Memory limits
+//! Code execution is performed in a temporary workspace with:
+//! - Script and generated-file writes kept under the workspace path
+//! - Advisory network reduction when network is disabled
+//! - Advisory memory limit metadata
 //! - Execution timeouts
 //! - Dangerous pattern detection before execution
+//!
+//! This is not an OS-level process sandbox. Absolute-path access and network
+//! syscalls are not guaranteed to be contained without an external sandbox
+//! runtime.
 //!
 //! # Supported Languages
 //!
@@ -26,10 +30,9 @@
 //!
 //! # Undo Capability
 //!
-//! Code execution is inherently not reversible, but the sandbox isolation
-//! ensures that no persistent changes are made to the user's system.
-//! All files created during execution are contained within the sandbox
-//! and cleaned up after execution completes.
+//! Code execution is inherently not reversible. The temporary workspace is
+//! cleaned up after execution, but this executor does not guarantee that
+//! arbitrary code cannot touch paths outside that workspace.
 
 use super::{ExecutorContext, ToolExecutor};
 use crate::core::agi::ExecutionContext;
@@ -50,12 +53,12 @@ const DEFAULT_MEMORY_LIMIT_MB: u64 = 512;
 
 /// Executor for code execution and analysis operations.
 ///
-/// Provides isolated code execution via the AGI sandbox system and
+/// Provides temporary-workspace code execution via the AGI sandbox system and
 /// code structure analysis capabilities.
 ///
 /// # Tools
 ///
-/// - `code_execute`: Execute code in an isolated sandbox
+/// - `code_execute`: Execute code in a temporary AGI workspace
 /// - `code_analyze`: Analyze code structure and patterns
 pub struct CodeExecutor;
 
@@ -93,13 +96,13 @@ impl CodeExecutor {
             severity: Severity::High,
         },
         DangerousPattern {
-            pattern: "eval(",
+            pattern: concat!("eval", "("),
             language: None, // All languages
             description: "Dynamic code evaluation",
             severity: Severity::High,
         },
         DangerousPattern {
-            pattern: "exec(",
+            pattern: concat!("exec", "("),
             language: None,
             description: "Dynamic code execution",
             severity: Severity::High,
@@ -312,7 +315,7 @@ impl CodeExecutor {
         Ok(())
     }
 
-    /// Execute code in an isolated sandbox.
+    /// Execute code in a temporary AGI workspace.
     ///
     /// # Parameters
     ///
@@ -331,9 +334,9 @@ impl CodeExecutor {
     /// # Security
     ///
     /// - Code is validated for dangerous patterns before execution
-    /// - Execution occurs in an isolated sandbox
-    /// - Network access is disabled by default
-    /// - Memory and time limits are enforced
+    /// - Execution occurs in a temporary workspace
+    /// - Network access is reduced by advisory environment controls by default
+    /// - Time limits are enforced, while memory limits are advisory metadata
     async fn execute_code(
         &self,
         parameters: &HashMap<String, Value>,
@@ -405,7 +408,7 @@ impl CodeExecutor {
 
         // Emit progress: creating sandbox
         if let Some(ref app) = context.app_handle {
-            emit_tool_progress(app, &tool_id, 0.1, Some("Creating isolated sandbox..."));
+            emit_tool_progress(app, &tool_id, 0.1, Some("Creating temporary workspace..."));
         }
 
         // Create sandbox manager and execute code
@@ -418,7 +421,10 @@ impl CodeExecutor {
                 app,
                 &tool_id,
                 0.3,
-                Some(&format!("Executing {} code in sandbox...", language)),
+                Some(&format!(
+                    "Executing {} code in temporary workspace...",
+                    language
+                )),
             );
         }
 
@@ -869,7 +875,7 @@ impl ToolExecutor for CodeExecutor {
     }
 
     fn description(&self) -> &'static str {
-        "Executes code in isolated sandboxes and analyzes code structure with security validation"
+        "Executes code in temporary workspaces and analyzes code structure with security validation"
     }
 
     async fn execute(

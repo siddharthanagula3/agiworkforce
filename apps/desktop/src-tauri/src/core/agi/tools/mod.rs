@@ -8,15 +8,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-/// Bug #54 fix: Returns the platform-appropriate default shell name.
-fn default_shell() -> &'static str {
-    match std::env::consts::OS {
-        "windows" => "powershell",
-        "macos" => "zsh",
-        _ => "bash", // Linux and other Unix-like systems
-    }
-}
-
 pub struct ToolRegistry {
     tools: Mutex<HashMap<String, Tool>>,
     capabilities_index: Mutex<HashMap<ToolCapability, Vec<String>>>,
@@ -96,7 +87,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "file_read".to_string(),
             name: "Read File".to_string(),
-            description: "Read content from a file".to_string(),
+            description: "Read content from a file. Returns file_version.sha256 for stale-read protection; pass it as expected_sha256 when editing or overwriting this file.".to_string(),
             capabilities: vec![ToolCapability::FileRead, ToolCapability::TextProcessing],
             parameters: vec![ToolParameter {
                 name: "path".to_string(),
@@ -136,7 +127,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "file_write".to_string(),
             name: "Write File".to_string(),
-            description: "Write content to a file".to_string(),
+            description: "Write content to a file. For an existing file, expected_sha256 is required and must match file_version.sha256 returned by file_read or file_read_range.".to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
             parameters: vec![
                 ToolParameter {
@@ -151,6 +142,13 @@ impl ToolRegistry {
                     parameter_type: ParameterType::String,
                     required: true,
                     description: "Content to write".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "expected_sha256".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Required for existing files: file_version.sha256 from the latest read of the file. Prevents overwriting stale content.".to_string(),
                     default: None,
                 },
             ],
@@ -185,14 +183,14 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "ui_click".to_string(),
             name: "Click UI Element".to_string(),
-            description: "Click on a UI element using various methods".to_string(),
+            description: "Click on a desktop UI target by coordinates, native element_id, or visible text".to_string(),
             capabilities: vec![ToolCapability::UIAutomation],
             parameters: vec![
                 ToolParameter {
                     name: "target".to_string(),
                     parameter_type: ParameterType::Object,
                     required: true,
-                    description: "Target element (coordinates, UIA, image, or text)".to_string(),
+                    description: "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}".to_string(),
                     default: None,
                 },
                 ToolParameter {
@@ -214,14 +212,14 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "ui_type".to_string(),
             name: "Type Text".to_string(),
-            description: "Type text into a UI element".to_string(),
+            description: "Type text into a desktop UI target by coordinates, native element_id, or visible text".to_string(),
             capabilities: vec![ToolCapability::UIAutomation, ToolCapability::TextProcessing],
             parameters: vec![
                 ToolParameter {
                     name: "target".to_string(),
                     parameter_type: ParameterType::Object,
                     required: true,
-                    description: "Target element".to_string(),
+                    description: "Target object: {\"coordinates\":{\"x\":number,\"y\":number}}, {\"x\":number,\"y\":number}, {\"element_id\":\"...\"}, or {\"text\":\"...\"}".to_string(),
                     default: None,
                 },
                 ToolParameter {
@@ -724,7 +722,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "browser_execute_async_js".to_string(),
             name: "Execute Async JavaScript".to_string(),
-            description: "Execute async JavaScript in the browser and return the result"
+            description: "Execute JavaScript in the browser and return the result. The script runs as an async function body, so use return to send a value back."
                 .to_string(),
             capabilities: vec![
                 ToolCapability::BrowserAutomation,
@@ -739,39 +737,11 @@ impl ToolRegistry {
                     default: None,
                 },
                 ToolParameter {
-                    name: "args".to_string(),
-                    parameter_type: ParameterType::Array,
-                    required: false,
-                    description: "Arguments passed to the script".to_string(),
-                    default: None,
-                },
-                ToolParameter {
                     name: "timeout_ms".to_string(),
                     parameter_type: ParameterType::Integer,
                     required: false,
-                    description: "Execution timeout in milliseconds".to_string(),
+                    description: "Execution timeout in milliseconds (default 30000, max 120000)".to_string(),
                     default: Some(serde_json::json!(30000)),
-                },
-                ToolParameter {
-                    name: "retry_count".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Retry attempts on failure".to_string(),
-                    default: Some(serde_json::json!(3)),
-                },
-                ToolParameter {
-                    name: "retry_delay_ms".to_string(),
-                    parameter_type: ParameterType::Integer,
-                    required: false,
-                    description: "Delay between retries in milliseconds".to_string(),
-                    default: Some(serde_json::json!(1000)),
-                },
-                ToolParameter {
-                    name: "await_promise".to_string(),
-                    parameter_type: ParameterType::Boolean,
-                    required: false,
-                    description: "Await promise results (default: true)".to_string(),
-                    default: Some(serde_json::json!(true)),
                 },
                 ToolParameter {
                     name: "tab_id".to_string(),
@@ -1649,7 +1619,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "image_generate".to_string(),
             name: "Generate Image".to_string(),
-            description: "Generate an image using AI (GPT Image 2, Imagen 4, SDXL)".to_string(),
+            description: "Generate an image using a configured AI image provider".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::APICall],
             parameters: vec![
                 ToolParameter {
@@ -1688,7 +1658,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "video_generate".to_string(),
             name: "Generate Video".to_string(),
-            description: "Generate a video using AI (Google Veo)".to_string(),
+            description: "Generate a video using a configured AI video provider".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::APICall],
             parameters: vec![
                 ToolParameter {
@@ -1704,6 +1674,21 @@ impl ToolRegistry {
                     required: false,
                     description: "Duration in seconds (default: 5)".to_string(),
                     default: Some(serde_json::json!(5)),
+                },
+                ToolParameter {
+                    name: "resolution".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Requested output resolution when supported by the provider"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "provider".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Video provider ID when configured".to_string(),
+                    default: None,
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -1724,10 +1709,31 @@ impl ToolRegistry {
             ],
             parameters: vec![
                 ToolParameter {
-                    name: "to".to_string(),
-                    parameter_type: ParameterType::String,
+                    name: "account_id".to_string(),
+                    parameter_type: ParameterType::Integer,
                     required: true,
-                    description: "Recipient email address".to_string(),
+                    description: "Connected email account ID".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "to".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "Recipient email addresses. Each item may be a string or {email, name} object".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "cc".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "CC recipients as strings or {email, name} objects".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "bcc".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "BCC recipients as strings or {email, name} objects".to_string(),
                     default: None,
                 },
                 ToolParameter {
@@ -1741,7 +1747,7 @@ impl ToolRegistry {
                     name: "body".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
-                    description: "Email body".to_string(),
+                    description: "Plain text email body".to_string(),
                     default: None,
                 },
             ],
@@ -1764,9 +1770,16 @@ impl ToolRegistry {
             parameters: vec![
                 ToolParameter {
                     name: "account_id".to_string(),
-                    parameter_type: ParameterType::String,
+                    parameter_type: ParameterType::Integer,
                     required: true,
                     description: "Email account ID".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "folder".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Folder to fetch from, such as INBOX".to_string(),
                     default: None,
                 },
                 ToolParameter {
@@ -1802,6 +1815,13 @@ impl ToolRegistry {
                     default: None,
                 },
                 ToolParameter {
+                    name: "calendar_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Calendar ID within the connected account".to_string(),
+                    default: None,
+                },
+                ToolParameter {
                     name: "title".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
@@ -1812,7 +1832,43 @@ impl ToolRegistry {
                     name: "start_time".to_string(),
                     parameter_type: ParameterType::String,
                     required: true,
-                    description: "Event start time (ISO 8601)".to_string(),
+                    description: "Event start time as RFC3339, for example 2026-06-04T15:00:00Z"
+                        .to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "end_time".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Event end time as RFC3339".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "description".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Event description".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "location".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Event location".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "attendees".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "Attendee email addresses".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "timezone".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Timezone label for event rendering, default UTC".to_string(),
                     default: None,
                 },
             ],
@@ -1832,13 +1888,43 @@ impl ToolRegistry {
                 ToolCapability::NetworkOperation,
                 ToolCapability::DataAnalysis,
             ],
-            parameters: vec![ToolParameter {
-                name: "account_id".to_string(),
-                parameter_type: ParameterType::String,
-                required: true,
-                description: "Calendar account ID".to_string(),
-                default: None,
-            }],
+            parameters: vec![
+                ToolParameter {
+                    name: "account_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Calendar account ID".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "calendar_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Calendar ID within the connected account".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "start_time".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Range start time as RFC3339".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "end_time".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Range end time as RFC3339".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "max_results".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum number of events to fetch, 1 to 250".to_string(),
+                    default: Some(serde_json::Value::Number(serde_json::Number::from(10))),
+                },
+            ],
             estimated_resources: ResourceUsage {
                 cpu_percent: 2.0,
                 memory_mb: 30,
@@ -1940,6 +2026,42 @@ impl ToolRegistry {
                     parameter_type: ParameterType::String,
                     required: true,
                     description: "Task title".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "description".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Task description".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "status".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Task status: todo, in_progress, completed, blocked, or cancelled"
+                        .to_string(),
+                    default: Some(serde_json::Value::String("todo".to_string())),
+                },
+                ToolParameter {
+                    name: "due_date".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional due date as RFC3339".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "priority".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Optional priority from 0 to 5".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "tags".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: false,
+                    description: "Optional task tags".to_string(),
                     default: None,
                 },
             ],
@@ -2355,7 +2477,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "schedule_recurring_task".to_string(),
             name: "Schedule Recurring Task".to_string(),
-            description: "Schedule a task to run on a recurring schedule. Examples: 'every morning at 8am summarize my calendar', 'every Friday at 5pm create weekly report'".to_string(),
+            description: "Schedule an AGI task prompt to run on a recurring schedule. Examples: 'every morning at 8am summarize my calendar', 'every Friday at 5pm create weekly report'".to_string(),
             capabilities: vec![ToolCapability::SystemOperation],
             parameters: vec![
                 ToolParameter {
@@ -2425,8 +2547,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "terminal_execute".to_string(),
             name: "Execute Terminal Command".to_string(),
-            description: "Execute a command in the system terminal (bash/powershell/cmd)"
-                .to_string(),
+            description: "Execute a command in the user's system default terminal shell".to_string(),
             capabilities: vec![
                 ToolCapability::CodeExecution,
                 ToolCapability::SystemOperation,
@@ -2447,22 +2568,20 @@ impl ToolRegistry {
                     default: None,
                 },
                 ToolParameter {
-                    name: "shell".to_string(),
-                    parameter_type: ParameterType::String,
-                    required: false,
-                    description: "Shell to execute command in (bash|zsh|powershell|cmd|fish|sh)"
-                        .to_string(),
-                    // Bug #54 fix: Select platform-appropriate default shell instead
-                    // of hardcoding "powershell" which is wrong on macOS/Linux.
-                    default: Some(serde_json::json!(default_shell())),
-                },
-                ToolParameter {
                     name: "timeout_ms".to_string(),
                     parameter_type: ParameterType::Integer,
                     required: false,
-                    description: "Timeout before the command is aborted (defaults to 60s)"
+                    description: "Timeout before the command is aborted (default 60000, max 300000)"
                         .to_string(),
                     default: Some(serde_json::json!(60000)),
+                },
+                ToolParameter {
+                    name: "max_output_bytes".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum stdout/stderr bytes captured and returned (default 30000, max 150000)"
+                        .to_string(),
+                    default: Some(serde_json::json!(30000)),
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -2509,9 +2628,9 @@ impl ToolRegistry {
                 ToolParameter {
                     name: "files".to_string(),
                     parameter_type: ParameterType::Array,
-                    required: true,
+                    required: false,
                     description: "Files to add (use ['.'] for all files)".to_string(),
-                    default: None,
+                    default: Some(serde_json::json!(["."])),
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -2598,8 +2717,8 @@ impl ToolRegistry {
             parameters: vec![ToolParameter {
                 name: "path".to_string(),
                 parameter_type: ParameterType::FilePath,
-                required: true,
-                description: "Repository path".to_string(),
+                required: false,
+                description: "Repository path (defaults to active project folder)".to_string(),
                 default: None,
             }],
             estimated_resources: ResourceUsage {
@@ -2608,6 +2727,359 @@ impl ToolRegistry {
                 network_mb: 0.0,
             },
             dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_diff".to_string(),
+            name: "Git Diff".to_string(),
+            description: "Read tracked Git diff content for the working tree or staged index. Does not include untracked file contents.".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Repository path (defaults to active project folder)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "file_path".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional repository-relative file path to diff".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "staged".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "When true, return staged/index diff instead of working-tree diff".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "max_bytes".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum diff content bytes returned across files (default 120000, max 300000)".to_string(),
+                    default: Some(serde_json::json!(120000)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["git_status".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_log".to_string(),
+            name: "Git Log".to_string(),
+            description: "Read recent Git commit history from the active repository without changing repository state.".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::CodeAnalysis],
+            parameters: vec![
+                ToolParameter {
+                    name: "path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Repository path (defaults to active project folder)".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum commits to return (default 20, max 100)".to_string(),
+                    default: Some(serde_json::json!(20)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["git_status".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "git_list_branches".to_string(),
+            name: "List Git Branches".to_string(),
+            description: "Read local Git branch names, current-branch flag, and last commit hash without changing repository state.".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation, ToolCapability::CodeAnalysis],
+            parameters: vec![ToolParameter {
+                name: "path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: false,
+                description: "Repository path (defaults to active project folder)".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["git_status".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "worktree_create".to_string(),
+            name: "Create Git Worktree".to_string(),
+            description: "Create or resume an AGI-managed git worktree under the active repository. This isolates files in a separate git worktree directory; it is not an OS sandbox.".to_string(),
+            capabilities: vec![
+                ToolCapability::FileWrite,
+                ToolCapability::CodeAnalysis,
+                ToolCapability::SystemOperation,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "slug".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Worktree slug. Slash-separated segments are allowed; each segment may contain letters, digits, dots, underscores, and dashes. Maximum 64 characters.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "repo_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Repository path. Defaults to the active project folder.".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["git_status".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "worktree_list".to_string(),
+            name: "List Git Worktrees".to_string(),
+            description:
+                "List AGI-managed git worktrees for the active repository without changing files."
+                    .to_string(),
+            capabilities: vec![
+                ToolCapability::CodeAnalysis,
+                ToolCapability::SystemOperation,
+            ],
+            parameters: vec![ToolParameter {
+                name: "repo_path".to_string(),
+                parameter_type: ParameterType::FilePath,
+                required: false,
+                description: "Repository path. Defaults to the active project folder.".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "worktree_remove".to_string(),
+            name: "Remove Git Worktree".to_string(),
+            description: "Remove an AGI-managed git worktree. Dirty worktrees are refused unless force is true after explicit approval; branch deletion is separate and opt-in.".to_string(),
+            capabilities: vec![
+                ToolCapability::FileWrite,
+                ToolCapability::CodeAnalysis,
+                ToolCapability::SystemOperation,
+            ],
+            parameters: vec![
+                ToolParameter {
+                    name: "slug".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Worktree slug returned by worktree_create or worktree_list".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "repo_path".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Repository path. Defaults to the active project folder.".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "force".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Allow removal of a dirty worktree only after explicit approval".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "delete_branch".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Delete the AGI-managed branch after removing the worktree".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 5.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["worktree_list".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "undo_get_summary".to_string(),
+            name: "Get Undo Summary".to_string(),
+            description:
+                "List counts and recent reversible AGI file/system changes without changing files."
+                    .to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "task_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Optional task/session id to filter undoable changes".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "undo_get_changes".to_string(),
+            name: "List Undoable Changes".to_string(),
+            description: "List recent reversible AGI changes without applying an undo. Use undo_change or undo_last only after user approval.".to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "task_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional task/session id to filter undoable changes".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum changes to return (default 20, max 50)".to_string(),
+                    default: Some(serde_json::json!(20)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "undo_last".to_string(),
+            name: "Undo Last Change".to_string(),
+            description: "Restore the most recent reversible AGI change. Requires user confirmation because it writes files or changes local state.".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "task_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: false,
+                description: "Optional task/session id to scope the undo".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["undo_get_changes".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "undo_change".to_string(),
+            name: "Undo Specific Change".to_string(),
+            description: "Restore one reversible AGI change by id. Requires user confirmation because it writes files or changes local state.".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "change_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Change id returned by undo_get_changes".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["undo_get_changes".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "coding_checkpoint_create".to_string(),
+            name: "Create Coding Checkpoint".to_string(),
+            description: "Snapshot explicit text files into AGI's local checkpoint store so they can be restored later. This persists file contents locally and requires confirmation.".to_string(),
+            capabilities: vec![ToolCapability::FileRead, ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "name".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Human-readable checkpoint name".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "paths".to_string(),
+                    parameter_type: ParameterType::Array,
+                    required: true,
+                    description: "One to twenty file paths to snapshot".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 3.0,
+                memory_mb: 30,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["file_read".to_string()],
+        })?;
+
+        self.register_tool(Tool {
+            id: "coding_checkpoint_list".to_string(),
+            name: "List Coding Checkpoints".to_string(),
+            description:
+                "List AGI named file checkpoints without returning snapshotted file contents."
+                    .to_string(),
+            capabilities: vec![ToolCapability::SystemOperation],
+            parameters: vec![],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "coding_checkpoint_rewind".to_string(),
+            name: "Rewind To Coding Checkpoint".to_string(),
+            description: "Restore files to a named AGI coding checkpoint. Requires user confirmation because it writes files.".to_string(),
+            capabilities: vec![ToolCapability::FileWrite, ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "checkpoint_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Checkpoint id returned by coding_checkpoint_create or coding_checkpoint_list".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 2.0,
+                memory_mb: 20,
+                network_mb: 0.0,
+            },
+            dependencies: vec!["coding_checkpoint_list".to_string()],
         })?;
 
         self.register_tool(Tool {
@@ -2714,7 +3186,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "media_generate_image".to_string(),
             name: "Generate Image".to_string(),
-            description: "Generate images using AI (GPT Image 2, Imagen 4, SDXL)".to_string(),
+            description: "Generate images using a configured AI image provider".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
             parameters: vec![
                 ToolParameter {
@@ -2750,7 +3222,7 @@ impl ToolRegistry {
         self.register_tool(Tool {
             id: "media_generate_video".to_string(),
             name: "Generate Video".to_string(),
-            description: "Generate video using AI (Veo 3.1) - Requires Pro/Max plan".to_string(),
+            description: "Generate video using a configured AI video provider".to_string(),
             capabilities: vec![ToolCapability::ImageProcessing, ToolCapability::Planning],
             parameters: vec![
                 ToolParameter {
@@ -2819,6 +3291,13 @@ impl ToolRegistry {
                     required: false,
                     description: "Optional exact-name exclude patterns (e.g. [\"node_modules\", \".git\"])".to_string(),
                     default: None,
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Directory listing timeout in milliseconds (default 30000, max 300000)".to_string(),
+                    default: Some(serde_json::json!(30000)),
                 },
             ],
             estimated_resources: ResourceUsage {
@@ -2890,6 +3369,22 @@ impl ToolRegistry {
                     description: "Lines of context before and after each match".to_string(),
                     default: None,
                 },
+                ToolParameter {
+                    name: "limit".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum entries to return (default 250, max 1000)".to_string(),
+                    default: Some(serde_json::json!(250)),
+                },
+                ToolParameter {
+                    name: "offset".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description:
+                        "Number of matching entries to skip before returning results (default 0)"
+                            .to_string(),
+                    default: Some(serde_json::json!(0)),
+                },
             ],
             estimated_resources: ResourceUsage {
                 cpu_percent: 30.0,
@@ -2930,6 +3425,14 @@ impl ToolRegistry {
                     description: "Max results (default 200, max 1000)".to_string(),
                     default: Some(serde_json::json!(200)),
                 },
+                ToolParameter {
+                    name: "offset".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Number of matches to skip before returning results (default 0)"
+                        .to_string(),
+                    default: Some(serde_json::json!(0)),
+                },
             ],
             estimated_resources: ResourceUsage {
                 cpu_percent: 10.0,
@@ -2946,7 +3449,9 @@ impl ToolRegistry {
             description: "Read a file starting from a specific line number. Each line is \
                 prefixed with its 1-based line number (e.g. \"42: content\"). Use `offset` \
                 to start from a specific line and `limit` to control how many lines to return. \
-                Essential for navigating large files without loading them fully into context."
+                Essential for navigating large files without loading them fully into context. \
+                Returns file_version.sha256; read the full relevant file before editing and pass \
+                the latest hash as expected_sha256."
                 .to_string(),
             capabilities: vec![ToolCapability::FileRead, ToolCapability::CodeAnalysis],
             parameters: vec![
@@ -3020,24 +3525,132 @@ impl ToolRegistry {
             id: "todo_write".to_string(),
             name: "TodoWrite (Task List)".to_string(),
             description: "Create or update a structured task list. Use to track multi-step \
-                progress. Each todo item has an optional id, a required title, and a status \
+                progress. Each todo item has an optional id, a required title or description, and a status \
                 (pending, in_progress, or completed). Calling this tool replaces the \
-                entire task list displayed to the user."
+                entire task list displayed to the user. Use an empty array to clear the list."
                 .to_string(),
             capabilities: vec![ToolCapability::Planning, ToolCapability::TextProcessing],
             parameters: vec![ToolParameter {
                 name: "todos".to_string(),
                 parameter_type: ParameterType::Array,
                 required: true,
-                description: "Array of todo items. Each item: {id?: string, title: string, \
+                description: "Array of todo items. Each item: {id?: string, title?: string, description?: string, \
                     status?: 'pending' | 'in_progress' | 'completed'}. Defaults: \
-                    id auto-generated, status 'pending'."
+                    id auto-generated, status 'pending'. Empty array clears the list."
                     .to_string(),
                 default: None,
             }],
             estimated_resources: ResourceUsage {
                 cpu_percent: 1.0,
                 memory_mb: 4,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        // ── Background Agent Control ─────────────────────────────────────────
+        self.register_tool(Tool {
+            id: "background_agent_start".to_string(),
+            name: "Start Background Agent".to_string(),
+            description: "Start a desktop background agent for a bounded standalone task. Returns an agent ID that can be checked with background_agent_get or stopped with background_agent_cancel.".to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::SystemOperation],
+            parameters: vec![
+                ToolParameter {
+                    name: "goal".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Specific task for the background agent to perform".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "working_directory".to_string(),
+                    parameter_type: ParameterType::FilePath,
+                    required: false,
+                    description: "Existing allowed directory where the background agent should work".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "custom_instructions".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Additional bounded instructions for the background agent".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "priority".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Queue priority from 0 to 255, default 5".to_string(),
+                    default: Some(serde_json::json!(5)),
+                },
+                ToolParameter {
+                    name: "conversation_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Optional source conversation identifier. If omitted, the tool call ID is used.".to_string(),
+                    default: None,
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 20.0,
+                memory_mb: 250,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "background_agent_get".to_string(),
+            name: "Get Background Agent".to_string(),
+            description: "Read sanitized status, progress, and final summary for a desktop background agent without exposing hidden conversation snapshots.".to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::TextProcessing],
+            parameters: vec![
+                ToolParameter {
+                    name: "agent_id".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "Background agent ID returned by background_agent_start or /agents".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "block".to_string(),
+                    parameter_type: ParameterType::Boolean,
+                    required: false,
+                    description: "Whether to wait for the agent to finish before returning".to_string(),
+                    default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "timeout_ms".to_string(),
+                    parameter_type: ParameterType::Integer,
+                    required: false,
+                    description: "Maximum wait time when block is true, default 30000, max 55000".to_string(),
+                    default: Some(serde_json::json!(30000)),
+                },
+            ],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
+                network_mb: 0.0,
+            },
+            dependencies: vec![],
+        })?;
+
+        self.register_tool(Tool {
+            id: "background_agent_cancel".to_string(),
+            name: "Cancel Background Agent".to_string(),
+            description: "Stop a queued, running, or paused desktop background agent by ID."
+                .to_string(),
+            capabilities: vec![ToolCapability::Planning, ToolCapability::SystemOperation],
+            parameters: vec![ToolParameter {
+                name: "agent_id".to_string(),
+                parameter_type: ParameterType::String,
+                required: true,
+                description: "Background agent ID to cancel".to_string(),
+                default: None,
+            }],
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 10,
                 network_mb: 0.0,
             },
             dependencies: vec![],
@@ -3140,10 +3753,12 @@ impl ToolRegistry {
             id: "multi_edit".to_string(),
             name: "Multi Edit".to_string(),
             description: "Atomic batch find-and-replace across one or more files. \
-                Takes an array of edits, each with {path, old_text, new_text}. \
-                All edits are applied atomically: if any edit fails, all changes \
-                are rolled back. Use this instead of multiple file_write calls \
-                when you need to make coordinated changes across files."
+                Takes an array of edits, each with {path, old_text, new_text, \
+                expected_sha256, replace_all?, expected_replacements?}. All edits are applied \
+                atomically: if any edit fails, all changes are rolled back. By \
+                default old_text must match exactly once. expected_sha256 must be \
+                file_version.sha256 from the latest read of that file. Use this instead of \
+                multiple file_write calls when you need coordinated changes."
                 .to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
             parameters: vec![ToolParameter {
@@ -3151,7 +3766,7 @@ impl ToolRegistry {
                 parameter_type: ParameterType::Array,
                 required: true,
                 description:
-                    "Array of edit objects, each with: path (string), old_text (string), new_text (string)"
+                    "Array of edit objects, each with: path (string), old_text (string), new_text (string), expected_sha256 (string from file_version.sha256), optional replace_all (boolean), optional expected_replacements (integer)"
                         .to_string(),
                 default: None,
             }],
@@ -3169,8 +3784,9 @@ impl ToolRegistry {
             name: "Apply Patch".to_string(),
             description: "Apply a unified diff patch to a file. Accepts standard \
                 unified diff format with @@ hunk headers, context lines (space prefix), \
-                removals (- prefix), and additions (+ prefix). Partial application is \
-                allowed: successfully applied hunks are kept even if some fail."
+                removals (- prefix), and additions (+ prefix). All hunks must apply \
+                cleanly before the file is written. For an existing file, expected_sha256 \
+                is required and must match the latest file_version.sha256 returned by a read."
                 .to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
             parameters: vec![
@@ -3186,6 +3802,13 @@ impl ToolRegistry {
                     parameter_type: ParameterType::String,
                     required: true,
                     description: "Unified diff patch content".to_string(),
+                    default: None,
+                },
+                ToolParameter {
+                    name: "expected_sha256".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: false,
+                    description: "Required for existing files: file_version.sha256 from the latest read of the file. Prevents applying a patch to stale content.".to_string(),
                     default: None,
                 },
             ],
@@ -3204,8 +3827,9 @@ impl ToolRegistry {
             description: "Perform exact string replacement in a file. Finds old_text in \
                 the file and replaces it with new_text. If old_text appears multiple \
                 times, returns an error with line numbers unless replace_all is true. \
-                Creates a checkpoint before editing for undo capability. Returns a \
-                unified diff of the changes."
+                expected_sha256 is required and must match file_version.sha256 from the \
+                latest file read. Creates a checkpoint before editing for undo capability. \
+                Returns a unified diff of the changes."
                 .to_string(),
             capabilities: vec![ToolCapability::FileWrite, ToolCapability::TextProcessing],
             parameters: vec![
@@ -3236,6 +3860,13 @@ impl ToolRegistry {
                     required: false,
                     description: "If true, replace all occurrences (default: false)".to_string(),
                     default: Some(serde_json::json!(false)),
+                },
+                ToolParameter {
+                    name: "expected_sha256".to_string(),
+                    parameter_type: ParameterType::String,
+                    required: true,
+                    description: "file_version.sha256 from the latest read of this file. Prevents editing stale content.".to_string(),
+                    default: None,
                 },
             ],
             estimated_resources: ResourceUsage {

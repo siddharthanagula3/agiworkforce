@@ -110,7 +110,7 @@ export default function PricingPage() {
             ))}
           </div>
 
-          {/* Billing cadence toggle — only relevant for waitlisted team tiers. */}
+          {/* Billing cadence toggle for hosted team tiers. */}
           {activeTab === 'team' && (
             <div className="agi-tier-toggle" role="tablist" aria-label={t('billingCadenceLabel')}>
               <button
@@ -207,8 +207,8 @@ export default function PricingPage() {
               <article className="agi-tier">
                 <h2 className="agi-tier-name">{t('hobby')}</h2>
                 <p className="agi-tier-price">
-                  <span className="agi-tier-price-num">{t('waitlistBadge')}</span>
-                  <span className="agi-tier-price-sub">{t('managedWaitlistSub')}</span>
+                  <span className="agi-tier-price-num">{t('free')}</span>
+                  <span className="agi-tier-price-sub">{t('webTrialSub')}</span>
                 </p>
                 <p className="agi-tier-body">{t('hobbyTierBody')}</p>
                 <ul className="agi-tier-features">
@@ -230,8 +230,8 @@ export default function PricingPage() {
                   </li>
                 </ul>
                 <div className="agi-tier-cta-group">
-                  <Link href="/pricing#waitlist" className="agi-tier-cta">
-                    {t('joinWaitlistCta')}
+                  <Link href="/chat" className="agi-tier-cta">
+                    {t('tryAgiCta')}
                   </Link>
                   <p className="agi-tier-cta-note">{t('managedWaitlistNote')}</p>
                 </div>
@@ -239,7 +239,7 @@ export default function PricingPage() {
             </div>
           )}
 
-          {/* Team tab: waitlisted tier cards */}
+          {/* Team tab: hosted tier cards */}
           {activeTab === 'team' && (
             <div className="agi-tier-grid">
               {(['pro', 'max'] as const).map((planId) => {
@@ -263,7 +263,7 @@ export default function PricingPage() {
                     </p>
                     <div className="agi-tier-cta-group">
                       <Link href="/pricing#waitlist" className="agi-tier-cta">
-                        {t('joinWaitlistCta')}
+                        {t('requestAccessCta')}
                       </Link>
                       <p className="agi-tier-cta-note">{t('waitlistNote')}</p>
                     </div>
@@ -333,7 +333,7 @@ export default function PricingPage() {
           style={{ borderTop: '1px solid var(--agi-rule)', paddingTop: 48 }}
         >
           <p className="agi-section-eyebrow">{t('waitlistBadge')}</p>
-          <h2 className="agi-section-h2">Join the Cloud invite list</h2>
+          <h2 className="agi-section-h2">Request hosted cloud access</h2>
           <p
             style={{
               maxWidth: 620,
@@ -343,11 +343,12 @@ export default function PricingPage() {
               marginBottom: 18,
             }}
           >
-            Cloud Managed is invite-only until subscription access, usage ledgering, abuse controls,
-            retention, and provider-cost controls are proven. Leave an email and we will notify you
-            when AGI Cloud opens for your surface.
+            Web users can already try AGI with a small Auto Economy cap. Request access here for
+            higher hosted capacity, team plans, and AGI-managed provider compute once usage
+            ledgering, abuse controls, retention, and provider-cost controls are enabled for your
+            account.
           </p>
-          <WaitlistForm source="billing" ctaLabel="Join Cloud waitlist" />
+          <WaitlistForm source="billing" ctaLabel="Request hosted access" />
         </section>
 
         {/* W1-05: Plan comparison table */}

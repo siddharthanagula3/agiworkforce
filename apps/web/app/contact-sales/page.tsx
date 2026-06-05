@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Contact sales | AGI',
+  title: 'Contact sales',
   description:
     'Reach a real human about AGI Enterprise. SSO, SCIM, audit log export, custom retention, named SLA.',
   alternates: { canonical: 'https://agiworkforce.com/contact-sales' },

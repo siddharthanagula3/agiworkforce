@@ -64,7 +64,7 @@ pub(super) fn extract_title(html: &str) -> Option<String> {
 /// Extract readable text content from HTML, stripping scripts, styles, tags,
 /// and normalizing whitespace. Returns a clean text representation suitable
 /// for LLM consumption.
-fn extract_text_from_html(html: &str, max_chars: usize) -> String {
+fn extract_text_from_html(html: &str, max_chars: usize) -> (String, bool) {
     // Remove scripts, styles, and comments first
     let no_scripts = SCRIPT_RE.replace_all(html, " ");
     let no_styles = STYLE_RE.replace_all(&no_scripts, " ");
@@ -96,7 +96,12 @@ fn extract_text_from_html(html: &str, max_chars: usize) -> String {
     let mut result = String::new();
     let mut prev_newline = false;
     let mut prev_space = false;
+    let mut truncated = false;
     for ch in decoded.chars() {
+        if result.len() >= max_chars {
+            truncated = true;
+            break;
+        }
         if ch == '\n' {
             if !prev_newline {
                 result.push('\n');
@@ -113,24 +118,27 @@ fn extract_text_from_html(html: &str, max_chars: usize) -> String {
             prev_newline = false;
             prev_space = false;
         }
-        if result.len() >= max_chars {
-            break;
-        }
     }
 
-    result.trim().to_string()
+    (result.trim().to_string(), truncated)
 }
 
 /// Process an HTTP response body: if it looks like HTML, extract readable text.
 /// Otherwise return as-is (truncated to max_chars).
-pub(super) fn process_response_body(body: &str, max_chars: usize) -> (String, bool) {
+pub(super) fn process_response_body(body: &str, max_chars: usize) -> (String, bool, bool) {
     if looks_like_html(body) {
-        let text = extract_text_from_html(body, max_chars);
-        (text, true)
+        let (text, truncated) = extract_text_from_html(body, max_chars);
+        (text, true, truncated)
     } else if body.len() > max_chars {
-        (body[..max_chars].to_string(), false)
+        let end = body
+            .char_indices()
+            .map(|(idx, _)| idx)
+            .take_while(|idx| *idx <= max_chars)
+            .last()
+            .unwrap_or(0);
+        (body[..end].to_string(), false, true)
     } else {
-        (body.to_string(), false)
+        (body.to_string(), false, false)
     }
 }
 
@@ -351,7 +359,7 @@ impl ToolExecutor {
         } else {
             None
         };
-        let (content, was_html) = process_response_body(&raw_body, 15000);
+        let (content, was_html, truncated) = process_response_body(&raw_body, 15000);
 
         let extracted = if let Some(sel) = selector {
             format!(
@@ -374,7 +382,7 @@ impl ToolExecutor {
                 "extracted": extracted,
                 "content_length": raw_len,
                 "was_html": was_html,
-                "truncated": content.len() < raw_len
+                "truncated": truncated
             }),
             error: if status >= 400 {
                 Some(format!("HTTP {}", status))

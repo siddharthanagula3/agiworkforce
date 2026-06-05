@@ -2,8 +2,7 @@
  * SkillMentionPicker Component
  *
  * Dropdown picker that appears when the user types "@" in the chat input.
- * Shows a filtered list of all 150 AI skills loaded from bundled .md files,
- * with keyboard navigation support.
+ * Shows a filtered list of loaded AI skills with keyboard navigation support.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -53,7 +52,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Load all 150 skills from bundled .md files (cached after first call)
+  // Load bundled skills from disk (cached after first call).
   const allSkills = useMemo(() => {
     try {
       return loadSkills().map(toMentionSkill);

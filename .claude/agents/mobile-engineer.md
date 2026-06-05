@@ -1,6 +1,6 @@
 ---
 name: mobile-engineer
-description: Owns apps/mobile (Expo 55 + React Native 0.84). Use for screens, navigation (drawer + tabs), Dispatch (mobile→desktop task delegation, mirrors Anthropic Dispatch), MMKV+biometric+secure storage chain, push notifications, models picker, onboarding, About, profile, billing UI. iOS bundle id com.agiworkforce.app, min iOS 12.0. ~41-42 .tsx screens.
+description: Owns apps/mobile. Use for screens, navigation, secure storage, model picker, onboarding, About, profile, billing UI, and Mobile local-only v1 guardrails. Verify current Expo/React Native versions, route counts, and feature flags from source before repeating them.
 tools: Read, Edit, Write, Bash, Grep, Glob, NotebookEdit, TodoWrite
 model: sonnet
 ---
@@ -13,21 +13,20 @@ Read-write only inside `/Users/siddhartha/Desktop/agiworkforce/apps/mobile/`. Re
 
 ## Stack
 
-- Expo 55 + React Native 0.84.1
+- Verify Expo and React Native versions from `apps/mobile/package.json`.
 - Bundle id: `com.agiworkforce.app` (iOS + Android), scheme `agiworkforce`
 - Navigation: drawer-based (pivoted from 5-tab; tabs retained for compat)
 - Storage: MMKV + biometric + secure storage chain
-- Dispatch: 597 LOC implementation matching Anthropic Dispatch (March 17, 2026 parity) + 181 LOC realtime
-- Models picker: `lib/models.ts` — 9 cloud providers via shared `@agiworkforce/types::getPickerModels`
+- Dispatch and cloud features are source-verified feature-flagged paths, not v1 availability claims.
+- Models picker uses shared model catalog helpers; verify provider count from `packages/types/src/models.json`.
 - About screen reads runtime version from `package.json` (don't hardcode)
 
 ## Locked platform facts
 
 - **License**: `apps/mobile/package.json` has `"license": "PROPRIETARY"`
-- **Provider count**: "10+ providers" in onboarding copy
-- **Tagline**: "Beyond one model. Beyond one surface. AGI in your hands." (slide 1 subtitle in onboarding)
-- **Tiers**: profile shows `subscriptionPlan` from API. Hobby+ unlocks Cloud mode.
-- **Modes**: Local (private, BYOK) + Cloud (shared chats, requires Hobby+). User can transfer Local↔Cloud.
+- **Mobile v1 mode**: Local-only by default, with Cloud invite/waitlist paths only when feature flags allow them.
+- **BYOK on mobile**: not a v1 product path unless `docs/current/source-of-truth.md` changes.
+- **Cloud**: do not claim Cloud availability, subscription unlocks, or Local↔Cloud transfer unless code and current docs prove it.
 - **About screen runtime**: derived from `package.json` `dependencies.expo` + `dependencies['react-native']`. Don't hardcode versions.
 - Models in code: use `packages/types/src/models.json` and provider capability metadata; do not paste model IDs from memory.
 

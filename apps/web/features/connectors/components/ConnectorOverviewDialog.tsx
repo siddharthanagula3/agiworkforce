@@ -13,7 +13,6 @@
 import { ShieldAlert, Wrench } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
-import { cn } from '@shared/lib/utils';
 import {
   Dialog,
   DialogContent,
@@ -22,6 +21,7 @@ import {
   DialogDescription,
 } from '@shared/ui/dialog';
 import { getConnectorTools } from '../config/connector-logos';
+import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -101,16 +101,7 @@ export function ConnectorOverviewDialog({
       <DialogContent className="border-white/[0.08] bg-[#0f0e0d] sm:max-w-lg">
         <DialogHeader>
           <div className="flex items-center gap-3">
-            {/* Connector icon */}
-            <div
-              className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-bold text-white shadow-lg',
-                connector.iconBg,
-              )}
-              aria-hidden="true"
-            >
-              {connector.iconEmoji ?? connector.iconText}
-            </div>
+            <OfficialConnectorLogo connector={connector} className="h-10 w-10 rounded-xl" />
             <div className="min-w-0">
               <DialogTitle className="text-base font-semibold text-foreground">
                 Connect {connector.name}

@@ -5,12 +5,15 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft, Layers, Link2, CheckCircle2, Circle, Puzzle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@shared/ui/card';
-import { Button } from '@shared/ui/button';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
-import { EXAMPLE_PLUGINS } from '@/features/plugins/data/plugins';
+import { PLUGIN_CATALOG } from '@/features/plugins/data/plugins';
 import type { Plugin } from '@/features/plugins/types';
+import { CONNECTORS } from '@/features/connectors/data/connectors';
+import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
+
+const CONNECTORS_BY_ID = new Map(CONNECTORS.map((connector) => [connector.id, connector]));
 
 function sourceBadgeClass(source: string): string {
   if (source === 'builtin') return 'bg-primary/15 text-primary border-primary/20';
@@ -61,14 +64,13 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
             {plugin.category}
           </p>
         </div>
-        <Button
-          disabled
-          variant="outline"
-          className="shrink-0"
-          aria-label={`${plugin.name} is preview only`}
+        <Link
+          href="/plugins#request-access"
+          className="shrink-0 rounded-md border border-border/70 px-3 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          aria-label={`Request hosted marketplace access for ${plugin.name}`}
         >
-          Preview only
-        </Button>
+          Request access
+        </Link>
       </div>
 
       {/* Description */}
@@ -120,6 +122,7 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
             <ul className="space-y-2">
               {plugin.connectors.map((connectorId) => {
                 const connected = !connectorsLoading && connectedIds.has(connectorId);
+                const connector = CONNECTORS_BY_ID.get(connectorId);
                 return (
                   <li
                     key={connectorId}
@@ -131,7 +134,15 @@ function PluginDetail({ plugin }: { plugin: Plugin }) {
                       ) : (
                         <Circle className="h-4 w-4 shrink-0 text-muted-foreground/50" />
                       )}
-                      <span className="text-sm capitalize text-foreground">{connectorId}</span>
+                      {connector && (
+                        <OfficialConnectorLogo
+                          connector={connector}
+                          className="h-6 w-6 rounded-md"
+                        />
+                      )}
+                      <span className="text-sm text-foreground">
+                        {connector?.name ?? connectorId}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       {connectorsLoading ? (
@@ -168,7 +179,7 @@ interface Props {
 
 export default function PluginDetailPage({ params }: Props) {
   const { id } = use(params);
-  const plugin = EXAMPLE_PLUGINS.find((p) => p.id === id);
+  const plugin = PLUGIN_CATALOG.find((p) => p.id === id);
 
   if (!plugin) {
     notFound();

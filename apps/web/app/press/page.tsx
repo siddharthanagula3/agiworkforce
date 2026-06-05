@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Press | AGI',
+  title: 'Press',
   description:
     'Press materials and contact for AGI — what we are, who runs it, and how to reach us.',
   alternates: { canonical: 'https://agiworkforce.com/press' },

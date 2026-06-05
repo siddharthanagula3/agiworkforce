@@ -4,7 +4,7 @@ import { Header } from '../../components/layout/Header';
 import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 export const metadata: Metadata = {
-  title: 'Partners | AGI',
+  title: 'Partners',
   description: 'How to partner with AGI — integrations, resellers, and platform plays.',
   alternates: { canonical: 'https://agiworkforce.com/partners' },
 };

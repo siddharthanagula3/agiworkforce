@@ -9,6 +9,7 @@ import {
   getModelMetadataById,
   getProviderDefaultModel,
   getTaskModelForProvider,
+  requireProviderDefaultModel,
   type Provider,
 } from '@agiworkforce/types';
 
@@ -121,7 +122,7 @@ const CORE_MODEL_BLUEPRINTS: readonly ModelBlueprint[] = [
 const DEFAULT_ROUTER_MODEL =
   getTaskModelForProvider('anthropic', 'chat') ??
   getTaskModelForProvider('openai', 'chat') ??
-  'claude-sonnet-4.6';
+  requireProviderDefaultModel('anthropic');
 
 function toRouterProvider(provider: Provider | string): LLMProvider | null {
   switch (provider) {

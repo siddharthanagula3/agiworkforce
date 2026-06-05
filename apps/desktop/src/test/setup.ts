@@ -174,6 +174,9 @@ vi.mock('../lib/tauri-mock', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test setup: core module re-export
     invoke: (core as any).invoke,
     isTauri: false,
+    isDesktopUiDevLocal: false,
+    supportsLocalAppMode: false,
+    isCloudWeb: false,
     isTauriContext: () => false,
     listen: vi.fn().mockResolvedValue(() => {}),
     emit: vi.fn().mockResolvedValue(undefined),

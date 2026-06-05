@@ -1,12 +1,3 @@
-/**
- * Project Settings Dialog
- *
- * A dialog for creating and editing project settings including:
- * - Project name and description
- * - Custom instructions
- * - File/knowledge management
- * - Associated conversations
- */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Dialog,
@@ -38,10 +29,10 @@ import {
   Settings,
   Palette,
   Trash2,
-  Plus,
   Upload,
   Brain,
   Database,
+  ChevronDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -109,7 +100,6 @@ const PROJECT_ICONS = [
   { name: 'Lightbulb', value: 'lightbulb' },
 ] as const;
 
-// BUG-PS-05: Icon name → Lucide component lookup map
 const ICON_COMPONENT_MAP: Record<string, LucideIcon> = {
   folder: Folder,
   code: Code,
@@ -126,6 +116,7 @@ interface ProjectSettingsDialogProps {
   onOpenChange: (open: boolean) => void;
   project?: Project | null;
   mode: 'create' | 'edit';
+  onCreated?: (project: Project) => void;
 }
 
 export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
@@ -133,6 +124,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   onOpenChange,
   project,
   mode,
+  onCreated,
 }) => {
   // Form state
   const [name, setName] = useState('');
@@ -149,12 +141,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
   const [activeTab, setActiveTab] = useState('general');
   const [knowledgeBaseFiles, setKnowledgeBaseFiles] = useState<KnowledgeBaseFile[]>([]);
   const [isUploadingKb, setIsUploadingKb] = useState(false);
+  const [showCreateOptions, setShowCreateOptions] = useState(false);
   const kbDropZoneRef = useRef<HTMLDivElement>(null);
 
   // Store actions
   const createProject = useProjectStore((state) => state.createProject);
   const updateProject = useProjectStore((state) => state.updateProject);
-  // BUG-PS-04: replaced deprecated useUnifiedChatStore with useChatStore
   const conversations = useChatStore((state) => state.conversations);
 
   // Reset form when dialog opens/closes or project identity changes (projectId only to avoid loop from new object refs)
@@ -173,8 +165,8 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setFiles(project.files);
         setConversationIds(project.conversationIds);
         setKnowledgeBaseFiles(project.knowledgeBaseFiles ?? []);
+        setShowCreateOptions(false);
       } else {
-        // Reset for create mode
         setName('');
         setDescription('');
         setCustomInstructions('');
@@ -186,6 +178,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
         setFiles([]);
         setConversationIds([]);
         setKnowledgeBaseFiles([]);
+        setShowCreateOptions(false);
       }
       setActiveTab('general');
     }
@@ -200,7 +193,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     setIsSaving(true);
     try {
       if (mode === 'create') {
-        await createProject({
+        const createdProject = await createProject({
           name: name.trim(),
           description: description.trim(),
           customInstructions: customInstructions.trim(),
@@ -214,6 +207,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           isArchived: false,
           knowledgeBaseFiles,
         });
+        onCreated?.(createdProject);
       } else if (project) {
         await updateProject(project.id, {
           name: name.trim(),
@@ -232,14 +226,12 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
       onOpenChange(false);
     } catch (error) {
       console.error('[ProjectSettingsDialog] Failed to save project:', error);
-      // BUG-PS-03: show user-visible error instead of silent console.error only
       toast.error('Failed to save project settings');
     } finally {
       setIsSaving(false);
     }
   };
 
-  // BUG-PS-02: real file picker via @tauri-apps/plugin-dialog
   const handleAddFile = useCallback(async () => {
     if (!isTauri) {
       toast.error('File picker is only available in the desktop app');
@@ -362,10 +354,215 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
     setKnowledgeBaseFiles((prev) => prev.filter((f) => f.id !== fileId));
   }, []);
 
+  if (mode === 'create') {
+    const projectPresets: Array<{
+      label: string;
+      name: string;
+      description: string;
+      icon: string;
+      accentColor: ProjectAccentColor;
+      Icon: LucideIcon;
+    }> = [
+      {
+        label: 'Codebase',
+        name: 'Codebase',
+        description: 'Track implementation notes, architecture decisions, and open bugs.',
+        icon: 'code',
+        accentColor: 'sky',
+        Icon: Code,
+      },
+      {
+        label: 'Launch',
+        name: 'Launch plan',
+        description: 'Collect product decisions, demo tasks, feedback, and follow-ups.',
+        icon: 'rocket',
+        accentColor: 'amber',
+        Icon: Rocket,
+      },
+      {
+        label: 'Research',
+        name: 'Research',
+        description: 'Keep source notes, comparison findings, and unanswered questions together.',
+        icon: 'book',
+        accentColor: 'violet',
+        Icon: BookOpen,
+      },
+      {
+        label: 'Work',
+        name: 'Work',
+        description: 'Organize recurring tasks, stakeholders, documents, and project memory.',
+        icon: 'briefcase',
+        accentColor: 'emerald',
+        Icon: Briefcase,
+      },
+    ];
+
+    const privacyOptions: Array<{
+      value: PrivacyMode;
+      label: string;
+      description: string;
+    }> = [
+      {
+        value: 'local',
+        label: 'Local',
+        description: 'Runs on this machine. Best for private work.',
+      },
+      {
+        value: 'byok',
+        label: 'BYOK',
+        description: 'Uses your provider key when the conversation needs cloud models.',
+      },
+      {
+        value: 'managed',
+        label: 'Cloud',
+        description: 'Uses AGI managed compute when your account has access.',
+      },
+    ];
+
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-[560px] overflow-hidden border-border bg-card p-0 shadow-2xl">
+          <div className="px-7 pb-6 pt-7">
+            <DialogHeader className="space-y-2 text-left">
+              <DialogTitle className="text-[1.65rem] font-semibold tracking-tight text-foreground">
+                Create a project
+              </DialogTitle>
+              <DialogDescription className="max-w-[440px] text-sm leading-6 text-muted-foreground">
+                Projects keep related chats, files, instructions, and memory together.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="mt-6 space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="project-name" className="text-sm font-medium text-foreground">
+                  What are you working on?
+                </Label>
+                <Input
+                  id="project-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Name your project"
+                  className="h-12 rounded-xl border-border bg-background px-4 text-base text-foreground placeholder:text-muted-foreground"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-foreground">Start from a preset</Label>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {projectPresets.map((preset) => {
+                    const PresetIcon = preset.Icon;
+                    return (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          if (!name.trim()) setName(preset.name);
+                          if (!description.trim()) setDescription(preset.description);
+                          setIcon(preset.icon);
+                          setAccentColor(preset.accentColor);
+                        }}
+                        className="inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted/60"
+                      >
+                        <PresetIcon className="h-4 w-4 text-muted-foreground" />
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="project-description"
+                  className="text-sm font-medium text-foreground"
+                >
+                  What are you trying to achieve?
+                </Label>
+                <Textarea
+                  id="project-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Describe the goal, audience, constraints, or anything AGI should keep in mind."
+                  className="min-h-[96px] resize-none rounded-xl border-border bg-background px-4 py-3 text-sm leading-6 text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+
+              <div className="rounded-xl border border-border bg-muted/20">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateOptions((value) => !value)}
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-foreground"
+                  aria-expanded={showCreateOptions}
+                >
+                  More options
+                  <ChevronDown
+                    className={cn(
+                      'h-4 w-4 text-muted-foreground transition-transform',
+                      showCreateOptions && 'rotate-180',
+                    )}
+                  />
+                </button>
+
+                {showCreateOptions && (
+                  <div className="border-t border-border px-4 pb-4 pt-3">
+                    <Label className="text-sm font-medium text-foreground">Default compute</Label>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      {privacyOptions.map((option) => {
+                        const selected = defaultPrivacyMode === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setDefaultPrivacyMode(option.value)}
+                            className={cn(
+                              'rounded-xl border px-3 py-3 text-left transition-colors',
+                              selected
+                                ? 'border-foreground/30 bg-foreground/[0.06]'
+                                : 'border-border bg-background hover:bg-muted/50',
+                            )}
+                          >
+                            <span className="block text-sm font-medium text-foreground">
+                              {option.label}
+                            </span>
+                            <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                              {option.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="border-t border-border bg-muted/20 px-7 py-4">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              className="border-border text-foreground"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={!name.trim() || isSaving}
+              className="bg-foreground px-5 text-background hover:bg-foreground/90"
+            >
+              {isSaving ? 'Creating...' : 'Create project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl bg-card border-border">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-2xl flex-col overflow-hidden border-border bg-card p-0 sm:max-h-[calc(100dvh-3rem)]">
+        <DialogHeader className="shrink-0 px-6 pt-6">
           <DialogTitle className="text-foreground flex items-center gap-2">
             <div
               className="w-6 h-6 rounded-md flex items-center justify-center"
@@ -373,44 +570,46 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
             >
               <FolderPlus className="w-4 h-4 text-white" />
             </div>
-            {mode === 'create' ? 'Create New Project' : 'Edit Project'}
+            Edit Project
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            {mode === 'create'
-              ? 'Create a new project to organize your conversations and files.'
-              : 'Update your project settings and organization.'}
+            Update your project settings and organization.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="bg-muted border-border flex-wrap">
-            <TabsTrigger value="general" className="data-[state=active]:bg-accent">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="mt-4 flex min-h-0 flex-1 flex-col px-6"
+        >
+          <TabsList className="shrink-0 flex-nowrap justify-start overflow-x-auto border-border bg-muted">
+            <TabsTrigger value="general" className="shrink-0 data-[state=active]:bg-accent">
               <Settings className="w-4 h-4 mr-2" />
               General
             </TabsTrigger>
-            <TabsTrigger value="instructions" className="data-[state=active]:bg-accent">
+            <TabsTrigger value="instructions" className="shrink-0 data-[state=active]:bg-accent">
               <FileText className="w-4 h-4 mr-2" />
               Instructions
             </TabsTrigger>
-            <TabsTrigger value="knowledge" className="data-[state=active]:bg-accent">
+            <TabsTrigger value="knowledge" className="shrink-0 data-[state=active]:bg-accent">
               <Database className="w-4 h-4 mr-2" />
               Knowledge
             </TabsTrigger>
-            <TabsTrigger value="files" className="data-[state=active]:bg-accent">
+            <TabsTrigger value="files" className="shrink-0 data-[state=active]:bg-accent">
               <File className="w-4 h-4 mr-2" />
               Files
             </TabsTrigger>
-            <TabsTrigger value="memory" className="data-[state=active]:bg-accent">
+            <TabsTrigger value="memory" className="shrink-0 data-[state=active]:bg-accent">
               <Brain className="w-4 h-4 mr-2" />
               Memory
             </TabsTrigger>
-            <TabsTrigger value="conversations" className="data-[state=active]:bg-accent">
+            <TabsTrigger value="conversations" className="shrink-0 data-[state=active]:bg-accent">
               <MessageSquare className="w-4 h-4 mr-2" />
               Conversations
             </TabsTrigger>
           </TabsList>
 
-          <div className="mt-4 min-h-[300px]">
+          <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-2 pb-2">
             {/* General Tab */}
             <TabsContent value="general" className="space-y-4">
               <div className="space-y-2">
@@ -466,7 +665,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 <Label className="text-foreground">Icon</Label>
                 <div className="flex gap-2 flex-wrap">
                   {PROJECT_ICONS.map((i) => {
-                    // BUG-PS-05: render actual Lucide icon; fall back to first letter if not in map
                     const IconComponent = ICON_COMPONENT_MAP[i.value];
                     return (
                       <button
@@ -575,30 +773,32 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                       Runs on-device. No data leaves your machine.
                     </span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-not-allowed opacity-50">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
                       name="privacy-mode"
                       value="byok"
-                      disabled
+                      checked={defaultPrivacyMode === 'byok'}
+                      onChange={() => setDefaultPrivacyMode('byok')}
                       className="accent-blue-500"
                     />
                     <span className="text-sm text-foreground">BYOK</span>
                     <span className="text-xs text-muted-foreground ml-1">
-                      Your API key, provider servers. (Coming soon)
+                      Your API key, provider servers.
                     </span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-not-allowed opacity-50">
+                  <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
                       name="privacy-mode"
                       value="managed"
-                      disabled
+                      checked={defaultPrivacyMode === 'managed'}
+                      onChange={() => setDefaultPrivacyMode('managed')}
                       className="accent-blue-500"
                     />
                     <span className="text-sm text-foreground">Cloud Managed</span>
                     <span className="text-xs text-muted-foreground ml-1">
-                      AGI servers, private beta.
+                      AGI cloud with subscription controls.
                     </span>
                   </label>
                 </div>
@@ -778,9 +978,9 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
                 {/* Info Box */}
                 <div className="p-3 bg-blue-500/10 rounded-lg border border-blue-500/30">
                   <p className="text-xs text-blue-300">
-                    Memories help AGI Workforce remember important details about your project across
-                    sessions. Architectural decisions, coding preferences, and project context are
-                    all stored as memories for continuous improvement.
+                    Memories help AGI remember important details about your project across sessions.
+                    Architectural decisions, coding preferences, and project context are stored as
+                    memories for continuity.
                   </p>
                 </div>
               </div>
@@ -837,7 +1037,7 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
           </div>
         </Tabs>
 
-        <DialogFooter className="mt-6">
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
           <Button
             variant="outline"
             onClick={() => onOpenChange(false)}
@@ -854,11 +1054,6 @@ export const ProjectSettingsDialog: React.FC<ProjectSettingsDialogProps> = ({
               <>
                 <span className="animate-spin mr-2">...</span>
                 Saving...
-              </>
-            ) : mode === 'create' ? (
-              <>
-                <Plus className="w-4 h-4 mr-2" />
-                Create Project
               </>
             ) : (
               'Save Changes'

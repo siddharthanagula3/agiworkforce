@@ -357,6 +357,8 @@ export interface ModelSelectorProps {
   /** Called when the user clicks "Manage API Keys" at the bottom of the popover. */
   onSettingsClick?: () => void;
   className?: string;
+  /** When false, an empty host model list shows setup messaging instead of cloud fallback models. */
+  allowFallbackModels?: boolean;
   /** Current effort level for the thinking/reasoning toggle. */
   effort?: Effort | null;
   /** Called when the user toggles thinking on/off. ON = 'medium', OFF = null. */
@@ -405,14 +407,23 @@ function providerSortKey(key: string): number {
 export function ModelSelector({
   onSettingsClick,
   className,
+  allowFallbackModels = true,
   effort,
   onEffortChange,
   onProPlusRequired,
 }: ModelSelectorProps) {
   const { models, selectedModelId, displayName, selectModel } = useModel();
 
-  const usingFallback = models.length === 0;
+  const hasHostModels = models.length > 0;
+  const usingFallback = allowFallbackModels && !hasHostModels;
   const displayModels = usingFallback ? CLOUD_FALLBACK_MODELS : models;
+  const setupOnly = !allowFallbackModels && !hasHostModels;
+  const selectedModelIsVisible = displayModels.some((model) => model.id === selectedModelId);
+  const triggerLabel = setupOnly
+    ? 'Configure Local/BYOK'
+    : !allowFallbackModels && !selectedModelIsVisible
+      ? 'Select model'
+      : displayName;
 
   // Pro+ gate — when a non-Pro+ user picks a model from a different provider
   // than the conversation's current provider, fire onProPlusRequired instead
@@ -500,7 +511,7 @@ export function ModelSelector({
             className,
           )}
         >
-          <span className="max-w-[140px] truncate font-medium">{displayName}</span>
+          <span className="max-w-[140px] truncate font-medium">{triggerLabel}</span>
           <ChevronDown size={12} className="shrink-0 opacity-60" />
         </button>
       </Popover.Trigger>
@@ -523,7 +534,7 @@ export function ModelSelector({
               Model
             </span>
             <span className="rounded-full bg-[var(--chat-accent-primary)]/10 px-2 py-0.5 text-[10px] font-semibold text-[var(--chat-accent-primary)]">
-              13+ Providers
+              {!allowFallbackModels ? 'Local/BYOK' : '13+ Providers'}
             </span>
           </div>
 
@@ -537,6 +548,18 @@ export function ModelSelector({
                   onSelect={() => guardedSelectModel(bestAutoId)}
                 />
                 <div className="mx-2 my-1 border-t border-[var(--chat-border)]" />
+              </div>
+            )}
+
+            {setupOnly && (
+              <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
+                <p className="font-medium text-[var(--chat-text-primary)]">
+                  No local or BYOK model is configured.
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
+                  Start Ollama, install a local model, or add a provider API key to chat without AGI
+                  Cloud sign-in.
+                </p>
               </div>
             )}
 
@@ -600,26 +623,31 @@ export function ModelSelector({
                                     </span>
                                   )}
                                 </div>
-                                {/* Capability sub-label + tier badge + context */}
-                                <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                                  <span
-                                    className={cn(
-                                      'text-[10px] font-medium',
-                                      isSelected
-                                        ? 'text-[var(--chat-accent-primary)]/80'
-                                        : 'text-[var(--chat-text-muted)]',
-                                    )}
-                                  >
-                                    {CAPABILITY_LABEL[capability]}
-                                  </span>
-                                  <span className="text-[var(--chat-text-muted)] text-[10px]">
-                                    ·
-                                  </span>
-                                  <TierBadge tier={m.tier} />
-                                  <span className="text-[10px] text-[var(--chat-text-muted)]">
-                                    {formatContext(m.contextWindow)} ctx
-                                  </span>
-                                </div>
+                                {!allowFallbackModels && m.isLocal ? (
+                                  <p className="mt-0.5 text-[10px] text-[var(--chat-text-muted)]">
+                                    Installed in Ollama
+                                  </p>
+                                ) : (
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                                    <span
+                                      className={cn(
+                                        'text-[10px] font-medium',
+                                        isSelected
+                                          ? 'text-[var(--chat-accent-primary)]/80'
+                                          : 'text-[var(--chat-text-muted)]',
+                                      )}
+                                    >
+                                      {CAPABILITY_LABEL[capability]}
+                                    </span>
+                                    <span className="text-[var(--chat-text-muted)] text-[10px]">
+                                      ·
+                                    </span>
+                                    <TierBadge tier={m.tier} />
+                                    <span className="text-[10px] text-[var(--chat-text-muted)]">
+                                      {formatContext(m.contextWindow)} ctx
+                                    </span>
+                                  </div>
+                                )}
                               </div>
 
                               {/* Selected checkmark */}

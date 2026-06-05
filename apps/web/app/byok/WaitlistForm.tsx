@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useId, useState, type FormEvent } from 'react';
 import { addCsrfHeaders, CsrfTokenError } from '@/lib/client/csrf';
 
 type WaitlistSource = 'byok' | 'sync' | 'billing' | 'other';
@@ -13,30 +15,43 @@ interface Props {
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
-export function WaitlistForm({
-  source = 'byok',
-  ctaLabel = 'Join Cloud Managed waitlist →',
-}: Props) {
+export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access →' }: Props) {
+  const errorId = useId();
+  const pathname = usePathname();
+  const loginHref = `/login?redirectTo=${encodeURIComponent(pathname || '/waitlist')}`;
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  const [authRequired, setAuthRequired] = useState(false);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setState('submitting');
     setErrorMsg('');
+    setAuthRequired(false);
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setErrorMsg('Enter a valid email address.');
+      setState('error');
+      return;
+    }
 
     try {
       const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
       const res = await fetch('/api/waitlist/cloud-managed', {
         method: 'POST',
         headers,
-        body: JSON.stringify({ email: email.trim().toLowerCase(), source }),
+        body: JSON.stringify({ email: normalizedEmail, source }),
       });
 
       if (res.ok) {
         setState('success');
         setEmail('');
+      } else if (res.status === 401) {
+        setErrorMsg('Sign in to request Cloud access.');
+        setAuthRequired(true);
+        setState('error');
       } else {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         setErrorMsg(data.error ?? 'Something went wrong. Please try again.');
@@ -62,7 +77,7 @@ export function WaitlistForm({
           margin: 0,
         }}
       >
-        You are on the list. We will email you when Cloud Managed private beta opens.
+        Your request is saved. We will email you when hosted cloud access opens for your account.
       </p>
     );
   }
@@ -70,6 +85,7 @@ export function WaitlistForm({
   return (
     <form
       onSubmit={handleSubmit}
+      noValidate
       style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 220px' }}>
@@ -78,8 +94,17 @@ export function WaitlistForm({
           required
           placeholder="your@email.com"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(e) => {
+            setEmail(e.target.value);
+            if (state === 'error') {
+              setState('idle');
+              setErrorMsg('');
+              setAuthRequired(false);
+            }
+          }}
           disabled={state === 'submitting'}
+          aria-invalid={state === 'error'}
+          aria-describedby={state === 'error' && errorMsg ? errorId : undefined}
           style={{
             padding: '8px 12px',
             background: 'var(--bg-elev)',
@@ -92,7 +117,17 @@ export function WaitlistForm({
           }}
         />
         {state === 'error' && errorMsg && (
-          <span style={{ fontSize: 12, color: 'var(--agi-error)' }}>{errorMsg}</span>
+          <span id={errorId} role="alert" style={{ fontSize: 12, color: 'var(--agi-error)' }}>
+            {errorMsg}{' '}
+            {authRequired && (
+              <Link
+                href={loginHref}
+                style={{ color: 'var(--text-1)', textDecoration: 'underline' }}
+              >
+                Sign in
+              </Link>
+            )}
+          </span>
         )}
       </div>
 

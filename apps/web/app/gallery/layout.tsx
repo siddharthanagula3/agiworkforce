@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     'AI use case examples',
   ],
   openGraph: {
-    title: 'Gallery | AGI',
+    title: 'Gallery',
     description:
       'Real examples of AGI in action - code generation, research, automation, and more.',
     type: 'website',
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Gallery | AGI',
+    title: 'Gallery',
     description:
       'Real examples of AGI in action - code generation, research, automation, and more.',
     images: ['/app-preview.png'],
