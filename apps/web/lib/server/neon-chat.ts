@@ -9,6 +9,7 @@ export type ChatConversationRow = {
   id: string;
   title: string;
   model: string | null;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
 };

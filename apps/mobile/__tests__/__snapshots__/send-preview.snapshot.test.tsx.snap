@@ -1,11 +1,11 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
+exports[`Mobile SendPreview snapshots locks the Cloud invite rendered tree for legacy direct-provider input 1`] = `
 <View
   style={
     {
-      "backgroundColor": "rgba(245, 158, 11, 0.06)",
-      "borderColor": "rgba(245, 158, 11, 0.3)",
+      "backgroundColor": "rgba(56, 189, 248, 0.06)",
+      "borderColor": "rgba(56, 189, 248, 0.3)",
       "borderRadius": 8,
       "borderWidth": 1,
       "gap": 6,
@@ -24,9 +24,9 @@ exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
     }
   >
     <View
-      color="#f59e0b"
+      color="#7dd3fc"
       size={14}
-      testID="icon-key-round"
+      testID="icon-cloud"
     />
     <Text
       numberOfLines={1}
@@ -39,7 +39,7 @@ exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
         }
       }
     >
-      Sent to api.anthropic.com
+      Cloud invite required
     </Text>
     <View
       style={
@@ -72,20 +72,10 @@ exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
           }
         }
       >
-        BYOK
+        Cloud
       </Text>
     </View>
   </View>
-  <Text
-    style={
-      {
-        "color": "#777",
-        "fontSize": 10,
-      }
-    }
-  >
-    Claude Sonnet 4.6
-  </Text>
   <Text
     style={
       {
@@ -95,7 +85,7 @@ exports[`Mobile SendPreview snapshots locks the BYOK turn rendered tree 1`] = `
       }
     }
   >
-    BYOK turn. The request, attachments, and system prompt go directly to api.anthropic.com via your API key. AGI does not receive a copy of the payload.
+    Cloud access is invite-gated on Mobile. Continue after Cloud Managed access is enabled.
   </Text>
 </View>
 `;

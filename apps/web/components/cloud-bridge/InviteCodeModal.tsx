@@ -310,10 +310,8 @@ export function InviteCodeModal({
                 id="invite-code-modal-desc"
                 className="text-xs text-muted-foreground leading-relaxed"
               >
-                Cloud features are gated for v1. Join the waitlist, or enter your invitation code
-                below to unlock cloud routing. AGI will route your requests through one of: BYOK
-                (your provider key), Groq (free tier, US-routed), OpenRouter, or DeepSeek (with
-                explicit data-residency disclosure).
+                Cloud access is currently invite-only. Join the waitlist, or enter your invitation
+                code if you already have one.
               </DialogDescription>
             </div>
           </div>

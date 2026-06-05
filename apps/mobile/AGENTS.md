@@ -2,13 +2,13 @@
 
 Status: Current
 Owner: Mobile lead
-Last updated: 2026-05-21
+Last updated: 2026-06-05
 
 Read root `AGENTS.md`, then this file, then `apps/mobile/README.md`.
 
 ## Scope
 
-`apps/mobile` owns small Local LLM onboarding, Cloud invite/waitlist entry, mobile chat, capture, voice/camera, approvals, preview/share, store metadata, and mobile native modules. Mobile v1 does not expose BYOK.
+`apps/mobile` owns small Local LLM onboarding, Cloud invite/waitlist entry, mobile chat, capture, voice/camera, approvals, preview/share, store metadata, and mobile native modules. Mobile does not expose direct provider-key entry.
 
 ## Lane Contract
 
@@ -22,7 +22,7 @@ Read root `AGENTS.md`, then this file, then `apps/mobile/README.md`.
 
 - On-device data, SQLCipher/MMKV storage, HealthKit/Health Connect, Cloud invite gating, model downloads, native modules, and store-review copy.
 - Mobile should not become the heavy compute surface first. Generated-file and long-running compute requests should delegate to Desktop/local host or future managed/private compute.
-- Do not route Local chats to Managed Cloud without explicit invite/subscription state, payload preview, and consent. Do not add Mobile BYOK without a new product decision.
+- Do not route Local chats to Managed Cloud without explicit invite/subscription state, payload preview, and consent. Do not add Mobile direct provider-key entry without a new product decision.
 
 ## Verification
 

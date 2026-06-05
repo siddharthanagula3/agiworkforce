@@ -55,6 +55,7 @@ let consoleWarnSpy: jest.SpyInstance;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  delete process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC;
   consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   mockBiometricLockEnabledFlag = true;
 });
@@ -161,6 +162,29 @@ describe('useBiometricGate — fail-closed on error', () => {
 
     expect(returned).toBe(true);
     expect(result.current.isUnlocked).toBe(true);
+  });
+});
+
+describe('useBiometricGate — visual QA bypass', () => {
+  it('unlocks in dev visual QA mode without calling OS authentication', async () => {
+    process.env.EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC = '1';
+    mockHasHardwareAsync.mockResolvedValue(true);
+    mockIsEnrolledAsync.mockResolvedValue(true);
+    mockAuthenticateAsync.mockResolvedValue({ success: false });
+
+    const { result } = renderHook(() => useBiometricGate());
+
+    expect(result.current.isUnlocked).toBe(true);
+    expect(result.current.isLocked).toBe(false);
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.authenticate();
+    });
+
+    expect(returned).toBe(true);
+    expect(result.current.isUnlocked).toBe(true);
+    expect(mockAuthenticateAsync).not.toHaveBeenCalled();
   });
 });
 

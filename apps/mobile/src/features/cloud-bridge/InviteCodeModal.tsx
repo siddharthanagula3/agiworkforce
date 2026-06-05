@@ -508,9 +508,8 @@ export function InviteCodeModal({
                     Cloud features
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
-                    Cloud features are gated for v1. Join the waitlist, or enter your invitation
-                    code below to unlock AGI Managed Cloud routing with explicit retention,
-                    residency, quota, and access controls.
+                    Cloud access is currently invite-only. Join the waitlist, or enter your
+                    invitation code if you already have one.
                   </Text>
                 </View>
                 <Pressable

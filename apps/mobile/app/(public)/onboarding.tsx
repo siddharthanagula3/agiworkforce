@@ -1,32 +1,30 @@
 /**
- * Onboarding v1 — privacy-first, no login, no cloud, no BYOK.
+ * Onboarding — local demo flow with gated Cloud continuation.
  *
  * 3-screen flow:
  *   Screen 1: Hero   → disclosure modal → Screen 2
  *   Screen 2: Device-tier detection + model recommendation → Screen 3
  *   Screen 3: First model download progress → chat
  *
- * Locks (2026-05-18):
- *   - Trust signals exact: "AGI Automation LLC · Delaware, USA" + DPDP Act 2023
- *   - Tagline exact: "AGI runs on your device."
- *   - No cloud branch, no BYOK, no login button
- *   - Device tier + model name/size pulled from catalog (not hardcoded)
- *   - Compliance disclosure fires before screen 2 (Article 50(1) + Apple 5.1.2(i))
- *   - Download UI is stubbed; storage-engineer wires real hook (see TODO)
+ * Current product rules:
+ *   - Local mode is free and demo-ready first.
+ *   - Cloud exists behind invite/waitlist access, not as a public branch here.
+ *   - Device tier and model name/size come from the catalog.
+ *   - Compliance disclosure fires before screen 2.
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Pressable, Animated, Platform, StyleSheet, ScrollView } from 'react-native';
+import { View, Pressable, Platform, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Cpu, Plane, Shield } from 'lucide-react-native';
+import Svg, { Circle, Line } from 'react-native-svg';
 import Constants from 'expo-constants';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { downloadModel, cancelDownload, ModelDownloadError } from '@/services/modelDownload';
-import { recordInstalledModel } from '@/storage/installedModels';
+import { getInstalledModel, recordInstalledModel } from '@/storage/installedModels';
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -45,8 +43,25 @@ import {
 } from '@agiworkforce/local-llm';
 import type { OnDeviceModel } from '@agiworkforce/types';
 
-// Mobile v1 first-run has no cloud branch and no BYOK provider routing.
+// Mobile first-run has no public cloud provider routing.
 const DISCLOSURE_PROVIDERS: string[] = [];
+
+// Website brand mark geometry from apps/web/components/agi/AgiMark.tsx.
+const AGI_MARK_SPOKE_COUNT = 12;
+const AGI_MARK_INNER_R = 4.6;
+const AGI_MARK_OUTER_R = 9;
+const AGI_MARK_STROKE_W = 1.5;
+const AGI_MARK_SPOKES = Array.from({ length: AGI_MARK_SPOKE_COUNT }, (_, i) => {
+  const angle = (i * 360) / AGI_MARK_SPOKE_COUNT;
+  const rad = (angle * Math.PI) / 180;
+  const round = (value: number) => Number(value.toFixed(6));
+  return {
+    x1: round(12 + AGI_MARK_INNER_R * Math.sin(rad)),
+    y1: round(12 - AGI_MARK_INNER_R * Math.cos(rad)),
+    x2: round(12 + AGI_MARK_OUTER_R * Math.sin(rad)),
+    y2: round(12 - AGI_MARK_OUTER_R * Math.cos(rad)),
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Device tier derived from DeviceCapabilities
@@ -194,6 +209,24 @@ export default function OnboardingScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!recommendedModel.needsDownload) return;
+    let isMounted = true;
+
+    getInstalledModel(recommendedModel.id)
+      .then((installed) => {
+        if (!isMounted || !installed) return;
+        setRecommendedModel((current) =>
+          current.id === recommendedModel.id ? { ...current, needsDownload: false } : current,
+        );
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [recommendedModel.id, recommendedModel.needsDownload]);
+
   const finishOnboarding = useCallback(() => {
     storage.set('onboarding-done', 'true');
     storage.set('onboarding-mode', 'local');
@@ -225,8 +258,9 @@ export default function OnboardingScreen() {
       ledger: mmkvDisclosureLedger,
       copy: disclosureCopy,
       surface: 'mobile',
-      // true even in v1 local-only: gate uses requireManagedCloud:false so this
-      // field is never evaluated now, and future cloud gate won't block returning users.
+      // The first-run disclosure is not the Cloud invite consent step. We keep
+      // managedCloudAccepted true here so returning users are not blocked by a
+      // disclosure they already accepted before the separate Cloud gate appears.
       managedCloudAccepted: true,
       chineseHqProvidersAccepted: [],
     });
@@ -406,47 +440,29 @@ function HeroScreen({
       testID="onboarding-hero-screen"
       style={[styles.heroRoot, { backgroundColor: colors.background }]}
     >
-      {/* Brand mark — neutral geometric circle (no burst / spiral / sparkle) */}
-      <View style={styles.brandMark}>
-        <View style={[styles.brandDot, { backgroundColor: colors.teal }]} />
+      <View style={styles.brandLockup}>
+        <AgiNativeMark
+          size={50}
+          color={colors.textPrimary}
+          accent={colors.teal}
+          testID="hero-brand-mark"
+        />
+        <Text
+          testID="hero-wordmark"
+          style={[styles.wordmark, { color: colors.textPrimary }]}
+          accessibilityRole="header"
+        >
+          AGI
+        </Text>
       </View>
 
-      {/* Wordmark */}
-      <Text
-        testID="hero-wordmark"
-        style={[styles.wordmark, { color: colors.textPrimary }]}
-        accessibilityRole="header"
-      >
-        AGI
-      </Text>
-
-      {/* Tagline — exact copy per lock */}
       <Text testID="hero-tagline" style={[styles.tagline, { color: colors.textSecondary }]}>
-        AGI runs on your device.
+        Your AI workspace for everyday work.
       </Text>
 
       <Text style={[styles.heroSubcopy, { color: colors.textMuted }]}>
-        No account. No cloud. Free forever.
+        Chat, write, code, research, and organize projects in one place.
       </Text>
-
-      {/* Local-only trust chips */}
-      <View style={styles.trustRow}>
-        <TrustChip
-          icon={<Cpu size={14} color={colors.teal} />}
-          label="Local LLMs active"
-          colors={colors}
-        />
-        <TrustChip
-          icon={<Plane size={14} color={colors.teal} />}
-          label="Works offline"
-          colors={colors}
-        />
-        <TrustChip
-          icon={<Shield size={14} color={colors.teal} />}
-          label="DPDP Act 2023 compliant"
-          colors={colors}
-        />
-      </View>
 
       {/* Primary CTA — full-width pill */}
       <Pressable
@@ -459,33 +475,39 @@ function HeroScreen({
         <Text style={[styles.ctaBtnText, { color: colors.black }]}>Start chatting</Text>
       </Pressable>
 
-      {/* Footer — exact copy per lock */}
       <Text testID="hero-footer" style={[styles.footer, { color: colors.textMuted }]}>
-        Made by AGI Automation LLC · Delaware, USA
+        Made by AGI Automation LLC, USA
       </Text>
     </View>
   );
 }
 
-function TrustChip({
-  icon,
-  label,
-  colors,
+function AgiNativeMark({
+  size,
+  color,
+  accent,
+  testID,
 }: {
-  icon: React.ReactElement;
-  label: string;
-  colors: ReturnType<typeof useThemeColors>;
+  size: number;
+  color: string;
+  accent: string;
+  testID?: string;
 }) {
   return (
-    <View
-      style={[
-        styles.trustChip,
-        { backgroundColor: 'rgba(62,184,196,0.08)', borderColor: colors.border },
-      ]}
-    >
-      {icon}
-      <Text style={[styles.trustChipText, { color: colors.textSecondary }]}>{label}</Text>
-    </View>
+    <Svg testID={testID} width={size} height={size} viewBox="0 0 24 24">
+      {AGI_MARK_SPOKES.map((spoke, idx) => (
+        <Line
+          key={idx}
+          x1={spoke.x1}
+          y1={spoke.y1}
+          x2={spoke.x2}
+          y2={spoke.y2}
+          stroke={idx === 0 ? accent : color}
+          strokeWidth={AGI_MARK_STROKE_W}
+          strokeLinecap="round"
+        />
+      ))}
+    </Svg>
   );
 }
 
@@ -506,6 +528,18 @@ function DeviceTierScreen({
   onPickModel: () => void;
 }) {
   const tierLabel = deviceInfo.tier === 1 ? 'Tier 1' : deviceInfo.tier === 2 ? 'Tier 2' : 'Tier 3';
+  const memoryLabel =
+    Constants.isDevice && deviceInfo.ramGB >= 2
+      ? `${deviceInfo.ramGB} GB RAM`
+      : 'Memory check unavailable in simulator';
+  const deviceSummary = [
+    deviceInfo.deviceName,
+    memoryLabel,
+    deviceInfo.osVersion !== 'Unknown' ? deviceInfo.osVersion : null,
+    `${tierLabel} local runtime`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const [cellularEnabled, setCellularEnabled] = useState(false);
 
   return (
@@ -523,10 +557,7 @@ function DeviceTierScreen({
         Your {deviceInfo.deviceName} is ready.
       </Text>
 
-      <Text style={[styles.tierSubhead, { color: colors.textMuted }]}>
-        {deviceInfo.deviceName} · {deviceInfo.ramGB} GB RAM · {deviceInfo.osVersion} · {tierLabel}{' '}
-        capable
-      </Text>
+      <Text style={[styles.tierSubhead, { color: colors.textMuted }]}>{deviceSummary}</Text>
 
       {/* Recommended model card */}
       <View
@@ -727,8 +758,6 @@ function DownloadScreen({
 
 // ---------------------------------------------------------------------------
 // Radial progress ring (terracotta stroke on neutral track).
-// TODO: Replace with react-native-svg Arc for pixel-perfect conic fill once
-// svg is confirmed in the project deps (no new dep added here).
 // ---------------------------------------------------------------------------
 function RadialProgress({
   progress,
@@ -741,55 +770,38 @@ function RadialProgress({
   stroke: number;
   color: string;
 }) {
-  const animatedValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(animatedValue, {
-      toValue: progress,
-      duration: 300,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, animatedValue]);
+  const normalizedProgress = Math.max(0, Math.min(100, progress));
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - normalizedProgress / 100);
 
   return (
     <View
       testID="download-radial-progress"
       style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
     >
-      {/* Neutral track */}
-      <View
-        style={{
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: stroke,
-          borderColor: 'rgba(255,255,255,0.08)',
-        }}
-      />
-      {/* Filled arc — opacity proxy until react-native-svg is available */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          borderWidth: stroke,
-          borderColor: color,
-          opacity: animatedValue.interpolate({
-            inputRange: [0, 5, 100],
-            outputRange: [0, 1, 1],
-          }),
-          transform: [
-            {
-              rotate: animatedValue.interpolate({
-                inputRange: [0, 100],
-                outputRange: ['0deg', '360deg'],
-              }),
-            },
-          ],
-        }}
-      />
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth={stroke}
+          fill="none"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={color}
+          strokeWidth={stroke}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={strokeDashoffset}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
     </View>
   );
 }
@@ -805,58 +817,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  brandMark: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(62,184,196,0.10)',
+  brandLockup: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
-  },
-  brandDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    gap: 16,
+    marginBottom: 22,
   },
   wordmark: {
-    fontSize: 96,
+    fontSize: 94,
     fontWeight: '700',
     letterSpacing: 0,
-    lineHeight: 96,
-    marginBottom: 12,
+    lineHeight: 108,
   },
   tagline: {
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 27,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   heroSubcopy: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '400',
     textAlign: 'center',
-    marginBottom: 32,
-  },
-  trustRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 48,
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-  },
-  trustChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    borderRadius: 20,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  trustChipText: {
-    fontSize: 12,
-    fontWeight: '500',
+    marginBottom: 52,
+    maxWidth: 320,
   },
   ctaBtn: {
     width: '100%',

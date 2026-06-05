@@ -11,8 +11,8 @@ export const metadata: Metadata = {
 };
 
 const SPECS: { k: string; v: string }[] = [
-  { k: 'Engine', v: 'Pure Rust, Tauri' },
-  { k: 'Size', v: '~35 MB installed' },
+  { k: 'Engine', v: 'Tauri shell · Rust backend · React UI' },
+  { k: 'Installer', v: 'Release asset pending public launch' },
   { k: 'Modes', v: 'Local · BYOK · Cloud invite' },
   { k: 'Storage', v: 'SQLite local · optional cloud sync' },
   { k: 'Computer use', v: 'Browser · files · terminal · screen' },
@@ -86,7 +86,7 @@ export default function DesktopPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Windows</h3>
               <p className="agi-reason-p">
-                Windows joins the same public launch date with installer, CLI, and desktop bridge
+                Windows is part of the public launch plan, with installer, CLI, and desktop bridge
                 messaging aligned around Local, BYOK, and invited Cloud.
               </p>
               <Link href="/download" className="agi-cta-ghost" style={{ marginTop: 4 }}>

@@ -306,7 +306,8 @@ const MessageListComponent: React.FC<MessageListProps> = ({
     });
   };
 
-  const handleReact = (messageId: string, reactionType: 'up' | 'down' | 'helpful') => {
+  const handleReact = (messageId: string, reactionType: 'up' | 'down' | null) => {
+    if (reactionType === null) return;
     reactToMessage(messageId, reactionType);
   };
 

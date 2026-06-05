@@ -59,7 +59,7 @@ export default function ProjectsFeaturePage() {
             {
               meta: 'Artifacts',
               title: 'Outputs stay attached to the project',
-              body: 'Reports, dashboards, docs, and prototypes should be discoverable from the project after the chat is gone.',
+              body: 'Reports, dashboards, docs, and prototypes stay discoverable from the project after the chat is gone.',
               href: '/features/artifacts',
             },
             {
@@ -71,15 +71,15 @@ export default function ProjectsFeaturePage() {
             {
               meta: 'Sharing',
               title: 'Team context hub',
-              body: 'Teams need shared projects with role-aware access and clear restrictions for shared chats and connected data.',
+              body: 'Team projects use role-aware access and clear restrictions for shared chats and connected data.',
               href: '/teams',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Implementation bar"
-          title="What project pages should promise."
+          eyebrow="Project controls"
+          title="The project workspace keeps context explicit."
           rows={[
             { k: 'Create', v: 'Name, description, icon, and optional starter instructions.' },
             {
@@ -102,8 +102,8 @@ export default function ProjectsFeaturePage() {
         />
 
         <LaunchCta
-          title="Projects are where AGI becomes a work OS."
-          body="Use this page to explain why users should create durable workspaces instead of treating AGI as a disposable chat box."
+          title="Projects turn repeat work into durable workspaces."
+          body="Users can keep recurring work organized instead of treating every AGI conversation as a disposable chat box."
           primary={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondary={{ href: '/business', label: 'Business workspace' }}
         />

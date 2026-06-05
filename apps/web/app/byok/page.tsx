@@ -7,7 +7,7 @@ import { WaitlistForm } from './WaitlistForm';
 
 export const metadata: Metadata = {
   title: 'Bring Your Own API Keys (BYOK)',
-  description: `Use your own Anthropic, OpenAI, Google, OpenRouter and more API keys directly in AGI. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
+  description: `Use your own Anthropic, OpenAI, Google, OpenRouter and more API keys in AGI desktop and developer surfaces. ${POSITIONING.wedge} ${LAUNCH.publicLabel}.`,
   alternates: { canonical: 'https://agiworkforce.com/byok' },
 };
 
@@ -24,7 +24,8 @@ export default function ByokPage() {
           <h1 className="agi-page-h1">Your keys. Your providers. No markup.</h1>
           <p className="agi-page-lede">
             Bring Anthropic, OpenAI, Google, OpenRouter, Groq, Mistral, xAI, DeepSeek, Perplexity,
-            and compatible endpoints into one AGI thread. Pay providers directly.
+            and compatible endpoints into AGI desktop and developer workflows. Pay providers
+            directly.
             <strong> AGI does not mark up your BYOK usage.</strong>
           </p>
 
@@ -73,8 +74,8 @@ export default function ByokPage() {
           </h2>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 20px', maxWidth: 560 }}>
             BYOK is the fastest path to Claude and ChatGPT-style capability at launch: users keep
-            provider ownership, AGI becomes the product shell, and Cloud remains invite-only for
-            users who want AGI-managed compute later.
+            provider ownership, AGI becomes the product shell on desktop and developer surfaces, and
+            Cloud remains invite-only for users who want AGI-managed compute later.
           </p>
           <div className="agi-cta-row">
             <Link href="/waitlist" className="agi-cta-primary">
@@ -91,9 +92,10 @@ export default function ByokPage() {
           <div className="agi-callout">
             <h2 className="agi-callout-h">{POSITIONING.trustBoundary}</h2>
             <p className="agi-callout-p">
-              Desktop and CLI store provider keys through the operating system keychain or local
-              developer configuration. Web and mobile use explicit consent before sending a prompt
-              to any provider. The active provider label remains visible in the composer and thread.
+              Desktop and developer surfaces store provider keys through the operating system
+              keychain or local developer configuration. Web remains account and managed-cloud
+              waitlist, not public BYOK chat. Mobile v1 does not accept provider keys. The active
+              provider label stays visible wherever BYOK is available.
             </p>
           </div>
           <div style={{ marginTop: 16 }}>
@@ -114,15 +116,16 @@ export default function ByokPage() {
               <h3 className="agi-step-h">Add a provider once</h3>
               <p className="agi-step-body">
                 Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Mistral, Groq, OpenRouter and
-                compatible endpoints. Start with one key and add more as your workflow grows.
+                compatible endpoints on the BYOK-enabled desktop and developer surfaces. Start with
+                one key and add more as your workflow grows.
               </p>
             </li>
             <li className="agi-step">
               <span className="agi-step-n">02 / Switch models mid-thread</span>
               <h3 className="agi-step-h">Change models without changing apps</h3>
               <p className="agi-step-body">
-                Route one turn to Claude, the next to GPT, the next to Gemini, and keep one
-                conversation history with clear provider labels.
+                Route BYOK-enabled work to Claude, GPT, Gemini, or local/open-compatible providers,
+                with clear provider labels and no silent Local-to-BYOK handoff.
               </p>
             </li>
             <li className="agi-step">

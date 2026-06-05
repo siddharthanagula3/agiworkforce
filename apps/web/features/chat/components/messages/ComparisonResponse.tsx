@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type KeyboardEvent } from 'react';
 import { Check } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import MarkdownContent from './MarkdownContent';
@@ -37,6 +37,12 @@ export function ComparisonResponse({
     setActiveTab(tab);
   }
 
+  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, tab: 'a' | 'b') {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    setActiveTab(tab === 'a' ? 'b' : 'a');
+  }
+
   function handleChoose() {
     if (!chosen && onChoose) onChoose(activeTab);
   }
@@ -44,7 +50,11 @@ export function ComparisonResponse({
   return (
     <div className="mt-3 space-y-3">
       {/* Tab toggle header */}
-      <div className="flex items-center gap-1 rounded-lg border border-border/40 bg-muted/20 p-1 w-fit">
+      <div
+        role="tablist"
+        aria-label="Comparison options"
+        className="flex w-fit items-center gap-1 rounded-lg border border-border/40 bg-muted/20 p-1"
+      >
         {(['a', 'b'] as const).map((tab) => {
           const label = tab === 'a' ? labelA : labelB;
           const isActive = activeTab === tab;
@@ -54,11 +64,16 @@ export function ComparisonResponse({
             <button
               key={tab}
               type="button"
+              role="tab"
               onClick={() => handleTabClick(tab)}
+              onKeyDown={(event) => handleTabKeyDown(event, tab)}
               data-testid={`comparison-tab-${tab}`}
+              id={`comparison-tab-${tab}`}
               aria-selected={isActive}
+              aria-controls={`comparison-panel-${tab}`}
+              tabIndex={isActive ? 0 : -1}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-150',
+                'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-150',
                 isActive
                   ? 'bg-background text-foreground shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
@@ -73,6 +88,9 @@ export function ComparisonResponse({
 
       {/* Single content area showing active tab */}
       <div
+        id={`comparison-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`comparison-tab-${activeTab}`}
         data-testid={`comparison-option-${activeTab}`}
         className="rounded-xl border border-border/50 bg-muted/10 p-4"
       >

@@ -53,8 +53,7 @@ export default function ChatTabScreen() {
   const selectedModel = useModelStore((s) => s.selectedModel);
   const selectedProvider = useModelStore((s) => s.selectedProvider);
 
-  // SendPreview disclosure — Mobile supports Local and Cloud Managed invite
-  // only. BYOK is not a Mobile provider mode.
+  // SendPreview disclosure — Mobile supports Local and Cloud Managed invite only.
   const sendPreviewPresentation = useMemo(() => {
     const providerMode: ProviderMode =
       selectedProvider === 'managed_cloud' ? 'ManagedGateway' : 'Local';

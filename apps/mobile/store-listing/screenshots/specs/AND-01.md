@@ -22,7 +22,7 @@ Data primed: roman-empire-chat fixture (3-turn local chat).
 - Model badge: "Qwen3 · 4B"
 - Android status bar: airplane mode icon visible
 
-Feature flags: default v1 (`cloudChat: false`, `byokKeys: false`)
+Feature flags: default local demo path (`cloudChat: false`)
 
 ## Tagline overlay
 

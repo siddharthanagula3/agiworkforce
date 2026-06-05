@@ -16,9 +16,8 @@
  *   content  – the full assistant message text
  */
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Copy, Check, ExternalLink, RefreshCw } from 'lucide-react';
-import DOMPurify from 'dompurify';
 import dynamic from 'next/dynamic';
 import { cn } from '@shared/lib/utils';
 import { SandboxedIframe } from './SandboxedIframe';
@@ -143,12 +142,12 @@ function HtmlBlock({ code }: { code: string }) {
           </button>
           <button
             type="button"
-            aria-label="Open in new tab"
+            aria-label="Open source in new tab"
             onClick={() => {
-              // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke
-              // the blob URL after a minute so the GC can reclaim the HTML body.
-
-              const blob = new Blob([code], { type: 'text/html' });
+              // Keep the executable preview in SandboxedIframe. A new tab gets
+              // source text so untrusted artifact HTML does not execute on a
+              // Blob origin.
+              const blob = new Blob([code], { type: 'text/plain;charset=utf-8' });
               const url = URL.createObjectURL(blob);
               window.open(url, '_blank', 'noopener,noreferrer');
               setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -254,24 +253,38 @@ function JsonBlock({ code }: { code: string }) {
     // leave as-is
   }
 
-  // Simple token colouriser (strings, numbers, booleans, null, keys)
-  const highlighted = display
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(
-      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g,
-      (match) => {
-        if (/^"/.test(match)) {
-          return /:$/.test(match)
-            ? `<span style="color:#7dd3fc">${match}</span>` // key → light-blue
-            : `<span style="color:#86efac">${match}</span>`; // string → green
-        }
-        if (/true|false/.test(match)) return `<span style="color:#f97316">${match}</span>`; // orange
-        if (/null/.test(match)) return `<span style="color:#94a3b8">${match}</span>`; // slate
-        return `<span style="color:#c084fc">${match}</span>`; // number → purple
-      },
+  const tokenPattern =
+    /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?)/g;
+  const highlightedParts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = tokenPattern.exec(display)) !== null) {
+    if (match.index > lastIndex) {
+      highlightedParts.push(display.slice(lastIndex, match.index));
+    }
+
+    const token = match[0];
+    let className = 'text-purple-300';
+    if (/^"/.test(token)) {
+      className = /:$/.test(token) ? 'text-sky-300' : 'text-green-300';
+    } else if (/^(true|false)$/.test(token)) {
+      className = 'text-orange-500';
+    } else if (token === 'null') {
+      className = 'text-slate-400';
+    }
+
+    highlightedParts.push(
+      <span key={`${match.index}-${token}`} className={className}>
+        {token}
+      </span>,
     );
+    lastIndex = match.index + token.length;
+  }
+
+  if (lastIndex < display.length) {
+    highlightedParts.push(display.slice(lastIndex));
+  }
 
   return (
     <div className="my-3 overflow-hidden rounded-lg border border-border">
@@ -280,12 +293,7 @@ function JsonBlock({ code }: { code: string }) {
         <CopyButton text={display} />
       </div>
       <pre className="overflow-x-auto bg-zinc-950 p-4 max-h-[400px]">
-        <code
-          className="text-sm leading-relaxed"
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(highlighted, { USE_PROFILES: { html: true } }),
-          }}
-        />
+        <code className="text-sm leading-relaxed">{highlightedParts}</code>
       </pre>
     </div>
   );

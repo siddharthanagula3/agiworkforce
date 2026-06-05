@@ -21,9 +21,9 @@ interface Surface {
 function DesktopMockup() {
   return (
     <div className="relative mx-auto w-full max-w-lg">
-      <div className="rounded-xl border border-white/10 bg-[#0e0e0e] p-1 shadow-2xl">
+      <div className="rounded-xl border border-white/10 bg-zinc-950 p-1 shadow-2xl">
         {/* Title bar */}
-        <div className="flex items-center gap-2 rounded-t-lg bg-[#1a1a1a] px-3 py-2">
+        <div className="flex items-center gap-2 rounded-t-lg bg-zinc-900 px-3 py-2">
           <div className="flex gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
@@ -32,18 +32,18 @@ function DesktopMockup() {
           <span className="ml-2 text-[10px] text-zinc-500">AGI</span>
         </div>
         {/* App content */}
-        <div className="flex h-80 rounded-b-lg bg-[#111]">
+        <div className="flex h-80 rounded-b-lg bg-zinc-950">
           {/* Sidebar */}
-          <div className="w-14 border-r border-white/5 bg-[#0e0e0e] p-2">
-            <div className="mb-3 rounded-md bg-[#c8892a]/20 px-1.5 py-1 text-center text-[7px] font-medium text-[#c8892a]">
+          <div className="w-14 border-r border-white/5 bg-zinc-950 p-2">
+            <div className="mb-3 rounded-md bg-workforce/20 px-1.5 py-1 text-center text-[7px] font-medium text-workforce">
               + New
             </div>
             {[
-              { name: 'Refactor auth...', dot: '#a855f7' },
-              { name: 'Write tests for...', dot: '#06b6d4' },
-              { name: 'Debug API...', dot: '#10b981' },
-              { name: 'Design landing...', dot: '#f59e0b' },
-              { name: 'Optimize DB...', dot: '#3b82f6' },
+              { name: 'Refactor auth...', dot: 'var(--color-agent-thinking)' },
+              { name: 'Write tests for...', dot: 'var(--color-info)' },
+              { name: 'Debug API...', dot: 'var(--color-success)' },
+              { name: 'Design landing...', dot: 'var(--color-warning)' },
+              { name: 'Optimize DB...', dot: 'var(--color-agent-active)' },
             ].map((chat) => (
               <div key={chat.name} className="mb-1.5 flex items-center gap-1 px-1">
                 <div
@@ -59,8 +59,8 @@ function DesktopMockup() {
             {/* Model selector */}
             <div className="flex items-center gap-2 border-b border-white/5 px-3 py-1.5">
               <div className="flex items-center gap-1 rounded-md bg-white/5 px-2 py-0.5">
-                <div className="h-1.5 w-1.5 rounded-full bg-[#c8892a]" />
-                <span className="text-[8px] font-medium text-zinc-300">Claude Opus</span>
+                <div className="h-1.5 w-1.5 rounded-full bg-workforce" />
+                <span className="text-[8px] font-medium text-zinc-300">Selected model</span>
                 <span className="text-[8px] text-zinc-600">&#9662;</span>
               </div>
             </div>
@@ -68,7 +68,7 @@ function DesktopMockup() {
             <div className="flex-1 space-y-3 overflow-hidden p-3">
               {/* User message */}
               <div className="flex justify-end">
-                <div className="max-w-[75%] rounded-xl rounded-br-sm bg-[#c8892a]/15 px-3 py-2">
+                <div className="max-w-[75%] rounded-xl rounded-br-sm bg-workforce/15 px-3 py-2">
                   <p className="text-[8px] leading-relaxed text-zinc-300">
                     Refactor the authentication module to use JWT tokens with refresh rotation
                   </p>
@@ -80,7 +80,7 @@ function DesktopMockup() {
                   I&apos;ll refactor the auth module. Let me read the existing implementation first.
                 </p>
                 {/* Code block */}
-                <div className="rounded-md border border-white/5 bg-[#0a0a0a] p-2">
+                <div className="rounded-md border border-white/5 bg-black/40 p-2">
                   <div className="mb-1 flex items-center gap-1">
                     <span className="text-[6px] text-zinc-600">src/auth/jwt.rs</span>
                   </div>
@@ -105,8 +105,8 @@ function DesktopMockup() {
             <div className="border-t border-white/5 px-3 py-2">
               <div className="flex items-center rounded-lg bg-white/5 px-2.5 py-1.5">
                 <span className="text-[8px] text-zinc-600">Message AGI...</span>
-                <div className="ml-auto h-4 w-4 rounded-md bg-[#c8892a]/30 p-0.5">
-                  <div className="h-full w-full rounded-sm bg-[#c8892a]" />
+                <div className="ml-auto h-4 w-4 rounded-md bg-workforce/30 p-0.5">
+                  <div className="h-full w-full rounded-sm bg-workforce" />
                 </div>
               </div>
             </div>
@@ -121,22 +121,22 @@ function DesktopMockup() {
 function WebMockup() {
   return (
     <div className="relative mx-auto w-full max-w-lg">
-      <div className="rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-zinc-950 shadow-2xl overflow-hidden">
         {/* Browser chrome */}
-        <div className="flex items-center gap-2 bg-[#1a1a1a] px-3 py-2">
+        <div className="flex items-center gap-2 bg-zinc-900 px-3 py-2">
           <div className="flex gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
           </div>
-          <div className="ml-2 flex-1 rounded-md bg-[#111] px-3 py-1">
+          <div className="ml-2 flex-1 rounded-md bg-zinc-950 px-3 py-1">
             <span className="text-[10px] text-zinc-500">app.agiworkforce.com</span>
           </div>
         </div>
         {/* Web app */}
-        <div className="flex h-80 bg-[#111]">
+        <div className="flex h-80 bg-zinc-950">
           {/* Sidebar indicator */}
-          <div className="w-10 border-r border-white/5 bg-[#0e0e0e] py-3">
+          <div className="w-10 border-r border-white/5 bg-zinc-950 py-3">
             {['💬', '🔧', '📁', '⚙️'].map((e) => (
               <div key={e} className="mb-2 flex justify-center text-[8px] opacity-50">
                 {e}
@@ -196,9 +196,9 @@ function WebMockup() {
 function CliMockup() {
   return (
     <div className="relative mx-auto w-full max-w-lg">
-      <div className="rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-zinc-950 shadow-2xl overflow-hidden">
         {/* Terminal header */}
-        <div className="flex items-center bg-[#1a1a1a] px-3 py-2">
+        <div className="flex items-center bg-zinc-900 px-3 py-2">
           <div className="flex gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
@@ -228,7 +228,7 @@ function CliMockup() {
           </div>
           <div className="text-purple-300/80">⚡ Updating 4 test files...</div>
           <div className="text-zinc-600">───────────────────────────────────────</div>
-          <div className="text-emerald-400/90">✓ 6 files modified, all 48 tests passing</div>
+          <div className="text-emerald-400/90">✓ Changes staged for review</div>
           <div className="text-zinc-600 mt-1">Tokens: 12,847 in · 3,291 out · Cost: $0.08</div>
           <div className="mt-2">
             <span className="text-emerald-400">❯ </span>
@@ -244,14 +244,14 @@ function CliMockup() {
 function VsCodeMockup() {
   return (
     <div className="relative mx-auto w-full max-w-lg">
-      <div className="rounded-xl border border-white/10 bg-[#1e1e1e] shadow-2xl overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-zinc-900 shadow-2xl overflow-hidden">
         {/* Title bar */}
-        <div className="flex items-center bg-[#2d2d2d] px-3 py-1.5">
+        <div className="flex items-center bg-zinc-800 px-3 py-1.5">
           <span className="text-[10px] text-zinc-500">main.tsx - AGI - VS Code</span>
         </div>
         <div className="flex h-80">
           {/* Activity bar */}
-          <div className="flex w-8 flex-col items-center gap-3 bg-[#2d2d2d] py-3">
+          <div className="flex w-8 flex-col items-center gap-3 bg-zinc-800 py-3">
             {['📄', '🔍', '⎇', '🐛', '🧩'].map((icon) => (
               <span key={icon} className="text-[8px] opacity-40">
                 {icon}
@@ -348,7 +348,7 @@ function VsCodeMockup() {
             ))}
           </div>
           {/* @agi panel */}
-          <div className="w-40 border-l border-white/5 bg-[#252526] p-2">
+          <div className="w-40 border-l border-white/5 bg-zinc-800/80 p-2">
             <div className="mb-2 flex items-center gap-1">
               <div className="h-2 w-2 rounded-full bg-blue-500" />
               <span className="text-[9px] font-bold text-blue-400">@agi</span>
@@ -360,7 +360,7 @@ function VsCodeMockup() {
               <p className="text-[7px] leading-relaxed text-zinc-400">
                 Added error handling and retry logic with exponential backoff.
               </p>
-              <div className="rounded-md border border-white/5 bg-[#1e1e1e] p-1 font-mono text-[6px] text-zinc-400">
+              <div className="rounded-md border border-white/5 bg-zinc-900 p-1 font-mono text-[6px] text-zinc-400">
                 + retryWithBackoff(refresh, 3)
               </div>
               <div className="mt-1.5 rounded bg-emerald-500/15 px-2 py-1 text-center text-[8px] font-medium text-emerald-400">
@@ -378,15 +378,15 @@ function VsCodeMockup() {
 function ExtensionMockup() {
   return (
     <div className="relative mx-auto w-full max-w-lg">
-      <div className="rounded-xl border border-white/10 bg-[#0e0e0e] shadow-2xl overflow-hidden">
+      <div className="rounded-xl border border-white/10 bg-zinc-950 shadow-2xl overflow-hidden">
         {/* Browser chrome */}
-        <div className="flex items-center gap-2 bg-[#1a1a1a] px-3 py-2">
+        <div className="flex items-center gap-2 bg-zinc-900 px-3 py-2">
           <div className="flex gap-1.5">
             <div className="h-2.5 w-2.5 rounded-full bg-red-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-yellow-500/70" />
             <div className="h-2.5 w-2.5 rounded-full bg-green-500/70" />
           </div>
-          <div className="ml-2 flex-1 rounded-md bg-[#111] px-3 py-1">
+          <div className="ml-2 flex-1 rounded-md bg-zinc-950 px-3 py-1">
             <span className="text-[10px] text-zinc-500">github.com/acme/myproject</span>
           </div>
           <div className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-400">
@@ -394,7 +394,7 @@ function ExtensionMockup() {
           </div>
         </div>
         {/* Page + side panel */}
-        <div className="relative flex h-80 bg-[#111]">
+        <div className="relative flex h-80 bg-zinc-950">
           {/* Background page */}
           <div className="flex-1 p-4 opacity-40">
             <div className="mb-3 flex items-center gap-2">
@@ -412,7 +412,7 @@ function ExtensionMockup() {
             </div>
           </div>
           {/* Extension side panel */}
-          <div className="w-48 border-l border-amber-500/20 bg-[#141310]/95 p-3 backdrop-blur-xl">
+          <div className="w-48 border-l border-amber-500/20 bg-amber-950/30 p-3 backdrop-blur-xl">
             <div className="mb-1 flex items-center justify-between">
               <span className="text-[10px] font-bold text-amber-400">AGI</span>
               <span className="text-[8px] text-zinc-600">✕</span>
@@ -445,7 +445,7 @@ function MobileMockup() {
   return (
     <div className="relative mx-auto w-[180px]">
       {/* Phone frame */}
-      <div className="aspect-[9/19.5] rounded-[36px] border-[3px] border-zinc-700 bg-[#0e0e0e] p-1.5 shadow-2xl">
+      <div className="aspect-[9/19.5] rounded-[36px] border-[3px] border-zinc-700 bg-zinc-950 p-1.5 shadow-2xl">
         {/* Dynamic Island */}
         <div className="mx-auto mb-1 h-5 w-20 rounded-b-2xl bg-black" />
         {/* Status bar */}
@@ -458,7 +458,7 @@ function MobileMockup() {
           </div>
         </div>
         {/* Screen */}
-        <div className="mx-1 flex flex-1 flex-col rounded-[22px] bg-[#111] p-2.5">
+        <div className="mx-1 flex flex-1 flex-col rounded-[22px] bg-zinc-950 p-2.5">
           {/* Header */}
           <div className="mb-2 flex items-center justify-between">
             <span className="text-[8px] font-bold text-white">AGI</span>
@@ -492,7 +492,7 @@ function MobileMockup() {
             </div>
             <div className="max-w-[85%]">
               <p className="text-[6px] leading-relaxed text-zinc-400">
-                All 3 agents completed. Merged to main, CI passing. Ready for deploy.
+                3 agent updates are ready for review before deploy.
               </p>
             </div>
           </div>
@@ -525,9 +525,9 @@ const surfaces: Surface[] = [
     icon: '🖥️',
     label: 'Desktop',
     tech: 'Tauri v2 · Rust + React 19',
-    color: '#c8892a',
+    color: 'var(--color-workforce)',
     features: [
-      'Full computer use - browser, keyboard, screen capture',
+      'Local workspace shell for files, tools, and approved desktop actions',
       `${MARKETING.tools.display} native IPC tools, no plugins required`,
       'Runs Ollama, LM Studio, and local models offline',
     ],
@@ -537,11 +537,11 @@ const surfaces: Surface[] = [
     icon: '🌐',
     label: 'Web',
     tech: 'Next.js SPA',
-    color: '#06b6d4',
+    color: 'var(--color-info)',
     features: [
       'Access from any browser - Chrome, Safari, Firefox, Edge',
-      'Same AI capabilities as the desktop app',
-      'No install needed, share links to conversations',
+      'Account, projects, synced chats, artifacts, and billing/waitlist',
+      'No install needed for hosted account workflows',
     ],
     mockup: <WebMockup />,
   },
@@ -549,11 +549,11 @@ const surfaces: Surface[] = [
     icon: '⌨️',
     label: 'CLI',
     tech: 'Rust binary · agi',
-    color: '#a855f7',
+    color: 'var(--color-agent-thinking)',
     features: [
       'Terminal-native agent with streaming output',
-      'Pipe-friendly - compose with grep, jq, and shell scripts',
-      'CI/CD ready - run in GitHub Actions, Docker, headless',
+      'Workspace-scoped commands with provider and model flags',
+      'Designed for shell workflows and local developer tasks',
     ],
     mockup: <CliMockup />,
   },
@@ -561,11 +561,11 @@ const surfaces: Surface[] = [
     icon: '🧩',
     label: 'VS Code',
     tech: '@agi chat participant',
-    color: '#3b82f6',
+    color: 'var(--color-agent-active)',
     features: [
       'Inline code assistance inside your editor',
       'Workspace-aware - understands your full project',
-      'MCP integrated - same tools as the desktop app',
+      'Editor-native path for code review and project context',
     ],
     mockup: <VsCodeMockup />,
   },
@@ -573,11 +573,11 @@ const surfaces: Surface[] = [
     icon: '🔌',
     label: 'Browser Extension',
     tech: 'Chrome MV3',
-    color: '#f59e0b',
+    color: 'var(--color-agent-warning)',
     features: [
-      'AI overlay on any webpage - summarize, extract, act',
+      'AI overlay for webpage summarization and extraction',
       "Context extraction from the page you're viewing",
-      'Quick actions - explain, translate, rewrite, code review',
+      'Quick actions with explicit browser context',
     ],
     mockup: <ExtensionMockup />,
   },
@@ -585,10 +585,10 @@ const surfaces: Surface[] = [
     icon: '📱',
     label: 'Mobile',
     tech: 'Expo · iOS + Android',
-    color: '#10b981',
+    color: 'var(--color-agent-success)',
     features: [
-      'Monitor running agents from your phone',
-      'Push notifications when tasks complete',
+      'Review agent status and lightweight continuity on the go',
+      'Mobile-first local/BYOK onboarding path',
       'Quick prompts and conversation history on the go',
     ],
     mockup: <MobileMockup />,
@@ -599,13 +599,13 @@ const surfaces: Surface[] = [
 function ProgressIndicator({ activeIndex, total }: { activeIndex: number; total: number }) {
   return (
     <div className="hidden md:flex flex-col items-center gap-2">
-      <span className="mb-1 font-mono text-[10px] text-[#c8892a]">
+      <span className="mb-1 font-mono text-[10px] text-workforce">
         {String(activeIndex + 1).padStart(2, '0')} / {String(total).padStart(2, '0')}
       </span>
       <div className="relative flex flex-col items-center gap-2">
         <div className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-white/10" />
         <motion.div
-          className="absolute left-1/2 top-0 w-px -translate-x-1/2 bg-[#c8892a] origin-top"
+          className="absolute left-1/2 top-0 w-px -translate-x-1/2 bg-workforce origin-top"
           animate={{ height: `${(activeIndex / Math.max(total - 1, 1)) * 100}%` }}
           transition={{ duration: 0.4, ease: SPRING_EASE }}
         />
@@ -616,7 +616,7 @@ function ProgressIndicator({ activeIndex, total }: { activeIndex: number; total:
             animate={{
               width: i === activeIndex ? 10 : 6,
               height: i === activeIndex ? 10 : 6,
-              backgroundColor: i <= activeIndex ? '#c8892a' : 'rgba(255,255,255,0.15)',
+              backgroundColor: i <= activeIndex ? 'var(--color-workforce)' : 'var(--color-muted)',
             }}
             transition={{ duration: 0.3, ease: SPRING_EASE }}
           />
@@ -629,30 +629,30 @@ function ProgressIndicator({ activeIndex, total }: { activeIndex: number; total:
 /* ─── Static Fallback (mobile / reduced-motion) ──────────────────── */
 function SurfaceShowcaseStatic() {
   return (
-    <div className="mt-20 space-y-px bg-[#1a1917]">
+    <div className="mt-20 space-y-px bg-zinc-900">
       {surfaces.map((s, i) => (
         <div
           key={s.label}
-          className="scroll-reveal opacity-0 translate-y-8 transition-all duration-1000 ease-out bg-[#09090b]"
+          className="scroll-reveal opacity-0 translate-y-8 transition-all duration-1000 ease-out bg-zinc-950"
         >
           <div className="mx-auto grid max-w-6xl items-center gap-8 px-4 py-12 md:grid-cols-[1fr_2fr] md:py-16">
             <div>
               <div className="mb-4 h-0.5 w-12 rounded-full" style={{ backgroundColor: s.color }} />
-              <p className="mb-1 font-mono text-xs" style={{ color: `${s.color}99` }}>
+              <p className="mb-1 font-mono text-xs opacity-70" style={{ color: s.color }}>
                 {s.tech}
               </p>
-              <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-[#edebe8]">
+              <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-zinc-100">
                 <span>{s.icon}</span>
                 {s.label}
               </h3>
-              <p className="mb-4 font-mono text-[10px] text-[#555150]">
+              <p className="mb-4 font-mono text-[10px] text-zinc-600">
                 {String(i + 1).padStart(2, '0')} / {String(surfaces.length).padStart(2, '0')}
               </p>
               <ul className="space-y-2.5">
                 {s.features.map((f) => (
                   <li
                     key={f}
-                    className="flex items-start gap-2 text-sm leading-relaxed text-[#888480]"
+                    className="flex items-start gap-2 text-sm leading-relaxed text-zinc-400"
                   >
                     <span className="mt-0.5" style={{ color: s.color }}>
                       &#8226;
@@ -730,14 +730,14 @@ export function SurfaceShowcase() {
       className="relative mt-20"
       style={{ height: surfaces.length * PX_PER_SURFACE }}
     >
-      <div className={`${overlayPosition} flex h-screen items-center bg-[#09090b]`}>
+      <div className={`${overlayPosition} flex h-screen items-center bg-zinc-950`}>
         <div className="mx-auto w-full max-w-6xl px-4 py-16">
           {/* Section header */}
           <div className="mb-10">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#c8892a]">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-workforce">
               Surfaces
             </p>
-            <h2 className="font-heading text-3xl tracking-tight md:text-4xl text-[#edebe8]">
+            <h2 className="font-heading text-3xl tracking-tight md:text-4xl text-zinc-100">
               Available on every surface
             </h2>
           </div>
@@ -772,10 +772,10 @@ export function SurfaceShowcase() {
                     className="mb-4 h-0.5 w-12 rounded-full"
                     style={{ backgroundColor: active.color }}
                   />
-                  <p className="mb-1 font-mono text-xs" style={{ color: `${active.color}99` }}>
+                  <p className="mb-1 font-mono text-xs opacity-70" style={{ color: active.color }}>
                     {active.tech}
                   </p>
-                  <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-[#edebe8]">
+                  <h3 className="mb-1 flex items-center gap-2 text-2xl font-bold text-zinc-100">
                     <span>{active.icon}</span>
                     {active.label}
                   </h3>
@@ -790,7 +790,7 @@ export function SurfaceShowcase() {
                           duration: 0.25,
                           ease: SPRING_EASE,
                         }}
-                        className="flex items-start gap-2 text-sm leading-relaxed text-[#888480]"
+                        className="flex items-start gap-2 text-sm leading-relaxed text-zinc-400"
                       >
                         <span className="mt-0.5" style={{ color: active.color }}>
                           &#8226;

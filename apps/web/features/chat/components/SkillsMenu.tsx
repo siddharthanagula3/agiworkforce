@@ -5,7 +5,7 @@
  * Body preview and expand/collapse have been removed; the heavy progressive-
  * disclosure version lives in the settings/skills page.
  *
- * Footer rows: "Manage skills" and "+ Add skill".
+ * Footer row: "Open skills library".
  */
 
 import React, { useEffect, useState } from 'react';
@@ -68,7 +68,10 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
 
   if (error) {
     return (
-      <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+      <div
+        role="alert"
+        className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive"
+      >
         Failed to load skills: {error}
       </div>
     );
@@ -81,14 +84,7 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
         onClick={onClose}
         className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
       >
-        Manage skills
-      </a>
-      <a
-        href="/skills"
-        onClick={onClose}
-        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
-      >
-        + Add skill
+        Open skills library
       </a>
     </div>
   );
@@ -97,8 +93,7 @@ export function SkillsMenu({ query, onSelect, onClose }: SkillsMenuProps): React
     return (
       <div className="flex w-56 flex-col p-1">
         <div className="px-3 py-3 text-sm text-muted-foreground">
-          No skills installed. Create skills under{' '}
-          <code className="text-xs">~/.claude/skills/</code>.
+          No skills installed. Open the skills library to manage available AGI skills.
         </div>
         {footer}
       </div>

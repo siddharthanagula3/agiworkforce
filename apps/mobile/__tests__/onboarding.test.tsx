@@ -1,18 +1,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Onboarding Screen — component tests (v1 local-only rewrite)
+ * Onboarding Screen — component tests
  *
  * PRD-MOBILE §11 3-screen flow:
  *   Screen 1 (Hero) → disclosure modal → Screen 2 (Device tier) → Screen 3 (Download)
  *
- * Locked (2026-05-18):
- *   - No cloud branch, no login button, no BYOK
- *   - Hero tagline: "AGI runs on your device."
- *   - Footer: "Made by AGI Automation LLC · Delaware, USA"
+ * Current lock:
+ *   - Local demo path first
+ *   - Cloud branch remains invite-gated behind its own UI
+ *   - Footer: "Made by AGI Automation LLC, USA"
  *   - Compliance disclosure fires before screen 2 (Article 50(1) + Apple 5.1.2(i))
- *
- * Tests that relied on the old 4-branch flow (welcome/mode-picker/cloud/BYOK)
- * were replaced here when onboarding-engineer rewrote the component in task #16.
  */
 
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -114,6 +111,12 @@ jest.mock('@agiworkforce/compliance', () => ({
 }));
 
 const mockDetectCapabilities = jest.fn(() => new Promise(() => {}));
+const mockGetInstalledModel = jest.fn().mockResolvedValue(null);
+
+jest.mock('../storage/installedModels', () => ({
+  getInstalledModel: (...args: unknown[]) => mockGetInstalledModel(...args),
+  recordInstalledModel: jest.fn().mockResolvedValue(undefined),
+}));
 
 // Local LLM catalog stub
 jest.mock('@agiworkforce/local-llm', () => ({
@@ -161,11 +164,12 @@ import OnboardingScreen from '../app/(public)/onboarding';
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('Onboarding (v1 local-only)', () => {
+describe('Onboarding', () => {
   beforeEach(() => {
     jest.useRealTimers();
     jest.clearAllMocks();
     mockIsDisclosureSatisfied.mockReturnValue(false);
+    mockGetInstalledModel.mockResolvedValue(null);
   });
 
   // -------------------------------------------------------------------------
@@ -188,9 +192,19 @@ describe('Onboarding (v1 local-only)', () => {
       expect(getByTestId('hero-wordmark')).toBeTruthy();
     });
 
-    it('shows exact locked tagline', () => {
+    it('shows the polished hero tagline', () => {
+      const { getByText } = render(<OnboardingScreen />);
+      expect(getByText('Your AI workspace for everyday work.')).toBeTruthy();
+    });
+
+    it('shows hero tagline testID', () => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId('hero-tagline')).toBeTruthy();
+    });
+
+    it('shows the website AGI brand mark beside the wordmark', () => {
+      const { getByTestId } = render(<OnboardingScreen />);
+      expect(getByTestId('hero-brand-mark')).toBeTruthy();
     });
 
     it('shows locked footer copy', () => {
@@ -201,6 +215,31 @@ describe('Onboarding (v1 local-only)', () => {
     it('shows "Start chatting" button', () => {
       const { getByTestId } = render(<OnboardingScreen />);
       expect(getByTestId('hero-start-chatting-btn')).toBeTruthy();
+    });
+
+    it('shows Continue when the recommended model is already installed', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(true);
+      mockGetInstalledModel.mockResolvedValue({
+        id: 'qwen2.5-1.5b-instruct-q4_k_m',
+        display_name: 'Qwen 2.5 1.5B',
+        runtime: 'local',
+        format: 'pte',
+        size_bytes: 1_073_741_824,
+        sha256: null,
+        local_path: null,
+        installed_at: Date.now(),
+        last_used_at: null,
+        capabilities: null,
+      });
+
+      const { getByTestId, getByText } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+
+      await waitFor(() => expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy());
+      await waitFor(() => expect(getByText('Continue')).toBeTruthy());
     });
 
     it('does NOT show device-tier screen on initial render', () => {

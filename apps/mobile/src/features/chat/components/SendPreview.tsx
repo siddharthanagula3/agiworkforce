@@ -10,7 +10,7 @@
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { ChevronDown, ChevronUp, Cloud, HardDrive, KeyRound, Lock } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Cloud, HardDrive, Lock } from 'lucide-react-native';
 import type { ReactElement } from 'react';
 import type { SendPreviewPresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
@@ -29,9 +29,6 @@ function DestinationIcon({
   if (presentation.staysLocal) {
     return <HardDrive size={14} color={colors.agentSuccess} />;
   }
-  if (presentation.providerMode === 'DirectByok') {
-    return <KeyRound size={14} color={colors.agentWarning} />;
-  }
   return <Cloud size={14} color="#7dd3fc" />;
 }
 
@@ -39,10 +36,29 @@ function getAccent(presentation: SendPreviewPresentation): { bg: string; border:
   if (presentation.staysLocal) {
     return { bg: 'rgba(16, 185, 129, 0.06)', border: 'rgba(16, 185, 129, 0.3)' };
   }
-  if (presentation.providerMode === 'DirectByok') {
-    return { bg: 'rgba(245, 158, 11, 0.06)', border: 'rgba(245, 158, 11, 0.3)' };
-  }
   return { bg: 'rgba(56, 189, 248, 0.06)', border: 'rgba(56, 189, 248, 0.3)' };
+}
+
+function getMobileDestinationLabel(presentation: SendPreviewPresentation): string {
+  if (presentation.providerMode === 'DirectByok') return 'Cloud invite required';
+  return presentation.destinationLabel;
+}
+
+function getMobilePrivacyLabel(presentation: SendPreviewPresentation): string {
+  if (presentation.providerMode === 'DirectByok') return 'Cloud';
+  return presentation.privacyShortLabel;
+}
+
+function getMobileBannerCopy(presentation: SendPreviewPresentation): string {
+  if (presentation.providerMode === 'DirectByok') {
+    return 'Cloud access is invite-gated on Mobile. Continue after Cloud Managed access is enabled.';
+  }
+  return presentation.bannerCopy;
+}
+
+function getMobileModelLabel(presentation: SendPreviewPresentation): string | undefined {
+  if (presentation.providerMode === 'DirectByok') return undefined;
+  return presentation.modelLabel;
 }
 
 function DetailRow({ term, definition }: { term: string; definition: string }) {
@@ -86,7 +102,7 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
           style={{ flex: 1, fontSize: 12, fontWeight: '600', color: colors.textPrimary }}
           numberOfLines={1}
         >
-          {presentation.destinationLabel}
+          {getMobileDestinationLabel(presentation)}
         </Text>
         <View
           style={{
@@ -111,15 +127,17 @@ export function SendPreview({ presentation, defaultExpanded = false }: SendPrevi
               letterSpacing: 0.5,
             }}
           >
-            {presentation.privacyShortLabel}
+            {getMobilePrivacyLabel(presentation)}
           </Text>
         </View>
       </View>
-      {presentation.modelLabel ? (
-        <Text style={{ fontSize: 10, color: colors.textMuted }}>{presentation.modelLabel}</Text>
+      {getMobileModelLabel(presentation) ? (
+        <Text style={{ fontSize: 10, color: colors.textMuted }}>
+          {getMobileModelLabel(presentation)}
+        </Text>
       ) : null}
       <Text style={{ fontSize: 11, lineHeight: 15, color: colors.textSecondary }}>
-        {presentation.bannerCopy}
+        {getMobileBannerCopy(presentation)}
       </Text>
       {detailsAvailable ? (
         <Pressable

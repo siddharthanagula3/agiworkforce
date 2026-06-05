@@ -15,6 +15,7 @@ import {
   Plug,
   CircleCheck,
   Loader2,
+  CircleX,
   ChevronRight,
   Wrench,
 } from 'lucide-react-native';
@@ -49,6 +50,8 @@ function getStatusLabel(status: ToolCall['status']): string | null {
   switch (status) {
     case 'running':
       return 'Running';
+    case 'completed':
+      return 'Done';
     case 'failed':
       return 'Error';
     default:
@@ -93,46 +96,92 @@ export function InlineToolCall({ toolCall }: InlineToolCallProps) {
 
   const labelColor = toolCall.status === 'failed' ? colors.agentError : colors.textSecondary;
 
+  const statusTone =
+    toolCall.status === 'failed'
+      ? colors.agentError
+      : toolCall.status === 'running'
+        ? colors.agentActive
+        : colors.agentSuccess;
+
   return (
     <>
-      {/* Borderless bar per §4 — no background, no card border */}
       <Pressable
         onPress={handleBarPress}
         style={{
           flexDirection: 'row',
-          alignItems: 'center',
-          gap: 8,
-          height: 32,
-          paddingHorizontal: 4,
-          borderRadius: 6,
+          alignItems: 'stretch',
+          gap: 9,
+          minHeight: 38,
+          paddingHorizontal: 2,
+          paddingVertical: 4,
+          borderRadius: 8,
         }}
         accessible={true}
         accessibilityLabel={`Tool call: ${toolCall.name}`}
         accessibilityRole="button"
         accessibilityHint={hasBody ? 'Double tap to expand details' : undefined}
       >
-        {/* Leading icon — spinner when running, tool icon otherwise */}
-        {toolCall.status === 'running' ? (
-          <Loader2 size={16} strokeWidth={1.75} color={colors.agentActive} />
-        ) : toolCall.status === 'completed' ? (
-          <CircleCheck size={16} strokeWidth={1.75} color={colors.textMuted} />
-        ) : (
-          <ToolIcon size={16} strokeWidth={1.75} color={iconColor} />
-        )}
+        <View style={{ width: 22, alignItems: 'center' }}>
+          <View style={{ flex: 1, width: 1.5, backgroundColor: `${statusTone}38`, minHeight: 5 }} />
+          <View
+            style={{
+              width: 22,
+              height: 22,
+              borderRadius: 11,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: `${statusTone}14`,
+              borderWidth: 1,
+              borderColor: `${statusTone}55`,
+            }}
+          >
+            {toolCall.status === 'running' ? (
+              <Loader2 size={13} strokeWidth={1.75} color={colors.agentActive} />
+            ) : toolCall.status === 'completed' ? (
+              <CircleCheck size={13} strokeWidth={1.75} color={colors.agentSuccess} />
+            ) : (
+              <CircleX size={13} strokeWidth={1.75} color={colors.agentError} />
+            )}
+          </View>
+          <View style={{ flex: 1, width: 1.5, backgroundColor: `${statusTone}22`, minHeight: 5 }} />
+        </View>
 
-        {/* Tool name */}
-        <Text style={{ fontSize: 13, color: labelColor, flex: 1 }} numberOfLines={1}>
-          {toolCall.name}
-          {statusLabel ? `: ${statusLabel}` : ''}
-          {toolCall.filePath ? ` ${toolCall.filePath}` : ''}
-        </Text>
-
-        {/* Trailing chevron — only when expandable */}
-        {hasBody && (
-          <Animated.View style={chevronStyle}>
-            <ChevronRight size={14} strokeWidth={2} color={colors.textMuted} />
-          </Animated.View>
-        )}
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <ToolIcon size={15} strokeWidth={1.75} color={iconColor} />
+            <Text
+              style={{ fontSize: 13, color: labelColor, flex: 1, fontWeight: '600' }}
+              numberOfLines={1}
+            >
+              {toolCall.name}
+              {toolCall.filePath ? ` ${toolCall.filePath}` : ''}
+            </Text>
+            {statusLabel ? (
+              <View
+                style={{
+                  borderRadius: 999,
+                  backgroundColor: `${statusTone}14`,
+                  paddingHorizontal: 7,
+                  paddingVertical: 2,
+                }}
+              >
+                <Text style={{ color: statusTone, fontSize: 10, fontWeight: '700' }}>
+                  {statusLabel}
+                </Text>
+              </View>
+            ) : null}
+            {hasBody ? (
+              <Animated.View style={chevronStyle}>
+                <ChevronRight size={14} strokeWidth={2} color={colors.textMuted} />
+              </Animated.View>
+            ) : null}
+          </View>
+          {toolCall.command ? (
+            <Text style={{ color: colors.textMuted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>
+              {toolCall.command}
+            </Text>
+          ) : null}
+        </View>
       </Pressable>
 
       {/* Expanded body as bottom-sheet per mobile §10 override */}

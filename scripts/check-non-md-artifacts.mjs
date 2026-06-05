@@ -122,6 +122,7 @@ const allowedLiveNonMarkdownPrefixes = [
   'docs/api/',
   'docs/visual-verification/',
   'audit/desktop-ui-computer-use/screenshots/',
+  'audit/demo-readiness/screenshots/',
 ];
 
 for (const scanRoot of ['docs', 'audit', 'reports', 'tasks']) {

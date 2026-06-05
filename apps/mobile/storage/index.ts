@@ -4,7 +4,6 @@ export type {
   Message,
   MemoryFact,
   InstalledModel,
-  ProviderKeyRecord,
   CustomInstruction,
   TelemetryEvent,
   ChatMode,
@@ -16,7 +15,6 @@ export * from './conversations';
 export * from './messages';
 export * from './memory';
 export * from './installedModels';
-export * from './providerKeys';
 export * from './customInstructions';
 export * from './settingsDb';
 export * from './telemetry';

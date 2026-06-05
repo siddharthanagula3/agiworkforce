@@ -297,6 +297,12 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                   placeholder="Search messages and conversations..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      void handleSearch();
+                    }
+                  }}
                   className="pl-9 pr-9"
                   autoFocus
                 />

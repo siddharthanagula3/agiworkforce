@@ -5,19 +5,13 @@
  *   Long-press mic in chat composer → VoiceConversationScreen appears
  *   Pulsing orb is visible (voice-conversation-orb)
  *   Tap the orb → listening phase begins
- *   Mock mic input returns a transcript after 2 s
+ *   Voice transcription returns text through the app's real voice path
  *   thinking → speaking phases progress
  *   Tap end-call → VoiceConversationScreen dismissed
  *   Chat screen with composer is visible again
  *
- * Mocks:
- *   - Microphone input is mocked by Detox's `device.setSimulatorPermission`.
- *   - The VoiceService.transcribe call is intercepted via the app's
- *     EXPO_PUBLIC_E2E_VOICE_TRANSCRIPT launch arg (handled in services/voice.ts
- *     when the env var is set).
- *   - TTS output is silenced by EXPO_PUBLIC_E2E_TTS_SILENT=1.
- *   - No real LLM call; the app's sendMessage stub returns immediately in
- *     v1 when SEED_ONBOARDING_DONE is set.
+ * Precondition: onboarding is complete and microphone permission is granted on
+ * the simulator. This spec does not seed transcripts through launch arguments.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20
@@ -29,15 +23,7 @@ describe('Voice record and send — on-device STT', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,
-      delete: true,
-      launchArgs: {
-        DETOX_DISABLE_BIOMETRIC: '1',
-        SEED_ONBOARDING_DONE: '1',
-        // Mock STT: transcribe() returns this text instead of running inference.
-        EXPO_PUBLIC_E2E_VOICE_TRANSCRIPT: 'hello world',
-        // Silence TTS so the test does not wait for audio playback.
-        EXPO_PUBLIC_E2E_TTS_SILENT: '1',
-      },
+      delete: false,
       permissions: {
         microphone: 'YES',
       },
@@ -107,5 +93,6 @@ describe('Voice record and send — on-device STT', () => {
     await waitFor(element(by.id('chat.composer.input')))
       .toBeVisible()
       .withTimeout(6000);
+    await device.takeScreenshot('06-voice-recording');
   });
 });

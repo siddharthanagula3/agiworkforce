@@ -36,7 +36,7 @@ export const FEATURES = {
   /** Auth (login, OAuth, password reset). No auth in v1 — local only. */
   auth: false,
 
-  /** Mobile has no BYOK surface in v1. Desktop/CLI own BYOK. */
+  /** Legacy direct-provider credential entry is not exposed on Mobile. */
   byokKeys: false,
 
   /** Cloud agent orchestration (Agents screen, agent stores). */

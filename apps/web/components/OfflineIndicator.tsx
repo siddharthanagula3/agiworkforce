@@ -202,7 +202,7 @@ export function OfflineIndicator({
           )}
 
           {state.state === SyncState.SYNCING && (
-            <span className="px-2 py-1 rounded text-xs font-medium opacity-75">Syncing...</span>
+            <span className="px-2 py-1 rounded text-xs font-medium opacity-75">Syncing…</span>
           )}
         </div>
       </div>
@@ -222,11 +222,16 @@ function formatTime(date: Date): string {
 
   if (diffSecs < 60) {
     return 'just now';
-  } else if (diffMins < 60) {
-    return `${diffMins}m ago`;
-  } else if (diffHours < 24) {
-    return `${diffHours}h ago`;
-  } else {
-    return date.toLocaleDateString();
   }
+  if (diffMins < 60) {
+    return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(-diffMins, 'minute');
+  }
+  if (diffHours < 24) {
+    return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(-diffHours, 'hour');
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
 }

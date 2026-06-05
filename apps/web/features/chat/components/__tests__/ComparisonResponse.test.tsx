@@ -14,8 +14,11 @@ const OPTION_B = { label: 'Vision-forward', content: 'Think big: multi-surface, 
 describe('ComparisonResponse', () => {
   it('renders both tab buttons with labels', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
+    expect(screen.getByRole('tablist', { name: /comparison options/i })).toBeInTheDocument();
     expect(screen.getByTestId('comparison-tab-a')).toBeInTheDocument();
     expect(screen.getByTestId('comparison-tab-b')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /builder-focused/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /vision-forward/i })).toBeInTheDocument();
     expect(screen.getByTestId('comparison-tab-a').textContent).toContain('Builder-focused');
     expect(screen.getByTestId('comparison-tab-b').textContent).toContain('Vision-forward');
   });
@@ -91,6 +94,7 @@ describe('ComparisonResponse', () => {
     render(<ComparisonResponse optionA={OPTION_A} optionB={OPTION_B} />);
     expect(screen.getByTestId('comparison-tab-a').getAttribute('aria-selected')).toBe('true');
     expect(screen.getByTestId('comparison-tab-b').getAttribute('aria-selected')).toBe('false');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'comparison-tab-a');
   });
 
   it('content area testid updates when tab switches', () => {

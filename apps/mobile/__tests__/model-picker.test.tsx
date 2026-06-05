@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Tests for ModelPickerSheet component.
  *
@@ -86,7 +87,7 @@ jest.mock('lucide-react-native', () => ({
   Cpu: jest.fn().mockReturnValue(null),
   Download: jest.fn().mockReturnValue(null),
   Lock: jest.fn().mockReturnValue(null),
-  CloudOff: jest.fn().mockReturnValue(null),
+  Cloud: jest.fn().mockReturnValue(null),
   ArrowUpCircle: jest.fn().mockReturnValue(null),
   Shuffle: jest.fn().mockReturnValue(null),
 }));
@@ -101,6 +102,14 @@ jest.mock('react-native-reanimated', () => ({
   FadeOut: { duration: jest.fn().mockReturnValue({}) },
   useReducedMotion: jest.fn().mockReturnValue(false),
 }));
+
+jest.mock('../src/features/cloud-bridge', () => {
+  const { View } = require('react-native');
+  return {
+    InviteCodeModal: ({ open }: { open: boolean }) =>
+      open ? <View testID="invite-code-modal" /> : null,
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Import modules under test AFTER mocks
@@ -195,8 +204,8 @@ describe('ModelPickerSheet', () => {
     const { getByText, getAllByText } = renderPicker();
 
     expect(getByText('On device')).toBeTruthy();
-    expect(getByText('Cloud Managed (locked)')).toBeTruthy();
-    expect(getAllByText('Locked').length).toBeGreaterThan(0);
+    expect(getByText('Cloud')).toBeTruthy();
+    expect(getAllByText('Invite').length).toBeGreaterThan(0);
   });
 
   it('marks the selected local model row as selected via accessibilityState', () => {
@@ -207,12 +216,12 @@ describe('ModelPickerSheet', () => {
     expect(standardRow.props.accessibilityState.selected).toBe(true);
   });
 
-  it('marks cloud rows as locked and disabled', () => {
+  it('marks cloud rows as invite-gated but tappable', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText } = renderPicker();
 
-    const lockedRow = getByLabelText(`${lockedModel.name}, locked, ${CLOUD_LOCK_REASON}`);
-    expect(lockedRow.props.accessibilityState.disabled).toBe(true);
+    const lockedRow = getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`);
+    expect(lockedRow.props.accessibilityState.disabled).toBe(false);
   });
 
   it('selects a local model when tapped', () => {
@@ -256,14 +265,15 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('does not select or close for locked cloud rows', () => {
+  it('does not select locked cloud rows and opens invite access', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText } = renderPicker();
+    const { getByLabelText, getByTestId } = renderPicker();
 
-    fireEvent.press(getByLabelText(`${lockedModel.name}, locked, ${CLOUD_LOCK_REASON}`));
+    fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
-    expect(mockSheetRef.current.close).not.toHaveBeenCalled();
+    expect(mockSheetRef.current.close).toHaveBeenCalled();
+    expect(getByTestId('invite-code-modal')).toBeTruthy();
   });
 
   it('selects a local auto mode when tapped', () => {

@@ -4,7 +4,7 @@
  * GET /api/chat/conversations/[id] - Get conversation with messages (paginated)
  *   Query params: limit (1-500, default 100), offset (default 0)
  *   Response: { conversation, messages, total, hasMore }
- * PUT /api/chat/conversations/[id] - Update conversation (rename)
+ * PUT /api/chat/conversations/[id] - Update conversation metadata
  * DELETE /api/chat/conversations/[id] - Soft delete conversation
  */
 
@@ -41,7 +41,7 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const db = getNeonChatDb();
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, title, model, created_at, updated_at
+      select id, title, model, project_id, created_at, updated_at
       from web_conversations
       where id = $1 and user_id = $2 and deleted_at is null
       limit 1
@@ -114,6 +114,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
   if (body['model']) updates['model'] = body['model'];
+  const hasProjectIdUpdate = Object.prototype.hasOwnProperty.call(body, 'projectId');
+  if (hasProjectIdUpdate) updates['projectId'] = body['projectId'];
 
   const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
     `
@@ -121,11 +123,19 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       set
         title = coalesce($3, title),
         model = coalesce($4, model),
+        project_id = case when $5::boolean then $6::text else project_id end,
         updated_at = now()
       where id = $1 and user_id = $2 and deleted_at is null
-      returning id, title, model, created_at, updated_at
+      returning id, title, model, project_id, created_at, updated_at
     `,
-    [id, userId, updates['title'] ?? null, updates['model'] ?? null],
+    [
+      id,
+      userId,
+      updates['title'] ?? null,
+      updates['model'] ?? null,
+      hasProjectIdUpdate,
+      updates['projectId'] ?? null,
+    ],
   );
 
   if (!conversation) {

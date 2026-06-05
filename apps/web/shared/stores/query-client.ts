@@ -10,6 +10,9 @@ import { toast } from 'sonner';
 import { useNotificationStore } from './notification-store';
 import { logger } from '@shared/lib/logger';
 
+const ENABLE_REACT_QUERY_DEVTOOLS =
+  process.env['NEXT_PUBLIC_ENABLE_REACT_QUERY_DEVTOOLS'] === 'true';
+
 /**
  * Extract user-friendly error message from various error types
  */
@@ -131,7 +134,8 @@ export const queryClient = new QueryClient({
   },
 });
 
-// Query client provider wrapper with dev tools
+// Query client provider wrapper. React Query Devtools is opt-in so local
+// public demos do not render product-unrelated floating controls.
 interface QueryProviderProps {
   children: React.ReactNode;
 }
@@ -142,7 +146,7 @@ function QueryDevtools() {
   );
 
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
+    if (process.env.NODE_ENV !== 'development' || !ENABLE_REACT_QUERY_DEVTOOLS) return;
 
     let mounted = true;
     void import('@tanstack/react-query-devtools').then((mod) => {

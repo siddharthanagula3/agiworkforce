@@ -5,8 +5,7 @@
  *   From chat, tap the Image chip (navigates to /(app)/image)
  *   Image picker chooser appears
  *   Tap "Photo Library" (image-picker-library-btn)
- *   Photo picker mock returns a fixture image (fixture is pre-seeded in
- *     simulator Photos app via device.sendUserNotification / setSimulatorPermission)
+ *   Photo picker shows a fixture image preloaded into the simulator
  *   Select the first image
  *   ImageWithQuestion screen appears with default question "What is in this image?"
  *   Type "what is this?" into the input (replaces default)
@@ -14,12 +13,9 @@
  *   On-device vision response renders (image-with-question-answer)
  *   PerformanceChip appears with model + tier
  *
- * Mocks:
- *   - expo-image-picker is NOT mocked at the Detox layer (the real system
- *     photo picker is used). We pre-load a fixture JPEG into the simulator's
- *     Photos library using `xcrun simctl addmedia` before the test run.
- *   - The vision model (runVisionQuery) is the real on-device stub that ships
- *     with the app. No network call is made.
+ * Precondition: onboarding is complete, a local model is installed, and a
+ * public fixture image has been added to the simulator's Photos library with
+ * `xcrun simctl addmedia`.
  *
  * NOTE: Detox must be installed before running.
  *   pnpm add -D detox@20
@@ -34,13 +30,7 @@ describe('Image with question — on-device vision', () => {
   beforeAll(async () => {
     await device.launchApp({
       newInstance: true,
-      delete: true,
-      launchArgs: {
-        DETOX_DISABLE_BIOMETRIC: '1',
-        SEED_ONBOARDING_DONE: '1',
-        // Grant photo library permission without a system prompt.
-        EXPO_PUBLIC_E2E_PHOTO_GRANTED: '1',
-      },
+      delete: false,
       permissions: {
         // Detox permission overrides for iOS simulator
         photos: 'YES',
@@ -113,5 +103,6 @@ describe('Image with question — on-device vision', () => {
     await waitFor(element(by.id('performance-chip')))
       .toBeVisible()
       .withTimeout(10000);
+    await device.takeScreenshot('05-image-question');
   });
 });

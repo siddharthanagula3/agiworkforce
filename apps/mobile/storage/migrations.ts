@@ -59,18 +59,6 @@ export const MIGRATION_SQL: Migration[] = [
         capabilities TEXT
       );
 
-      CREATE TABLE IF NOT EXISTS provider_keys (
-        id TEXT PRIMARY KEY,
-        provider TEXT NOT NULL,
-        prefix TEXT,
-        display_name TEXT,
-        keychain_ref TEXT NOT NULL,
-        scopes TEXT,
-        created_at INTEGER NOT NULL,
-        last_used_at INTEGER,
-        revoked_at INTEGER
-      );
-
       CREATE TABLE IF NOT EXISTS custom_instructions (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,

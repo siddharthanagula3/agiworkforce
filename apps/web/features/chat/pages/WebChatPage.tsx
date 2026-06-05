@@ -37,7 +37,6 @@ import {
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
-import { useChatStore as useUnifiedChatStore } from '@agiworkforce/unified-chat';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
 import type { WebChatMessageMetadata } from '../types/message-metadata';
 import {
@@ -132,6 +131,68 @@ async function saveSystemMessage(params: {
     createdAt: raw.created_at ?? new Date().toISOString(),
     metadata: raw.metadata ?? params.metadata,
   };
+}
+
+async function readChatMutationError(response: Response, fallback: string): Promise<string> {
+  const errorData = await response.json().catch(() => ({}));
+  if (
+    errorData &&
+    typeof errorData === 'object' &&
+    'error' in errorData &&
+    errorData.error &&
+    typeof errorData.error === 'object' &&
+    'message' in errorData.error &&
+    typeof errorData.error.message === 'string'
+  ) {
+    return errorData.error.message;
+  }
+  return fallback;
+}
+
+async function deleteConversationMessage(params: {
+  conversationId: string;
+  messageId: string;
+  authToken: string;
+}): Promise<void> {
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${params.authToken}`,
+  });
+  const response = await fetch(
+    `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
+    {
+      method: 'DELETE',
+      headers,
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'Failed to delete message'));
+  }
+}
+
+async function patchConversationMessageReaction(params: {
+  conversationId: string;
+  messageId: string;
+  reaction: 'thumbsUp' | 'thumbsDown' | null;
+  authToken: string;
+}): Promise<void> {
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${params.authToken}`,
+  });
+  const response = await fetch(
+    `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ reaction: params.reaction }),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'Failed to update reaction'));
+  }
 }
 
 export default function WebChatPage() {
@@ -247,8 +308,11 @@ export default function WebChatPage() {
   const messages = useChatStore((s) => s.messages);
   const activeConversationId = useChatStore((s) => s.activeConversationId);
   const addMessage = useChatStore((s) => s.addMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const isLoading = useChatStore((s) => s.isLoading);
+  const chatError = useChatStore((s) => s.error);
+  const setChatError = useChatStore((s) => s.setError);
 
   // SendPreview presentation — privacy-disclosure card rendered above the
   // composer so users always see where the next turn is going (local device,
@@ -565,8 +629,9 @@ export default function WebChatPage() {
   );
 
   const handleDeleteSession = useCallback(
-    (id: string) => {
-      deleteConversation(id);
+    async (id: string) => {
+      const deleted = await deleteConversation(id);
+      if (!deleted) return;
       if (id === displayedConversationId) {
         setBareChatSessionId(null);
         setActiveConversation(null);
@@ -578,17 +643,16 @@ export default function WebChatPage() {
 
   const handleRenameSession = useCallback(
     (id: string, title: string) => {
-      updateConversation(id, { title });
+      void updateConversation(id, { title });
     },
     [updateConversation],
   );
 
-  const updateUnifiedConversation = useUnifiedChatStore((s) => s.updateConversation);
   const handleMoveToProjectSession = useCallback(
     (sessionId: string, projectId: string) => {
-      updateUnifiedConversation(sessionId, { projectId });
+      void updateConversation(sessionId, { projectId });
     },
-    [updateUnifiedConversation],
+    [updateConversation],
   );
 
   // Auto-title: when the second message arrives (first assistant reply), derive title
@@ -606,37 +670,69 @@ export default function WebChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayedMessages.length, displayedConversationId, conversations, updateConversation]);
 
+  const deletePersistedMessages = useCallback(
+    async (ids: string[]): Promise<boolean> => {
+      if (!displayedConversationId || ids.length === 0) return false;
+
+      const authToken = await getToken();
+      if (!authToken) {
+        setChatError('Not authenticated');
+        return false;
+      }
+
+      try {
+        for (const messageId of ids) {
+          await deleteConversationMessage({
+            conversationId: displayedConversationId,
+            messageId,
+            authToken,
+          });
+          deleteMessage(messageId);
+        }
+        return true;
+      } catch (error) {
+        setChatError(error instanceof Error ? error.message : 'Failed to delete message');
+        return false;
+      }
+    },
+    [deleteMessage, displayedConversationId, getToken, setChatError],
+  );
+
   const handleDeleteMessage = useCallback(
     (id: string) => {
-      deleteMessage(id);
+      void deletePersistedMessages([id]);
     },
-    [deleteMessage],
+    [deletePersistedMessages],
   );
 
   const handleEditMessage = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
-      const msg = displayedMessages.find((m) => m.id === id);
+      const idx = displayedMessages.findIndex((m) => m.id === id);
+      const msg = idx >= 0 ? displayedMessages[idx] : undefined;
       if (!msg || msg.role !== 'user') return;
       if (isTrialExhausted) {
         handleOpenCloudWaitlist();
         return;
       }
-      setComposerPrefill(msg.content);
-      deleteMessage(id);
+      const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
+      const deleted = await deletePersistedMessages(rollbackIds);
+      if (deleted) {
+        setComposerPrefill(msg.content);
+      }
     },
     [
       displayedConversationId,
       displayedMessages,
       isStreaming,
-      deleteMessage,
+      deletePersistedMessages,
       isTrialExhausted,
       handleOpenCloudWaitlist,
     ],
   );
 
   const handleRegenerateMessage = useCallback(
-    (id: string) => {
+    async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
       const idx = displayedMessages.findIndex((m) => m.id === id);
       if (idx <= 0) return;
@@ -653,24 +749,59 @@ export default function WebChatPage() {
         handleOpenCloudWaitlist();
         return;
       }
-      // Remove the assistant message being regenerated, then resend
-      deleteMessage(id);
-      sendMessage(userMsg.content, {
-        model: activeModelId,
-        conversationId: displayedConversationId,
-        attachments: userMsg.attachments,
-      });
+      const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
+      const deleted = await deletePersistedMessages(rollbackIds);
+      if (deleted) {
+        await sendMessage(userMsg.content, {
+          model: activeModelId,
+          conversationId: displayedConversationId,
+          attachments: userMsg.attachments,
+        });
+      }
     },
     [
       displayedConversationId,
       displayedMessages,
       isStreaming,
-      deleteMessage,
+      deletePersistedMessages,
       sendMessage,
       activeModelId,
       isTrialExhausted,
       handleOpenCloudWaitlist,
     ],
+  );
+
+  const handleReactMessage = useCallback(
+    async (id: string, reactionType: 'up' | 'down' | null) => {
+      if (!displayedConversationId) return;
+      const authToken = await getToken();
+      if (!authToken) {
+        setChatError('Not authenticated');
+        return;
+      }
+
+      const reaction =
+        reactionType === 'up' ? 'thumbsUp' : reactionType === 'down' ? 'thumbsDown' : null;
+
+      try {
+        await patchConversationMessageReaction({
+          conversationId: displayedConversationId,
+          messageId: id,
+          reaction,
+          authToken,
+        });
+        const current = useChatStore.getState().messages.find((message) => message.id === id);
+        updateMessage(id, {
+          metadata: {
+            ...current?.metadata,
+            reaction,
+          },
+        });
+      } catch (error) {
+        setChatError(error instanceof Error ? error.message : 'Failed to update reaction');
+      }
+    },
+    [displayedConversationId, getToken, setChatError, updateMessage],
   );
 
   const chatMessages = useMemo(
@@ -744,6 +875,24 @@ export default function WebChatPage() {
             </div>
           </div>
 
+          {chatError && (
+            <div
+              role="alert"
+              aria-live="polite"
+              className="flex shrink-0 items-start justify-between gap-3 border-b border-red-500/25 bg-red-500/10 px-4 py-2 text-sm"
+            >
+              <span className="min-w-0 flex-1 break-words text-red-100">{chatError}</span>
+              <button
+                type="button"
+                onClick={() => setChatError(null)}
+                className="rounded-md p-1 text-red-200 transition-colors hover:bg-red-500/20 hover:text-white"
+                aria-label="Dismiss chat error"
+              >
+                <XIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          )}
+
           {/* Notification permission banner — shown during long generations */}
           {showNotifBanner && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
@@ -811,6 +960,7 @@ export default function WebChatPage() {
                   onRegenerate={handleRegenerateMessage}
                   onEdit={handleEditMessage}
                   onDelete={handleDeleteMessage}
+                  onReact={handleReactMessage}
                   onSendMessage={(text) => setComposerPrefill(text)}
                   onPaywallUpgrade={handleOpenCloudWaitlist}
                 />

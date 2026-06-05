@@ -2,7 +2,7 @@
  * Theme preference tests — C10
  *
  * Covers:
- *   - settingsStore: default is 'dark'
+ *   - settingsStore: default is 'system'
  *   - settingsStore: setThemeMode cycles through all three modes
  *   - settingsStore: round-trip through all modes
  *   - lib/theme getColors: dark mode returns dark palette
@@ -50,7 +50,7 @@ import { getColors, colors, lightColors } from '../src/ui/theme';
 // ---------------------------------------------------------------------------
 
 function resetStore() {
-  useSettingsStore.setState({ themeMode: 'dark' });
+  useSettingsStore.setState({ themeMode: 'system' });
 }
 
 // ---------------------------------------------------------------------------
@@ -60,8 +60,8 @@ function resetStore() {
 describe('settingsStore themeMode', () => {
   beforeEach(resetStore);
 
-  it('defaults to dark', () => {
-    expect(useSettingsStore.getState().themeMode).toBe('dark');
+  it('defaults to system', () => {
+    expect(useSettingsStore.getState().themeMode).toBe('system');
   });
 
   it('setThemeMode switches to light', () => {

@@ -1,5 +1,5 @@
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool';
-export type ModelRuntime = 'local' | 'cloud' | 'byok';
+export type ModelRuntime = 'local' | 'cloud';
 export type ModelFormat = 'gguf' | 'safetensors' | 'mlx' | 'onnx' | 'pte';
 export type ChatMode = 'chat' | 'agent' | 'voice';
 
@@ -52,19 +52,6 @@ export interface InstalledModel {
   installed_at: number;
   last_used_at: number | null;
   capabilities: string | null;
-}
-
-export interface ProviderKeyRecord {
-  id: string;
-  provider: string;
-  prefix: string | null;
-  display_name: string | null;
-  keychain_ref: string;
-  scopes: string | null;
-  created_at: number;
-  last_used_at: number | null;
-  revoked_at: number | null;
-  key_ciphertext?: string;
 }
 
 export interface CustomInstruction {

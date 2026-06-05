@@ -105,11 +105,13 @@ jest.mock('react-native-safe-area-context', () => {
 
 const mockSettingsState = {
   hapticsEnabled: true,
-  themeMode: 'dark' as const,
+  themeMode: 'system' as const,
+  accentColor: 'neutral' as const,
   isTemporaryChat: false,
   autoApproveMode: 'ask',
   setHapticsEnabled: jest.fn(),
   setThemeMode: jest.fn(),
+  setAccentColor: jest.fn(),
   setTemporaryChat: jest.fn(),
   setAutoApproveMode: jest.fn(),
 };
@@ -135,6 +137,14 @@ jest.mock('@/lib/safeOpenURL', () => ({
 jest.mock('@/lib/v1FeatureFlags', () => ({
   FEATURES: { companion: false, connectorsCloudOnly: false },
 }));
+
+jest.mock('@/src/features/cloud-bridge', () => {
+  const { View } = require('react-native');
+  return {
+    InviteCodeModal: ({ open }: { open: boolean }) =>
+      open ? <View testID="invite-code-modal" /> : null,
+  };
+});
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
@@ -165,7 +175,7 @@ import SettingsTabScreen from '@/src/features/settings';
 // ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('SettingsScreen — inset-grouped card layout', () => {
-  it('locks the full settings screen tree (dark mode, Local Active)', () => {
+  it('locks the full settings screen tree (system mode, local demo)', () => {
     const { toJSON } = render(<SettingsTabScreen />);
     expect(toJSON()).toMatchSnapshot();
   });

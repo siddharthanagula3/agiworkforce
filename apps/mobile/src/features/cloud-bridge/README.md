@@ -8,8 +8,8 @@ Canonical reference: `apps/desktop/src/features/cloud-bridge/README.md`
 ## Purpose
 
 Every cloud-only feature on mobile (Connectors, Cloud Sync, Web Search, Computer Use, etc.)
-opens this modal when the user taps the locked surface. v1 ships local-only; this modal is
-the single, consistent gate for cloud access.
+opens this modal when the user taps the locked surface. The local demo path stays usable,
+and this modal is the single, consistent gate for Cloud Managed access.
 
 This is the **mobile port** of the canonical desktop modal. The contract is identical;
 the implementation uses React Native primitives + NativeWind theme tokens.
@@ -64,7 +64,7 @@ compatibility — will be removed once the Detox suite is migrated in a follow-u
 
 ## v1 lock compliance
 
-- No BYOK input fields visible (per `v1-local-only-cloud-waitlist-2026-05-18`)
+- No direct provider-key input fields are visible on Mobile
 - Brand string is "AGI" everywhere (per `brand-agi-2026-05-15`)
 - No direct mobile database/auth platform client is used
 - Cloud surfaces opened by this modal are gated behind invite-code redemption

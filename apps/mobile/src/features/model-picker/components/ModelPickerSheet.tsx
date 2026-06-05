@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, TextInput, Pressable, Switch } from 'react-native';
+import { View, TextInput, Pressable } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
-import { Brain, Search, X as XIcon } from 'lucide-react-native';
+import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { AutoModeCards } from './AutoModeCard';
+import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelRow } from './ModelRow';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
@@ -15,13 +15,10 @@ import {
   AUTO_MODES,
   MODEL_LIST,
   isAutoMode,
+  type AutoModeDef,
   type ModelDef,
 } from '@/src/features/model-picker/service';
-import { colors } from '@/src/ui/theme';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+import { useThemeColors } from '@/src/ui/theme';
 
 function groupBySurface(
   models: ModelDef[],
@@ -30,48 +27,82 @@ function groupBySurface(
   const cloud = models.filter((model) => model.surface === 'cloud_managed');
   const sections: Array<{ sectionId: string; sectionLabel: string; models: ModelDef[] }> = [];
 
-  if (local.length > 0) {
+  if (local.length > 0)
     sections.push({ sectionId: 'local', sectionLabel: 'On device', models: local });
-  }
-  if (cloud.length > 0) {
-    sections.push({
-      sectionId: 'cloud_managed',
-      sectionLabel: 'Cloud Managed (locked)',
-      models: cloud,
-    });
-  }
-
+  if (cloud.length > 0) sections.push({ sectionId: 'cloud', sectionLabel: 'Cloud', models: cloud });
   return sections;
 }
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
+function AutoModeRow({
+  mode,
+  selected,
+  onPress,
+}: {
+  mode: AutoModeDef;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${mode.name}: ${mode.description}`}
+      accessibilityState={{ selected }}
+      style={{
+        minHeight: 62,
+        paddingHorizontal: 16,
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        backgroundColor: selected ? `${colors.teal}10` : colors.transparent,
+      }}
+    >
+      <View
+        style={{
+          width: 30,
+          height: 30,
+          borderRadius: 9,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: selected ? `${colors.teal}18` : colors.surfaceHover,
+        }}
+      >
+        <Cpu size={17} color={selected ? colors.teal : colors.textSecondary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text
+          style={{
+            color: selected ? colors.teal : colors.textPrimary,
+            fontSize: 15,
+            fontWeight: '700',
+          }}
+        >
+          {mode.name}
+        </Text>
+        <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+          {mode.description}
+        </Text>
+      </View>
+      {selected ? <Check size={17} color={colors.teal} /> : null}
+    </Pressable>
+  );
+}
 
 interface ModelPickerSheetProps {
-  /** Ref forwarded so the parent can open/close the sheet. */
   sheetRef: React.RefObject<BottomSheet | null>;
-  /**
-   * Optional override for model selection. When provided, the sheet calls this
-   * instead of updating the global modelStore. Useful for forms that manage
-   * their own model state (e.g. ScheduleForm).
-   */
   onSelect?: (modelId: string) => void;
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) {
-  const snapPoints = useMemo(() => ['50%', '90%'], []);
+  const colors = useThemeColors();
+  const snapPoints = useMemo(() => ['58%', '90%'], []);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const favorites = useModelStore((s) => s.favorites);
   const thinkingEnabledPerModel = useModelStore((s) => s.thinkingEnabledPerModel);
-  const thinkingModeEnabled = useModelStore((s) => s.thinkingModeEnabled);
   const setModel = useModelStore((s) => s.setModel);
-  const setThinkingMode = useModelStore((s) => s.setThinkingMode);
   const toggleFavorite = useModelStore((s) => s.toggleFavorite);
   const toggleThinkingForModel = useModelStore((s) => s.toggleThinkingForModel);
   const installJobs = useModelInstallStore((s) => s.jobs);
@@ -82,51 +113,46 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
   const statusForModel = useModelInstallStore((s) => s.statusForModel);
 
   const [search, setSearch] = useState('');
-  const searchInputRef = useRef<TextInput>(null);
-  const catalogModels = MODEL_LIST;
-
-  // Track which model row is expanded to show the thinking toggle.
-  // A model expands when it is already selected and tapped again.
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     void hydrateInstalledModels();
   }, [hydrateInstalledModels]);
 
-  // Filter models by search query
   const query = search.trim().toLowerCase();
   const filteredModels = useMemo(() => {
-    if (!query) return catalogModels;
-    return catalogModels.filter(
-      (m) =>
-        m.name.toLowerCase().includes(query) ||
-        m.provider.toLowerCase().includes(query) ||
-        m.providerLabel.toLowerCase().includes(query) ||
-        m.runtimeLabel.toLowerCase().includes(query) ||
-        m.id.toLowerCase().includes(query),
+    if (!query) return MODEL_LIST;
+    return MODEL_LIST.filter(
+      (model) =>
+        model.name.toLowerCase().includes(query) ||
+        model.provider.toLowerCase().includes(query) ||
+        model.providerLabel.toLowerCase().includes(query) ||
+        model.runtimeLabel.toLowerCase().includes(query) ||
+        model.id.toLowerCase().includes(query),
     );
-  }, [query, catalogModels]);
+  }, [query]);
 
-  const favoriteModels = useMemo(() => {
-    return filteredModels.filter((m) => m.surface === 'local' && favorites.includes(m.id));
-  }, [filteredModels, favorites]);
+  const favoriteModels = useMemo(
+    () =>
+      filteredModels.filter((model) => model.surface === 'local' && favorites.includes(model.id)),
+    [favorites, filteredModels],
+  );
 
   const nonFavoriteModels = useMemo(() => {
     if (favoriteModels.length === 0) return filteredModels;
-    const favSet = new Set(favorites);
-    return filteredModels.filter((m) => !favSet.has(m.id));
-  }, [filteredModels, favoriteModels, favorites]);
+    const favoriteIds = new Set(favorites);
+    return filteredModels.filter((model) => !favoriteIds.has(model.id));
+  }, [favoriteModels, favorites, filteredModels]);
 
   const groupedModels = useMemo(() => groupBySurface(nonFavoriteModels), [nonFavoriteModels]);
 
   const selectAndClose = useCallback(
     (id: string) => {
       setExpandedModelId(null);
-      if (onSelect) {
-        onSelect(id);
-      } else {
-        setModel(id);
-      }
+      if (onSelect) onSelect(id);
+      else setModel(id);
       sheetRef.current?.close();
     },
     [onSelect, setModel, sheetRef],
@@ -134,24 +160,19 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
 
   const handleSelectModel = useCallback(
     (id: string) => {
-      const chosenModel = catalogModels.find((m) => m.id === id);
+      const chosenModel = MODEL_LIST.find((model) => model.id === id);
       if (!chosenModel || chosenModel.availability === 'locked') return;
 
       const installStatus = statusForModel(chosenModel);
-      if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') {
-        return;
-      }
+      if (installStatus.status === 'downloading' || installStatus.status === 'unavailable') return;
 
       if (installStatus.status === 'download_required' || installStatus.status === 'failed') {
         void prepareModel(chosenModel)
-          .then(() => {
-            selectAndClose(id);
-          })
+          .then(() => selectAndClose(id))
           .catch(() => undefined);
         return;
       }
 
-      // If tapping the already-selected model, toggle expansion (show thinking toggle).
       if (id === selectedModel && !isAutoMode(id)) {
         setExpandedModelId((prev) => (prev === id ? null : id));
         return;
@@ -159,41 +180,28 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
 
       selectAndClose(id);
     },
-    [catalogModels, prepareModel, selectAndClose, selectedModel, statusForModel],
+    [prepareModel, selectAndClose, selectedModel, statusForModel],
   );
 
   const handleSelectAutoMode = useCallback(
     (id: string) => {
       setExpandedModelId(null);
-      if (onSelect) {
-        onSelect(id);
-      } else {
-        setModel(id);
-      }
+      if (onSelect) onSelect(id);
+      else setModel(id);
       sheetRef.current?.close();
     },
     [onSelect, setModel, sheetRef],
   );
 
-  const handleToggleThinking = useCallback(
-    (modelId: string) => {
-      toggleThinkingForModel(modelId);
-    },
-    [toggleThinkingForModel],
-  );
-
-  const handleToggleExtendedThinking = useCallback(() => {
-    setThinkingMode(!thinkingModeEnabled);
-  }, [setThinkingMode, thinkingModeEnabled]);
+  const openInvite = useCallback(() => {
+    sheetRef.current?.close();
+    setInviteOpen(true);
+  }, [sheetRef]);
 
   const clearSearch = useCallback(() => {
     setSearch('');
     searchInputRef.current?.blur();
   }, []);
-
-  const handleClose = useCallback(() => {
-    sheetRef.current?.close();
-  }, [sheetRef]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -201,7 +209,7 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
         {...props}
         disappearsOnIndex={-1}
         appearsOnIndex={0}
-        opacity={0.6}
+        opacity={0.54}
         pressBehavior="close"
       />
     ),
@@ -226,192 +234,186 @@ export function ModelPickerSheet({ sheetRef, onSelect }: ModelPickerSheetProps) 
           thinkingEnabled={thinkingEnabledPerModel[model.id] ?? false}
           installStatus={installStatus}
           onSelect={handleSelectModel}
+          onLockedPress={openInvite}
           onToggleFavorite={toggleFavorite}
-          onToggleThinking={handleToggleThinking}
+          onToggleThinking={toggleThinkingForModel}
         />
       );
     },
     [
-      selectedModel,
-      favorites,
       expandedModelId,
-      thinkingEnabledPerModel,
+      favorites,
+      handleSelectModel,
       installJobs,
       installedModelIds,
+      openInvite,
       readySystemModelIds,
+      selectedModel,
       statusForModel,
-      handleSelectModel,
+      thinkingEnabledPerModel,
       toggleFavorite,
-      handleToggleThinking,
+      toggleThinkingForModel,
     ],
   );
 
   return (
-    <BottomSheet
-      ref={sheetRef as React.RefObject<BottomSheet>}
-      index={-1}
-      snapPoints={snapPoints}
-      enablePanDownToClose
-      enableDynamicSizing={false}
-      backdropComponent={renderBackdrop}
-      backgroundStyle={{ backgroundColor: colors.background }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
-    >
-      {/* ---- Header ---- */}
-      <View className="px-4 pb-3 pt-1 flex-row items-center justify-between">
-        <View>
-          <Text variant="subheading">Models</Text>
-          <Text className="text-xs text-white/40 mt-0.5">Local LLMs are active</Text>
+    <>
+      <BottomSheet
+        ref={sheetRef as React.RefObject<BottomSheet>}
+        index={-1}
+        snapPoints={snapPoints}
+        enablePanDownToClose
+        enableDynamicSizing={false}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: colors.background }}
+        handleIndicatorStyle={{ backgroundColor: colors.textMuted, width: 36 }}
+      >
+        <View style={{ paddingHorizontal: 16, paddingBottom: 12, paddingTop: 2 }}>
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <Text style={{ color: colors.textPrimary, fontSize: 20, fontWeight: '700' }}>
+              Models
+            </Text>
+            <Pressable
+              onPress={() => sheetRef.current?.close()}
+              accessibilityLabel="Close model picker"
+              accessibilityRole="button"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.surfaceElevated,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              <XIcon size={16} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+          <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+            Local models are selectable. Cloud models require an invite.
+          </Text>
         </View>
 
-        <Pressable
-          onPress={handleClose}
-          className="p-1.5 rounded-full bg-white/5 active:bg-white/10"
-          accessibilityLabel="Close model picker"
-          accessibilityRole="button"
+        <View
+          style={{
+            marginHorizontal: 16,
+            marginBottom: 12,
+            height: 42,
+            borderRadius: 21,
+            paddingHorizontal: 13,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
         >
-          <XIcon size={16} color={colors.textMuted} />
-        </Pressable>
-      </View>
-
-      {/* ---- Search bar ---- */}
-      <View className="mx-4 mb-3 flex-row items-center gap-2 bg-surface-elevated rounded-xl border border-white/8 px-3 py-2">
-        <Search size={16} color={colors.textMuted} />
-        <TextInput
-          ref={searchInputRef}
-          className="flex-1 text-white text-sm py-0"
-          placeholder="Search models..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
-          value={search}
-          onChangeText={setSearch}
-          selectionColor={colors.teal}
-          autoCorrect={false}
-          autoCapitalize="none"
-          returnKeyType="search"
-          accessibilityLabel="Search models"
-          accessibilityRole="search"
-        />
-        {search.length > 0 && (
-          <Pressable
-            onPress={clearSearch}
-            className="p-0.5"
-            accessibilityLabel="Clear search"
-            accessibilityRole="button"
-          >
-            <XIcon size={14} color={colors.textMuted} />
-          </Pressable>
-        )}
-      </View>
-
-      {/* ---- Scrollable content ---- */}
-      <BottomSheetScrollView
-        testID="model-picker-sheet"
-        contentContainerStyle={{ paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Auto modes (hidden when searching) */}
-        {!query && (
-          <AutoModeCards
-            modes={AUTO_MODES}
-            selectedId={selectedModel}
-            onSelect={handleSelectAutoMode}
+          <Search size={16} color={colors.textMuted} />
+          <TextInput
+            ref={searchInputRef}
+            style={{ flex: 1, color: colors.textPrimary, fontSize: 14, paddingVertical: 0 }}
+            placeholder="Search models"
+            placeholderTextColor={colors.textMuted}
+            value={search}
+            onChangeText={setSearch}
+            selectionColor={colors.teal}
+            autoCorrect={false}
+            autoCapitalize="none"
+            returnKeyType="search"
+            accessibilityLabel="Search models"
+            accessibilityRole="search"
           />
-        )}
+          {search.length > 0 ? (
+            <Pressable onPress={clearSearch} accessibilityLabel="Clear search" hitSlop={8}>
+              <XIcon size={14} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
 
-        {/* Separator between auto modes and model list */}
-        {!query && <View className="mx-4 mb-2 mt-1 border-b border-white/8" />}
-
-        {/* Favorites section — always shown flat (no sub-grouping) */}
-        {favoriteModels.length > 0 && (
-          <View className="mb-2">
-            <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1">
-              Favorites
-            </Text>
-            {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
-          </View>
-        )}
-
-        {/* Provider-grouped model list */}
-        {query ? (
-          // While searching, render a flat list without section headers.
-          <View>
-            {favoriteModels.length > 0 && nonFavoriteModels.length > 0 && (
-              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 mb-1 mt-1">
-                All Models
-              </Text>
-            )}
-            {nonFavoriteModels.map((model) => renderModelRow(model, 'all'))}
-          </View>
-        ) : (
-          // No active search → provider sections with headers.
-          groupedModels.map(({ sectionId, sectionLabel, models }) => (
-            <View key={sectionId} className="mb-1">
-              <Text className="text-xs text-white/40 font-medium uppercase tracking-wider px-4 pt-2 pb-1">
-                {sectionLabel}
-              </Text>
-              {models.map((model) => renderModelRow(model, `grp-${sectionId}`))}
+        <BottomSheetScrollView
+          testID="model-picker-sheet"
+          contentContainerStyle={{ paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {!query ? (
+            <View style={{ marginBottom: 8 }}>
+              {AUTO_MODES.map((mode) => (
+                <AutoModeRow
+                  key={mode.id}
+                  mode={mode}
+                  selected={selectedModel === mode.id}
+                  onPress={() => handleSelectAutoMode(mode.id)}
+                />
+              ))}
             </View>
-          ))
-        )}
+          ) : null}
 
-        {/* Extended thinking toggle — shown when not searching */}
-        {!query && (
-          <>
-            <View className="mx-4 mt-3 mb-1 border-b border-white/8" />
-            <Pressable
-              onPress={handleToggleExtendedThinking}
-              className="flex-row items-center px-4 py-3 gap-3 active:bg-white/5"
-              accessibilityLabel="Extended thinking"
-              accessibilityRole="switch"
-              accessibilityState={{ checked: thinkingModeEnabled }}
-              accessibilityHint="Think longer for complex tasks"
-            >
-              <View
-                className="w-6 h-6 rounded-md items-center justify-center"
+          {favoriteModels.length > 0 ? (
+            <View style={{ marginBottom: 6 }}>
+              <Text
                 style={{
-                  backgroundColor: thinkingModeEnabled ? colors.surfaceHover : colors.borderLight,
+                  color: colors.textMuted,
+                  fontSize: 12,
+                  fontWeight: '700',
+                  paddingHorizontal: 16,
+                  paddingVertical: 6,
                 }}
               >
-                <Brain
-                  size={16}
-                  color={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
-                />
-              </View>
+                Favorites
+              </Text>
+              {favoriteModels.map((model) => renderModelRow(model, 'fav'))}
+            </View>
+          ) : null}
 
-              <View className="flex-1">
+          {query ? (
+            <View>{nonFavoriteModels.map((model) => renderModelRow(model, 'search'))}</View>
+          ) : (
+            groupedModels.map(({ sectionId, sectionLabel, models }) => (
+              <View key={sectionId} style={{ marginBottom: 6 }}>
                 <Text
-                  className={`text-sm font-medium ${
-                    thinkingModeEnabled ? 'text-purple-400' : 'text-white'
-                  }`}
+                  style={{
+                    color: colors.textMuted,
+                    fontSize: 12,
+                    fontWeight: '700',
+                    paddingHorizontal: 16,
+                    paddingVertical: 6,
+                  }}
                 >
-                  Extended thinking
+                  {sectionLabel}
                 </Text>
-                <Text className="text-[11px] text-white/40 mt-0.5">
-                  Think longer for complex tasks
-                </Text>
+                {models.map((model) => renderModelRow(model, `grp-${sectionId}`))}
               </View>
+            ))
+          )}
 
-              <Switch
-                value={thinkingModeEnabled}
-                onValueChange={handleToggleExtendedThinking}
-                trackColor={{ false: colors.border, true: colors.surfaceHover }}
-                thumbColor={thinkingModeEnabled ? colors.agentThinking : colors.textMuted}
-                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
-                accessibilityLabel="Enable extended thinking"
-              />
-            </Pressable>
-          </>
-        )}
+          {filteredModels.length === 0 ? (
+            <View
+              style={{
+                alignItems: 'center',
+                justifyContent: 'center',
+                paddingVertical: 44,
+                paddingHorizontal: 28,
+              }}
+            >
+              <Text style={{ color: colors.textMuted, fontSize: 14, textAlign: 'center' }}>
+                No models matching "{search}"
+              </Text>
+            </View>
+          ) : null}
+        </BottomSheetScrollView>
+      </BottomSheet>
 
-        {/* Empty state */}
-        {filteredModels.length === 0 && (
-          <View className="items-center justify-center py-12 px-8">
-            <Text className="text-white/40 text-sm text-center">
-              No models matching &quot;{search}&quot;
-            </Text>
-          </View>
-        )}
-      </BottomSheetScrollView>
-    </BottomSheet>
+      <InviteCodeModal
+        open={inviteOpen}
+        onClose={() => setInviteOpen(false)}
+        source="other"
+        defaultTab="invite"
+      />
+    </>
   );
 }

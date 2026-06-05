@@ -24,19 +24,19 @@ const COPY = {
   diffEyebrow: 'What makes it different',
   diffCards: [
     {
-      label: 'Local-only',
+      label: 'Local mode',
       headline: 'Your phone runs the AI.',
       body: 'In Local mode there is no model-provider call during inference. Works on a plane, in a basement, or anywhere network access is unreliable.',
     },
     {
       label: 'Mobile Cloud',
       headline: 'Hosted models wait for an invite.',
-      body: 'Mobile Cloud requires invite access and subscription-backed account state. BYOK belongs to Desktop and developer surfaces, not Mobile v1.',
+      body: 'Mobile Cloud requires invite access and subscription-backed account state. The mobile setup stays focused on Local and invite-gated Cloud.',
     },
     {
       label: 'Cloud invite',
       headline: 'Managed power when users ask for it.',
-      body: 'Cloud is invite-only for hosted sync, managed tools, and higher-capacity workflows. Local chats do not silently move to BYOK or Cloud.',
+      body: 'Cloud is invite-only for hosted sync, managed tools, and higher-capacity workflows. Local chats do not silently move to Cloud.',
     },
   ],
 
@@ -48,16 +48,16 @@ const COPY = {
   onDeviceIosLabel: 'On iPhone',
   onDeviceAndroidLabel: 'On Android',
   onDeviceIosRows: [
-    ['Apple Foundation Models', 'iPhone 15 Pro and later, on-chip, ~4K context'],
-    ['Qwen3-4B (executorch)', 'iPhone 12 and later, on-device, universal fallback'],
+    ['Apple Foundation Models', 'Supported Apple on-device runtime where available'],
+    ['react-native-executorch', 'A15+ class devices with downloadable small models'],
   ],
   onDeviceAndroidRows: [
-    ['Gemini Nano (AICore)', 'Pixel 9+, Galaxy S26+, OnePlus 15+ with 12 GB RAM'],
-    ['Gemma + LiteRT', "All Android devices with 4 GB+ RAM. Google's own path."],
-    ['Qwen3-4B (universal)', 'Mid-range: Redmi Note 13, Vivo Y200, and similar'],
+    ['Gemini Nano (AICore)', 'AICore-capable devices when the runtime is available'],
+    ['react-native-executorch', 'Mid-range Android devices with downloadable small models'],
+    ['llama.rn fallback', 'Manual local model route for older supported devices'],
   ],
   onDeviceNote:
-    'On Android, fewer than 5% of EU devices in active use qualify for Gemini Nano. AGI works on the other 95% via Gemma and Qwen3-4B.',
+    'Local model availability is device-dependent. AGI Mobile must show installed, downloadable, unavailable, and runtime-offline states instead of silently switching to Cloud.',
 
   // Feature grid
   featureEyebrow: 'Features in v1',
@@ -67,7 +67,11 @@ const COPY = {
     { icon: '📷', label: 'Image Q&A', body: 'Take a photo. Ask anything about what you see.' },
     { icon: '🎙', label: 'Voice', body: 'Speak your question. Read the answer.' },
     { icon: '📄', label: 'OCR + Scan', body: 'Point at a document or sign. Extract and ask.' },
-    { icon: '🌐', label: 'Translate', body: '60+ language pairs, on-device, no internet needed.' },
+    {
+      icon: '🌐',
+      label: 'Translate',
+      body: 'Supported language pairs, on-device after the required language models are available.',
+    },
     { icon: '🧠', label: 'Memory', body: 'Remembers facts you tell it across conversations.' },
     { icon: '📁', label: 'Projects', body: 'Topic workspaces. Keep context separate.' },
     {
@@ -76,7 +80,11 @@ const COPY = {
       body: `${MARKETING.skills.display} built-in skills across ${MARKETING.categories.display} categories.`,
     },
     { icon: '❤️', label: 'HealthKit', body: 'iOS: weekly activity recap in plain language.' },
-    { icon: '🇮🇳', label: 'Hindi', body: 'Validated against a 60-prompt native-speaker suite.' },
+    {
+      icon: '🇮🇳',
+      label: 'Hindi',
+      body: 'Hindi-facing copy and support paths are part of the Mobile v1 readiness work.',
+    },
   ],
 
   // Privacy section
@@ -90,8 +98,8 @@ const COPY = {
       body: 'Local conversations run on the device using supported on-device or local model routes. They are not silently sent to AGI Cloud.',
     },
     {
-      label: 'No Mobile BYOK',
-      body: 'Mobile v1 does not accept provider keys. Use Desktop or developer surfaces for BYOK-local workflows.',
+      label: 'Simple mobile setup',
+      body: 'Mobile v1 keeps setup focused on Local and invite-gated Cloud so users always know which mode they are using.',
     },
     {
       label: 'Cloud mode',
@@ -544,7 +552,7 @@ export default function MobilePage() {
           <div className="agi-colophon">
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Developer</span>
-              <span className="agi-colophon-val">{COPY.aboutCompany}, Delaware, USA</span>
+              <span className="agi-colophon-val">{COPY.aboutCompany}, USA</span>
             </div>
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Platform</span>

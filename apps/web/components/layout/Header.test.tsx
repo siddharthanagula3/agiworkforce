@@ -1,0 +1,75 @@
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Header } from './Header';
+
+const clerkState = vi.hoisted(() => ({
+  user: null as null | { primaryEmailAddress?: { emailAddress?: string } },
+  isLoaded: true,
+  signOut: vi.fn(),
+}));
+
+vi.mock('@clerk/nextjs', () => ({
+  useUser: () => ({ user: clerkState.user, isLoaded: clerkState.isLoaded }),
+  useClerk: () => ({ signOut: clerkState.signOut }),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) =>
+      ({
+        agiHome: 'AGI home',
+        menuClose: 'Close menu',
+        menuOpen: 'Open menu',
+        navAgiCode: 'AGI Code',
+        navApps: 'Apps',
+        navBusiness: 'Business',
+        navChat: 'Chat',
+        navCompare: 'Compare',
+        navContactSales: 'Contact Sales',
+        navInstall: 'Install',
+        navPricing: 'Pricing',
+        navSignIn: 'Sign In',
+        navSignOut: 'Sign Out',
+      })[key] ?? key,
+  }),
+}));
+
+describe('Header', () => {
+  beforeEach(() => {
+    clerkState.user = null;
+    clerkState.isLoaded = true;
+    clerkState.signOut.mockResolvedValue(undefined);
+    vi.clearAllMocks();
+  });
+
+  it('exposes the navigation target used by accessible navigation', () => {
+    render(<Header />);
+
+    expect(screen.getByRole('navigation', { name: 'Primary' })).toHaveAttribute(
+      'id',
+      'main-navigation',
+    );
+  });
+
+  it('closes the mobile menu before signing out', async () => {
+    clerkState.user = {
+      primaryEmailAddress: { emailAddress: 'user@example.com' },
+    };
+    const { container } = render(<Header />);
+
+    const openMenuButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open menu"]',
+    );
+    expect(openMenuButton).not.toBeNull();
+    fireEvent.click(openMenuButton!);
+
+    expect(container.querySelector('button[aria-label="Close menu"]')).not.toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign Out' }).at(-1)!);
+
+    await waitFor(() => {
+      expect(clerkState.signOut).toHaveBeenCalledWith({ redirectUrl: '/' });
+    });
+    expect(container.querySelector('button[aria-label="Close menu"]')).toBeNull();
+  });
+});

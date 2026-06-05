@@ -1,9 +1,8 @@
 /**
  * Capabilities Settings Screen
  *
- * Mobile v1 is Local plus Cloud Managed invite/waitlist. Local LLM execution
- * is locked on, Cloud Managed capabilities are waitlisted, and Mobile has no
- * BYOK mode.
+ * Mobile uses Local plus Cloud Managed invite/waitlist. Local LLM execution
+ * is locked on and Cloud Managed capabilities are waitlisted.
  */
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -137,14 +136,6 @@ const BASE_CAPABILITIES: Omit<CapabilityMeta, 'onPress'>[] = [
     description: 'Computer-use and browser environments are Cloud Managed waitlist features.',
     stateLabel: 'Waitlist',
   },
-  {
-    key: 'byok-providers',
-    icon: Key,
-    state: 'locked',
-    label: 'BYOK',
-    description: 'BYOK is available on supported Desktop and developer surfaces, not Mobile.',
-    stateLabel: 'Locked',
-  },
 ];
 
 function stateColors(state: CapabilityState, c: ReturnType<typeof useThemeColors>) {
@@ -242,8 +233,7 @@ export default function CapabilitiesScreen() {
             </Text>
           </View>
           <Text style={{ color: c.textSecondary, fontSize: 12, lineHeight: 17 }}>
-            Local LLMs stay on for Mobile v1. Cloud Managed is invite-only, and Mobile has no BYOK
-            mode.
+            Local LLMs stay on for the current demo path. Cloud Managed is invite-only.
           </Text>
         </View>
 
