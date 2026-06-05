@@ -1,7 +1,7 @@
 import { View, Pressable } from 'react-native';
 import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
 
 interface QuotedReplyBarProps {
@@ -16,6 +16,7 @@ interface QuotedReplyBarProps {
  * Displayed when user swipes right on a message to quote-reply.
  */
 export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
+  const colors = useThemeColors();
   const isUser = message.role === 'user';
   const label = isUser ? 'You' : (message.model ?? 'Assistant');
   const preview =
@@ -26,7 +27,7 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: 'rgba(33, 128, 141, 0.08)',
+        backgroundColor: colors.accentSurface,
         borderLeftWidth: 3,
         borderLeftColor: colors.teal,
         borderRadius: 8,
@@ -52,7 +53,7 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
         <Text
           style={{
             fontSize: 12,
-            color: 'rgba(255, 255, 255, 0.5)',
+            color: colors.textMuted,
           }}
           numberOfLines={2}
         >
@@ -65,7 +66,7 @@ export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
         accessibilityLabel="Dismiss reply"
         accessibilityRole="button"
       >
-        <X size={16} color="rgba(255, 255, 255, 0.3)" />
+        <X size={16} color={colors.textMuted} />
       </Pressable>
     </View>
   );

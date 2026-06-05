@@ -30,9 +30,9 @@ export function SendErrorBanner({ error, onRetry, onDismiss }: SendErrorBannerPr
         alignItems: 'center',
         paddingHorizontal: 16,
         paddingVertical: 10,
-        backgroundColor: `${colors.agentError}14`,
+        backgroundColor: colors.dangerSurface,
         borderTopWidth: 1,
-        borderTopColor: `${colors.agentError}28`,
+        borderTopColor: colors.dangerBorder,
         gap: 8,
       }}
       accessibilityRole="alert"

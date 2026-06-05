@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import { DrawerActions } from '@react-navigation/native';
-import { MoreHorizontal, WifiOff, SquarePen, Menu, Cpu } from 'lucide-react-native';
+import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -205,8 +205,8 @@ export default function ChatScreen() {
       if (finalText.startsWith('/image ')) {
         if (!FEATURES.imageGen) {
           Alert.alert(
-            'Image generation requires Cloud Managed',
-            'Mobile v1 can attach and inspect local images, but generation uses hosted compute and is waitlist-gated.',
+            'Image generation uses AGI Cloud',
+            'You can attach and inspect local images now. Image generation is available with Cloud access.',
           );
           return;
         }
@@ -303,8 +303,8 @@ export default function ChatScreen() {
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
       Alert.alert(
-        'Connectors require Cloud Managed',
-        'Mobile v1 keeps chat local. Connector OAuth and remote tools open through Desktop handoff or the Cloud Managed waitlist.',
+        'Connectors are available with AGI Cloud',
+        'Join the waitlist or enter an invitation code to use connected sources on mobile.',
       );
       return;
     }
@@ -407,13 +407,23 @@ export default function ChatScreen() {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameText, setRenameText] = useState('');
   const [waitlistSheetVisible, setWaitlistSheetVisible] = useState(false);
+  const [waitlistDefaultTab, setWaitlistDefaultTab] = useState<'invite' | 'waitlist'>('waitlist');
 
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
 
-  const handleOpenWaitlist = useCallback(() => {
+  const handleOpenWaitlist = useCallback((defaultTab: 'invite' | 'waitlist' = 'waitlist') => {
+    setWaitlistDefaultTab(defaultTab);
     setWaitlistSheetVisible(true);
   }, []);
+
+  const handleTapCloudMode = useCallback(() => {
+    if (cloudUnlocked) {
+      handleOpenModelPicker();
+      return;
+    }
+    handleOpenWaitlist();
+  }, [cloudUnlocked, handleOpenModelPicker, handleOpenWaitlist]);
 
   const handleNewChat = useCallback(() => {
     router.push('/(app)' as Parameters<typeof router.push>[0]);
@@ -574,14 +584,23 @@ export default function ChatScreen() {
 
   if (!id) {
     return (
-      <SafeAreaView className="flex-1 bg-surface-base items-center justify-center">
-        <Text className="text-white/50">No conversation selected</Text>
+      <SafeAreaView
+        className="flex-1 items-center justify-center"
+        style={{ backgroundColor: colors.surfaceBase }}
+      >
+        <Text style={{ color: colors.textMuted }}>No conversation selected</Text>
       </SafeAreaView>
     );
   }
 
+  const currentAppMode = resolveAppMode(selectedModel);
+
   return (
-    <SafeAreaView className="flex-1 bg-surface-base" edges={['top']}>
+    <SafeAreaView
+      className="flex-1"
+      style={{ backgroundColor: colors.surfaceBase }}
+      edges={['top']}
+    >
       <KeyboardAvoidingView
         className="flex-1"
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -625,9 +644,9 @@ export default function ChatScreen() {
                 paddingHorizontal: 8,
                 paddingVertical: 4,
                 borderRadius: 8,
-                backgroundColor: `${colors.teal}18`,
+                backgroundColor: colors.accentSurface,
                 borderWidth: 1,
-                borderColor: `${colors.teal}35`,
+                borderColor: colors.accentBorder,
                 maxWidth: 120,
               }}
               accessibilityLabel={`Active project: ${activeProject.name}. Tap to view details.`}
@@ -645,10 +664,11 @@ export default function ChatScreen() {
           {/* ModeToggle — flex:1 ensures true center regardless of left/right widths */}
           <View style={{ flex: 1, alignItems: 'center' }}>
             <ModeToggle
-              mode="local"
+              mode={currentAppMode}
               cloudJoined={waitlistJoined}
+              cloudUnlocked={cloudUnlocked}
               waitlistRank={waitlistRank}
-              onTapCloud={handleOpenWaitlist}
+              onTapCloud={handleTapCloudMode}
             />
           </View>
 
@@ -673,29 +693,6 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {/* On-device shield badge — shown when conversation is empty */}
-        {conversationMessages.length === 0 && (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              alignSelf: 'center',
-              gap: 6,
-              paddingHorizontal: 12,
-              paddingVertical: 5,
-              borderRadius: 20,
-              backgroundColor: `${colors.teal}1F`,
-              marginTop: 10,
-            }}
-            accessibilityLabel="On-device mode active"
-          >
-            <Cpu size={12} color={colors.teal} strokeWidth={1.8} />
-            <Text style={{ fontSize: 12, color: colors.teal, fontWeight: '500' }}>
-              On-device · Private · Works offline
-            </Text>
-          </View>
-        )}
-
         {/* Offline banner */}
         {!isOnline && (
           <View
@@ -704,14 +701,14 @@ export default function ChatScreen() {
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              backgroundColor: colors.dangerSurface,
               paddingVertical: 6,
               borderBottomWidth: 1,
-              borderBottomColor: 'rgba(239, 68, 68, 0.2)',
+              borderBottomColor: colors.dangerBorder,
             }}
           >
-            <WifiOff size={12} color="#ef4444" />
-            <Text style={{ fontSize: 12, color: '#ef4444' }}>
+            <WifiOff size={12} color={colors.agentError} />
+            <Text style={{ fontSize: 12, color: colors.agentError }}>
               You're offline — viewing cached conversations
             </Text>
           </View>
@@ -772,7 +769,7 @@ export default function ChatScreen() {
           isOnline={isOnline}
           queueSize={queueSize}
           attachRef={chatInputAttachRef}
-          showChips={conversationMessages.length === 0}
+          showChips={false}
         />
 
         {/* Add to Chat bottom sheet */}
@@ -781,10 +778,15 @@ export default function ChatScreen() {
           onCamera={handleSheetCamera}
           onPhotos={handleSheetPhotos}
           onFile={handleSheetFile}
+          onOpenCloudAccess={handleOpenWaitlist}
         />
 
         {/* Model picker bottom sheet */}
-        <ModelPickerSheet sheetRef={modelPickerRef} onSelect={handleModelSelect} />
+        <ModelPickerSheet
+          sheetRef={modelPickerRef}
+          onSelect={handleModelSelect}
+          onOpenCloudAccess={handleOpenWaitlist}
+        />
 
         {/* Voice conversation full-screen overlay */}
         <VoiceConversationScreen
@@ -814,7 +816,7 @@ export default function ChatScreen() {
           open={waitlistSheetVisible}
           onClose={() => setWaitlistSheetVisible(false)}
           source="other"
-          defaultTab="waitlist"
+          defaultTab={waitlistDefaultTab}
         />
 
         {/* Mid-conversation mode-switch confirmation */}
@@ -836,7 +838,7 @@ export default function ChatScreen() {
           <Pressable
             style={{
               flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.6)',
+              backgroundColor: colors.scrim,
               alignItems: 'center',
               justifyContent: 'center',
               padding: 24,
@@ -846,33 +848,40 @@ export default function ChatScreen() {
             <Pressable
               style={{
                 width: '100%',
-                backgroundColor: '#1e2025',
+                backgroundColor: colors.surfaceElevated,
                 borderRadius: 14,
                 padding: 20,
                 borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.08)',
+                borderColor: colors.border,
               }}
               onPress={() => undefined}
             >
-              <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff', marginBottom: 12 }}>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                  marginBottom: 12,
+                }}
+              >
                 Rename Conversation
               </Text>
               <TextInput
                 style={{
-                  backgroundColor: 'rgba(255,255,255,0.06)',
+                  backgroundColor: colors.inputSurface,
                   borderRadius: 8,
                   padding: 12,
                   fontSize: 15,
-                  color: '#fff',
+                  color: colors.textPrimary,
                   borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.1)',
+                  borderColor: colors.border,
                   marginBottom: 16,
                 }}
                 value={renameText}
                 onChangeText={setRenameText}
                 autoFocus
                 placeholder="Enter a new title"
-                placeholderTextColor="rgba(255,255,255,0.3)"
+                placeholderTextColor={colors.textMuted}
                 selectTextOnFocus
               />
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>

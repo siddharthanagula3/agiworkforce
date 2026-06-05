@@ -155,6 +155,7 @@ const defaultProps = {
   onCamera: jest.fn(),
   onPhotos: jest.fn(),
   onFile: jest.fn(),
+  onOpenCloudAccess: jest.fn(),
 };
 
 function renderSheet(overrides = {}) {
@@ -176,6 +177,12 @@ describe('AddToChatSheet', () => {
   // ---- Section 1: Attachment Row ----
 
   describe('attachment row', () => {
+    it('renders an explicit close button', () => {
+      const { getByLabelText } = renderSheet();
+
+      expect(getByLabelText('Close Add to Chat')).toBeTruthy();
+    });
+
     it('renders 3 attachment cards: Camera, Photos, File', () => {
       const { getByText, queryByText } = renderSheet();
 
@@ -245,17 +252,18 @@ describe('AddToChatSheet', () => {
       expect(queryByLabelText('Image generation on')).toBeNull();
     });
 
-    it('opens the waitlist instead of enabling cloud web search', () => {
+    it('requests cloud access instead of enabling cloud web search', () => {
       useChatStore.setState({
         features: { webSearch: false, imageGen: false, health: false },
       });
 
-      const { getByLabelText, getByTestId } = renderSheet();
+      const onOpenCloudAccess = jest.fn();
+      const { getByLabelText } = renderSheet({ onOpenCloudAccess });
 
       fireEvent.press(getByLabelText('Web search, Waitlist'));
 
       expect(useChatStore.getState().features.webSearch).toBe(false);
-      expect(getByTestId('invite-code-modal')).toBeTruthy();
+      expect(onOpenCloudAccess).toHaveBeenCalled();
     });
   });
 

@@ -430,8 +430,8 @@ function ArtifactPreviewModal({
               </Text>
             </View>
             <Text className="text-[12px] leading-[18px]" style={{ color: c.textMuted }}>
-              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on
-              Desktop or Cloud Managed environments.
+              Mobile previews, copies, and shares artifacts. Regeneration and execution stay on AGI
+              Desktop or AGI Cloud environments.
             </Text>
           </View>
 

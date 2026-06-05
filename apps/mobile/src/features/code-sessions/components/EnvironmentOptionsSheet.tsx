@@ -41,7 +41,7 @@ export function EnvironmentOptionsSheet({
       >
         <Pressable
           className="flex-1 justify-end"
-          style={{ backgroundColor: 'rgba(0, 0, 0, 0.58)' }}
+          style={{ backgroundColor: c.scrim }}
           onPress={onClose}
           accessibilityLabel="Close environment options"
         >
@@ -70,7 +70,7 @@ export function EnvironmentOptionsSheet({
 
             <Text className="text-[13px] leading-[19px] mb-5" style={{ color: c.textMuted }}>
               Mobile can view, approve, and add feedback. Code execution needs AGI Desktop or a
-              Cloud Managed environment.
+              Cloud environment.
             </Text>
 
             <EnvironmentOption
@@ -81,7 +81,7 @@ export function EnvironmentOptionsSheet({
             />
             <EnvironmentOption
               icon={<Cloud size={22} color={c.agentActive} />}
-              title="Cloud Managed waitlist"
+              title="AGI Cloud waitlist"
               body="Join the waitlist for hosted code environments."
               onPress={openWaitlist}
             />

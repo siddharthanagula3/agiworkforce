@@ -118,6 +118,7 @@ jest.mock('../src/features/cloud-bridge', () => {
 import { ModelPickerSheet } from '../src/features/model-picker/components/ModelPickerSheet';
 import { useModelInstallStore } from '../src/features/model-picker/installStore';
 import { useModelStore } from '../src/features/model-picker/store';
+import { useWaitlistStore } from '../src/features/waitlist/store';
 import {
   AUTO_MODES,
   CLOUD_LOCK_REASON,
@@ -132,6 +133,17 @@ import {
 
 function resetModelStore() {
   const hydrateInstalledModels = jest.fn<Promise<void>, []>(async () => undefined);
+  useWaitlistStore.setState({
+    joined: false,
+    email: undefined,
+    country: undefined,
+    rank: undefined,
+    joinedAt: undefined,
+    cloudUnlocked: false,
+    inviteId: undefined,
+    inviteCode: undefined,
+    cloudUnlockedAt: undefined,
+  });
   useModelStore.setState({
     selectedModel: DEFAULT_LOCAL_MODEL_ID,
     selectedProvider: 'local',
@@ -149,9 +161,16 @@ function resetModelStore() {
 }
 
 const mockSheetRef = { current: { close: jest.fn(), snapToIndex: jest.fn() } };
-function renderPicker(overrides?: { onSelect?: (id: string) => void }) {
+function renderPicker(overrides?: {
+  onSelect?: (id: string) => void;
+  onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
+}) {
   return render(
-    <ModelPickerSheet sheetRef={mockSheetRef as never} onSelect={overrides?.onSelect} />,
+    <ModelPickerSheet
+      sheetRef={mockSheetRef as never}
+      onSelect={overrides?.onSelect}
+      onOpenCloudAccess={overrides?.onOpenCloudAccess}
+    />,
   );
 }
 
@@ -265,7 +284,16 @@ describe('ModelPickerSheet', () => {
     expect(mockSheetRef.current.close).toHaveBeenCalled();
   });
 
-  it('does not select locked cloud rows and opens invite access', () => {
+  it('closes the sheet when tapping the already selected local model', () => {
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    const { getByLabelText } = renderPicker();
+
+    fireEvent.press(getByLabelText('AGI Standard, selected'));
+
+    expect(mockSheetRef.current.close).toHaveBeenCalled();
+  });
+
+  it('does not select locked cloud rows and opens invite access', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const { getByLabelText, getByTestId } = renderPicker();
 
@@ -273,7 +301,34 @@ describe('ModelPickerSheet', () => {
 
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(mockSheetRef.current.close).toHaveBeenCalled();
-    expect(getByTestId('invite-code-modal')).toBeTruthy();
+    await waitFor(() => expect(getByTestId('invite-code-modal')).toBeTruthy());
+  });
+
+  it('delegates locked cloud rows to the parent invite surface when provided', async () => {
+    const lockedModel = LOCKED_CLOUD_MODELS[0]!;
+    const onOpenCloudAccess = jest.fn();
+    const { getByLabelText, queryByTestId } = renderPicker({ onOpenCloudAccess });
+
+    fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
+
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockSheetRef.current.close).toHaveBeenCalled();
+    await waitFor(() => expect(onOpenCloudAccess).toHaveBeenCalledWith('invite'));
+    expect(queryByTestId('invite-code-modal')).toBeNull();
+  });
+
+  it('selects cloud rows after invite access', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const cloudModel = LOCKED_CLOUD_MODELS[0]!;
+    const { getByLabelText, getByText, queryByTestId } = renderPicker();
+
+    expect(getByText('Local and AGI Cloud models are selectable.')).toBeTruthy();
+
+    fireEvent.press(getByLabelText(cloudModel.name));
+
+    expect(useModelStore.getState().selectedModel).toBe(cloudModel.id);
+    expect(useModelStore.getState().selectedProvider).toBe('cloud_managed');
+    expect(queryByTestId('invite-code-modal')).toBeNull();
   });
 
   it('selects a local auto mode when tapped', () => {

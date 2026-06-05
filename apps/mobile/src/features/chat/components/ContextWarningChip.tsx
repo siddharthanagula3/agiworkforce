@@ -36,9 +36,9 @@ export function ContextWarningChip({
         justifyContent: 'space-between',
         paddingHorizontal: 12,
         paddingVertical: 7,
-        backgroundColor: `${colors.agentWarning}18`,
+        backgroundColor: colors.warningSurface,
         borderTopWidth: 1,
-        borderTopColor: `${colors.agentWarning}30`,
+        borderTopColor: colors.warningBorder,
         gap: 8,
       }}
       accessibilityRole="alert"
@@ -62,7 +62,7 @@ export function ContextWarningChip({
             paddingVertical: 3,
             borderRadius: 12,
             borderWidth: 1,
-            borderColor: `${colors.agentWarning}60`,
+            borderColor: colors.warningBorder,
           }}
           accessibilityRole="button"
           accessibilityLabel="Start fresh chat"

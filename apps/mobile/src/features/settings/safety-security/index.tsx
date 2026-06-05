@@ -90,7 +90,13 @@ export default function SafetySecurityScreen() {
               Require Face ID, Touch ID, or passcode to open AGI.
             </Text>
           </View>
-          <Switch value={biometricEnabled} onValueChange={handleBiometric} disabled={saving} />
+          <Switch
+            value={biometricEnabled}
+            onValueChange={handleBiometric}
+            disabled={saving}
+            accessibilityLabel={`App Lock. ${biometricEnabled ? 'On' : 'Off'}`}
+            accessibilityHint="Require Face ID, Touch ID, or passcode to open AGI"
+          />
         </View>
         <SettingsRow
           label="Permissions"

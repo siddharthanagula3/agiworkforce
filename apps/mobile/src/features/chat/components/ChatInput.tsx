@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useImperativeHandle } from 'react';
-import { View, TextInput, Pressable } from 'react-native';
+import { Alert, View, TextInput, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus, Link as LinkIcon } from 'lucide-react-native';
 import { ModelSelectorButton } from './ModelSelectorButton';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
@@ -13,8 +14,8 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTheme } from '@/src/ui/theme';
 import { getDisplayName } from '@/src/features/model-picker/service';
-import { colors } from '@/src/ui/theme';
 import { MAX_INPUT_LINES } from '@/lib/constants';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
 import { cleanupVoiceDictation, detectVoiceCommand } from '@agiworkforce/utils/voice';
 
@@ -65,13 +66,15 @@ export function ChatInput({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDurationMs, setRecordingDurationMs] = useState(0);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [voiceResetSignal, setVoiceResetSignal] = useState(0);
   const inputRef = useRef<TextInput>(null);
   const recordingStartTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
-  const { colors: themeColors, isDark } = useTheme();
+  const { colors: themeColors } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const modelName = getDisplayName(selectedModel);
 
@@ -145,6 +148,16 @@ export function ChatInput({
     [applyTranscript],
   );
 
+  const resetRecordingUi = useCallback(() => {
+    setIsRecording(false);
+    setRecordingDurationMs(0);
+    setAudioLevel(0);
+    if (durationIntervalRef.current) {
+      clearInterval(durationIntervalRef.current);
+      durationIntervalRef.current = null;
+    }
+  }, []);
+
   const handleRecordingStart = useCallback(() => {
     setIsRecording(true);
     setRecordingDurationMs(0);
@@ -155,8 +168,8 @@ export function ChatInput({
   }, []);
 
   const handleRecordingStop = useCallback(() => {
-    // Duration timer stays until transcription completes (handled in handleTranscription)
-  }, []);
+    resetRecordingUi();
+  }, [resetRecordingUi]);
 
   const handleMetering = useCallback((event: VoiceMeteringEvent) => {
     const normalized = Math.max(0, Math.min(1, (event.metering + 60) / 60));
@@ -164,26 +177,17 @@ export function ChatInput({
   }, []);
 
   const handleOverlayCancel = useCallback(() => {
-    setIsRecording(false);
-    setRecordingDurationMs(0);
-    setAudioLevel(0);
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
-    }
+    resetRecordingUi();
+    setVoiceResetSignal((value) => value + 1);
     if (VoiceService.isRecording()) {
       VoiceService.cancelRecording().catch(() => {
         // ignore cleanup errors
       });
     }
-  }, []);
+  }, [resetRecordingUi]);
 
   const handleOverlaySend = useCallback(async () => {
-    setIsRecording(false);
-    if (durationIntervalRef.current) {
-      clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
-    }
+    resetRecordingUi();
     if (!VoiceService.isRecording()) return;
     try {
       const uri = await VoiceService.stopRecording();
@@ -193,17 +197,26 @@ export function ChatInput({
       }
     } catch {
       // ignore transcription errors from overlay send
+    } finally {
+      setVoiceResetSignal((value) => value + 1);
     }
-    setRecordingDurationMs(0);
-    setAudioLevel(0);
-  }, [applyTranscript]);
+  }, [applyTranscript, resetRecordingUi]);
+
+  const handleVoiceError = useCallback(
+    (message: string) => {
+      resetRecordingUi();
+      setVoiceResetSignal((value) => value + 1);
+      Alert.alert('Voice input unavailable', message);
+    },
+    [resetRecordingUi],
+  );
 
   const hasContent = text.trim().length > 0 || attachments.length > 0;
 
   const showCommandPalette = text.startsWith('/') && !isStreaming;
 
   const availableCommands: ChatCommand[] = [
-    '/image',
+    ...(FEATURES.imageGen ? (['/image'] as const) : []),
     ...(onOpenVoiceMode ? (['/voice'] as const) : []),
     ...(onOpenCompare ? (['/compare'] as const) : []),
     ...(onOpenExport ? (['/export'] as const) : []),
@@ -262,7 +275,7 @@ export function ChatInput({
         : "What's on your mind?";
 
   return (
-    <View className="px-4 pb-4 pt-2">
+    <View className="px-4 pt-2" style={{ paddingBottom: Math.max(insets.bottom + 6, 16) }}>
       {/* Recording overlay -- shown while recording is active */}
       <RecordingOverlay
         visible={isRecording}
@@ -292,7 +305,7 @@ export function ChatInput({
           backgroundColor: themeColors.surfaceElevated,
           borderRadius: 16,
           borderWidth: 1,
-          borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)',
+          borderColor: themeColors.composerBorder,
           paddingHorizontal: 12,
           paddingVertical: 8,
         }}
@@ -315,7 +328,7 @@ export function ChatInput({
           onChangeText={setText}
           multiline
           numberOfLines={MAX_INPUT_LINES}
-          selectionColor={colors.teal}
+          selectionColor={themeColors.teal}
           returnKeyType="default"
           blurOnSubmit={false}
           accessible={true}
@@ -378,6 +391,8 @@ export function ChatInput({
                 onRecordingStop={handleRecordingStop}
                 onMetering={handleMetering}
                 onLongPress={onOpenVoiceMode}
+                onError={handleVoiceError}
+                resetSignal={voiceResetSignal}
                 disabled={isStreaming}
               />
             </View>

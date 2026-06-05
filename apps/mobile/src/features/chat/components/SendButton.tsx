@@ -8,7 +8,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Send, Square, Clock } from 'lucide-react-native';
 import { useEffect } from 'react';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 type SendButtonState = 'idle' | 'streaming' | 'queued';
 
@@ -20,19 +20,33 @@ interface SendButtonProps {
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const STATE_COLORS: Record<SendButtonState, string> = {
-  idle: colors.terraCotta,
-  streaming: '#ef4444', // red
-  queued: '#f59e0b', // amber
-};
+function stateColors(colors: ColorScheme): Record<SendButtonState, string> {
+  return {
+    idle: colors.teal,
+    streaming: colors.agentError,
+    queued: colors.agentWarning,
+  };
+}
+
+function iconForState(state: SendButtonState) {
+  if (state === 'streaming') return Square;
+  if (state === 'queued') return Clock;
+  return Send;
+}
+
+function fillForState(state: SendButtonState, color: string) {
+  return state === 'streaming' ? color : undefined;
+}
 
 /**
  * Three-state send button:
- * - idle: terra-cotta bg, Send icon
- * - streaming: red bg, Square/stop icon
- * - queued: amber bg, Clock icon
+ * - idle: accent background, Send icon
+ * - streaming: error background, Square/stop icon
+ * - queued: warning background, Clock icon
  */
 export function SendButton({ state, onPress, disabled }: SendButtonProps) {
+  const colors = useThemeColors();
+  const palette = stateColors(colors);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -51,19 +65,20 @@ export function SendButton({ state, onPress, disabled }: SendButtonProps) {
   const animatedStyle = useAnimatedStyle(() => {
     const bgColor =
       progress.value <= 1
-        ? interpolateColor(progress.value, [0, 1], [STATE_COLORS.idle, STATE_COLORS.streaming])
-        : interpolateColor(
-            progress.value - 1,
-            [0, 1],
-            [STATE_COLORS.streaming, STATE_COLORS.queued],
-          );
+        ? interpolateColor(progress.value, [0, 1], [palette.idle, palette.streaming])
+        : interpolateColor(progress.value - 1, [0, 1], [palette.streaming, palette.queued]);
 
     return {
-      backgroundColor: isDisabled.value ? 'rgba(255,255,255,0.1)' : bgColor,
+      backgroundColor: isDisabled.value ? colors.neutralSurface : bgColor,
     };
   });
 
-  const iconColor = disabled ? colors.textMuted : '#ffffff';
+  const iconColor = disabled
+    ? colors.textSecondary
+    : state === 'idle'
+      ? colors.accentText
+      : colors.white;
+  const Icon = iconForState(state);
 
   return (
     <AnimatedPressable
@@ -87,9 +102,7 @@ export function SendButton({ state, onPress, disabled }: SendButtonProps) {
       }
       accessibilityRole="button"
     >
-      {state === 'idle' && <Send size={16} color={iconColor} />}
-      {state === 'streaming' && <Square size={16} color="#fff" fill="#fff" />}
-      {state === 'queued' && <Clock size={16} color="#fff" />}
+      <Icon size={16} color={iconColor} fill={fillForState(state, iconColor)} />
     </AnimatedPressable>
   );
 }

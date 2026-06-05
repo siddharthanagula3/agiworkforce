@@ -165,7 +165,7 @@ export function ConversationExportSheet({
       enableDynamicSizing={false}
       backdropComponent={renderBackdrop}
       backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
-      handleIndicatorStyle={{ backgroundColor: 'rgba(255,255,255,0.3)', width: 36 }}
+      handleIndicatorStyle={{ backgroundColor: colors.textMuted, width: 36 }}
     >
       {/* Header */}
       <View
@@ -213,7 +213,7 @@ export function ConversationExportSheet({
                 paddingVertical: 14,
                 gap: 14,
                 opacity: isDisabled && !isLoading ? 0.45 : 1,
-                backgroundColor: pressed && !isDisabled ? 'rgba(255,255,255,0.04)' : 'transparent',
+                backgroundColor: pressed && !isDisabled ? colors.surfaceHover : colors.transparent,
                 borderBottomWidth: index < EXPORT_OPTIONS.length - 1 ? 1 : 0,
                 borderBottomColor: colors.border,
               })}
@@ -224,7 +224,7 @@ export function ConversationExportSheet({
                   width: 36,
                   height: 36,
                   borderRadius: 8,
-                  backgroundColor: isCopied ? 'rgba(16,185,129,0.12)' : 'rgba(33,128,141,0.12)',
+                  backgroundColor: isCopied ? colors.successSurface : colors.accentSurface,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}

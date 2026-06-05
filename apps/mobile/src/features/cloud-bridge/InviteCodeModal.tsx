@@ -21,7 +21,7 @@ import type { InviteCodeError, InviteCodeModalProps } from './types';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const DEFAULT_COUNTRY = { code: 'IN', name: 'India', flag: '🇮🇳' };
+const DEFAULT_COUNTRY = { code: 'US', name: 'United States', flag: '🇺🇸' };
 
 function friendlyInviteError(code?: InviteCodeError): string {
   switch (code) {
@@ -106,9 +106,9 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
           <Check size={24} color={colors.white} strokeWidth={2.5} />
         </View>
         <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
-          Cloud unlocked!
+          AGI Cloud unlocked
         </Text>
-        <Text style={{ fontSize: 14, color: colors.textSecondary }}>Closing in a moment…</Text>
+        <Text style={{ fontSize: 14, color: colors.textSecondary }}>Closing...</Text>
       </View>
     );
   }
@@ -167,7 +167,7 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
         onPress={handleSubmit}
         disabled={!canSubmit}
         accessibilityRole="button"
-        accessibilityLabel="Unlock cloud"
+        accessibilityLabel="Unlock AGI Cloud"
         style={{
           backgroundColor: canSubmit ? colors.teal : colors.surfaceHover,
           borderRadius: 14,
@@ -180,20 +180,20 @@ function InviteTab({ source, onSwitchToWaitlist, onRedeemed, onClose }: InviteTa
       >
         {state === 'loading' ? (
           <>
-            <ActivityIndicator size="small" color={colors.white} />
-            <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>
+            <ActivityIndicator size="small" color={colors.accentText} />
+            <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>
               Validating…
             </Text>
           </>
         ) : (
           <Text
             style={{
-              color: canSubmit ? colors.white : colors.textMuted,
+              color: canSubmit ? colors.accentText : colors.textMuted,
               fontSize: 16,
               fontWeight: '600',
             }}
           >
-            Unlock cloud
+            Unlock AGI Cloud
           </Text>
         )}
       </Pressable>
@@ -289,7 +289,7 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
             lineHeight: 20,
           }}
         >
-          We'll email you when cloud opens.
+          We'll email you when AGI Cloud is ready.
         </Text>
       </View>
     );
@@ -392,13 +392,15 @@ function WaitlistTab({ onWaitlisted, onClose }: WaitlistTabProps) {
       >
         {submitting ? (
           <>
-            <ActivityIndicator size="small" color={colors.white} />
-            <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>Joining…</Text>
+            <ActivityIndicator size="small" color={colors.accentText} />
+            <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>
+              Joining…
+            </Text>
           </>
         ) : (
           <Text
             style={{
-              color: canSubmit ? colors.white : colors.textMuted,
+              color: canSubmit ? colors.accentText : colors.textMuted,
               fontSize: 16,
               fontWeight: '600',
             }}
@@ -447,11 +449,7 @@ export function InviteCodeModal({
       onRequestClose={handleClose}
       accessibilityViewIsModal
     >
-      <Pressable
-        onPress={handleClose}
-        accessibilityLabel="Close cloud features modal"
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
-      >
+      <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
         <Pressable
           onPress={() => {
             /* swallow taps */
@@ -505,11 +503,11 @@ export function InviteCodeModal({
                 </View>
                 <View style={{ flex: 1, gap: 4 }}>
                   <Text style={{ fontSize: 16, fontWeight: '600', color: colors.textPrimary }}>
-                    Cloud features
+                    AGI Cloud
                   </Text>
                   <Text style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 17 }}>
-                    Cloud access is currently invite-only. Join the waitlist, or enter your
-                    invitation code if you already have one.
+                    AGI Cloud is currently invite-only. Join the waitlist, or enter your invitation
+                    code if you already have one.
                   </Text>
                 </View>
                 <Pressable
@@ -547,7 +545,7 @@ export function InviteCodeModal({
                       paddingVertical: 10,
                       borderRadius: 10,
                       alignItems: 'center',
-                      backgroundColor: activeTab === tab ? colors.background : 'transparent',
+                      backgroundColor: activeTab === tab ? colors.background : colors.transparent,
                     }}
                   >
                     <Text
@@ -583,7 +581,7 @@ export function InviteCodeModal({
             </SafeAreaView>
           </KeyboardAvoidingView>
         </Pressable>
-      </Pressable>
+      </View>
     </Modal>
   );
 }

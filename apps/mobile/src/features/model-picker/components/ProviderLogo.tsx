@@ -13,6 +13,7 @@
 import React from 'react';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { PROVIDER_DISPLAY, type ProviderId } from '@agiworkforce/types';
+import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // SVG path data from simple-icons (v16, 24×24 viewBox). Sourced per-icon to
@@ -66,8 +67,9 @@ interface ProviderLogoProps {
 }
 
 export function ProviderLogo({ providerId, size = 24 }: ProviderLogoProps) {
+  const colors = useThemeColors();
   const display = PROVIDER_DISPLAY[providerId as ProviderId];
-  const brandColor = display?.brandColor ?? '#888888';
+  const brandColor = display?.brandColor ?? colors.textMuted;
 
   const path = ICON_PATHS[providerId];
   const useCircle = CIRCLE_FALLBACK.has(providerId as ProviderId) || !path;

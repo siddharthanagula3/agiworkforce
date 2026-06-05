@@ -5,7 +5,8 @@ import { Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useThemeColors } from '@/src/ui/theme';
 
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
@@ -16,6 +17,7 @@ interface ChatEmptyStateProps {
 }
 
 export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptyStateProps) {
+  const colors = useThemeColors();
   const nickname = useSettingsStore((s) => s.personalization.nickname);
   const fullName = useSettingsStore((s) => s.personalization.fullName);
   const displayName = nickname || fullName?.split(' ')[0] || '';
@@ -24,11 +26,13 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
   const [bannerVisible, setBannerVisible] = useState(false);
 
   useEffect(() => {
-    if (showPairingBanner !== false) {
+    if (FEATURES.companion && showPairingBanner !== false && onPairDesktop) {
       const dismissed = storage.getString(MMKV_PAIRING_BANNER_KEY);
       setBannerVisible(!dismissed);
+    } else {
+      setBannerVisible(false);
     }
-  }, [showPairingBanner]);
+  }, [onPairDesktop, showPairingBanner]);
 
   const dismissBanner = useCallback(() => {
     storage.set(MMKV_PAIRING_BANNER_KEY, 'true');
@@ -52,9 +56,9 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
             right: 0,
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: 'rgba(33, 128, 141, 0.12)',
+            backgroundColor: colors.accentSurface,
             borderWidth: 1,
-            borderColor: 'rgba(33, 128, 141, 0.25)',
+            borderColor: colors.accentBorder,
             borderRadius: 12,
             paddingHorizontal: 14,
             paddingVertical: 12,
@@ -71,7 +75,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
             <Text style={{ fontSize: 13, fontWeight: '600', color: colors.teal }}>
               Pair your desktop?
             </Text>
-            <Text style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 1 }}>
+            <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 1 }}>
               Scan QR to connect
             </Text>
           </Pressable>
@@ -81,7 +85,7 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
             accessibilityLabel="Dismiss pairing banner"
             accessibilityRole="button"
           >
-            <X size={16} color="rgba(255,255,255,0.3)" />
+            <X size={16} color={colors.textMuted} />
           </Pressable>
         </Animated.View>
       )}
@@ -91,10 +95,12 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
         <Text
           style={{
             fontSize: 28,
-            fontWeight: '400',
+            lineHeight: 36,
+            fontWeight: '500',
             color: colors.textPrimary,
             textAlign: 'center',
             marginBottom: 8,
+            width: '100%',
           }}
         >
           {headline}
@@ -107,9 +113,11 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
           <Text
             style={{
               fontSize: 15,
+              lineHeight: 22,
               color: colors.textMuted,
               textAlign: 'center',
               marginBottom: 0,
+              width: '100%',
             }}
           >
             How can I help you?

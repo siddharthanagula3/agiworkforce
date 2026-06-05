@@ -101,6 +101,8 @@ import { useChatStore } from '../stores/chatStore';
 import { streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import { useWaitlistStore } from '../src/features/waitlist/store';
 import {
   listInstalledModels,
   getInstalledModel,
@@ -133,6 +135,17 @@ function getState() {
 
 /** Reset store to initial state between tests */
 function resetStore() {
+  useWaitlistStore.setState({
+    joined: false,
+    email: undefined,
+    country: undefined,
+    rank: undefined,
+    joinedAt: undefined,
+    cloudUnlocked: false,
+    inviteId: undefined,
+    inviteCode: undefined,
+    cloudUnlockedAt: undefined,
+  });
   useChatStore.setState({
     conversations: [],
     currentConversationId: null,
@@ -153,6 +166,7 @@ function resetStore() {
 const CONV_ID = 'test-conv-123';
 const MODEL = 'claude-3-5-sonnet';
 const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -481,6 +495,94 @@ describe('chatStore — streaming state', () => {
         expect.objectContaining({ modelId: LOCAL_MODEL, prompt: 'Stay local' }),
       );
       expect(mockStreamChat).not.toHaveBeenCalled();
+    });
+
+    it('strips local reasoning and model control tokens from visible replies', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+      mockListInstalledModels.mockResolvedValue([
+        {
+          id: LOCAL_MODEL,
+          display_name: 'AGI Standard',
+          runtime: 'local',
+          format: 'pte',
+          size_bytes: 2_147_483_648,
+          sha256: null,
+          local_path: null,
+          installed_at: 1,
+          last_used_at: null,
+          capabilities: null,
+        },
+      ]);
+      mockLocalGenerate.mockImplementation(async (_modelPath, opts) => {
+        capturedLocalGenerateOptions = opts;
+        return {
+          text: '<think>Pick a concise answer.</think>\n\nA local mode test can answer a simple offline question in one sentence.<|im_end|>',
+          runtime: 'executorch',
+          aborted: false,
+        };
+      });
+
+      await act(async () => {
+        await getState().sendMessage(
+          CONV_ID,
+          'Give me a one sentence local mode test.',
+          LOCAL_MODEL,
+        );
+      });
+
+      expect(capturedLocalGenerateOptions?.messages?.[0]?.content).toContain(
+        "Answer the user's current request directly",
+      );
+
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe(
+        'A local mode test can answer a simple offline question in one sentence.',
+      );
+      expect(assistantMsg?.content).not.toContain('<think>');
+      expect(assistantMsg?.content).not.toContain('<|im_end|>');
+      expect(assistantMsg?.reasoning).toBe('Pick a concise answer.');
+    });
+  });
+
+  describe('cloud invite path', () => {
+    it('does not fall back to local generation for locked cloud models', async () => {
+      mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Use AGI Cloud', CLOUD_MODEL);
+      });
+
+      expect(mockLocalGenerate).not.toHaveBeenCalled();
+      expect(mockStreamChat).not.toHaveBeenCalled();
+      expect(getState().error).toBe('mobile-local-only');
+      expect(getState().messages[CONV_ID]).toEqual([]);
+    });
+
+    it('streams unlocked cloud models through the remote path', async () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockRemoteDisabledReason.mockReturnValue(null);
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDelta({ content: 'Cloud answer' });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Use AGI Cloud', CLOUD_MODEL);
+      });
+
+      expect(mockLocalGenerate).not.toHaveBeenCalled();
+      expect(capturedBody?.model).toBe(CLOUD_MODEL);
+      const msgs = getState().messages[CONV_ID] ?? [];
+      const assistantMsg = [...msgs].reverse().find((m) => m.role === 'assistant');
+      expect(assistantMsg?.content).toBe('Cloud answer');
+      expect(assistantMsg?.metadata?.localMode).toBeUndefined();
     });
   });
 

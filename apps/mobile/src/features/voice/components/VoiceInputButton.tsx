@@ -1,6 +1,6 @@
 // AUDIT-FIX: STT-WIRE
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Linking, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -11,7 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Mic, Loader } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import type { VoiceMeteringEvent } from '@/src/features/voice/services/voice';
@@ -37,6 +37,7 @@ interface VoiceInputButtonProps {
   onMetering?: (event: VoiceMeteringEvent) => void;
   onLongPress?: () => void;
   onError?: (error: string) => void;
+  resetSignal?: number;
   disabled?: boolean;
 }
 
@@ -54,8 +55,10 @@ export function VoiceInputButton({
   onMetering,
   onLongPress,
   onError,
+  resetSignal = 0,
   disabled = false,
 }: VoiceInputButtonProps) {
+  const colors = useThemeColors();
   const [state, setState] = useState<VoiceState>('idle');
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -97,15 +100,18 @@ export function VoiceInputButton({
     transform: [{ rotate: `${spinRotation.value}deg` }],
   }));
 
+  useEffect(() => {
+    if (resetSignal <= 0) return;
+    pressStartRef.current = 0;
+    isLongPressRef.current = false;
+    isPTTRef.current = false;
+    setState('idle');
+  }, [resetSignal]);
+
   const reportError = useCallback(
-    async (err: unknown) => {
+    (err: unknown) => {
       if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
-        onError?.('Microphone access is off. Open Settings to enable it.');
-        try {
-          await Linking.openSettings();
-        } catch {
-          // Settings unavailable — best effort
-        }
+        onError?.('Voice input needs microphone and speech recognition access.');
         return;
       }
       const message = err instanceof Error ? err.message : 'Voice capture failed';
@@ -122,9 +128,12 @@ export function VoiceInputButton({
       await VoiceService.startRecording((event) => onMetering?.(event));
     } catch (err) {
       setState('idle');
+      pressStartRef.current = 0;
+      isPTTRef.current = false;
+      onRecordingStop?.();
       reportError(err);
     }
-  }, [hapticsEnabled, onRecordingStart, onMetering, reportError]);
+  }, [hapticsEnabled, onRecordingStart, onRecordingStop, onMetering, reportError]);
 
   const stopTapRecording = useCallback(async () => {
     try {
@@ -153,9 +162,11 @@ export function VoiceInputButton({
     } catch (err) {
       isPTTRef.current = false;
       setState('idle');
+      pressStartRef.current = 0;
+      onRecordingStop?.();
       reportError(err);
     }
-  }, [hapticsEnabled, onMetering, onRecordingStart, reportError]);
+  }, [hapticsEnabled, onMetering, onRecordingStart, onRecordingStop, reportError]);
 
   const stopPTTRecording = useCallback(async () => {
     isPTTRef.current = false;
@@ -176,7 +187,12 @@ export function VoiceInputButton({
   }, [hapticsEnabled, onRecordingStop, onTranscription, reportError]);
 
   const handlePressIn = useCallback(() => {
-    if (disabled || state !== 'idle') return;
+    if (disabled || state === 'processing') return;
+    if (state === 'recording') {
+      pressStartRef.current = Date.now();
+      return;
+    }
+    if (state !== 'idle') return;
     pressStartRef.current = Date.now();
     isLongPressRef.current = false;
     isPTTRef.current = false;
@@ -194,6 +210,11 @@ export function VoiceInputButton({
 
     if (isLongPressRef.current) return;
 
+    if (state === 'recording') {
+      stopTapRecording();
+      return;
+    }
+
     if (isPTTRef.current || state === 'ptt') {
       stopPTTRecording();
       return;
@@ -202,8 +223,6 @@ export function VoiceInputButton({
     if (holdMs < PTT_THRESHOLD_MS) {
       if (state === 'idle') {
         startTapRecording();
-      } else if (state === 'recording') {
-        stopTapRecording();
       }
     }
   }, [state, stopPTTRecording, startTapRecording, stopTapRecording]);
@@ -219,7 +238,11 @@ export function VoiceInputButton({
   const isProcessing = state === 'processing';
   const isDisabled = disabled || isProcessing;
 
-  const iconColor = isActive ? colors.agentError : isProcessing ? colors.teal : colors.textMuted;
+  const iconColor = isActive
+    ? colors.agentError
+    : isProcessing
+      ? colors.teal
+      : colors.textSecondary;
 
   const accessibilityLabel =
     state === 'recording'
@@ -253,8 +276,14 @@ export function VoiceInputButton({
         onLongPress={handleLongPress}
         delayLongPress={LONG_PRESS_DELAY_MS}
         disabled={isDisabled}
-        className="p-1.5 rounded-lg active:bg-white/5 z-10"
-        style={isDisabled ? { opacity: 0.5 } : undefined}
+        style={[
+          {
+            padding: 6,
+            borderRadius: 8,
+            backgroundColor: colors.transparent,
+          },
+          isDisabled ? { opacity: 0.5 } : undefined,
+        ]}
         accessibilityLabel={accessibilityLabel}
         accessibilityHint="Tap to start or stop recording. Hold for instant push-to-talk. Long press for voice conversation mode."
         accessibilityRole="button"

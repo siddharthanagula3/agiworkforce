@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import { DrawerActions } from '@react-navigation/native';
 import { ArrowLeft, LogIn, Menu } from 'lucide-react-native';
-import { summarizeProjectHeader, formatChatExecutionModeLabel } from '@agiworkforce/types';
+import { summarizeProjectHeader } from '@agiworkforce/types';
 import type { ProjectRecord } from '@agiworkforce/types';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { ProjectHeader } from '@/src/features/projects/components/ProjectHeader';
@@ -53,7 +53,7 @@ function LocalOnlyFallback({
         {localProject?.name ?? projectId}
       </Text>
       <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-        {formatChatExecutionModeLabel('local_only')} — project details sync when you join Cloud.
+        Local Mode. Project details sync when you join AGI Cloud.
       </Text>
       <Pressable
         onPress={onJoinWaitlist}
@@ -65,9 +65,9 @@ function LocalOnlyFallback({
           paddingHorizontal: 14,
           paddingVertical: 8,
           borderRadius: 8,
-          backgroundColor: `${colors.teal}20`,
+          backgroundColor: colors.accentSurface,
           borderWidth: 1,
-          borderColor: `${colors.teal}40`,
+          borderColor: colors.accentBorder,
         }}
         accessibilityRole="button"
         accessibilityLabel="Join Cloud waitlist"
@@ -121,7 +121,7 @@ function TabBar({
               paddingVertical: 7,
               borderRadius: 8,
               alignItems: 'center',
-              backgroundColor: isActive ? colors.surfaceOverlay : 'transparent',
+              backgroundColor: isActive ? colors.surfaceOverlay : colors.transparent,
             }}
             accessibilityRole="tab"
             accessibilityLabel={tab.label}

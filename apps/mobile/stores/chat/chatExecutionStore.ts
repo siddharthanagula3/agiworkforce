@@ -11,7 +11,8 @@ import {
   markLocalModelRefUsed,
   resolveLocalModelRef,
 } from '@/src/features/model-picker/localModelRuntime';
-import { isSelectableModelId } from '@/src/features/model-picker/service';
+import { isCloudManagedModelId, isSelectableModelId } from '@/src/features/model-picker/service';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -69,7 +70,7 @@ const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
 const DEFAULT_LOCAL_SYSTEM_PROMPT =
-  'You are AGI, a concise helpful assistant running locally on this device. Keep final answers separate from any thinking or reasoning text.';
+  "You are AGI, a concise helpful assistant running locally on this device. Answer the user's current request directly. Keep final answers separate from any thinking or reasoning text. Do not invent a different prompt or test unless the user explicitly asks you to create one.";
 
 const CHAT_MODE_PROMPTS: Record<ChatMode, string | null> = {
   chat: null,
@@ -153,7 +154,7 @@ function stripPartialLocalReasoningTag(raw: string): string {
 }
 
 function parseLocalThinking(raw: string): ParsedLocalThinking {
-  const safeRaw = stripPartialLocalReasoningTag(raw);
+  const safeRaw = stripPartialLocalReasoningTag(sanitizeLocalOutput(raw));
   LOCAL_REASONING_TAG_RE.lastIndex = 0;
 
   let cursor = 0;
@@ -189,10 +190,20 @@ function parseLocalThinking(raw: string): ParsedLocalThinking {
   }
 
   return {
-    content: content.replace(/^\s+/, ''),
+    content: sanitizeLocalOutput(content).replace(/^\s+/, ''),
     reasoning: reasoning.trim(),
     hasReasoning,
   };
+}
+
+function sanitizeLocalOutput(raw: string): string {
+  return raw
+    .replace(/<\|im_(?:start|end)\|>/gi, '')
+    .replace(/<\|endoftext\|>/gi, '')
+    .replace(/<\/?s>/gi, '')
+    .split(String.fromCharCode(0))
+    .join('')
+    .trimEnd();
 }
 
 function localSetupMessage(error: unknown): string {
@@ -204,7 +215,7 @@ function localSetupMessage(error: unknown): string {
     raw.includes('not downloaded') ||
     raw.includes('not available on this device')
   ) {
-    return 'Local Mode + Local LLMs is active, but no on-device model is ready yet. Download a local model from Models or join the Cloud Managed waitlist for hosted compute.';
+    return 'Local Mode is active, but no on-device model is ready yet. Open Models to download a local model or request AGI Cloud access.';
   }
   return (
     raw ||
@@ -331,8 +342,26 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
-    const remoteDisabledReason = getRemoteChatDisabledReason();
-    const shouldUseLocalRuntime = isSelectableModelId(model) || Boolean(remoteDisabledReason);
+    const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
+    const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
+    const isCloudModel = isCloudManagedModelId(model);
+    const shouldUseLocalRuntime = isSelectableModelId(model);
+    if (isCloudModel && remoteDisabledReason) {
+      set({
+        error: remoteDisabledReason,
+        paywallError: null,
+        isStreaming: streamingConversations.size > 0,
+      });
+      return;
+    }
+    if (!shouldUseLocalRuntime && remoteDisabledReason) {
+      set({
+        error: remoteDisabledReason,
+        paywallError: null,
+        isStreaming: streamingConversations.size > 0,
+      });
+      return;
+    }
     if (shouldUseLocalRuntime && attachments && attachments.length > 0) {
       uploadedAttachments = createLocalAttachmentReferences(attachments);
     } else if (attachments && attachments.length > 0) {

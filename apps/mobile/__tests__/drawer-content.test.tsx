@@ -144,7 +144,7 @@ describe('DrawerContent', () => {
   });
 
   it('renders the AGI mobile drawer structure', () => {
-    const { getByText, getAllByText, queryByText } = renderDrawer();
+    const { getByText, getAllByText, getAllByLabelText, queryByText } = renderDrawer();
 
     expect(getByText('AGI')).toBeTruthy();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
@@ -152,6 +152,7 @@ describe('DrawerContent', () => {
     expect(getByText('AGI Agent')).toBeTruthy();
     expect(getByText('Recents')).toBeTruthy();
     expect(getByText('Settings')).toBeTruthy();
+    expect(getAllByLabelText('Open profile').length).toBeGreaterThanOrEqual(2);
     expect(queryByText(/byok/i)).toBeNull();
   });
 

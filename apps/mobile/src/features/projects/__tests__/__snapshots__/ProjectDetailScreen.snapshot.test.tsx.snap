@@ -5,8 +5,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
   accessibilityLabel="Project: My Detail Project"
   style={
     {
-      "backgroundColor": "#1a1a1a",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 12,
       "borderWidth": 1,
       "flexDirection": "column",
@@ -66,7 +66,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 16,
               "fontWeight": "600",
             }
@@ -79,7 +79,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
         numberOfLines={2}
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 12,
             "marginTop": 2,
           }
@@ -180,14 +180,14 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       }
     >
       <View
-        color="#777"
+        color="rgba(244, 244, 244, 0.48)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -207,7 +207,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -229,8 +229,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -241,7 +241,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -255,8 +255,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -267,7 +267,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -281,8 +281,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -293,7 +293,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a m
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -313,8 +313,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
   accessibilityLabel="Project: My Detail Project"
   style={
     {
-      "backgroundColor": "#1a1a1a",
-      "borderColor": "#333",
+      "backgroundColor": "#212121",
+      "borderColor": "rgba(255, 255, 255, 0.10)",
       "borderRadius": 12,
       "borderWidth": 1,
       "flexDirection": "column",
@@ -379,7 +379,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
           numberOfLines={1}
           style={
             {
-              "color": "#fff",
+              "color": "#f4f4f4",
               "fontSize": 16,
               "fontWeight": "600",
             }
@@ -392,7 +392,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
         numberOfLines={2}
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 12,
             "marginTop": 2,
           }
@@ -493,14 +493,14 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       }
     >
       <View
-        color="#777"
+        color="rgba(244, 244, 244, 0.48)"
         size={11}
         testID="icon-users"
       />
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -520,7 +520,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -540,7 +540,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       <Text
         style={
           {
-            "color": "#777",
+            "color": "rgba(244, 244, 244, 0.48)",
             "fontSize": 11,
           }
         }
@@ -562,8 +562,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -574,7 +574,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -588,8 +588,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -600,7 +600,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,
@@ -614,8 +614,8 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
     <View
       style={
         {
-          "backgroundColor": "#0e0e0e",
-          "borderColor": "#333",
+          "backgroundColor": "#2a2a2a",
+          "borderColor": "rgba(255, 255, 255, 0.10)",
           "borderRadius": 4,
           "borderWidth": 1,
           "paddingHorizontal": 6,
@@ -626,7 +626,7 @@ exports[`ProjectDetailScreen — unit snapshots locks ProjectHeader tree for a s
       <Text
         style={
           {
-            "color": "#aaa",
+            "color": "rgba(244, 244, 244, 0.74)",
             "fontSize": 10,
             "fontWeight": "500",
             "letterSpacing": 0.4,

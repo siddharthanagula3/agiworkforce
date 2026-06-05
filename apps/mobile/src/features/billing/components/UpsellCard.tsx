@@ -9,17 +9,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { Zap, Check, X } from 'lucide-react-native';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { storage } from '@/lib/mmkv';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 const MMKV_DISMISS_KEY = 'tier_upsell_dismissed_at';
 const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const FEATURE_BULLETS: string[] = [
-  `${formatChatExecutionModeLabel('cloud_managed')} — no API keys required`,
+  'AGI Cloud access with no API keys required',
   'Access to basic cloud models',
   'Limited monthly credits included',
   'Shared chats and cross-device sync',
@@ -38,6 +37,7 @@ function shouldShowUpsell(): boolean {
 }
 
 export function UpsellCard({ onUpgradePress }: UpsellCardProps) {
+  const colors = useThemeColors();
   const [visible, setVisible] = useState(false);
 
   // Read MMKV after component mounts so the encrypted storage is ready.
@@ -55,10 +55,10 @@ export function UpsellCard({ onUpgradePress }: UpsellCardProps) {
   return (
     <View
       style={{
-        backgroundColor: '#1a2428',
+        backgroundColor: colors.surfaceElevated,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: colors.teal + '40',
+        borderColor: colors.border,
         padding: 16,
       }}
     >
@@ -70,14 +70,16 @@ export function UpsellCard({ onUpgradePress }: UpsellCardProps) {
               width: 32,
               height: 32,
               borderRadius: 8,
-              backgroundColor: colors.teal + '20',
+              backgroundColor: colors.accentSurface,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
             <Zap size={16} color={colors.teal} />
           </View>
-          <Text className="text-base font-semibold text-white">Upgrade to Hobby</Text>
+          <Text className="text-base font-semibold" style={{ color: colors.textPrimary }}>
+            Upgrade to Hobby
+          </Text>
         </View>
 
         {/* Dismiss — 44pt min touch target */}
@@ -97,7 +99,9 @@ export function UpsellCard({ onUpgradePress }: UpsellCardProps) {
         {FEATURE_BULLETS.map((bullet) => (
           <View key={bullet} className="flex-row items-center gap-2">
             <Check size={14} color={colors.teal} />
-            <Text className="text-sm text-white/70 flex-1">{bullet}</Text>
+            <Text className="text-sm flex-1" style={{ color: colors.textSecondary }}>
+              {bullet}
+            </Text>
           </View>
         ))}
       </View>
@@ -118,7 +122,9 @@ export function UpsellCard({ onUpgradePress }: UpsellCardProps) {
         accessibilityLabel="Maybe later"
         accessibilityRole="button"
       >
-        <Text className="text-sm text-white/40">Maybe later</Text>
+        <Text className="text-sm" style={{ color: colors.textMuted }}>
+          Maybe later
+        </Text>
       </Pressable>
     </View>
   );

@@ -8,11 +8,10 @@
  *   - Shows "How can I help you?" subtitle only when no display name
  *   - Does not render duplicate prompt chips
  *   - Does NOT show suggestion-style cards or multi-step wizard content
- *   - Shows pairing banner on first launch
- *   - Pairing banner is dismissible
+ *   - Keeps desktop pairing banner hidden while the companion feature is gated
  */
 
-import { render, fireEvent } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be before component import
@@ -207,43 +206,43 @@ describe('ChatEmptyState', () => {
     expect(queryByText(/start a conversation/i)).toBeNull();
   });
 
-  describe('pairing banner', () => {
-    it('shows pairing banner on first launch (no dismissal in storage)', () => {
+  describe('pairing banner gate', () => {
+    it('does not show pairing banner without a pairing handler', () => {
       mockStorageGetString.mockReturnValue(undefined);
 
       const { getByText } = render(<ChatEmptyState showPairingBanner />);
-      expect(getByText('Pair your desktop?')).toBeTruthy();
-      expect(getByText('Scan QR to connect')).toBeTruthy();
+      expect(getByText('Ask anything')).toBeTruthy();
+    });
+
+    it('keeps pairing banner hidden while companion is disabled', () => {
+      mockStorageGetString.mockReturnValue(undefined);
+
+      const { queryByText } = render(
+        <ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />,
+      );
+      expect(queryByText('Pair your desktop?')).toBeNull();
+      expect(queryByText('Scan QR to connect')).toBeNull();
     });
 
     it('does NOT show pairing banner when previously dismissed', () => {
       mockStorageGetString.mockReturnValue('true');
 
-      const { queryByText } = render(<ChatEmptyState showPairingBanner />);
+      const { queryByText } = render(
+        <ChatEmptyState showPairingBanner onPairDesktop={jest.fn()} />,
+      );
       expect(queryByText('Pair your desktop?')).toBeNull();
     });
 
-    it('pairing banner is dismissible', () => {
-      mockStorageGetString.mockReturnValue(undefined);
-
-      const { getByLabelText, queryByText } = render(<ChatEmptyState showPairingBanner />);
-
-      expect(queryByText('Pair your desktop?')).toBeTruthy();
-      fireEvent.press(getByLabelText('Dismiss pairing banner'));
-      expect(queryByText('Pair your desktop?')).toBeNull();
-      expect(mockStorageSet).toHaveBeenCalledWith('dismissedDesktopPairingBanner', 'true');
-    });
-
-    it('calls onPairDesktop when pairing button is pressed', () => {
+    it('does not expose a desktop-pairing action while companion is disabled', () => {
       mockStorageGetString.mockReturnValue(undefined);
       const onPairDesktop = jest.fn();
 
-      const { getByLabelText } = render(
+      const { queryByLabelText } = render(
         <ChatEmptyState showPairingBanner onPairDesktop={onPairDesktop} />,
       );
 
-      fireEvent.press(getByLabelText('Pair your desktop'));
-      expect(onPairDesktop).toHaveBeenCalled();
+      expect(queryByLabelText('Pair your desktop')).toBeNull();
+      expect(onPairDesktop).not.toHaveBeenCalled();
     });
   });
 });

@@ -26,7 +26,7 @@ import {
 } from 'lucide-react-native';
 import type { GeneratedFilePresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 export interface GeneratedFileCardProps {
   presentation: GeneratedFilePresentation;
@@ -34,13 +34,13 @@ export interface GeneratedFileCardProps {
   onOpenSourceSession?: () => void;
 }
 
-function getKindIcon(kindLabel: string, size = 16): ReactElement {
+function getKindIcon(kindLabel: string, colors: ColorScheme, size = 16): ReactElement {
   const lower = kindLabel.toLowerCase();
   if (lower.includes('pdf')) {
-    return <FileText size={size} color="#fb7185" />;
+    return <FileText size={size} color={colors.agentError} />;
   }
   if (lower.includes('word') || lower.includes('docx') || lower.includes('document')) {
-    return <FileText size={size} color="#38bdf8" />;
+    return <FileText size={size} color={colors.agentActive} />;
   }
   if (
     lower.includes('excel') ||
@@ -48,37 +48,43 @@ function getKindIcon(kindLabel: string, size = 16): ReactElement {
     lower.includes('csv') ||
     lower.includes('spreadsheet')
   ) {
-    return <FileSpreadsheet size={size} color="#34d399" />;
+    return <FileSpreadsheet size={size} color={colors.agentSuccess} />;
   }
   if (lower.includes('pptx') || lower.includes('presentation')) {
-    return <Presentation size={size} color="#fbbf24" />;
+    return <Presentation size={size} color={colors.agentWarning} />;
   }
   if (lower.includes('archive') || lower.includes('zip')) {
-    return <Archive size={size} color="#d4d4d8" />;
+    return <Archive size={size} color={colors.textSecondary} />;
   }
   if (lower.includes('image')) {
-    return <ImageIcon size={size} color="#f0abfc" />;
+    return <ImageIcon size={size} color={colors.agentThinking} />;
   }
   if (lower.includes('html')) {
-    return <Code2 size={size} color="#fb923c" />;
+    return <Code2 size={size} color={colors.agentWarning} />;
   }
-  return <Layers size={size} color="#a1a1aa" />;
+  return <Layers size={size} color={colors.textMuted} />;
 }
 
-function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation }) {
-  let bg: string = 'rgba(113, 113, 122, 0.16)';
+function StatusBadge({
+  presentation,
+  colors,
+}: {
+  presentation: GeneratedFilePresentation;
+  colors: ColorScheme;
+}) {
+  let bg: string = colors.neutralSurface;
   let fg: string = colors.textSecondary;
   let Icon: typeof Loader = Clock;
   if (presentation.isRunning) {
-    bg = 'rgba(245, 158, 11, 0.16)';
+    bg = colors.warningSurface;
     fg = colors.agentWarning;
     Icon = Loader;
   } else if (presentation.isFailed) {
-    bg = 'rgba(239, 68, 68, 0.16)';
+    bg = colors.dangerSurface;
     fg = colors.agentError;
     Icon = AlertTriangle;
   } else if (presentation.isComplete) {
-    bg = 'rgba(16, 185, 129, 0.16)';
+    bg = colors.successSurface;
     fg = colors.agentSuccess;
     Icon = ShieldCheck;
   }
@@ -111,7 +117,15 @@ function StatusBadge({ presentation }: { presentation: GeneratedFilePresentation
   );
 }
 
-function Chip({ icon, label }: { icon?: ReactElement; label: string }) {
+function Chip({
+  icon,
+  label,
+  colors,
+}: {
+  icon?: ReactElement;
+  label: string;
+  colors: ColorScheme;
+}) {
   return (
     <View
       style={{
@@ -123,7 +137,7 @@ function Chip({ icon, label }: { icon?: ReactElement; label: string }) {
         borderRadius: 9999,
         borderWidth: 1,
         borderColor: colors.border,
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: colors.neutralSurface,
       }}
     >
       {icon}
@@ -133,6 +147,7 @@ function Chip({ icon, label }: { icon?: ReactElement; label: string }) {
 }
 
 export function GeneratedFileCard({ presentation, onOpenSourceSession }: GeneratedFileCardProps) {
+  const colors = useThemeColors();
   const showChips = Boolean(
     presentation.privacyShortLabel || presentation.providerLabel || presentation.sourceSurfaceLabel,
   );
@@ -143,7 +158,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
       style={{
         padding: 12,
         borderRadius: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+        backgroundColor: colors.surfaceElevated,
         borderWidth: 1,
         borderColor: colors.border,
         gap: 8,
@@ -162,12 +177,12 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
               width: 48,
               height: 48,
               borderRadius: 6,
-              backgroundColor: 'rgba(255, 255, 255, 0.04)',
+              backgroundColor: colors.neutralSurface,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            {getKindIcon(presentation.kindLabel)}
+            {getKindIcon(presentation.kindLabel, colors)}
           </View>
         )}
         <View style={{ flex: 1, gap: 4 }}>
@@ -183,7 +198,7 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
             >
               {presentation.title}
             </Text>
-            <StatusBadge presentation={presentation} />
+            <StatusBadge presentation={presentation} colors={colors} />
           </View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
             <Text style={{ fontSize: 11, color: colors.textSecondary }}>
@@ -214,11 +229,14 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
                 <Chip
                   icon={<Lock size={10} color={colors.textSecondary} />}
                   label={presentation.privacyShortLabel}
+                  colors={colors}
                 />
               ) : null}
-              {presentation.providerLabel ? <Chip label={presentation.providerLabel} /> : null}
+              {presentation.providerLabel ? (
+                <Chip label={presentation.providerLabel} colors={colors} />
+              ) : null}
               {presentation.sourceSurfaceLabel ? (
-                <Chip label={presentation.sourceSurfaceLabel} />
+                <Chip label={presentation.sourceSurfaceLabel} colors={colors} />
               ) : null}
             </View>
           ) : null}

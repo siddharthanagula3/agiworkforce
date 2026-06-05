@@ -14,7 +14,7 @@ import { MessageBubble } from './MessageBubble';
 import { ChatEmptyState } from './ChatEmptyState';
 import { TypingIndicator } from './TypingIndicator';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import type { ChatMessage } from '@/types/chat';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
@@ -52,6 +52,7 @@ export function MessageList({
   onReaction,
   onPairDesktop,
 }: MessageListProps) {
+  const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
 
   // Raw boolean ref — used inside scroll handler to avoid stale closure
@@ -91,7 +92,7 @@ export function MessageList({
 
   const renderItem = useCallback(
     ({ item }: { item: ChatMessage }) => (
-      <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply}>
+      <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
         <MessageBubble
           message={item}
           onApprove={onApprove}
@@ -103,7 +104,16 @@ export function MessageList({
         />
       </SwipeReplyWrapper>
     ),
-    [onApprove, onReject, onDeleteMessage, onRetryMessage, onEditMessage, onQuoteReply, onReaction],
+    [
+      colors,
+      onApprove,
+      onReject,
+      onDeleteMessage,
+      onRetryMessage,
+      onEditMessage,
+      onQuoteReply,
+      onReaction,
+    ],
   );
 
   const keyExtractor = useCallback((item: ChatMessage) => item.id, []);
@@ -140,24 +150,30 @@ export function MessageList({
         scrollEventThrottle={100}
         refreshControl={
           onRefresh ? (
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#2dd4bf" />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.teal} />
           ) : undefined
         }
         ListFooterComponent={typingFooter}
       />
 
-      {/* Scroll-to-bottom FAB — matches Claude iOS floating chevron */}
+      {/* Scroll-to-bottom floating chevron. */}
       <Animated.View
         style={[styles.fab, fabStyle]}
         pointerEvents={showScrollButton ? 'auto' : 'none'}
       >
         <Pressable
           onPress={scrollToBottom}
-          style={({ pressed }) => [styles.fabButton, pressed && styles.fabButtonPressed]}
           accessibilityLabel="Scroll to bottom"
           accessibilityRole="button"
+          style={({ pressed }) => [
+            styles.fabButton,
+            {
+              backgroundColor: colors.teal,
+              opacity: pressed ? 0.82 : 1,
+            },
+          ]}
         >
-          <ChevronDown size={20} color="#ffffff" strokeWidth={2.5} />
+          <ChevronDown size={20} color={colors.accentText} strokeWidth={2.5} />
         </Pressable>
       </Animated.View>
     </View>
@@ -172,22 +188,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignSelf: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0,
     shadowRadius: 4,
-    elevation: 6,
+    elevation: 0,
   },
   fabButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.teal,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  fabButtonPressed: {
-    opacity: 0.8,
   },
 });
 
@@ -198,10 +209,11 @@ const styles = StyleSheet.create({
 interface SwipeReplyWrapperProps {
   message: ChatMessage;
   onSwipeReply?: (message: ChatMessage) => void;
+  colors: ColorScheme;
   children: React.ReactNode;
 }
 
-function SwipeReplyWrapper({ message, onSwipeReply, children }: SwipeReplyWrapperProps) {
+function SwipeReplyWrapper({ message, onSwipeReply, colors, children }: SwipeReplyWrapperProps) {
   const swipeableRef = useRef<Swipeable>(null);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
@@ -220,7 +232,7 @@ function SwipeReplyWrapper({ message, onSwipeReply, children }: SwipeReplyWrappe
             width: 36,
             height: 36,
             borderRadius: 18,
-            backgroundColor: 'rgba(33, 128, 141, 0.2)',
+            backgroundColor: colors.accentSurface,
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -229,7 +241,7 @@ function SwipeReplyWrapper({ message, onSwipeReply, children }: SwipeReplyWrappe
         </View>
       </View>
     );
-  }, []);
+  }, [colors]);
 
   const handleSwipeOpen = useCallback(
     (direction: 'left' | 'right') => {
