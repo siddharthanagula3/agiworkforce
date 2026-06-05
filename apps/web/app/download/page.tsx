@@ -27,8 +27,8 @@ const SURFACES: Surface[] = [
   {
     title: 'Website',
     icon: Globe2,
-    body: 'Use AGI in the browser with subscription-backed chat, projects, artifacts, usage, billing, and account settings.',
-    bullets: ['Subscription web chat', 'Projects and artifacts', 'Usage and billing controls'],
+    body: 'Use AGI in the browser with account chat, projects, artifacts, usage view, billing waitlist, and account settings.',
+    bullets: ['Account web chat', 'Projects and artifacts', 'Usage view and billing waitlist'],
     primaryLabel: 'Open web app',
     primaryHref: '/chat',
     secondaryLabel: 'See website features',
@@ -49,12 +49,12 @@ const SURFACES: Surface[] = [
   {
     title: 'Desktop',
     icon: Monitor,
-    body: 'The local AGI host for chat, local models, BYOK keys, computer use, and cowork tasks in one shell.',
-    bullets: ['macOS, Windows, Linux', 'Local and BYOK modes', 'Chat and cowork together'],
-    primaryLabel: 'Desktop details',
+    body: 'The local AGI host for chat, local models, BYOK keys, files, tools, and cowork tasks in one shell.',
+    bullets: ['macOS, Windows, Linux', 'Local and BYOK modes', 'Chat, files, and tools together'],
+    primaryLabel: 'Desktop page',
     primaryHref: '/desktop',
-    secondaryLabel: 'Desktop details',
-    secondaryHref: '/desktop',
+    secondaryLabel: 'Local mode',
+    secondaryHref: '/local',
     status: LAUNCH.publicLabel,
   },
   {
@@ -102,13 +102,13 @@ const DESKTOP_DOWNLOADS = [
   {
     platform: 'Windows',
     detail: 'Installer route opens when release assets are available',
-    href: '/api/download?platform=windows',
+    href: '/desktop',
     action: 'Check availability',
   },
   {
     platform: 'Linux',
     detail: 'AppImage or package route opens when release assets are available',
-    href: '/api/download?platform=linux',
+    href: '/desktop',
     action: 'Check availability',
   },
 ];
@@ -208,14 +208,9 @@ export default function DownloadPage() {
           <p className="agi-section-eyebrow">Terminal</p>
           <div className="agi-terminal">
             <div className="agi-terminal-bar">~/agi-workforce — install</div>
-            <pre className="agi-terminal-pre">
-              <span className="agi-terminal-prompt">$ </span>curl -fsSL
-              https://agiworkforce.com/install.sh | sh
-              {'\n'}
-              <span className="agi-terminal-prompt">$ </span>agi login
-              {'\n'}
-              <span className="agi-terminal-prompt">$ </span>agi exec &quot;review this repo&quot;
-            </pre>
+            <pre className="agi-terminal-pre">{`$ curl -fsSL https://agiworkforce.com/install.sh | bash
+$ agi login
+$ agi exec "review this repo"`}</pre>
           </div>
         </section>
 
@@ -226,9 +221,9 @@ export default function DownloadPage() {
                 Choose local, BYOK, or managed cloud deliberately.
               </h2>
               <p className="agi-launch-body">
-                Desktop and CLI are the local execution anchors. Website uses subscription-backed
-                app chat. Mobile is Local plus Cloud invite. Chrome and VS Code stay scoped to
-                browser and workspace tasks unless the user explicitly hands off context.
+                Desktop and CLI are the local execution anchors. Website uses account app chat.
+                Mobile is Local plus Cloud invite. Chrome and VS Code stay scoped to browser and
+                workspace tasks unless the user explicitly hands off context.
               </p>
             </div>
             <Link href="/compare" className="agi-cta-primary">

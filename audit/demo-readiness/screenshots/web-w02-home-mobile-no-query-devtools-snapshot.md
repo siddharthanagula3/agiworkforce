@@ -1,0 +1,19 @@
+- generic [active] [ref=e1] [box=0,0,382,844]:
+  - navigation "Skip links" [ref=e3] [box=0,0,187,52]:
+    - list [ref=e4] [box=8,8,171,36]:
+      - listitem [ref=e5] [box=8,8,171,36]
+  - generic [ref=e7] [box=0,0,382,7593]:
+    - main [ref=e9] [box=0,0,382,7593]:
+      - generic [ref=e10] [box=28,0,326,79]
+      - generic [ref=e34] [box=28,79,326,1563]
+      - region "Key proof points" [ref=e76] [box=28,1642,326,538]
+      - generic "cross-provider chat demo" [ref=e94] [box=28,2236,326,535]
+      - generic [ref=e112] [box=28,2867,326,834]
+      - generic [ref=e128] [box=28,3701,326,1302]
+      - generic [ref=e156] [box=28,5003,326,1224]
+      - generic [ref=e185] [box=28,6291,326,301]
+      - generic [ref=e191] [box=28,6752,326,841]
+    - region "Notifications alt+T" [box=0,7593,382,0]
+  - button "Open Next.js Dev Tools" [ref=e274] [cursor=pointer] [box=22,790,32,32]:
+    - img [ref=e275] [box=22,786,40,40]
+  - alert [ref=e278] [box=-1,7592,1,1]

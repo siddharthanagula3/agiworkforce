@@ -23,7 +23,7 @@ function AuthErrorBody() {
       <p className="agi-page-lede" style={{ marginBottom: 20 }}>
         Something went wrong while authenticating you.{' '}
         <strong>
-          Try again — most issues clear up on retry. If it persists, email contact@agiworkforce.com
+          Try again. Most issues clear up on retry. If it persists, email contact@agiworkforce.com
           with the error code below.
         </strong>
       </p>
@@ -36,7 +36,7 @@ function AuthErrorBody() {
           Try sign-in again
         </Link>
         <a href="mailto:contact@agiworkforce.com" className="agi-cta-ghost">
-          Email support →
+          Email support
         </a>
       </div>
     </section>

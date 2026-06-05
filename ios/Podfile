@@ -3,6 +3,8 @@ require File.join(File.dirname(`node --print "require.resolve('react-native/pack
 
 require 'json'
 podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties.json'))) rescue {}
+app_root = File.expand_path('../apps/mobile', __dir__)
+ENV['PROJECT_ROOT'] ||= app_root
 
 def ccache_enabled?(podfile_properties)
   # Environment variable takes precedence
@@ -21,7 +23,7 @@ platform :ios, podfile_properties['ios.deploymentTarget'] || '17.0'
 prepare_react_native_project!
 
 target 'agiworkforce' do
-  use_expo_modules!
+  use_expo_modules!(projectRoot: app_root)
 
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
     config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
@@ -35,7 +37,11 @@ target 'agiworkforce' do
       'react-native-config',
       '--json',
       '--platform',
-      'ios'
+      'ios',
+      '--project-root',
+      app_root,
+      '--source-dir',
+      __dir__
     ]
   end
 
@@ -48,7 +54,7 @@ target 'agiworkforce' do
     :path => config[:reactNativePath],
     :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
     # An absolute path to your application root.
-    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :app_path => app_root,
     :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
 

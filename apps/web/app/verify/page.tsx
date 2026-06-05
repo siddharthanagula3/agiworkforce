@@ -33,9 +33,9 @@ function VerifyEmailBody({ email }: { email: string | null }) {
         <p className="agi-callout-p">
           Check spam, then{' '}
           <Link href="/forgot-password" style={{ color: 'var(--agi-amber)' }}>
-            request a fresh link
+            open the sign-in recovery flow
           </Link>
-          . Or email contact@agiworkforce.com — we can verify manually.
+          . You can also email contact@agiworkforce.com for account help.
         </p>
       </div>
       <p style={{ marginTop: 24, fontSize: 14, color: 'var(--agi-ink-2)', textAlign: 'center' }}>

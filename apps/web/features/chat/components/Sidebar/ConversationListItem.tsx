@@ -170,7 +170,7 @@ export const ConversationListItem = memo(function ConversationListItem({
     <>
       <div
         className={cn(
-          'group relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-all',
+          'group relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-colors',
           isActive
             ? 'bg-teal-100 dark:bg-teal-900/30 text-foreground'
             : 'text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground',

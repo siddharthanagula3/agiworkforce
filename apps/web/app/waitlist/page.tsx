@@ -20,9 +20,9 @@ export default function WaitlistPage() {
           <p className="agi-section-eyebrow">Cloud invite</p>
           <h1 className="agi-page-h1">Join the AGI Cloud waitlist.</h1>
           <p className="agi-page-lede">
-            Cloud Managed is invite-only across Web, Mobile, Desktop, CLI, Chrome, and VS Code until
-            subscription access, usage ledgering, abuse controls, retention, and provider-cost
-            controls are proven.
+            Managed cloud capacity is invite-only until subscription access, usage ledgering, abuse
+            controls, retention, and provider-cost controls are proven. Web, Mobile, and Desktop use
+            account state. CLI, Chrome, and VS Code require explicit scoped handoff.
           </p>
           <div style={{ maxWidth: 560, marginTop: 24 }}>
             <WaitlistForm source="other" ctaLabel="Request invite" />

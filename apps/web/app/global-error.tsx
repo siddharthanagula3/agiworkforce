@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { type CSSProperties, useEffect } from 'react';
 import { Bot, RefreshCw, Home } from 'lucide-react';
 
 // global-error.tsx replaces the root layout entirely, so it must render
@@ -18,13 +18,27 @@ export default function GlobalError({
     console.error('[GlobalError] Root layout error caught:', error.digest ?? error.message);
   }, [error]);
 
+  const errorTheme = {
+    '--global-error-bg': 'black',
+    '--global-error-fg': 'white',
+    '--global-error-muted': 'darkgray',
+    '--global-error-quiet': 'gray',
+    '--global-error-border': 'dimgray',
+    '--global-error-panel': 'color-mix(in srgb, black 88%, white)',
+    '--global-error-danger': 'crimson',
+    '--global-error-danger-bg': 'color-mix(in srgb, crimson 12%, transparent)',
+    '--global-error-primary': 'royalblue',
+    '--global-error-link': 'lightskyblue',
+  } as CSSProperties;
+
   return (
     <html lang="en">
       <body
         style={{
+          ...errorTheme,
           margin: 0,
-          backgroundColor: '#000',
-          color: '#fff',
+          backgroundColor: 'var(--global-error-bg)',
+          color: 'var(--global-error-fg)',
           fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           display: 'flex',
           minHeight: '100vh',
@@ -45,14 +59,20 @@ export default function GlobalError({
               width: '5rem',
               height: '5rem',
               borderRadius: '9999px',
-              backgroundColor: 'rgba(239,68,68,0.1)',
+              backgroundColor: 'var(--global-error-danger-bg)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 1.5rem',
             }}
           >
-            <Bot style={{ width: '2.5rem', height: '2.5rem', color: '#ef4444' }} />
+            <Bot
+              style={{
+                width: '2.5rem',
+                height: '2.5rem',
+                color: 'var(--global-error-danger)',
+              }}
+            />
           </div>
 
           <h1
@@ -65,12 +85,24 @@ export default function GlobalError({
             Something Went Wrong
           </h1>
 
-          <p style={{ color: '#a1a1aa', marginBottom: '0.5rem', fontSize: '0.875rem' }}>
+          <p
+            style={{
+              color: 'var(--global-error-muted)',
+              marginBottom: '0.5rem',
+              fontSize: '0.875rem',
+            }}
+          >
             {error.message || 'A critical error occurred. Please reload the page.'}
           </p>
 
           {error.digest && (
-            <p style={{ color: '#52525b', fontSize: '0.75rem', marginBottom: '1.5rem' }}>
+            <p
+              style={{
+                color: 'var(--global-error-quiet)',
+                fontSize: '0.75rem',
+                marginBottom: '1.5rem',
+              }}
+            >
               Error ID: {error.digest}
             </p>
           )}
@@ -92,11 +124,11 @@ export default function GlobalError({
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: '9999px',
-                backgroundColor: '#2563eb',
+                backgroundColor: 'var(--global-error-primary)',
                 padding: '0 1.5rem',
                 fontSize: '0.875rem',
                 fontWeight: 500,
-                color: '#fff',
+                color: 'var(--global-error-fg)',
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -112,12 +144,12 @@ export default function GlobalError({
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: '9999px',
-                border: '1px solid #3f3f46',
-                backgroundColor: '#18181b',
+                border: '1px solid var(--global-error-border)',
+                backgroundColor: 'var(--global-error-panel)',
                 padding: '0 1.5rem',
                 fontSize: '0.875rem',
                 fontWeight: 500,
-                color: '#fff',
+                color: 'var(--global-error-fg)',
                 textDecoration: 'none',
               }}
             >
@@ -130,12 +162,12 @@ export default function GlobalError({
             style={{
               marginTop: '3rem',
               paddingTop: '1.5rem',
-              borderTop: '1px solid #27272a',
+              borderTop: '1px solid var(--global-error-border)',
             }}
           >
-            <p style={{ color: '#71717a', fontSize: '0.875rem' }}>
+            <p style={{ color: 'var(--global-error-quiet)', fontSize: '0.875rem' }}>
               If this problem persists,{' '}
-              <a href="/contact" style={{ color: '#60a5fa' }}>
+              <a href="/contact" style={{ color: 'var(--global-error-link)' }}>
                 contact our support team
               </a>
             </p>

@@ -13,7 +13,7 @@ describe('remoteChatGate', () => {
     expect(() => assertRemoteChatAllowed(flags)).toThrow(RemoteChatDisabledError);
   });
 
-  it('does not allow remote chat from a Mobile BYOK flag', () => {
+  it('does not allow remote chat from a legacy direct-provider flag', () => {
     expect(
       getRemoteChatDisabledReason({ v1LocalOnly: true, cloudChat: false, byokKeys: true }),
     ).toBe(MOBILE_REMOTE_CHAT_DISABLED_MESSAGE);

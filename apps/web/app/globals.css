@@ -258,56 +258,56 @@
    behavior across releases, so this scoped block protects login/signup from
    unreadable text while keeping the rest of the marketing shell untouched. */
 [data-design='agi'] .agi-auth-page :where(.cl-card) {
-  background: #161713 !important;
-  border: 1px solid rgb(255 255 255 / 0.12) !important;
-  color: #f2eadc !important;
-  box-shadow: 0 28px 80px rgb(0 0 0 / 0.36) !important;
+  background: var(--agi-ink) !important;
+  border: 1px solid color-mix(in srgb, var(--agi-button-ink) 16%, transparent) !important;
+  color: var(--agi-button-ink) !important;
+  box-shadow: 0 28px 80px var(--agi-shadow) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-headerTitle, .cl-identityPreviewText) {
-  color: #f2eadc !important;
+  color: var(--agi-button-ink) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-headerSubtitle, .cl-formFieldLabel) {
-  color: #c8c0b2 !important;
+  color: color-mix(in srgb, var(--agi-button-ink) 78%, transparent) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-dividerText, .cl-footerActionText) {
-  color: #938b7d !important;
+  color: color-mix(in srgb, var(--agi-button-ink) 58%, transparent) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-socialButtonsBlockButton) {
-  background: #202119 !important;
-  border-color: rgb(255 255 255 / 0.12) !important;
-  color: #f2eadc !important;
+  background: color-mix(in srgb, var(--agi-button-ink) 7%, var(--agi-ink)) !important;
+  border-color: color-mix(in srgb, var(--agi-button-ink) 16%, transparent) !important;
+  color: var(--agi-button-ink) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-socialButtonsBlockButtonText) {
-  color: #f2eadc !important;
+  color: var(--agi-button-ink) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-formFieldInput) {
-  background: #f7f2e8 !important;
-  border-color: rgb(226 220 207 / 0.28) !important;
-  color: #1b1c18 !important;
+  background: var(--agi-card) !important;
+  border-color: var(--agi-rule-strong) !important;
+  color: var(--agi-ink) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-formFieldInput::placeholder) {
-  color: #6f685e !important;
+  color: var(--agi-ink-quiet) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-formButtonPrimary) {
-  background: #d4b06d !important;
-  color: #181914 !important;
+  background: var(--agi-amber) !important;
+  color: var(--agi-button-ink) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-footer) {
-  background: #141511 !important;
-  color: #938b7d !important;
+  background: color-mix(in srgb, var(--agi-button-ink) 5%, var(--agi-ink)) !important;
+  color: color-mix(in srgb, var(--agi-button-ink) 58%, transparent) !important;
 }
 
 [data-design='agi'] .agi-auth-page :where(.cl-footerActionLink, .cl-identityPreviewEditButton) {
-  color: #d4a85f !important;
+  color: var(--agi-amber) !important;
 }
 
 @keyframes hero-fade-up {
@@ -1981,7 +1981,7 @@
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   margin-top: 66px;
 }
@@ -1996,17 +1996,23 @@
   justify-content: flex-end;
 }
 [data-design='agi'] .agi-console-stat-value {
-  font-size: clamp(1.45rem, 3vw, 2.3rem);
-  line-height: 1;
+  display: block;
+  max-width: 100%;
+  font-size: clamp(1.2rem, 1.75vw, 1.7rem);
+  line-height: 1.05;
   color: var(--agi-amber);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 [data-design='agi'] .agi-console-stat-label {
   margin-top: 8px;
   color: var(--agi-ink-2);
   font-size: 12px;
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 [data-design='agi'] .agi-console-stat-note {
   margin-top: 4px;
@@ -2609,7 +2615,10 @@
   font-size: 13.5px;
   line-height: 1.85;
   color: var(--agi-ink);
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
 }
 [data-design='agi'] .agi-terminal-comment {
   color: var(--agi-ink-quiet);
@@ -2618,6 +2627,13 @@
   color: var(--agi-ink-quiet);
   user-select: none;
   margin-right: 6px;
+}
+@media (max-width: 640px) {
+  [data-design='agi'] .agi-terminal-pre {
+    padding: 18px;
+    font-size: 12px;
+    line-height: 1.8;
+  }
 }
 
 /* reasons */
@@ -2972,34 +2988,35 @@
    Tokens map to perceptually-equivalent light-surface values. */
 [data-theme='light'] [data-design='agi'],
 [data-theme='light'][data-design='agi'] {
-  --agi-bg: #f2f0ea;
-  --agi-bg-2: #ebe7dc;
-  --agi-bg-3: #dfd8c8;
-  --agi-card: #f8f5ee;
+  --agi-bg: hsl(210, 26%, 98%);
+  --agi-bg-2: hsl(214, 22%, 95%);
+  --agi-bg-3: hsl(215, 20%, 90%);
+  --agi-card: hsl(0, 0%, 100%);
 
-  --agi-rule: rgba(48, 45, 38, 0.12);
-  --agi-rule-strong: rgba(48, 45, 38, 0.22);
+  --agi-rule: hsl(215 26% 18% / 0.12);
+  --agi-rule-strong: hsl(215 26% 18% / 0.22);
 
-  --agi-ink: #39362e;
-  --agi-ink-2: #5e5749;
-  --agi-ink-quiet: #7f7769;
-  --agi-ink-faint: #aaa292;
+  --agi-ink: hsl(218, 26%, 15%);
+  --agi-ink-2: hsl(216, 18%, 32%);
+  --agi-ink-quiet: hsl(215, 13%, 48%);
+  --agi-ink-faint: hsl(215, 12%, 64%);
 
-  --agi-amber: #9b7a3e;
-  --agi-amber-soft: rgba(155, 122, 62, 0.13);
-  --agi-surface-wash: rgba(111, 95, 64, 0.05);
-  --agi-line-soft: rgba(48, 45, 38, 0.055);
-  --agi-glow-soft: rgba(155, 122, 62, 0.09);
-  --agi-console-tint: rgba(232, 226, 215, 0.72);
-  --agi-console-tint-strong: rgba(237, 231, 220, 0.84);
-  --agi-button-bg: #51493b;
-  --agi-button-bg-hover: #625848;
-  --agi-button-ink: #efe8dc;
-  --agi-error: #a75b55;
-  --agi-shadow: rgba(70, 63, 50, 0.16);
-  --agi-header-sheen: rgba(250, 246, 236, 0.22);
-  --agi-code-bg: rgba(48, 45, 38, 0.06);
-  --agi-selection-bg: rgba(155, 122, 62, 0.22);
+  --agi-amber: hsl(190, 78%, 34%);
+  --agi-amber-soft: hsl(190 78% 34% / 0.11);
+  --agi-surface-wash: hsl(210 42% 45% / 0.045);
+  --agi-line-soft: hsl(215 26% 18% / 0.055);
+  --agi-glow-soft: hsl(190 78% 34% / 0.09);
+  --agi-console-tint: hsl(210 29% 97% / 0.82);
+  --agi-console-tint-strong: hsl(210 32% 99% / 0.92);
+  --agi-button-bg: hsl(218, 26%, 15%);
+  --agi-button-bg-hover: hsl(190, 78%, 29%);
+  --agi-button-ink: hsl(210, 26%, 98%);
+  --agi-error: hsl(3, 51%, 51%);
+  --agi-success: hsl(160, 72%, 33%);
+  --agi-shadow: hsl(218 26% 15% / 0.14);
+  --agi-header-sheen: hsl(190 78% 34% / 0.08);
+  --agi-code-bg: hsl(216 18% 32% / 0.07);
+  --agi-selection-bg: hsl(190 78% 34% / 0.2);
   --agi-selection-text: var(--agi-ink);
 
   background: var(--agi-bg);

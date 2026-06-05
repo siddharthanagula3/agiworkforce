@@ -201,7 +201,9 @@ export default async function RootLayout({
       >
         <ClerkProvider localization={clerkLocalization}>
           <SkipLinks />
-          <Providers nonce={nonce}>{children}</Providers>
+          <div id="main-content" tabIndex={-1}>
+            <Providers nonce={nonce}>{children}</Providers>
+          </div>
           {/* GA4: only rendered when NEXT_PUBLIC_GA_TRACKING_ID is set */}
           {gaTrackingId && <GoogleAnalytics trackingId={gaTrackingId} nonce={nonce} />}
         </ClerkProvider>

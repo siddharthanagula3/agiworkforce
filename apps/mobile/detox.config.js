@@ -12,7 +12,6 @@
  *   before the suite can execute. See `docs/e2e-setup.md` for the full
  *   runbook. The 5 specs in scripts/screenshots/specs/ are syntactically
  *   valid TypeScript and pass `pnpm typecheck` without the package installed
- *   (Detox types are inlined as `any` in the spec shim at the top of each
  *   file). Actual Detox execution requires the native binary.
  *
  * Usage (after installing detox):
@@ -36,15 +35,15 @@ module.exports = {
   apps: {
     'ios.debug': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/AGIWorkforce.app',
+      binaryPath: 'ios/build/Build/Products/Debug-iphonesimulator/agiworkforce.app',
       build:
-        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build | xcpretty',
+        'xcodebuild -workspace ios/agiworkforce.xcworkspace -scheme agiworkforce -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
     },
     'ios.release': {
       type: 'ios.app',
-      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/AGIWorkforce.app',
+      binaryPath: 'ios/build/Build/Products/Release-iphonesimulator/agiworkforce.app',
       build:
-        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Release -sdk iphonesimulator -derivedDataPath ios/build | xcpretty',
+        'xcodebuild -workspace ios/agiworkforce.xcworkspace -scheme agiworkforce -configuration Release -sdk iphonesimulator -derivedDataPath ios/build',
     },
     'android.debug': {
       type: 'android.apk',

@@ -6,7 +6,7 @@ import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Contact sales',
   description:
-    'Reach a real human about AGI Enterprise. SSO, SCIM, audit log export, custom retention, named SLA.',
+    'Reach a real human about AGI Enterprise readiness, security review needs, account rollout, and managed cloud access.',
   alternates: { canonical: 'https://agiworkforce.com/contact-sales' },
 };
 
@@ -22,8 +22,7 @@ export default function ContactSalesPage() {
             <strong>
               Email contact@agiworkforce.com with what you&rsquo;re trying to do, how big your team
               is, and what your security review needs.
-            </strong>{' '}
-            We respond within one business day.
+            </strong>
           </p>
         </section>
         <section className="agi-section">
@@ -39,8 +38,8 @@ export default function ContactSalesPage() {
             <li className="agi-reason">
               <h3 className="agi-reason-h">Your security review</h3>
               <p className="agi-reason-p">
-                What controls do you need on day one (SSO, SCIM, audit log, BYOK enforcement,
-                retention windows)?
+                Which controls matter first, such as SSO, SCIM, audit logs, BYOK enforcement, or
+                retention windows?
               </p>
             </li>
             <li className="agi-reason">

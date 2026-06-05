@@ -1,14 +1,25 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew } from './ChatComposerNew';
 
 // ─── Module mocks ──────────────────────────────────────────────────────────────
 
+const chatComposerMocks = vi.hoisted(() => ({
+  skills: [
+    {
+      id: 'backend-engineer',
+      name: 'Backend Engineer',
+      description: 'Backend implementation support',
+      category: 'Engineering',
+    },
+  ],
+}));
+
 vi.mock('@features/chat/services/chat-ai-service', () => ({
   ChatAIService: {
-    getAvailableSkillsSync: () => [],
-    getAvailableSkills: () => Promise.resolve([]),
+    getAvailableSkillsSync: () => chatComposerMocks.skills,
+    getAvailableSkills: () => Promise.resolve(chatComposerMocks.skills),
     stopGeneration: vi.fn(),
   },
 }));
@@ -99,6 +110,10 @@ describe('ChatComposerNew', () => {
     vi.clearAllMocks();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('renders the message textarea', () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
     expect(screen.getByRole('textbox', { name: /message input/i })).toBeInTheDocument();
@@ -157,6 +172,27 @@ describe('ChatComposerNew', () => {
     });
   });
 
+  it('clears selected skill when its instruction body cannot load', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(new Response(JSON.stringify({ error: 'missing' }), { status: 404 })),
+    );
+    render(<ChatComposerNew onSend={vi.fn()} />);
+
+    const textarea = screen.getByRole('textbox', { name: /message input/i });
+    await userEvent.type(textarea, '@back');
+    fireEvent.click(await screen.findByText('Backend Engineer'));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Could not load Backend Engineer skill instructions. Select the skill again.',
+      );
+    });
+    expect(screen.queryByText('/Backend Engineer')).not.toBeInTheDocument();
+  });
+
   it('opens + menu and shows Add files or photos option', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
@@ -166,15 +202,29 @@ describe('ChatComposerNew', () => {
     expect(screen.getByText('Add files or photos')).toBeInTheDocument();
   });
 
-  it('opens + menu and shows Research and Web search toggle rows', async () => {
+  it('surfaces attachment validation errors in the composer', () => {
+    const { container } = render(<ChatComposerNew onSend={vi.fn()} />);
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(input).not.toBeNull();
+
+    const unsupportedFile = new File(['binary'], 'installer.exe', {
+      type: 'application/x-msdownload',
+    });
+    fireEvent.change(input!, { target: { files: [unsupportedFile] } });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '"installer.exe" has an unsupported file type (application/x-msdownload).',
+    );
+  });
+
+  it('opens + menu and shows the backed Web search toggle row', async () => {
     render(<ChatComposerNew onSend={vi.fn()} />);
 
     const moreBtn = screen.getByRole('button', { name: /more options/i });
     fireEvent.click(moreBtn);
 
-    // Both text labels appear (pills + menu rows); just verify at least one exists
-    expect(screen.getAllByText('Research').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Web search').length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /toggle research mode/i })).not.toBeInTheDocument();
   });
 
   it('clears the textarea after sending', async () => {

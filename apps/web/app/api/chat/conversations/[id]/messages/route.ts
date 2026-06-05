@@ -44,7 +44,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
     throw createError.validation('Invalid request body', validationResult.error);
   }
 
-  const { content, metadata, model, role, skipLlm } = validationResult.data;
+  const { id: clientMessageId, content, metadata, model, role, skipLlm } = validationResult.data;
 
   const db = getNeonChatDb();
   const [conversation] = await db.query<{ id: string; model: string | null }>(
@@ -71,11 +71,12 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   try {
     [message] = await db.query<ChatMessageRow>(
       `
-        insert into web_messages (conversation_id, role, content, model, metadata)
-        values ($1, $2, $3, $4, $5::jsonb)
+        insert into web_messages (id, conversation_id, role, content, model, metadata)
+        values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb)
         returning id, role, content, model, provider, input_tokens, output_tokens, cost_cents, created_at, metadata
       `,
       [
+        clientMessageId ?? null,
         conversationId,
         role,
         content.trim(),

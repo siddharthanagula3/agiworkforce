@@ -8,7 +8,7 @@ import { Zap } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
-export type RuntimeTier = 'local' | 'cloud' | 'byok' | 'Tier 1' | 'Tier 2' | 'Tier 3';
+export type RuntimeTier = 'local' | 'cloud' | 'Tier 1' | 'Tier 2' | 'Tier 3';
 
 export interface PerformanceChipProps {
   model?: string;

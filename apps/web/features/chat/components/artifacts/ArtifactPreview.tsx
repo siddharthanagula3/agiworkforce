@@ -147,6 +147,33 @@ export function ArtifactPreview({
   const hasGeneratedFileManifest = Boolean(
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
+  const docxPreviewHtml = useMemo(() => {
+    if (!docxHtml) return null;
+    const sanitizedDocxHtml = sanitizeArtifact(docxHtml, 'html');
+
+    return `<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: blob:; style-src 'unsafe-inline';">
+    <style>
+      body {
+        margin: 0;
+        padding: 24px;
+        color: rgb(17 24 39);
+        background: white;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.6;
+      }
+      img { max-width: 100%; height: auto; }
+      table { border-collapse: collapse; max-width: 100%; }
+      td, th { border: 1px solid rgb(209 213 219); padding: 6px 8px; }
+    </style>
+  </head>
+  <body>${sanitizedDocxHtml}</body>
+</html>`;
+  }, [docxHtml]);
 
   const getPreviewHTML = useCallback((): string => {
     const content =
@@ -388,13 +415,12 @@ export function ArtifactPreview({
   };
 
   const handleOpenInNewTab = () => {
-    // WEB-25: noopener,noreferrer prevents reverse-tabnabbing; revoke the blob
-    // URL after a minute so the GC can reclaim the HTML body.
-    // getPreviewHTML() always returns a full <!DOCTYPE html> document regardless
-    // of artifact.type, so text/html is always correct here.
+    // Keep executable artifact rendering inside SandboxedIframe. The new tab
+    // shows source text so untrusted artifact HTML does not execute on a Blob
+    // origin.
     const html = getPreviewHTML();
 
-    const blob = new Blob([html], { type: 'text/html' });
+    const blob = new Blob([html], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener,noreferrer');
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -541,8 +567,15 @@ export function ArtifactPreview({
                 <RefreshCw className="h-3.5 w-3.5" />
               </Button>
 
-              <Button variant="ghost" size="sm" onClick={handleOpenInNewTab} className="h-7 px-2">
-                <ExternalLink className="h-3.5 w-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenInNewTab}
+                className="h-7 px-2"
+                aria-label="Open source in new tab"
+                title="Open source in new tab"
+              >
+                <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
 
               <Button variant="ghost" size="sm" onClick={handleFullscreen} className="h-7 px-2">
@@ -635,24 +668,26 @@ export function ArtifactPreview({
         {/* Preview Tab — DOCX viewer via mammoth (Fix 40) */}
         {isDocx && (
           <TabsContent value="preview" className="m-0 p-0">
-            <ScrollArea
-              className={cn('bg-background', isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]')}
-            >
-              {docxError ? (
-                <div className="flex items-center justify-center p-8 text-sm text-destructive">
-                  Could not render document: {docxError}
-                </div>
-              ) : docxHtml ? (
-                <div
-                  className="prose dark:prose-invert max-w-none p-6"
-                  dangerouslySetInnerHTML={{ __html: docxHtml }}
-                />
-              ) : (
-                <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-                  Converting document...
-                </div>
-              )}
-            </ScrollArea>
+            {docxError ? (
+              <div className="flex items-center justify-center p-8 text-sm text-destructive">
+                Could not render document: {docxError}
+              </div>
+            ) : docxPreviewHtml ? (
+              <iframe
+                title={`${artifact.title || 'DOCX'} document preview`}
+                srcDoc={docxPreviewHtml}
+                sandbox=""
+                referrerPolicy="no-referrer"
+                className={cn(
+                  'w-full border-0 bg-background',
+                  isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[600px]',
+                )}
+              />
+            ) : (
+              <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+                Converting document...
+              </div>
+            )}
           </TabsContent>
         )}
 

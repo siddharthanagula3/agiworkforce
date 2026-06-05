@@ -36,7 +36,7 @@ jest.mock('lucide-react-native', () => {
   );
   return {
     Folder: factory('folder'),
-    KeyRound: factory('key-round'),
+    Cloud: factory('cloud'),
     Lock: factory('lock'),
     Users: factory('users'),
   };
@@ -83,13 +83,17 @@ describe('Mobile ProjectHeader', () => {
     expect(getAllByTestId('icon-lock').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('uses the KeyRound icon for BYOK privacy chip', () => {
+  it('maps legacy direct-provider privacy to a cloud chip on Mobile', () => {
     const presentation = buildPresentation({
       defaultPrivacyMode: 'byok',
       defaultProviderMode: 'DirectByok',
     });
-    const { getAllByTestId } = render(<ProjectHeader presentation={presentation} />);
-    expect(getAllByTestId('icon-key-round').length).toBeGreaterThanOrEqual(1);
+    const { getAllByTestId, queryByText, getByText } = render(
+      <ProjectHeader presentation={presentation} />,
+    );
+    expect(getAllByTestId('icon-cloud').length).toBeGreaterThanOrEqual(1);
+    expect(getByText('Cloud invite')).toBeTruthy();
+    expect(queryByText(/byok/i)).toBeNull();
   });
 
   it('surfaces the imported-from chip when provenance is present', () => {

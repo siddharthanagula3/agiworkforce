@@ -34,7 +34,7 @@ async function handleGetConversations(request: NextRequest) {
     if (q) {
       conversations = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, created_at, updated_at
+          select id, title, model, project_id, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null and title ilike $2
           order by updated_at desc
@@ -45,7 +45,7 @@ async function handleGetConversations(request: NextRequest) {
     } else {
       conversations = await getNeonChatDb().query<ChatConversationRow>(
         `
-          select id, title, model, created_at, updated_at
+          select id, title, model, project_id, created_at, updated_at
           from web_conversations
           where user_id = $1 and deleted_at is null
           order by updated_at desc
@@ -87,11 +87,11 @@ async function handleCreateConversation(request: NextRequest) {
   try {
     const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
       `
-        insert into web_conversations (user_id, title, model)
-        values ($1, $2, $3)
-        returning id, title, model, created_at, updated_at
+        insert into web_conversations (user_id, title, model, project_id)
+        values ($1, $2, $3, $4)
+        returning id, title, model, project_id, created_at, updated_at
       `,
-      [userId, body.title, body.model ?? null],
+      [userId, body.title, body.model ?? null, body.projectId ?? null],
     );
     return NextResponse.json({ conversation }, { status: 201 });
   } catch (error) {

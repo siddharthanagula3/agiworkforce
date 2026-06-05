@@ -1,6 +1,6 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tree for a BYOK project 1`] = `
+exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tree for Cloud invite rendering 1`] = `
 <View
   accessibilityLabel="Project: Snapshot project"
   style={
@@ -126,7 +126,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
     }
   >
     <View
-      accessibilityLabel="Privacy: BYOK"
+      accessibilityLabel="Privacy: Cloud"
       style={
         {
           "alignItems": "center",
@@ -145,7 +145,7 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <View
         color="#e4e4e7"
         size={11}
-        testID="icon-key-round"
+        testID="icon-cloud"
       />
       <Text
         style={
@@ -156,15 +156,15 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
           }
         }
       >
-        BYOK
+        Cloud
       </Text>
     </View>
     <View
       accessibilityLabel="Provider mode: DirectByok"
       style={
         {
-          "backgroundColor": "rgba(245, 158, 11, 0.16)",
-          "borderColor": "rgba(245, 158, 11, 0.32)",
+          "backgroundColor": "rgba(56, 189, 248, 0.16)",
+          "borderColor": "rgba(56, 189, 248, 0.32)",
           "borderRadius": 9999,
           "borderWidth": 1,
           "paddingHorizontal": 8,
@@ -176,13 +176,13 @@ exports[`Mobile shared-primitive snapshots locks the RN-native ProjectHeader tre
       <Text
         style={
           {
-            "color": "#fcd34d",
+            "color": "#7dd3fc",
             "fontSize": 11,
             "fontWeight": "500",
           }
         }
       >
-        BYOK
+        Cloud invite
       </Text>
     </View>
   </View>

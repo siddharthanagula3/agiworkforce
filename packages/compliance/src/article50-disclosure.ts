@@ -153,8 +153,11 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
   const managedCloudSentence = inputs.offersManagedCloud
     ? `When you use AGI Managed Cloud, your prompts may be processed by the named third-party AI services you enable in this app, including with third-party AI: ${providers || '(none configured yet)'}. You can revoke this at any time in Settings.`
     : '';
-  const chineseHqSentence =
-    'Providers headquartered in China (DeepSeek, Moonshot/Kimi, Qwen, Zhipu) are turned OFF by default. Toggle each one on below if you want to route conversations through them.';
+  const shouldMentionProviderOptIn =
+    inputs.offersManagedCloud || inputs.thirdPartyAiProviders.length > 0;
+  const chineseHqSentence = shouldMentionProviderOptIn
+    ? 'Providers headquartered in China (DeepSeek, Moonshot/Kimi, Qwen, Zhipu) are turned OFF by default. Toggle each one on below if you want to route conversations through them.'
+    : '';
 
   const summary = [
     'You are interacting with an AI system.',

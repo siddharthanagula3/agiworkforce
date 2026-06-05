@@ -33,6 +33,11 @@ export function Header() {
     await signOut({ redirectUrl: '/' });
   };
 
+  const handleMobileSignOut = async () => {
+    setIsMenuOpen(false);
+    await handleSignOut();
+  };
+
   return (
     <header className="agi-top" style={{ position: 'relative' }}>
       <Link href="/" className="agi-mark" aria-label={t('agiHome')}>
@@ -41,6 +46,7 @@ export function Header() {
       </Link>
 
       <nav
+        id="main-navigation"
         className="agi-top-right"
         aria-label="Primary"
         style={{ display: 'flex', alignItems: 'center', gap: 24 }}
@@ -85,6 +91,7 @@ export function Header() {
           className="agi-top-link agi-top-mobile-toggle"
           aria-label={isMenuOpen ? t('menuClose') : t('menuOpen')}
           aria-expanded={isMenuOpen}
+          aria-controls="agi-mobile-menu"
           onClick={() => setIsMenuOpen((v) => !v)}
           style={{ display: 'none' }}
         >
@@ -95,6 +102,7 @@ export function Header() {
       {/* Mobile menu (hidden by default; shown when toggled) */}
       {isMenuOpen && (
         <div
+          id="agi-mobile-menu"
           className="agi-top-mobile-menu"
           style={{
             position: 'absolute',
@@ -125,7 +133,7 @@ export function Header() {
               <Link href="/chat" className="agi-top-link" onClick={() => setIsMenuOpen(false)}>
                 {t('navChat')}
               </Link>
-              <button type="button" onClick={handleSignOut} className="agi-top-link">
+              <button type="button" onClick={handleMobileSignOut} className="agi-top-link">
                 {t('navSignOut')}
               </button>
             </>

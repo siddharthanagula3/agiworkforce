@@ -10,9 +10,9 @@
  * trigger the gate.  An identical provider switch is always allowed.
  *
  * Contract drift fix (2026-05-08): the guard now operates on the canonical
- * {@link UIPlanTier} (6 values: local | byok | hobby | pro | pro_plus | max).
- * Mobile still persists a {@link BillingPlanTier} (8 values, dash-separated)
- * for display labels — call {@link mapBillingPlanToUIPlan} at the boundary.
+ * {@link UIPlanTier}. Mobile still persists a {@link BillingPlanTier}
+ * for display labels and compatibility with older installs. Call
+ * {@link mapBillingPlanToUIPlan} at the boundary.
  */
 
 import { type BillingPlanTier, type UIPlanTier, tierAtLeast } from '@agiworkforce/types';
@@ -29,13 +29,14 @@ export type ProviderSwitchDecision = 'allow' | 'upgrade-required';
 // ---------------------------------------------------------------------------
 
 /**
- * Map the persisted {@link BillingPlanTier} (8 values, used by `tierStore` and
- * the `/api/me` payload) to the canonical {@link UIPlanTier} (6 values, used
- * by every gate decision across the platform).
+ * Map the persisted {@link BillingPlanTier} (used by `tierStore` and the
+ * `/api/me` payload) to the canonical {@link UIPlanTier} used by every gate
+ * decision across the platform.
  *
  * Mapping rules:
  *   - `local-only` → `local`        (renamed in canonical contract)
- *   - `free`       → `byok`         (free tier surfaces as BYOK in UI)
+ *   - legacy direct-provider tiers → `local` on Mobile
+ *   - `free`       → `local`        (Mobile demo starts from local access)
  *   - `enterprise` → `max`          (enterprise users get max gates)
  *   - everything else passes through unchanged.
  *
@@ -48,10 +49,9 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
     case 'local-only':
       return 'local';
     case 'byok':
-      return 'byok';
+      return 'local';
     case 'free':
-      // Free tier exposes BYOK gates (no managed cloud, no provider switch).
-      return 'byok';
+      return 'local';
     case 'hobby':
       return 'hobby';
     case 'pro':
@@ -66,10 +66,10 @@ export function mapBillingPlanToUIPlan(plan: BillingPlanTier): UIPlanTier {
     default: {
       // Exhaustiveness check — if a new BillingPlanTier value is added, the
       // compiler will surface it here. Default fallback is the most-restrictive
-      // BYOK gate.
+      // local gate.
       const _exhaustive: never = plan;
       void _exhaustive;
-      return 'byok';
+      return 'local';
     }
   }
 }

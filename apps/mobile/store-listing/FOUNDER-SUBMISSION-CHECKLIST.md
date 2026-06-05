@@ -219,7 +219,7 @@ Run through this list the day before you submit.
 - [ ] Visual spot-check: every screenshot shows the on-device shield badge
 - [ ] Visual spot-check: no placeholder text ("TODO", "**FILL**") visible in any screenshot
 - [ ] `apps/mobile/app.config.js` `version` matches the build you are submitting
-- [ ] `FEATURES.byokKeys = false`, `FEATURES.cloudChat = false`, `FEATURES.billing = false` confirmed in `lib/v1FeatureFlags.ts`
+- [ ] Direct provider-key entry disabled, `FEATURES.cloudChat = false`, and `FEATURES.billing = false` confirmed in `lib/v1FeatureFlags.ts`
 - [ ] Privacy policy page at `https://agiworkforce.com/privacy` is live and accessible
 - [ ] Support page at `https://agiworkforce.com/support` is live (or redirects to a working contact page)
 - [ ] `review@agiworkforce.com` inbox is monitored; test it before submitting

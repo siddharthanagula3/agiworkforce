@@ -59,12 +59,66 @@ class ChatApiError extends Error {
   }
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readChatApiErrorPayload(
+  payload: unknown,
+  fallbackMessage: string,
+): { message: string; code?: string } {
+  if (!payload || typeof payload !== 'object') {
+    return { message: fallbackMessage };
+  }
+
+  const body = payload as Record<string, unknown>;
+  const topLevelMessage = readString(body['message']);
+  const topLevelCode = readString(body['code']);
+  const error = body['error'];
+
+  if (typeof error === 'string') {
+    return { message: readString(error) ?? fallbackMessage, code: topLevelCode };
+  }
+
+  if (error && typeof error === 'object') {
+    const errorBody = error as Record<string, unknown>;
+    const nestedMessage = readString(errorBody['message']);
+    const nestedCode = readString(errorBody['code']);
+    return {
+      message: nestedMessage ?? topLevelMessage ?? fallbackMessage,
+      code: nestedCode ?? topLevelCode,
+    };
+  }
+
+  return { message: topLevelMessage ?? fallbackMessage, code: topLevelCode };
+}
+
+function getVisibleErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+  return 'An unknown error occurred';
+}
+
+function buildAssistantErrorContent(message: string): string {
+  return `Error: ${message}\n\nTry again, or start a new chat if this response is stuck.`;
+}
+
 /**
  * Save a message to the database
  */
 async function saveMessageToDb(
   conversationId: string,
-  message: { role: string; content: string; model?: string; metadata?: MessageMetadata },
+  message: {
+    id?: string;
+    role: string;
+    content: string;
+    model?: string;
+    metadata?: MessageMetadata;
+  },
   authToken: string,
 ): Promise<{ id: string } | null> {
   try {
@@ -76,6 +130,7 @@ async function saveMessageToDb(
       method: 'POST',
       headers,
       body: JSON.stringify({
+        id: message.id,
         role: message.role,
         content: message.content,
         model: message.model,
@@ -172,9 +227,17 @@ export function useChatStream(): UseChatStreamReturn {
         .getState()
         .conversations.find((conversation) => conversation.id === conversationId)?.isTemporary;
       if (!isTemporaryConversation) {
-        saveMessageToDb(conversationId, { role: 'user', content: content.trim() }, authToken).catch(
-          (err) => console.error('[useChatStream] Failed to save user message:', err),
-        );
+        saveMessageToDb(
+          conversationId,
+          { id: userMessageId, role: 'user', content: content.trim() },
+          authToken,
+        )
+          .then((saved) => {
+            if (saved?.id && saved.id !== userMessageId) {
+              updateMessage(userMessageId, { id: saved.id });
+            }
+          })
+          .catch((err) => console.error('[useChatStream] Failed to save user message:', err));
       }
 
       // Create assistant message placeholder
@@ -381,9 +444,12 @@ export function useChatStream(): UseChatStreamReturn {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          const serverError = (errorData as { error?: { code?: string; message?: string } }).error;
-          throw new ChatApiError(serverError?.message || `Request failed: ${response.status}`, {
-            code: serverError?.code,
+          const { message, code } = readChatApiErrorPayload(
+            errorData,
+            `Request failed: ${response.status}`,
+          );
+          throw new ChatApiError(message, {
+            code,
             status: response.status,
           });
         }
@@ -518,15 +584,22 @@ export function useChatStream(): UseChatStreamReturn {
                 saveMessageToDb(
                   conversationId,
                   {
+                    id: assistantMessageId,
                     role: 'assistant',
                     content: fullAssistantContent,
                     model,
                     metadata: buildAssistantMetadata(),
                   },
                   authToken,
-                ).catch((err) =>
-                  console.error('[useChatStream] Failed to save assistant message:', err),
-                );
+                )
+                  .then((saved) => {
+                    if (saved?.id && saved.id !== assistantMessageId) {
+                      updateMessage(assistantMessageId, { id: saved.id });
+                    }
+                  })
+                  .catch((err) =>
+                    console.error('[useChatStream] Failed to save assistant message:', err),
+                  );
               }
               stopStreaming();
               setLoading(false);
@@ -635,13 +708,22 @@ export function useChatStream(): UseChatStreamReturn {
           saveMessageToDb(
             conversationId,
             {
+              id: assistantMessageId,
               role: 'assistant',
               content: fullAssistantContent,
               model,
               metadata: buildAssistantMetadata(),
             },
             authToken,
-          ).catch((err) => console.error('[useChatStream] Failed to save assistant message:', err));
+          )
+            .then((saved) => {
+              if (saved?.id && saved.id !== assistantMessageId) {
+                updateMessage(assistantMessageId, { id: saved.id });
+              }
+            })
+            .catch((err) =>
+              console.error('[useChatStream] Failed to save assistant message:', err),
+            );
         }
 
         // Ensure streaming is stopped
@@ -652,8 +734,7 @@ export function useChatStream(): UseChatStreamReturn {
           // User cancelled - update message to show partial content
           updateMessage(assistantMessageId, { isStreaming: false });
         } else {
-          // Real error - show the actual error message to help with debugging
-          const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+          const errorMessage = getVisibleErrorMessage(error);
           const errorCode = error instanceof ChatApiError ? error.code : undefined;
           if (isAutoEconomyTrialErrorCode(errorCode)) {
             if (errorCode === 'website_trial_prompt_limit_reached') {
@@ -674,14 +755,11 @@ export function useChatStream(): UseChatStreamReturn {
             return;
           }
 
-          console.error('[useChatStream] API Error:', errorMessage, error);
           finishRunningTools('failed', errorMessage);
 
-          // Show the actual error in the message for visibility
-          // This helps users and developers understand what went wrong
           updateMessage(assistantMessageId, {
             isStreaming: false,
-            content: `⚠️ Error: ${errorMessage}\n\nPlease check the console for more details or try again.`,
+            content: buildAssistantErrorContent(errorMessage),
             error: true,
           });
           setError(errorMessage);

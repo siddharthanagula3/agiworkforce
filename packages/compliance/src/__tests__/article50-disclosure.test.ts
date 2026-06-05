@@ -31,6 +31,7 @@ describe('Article50Disclosure — compose', () => {
       thirdPartyAiProviders: [],
     });
     expect(copy.summary).not.toContain('Managed Cloud');
+    expect(copy.summary).not.toContain('Toggle each one on below');
     expect(copy.summary).toContain('You are interacting with an AI system');
   });
 

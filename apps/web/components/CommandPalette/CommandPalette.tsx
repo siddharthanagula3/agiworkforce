@@ -8,15 +8,13 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import {
   Bot,
   ChevronRight,
   CreditCard,
   DollarSign,
-  Image,
-  LayoutDashboard,
   MessageSquare,
   Monitor,
   Moon,
@@ -27,13 +25,11 @@ import {
   Settings,
   Sun,
   X,
-  Zap,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
-import { Dialog, DialogContent } from '@/components/ui/Dialog';
-import { useUIStore } from '@/stores/uiStore';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/Dialog';
 import { useChatStore } from '@/stores/chatStore';
-import { AVAILABLE_MODELS } from '@/shared/stores/model-store';
+import { AVAILABLE_MODELS, useModelStore } from '@/shared/stores/model-store';
 import type { AIModel } from '@/shared/stores/model-store';
 import { normalizeModelId, requireProviderDefaultModel } from '@agiworkforce/types';
 
@@ -67,9 +63,9 @@ function useCommands(
   onOpenSubMenu: (menu: ActiveSubMenu) => void,
   currentModelId: string,
   setModelId: (id: string) => void,
+  isChatRoute: boolean,
 ): { top: CommandOption[]; modelCommands: CommandOption[] } {
   const router = useRouter();
-  const { toggleSimpleMode, simpleMode } = useUIStore();
   const { sidebarCollapsed, toggleSidebar } = useChatStore();
   const { theme, setTheme } = useTheme();
 
@@ -79,6 +75,30 @@ function useCommands(
   const themeLabel = theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'System';
   const nextTheme = theme === 'light' ? 'dark' : theme === 'dark' ? 'system' : 'light';
   const ThemeIcon = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor;
+
+  const preferences: CommandOption[] = [
+    ...(isChatRoute
+      ? [
+          {
+            id: 'toggle-sidebar',
+            title: sidebarCollapsed ? 'Expand Chat Sidebar' : 'Collapse Chat Sidebar',
+            subtitle: 'Toggle the chat conversation list',
+            group: 'Preferences',
+            icon: sidebarCollapsed ? PanelLeftOpen : PanelLeftClose,
+            shortcut: `${mod}⇧S`,
+            action: toggleSidebar,
+          } satisfies CommandOption,
+        ]
+      : []),
+    {
+      id: 'toggle-theme',
+      title: `Switch to ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)} Theme`,
+      subtitle: `Currently: ${themeLabel}`,
+      group: 'Preferences',
+      icon: ThemeIcon,
+      action: () => setTheme(nextTheme),
+    },
+  ];
 
   const top: CommandOption[] = [
     // ---------- Actions ----------
@@ -112,14 +132,6 @@ function useCommands(
 
     // ---------- Navigate ----------
     {
-      id: 'go-chat-dashboard',
-      title: 'Go to Chat',
-      group: 'Navigate',
-      icon: LayoutDashboard,
-      shortcut: `${mod}D`,
-      action: () => router.push('/chat'),
-    },
-    {
       id: 'go-chat',
       title: 'Go to Chat',
       group: 'Navigate',
@@ -142,13 +154,6 @@ function useCommands(
       action: () => router.push('/billing'),
     },
     {
-      id: 'go-media',
-      title: 'Go to Media Generation',
-      group: 'Navigate',
-      icon: Image,
-      action: () => router.push('/chat'),
-    },
-    {
       id: 'go-pricing',
       title: 'View Pricing',
       group: 'Navigate',
@@ -157,31 +162,7 @@ function useCommands(
     },
 
     // ---------- Preferences ----------
-    {
-      id: 'toggle-sidebar',
-      title: sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar',
-      subtitle: 'Toggle conversation list',
-      group: 'Preferences',
-      icon: sidebarCollapsed ? PanelLeftOpen : PanelLeftClose,
-      shortcut: `${mod}⇧S`,
-      action: toggleSidebar,
-    },
-    {
-      id: 'toggle-theme',
-      title: `Switch to ${nextTheme.charAt(0).toUpperCase() + nextTheme.slice(1)} Theme`,
-      subtitle: `Currently: ${themeLabel}`,
-      group: 'Preferences',
-      icon: ThemeIcon,
-      action: () => setTheme(nextTheme),
-    },
-    {
-      id: 'toggle-simple-mode',
-      title: simpleMode ? 'Switch to Advanced Mode' : 'Switch to Simple Mode',
-      subtitle: simpleMode ? 'Show full feature set' : 'Hide advanced options',
-      group: 'Preferences',
-      icon: Zap,
-      action: toggleSimpleMode,
-    },
+    ...preferences,
   ];
 
   const modelCommands: CommandOption[] = AVAILABLE_MODELS.map((model: AIModel) => ({
@@ -227,46 +208,27 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeSubMenu, setActiveSubMenu] = useState<ActiveSubMenu>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pathname = usePathname();
+  const isChatRoute = pathname?.startsWith('/chat') || pathname?.startsWith('/chats') || false;
+  const currentModelId = useModelStore((state) => state.selectedModelId);
+  const setSelectedModelId = useModelStore((state) => state.setSelectedModelId);
 
-  // Model state - sourced from shared model store via a lightweight selector
-  const [currentModelId, setCurrentModelId] = useState(() => {
-    if (typeof window === 'undefined') return DEFAULT_COMMAND_PALETTE_MODEL;
-    try {
-      const raw = localStorage.getItem('agi-model-store');
-      if (raw) {
-        const parsed = JSON.parse(raw) as { state?: { selectedModelId?: string } };
-        return normalizeModelId(parsed?.state?.selectedModelId) ?? DEFAULT_COMMAND_PALETTE_MODEL;
-      }
-    } catch {
-      // ignore
-    }
-    return DEFAULT_COMMAND_PALETTE_MODEL;
-  });
-
-  const handleModelSwitch = useCallback((modelId: string) => {
-    const nextModelId = normalizeModelId(modelId) ?? modelId;
-    setCurrentModelId(nextModelId);
-    // Persist to shared model store via localStorage directly
-    try {
-      const raw = localStorage.getItem('agi-model-store');
-      const existing = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      const updated = {
-        ...existing,
-        state: { ...(existing['state'] as Record<string, unknown>), selectedModelId: nextModelId },
-      };
-      localStorage.setItem('agi-model-store', JSON.stringify(updated));
-    } catch {
-      // ignore
-    }
-  }, []);
+  const handleModelSwitch = useCallback(
+    (modelId: string) => {
+      const nextModelId = normalizeModelId(modelId) ?? modelId;
+      setSelectedModelId(nextModelId);
+    },
+    [setSelectedModelId],
+  );
 
   const { top: topCommands, modelCommands } = useCommands(
     setActiveSubMenu,
-    currentModelId,
+    currentModelId || DEFAULT_COMMAND_PALETTE_MODEL,
     (modelId) => {
       handleModelSwitch(modelId);
       onOpenChange(false);
     },
+    isChatRoute,
   );
 
   const activeCommands = activeSubMenu === 'model' ? modelCommands : topCommands;
@@ -339,6 +301,10 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="p-0 overflow-hidden bg-zinc-900 border border-zinc-700 shadow-2xl max-w-xl [&>button]:hidden">
+        <DialogTitle className="sr-only">Command palette</DialogTitle>
+        <DialogDescription className="sr-only">
+          Search commands, navigate the app, change preferences, and switch AI models.
+        </DialogDescription>
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800">
           {activeSubMenu ? (
@@ -347,8 +313,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                 setActiveSubMenu(null);
                 setQuery('');
               }}
-              className="text-zinc-500 hover:text-zinc-300 shrink-0"
+              className="rounded-sm text-zinc-500 hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 shrink-0"
               aria-label="Back to main menu"
+              type="button"
             >
               <ChevronRight className="w-4 h-4 rotate-180" />
             </button>
@@ -364,17 +331,19 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              activeSubMenu === 'model' ? 'Filter models...' : 'Type a command or search...'
-            }
-            className="flex-1 bg-transparent text-zinc-200 placeholder:text-zinc-500 text-sm outline-none"
+            placeholder={activeSubMenu === 'model' ? 'Filter models…' : 'Type a command or search…'}
+            name="command-palette-search"
+            autoComplete="off"
+            spellCheck={false}
+            className="flex-1 rounded-sm bg-transparent text-zinc-200 placeholder:text-zinc-500 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500"
             aria-label="Command palette search"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="text-zinc-500 hover:text-zinc-300 shrink-0"
+              className="rounded-sm text-zinc-500 hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500 shrink-0"
               aria-label="Clear search"
+              type="button"
             >
               <X className="w-4 h-4" />
             </button>
@@ -391,7 +360,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           ) : (
             Object.entries(groups).map(([group, items]) => (
               <div key={group}>
-                <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
+                <p className="px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
                   {group}
                 </p>
                 {items.map((cmd) => {
@@ -406,9 +375,10 @@ export function CommandPalette({ open, onOpenChange }: Props) {
                       onClick={() => execute(cmd)}
                       onMouseEnter={() => setSelectedIndex(idx)}
                       className={cn(
-                        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left',
+                        'w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500',
                         isSelected ? 'bg-white/10 text-white' : 'text-zinc-300 hover:bg-white/5',
                       )}
+                      type="button"
                     >
                       <Icon className="w-4 h-4 shrink-0 text-zinc-500" aria-hidden="true" />
                       <div className="flex-1 min-w-0">

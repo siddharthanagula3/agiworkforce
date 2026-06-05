@@ -206,7 +206,7 @@ interface MessageBubbleProps {
   onRegenerate?: (messageId: string) => void;
   onDelete?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
-  onReact?: (messageId: string, reactionType: 'up' | 'down' | 'helpful') => void;
+  onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   onBranch?: (messageId: string) => void;
   hasBranches?: boolean;
   /**

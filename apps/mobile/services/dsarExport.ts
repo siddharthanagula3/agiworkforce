@@ -441,7 +441,11 @@ export async function wipeAllLocalData(): Promise<void> {
     await db.execAsync('DELETE FROM memory_facts;');
     await db.execAsync('DELETE FROM custom_instructions;');
     await db.execAsync('DELETE FROM installed_models;');
-    await db.execAsync('DELETE FROM provider_keys;');
+    try {
+      await db.execAsync('DELETE FROM provider_keys;');
+    } catch {
+      // Older private builds had this table. Current Mobile builds do not create it.
+    }
     await db.execAsync('DELETE FROM settings;');
     await db.execAsync('DELETE FROM conversations;'); // cascades to messages + doc_chunks
     try {

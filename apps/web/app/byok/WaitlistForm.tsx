@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useAuth } from '@clerk/nextjs';
 import { usePathname } from 'next/navigation';
 import { useId, useState, type FormEvent } from 'react';
 import { addCsrfHeaders, CsrfTokenError } from '@/lib/client/csrf';
@@ -16,8 +17,10 @@ interface Props {
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
 export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access →' }: Props) {
+  const emailId = useId();
   const errorId = useId();
   const pathname = usePathname();
+  const { isLoaded, isSignedIn } = useAuth();
   const loginHref = `/login?redirectTo=${encodeURIComponent(pathname || '/waitlist')}`;
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
@@ -33,6 +36,19 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
     const normalizedEmail = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       setErrorMsg('Enter a valid email address.');
+      setState('error');
+      return;
+    }
+
+    if (!isLoaded) {
+      setErrorMsg('Checking sign-in status. Please try again.');
+      setState('error');
+      return;
+    }
+
+    if (!isSignedIn) {
+      setErrorMsg('Sign in to request Cloud access.');
+      setAuthRequired(true);
       setState('error');
       return;
     }
@@ -72,7 +88,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
       <p
         style={{
           fontSize: 14,
-          color: 'var(--teal, #2eb88a)',
+          color: 'var(--agi-success)',
           padding: '10px 0',
           margin: 0,
         }}
@@ -89,10 +105,17 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
       style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '1 1 220px' }}>
+        <label htmlFor={emailId} className="sr-only">
+          Email address
+        </label>
         <input
+          id={emailId}
+          name="email"
           type="email"
+          autoComplete="email"
+          spellCheck={false}
           required
-          placeholder="your@email.com"
+          placeholder="you@example.com…"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value);
@@ -117,7 +140,12 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
           }}
         />
         {state === 'error' && errorMsg && (
-          <span id={errorId} role="alert" style={{ fontSize: 12, color: 'var(--agi-error)' }}>
+          <span
+            id={errorId}
+            role="alert"
+            aria-live="polite"
+            style={{ fontSize: 12, color: 'var(--agi-error)' }}
+          >
             {errorMsg}{' '}
             {authRequired && (
               <Link
@@ -133,7 +161,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
 
       <button
         type="submit"
-        disabled={state === 'submitting'}
+        disabled={state === 'submitting' || !isLoaded}
         style={{
           padding: '8px 16px',
           background: 'var(--agi-button-bg)',
@@ -142,12 +170,12 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request Cloud access
           color: 'var(--agi-button-ink)',
           fontSize: 14,
           fontWeight: 600,
-          cursor: state === 'submitting' ? 'wait' : 'pointer',
+          cursor: state === 'submitting' || !isLoaded ? 'wait' : 'pointer',
           whiteSpace: 'nowrap',
-          opacity: state === 'submitting' ? 0.7 : 1,
+          opacity: state === 'submitting' || !isLoaded ? 0.7 : 1,
         }}
       >
-        {state === 'submitting' ? 'Joining...' : ctaLabel}
+        {state === 'submitting' ? 'Joining…' : !isLoaded ? 'Checking…' : ctaLabel}
       </button>
     </form>
   );

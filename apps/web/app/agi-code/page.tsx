@@ -24,7 +24,7 @@ export default function AgiCodePage() {
         <Header />
         <CampaignHero
           eyebrow={`${LAUNCH.publicLabel} · Developer surface`}
-          title="A coding agent suite where the model is not the product prison."
+          title="A coding agent suite with model choice."
           lede="Codex and Claude Code set the bar: terminal agents, IDE extensions, cloud tasks, diffs, tests, permissions, and parallel work. AGI Code targets that workflow while letting builders choose local models, BYOK providers, or invite-only AGI Cloud."
           primaryCta={{ href: '/cli', label: 'Open CLI page' }}
           secondaryCta={{ href: '/vscode-extension', label: 'VS Code extension' }}
@@ -62,7 +62,7 @@ export default function AgiCodePage() {
             {
               meta: 'Safety',
               title: 'Permissions before power',
-              body: 'Ask, accept edits, plan, auto, and bypass-style modes need visible tool inputs, command risk, and workspace scope.',
+              body: 'Ask, accept edits, plan, auto, and bypass-style modes expose tool inputs, command risk, and workspace scope.',
             },
             {
               meta: 'Models',
@@ -72,13 +72,13 @@ export default function AgiCodePage() {
             {
               meta: 'Cloud invite',
               title: 'Background automation later',
-              body: 'Cloud coding tasks should stay invite-only until metering, abuse, logs, and environment controls are production-ready.',
+              body: 'Cloud coding tasks stay invite-only until metering, abuse, logs, and environment controls are proven.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="What the ads should say"
+          eyebrow="Developer positioning"
           title="Developer positioning against Codex and Claude Code."
           rows={[
             {
@@ -87,15 +87,15 @@ export default function AgiCodePage() {
             },
             {
               k: 'Differentiator',
-              v: 'OpenAI and Anthropic ship excellent agents locked to their model ecosystems. AGI makes provider choice the default.',
+              v: 'OpenAI and Anthropic ship excellent agents inside their model ecosystems. AGI makes provider choice the default.',
             },
             {
-              k: 'Proof to show',
-              v: 'Demos should show model switching, permission prompts, file diffs, test loops, and provider labels in one session.',
+              k: 'Demo proof',
+              v: 'Model switching, permission prompts, file diffs, test loops, and provider labels in one session.',
             },
             {
-              k: 'Risk to avoid',
-              v: 'Do not imply managed cloud coding is public before invite access and control-plane readiness.',
+              k: 'Cloud boundary',
+              v: 'Managed cloud coding remains invite-only until access and control-plane readiness are proven.',
             },
           ]}
         />
@@ -133,7 +133,7 @@ export default function AgiCodePage() {
 
         <LaunchCta
           title="Ship the developer product as a suite, not a terminal-only utility."
-          body="Your target users need the same task to move between CLI, editor, desktop, web, and mobile approvals without losing context or provider choice."
+          body="Users can move a task between CLI, editor, desktop, web, and mobile approvals without losing context or provider choice."
           primary={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondary={{ href: '/compare/codex', label: 'Compare with Codex' }}
         />

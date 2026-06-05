@@ -1,8 +1,9 @@
 /**
  * Unit tests for modelStore.
  *
- * Mobile v1 is local-first: selectable model ids are local-LLM rows or local
- * auto modes. Cloud provider ids are ignored by the store.
+ * Mobile starts from local models: selectable ids are local rows with an active
+ * runtime/download preset or local auto modes. Cloud provider ids are ignored
+ * by this local store.
  */
 
 // ---------------------------------------------------------------------------
@@ -35,8 +36,9 @@ import { useModelStore } from '../src/features/model-picker/store';
 // ---------------------------------------------------------------------------
 
 const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
-const VISION_MODEL_ID = 'qwen2.5-vl-3b-instruct';
 const CLOUD_MODEL_ID = 'gpt-5.5';
+const SELECTABLE_MODEL_IDS = LOCAL_MODEL_LIST.map((model) => model.id);
+const SECOND_SELECTABLE_MODEL_ID = SELECTABLE_MODEL_IDS.find((id) => id !== LITE_MODEL_ID);
 
 function getState() {
   return useModelStore.getState();
@@ -85,16 +87,20 @@ describe('modelStore', () => {
     });
 
     it('pushes local models to recents newest first', () => {
-      getState().setModel(LITE_MODEL_ID);
-      getState().setModel(VISION_MODEL_ID);
+      expect(SECOND_SELECTABLE_MODEL_ID).toBeDefined();
 
-      expect(getState().recentModels[0]).toBe(VISION_MODEL_ID);
+      getState().setModel(LITE_MODEL_ID);
+      getState().setModel(SECOND_SELECTABLE_MODEL_ID!);
+
+      expect(getState().recentModels[0]).toBe(SECOND_SELECTABLE_MODEL_ID);
       expect(getState().recentModels[1]).toBe(LITE_MODEL_ID);
     });
 
     it('deduplicates recents', () => {
+      expect(SECOND_SELECTABLE_MODEL_ID).toBeDefined();
+
       getState().setModel(LITE_MODEL_ID);
-      getState().setModel(VISION_MODEL_ID);
+      getState().setModel(SECOND_SELECTABLE_MODEL_ID!);
       getState().setModel(LITE_MODEL_ID);
 
       const recents = getState().recentModels;
@@ -103,9 +109,6 @@ describe('modelStore', () => {
     });
 
     it('limits recents to 5 selectable entries and deduplicates', () => {
-      // apple-foundation-models and gemini-nano-aicore are filtered from
-      // LOCAL_MODEL_LIST in v1 (stub native impl), so the list has 3 entries.
-      // Cycle local ids and auto modes repeatedly to exceed the cap.
       const localIds = LOCAL_MODEL_LIST.map((model) => model.id);
       const manyIds = [
         ...localIds,

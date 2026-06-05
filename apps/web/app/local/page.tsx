@@ -31,20 +31,24 @@ export default function LocalPage() {
           <div className="agi-terminal">
             <div className="agi-terminal-bar">~/agi-workforce — local mode</div>
             <pre className="agi-terminal-pre">
-              <span className="agi-terminal-comment">
-                # macOS — install Ollama, pull any open-weight model, connect
-              </span>
+              <span className="agi-terminal-comment"># Ollama local server</span>
               {'\n'}
               <span className="agi-terminal-prompt">$ </span>brew install ollama
               {'\n'}
               <span className="agi-terminal-prompt">$ </span>ollama pull &lt;your-model&gt;
               {'\n'}
-              <span className="agi-terminal-prompt">$ </span>agi --provider ollama
+              <span className="agi-terminal-prompt">$ </span>agi models scan
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>agi --provider ollama --model
+              &lt;model&gt;
               {'\n'}
               {'\n'}
-              <span className="agi-terminal-comment"># or with LM Studio (GUI)</span>
+              <span className="agi-terminal-comment"># LM Studio local server</span>
               {'\n'}
-              <span className="agi-terminal-prompt">$ </span>agi --provider lmstudio
+              <span className="agi-terminal-prompt">$ </span>agi models scan
+              {'\n'}
+              <span className="agi-terminal-prompt">$ </span>agi --provider lmstudio --model
+              &lt;model&gt;
             </pre>
           </div>
         </section>

@@ -47,6 +47,7 @@ describe('Single Conversation API', () => {
     id: 'conv-1',
     title: 'Test Conversation',
     model: 'auto',
+    project_id: null,
     created_at: '2026-01-25T00:00:00Z',
     updated_at: '2026-01-25T00:00:00Z',
   };
@@ -215,6 +216,29 @@ describe('Single Conversation API', () => {
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('update web_conversations'),
           expect.arrayContaining(['gpt-5.5']),
+        );
+      });
+
+      it('should update conversation project association', async () => {
+        const updated = { ...mockConversation, project_id: 'proj-1' };
+        mockQuery.mockResolvedValueOnce([updated]);
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1', {
+          method: 'PUT',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ projectId: 'proj-1' }),
+        });
+        const response = await PUT(request, mockContext);
+
+        expect(response.status).toBe(200);
+        const data = await response.json();
+        expect(data.conversation.project_id).toBe('proj-1');
+        expect(mockQuery).toHaveBeenCalledWith(
+          expect.stringContaining('project_id'),
+          expect.arrayContaining([true, 'proj-1']),
         );
       });
 

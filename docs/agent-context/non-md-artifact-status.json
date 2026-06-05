@@ -38,6 +38,12 @@
       "status": "active-audit-evidence",
       "owner": "Platform lead",
       "reason": "Current desktop UI and computer-use verification captures referenced by audit/desktop-ui-computer-use/README.md."
+    },
+    {
+      "path": "audit/demo-readiness/screenshots/**",
+      "status": "active-audit-evidence",
+      "owner": "Platform lead",
+      "reason": "Current website and desktop demo-readiness ledgers reference these captures as user-visible verification evidence."
     }
   ],
   "rebuildRequired": [

@@ -37,6 +37,7 @@ export const UpdateConversationSchema = z.object({
       message: 'Invalid model specified',
     })
     .optional(),
+  projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
 });
 
 export type UpdateConversationInput = z.infer<typeof UpdateConversationSchema>;
@@ -55,6 +56,7 @@ export const CreateConversationSchema = z.object({
     })
     .optional()
     .default('auto'),
+  projectId: z.string().max(200, 'Project ID must be 200 characters or less').nullable().optional(),
 });
 
 export type CreateConversationInput = z.infer<typeof CreateConversationSchema>;
@@ -66,6 +68,7 @@ type MessageRole = (typeof MESSAGE_ROLES)[number];
 // AUDIT-008-004: Validation schema for message creation
 // Max content length: shared with the llm gateway via MAX_MESSAGE_LENGTH.
 export const CreateMessageSchema = z.object({
+  id: z.string().uuid('Message ID must be a valid UUID').optional(),
   content: z
     .string()
     .min(1, 'Message content is required')

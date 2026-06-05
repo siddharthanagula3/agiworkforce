@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useMemo, useEffect, Suspense } from 'react';
+import { useState, useMemo, useEffect, Suspense, useId } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
-import { Search, Plus, Code, FileText, Sparkles, type LucideIcon } from 'lucide-react';
+import { Search, Settings2, Code, FileText, Sparkles, type LucideIcon } from 'lucide-react';
 import { Button } from '@shared/ui/button';
 import { Input } from '@shared/ui/input';
 import { Badge } from '@shared/ui/badge';
 import { cn } from '@shared/lib/utils';
+import { Header } from '../../components/layout/Header';
+import { MarketingFooter } from '../../components/marketing/MarketingFooter';
 
 // ─── API response type ─────────────────────────────────────────────────────────
 
@@ -131,6 +133,7 @@ function SkillsPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  const searchId = useId();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [skills, setSkills] = useState<SkillCardItem[]>([]);
@@ -197,112 +200,138 @@ function SkillsPageInner() {
   const totalCount = activeTab === 'prompts' ? promptSkills.length : agentSkills.length;
 
   return (
-    <div className="min-h-full bg-background">
-      {/* Page Header */}
-      <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
-        <div className="mx-auto max-w-6xl">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">Skills</h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Quick-access prompts and specialist AI agents for every domain.
-              </p>
-            </div>
-            <Button
-              size="sm"
-              className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-              Add skill
-            </Button>
-          </div>
-
-          {/* Tabs + Search */}
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-            {/* Tabs */}
-            <div className="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5">
-              {(['prompts', 'agents'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    'rounded-md px-4 py-1.5 text-xs font-medium capitalize transition-all duration-150',
-                    activeTab === tab
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  aria-pressed={activeTab === tab}
+    <div data-design="agi">
+      <main className="agi-shell">
+        <Header />
+        <section className="min-h-full bg-background" aria-labelledby="skills-title">
+          {/* Page Header */}
+          <div className="border-b border-white/[0.06] bg-black/20 px-6 py-6">
+            <div className="mx-auto max-w-6xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 id="skills-title" className="text-2xl font-bold text-foreground">
+                    Skills
+                  </h1>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Quick-access prompts and specialist AI agents for every domain.
+                  </p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  className="h-8 gap-1.5 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90"
                 >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            {/* Search */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder={`Search ${activeTab}...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="mx-auto max-w-6xl px-6 py-6">
-        {loading ? (
-          <>
-            <div className="mb-4 h-3 w-20 animate-pulse rounded bg-white/[0.06]" />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <SkeletonCard key={i} />
-              ))}
-            </div>
-          </>
-        ) : error ? (
-          <div className="py-20 text-center">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-              <FileText className="h-7 w-7 text-muted-foreground" />
-            </div>
-            <h3 className="text-base font-medium text-foreground">Could not load skills</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{error}</p>
-          </div>
-        ) : (
-          <>
-            {/* Results count */}
-            <p className="mb-4 text-xs text-muted-foreground">
-              {searchQuery
-                ? `${filteredItems.length} of ${totalCount} ${activeTab}`
-                : `${totalCount} ${activeTab}`}
-            </p>
-
-            {/* Grid */}
-            {filteredItems.length > 0 ? (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredItems.map((item) => (
-                  <SkillCard key={item.id} item={item} />
-                ))}
+                  <Link href="/customize">
+                    <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    Manage skills
+                  </Link>
+                </Button>
               </div>
-            ) : (
+
+              {/* Tabs + Search */}
+              <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+                {/* Tabs */}
+                <div
+                  className="flex items-center gap-1 rounded-lg border border-white/[0.06] bg-white/[0.03] p-0.5"
+                  role="group"
+                  aria-label="Skill category"
+                >
+                  {(['prompts', 'agents'] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setActiveTab(tab)}
+                      className={cn(
+                        'rounded-md px-4 py-1.5 text-xs font-medium capitalize transition-all duration-150',
+                        activeTab === tab
+                          ? 'bg-primary text-primary-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                      aria-pressed={activeTab === tab}
+                    >
+                      {tab}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Search */}
+                <div className="relative flex-1 max-w-md">
+                  <label htmlFor={searchId} className="sr-only">
+                    Search skills
+                  </label>
+                  <Search
+                    className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+                  <Input
+                    id={searchId}
+                    name="skills-search"
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder={`Search ${activeTab}...`}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="h-9 border-white/[0.08] bg-white/[0.04] pl-9 text-sm placeholder:text-muted-foreground/60 focus:border-primary/50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="mx-auto max-w-6xl px-6 py-6">
+            {loading ? (
+              <>
+                <div className="mb-4 h-3 w-20 animate-pulse rounded bg-white/[0.06]" />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <SkeletonCard key={i} />
+                  ))}
+                </div>
+              </>
+            ) : error ? (
               <div className="py-20 text-center">
                 <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
-                  <Search className="h-7 w-7 text-muted-foreground" />
+                  <FileText className="h-7 w-7 text-muted-foreground" />
                 </div>
-                <h3 className="text-base font-medium text-foreground">No {activeTab} found</h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {totalCount === 0
-                    ? 'No skills are loaded. Configure the SKILLS_LAYERS environment variable.'
-                    : 'Try a different search term.'}
-                </p>
+                <h3 className="text-base font-medium text-foreground">Could not load skills</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{error}</p>
               </div>
+            ) : (
+              <>
+                {/* Results count */}
+                <p className="mb-4 text-xs text-muted-foreground">
+                  {searchQuery
+                    ? `${filteredItems.length} of ${totalCount} ${activeTab}`
+                    : `${totalCount} ${activeTab}`}
+                </p>
+
+                {/* Grid */}
+                {filteredItems.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {filteredItems.map((item) => (
+                      <SkillCard key={item.id} item={item} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-20 text-center">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/[0.04]">
+                      <Search className="h-7 w-7 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-base font-medium text-foreground">No {activeTab} found</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {totalCount === 0
+                        ? 'No skills are loaded in this environment. Use Manage skills to connect project or local skill sources.'
+                        : 'Try a different search term.'}
+                    </p>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </section>
+        <MarketingFooter />
+      </main>
     </div>
   );
 }

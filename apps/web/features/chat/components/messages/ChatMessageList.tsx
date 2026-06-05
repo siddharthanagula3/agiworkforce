@@ -42,6 +42,7 @@ export interface ChatMessageListProps {
   onRegenerate?: (messageId: string) => void;
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string) => void;
+  onReact?: (messageId: string, reactionType: 'up' | 'down' | null) => void;
   /** Called when user selects a follow-up suggestion pill */
   onSendMessage?: (content: string) => void;
   /** When true, follow-up suggestion pills fade out (user is typing in the composer) */
@@ -169,6 +170,7 @@ interface MessageGroupRowProps {
   onRegenerate?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   /** Called when a paywall Upgrade button is clicked. */
   onPaywallUpgrade?: (messageId: string) => void;
   /** Called when a paywall Try-later button is clicked. */
@@ -180,6 +182,7 @@ interface MessageRowProps {
   onRegenerate?: (id: string) => void;
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onReact?: (id: string, reactionType: 'up' | 'down' | null) => void;
   onPaywallUpgrade?: (messageId: string) => void;
   onPaywallDismiss?: (messageId: string) => void;
 }
@@ -197,6 +200,7 @@ const MessageRow = ({
   onRegenerate,
   onEdit,
   onDelete,
+  onReact,
   onPaywallUpgrade,
   onPaywallDismiss,
 }: MessageRowProps) => {
@@ -246,6 +250,7 @@ const MessageRow = ({
       onRegenerate={onRegenerate && displayRole === 'assistant' ? handleRegenerate : undefined}
       onEdit={onEdit && displayRole === 'user' ? handleEdit : undefined}
       onDelete={onDelete ? handleDelete : undefined}
+      onReact={onReact && displayRole === 'assistant' ? onReact : undefined}
     />
   );
 };
@@ -257,6 +262,7 @@ const MessageGroupRow = memo(
     onRegenerate,
     onEdit,
     onDelete,
+    onReact,
     onPaywallUpgrade,
     onPaywallDismiss,
   }: MessageGroupRowProps) => {
@@ -271,6 +277,7 @@ const MessageGroupRow = memo(
             onRegenerate={onRegenerate}
             onEdit={onEdit}
             onDelete={onDelete}
+            onReact={onReact}
             onPaywallUpgrade={onPaywallUpgrade}
             onPaywallDismiss={onPaywallDismiss}
           />
@@ -279,22 +286,28 @@ const MessageGroupRow = memo(
     );
   },
   (prev, next) => {
-    const prevLast = prev.group.messages[prev.group.messages.length - 1];
-    const nextLast = next.group.messages[next.group.messages.length - 1];
-
     return (
       prev.group.firstId === next.group.firstId &&
       prev.group.messages.length === next.group.messages.length &&
-      prevLast?.content === nextLast?.content &&
-      prevLast?.isStreaming === nextLast?.isStreaming &&
-      // Re-render when thinking content or its streaming state changes
-      getMeta(prevLast)?.thinkingContent === getMeta(nextLast)?.thinkingContent &&
-      getMeta(prevLast)?.isThinkingStreaming === getMeta(nextLast)?.isThinkingStreaming &&
-      // Re-render when paywall state changes
-      getMeta(prevLast)?.paywall === getMeta(nextLast)?.paywall &&
+      prev.group.messages.every((prevMessage, index) => {
+        const nextMessage = next.group.messages[index];
+        if (!nextMessage) return false;
+        const prevMeta = getMeta(prevMessage);
+        const nextMeta = getMeta(nextMessage);
+        return (
+          prevMessage.id === nextMessage.id &&
+          prevMessage.content === nextMessage.content &&
+          prevMessage.isStreaming === nextMessage.isStreaming &&
+          prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
+          prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
+          prevMeta?.reaction === nextMeta?.reaction &&
+          prevMeta?.paywall === nextMeta?.paywall
+        );
+      }) &&
       prev.onRegenerate === next.onRegenerate &&
       prev.onEdit === next.onEdit &&
       prev.onDelete === next.onDelete &&
+      prev.onReact === next.onReact &&
       prev.onPaywallUpgrade === next.onPaywallUpgrade &&
       prev.onPaywallDismiss === next.onPaywallDismiss
     );
@@ -314,6 +327,7 @@ const ChatMessageListComponent = ({
   onRegenerate,
   onEdit,
   onDelete,
+  onReact,
   onSendMessage,
   isUserTyping = false,
   className,
@@ -386,6 +400,11 @@ const ChatMessageListComponent = ({
 
   const handleDelete = useCallback((id: string) => onDelete?.(id), [onDelete]);
 
+  const handleReact = useCallback(
+    (id: string, reactionType: 'up' | 'down' | null) => onReact?.(id, reactionType),
+    [onReact],
+  );
+
   const handlePaywallUpgrade = useCallback(
     (id: string) => onPaywallUpgrade?.(id),
     [onPaywallUpgrade],
@@ -447,6 +466,7 @@ const ChatMessageListComponent = ({
                   onRegenerate={handleRegenerate}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
+                  onReact={handleReact}
                   onPaywallUpgrade={handlePaywallUpgrade}
                   onPaywallDismiss={handlePaywallDismiss}
                 />
@@ -508,25 +528,32 @@ const ChatMessageListComponent = ({
  * Replaces `MessageListNew`. Compatible with the same props interface.
  */
 export const ChatMessageList = memo(ChatMessageListComponent, (prev, next) => {
-  const lastPrev = prev.messages[prev.messages.length - 1];
-  const lastNext = next.messages[next.messages.length - 1];
-
   return (
     prev.messages.length === next.messages.length &&
     prev.isLoading === next.isLoading &&
     prev.isUserTyping === next.isUserTyping &&
     prev.onRegenerate === next.onRegenerate &&
     prev.onDelete === next.onDelete &&
+    prev.onReact === next.onReact &&
     prev.onSendMessage === next.onSendMessage &&
     prev.className === next.className &&
     prev.onPaywallUpgrade === next.onPaywallUpgrade &&
     prev.onPaywallDismiss === next.onPaywallDismiss &&
-    // Detect streaming content changes in the last message
-    lastPrev?.content === lastNext?.content &&
-    lastPrev?.isStreaming === lastNext?.isStreaming &&
-    // Detect thinking content changes
-    getMeta(lastPrev)?.thinkingContent === getMeta(lastNext)?.thinkingContent &&
-    getMeta(lastPrev)?.isThinkingStreaming === getMeta(lastNext)?.isThinkingStreaming
+    prev.messages.every((prevMessage, index) => {
+      const nextMessage = next.messages[index];
+      if (!nextMessage) return false;
+      const prevMeta = getMeta(prevMessage);
+      const nextMeta = getMeta(nextMessage);
+      return (
+        prevMessage.id === nextMessage.id &&
+        prevMessage.content === nextMessage.content &&
+        prevMessage.isStreaming === nextMessage.isStreaming &&
+        prevMeta?.thinkingContent === nextMeta?.thinkingContent &&
+        prevMeta?.isThinkingStreaming === nextMeta?.isThinkingStreaming &&
+        prevMeta?.reaction === nextMeta?.reaction &&
+        prevMeta?.paywall === nextMeta?.paywall
+      );
+    })
   );
 });
 

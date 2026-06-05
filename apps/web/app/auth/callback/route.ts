@@ -1,24 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 /**
  * This retired OAuth callback route is no longer active.
  * Authentication is now handled by Clerk. Any OAuth codes sent here
  * are against the wrong auth backend and must not be exchanged.
  *
- * Return 410 Gone so crawlers and bookmarked links get a permanent signal,
- * and so any code still pointing here fails visibly rather than silently.
+ * Redirect to the visible auth error page so old links fail clearly without
+ * leaving a raw JSON error page in browser sessions.
  */
-export async function GET() {
-  return new NextResponse(
-    JSON.stringify({
-      error: 'auth_route_removed',
-      message:
-        'This authentication endpoint has been removed. Please sign in via the main login page.',
-      login_url: '/login',
-    }),
-    {
-      status: 410,
-      headers: { 'Content-Type': 'application/json' },
-    },
+export async function GET(request: NextRequest) {
+  const errorUrl = new URL('/auth/error', request.url);
+  errorUrl.searchParams.set('error', 'auth_route_removed');
+  errorUrl.searchParams.set(
+    'error_description',
+    'This sign-in callback has been retired. Please use the main login page.',
   );
+
+  return NextResponse.redirect(errorUrl, { status: 307 });
 }

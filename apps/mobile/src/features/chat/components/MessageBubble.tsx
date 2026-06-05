@@ -459,7 +459,7 @@ export const MessageBubble = memo(function MessageBubble({
               </View>
             ) : null}
 
-            {/* Provenance badge: "On device" or "BYOK · {Provider}" */}
+            {/* Provenance badge: local or cloud provider context */}
             {provenance && (
               <ProvenanceFooter provider={provenance.provider} model={provenance.model} />
             )}

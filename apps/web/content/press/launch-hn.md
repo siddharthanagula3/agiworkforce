@@ -28,11 +28,11 @@ https://agiworkforce.com/mobile
 
 ---
 
-Hi HN. I am the founder of AGI Automation LLC and today we are launching AGI Mobile — a free Local + BYOK AI assistant for iOS and Android, with Cloud by invite.
+Hi HN. I am the founder of AGI Automation LLC and today we are launching AGI Mobile — a free Local AI assistant for iOS and Android, with Cloud by invite.
 
 **What it does**
 
-It is a chat assistant (text, image Q&A, voice, OCR, translate, memory, projects) with three explicit routes: Local mode, BYOK mode, and Cloud by invite. Local mode works in airplane mode and is not silently routed to BYOK or Cloud.
+It is a chat assistant (text, image Q&A, voice, OCR, translate, memory, projects) with two explicit mobile routes: Local mode and Cloud by invite. Local mode works in airplane mode and is not silently routed to Cloud.
 
 **On-device AI stack**
 
@@ -43,7 +43,7 @@ The Qwen3-4B fallback is what makes this work on mid-range Android — Redmi Not
 
 **Why we built it this way**
 
-Every AI assistant I used forced one default cloud path. I wanted users to choose: local hardware when privacy or cost matters, their own provider keys when frontier models matter, and AGI Cloud only when they ask for managed compute.
+Every AI assistant I used forced one default cloud path. I wanted mobile users to start with local hardware when privacy or cost matters, and use AGI Cloud only when they ask for managed compute.
 
 **Tech stack**
 
@@ -56,7 +56,7 @@ Every AI assistant I used forced one default cloud path. I wanted users to choos
 
 **What is not in v1**
 
-Cloud models, cross-device sync, and team features are invite-gated. The Local and BYOK experiences are the free launch wedge.
+Cloud models, cross-device sync, and team features are invite-gated. Local is the free launch wedge.
 
 **What I would like feedback on**
 

@@ -40,12 +40,12 @@
 
 ### Step 2 — Onboarding hero
 
-| Check                                            | Result      |
-| ------------------------------------------------ | ----------- |
-| Tagline: "AGI runs on your device."              | PASS / FAIL |
-| Trust chip: "AGI Automation LLC · Delaware, USA" | PASS / FAIL |
-| DPDP Act badge present                           | PASS / FAIL |
-| "Start chatting" button visible                  | PASS / FAIL |
+| Check                                 | Result      |
+| ------------------------------------- | ----------- |
+| Tagline: "AGI runs on your device."   | PASS / FAIL |
+| Trust chip: "AGI Automation LLC, USA" | PASS / FAIL |
+| DPDP Act badge present                | PASS / FAIL |
+| "Start chatting" button visible       | PASS / FAIL |
 
 **Overall step result:** PASS / FAIL  
 Notes:
@@ -201,12 +201,12 @@ Notes:
 
 ### Step 2 — Onboarding hero
 
-| Check                                            | Result      |
-| ------------------------------------------------ | ----------- |
-| Tagline: "AGI runs on your device."              | PASS / FAIL |
-| Trust chip: "AGI Automation LLC · Delaware, USA" | PASS / FAIL |
-| DPDP Act badge present                           | PASS / FAIL |
-| "Start chatting" button visible                  | PASS / FAIL |
+| Check                                 | Result      |
+| ------------------------------------- | ----------- |
+| Tagline: "AGI runs on your device."   | PASS / FAIL |
+| Trust chip: "AGI Automation LLC, USA" | PASS / FAIL |
+| DPDP Act badge present                | PASS / FAIL |
+| "Start chatting" button visible       | PASS / FAIL |
 
 **Overall step result:** PASS / FAIL  
 Notes:

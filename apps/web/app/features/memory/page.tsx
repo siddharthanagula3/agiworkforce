@@ -24,7 +24,7 @@ export default function MemoryFeaturePage() {
         <CampaignHero
           eyebrow={`${LAUNCH.publicLabel} · Memory`}
           title="Memory only works if users can see and control it."
-          lede="AGI should remember useful context across chats and projects, but never as a hidden black box. Users need search, reference-chat controls, generated memory controls, import from other AI providers, and a clear delete path."
+          lede="AGI Memory is designed to remember useful context across chats and projects without becoming a hidden black box. Users get search, reference-chat controls, generated memory controls, import paths from provider exports, and a clear delete path."
           primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondaryCta={{ href: '/privacy', label: 'Privacy posture' }}
           chips={['View', 'Search', 'Edit', 'Delete', 'Import']}
@@ -39,7 +39,7 @@ export default function MemoryFeaturePage() {
 
         <FeatureGrid
           eyebrow="Memory controls"
-          title="The settings page needs explicit language."
+          title="Explicit controls for remembered context."
           items={[
             {
               meta: 'Search',
@@ -59,7 +59,7 @@ export default function MemoryFeaturePage() {
             {
               meta: 'Import',
               title: 'Import from other AI providers',
-              body: 'Migration should provide a prompt and a start-import flow so users can bring useful context from ChatGPT, Claude, Gemini, or other exports.',
+              body: 'Migration starts from user-authorized exports so useful context can move from ChatGPT, Claude, Gemini, or other tools.',
             },
             {
               meta: 'Projects',
@@ -69,38 +69,38 @@ export default function MemoryFeaturePage() {
             },
             {
               meta: 'Privacy',
-              title: 'Temporary chats must opt out',
-              body: 'Incognito or temporary chats should never become memory and should not train future personalization.',
+              title: 'Temporary chats stay out',
+              body: 'Incognito or temporary chats stay separate from memory and future personalization.',
             },
           ]}
         />
 
         <LedgerSection
           eyebrow="Trust language"
-          title="What to promise and what to avoid."
+          title="Memory boundaries stay visible."
           rows={[
             {
-              k: 'Say',
+              k: 'Control',
               v: 'Memory is user-controlled, inspectable, editable, deletable, and separately configurable for chats and projects.',
             },
             {
-              k: 'Say',
+              k: 'Modes',
               v: 'Local, BYOK, and Cloud memory boundaries are visible and governed by mode.',
             },
             {
-              k: 'Avoid',
-              v: 'Do not imply AGI can import memories directly from another provider account without that provider export or user authorization path.',
+              k: 'Import',
+              v: 'Provider migration uses export files or user-authorized provider paths, not hidden account scraping.',
             },
             {
-              k: 'Avoid',
-              v: 'Do not claim all memory is private without specifying whether the active mode is Local, BYOK, or Cloud.',
+              k: 'Privacy',
+              v: 'Privacy language follows the active Local, BYOK, or Cloud mode instead of a single blanket claim.',
             },
           ]}
         />
 
         <LaunchCta
-          title="Memory is one of the highest-trust pages on the site."
-          body="This page gives users confidence that AGI can be personal without becoming opaque."
+          title="Memory builds trust when it stays visible."
+          body="Users can make AGI personal while still seeing what it remembers, where that memory came from, and how to remove it."
           primary={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondary={{ href: '/trust', label: 'Trust center' }}
         />

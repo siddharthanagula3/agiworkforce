@@ -74,7 +74,7 @@ export function DownloadSection({ downloads }: { downloads: DownloadUrls }) {
               'relative flex flex-col items-center rounded-2xl border p-8 transition-all duration-300 text-left w-full',
               !isLaunchAccessOnly && 'hover:scale-[1.02]',
               isDetected && !isLaunchAccessOnly
-                ? 'border-blue-500 bg-blue-500/5 shadow-[0_0_20px_rgba(59,130,246,0.15)]'
+                ? 'border-blue-500 bg-blue-500/5 shadow-lg shadow-blue-500/10'
                 : 'border-zinc-800 bg-zinc-950/50',
               !isLaunchAccessOnly && 'hover:border-zinc-700',
               isLaunchAccessOnly && 'opacity-75 cursor-not-allowed',

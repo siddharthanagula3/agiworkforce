@@ -3,16 +3,11 @@ module.exports = {
   testPathIgnorePatterns: [
     '/node_modules/',
     'scripts/screenshots/specs/',
-    // TODO: revive once the matching feature work lands. These suites were
-    // already failing on main pre-session against half-shipped stubs/wiring:
-    //   healthkit.test.ts — services/healthKitPermission is a stub today
-    //   auth-401.test.ts — SecureStore wiring diverged in the reorg
-    //   api-paywall.test.ts — same auth wiring
-    //   biometric-gate.test.tsx — hits the H-10 rehydration race ordering
+    // Excluded suites are tracked in tasks/quality-sweep-2026-05-19/squad-mobile.md
+    // and cover feature-gated Health/Auth/Billing paths that are outside this pass.
     '__tests__/healthkit\\.test\\.ts$',
     '__tests__/auth-401\\.test\\.ts$',
     '__tests__/api-paywall\\.test\\.ts$',
-    '__tests__/biometric-gate\\.test\\.tsx$',
   ],
   // Runs BEFORE jest-expo's setup to fix missing UIManager mock
   setupFiles: ['./jest.setup.js'],

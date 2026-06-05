@@ -9,11 +9,11 @@
 
 > AGI Mobile is live.
 >
-> Free Local. Free BYOK. Cloud by invite.
+> Free Local. Cloud by invite.
 >
 > iOS + Android, today.
 >
-> Choose your route: on-device local, your provider key, or AGI Cloud invite.
+> Choose your route: on-device local or AGI Cloud invite.
 >
 > App Store + Play links: agiworkforce.com/mobile
 
@@ -25,7 +25,7 @@
 
 > Your phone has AI built in. ChatGPT doesn't know that. We do.
 >
-> AGI Mobile — free Local, free BYOK, Cloud by invite.
+> AGI Mobile — free Local, Cloud by invite.
 >
 > iOS + Android: agiworkforce.com/mobile
 
@@ -53,7 +53,7 @@
 >
 > AGI Mobile doesn't.
 >
-> Local. BYOK. Cloud by invite.
+> Local. Cloud by invite.
 >
 > iOS + Android: agiworkforce.com/mobile
 
@@ -65,7 +65,7 @@
 
 Reply 1:
 
-> How it works: Local mode uses Apple Foundation Models on iPhone 15 Pro+ and Gemma + Qwen3-4B on Android where supported. BYOK and Cloud are explicit.
+> How it works: Local mode uses Apple Foundation Models on iPhone 15 Pro+ and Gemma + Qwen3-4B on Android where supported. Cloud is explicit.
 
 Reply 2:
 
@@ -73,7 +73,7 @@ Reply 2:
 
 Reply 3:
 
-> Cloud is invite-only. Bigger models, sync, team features — request access at agiworkforce.com/mobile. Local + BYOK are free launch paths.
+> Cloud is invite-only. Bigger models, sync, team features — request access at agiworkforce.com/mobile. Local is the free launch path.
 
 ---
 

@@ -23,8 +23,8 @@ export default function ArtifactsFeaturePage() {
         <Header />
         <CampaignHero
           eyebrow={`${LAUNCH.publicLabel} · Artifacts`}
-          title="Generated work should live beside the chat, not inside it."
-          lede="Artifacts are the AGI answer to Claude Artifacts and ChatGPT Canvas: a dedicated surface for apps, documents, reports, charts, code, spreadsheets, and prototypes that users can inspect, revise, download, and share."
+          title="Generated work belongs beside the chat."
+          lede="Artifacts are AGI's dedicated surface for apps, documents, reports, charts, code, spreadsheets, and prototypes that users can inspect, revise, download, and share."
           primaryCta={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondaryCta={{ href: '/features/deep-research', label: 'Research artifacts' }}
           chips={['Preview', 'Version', 'Download', 'Publish', 'Auto-fix']}
@@ -67,19 +67,19 @@ export default function ArtifactsFeaturePage() {
             {
               meta: 'Gallery',
               title: 'A catalog of created work',
-              body: 'Users need an artifacts home for search, filtering, inspiration, cleanup, and re-opening prior work.',
+              body: 'An artifacts home keeps search, filtering, cleanup, and re-opening prior work in one place.',
             },
             {
               meta: 'Safety',
               title: 'Sandbox and domain controls',
-              body: 'Rendered artifacts need isolated execution, explicit network egress policy, and clear publish warnings.',
+              body: 'Rendered artifacts use isolated execution, explicit network egress policy, and clear publish warnings.',
             },
           ]}
         />
 
         <LedgerSection
-          eyebrow="Parity checklist"
-          title="What users will expect from artifacts."
+          eyebrow="Launch bar"
+          title="The artifact experience users expect."
           rows={[
             { k: 'Panel', v: 'Resizable right-side preview beside the active chat.' },
             {
@@ -92,15 +92,15 @@ export default function ArtifactsFeaturePage() {
             },
             {
               k: 'Errors',
-              v: 'Runtime errors should surface in the UI and feed back into an auto-fix loop.',
+              v: 'Runtime errors surface in the UI and can feed back into an auto-fix loop.',
             },
-            { k: 'Gallery', v: 'All artifacts should be searchable from a dedicated catalog.' },
+            { k: 'Gallery', v: 'Artifacts are searchable from a dedicated catalog.' },
           ]}
         />
 
         <LaunchCta
-          title="Artifacts are a launch-page must, not a later nice-to-have."
-          body="Claude and ChatGPT both train users to expect a canvas for substantial work. AGI should advertise it as a first-class capability across models."
+          title="Artifacts are first-class work, not chat overflow."
+          body="Claude and ChatGPT trained users to expect a canvas for substantial work. AGI keeps that workspace available across model choices."
           primary={{ href: '/download', label: LAUNCH.ctaLabel }}
           secondary={{ href: '/compare/claude', label: 'Compare with Claude' }}
         />

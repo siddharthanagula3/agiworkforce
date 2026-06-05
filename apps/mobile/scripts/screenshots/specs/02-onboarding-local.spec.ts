@@ -1,20 +1,17 @@
 /**
- * E2E spec — 02: onboarding-local
+ * E2E spec — 02: onboarding
  *
- * Critical path (v1 local-only):
+ * Critical path:
  *   cold launch → privacy hero shown
  *   tap "Start chatting" → compliance disclosure modal
  *   accept disclosure → device-tier detection screen
- *   tap "Continue" / "Download model" → download UX
- *   wait for (stubbed) download → skip → chat empty state
+ *   tap "Continue" or "Download model" → installed/download path
+ *   arrive at chat empty state
  *
- * Mocks:
- *   - No real LLM; the download progress is the built-in stub timer
- *     (1.2 %/80 ms tick, completes in ~6.7 s, then routes to chat).
- *   - All cloud services are gated by FEATURES flags (billing/auth=false),
- *     so no cloud auth calls can be made.
- *
- * Runs in < 90 s on a simulator (download stub ~7 s + nav overhead).
+ * Precondition for CI: start Metro with
+ *   EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC=1
+ * before running this spec. The app does not read Detox-only biometric
+ * launch arguments.
  *
  * NOTE: Detox is not in package.json. Install with
  *   pnpm add -D detox@20
@@ -24,14 +21,12 @@
 
 import { device, element, by, waitFor } from 'detox';
 
-describe('Onboarding — local path (v1)', () => {
+describe('Onboarding — local setup with cloud invite gate', () => {
   beforeAll(async () => {
     // Cold launch: delete all app data so onboarding always shows.
     await device.launchApp({
       newInstance: true,
       delete: true,
-      // Bypass biometric gate in CI.
-      launchArgs: { DETOX_DISABLE_BIOMETRIC: '1' },
     });
   });
 
@@ -45,8 +40,11 @@ describe('Onboarding — local path (v1)', () => {
       .withTimeout(8000);
   });
 
-  it('shows the locked tagline "AGI runs on your device."', async () => {
+  it('shows the locked tagline "Your AI workspace for everyday work."', async () => {
     await waitFor(element(by.id('hero-tagline')))
+      .toBeVisible()
+      .withTimeout(4000);
+    await waitFor(element(by.text('Your AI workspace for everyday work.')))
       .toBeVisible()
       .withTimeout(4000);
   });
@@ -83,16 +81,16 @@ describe('Onboarding — local path (v1)', () => {
       .withTimeout(4000);
   });
 
-  it('tapping the download button shows the download progress screen', async () => {
+  it('tapping the download button advances through installed or download flow', async () => {
     await element(by.id('device-tier-download-btn')).tap();
-    // The download screen may not exist for Tier-1 devices (Apple FM, no download).
-    // In that case the app skips directly to chat — both paths are acceptable.
+    // The download screen is skipped when the recommended model is already
+    // installed or the selected runtime is provided by the OS.
     try {
       await waitFor(element(by.id('onboarding-download-screen')))
         .toBeVisible()
         .withTimeout(4000);
     } catch {
-      // Tier-1 device: already in chat — test is still valid.
+      // Installed or OS-provided model: already in chat.
       return;
     }
   });
@@ -104,7 +102,7 @@ describe('Onboarding — local path (v1)', () => {
         .toBeVisible()
         .withTimeout(3000);
     } catch {
-      // Tier-1 / already navigated to chat — acceptable.
+      // Installed or OS-provided model: already navigated to chat.
     }
   });
 
@@ -120,5 +118,6 @@ describe('Onboarding — local path (v1)', () => {
     await waitFor(element(by.id('chat.composer.input')))
       .toBeVisible()
       .withTimeout(10000);
+    await device.takeScreenshot('02-onboarding-local');
   });
 });

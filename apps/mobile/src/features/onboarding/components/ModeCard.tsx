@@ -1,6 +1,5 @@
 /**
- * Selectable mode card used in the onboarding mode picker (Branch A/B/C).
- * Follows the PRD §11 copy exactly.
+ * Selectable onboarding mode card for local demo and invite-gated Cloud paths.
  */
 import { useState } from 'react';
 import { View, Pressable } from 'react-native';
@@ -23,20 +22,19 @@ const MODE_META: Record<
 > = {
   local: {
     title: formatChatExecutionModeLabel('local_only'),
-    body: 'Free forever. No account. No internet needed after one download. Best for sensitive prompts.',
+    body: 'Free local mode. No account required for local chats after model setup. Best for sensitive prompts.',
     privacy: 'Your prompts never leave your device. AI runs locally using your phone hardware.',
     testIdPrefix: 'mode-local',
   },
   cloud: {
     title: `${formatChatExecutionModeLabel('cloud_managed')} waitlist`,
     body: 'Hosted compute, sync, generated files, code execution, and browser environments are waitlist-gated until billing, fraud, quota, and provider-cost controls are ready.',
-    privacy:
-      'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent. Mobile has no BYOK mode.',
+    privacy: 'Cloud Managed uses AGI-managed infrastructure only after explicit launch consent.',
     testIdPrefix: 'mode-cloud',
   },
   decide_later: {
     title: 'Decide later',
-    body: 'Start in Local Mode now. Cloud Managed can be reviewed later from Settings when the waitlist opens.',
+    body: 'Start in Local Mode now. Cloud Managed can be reviewed later from Settings when invite access is available.',
     privacy: 'Local Mode remains active until you explicitly choose another available mode.',
     testIdPrefix: 'mode-decide-later',
   },

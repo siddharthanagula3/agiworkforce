@@ -177,7 +177,7 @@ function SkillsTab({ query }: { query: string }) {
           <p className="text-sm text-muted-foreground">
             {query || filterSource !== 'all'
               ? 'No skills match your filters.'
-              : "No skills found. Create skills under ~/.claude/skills/ or your project's .claude/skills/."}
+              : 'No skills found. Open the skills library to manage available AGI skills.'}
           </p>
         </div>
       ) : (

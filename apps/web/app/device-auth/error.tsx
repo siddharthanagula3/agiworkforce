@@ -1,7 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
-
 export default function Error({
   error,
   reset,
@@ -9,10 +7,6 @@ export default function Error({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
-  useEffect(() => {
-    // Log error for debugging (server-side only in production)
-  }, [error]);
-
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center px-4">
       <div className="text-center max-w-md">

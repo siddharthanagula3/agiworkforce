@@ -1,32 +1,30 @@
 # Screenshot capture pipeline — AGI mobile
 
-> Detox-driven automated capture for every screenshot in
-> `apps/mobile/store-listing/screenshots/specs/`. Real device frames
-> are required by App Review (Guideline 2.3.10); these scripts run
-> against the production binary on an iOS Simulator or Android
-> Emulator to make captures reproducible.
->
-> **Limitation**: simulator captures are acceptable for Google Play
-> but Apple App Review may reject simulator captures for a paid app
-> that requires a hardware-only feature. For v1 the only such risk is
-> the Local mode capture (screenshot 1) which requires actual
-> compute — on simulator the Phi-3-mini inference will work but
-> slower. If reviewer pushes back, recapture on real device.
+Detox-driven automated capture for Mobile visual QA. This is a local
+automation harness, not the final App Store / Play Store evidence package.
+Store-release captures still require the actual App Review device matrix and
+founder approval.
+
+> **Limitation**: simulator captures are useful for local visual QA.
+> Store submission still requires a release-device pass and founder
+> approval before upload.
 
 ---
 
 ## Prerequisites
 
 - macOS 14+ with Xcode 16 (for `xcrun simctl` automation)
-- Android Studio with `emulator` + AVDs `pixel_8_pro_api_34` and `pixel_tablet_api_34`
+- Android Studio with `emulator` + AVD `pixel_8_api_34` for Android captures
 - pnpm 9.x at repo root
-- `apps/mobile/.env.screenshots` populated with test API keys
-  (one Anthropic, one OpenAI, one Google — restricted to
-  free-tier-friendly models)
+- Detox 20 installed locally before running this harness
+- Expo dev client running with the visual-QA biometric bypass enabled
+- onboarding completed and AGI Standard installed before specs 01, 03, 04, 05, and 06
 
 ```bash
 cd apps/mobile
 pnpm install
+pnpm add -D detox@20
+EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC=1 pnpm exec expo start --dev-client --host localhost
 # iOS simulator boot
 pnpm screenshots:ios
 # Android emulator captures
@@ -40,39 +38,37 @@ pnpm screenshots:android
 
 The `screenshots:ios` script iterates these simulators:
 
-| Class      | Simulator                        | Resolution  |
-| ---------- | -------------------------------- | ----------- |
-| iOS 6.7"   | `iPhone 17 Pro Max` (iOS 26.2)   | 1290 × 2796 |
-| iOS 6.5"   | `iPhone 11 Pro Max` (iOS 17.4)   | 1242 × 2688 |
-| iOS 5.5"   | `iPhone 8 Plus` (iOS 16.x)       | 1242 × 2208 |
-| iPad 12.9" | `iPad Pro (12.9-inch) (6th gen)` | 2048 × 2732 |
-| iPad 11"   | `iPad Pro (11-inch) (4th gen)`   | 1668 × 2388 |
+| Class             | Simulator               | Resolution  |
+| ----------------- | ----------------------- | ----------- |
+| iPhone 17 Pro     | `iPhone 17 Pro`         | 1206 × 2622 |
+| iPhone 17 Pro Max | `iPhone 17 Pro Max`     | 1320 × 2868 |
+| iPad Pro 13"      | `iPad Pro 13-inch (M5)` | 2048 × 2732 |
+| iPad Pro 11"      | `iPad Pro 11-inch (M5)` | 1668 × 2388 |
 
 The `screenshots:android` script targets:
 
-| Class      | AVD                        | Resolution  |
-| ---------- | -------------------------- | ----------- |
-| Phone      | `pixel_8_pro_api_34`       | 1080 × 2400 |
-| 10" tablet | `pixel_tablet_api_34`      | 1920 × 1200 |
-| 7" tablet  | `pixel_7_api_34_landscape` | 1280 × 800  |
+| Class | AVD              | Resolution  |
+| ----- | ---------------- | ----------- |
+| Phone | `pixel_8_api_34` | 1080 × 2400 |
 
 ---
 
 ## Per-screenshot capture spec
 
-| File                               | Detox spec                  | Pre-conditions                                                                |
-| ---------------------------------- | --------------------------- | ----------------------------------------------------------------------------- |
-| `01-multi-provider.png`            | `01-multi-provider.spec.ts` | Three provider keys added; one chat thread with 3 turns × different providers |
-| `02-byok-keys.png`                 | `02-byok-keys.spec.ts`      | Settings → Provider Keys with 3 keys configured                               |
-| `03-cross-provider-continuity.png` | `03-cross-provider.spec.ts` | One chat with web-search tool call migrating across 3 providers               |
-| `04-voice-hold-to-speak.png`       | `04-voice.spec.ts`          | Composer mid-recording state (4s elapsed)                                     |
-| `05-vision-attachment.png`         | `05-vision.spec.ts`         | Chat with sample image + model OCR response                                   |
-| `06-cross-device-sync.png`         | `06-sync.spec.ts`           | Cloud-mode chat with sync chip mid-flash                                      |
+| File                      | Detox spec                           | Pre-conditions                                |
+| ------------------------- | ------------------------------------ | --------------------------------------------- |
+| `01-local-demo-chat.png`  | `01-multi-provider.spec.ts`          | Onboarding complete and local model installed |
+| `02-onboarding-local.png` | `02-onboarding-local.spec.ts`        | First launch with local onboarding            |
+| `03-first-message.png`    | `03-chat-first-message.spec.ts`      | Onboarding complete and local model installed |
+| `04-cloud-waitlist.png`   | `04-mode-toggle-to-waitlist.spec.ts` | Cloud invite gate reachable from chat         |
+| `05-image-question.png`   | `05-image-with-question.spec.ts`     | Photo permission and fixture media available  |
+| `06-voice-recording.png`  | `06-voice-record-and-send.spec.ts`   | Microphone permission granted                 |
 
 Each Detox spec drives the app to the captured state and calls
-`device.takeScreenshot('NN-name')`. The post-processor in
-`pipeline.ts` composites the locked tagline overlay onto each raw
-capture, writing both `raw/` and `final/` variants.
+`device.takeScreenshot('NN-name')`. The post-processor in `pipeline.ts`
+composites the tagline overlay onto each raw capture, writing both `raw/` and
+`final/` variants. The command exits early with a clear error if Detox is not
+installed.
 
 ---
 
@@ -94,10 +90,9 @@ capture, writing both `raw/` and `final/` variants.
 
 If App Review pushes back on simulator captures:
 
-1. Connect a real device (iPhone 15 Pro Max for 6.7" class)
+1. Connect a real device for the target App Store or Play Store size class
 2. Build the production-config app to device with `eas build --profile preview`
-3. Drive each spec manually via the in-app demo mode (Settings →
-   Hidden → Demo) which pre-seeds the chat state
+3. Complete onboarding, confirm AGI Standard is installed, and drive each frame manually
 4. Use the device's screenshot key combo, AirDrop to Mac, drop into
    `captures/{class}/raw/`
 5. Run the compositor: `pnpm screenshots:composite`
@@ -108,10 +103,10 @@ If App Review pushes back on simulator captures:
 
 Before submitting to App Store Connect:
 
-- [ ] `pnpm screenshots:ios` exits 0
-- [ ] `pnpm screenshots:android` exits 0
+- [ ] Detox is installed and `pnpm screenshots:ios` exits 0
+- [ ] Android AVD exists and `pnpm screenshots:android` exits 0
 - [ ] Visual diff against the previous release's captures shows no
-      regression in any of the 30 iOS + 18 Android frames
+      regression in any iOS or Android frame
 - [ ] Founder approves each frame (PR review on `screenshots-vN/`
       branch)
 - [ ] Captures uploaded to App Store Connect via `fastlane deliver`
@@ -136,16 +131,11 @@ checked in — they define the build, not the build output.
 
 ## Founder-input required
 
-The following items **cannot be automated** and need founder action
-before submission:
+The following items need founder or design action before submission:
 
-1. **Real test API keys** — the founder must drop free-tier-friendly
-   Anthropic + OpenAI + Google + xAI keys into
-   `apps/mobile/.env.screenshots`. These are not committed.
-2. **Sample image for screenshot 5** — a hand-drawn whiteboard photo
+1. **Sample image for screenshot 5** — a hand-drawn whiteboard photo
    that's safe to publicly distribute. Owner: design.
-3. **Audio bumper** — `assets/audio/bumper-12s.m4a` for the optional
+2. **Audio bumper** — `assets/audio/bumper-12s.m4a` for the optional
    app preview video. Owner: design.
-4. **Real device captures** if simulator is rejected — owner: founder
-   (need physical iPhone 17 Pro Max + iPhone 14 Plus + iPhone 8 Plus
-   - iPad 12.9" + iPad 11").
+3. **Real device captures** for release upload when the simulator pass
+   does not match the store device matrix. Owner: founder.

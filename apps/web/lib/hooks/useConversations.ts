@@ -10,6 +10,7 @@ interface ApiConversation {
   id: string;
   title: string;
   model?: string | null;
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,7 +33,10 @@ interface UseConversationsReturn {
   fetchConversations: () => Promise<void>;
   createConversation: (title?: string, model?: string) => Promise<Conversation | null>;
   loadConversation: (id: string) => Promise<boolean>;
-  updateConversation: (id: string, updates: { title?: string; model?: string }) => Promise<boolean>;
+  updateConversation: (
+    id: string,
+    updates: { title?: string; model?: string; projectId?: string | null },
+  ) => Promise<boolean>;
   deleteConversation: (id: string) => Promise<boolean>;
   setActiveConversation: (id: string | null) => void;
 }
@@ -98,6 +102,7 @@ export function useConversations(): UseConversationsReturn {
           id: c.id,
           title: c.title,
           model: c.model ?? null,
+          projectId: c.project_id ?? null,
           createdAt: c.created_at,
           updatedAt: c.updated_at,
         }),
@@ -135,6 +140,7 @@ export function useConversations(): UseConversationsReturn {
           id: data.conversation.id,
           title: data.conversation.title,
           model: data.conversation.model ?? null,
+          projectId: data.conversation.project_id ?? null,
           createdAt: data.conversation.created_at,
           updatedAt: data.conversation.updated_at,
         };
@@ -175,6 +181,7 @@ export function useConversations(): UseConversationsReturn {
           updateConversationInStore(id, {
             title: loadedConversation.title,
             model: loadedConversation.model ?? null,
+            projectId: loadedConversation.project_id ?? null,
             updatedAt: loadedConversation.updated_at,
           });
         }
@@ -210,7 +217,10 @@ export function useConversations(): UseConversationsReturn {
 
   // Update a conversation - returns true on success
   const updateConversation = useCallback(
-    async (id: string, updates: { title?: string; model?: string }): Promise<boolean> => {
+    async (
+      id: string,
+      updates: { title?: string; model?: string; projectId?: string | null },
+    ): Promise<boolean> => {
       try {
         const headers = await addCsrfHeaders(await getAuthHeaders());
         const response = await fetch(`/api/chat/conversations/${id}`, {
@@ -228,6 +238,7 @@ export function useConversations(): UseConversationsReturn {
         updateConversationInStore(id, {
           title: data.conversation.title,
           model: data.conversation.model ?? undefined,
+          projectId: data.conversation.project_id ?? null,
           updatedAt: data.conversation.updated_at,
         });
         return true;

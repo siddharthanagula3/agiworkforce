@@ -6,13 +6,13 @@ import { MarketingFooter } from '../../../components/marketing/MarketingFooter';
 export const metadata: Metadata = {
   title: 'Mobile Legal — Privacy Policy and Terms of Service',
   description:
-    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local, BYOK, and Cloud invite modes.',
+    'Privacy policy and terms of service for AGI Mobile (iOS and Android), including Local and Cloud invite modes.',
   alternates: { canonical: 'https://agiworkforce.com/mobile/legal' },
 };
 
 const EFFECTIVE_DATE = '2026-07-12';
 const COMPANY = 'AGI Automation LLC';
-const COMPANY_STATE = 'a Delaware limited liability company';
+const COMPANY_STATE = 'a United States limited liability company';
 const SUPPORT_EMAIL = 'support@agiworkforce.com';
 const PRIVACY_EMAIL = 'privacy@agiworkforce.com';
 
@@ -28,8 +28,8 @@ export default function MobileLegalPage() {
           <p className="agi-page-lede">
             Effective {EFFECTIVE_DATE}. Applies to AGI Mobile on iOS and Android.{' '}
             <strong>
-              Local mode runs on your device. BYOK and Cloud modes use explicit provider labels and
-              separate trust boundaries.
+              Local mode runs on your device. Cloud mode uses explicit labels and a separate trust
+              boundary.
             </strong>
           </p>
           <div className="agi-cta-row" style={{ marginTop: 16 }}>
@@ -61,8 +61,7 @@ export default function MobileLegalPage() {
             </h3>
             <p className="agi-callout-p">
               In Local mode, the AI model runs on your device or a local model route and is not
-              silently routed to AGI Cloud. Mobile v1 does not accept provider keys; BYOK belongs to
-              Desktop and developer surfaces. Cloud mode is invite-gated and visibly labeled.
+              silently routed to AGI Cloud. Cloud mode is invite-gated and visibly labeled.
             </p>
           </div>
 
@@ -146,8 +145,7 @@ export default function MobileLegalPage() {
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
             {COMPANY} does not use your AGI Mobile conversation content to train AGI-owned models.
-            BYOK requests are governed by the selected provider account and terms. We do not sell
-            your conversation content.
+            We do not sell your conversation content.
           </p>
 
           <h3
@@ -163,9 +161,9 @@ export default function MobileLegalPage() {
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
             In Local mode, conversation inference runs on-device and is not processed by {COMPANY}{' '}
-            for inference. BYOK and Cloud modes may involve provider or AGI processing according to
-            the user-selected mode. Account data is processed with your consent for authentication,
-            invite, and support workflows. You may request deletion at any time by emailing{' '}
+            for inference. Cloud mode may involve AGI processing according to the user-selected
+            mode. Account data is processed with your consent for authentication, invite, and
+            support workflows. You may request deletion at any time by emailing{' '}
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
@@ -184,12 +182,11 @@ export default function MobileLegalPage() {
             GDPR (European Union / European Economic Area)
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
-            Local-mode conversation inference is on-device. BYOK and Cloud modes may involve the
-            selected provider or AGI acting under the relevant controller/processor relationship and
-            terms. Account data processed in connection with invite and authentication workflows
-            falls under Art. 6(1)(b) GDPR (performance of a contract). You have the right of access,
-            rectification, erasure, restriction, data portability, and objection. Exercise these
-            rights by emailing{' '}
+            Local-mode conversation inference is on-device. Cloud mode may involve AGI acting under
+            the relevant controller/processor relationship and terms. Account data processed in
+            connection with invite and authentication workflows falls under Art. 6(1)(b) GDPR
+            (performance of a contract). You have the right of access, rectification, erasure,
+            restriction, data portability, and objection. Exercise these rights by emailing{' '}
             <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
               {PRIVACY_EMAIL}
             </a>
@@ -367,9 +364,9 @@ export default function MobileLegalPage() {
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Governing law</span>
               <span className="agi-colophon-val">
-                These terms are governed by the laws of the State of Delaware, USA, without regard
-                to conflict-of-law principles. Disputes shall be resolved in the state or federal
-                courts of Delaware, except where mandatory consumer protection laws in your
+                These terms are governed by the laws of the State of Texas, USA, without regard to
+                conflict-of-law principles. Disputes shall be resolved in the state or federal
+                courts of Texas, except where mandatory consumer protection laws in your
                 jurisdiction require otherwise.
               </span>
             </div>
