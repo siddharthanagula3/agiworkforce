@@ -27,26 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
-      - name: Scan for unpinned external actions
+      - name: Scan for invalid external action pins
         shell: bash
-        run: |
-          set -euo pipefail
-          # Match `uses: <thing>@<ref>` lines that are NOT in the allowlist.
-          # Allowlist: `uses: ./...` in-repo reusable workflows only.
-          # Required form for everything else: @<40-hex-char SHA>.
-          unpinned=$(
-            grep -rEn '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[^[:space:]]+@[^[:space:]]+' \
-              .github/workflows \
-              | grep -vE 'uses:[[:space:]]+\./' \
-              | grep -vE '@[0-9a-f]{40}([[:space:]]|$|#)' \
-              || true
-          )
-          if [ -n "$unpinned" ]; then
-            echo "::error::Found third-party actions that are NOT pinned to a 40-char SHA:"
-            echo "$unpinned"
-            echo ""
-            echo "Fix: replace '@v1' / '@main' / '@latest' with '@<40-char-sha> # <version>'."
-            echo "Resolve a SHA via: gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq .object.sha"
-            exit 1
-          fi
-          echo "OK — all third-party actions are SHA-pinned."
+        run: VERIFY_ACTION_PIN_OBJECTS=1 bash scripts/check-action-pins.sh
