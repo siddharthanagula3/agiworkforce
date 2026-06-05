@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { spawnSync } from 'node:child_process';
 
 const root = process.cwd();
 const errors = [];
@@ -63,9 +64,21 @@ requireIncludes(
   '.github/workflows/actions-pinned-check.yml',
   'All third-party actions are SHA-pinned',
 );
-requireIncludes('.github/workflows/actions-pinned-check.yml', '@[0-9a-f]{40}');
+requireIncludes(
+  '.github/workflows/actions-pinned-check.yml',
+  'VERIFY_ACTION_PIN_OBJECTS=1 bash scripts/check-action-pins.sh',
+);
 requireIncludes('.github/workflows/release-cli.yml', 'agiworkforce-*.${{ matrix.archive }}');
 requireNotIncludes('.github/workflows/ci.yml', '--filter web');
+
+const actionPins = spawnSync('bash', ['scripts/check-action-pins.sh'], {
+  cwd: root,
+  env: { ...process.env, VERIFY_ACTION_PIN_OBJECTS: '0' },
+  stdio: 'inherit',
+});
+if (actionPins.status !== 0) {
+  errors.push('scripts/check-action-pins.sh failed');
+}
 
 if (errors.length > 0) {
   console.error('CI guardrail check failed:');

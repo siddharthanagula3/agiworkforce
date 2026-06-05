@@ -2,7 +2,8 @@
 # scripts/check-action-pins.sh
 #
 # Verify every external GitHub Action is pinned to a full commit SHA.
-# Fails (exit 1) if any `uses:` line points at a tag.
+# Fails (exit 1) if any `uses:` line points at a tag or, when
+# VERIFY_ACTION_PIN_OBJECTS=1, an annotated tag object SHA.
 #
 # Source: docs/plans/redteam-services.md (red team report 2026-05-04, C3).
 #
@@ -13,6 +14,7 @@
 set -euo pipefail
 
 WORKFLOWS_DIR="${1:-.github/workflows}"
+VERIFY_ACTION_PIN_OBJECTS="${VERIFY_ACTION_PIN_OBJECTS:-0}"
 
 if [ ! -d "$WORKFLOWS_DIR" ]; then
   echo "ERROR: workflows directory not found: $WORKFLOWS_DIR" >&2
@@ -25,6 +27,39 @@ ALLOWED_UNPINNED=()
 
 violations=0
 checked=0
+object_checks=0
+
+if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
+  TMP_ROOT="${TMPDIR:-/tmp}/agi-action-pin-check.$$"
+  mkdir -p "$TMP_ROOT"
+  trap 'rm -rf "$TMP_ROOT"' EXIT
+fi
+
+verify_commit_object() {
+  action_repo="$1"
+  version="$2"
+  ref_label="$3"
+
+  object_checks=$((object_checks + 1))
+
+  repo_dir="$TMP_ROOT/check-${object_checks}"
+  mkdir -p "$repo_dir"
+  (
+    cd "$repo_dir"
+    git init -q
+    git remote add origin "https://github.com/${action_repo}.git"
+    git fetch --depth=1 --quiet origin "$version"
+    object_type="$(git cat-file -t FETCH_HEAD)"
+    if [ "$object_type" != "commit" ]; then
+      resolved_commit="$(git rev-parse -q --verify 'FETCH_HEAD^{commit}' 2>/dev/null || true)"
+      echo "::error::Pinned action ref is a ${object_type}, not a commit: ${ref_label}" >&2
+      if [ -n "$resolved_commit" ]; then
+        echo "  Use commit SHA: ${action_repo}@${resolved_commit}" >&2
+      fi
+      exit 1
+    fi
+  )
+}
 
 while IFS= read -r line; do
   # Strip leading whitespace and the "uses:" key.
@@ -38,6 +73,9 @@ while IFS= read -r line; do
   if [[ "$ref" != *"@"* ]]; then continue; fi
   owner_repo=$(printf '%s' "$ref" | sed -E 's/@[^@]+$//')
   version=$(printf '%s' "$ref" | sed -E 's/^.*@//')
+  owner=$(printf '%s' "$owner_repo" | cut -d/ -f1)
+  repo=$(printf '%s' "$owner_repo" | cut -d/ -f2)
+  action_repo="${owner}/${repo}"
 
   checked=$((checked + 1))
 
@@ -50,6 +88,11 @@ while IFS= read -r line; do
 
   # Require a 40-char hex SHA. Short SHAs and tags fail.
   if printf '%s' "$version" | grep -Eq '^[0-9a-f]{40}$'; then
+    if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
+      if ! verify_commit_object "$action_repo" "$version" "$ref"; then
+        violations=$((violations + 1))
+      fi
+    fi
     continue
   fi
 
@@ -60,6 +103,9 @@ done < <(grep -E "^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*" "$WORKFLOWS_DIR"
 
 echo ""
 echo "Checked $checked external action references."
+if [ "$VERIFY_ACTION_PIN_OBJECTS" = "1" ]; then
+  echo "Verified $object_checks pinned action object(s)."
+fi
 if [ "$violations" -gt 0 ]; then
   echo "FAIL: $violations unpinned external action(s)." >&2
   exit 1
