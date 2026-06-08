@@ -59,6 +59,7 @@ ignore = [
     "RUSTSEC-2026-0119", # hickory-proto O(n²) name compression (mongodb transitive, optional feature)
     "RUSTSEC-2026-0118", # hickory-proto NSEC3 unbounded loop (mongodb transitive, optional feature)
     "RUSTSEC-2023-0071", # rsa Marvin Attack (mongodb / mysql_async transitive, optional feature)
+    "RUSTSEC-2026-0173", # proc-macro-error2 unmaintained (mysql_async → mysql-common-derive transitive, optional feature)
 
     # rustls-webpki — both 0.101.x and the older 0.103.x branches still in
     # the dep tree have name-constraint and CRL-panic advisories without
