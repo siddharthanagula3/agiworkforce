@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  shell-quote: '>=1.8.4'
   baseline-browser-mapping: ^2.9.11
   lodash-es: '>=4.18.1'
   diff: ^5.2.2
@@ -552,7 +553,7 @@ importers:
         specifier: ^22.19.15
         version: 22.19.15
       '@types/vscode':
-        specifier: ^1.110.0
+        specifier: ^1.100.0
         version: 1.110.0
       '@types/ws':
         specifier: ^8.18.0
@@ -17910,10 +17911,10 @@ packages:
       }
     engines: { node: '>=8' }
 
-  shell-quote@1.8.3:
+  shell-quote@1.8.4:
     resolution:
       {
-        integrity: sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==,
+        integrity: sha512-VsC6n6vz1ihYYyZZwX7YZSF5l5x36ca17OC+a69h94YqB7X6XLwf+5MOgynYir2SLFUbl8gIYvBo8K8RoNQ6bQ==,
       }
     engines: { node: '>= 0.4' }
 
@@ -31438,7 +31439,7 @@ snapshots:
 
   react-devtools-core@6.1.5:
     dependencies:
-      shell-quote: 1.8.3
+      shell-quote: 1.8.4
       ws: 8.20.1
     transitivePeerDependencies:
       - bufferutil
@@ -32344,7 +32345,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  shell-quote@1.8.3: {}
+  shell-quote@1.8.4: {}
 
   side-channel-list@1.0.0:
     dependencies:
