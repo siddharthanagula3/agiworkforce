@@ -15,6 +15,7 @@ import { logger } from '../lib/logger';
 const router: Router = Router();
 
 router.use(authenticateToken);
+router.use(createRateLimiter('default'));
 
 const uuidParamSchema = z.object({
   orgId: z.uuid(),

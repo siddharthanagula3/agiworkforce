@@ -103,6 +103,7 @@ vi.mock('../../src/lib/neonClients', () => {
 const { deviceAuthRouter } = await import('../../src/routes/deviceAuth');
 const { authRouter } = await import('../../src/routes/auth');
 const { authenticateToken } = await import('../../src/middleware/auth');
+const { createRateLimiter } = await import('../../src/middleware/rateLimit');
 const { errorHandler } = await import('../../src/middleware/errorHandler');
 
 function createApp() {
@@ -111,7 +112,7 @@ function createApp() {
   app.use('/auth/device', deviceAuthRouter);
   app.use('/api/auth', authRouter);
   // A protected probe route so we can assert a revoked token is rejected.
-  app.get('/protected', authenticateToken, (_req, res) => {
+  app.get('/protected', createRateLimiter('default'), authenticateToken, (_req, res) => {
     res.json({ ok: true });
   });
   app.use(errorHandler);

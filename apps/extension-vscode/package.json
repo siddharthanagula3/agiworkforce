@@ -10,7 +10,7 @@
     "url": "https://github.com/siddharthanagula3/agiworkforce"
   },
   "engines": {
-    "vscode": "^1.110.0"
+    "vscode": "^1.100.0"
   },
   "preview": true,
   "pricing": "Free",
@@ -940,7 +940,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "^22.19.15",
-    "@types/vscode": "^1.110.0",
+    "@types/vscode": "^1.100.0",
     "@types/ws": "^8.18.0",
     "@typescript-eslint/eslint-plugin": "^8.57.2",
     "@typescript-eslint/parser": "^8.57.2",
