@@ -18,8 +18,8 @@ import { authenticateToken } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { createRateLimiter } from '../middleware/rateLimit';
 import { logger } from '../lib/logger';
-import { getMcpProxy, McpProxyError } from './mcpProxy';
-import { getServerEntry } from './mcpConfig';
+import { getSharedMcpCatalog, callSharedMcpTool } from './sharedClient';
+import { getServerEntry, loadMcpConfig } from './mcpConfig';
 
 const router: Router = Router();
 
@@ -48,15 +48,6 @@ const toolNameParamSchema = z.string().min(1).max(200);
 // HELPERS
 // =============================================================================
 
-async function getProxy() {
-  try {
-    return await getMcpProxy();
-  } catch (err) {
-    logger.error({ err }, 'Failed to initialize MCP proxy');
-    throw new AppError('MCP proxy is not initialized', 503);
-  }
-}
-
 function validateServerId(serverId: string | undefined): string {
   const parsed = serverIdParamSchema.safeParse(serverId);
   if (!parsed.success) {
@@ -84,18 +75,23 @@ function validateToolName(toolName: string | undefined): string {
  * SECURITY: Rate limited to 30/min (read-only list operation)
  */
 router.get('/servers', createRateLimiter('mcp-list'), async (_req: Request, res: Response) => {
-  const proxy = await getProxy();
-  const servers = proxy.listServers();
+  try {
+    const catalog = await getSharedMcpCatalog();
+    const configServers = loadMcpConfig();
 
-  res.json({
-    servers: servers.map((s) => ({
-      id: s.id,
-      name: s.name,
-      description: s.description,
-      connected: s.connected,
-      transport: s.transport,
-    })),
-  });
+    res.json({
+      servers: configServers.map((s) => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        connected: Object.prototype.hasOwnProperty.call(catalog.servers, s.id),
+        transport: s.transport.type,
+      })),
+    });
+  } catch (err) {
+    logger.error({ err }, 'Failed to retrieve MCP catalog');
+    throw new AppError('Failed to retrieve MCP catalog', 503);
+  }
 });
 
 /**
@@ -108,7 +104,6 @@ router.get(
   '/servers/:serverId/tools',
   createRateLimiter('mcp-list'),
   async (req: Request<{ serverId: string }>, res: Response) => {
-    const proxy = await getProxy();
     const serverId = validateServerId(req.params.serverId);
 
     // Verify server exists in config
@@ -118,22 +113,25 @@ router.get(
     }
 
     try {
-      const tools = await proxy.listTools(serverId);
+      const catalog = await getSharedMcpCatalog();
+      const serverCatalog = catalog.servers[serverId];
+      if (!serverCatalog) {
+        throw new AppError(`Server "${serverId}" is not connected or initialized`, 503);
+      }
 
       res.json({
         serverId,
         serverName: entry.name,
-        tools: tools.map((t) => ({
-          name: t.name,
+        tools: serverCatalog.tools.map((t) => ({
+          name: t.toolName,
           description: t.description ?? '',
           inputSchema: t.inputSchema ?? {},
         })),
       });
     } catch (err) {
-      if (err instanceof McpProxyError) {
-        throw new AppError(err.message, mapErrorCode(err.code));
-      }
-      throw err;
+      if (err instanceof AppError) throw err;
+      logger.error({ err, serverId }, 'Failed to retrieve server tools');
+      throw new AppError('Failed to retrieve server tools', 502);
     }
   },
 );
@@ -151,7 +149,6 @@ router.post(
   '/servers/:serverId/tools/:toolName/call',
   createRateLimiter('mcp-call'),
   async (req: Request<{ serverId: string; toolName: string }>, res: Response) => {
-    const proxy = await getProxy();
     const serverId = validateServerId(req.params.serverId);
     const toolName = validateToolName(req.params.toolName);
     const user = req.user;
@@ -170,17 +167,13 @@ router.post(
     }
 
     // Verify tool exists on this server
-    let tools: Awaited<ReturnType<typeof proxy.listTools>>;
-    try {
-      tools = await proxy.listTools(serverId);
-    } catch (err) {
-      if (err instanceof McpProxyError) {
-        throw new AppError(err.message, mapErrorCode(err.code));
-      }
-      throw err;
+    const catalog = await getSharedMcpCatalog();
+    const serverCatalog = catalog.servers[serverId];
+    if (!serverCatalog) {
+      throw new AppError(`Server "${serverId}" is not connected or initialized`, 503);
     }
 
-    const toolDef = tools.find((t) => t.name === toolName);
+    const toolDef = serverCatalog.tools.find((t) => t.toolName === toolName);
     if (!toolDef) {
       throw new AppError(`Tool "${toolName}" not found on server "${serverId}"`, 404);
     }
@@ -208,7 +201,7 @@ router.post(
     const startTime = Date.now();
 
     try {
-      const result = await proxy.callTool(serverId, toolName, body.arguments);
+      const result = await callSharedMcpTool(serverId, toolName, body.arguments);
       const durationMs = Date.now() - startTime;
 
       // SECURITY: Audit log after execution
@@ -251,10 +244,10 @@ router.post(
         'MCP tool call failed',
       );
 
-      if (err instanceof McpProxyError) {
-        throw new AppError(err.message, mapErrorCode(err.code));
-      }
-      throw err;
+      throw new AppError(
+        err instanceof Error ? err.message : 'MCP tool call execution failed',
+        502,
+      );
     }
   },
 );
@@ -304,30 +297,6 @@ function validateToolArguments(
   }
 
   return { valid: true };
-}
-
-/**
- * Map McpProxyError codes to HTTP status codes.
- */
-function mapErrorCode(code: string): number {
-  switch (code) {
-    case 'SERVER_NOT_FOUND':
-      return 404;
-    case 'SERVER_NOT_INITIALIZED':
-      return 503;
-    case 'TOOLS_LIST_FAILED':
-      return 502;
-    case 'REQUEST_TIMEOUT':
-      return 504;
-    case 'HTTP_ERROR':
-    case 'HTTP_REQUEST_FAILED':
-      return 502;
-    case 'WRITE_FAILED':
-    case 'SERVER_NOT_WRITABLE':
-      return 503;
-    default:
-      return 500;
-  }
 }
 
 export { router as mcpRouter };
