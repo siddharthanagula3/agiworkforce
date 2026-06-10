@@ -18,6 +18,12 @@ const ignoredParts = new Set([
   '.turbo',
   '.expo',
   'Pods',
+  '.vercel',
+  'dist-web',
+  '.vscode-test',
+  'public',
+  'playwright-report',
+  'test-results',
 ]);
 
 function exists(relativePath) {
