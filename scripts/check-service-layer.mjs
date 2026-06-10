@@ -17,6 +17,7 @@ const ignoredParts = new Set([
   '.cache',
   '.turbo',
   '.expo',
+  'Pods',
 ]);
 
 function exists(relativePath) {

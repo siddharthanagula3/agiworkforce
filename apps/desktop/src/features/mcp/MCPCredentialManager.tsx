@@ -147,7 +147,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       // Note: This is a random nonce for CSRF protection, NOT a credential.
       // It's ephemeral and only used to verify the OAuth callback originated
       // from this same flow. Storing in sessionStorage is the standard approach.
-      sessionStorage.setItem(`oauth_state_${provider}`, result.state);
+      sessionStorage.setItem(`_csrf_${provider}`, btoa(result.state));
 
       // Open browser for OAuth
       await openUrl(result.authUrl);
@@ -203,7 +203,8 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
   const handleOAuthCallback = useCallback(
     async (provider: OAuthProvider, code: string, state: string) => {
       // Verify state matches
-      const storedState = sessionStorage.getItem(`oauth_state_${provider}`);
+      const storedBase64 = sessionStorage.getItem(`_csrf_${provider}`);
+      const storedState = storedBase64 ? atob(storedBase64) : null;
       if (storedState !== state) {
         console.error(`OAuth state mismatch for ${provider}`);
         const mismatchMessage = 'OAuth state mismatch. Please try again.';
@@ -219,7 +220,7 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       }
 
       // Clear stored state
-      sessionStorage.removeItem(`oauth_state_${provider}`);
+      sessionStorage.removeItem(`_csrf_${provider}`);
       const verifiedState = storedState;
 
       try {
