@@ -846,7 +846,7 @@ describe('summarizeSendPreview', () => {
     expect(out.staysLocal).toBe(false);
     expect(out.privacyMode).toBe('byok');
     expect(out.destinationLabel).toBe('Sent to api.anthropic.com');
-    expect(out.bannerCopy).toMatch(/api.anthropic.com/);
+    expect(out.bannerCopy).toMatch(/api\.anthropic\.com/);
     expect(out.bannerCopy).toMatch(/your API key/);
   });
 

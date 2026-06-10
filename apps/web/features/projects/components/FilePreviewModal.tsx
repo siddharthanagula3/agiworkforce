@@ -167,7 +167,7 @@ function TextPreview({ storageUri, fileName, mimeType }: TextPreviewProps) {
     const lang = EXT_LANG[ext] ?? (mimeType === 'application/json' ? 'json' : 'text');
     // Escape backticks in content to prevent breaking out of the code fence.
     // Replace ``` with an escaped variant that markdown renderers won't interpret as a fence.
-    const escapedText = text.replace(/`/g, '\\`');
+    const escapedText = text.replace(/\\/g, '\\\\').replace(/`/g, '\\`');
     const fenced = `\`\`\`${lang}\n${escapedText}\n\`\`\``;
     return (
       <div

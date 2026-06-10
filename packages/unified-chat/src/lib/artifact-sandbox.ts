@@ -21,8 +21,28 @@ const CSP_META =
 const BASE_STYLES =
   `<style>` +
   `* { box-sizing: border-box; } ` +
-  `body { margin: 0; padding: 16px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: #e4e4e7; background: #18181b; } ` +
+  `:root { color-scheme: light dark; } ` +
+  `body { margin: 0; padding: 16px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.5; color: CanvasText; background: Canvas; } ` +
   `</style>`;
+
+const CSP_META_TAG_PATTERN =
+  /<meta\s+[^>]*http-equiv\s*=\s*(["']?)content-security-policy\1[^>]*>/gi;
+
+function stripCspMetaTags(content: string): string {
+  return content.replace(CSP_META_TAG_PATTERN, '');
+}
+
+function injectHeadContent(documentHtml: string, headContent: string): string {
+  if (/<head\b[^>]*>/i.test(documentHtml)) {
+    return documentHtml.replace(/<head\b[^>]*>/i, (match) => `${match}\n${headContent}`);
+  }
+
+  if (/<html\b[^>]*>/i.test(documentHtml)) {
+    return documentHtml.replace(/<html\b[^>]*>/i, (match) => `${match}<head>${headContent}</head>`);
+  }
+
+  return `${headContent}${documentHtml}`;
+}
 
 /**
  * Wrap raw HTML artifact content in a fully-formed document with our CSP meta
@@ -37,10 +57,7 @@ export function buildSandboxedHtml(content: string): string {
   const isFullDocument = /<html[\s>]/i.test(content) || /<!doctype/i.test(content);
 
   if (isFullDocument) {
-    if (/<meta[^>]*content-security-policy/i.test(content)) {
-      return content;
-    }
-    return content.replace(/<head([^>]*)>/i, `<head$1>\n${CSP_META}`);
+    return injectHeadContent(stripCspMetaTags(content), CSP_META);
   }
 
   return (
