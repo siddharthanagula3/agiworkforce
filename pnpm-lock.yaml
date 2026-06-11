@@ -554,7 +554,7 @@ importers:
         specifier: ^22.19.15
         version: 22.19.15
       '@types/vscode':
-        specifier: ^1.110.0
+        specifier: ^1.100.0
         version: 1.110.0
       '@types/ws':
         specifier: ^8.18.0
