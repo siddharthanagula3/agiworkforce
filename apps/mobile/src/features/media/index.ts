@@ -1,1 +1,1 @@
-export * from './photoPicker';
+export * from './photo-picker';
