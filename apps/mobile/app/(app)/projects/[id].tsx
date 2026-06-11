@@ -3,8 +3,7 @@ import { View, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
-import { DrawerActions } from '@react-navigation/native';
-import { ArrowLeft, LogIn, Menu } from 'lucide-react-native';
+import { ArrowLeft, Menu } from 'lucide-react-native';
 import { summarizeProjectHeader } from '@agiworkforce/types';
 import type { ProjectRecord } from '@agiworkforce/types';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
@@ -16,6 +15,7 @@ import { useProjectStore } from '@/src/features/projects/store';
 import { fetchProject } from '@/src/features/projects/service';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 
 type TabId = 'chats' | 'sources';
 
@@ -29,12 +29,10 @@ function LocalOnlyFallback({
   projectId,
   localProject,
   colors,
-  onJoinWaitlist,
 }: {
   projectId: string;
   localProject: { name: string } | undefined;
   colors: ReturnType<typeof useThemeColors>;
-  onJoinWaitlist: () => void;
 }) {
   return (
     <View
@@ -53,30 +51,8 @@ function LocalOnlyFallback({
         {localProject?.name ?? projectId}
       </Text>
       <Text style={{ fontSize: 13, color: colors.textSecondary }}>
-        Local Mode. Project details sync when you join AGI Cloud.
+        Local project. Details, chats, and sources stay on this device.
       </Text>
-      <Pressable
-        onPress={onJoinWaitlist}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          alignSelf: 'flex-start',
-          paddingHorizontal: 14,
-          paddingVertical: 8,
-          borderRadius: 8,
-          backgroundColor: colors.accentSurface,
-          borderWidth: 1,
-          borderColor: colors.accentBorder,
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Join Cloud waitlist"
-      >
-        <LogIn size={14} color={colors.teal} />
-        <Text style={{ fontSize: 13, fontWeight: '600', color: colors.teal }}>
-          Join Cloud waitlist
-        </Text>
-      </Pressable>
     </View>
   );
 }
@@ -184,12 +160,8 @@ export default function ProjectDetailScreen() {
   }, [router]);
 
   const handleOpenDrawer = useCallback(() => {
-    navigation.dispatch(DrawerActions.openDrawer());
+    openNearestDrawer(navigation);
   }, [navigation]);
-
-  const handleJoinWaitlist = useCallback(() => {
-    router.push('/(app)' as Parameters<typeof router.push>[0]);
-  }, [router]);
 
   if (!id) {
     return (
@@ -237,14 +209,7 @@ export default function ProjectDetailScreen() {
     }
 
     // error or idle — show local-only fallback (also shows tab bar below)
-    return (
-      <LocalOnlyFallback
-        projectId={id}
-        localProject={localProject}
-        colors={colors}
-        onJoinWaitlist={handleJoinWaitlist}
-      />
-    );
+    return <LocalOnlyFallback projectId={id} localProject={localProject} colors={colors} />;
   };
 
   const isLoading = fetchState.kind === 'loading';
