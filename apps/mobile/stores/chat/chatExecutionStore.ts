@@ -20,6 +20,11 @@ import { useChatViewStore, type ChatMode, type ChatStyle } from './chatViewStore
 import { retrieveMemoryContext } from '@/src/features/memory/store';
 import { buildPersonalContextBlocks } from '@/src/features/memory/services/personalContext';
 import { consolidateFactsFromTurn } from '@/src/features/memory/services/consolidation';
+import {
+  executionModeForConversation,
+  executionModeForModel,
+  providerForExecutionMode,
+} from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, MessageAttachment } from '@/types/chat';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { UploadFileInput, UploadFileResult } from '@/services/api';
@@ -215,7 +220,7 @@ function localSetupMessage(error: unknown): string {
     raw.includes('not downloaded') ||
     raw.includes('not available on this device')
   ) {
-    return 'Local Mode is active, but no on-device model is ready yet. Open Models to download a local model or request AGI Cloud access.';
+    return 'Local Mode is active, but no on-device model is ready yet. Open Models to download or select a local model.';
   }
   return (
     raw ||
@@ -342,11 +347,33 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
+    const msgStore = getMsgStore();
+    const conversation = msgStore.getState().conversations.find((c) => c.id === conversationId);
     const cloudUnlocked = useWaitlistStore.getState().cloudUnlocked;
     const remoteDisabledReason = getRemoteChatDisabledReason(undefined, { cloudUnlocked });
     const isCloudModel = isCloudManagedModelId(model);
-    const shouldUseLocalRuntime = isSelectableModelId(model);
-    if (isCloudModel && remoteDisabledReason) {
+    const executionMode = conversation
+      ? executionModeForConversation(conversation)
+      : executionModeForModel(model);
+    const provider = providerForExecutionMode(executionMode);
+    const shouldUseLocalRuntime = executionMode === 'local' && isSelectableModelId(model);
+    if (executionMode === 'local' && isCloudModel) {
+      set({
+        error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
+        paywallError: null,
+        isStreaming: streamingConversations.size > 0,
+      });
+      return;
+    }
+    if (executionMode === 'cloud' && !isCloudModel) {
+      set({
+        error: 'This is an AGI Cloud chat. Start a separate Local Mode chat to use local models.',
+        paywallError: null,
+        isStreaming: streamingConversations.size > 0,
+      });
+      return;
+    }
+    if (executionMode === 'cloud' && remoteDisabledReason) {
       set({
         error: remoteDisabledReason,
         paywallError: null,
@@ -408,7 +435,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       model,
     };
 
-    const msgStore = getMsgStore();
     const existingMessages = msgStore.getState().messages[conversationId] ?? [];
 
     const historyMessages: Array<{
@@ -458,24 +484,25 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       historyMessages.push({ role: 'user', content: messageContent });
     }
 
-    const projectState = useProjectStore.getState();
-    if (projectState.activeProjectId) {
-      const activeProject = projectState.projects.find(
-        (p) => p.id === projectState.activeProjectId,
-      );
+    const projectState = executionMode === 'local' ? useProjectStore.getState() : null;
+    const localProjectId = projectState?.activeProjectId ?? null;
+    if (projectState && localProjectId) {
+      const activeProject = projectState.projects.find((p) => p.id === localProjectId);
       if (activeProject?.instructions?.trim()) {
         historyMessages.unshift({ role: 'system', content: activeProject.instructions.trim() });
       }
     }
 
-    const chatViewState = useChatViewStore.getState();
-    const viewSystemPrompt = buildChatViewSystemPrompt(
-      options?.mode ?? chatViewState.chatMode,
-      options?.style ?? chatViewState.chatStyle,
-      options?.taskInstruction,
-    );
-    if (viewSystemPrompt) {
-      historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
+    if (executionMode === 'local') {
+      const chatViewState = useChatViewStore.getState();
+      const viewSystemPrompt = buildChatViewSystemPrompt(
+        options?.mode ?? chatViewState.chatMode,
+        options?.style ?? chatViewState.chatStyle,
+        options?.taskInstruction,
+      );
+      if (viewSystemPrompt) {
+        historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
+      }
     }
 
     // Resolve per-conversation reasoning effort for the remote API path.
@@ -483,27 +510,29 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // not expose an equivalent effort axis.
     const agentControl = useAgentControlStore
       .getState()
-      .resolve(conversationId, projectState.activeProjectId);
+      .resolve(conversationId, executionMode === 'local' ? localProjectId : null);
 
-    // Inject personalization + top-K relevant memories as system context.
-    // A pure composer decides block content + order ([persona, memory]); any
-    // failure here must never block a chat turn (graceful, on-device).
-    try {
-      const memFacts = await retrieveMemoryContext(content, 5);
-      const { personalization } = useSettingsStore.getState();
-      const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
-      // Unshift in reverse so the final order is [persona, memory, ...existing].
-      for (let i = blocks.length - 1; i >= 0; i -= 1) {
-        historyMessages.unshift(blocks[i]);
+    if (executionMode === 'local') {
+      // Inject personalization + top-K relevant memories as system context.
+      // A pure composer decides block content + order ([persona, memory]); any
+      // failure here must never block a chat turn (graceful, on-device).
+      try {
+        const memFacts = await retrieveMemoryContext(content, 5);
+        const { personalization } = useSettingsStore.getState();
+        const blocks = buildPersonalContextBlocks({ personalization, memories: memFacts });
+        // Unshift in reverse so the final order is [persona, memory, ...existing].
+        for (let i = blocks.length - 1; i >= 0; i -= 1) {
+          historyMessages.unshift(blocks[i]);
+        }
+      } catch {
+        // Non-fatal: memory/personalization injection must never block a local chat turn.
       }
-    } catch {
-      // Non-fatal: memory/personalization injection must never block a chat turn.
     }
 
     // Learn from this turn: extract durable facts from the user's message and
     // persist new ones (deduped). Fire-and-forget — never await, never block the
     // turn — and skip entirely in temporary/incognito chats.
-    if (!useSettingsStore.getState().isTemporaryChat) {
+    if (executionMode === 'local' && !useSettingsStore.getState().isTemporaryChat) {
       void consolidateFactsFromTurn({ message: content, conversationId });
     }
 
@@ -520,7 +549,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     msgStore.setState((state) => ({
       conversations: state.conversations.map((c) =>
         c.id === conversationId
-          ? { ...c, lastMessage: content, updatedAt: new Date().toISOString() }
+          ? {
+              ...c,
+              lastMessage: content,
+              updatedAt: new Date().toISOString(),
+              model: c.model ?? model,
+              provider: c.provider ?? provider,
+              executionMode: c.executionMode ?? executionMode,
+            }
           : c,
       ),
     }));
@@ -678,6 +714,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   lastMessage: finalContent.slice(0, 100),
                   messageCount: (c.messageCount ?? 0) + 2,
                   updatedAt: new Date().toISOString(),
+                  model: c.model ?? model,
+                  provider: c.provider ?? provider,
+                  executionMode: c.executionMode ?? executionMode,
                 }
               : c,
           ),
@@ -759,18 +798,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             abortControllers.delete(conversationId);
             streamingConversations.delete(conversationId);
 
-            // Extract code-block artifacts from the completed remote response.
-            const remoteConvTitle =
-              currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
-                ?.title ?? '';
-            captureArtifactsFromMessage(
-              finalContent,
-              assistantMessageId,
-              conversationId,
-              remoteConvTitle,
-              new Date().toISOString(),
-            );
-
             currentMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
               conversations: s.conversations.map((c) =>
@@ -780,6 +807,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       lastMessage: preview,
                       messageCount: (c.messageCount ?? 0) + 2,
                       updatedAt: new Date().toISOString(),
+                      model: c.model ?? model,
+                      provider: c.provider ?? provider,
+                      executionMode: c.executionMode ?? executionMode,
                     }
                   : c,
               ),
