@@ -2,10 +2,11 @@
  * Cloud waitlist capture sheet — surfaces when the user taps the locked Cloud
  * side of the ModeToggle (or any other cloud-gated entry point).
  *
- * Three internal states:
- *   1. `entry`     — email + country form
- *   2. `submitting`— loading state during onSubmit()
- *   3. `confirmed` — success state with rank
+ * Four internal states:
+ *   1. `entry`      — email + country form
+ *   2. `submitting` — loading state during onSubmit()
+ *   3. `confirmed`  — success state with rank
+ *   4. `error`      — submission failure with retry
  *
  * The caller wires `onSubmit({email, country})` to the Web/API persistence
  * layer. The component is unopinionated about how the row is stored.
@@ -22,9 +23,11 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Cloud as CloudIcon, X, Check, ChevronDown } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { Cloud as CloudIcon, X, Check, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { useSettingsStore } from '@/stores/settingsStore';
 
 export interface WaitlistSubmission {
   email: string;
@@ -61,6 +64,7 @@ export function CloudWaitlistSheet({
   onJoined,
 }: CloudWaitlistSheetProps) {
   const colors = useThemeColors();
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [state, setState] = useState<SheetState>('entry');
   const [email, setEmail] = useState('');
   const [country] = useState(defaultCountry);
@@ -69,6 +73,12 @@ export function CloudWaitlistSheet({
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const submitting = state === 'submitting';
+
+  const triggerHaptic = (style: Haptics.ImpactFeedbackStyle) => {
+    if (hapticsEnabled) {
+      Haptics.impactAsync(style);
+    }
+  };
 
   const reset = () => {
     setState('entry');
@@ -89,11 +99,13 @@ export function CloudWaitlistSheet({
 
   const handleSubmit = async () => {
     if (!isValidEmail) {
-      setError('Please enter a valid email address.');
+      setError('Enter a valid email address.');
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
       return;
     }
     setError(null);
     setState('submitting');
+    triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     try {
       const res = await onSubmit({
         email: email.trim().toLowerCase(),
@@ -101,10 +113,17 @@ export function CloudWaitlistSheet({
       });
       setResult(res);
       setState('confirmed');
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Medium);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
       setState('error');
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const handleRetry = () => {
+    setState('entry');
+    setError(null);
   };
 
   return (
@@ -134,6 +153,7 @@ export function CloudWaitlistSheet({
         >
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <SafeAreaView edges={['bottom']}>
+              {/* Drag handle */}
               <View
                 style={{
                   width: 40,
@@ -146,6 +166,7 @@ export function CloudWaitlistSheet({
                 }}
               />
 
+              {/* Close button row */}
               <View
                 style={{
                   flexDirection: 'row',
@@ -166,17 +187,37 @@ export function CloudWaitlistSheet({
                 </Pressable>
               </View>
 
-              <ScrollView keyboardShouldPersistTaps="handled" style={{ paddingHorizontal: 22 }}>
-                {state === 'confirmed' && result
-                  ? renderConfirmed({ colors, email, country, rank: result.rank })
-                  : renderEntry({
-                      colors,
-                      email,
-                      setEmail,
-                      country,
-                      error,
-                      submitting,
-                    })}
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                style={{ paddingHorizontal: 22 }}
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
+                {state === 'confirmed' && result ? (
+                  <ConfirmedView
+                    colors={colors}
+                    email={email}
+                    country={country}
+                    rank={result.rank}
+                  />
+                ) : state === 'error' ? (
+                  <ErrorView
+                    colors={colors}
+                    message={error ?? 'Something went wrong. Try again.'}
+                    onRetry={handleRetry}
+                  />
+                ) : (
+                  <EntryView
+                    colors={colors}
+                    email={email}
+                    setEmail={(t) => {
+                      setEmail(t);
+                      if (error) setError(null);
+                    }}
+                    country={country}
+                    error={error}
+                    submitting={submitting}
+                  />
+                )}
               </ScrollView>
 
               <View style={{ paddingHorizontal: 22, paddingTop: 12, paddingBottom: 16 }}>
@@ -193,8 +234,29 @@ export function CloudWaitlistSheet({
                       alignItems: 'center',
                     }}
                   >
-                    <Text style={{ color: colors.white, fontSize: 16, fontWeight: '600' }}>
+                    <Text style={{ color: colors.accentText, fontSize: 16, fontWeight: '600' }}>
                       Continue on-device
+                    </Text>
+                  </Pressable>
+                ) : state === 'error' ? (
+                  <Pressable
+                    testID="cloud-waitlist-retry-btn"
+                    onPress={handleRetry}
+                    accessibilityRole="button"
+                    accessibilityLabel="Try again"
+                    style={{
+                      backgroundColor: colors.surfaceHover,
+                      borderRadius: 14,
+                      paddingVertical: 16,
+                      alignItems: 'center',
+                      flexDirection: 'row',
+                      justifyContent: 'center',
+                      gap: 8,
+                    }}
+                  >
+                    <RotateCcw size={16} color={colors.textSecondary} strokeWidth={2} />
+                    <Text style={{ color: colors.textSecondary, fontSize: 16, fontWeight: '600' }}>
+                      Try again
                     </Text>
                   </Pressable>
                 ) : (
@@ -204,6 +266,7 @@ export function CloudWaitlistSheet({
                     disabled={!isValidEmail || submitting}
                     accessibilityRole="button"
                     accessibilityLabel="Join the cloud waitlist"
+                    accessibilityState={{ disabled: !isValidEmail || submitting, busy: submitting }}
                     style={{
                       backgroundColor:
                         isValidEmail && !submitting ? colors.teal : colors.surfaceHover,
@@ -215,10 +278,10 @@ export function CloudWaitlistSheet({
                       gap: 8,
                     }}
                   >
-                    {submitting && <ActivityIndicator size="small" color={colors.white} />}
+                    {submitting && <ActivityIndicator size="small" color={colors.accentText} />}
                     <Text
                       style={{
-                        color: isValidEmail && !submitting ? colors.white : colors.textMuted,
+                        color: isValidEmail && !submitting ? colors.accentText : colors.textMuted,
                         fontSize: 16,
                         fontWeight: '600',
                       }}
@@ -247,7 +310,11 @@ export function CloudWaitlistSheet({
   );
 }
 
-function renderEntry({
+// ---------------------------------------------------------------------------
+// Entry state
+// ---------------------------------------------------------------------------
+
+function EntryView({
   colors,
   email,
   setEmail,
@@ -263,7 +330,8 @@ function renderEntry({
   submitting: boolean;
 }) {
   return (
-    <View>
+    <View style={{ paddingBottom: 4 }}>
+      {/* Cloud icon */}
       <View
         style={{
           width: 56,
@@ -279,10 +347,11 @@ function renderEntry({
 
       <Text
         style={{
-          fontSize: 28,
+          fontSize: 26,
           fontWeight: '700',
           color: colors.textPrimary,
           marginTop: 14,
+          letterSpacing: -0.3,
           lineHeight: 32,
         }}
       >
@@ -294,14 +363,15 @@ function renderEntry({
           fontSize: 14,
           color: colors.textSecondary,
           marginTop: 8,
-          lineHeight: 20,
+          lineHeight: 21,
         }}
       >
-        v1 runs entirely on your device. Cloud unlocks bigger models, web search, and computer-use.
-        Join the waitlist and we'll email you.
+        v1 runs entirely on your device. Cloud unlocks bigger models, web search, and computer-use —
+        invite-only for now.
       </Text>
 
-      <View style={{ marginTop: 22 }}>
+      {/* Email field */}
+      <View style={{ marginTop: 24 }}>
         <Text
           style={{
             fontSize: 11,
@@ -315,6 +385,7 @@ function renderEntry({
         </Text>
         <TextInput
           testID="cloud-waitlist-email-input"
+          accessibilityLabel="Email address"
           value={email}
           onChangeText={setEmail}
           placeholder="you@example.com"
@@ -324,6 +395,7 @@ function renderEntry({
           autoCorrect={false}
           autoComplete="email"
           editable={!submitting}
+          returnKeyType="go"
           style={{
             marginTop: 6,
             paddingHorizontal: 14,
@@ -336,11 +408,17 @@ function renderEntry({
             color: colors.textPrimary,
           }}
         />
-        {error && (
-          <Text style={{ marginTop: 6, fontSize: 12, color: colors.agentError }}>{error}</Text>
-        )}
+        {error ? (
+          <Text
+            accessibilityRole="alert"
+            style={{ marginTop: 6, fontSize: 12, color: colors.agentError }}
+          >
+            {error}
+          </Text>
+        ) : null}
       </View>
 
+      {/* Region display */}
       <View style={{ marginTop: 14 }}>
         <Text
           style={{
@@ -351,7 +429,7 @@ function renderEntry({
             fontWeight: '600',
           }}
         >
-          Country · optional · helps us price fairly
+          Region
         </Text>
         <View
           style={{
@@ -369,15 +447,17 @@ function renderEntry({
           <Text style={{ fontSize: 15, color: colors.textPrimary }}>
             {country.flag} {country.name}
           </Text>
-          <View style={{ flex: 1 }} />
-          <ChevronDown size={16} color={colors.textMuted} />
         </View>
       </View>
     </View>
   );
 }
 
-function renderConfirmed({
+// ---------------------------------------------------------------------------
+// Confirmed state
+// ---------------------------------------------------------------------------
+
+function ConfirmedView({
   colors,
   email,
   country,
@@ -389,7 +469,8 @@ function renderConfirmed({
   rank: number;
 }) {
   return (
-    <View style={{ alignItems: 'center', paddingTop: 8 }}>
+    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+      {/* Success circle */}
       <View
         style={{
           width: 80,
@@ -405,41 +486,51 @@ function renderConfirmed({
 
       <Text
         style={{
-          fontSize: 28,
+          fontSize: 26,
           fontWeight: '700',
           color: colors.textPrimary,
-          marginTop: 16,
+          marginTop: 18,
+          letterSpacing: -0.3,
+          textAlign: 'center',
         }}
       >
         You're confirmed.
       </Text>
 
-      <Text
+      {/* Rank badge */}
+      <View
         style={{
-          fontSize: 16,
-          fontWeight: '600',
-          color: colors.teal,
-          marginTop: 8,
+          marginTop: 12,
+          paddingHorizontal: 16,
+          paddingVertical: 8,
+          borderRadius: 20,
+          backgroundColor: colors.successSurface,
+          borderWidth: 1,
+          borderColor: colors.successBorder,
         }}
-        testID="cloud-waitlist-rank"
       >
-        {/* rank is 0-indexed from server (count of earlier rows); display as 1-indexed */}#
-        {(rank + 1).toLocaleString('en-US')} in line
-      </Text>
+        <Text
+          testID="cloud-waitlist-rank"
+          style={{ fontSize: 15, fontWeight: '600', color: colors.agentSuccess }}
+        >
+          #{(rank + 1).toLocaleString('en-US')} in line
+        </Text>
+      </View>
 
       <Text
         style={{
           fontSize: 14,
           color: colors.textSecondary,
-          marginTop: 12,
+          marginTop: 14,
           textAlign: 'center',
-          lineHeight: 20,
-          maxWidth: 320,
+          lineHeight: 21,
+          maxWidth: 300,
         }}
       >
         We'll email you when cloud opens. No date promised yet — we'll let you in in waves.
       </Text>
 
+      {/* Receipt strip */}
       <View
         style={{
           marginTop: 18,
@@ -455,6 +546,66 @@ function renderConfirmed({
           {email} · {country.flag} · joined {formatToday()}
         </Text>
       </View>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Error state
+// ---------------------------------------------------------------------------
+
+function ErrorView({
+  colors,
+  message,
+  onRetry,
+}: {
+  colors: ReturnType<typeof useThemeColors>;
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 8 }}>
+      {/* Error surface */}
+      <View
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: 36,
+          backgroundColor: colors.dangerSurface,
+          borderWidth: 1,
+          borderColor: colors.dangerBorder,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <X size={32} color={colors.agentError} strokeWidth={2.5} />
+      </View>
+
+      <Text
+        style={{
+          fontSize: 20,
+          fontWeight: '700',
+          color: colors.textPrimary,
+          marginTop: 16,
+          textAlign: 'center',
+        }}
+      >
+        Something went wrong.
+      </Text>
+
+      <Text
+        style={{
+          fontSize: 14,
+          color: colors.textSecondary,
+          marginTop: 8,
+          textAlign: 'center',
+          lineHeight: 21,
+          maxWidth: 300,
+        }}
+        accessibilityRole="alert"
+      >
+        {message}
+      </Text>
     </View>
   );
 }
