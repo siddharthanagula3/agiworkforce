@@ -8,7 +8,7 @@ Purpose: Mobile media-picking helpers for converting user-selected photos into c
 ## Public API
 
 - `index.ts` is the domain import surface.
-- `photoPicker.ts` owns image-library selection and conversion to chat attachments.
+- `photo-picker.ts` owns image-library selection and conversion to chat attachments.
 
 ## Rules
 
