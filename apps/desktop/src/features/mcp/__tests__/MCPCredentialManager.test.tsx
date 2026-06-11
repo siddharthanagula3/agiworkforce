@@ -47,6 +47,9 @@ const servers: McpServerInfo[] = [
 
 describe('MCPCredentialManager', () => {
   let mcpMock: McpClientMocks;
+  const storeOAuthState = (provider: string, state: string) => {
+    sessionStorage.setItem(`_csrf_${provider}`, btoa(state));
+  };
 
   beforeEach(async () => {
     sessionStorage.clear();
@@ -65,7 +68,7 @@ describe('MCPCredentialManager', () => {
   });
 
   it('rejects deep-link callbacks when OAuth state mismatches', async () => {
-    sessionStorage.setItem('oauth_state_github', 'trusted-state');
+    storeOAuthState('github', 'trusted-state');
 
     render(<MCPCredentialManager servers={servers} />);
 
@@ -86,7 +89,7 @@ describe('MCPCredentialManager', () => {
   });
 
   it('completes OAuth using the stored verified state', async () => {
-    sessionStorage.setItem('oauth_state_github', 'trusted-state');
+    storeOAuthState('github', 'trusted-state');
 
     render(<MCPCredentialManager servers={servers} />);
 
@@ -103,6 +106,6 @@ describe('MCPCredentialManager', () => {
     await waitFor(() =>
       expect(mcpMock.oauthCallback).toHaveBeenCalledWith('github', 'abc123', 'trusted-state'),
     );
-    expect(sessionStorage.getItem('oauth_state_github')).toBeNull();
+    expect(sessionStorage.getItem('_csrf_github')).toBeNull();
   });
 });
