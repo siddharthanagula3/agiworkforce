@@ -134,8 +134,8 @@ export default function ProjectDetailScreen() {
 
   const loadProject = useCallback(async () => {
     if (!id) return;
-    if (!FEATURES.auth) {
-      setFetchState({ kind: 'error', message: 'no-auth' });
+    if (!FEATURES.auth || !FEATURES.crossDeviceSync) {
+      setFetchState({ kind: 'error', message: 'local-only' });
       return;
     }
     setFetchState({ kind: 'loading' });
