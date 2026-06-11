@@ -137,6 +137,10 @@ export interface ConversationSummary {
   pinned: boolean;
   lastMessage?: string;
   model?: string;
+  /** Provider used in this conversation. Local Mode uses "local"; AGI Cloud uses "cloud_managed". */
+  provider?: string;
+  /** Local and Cloud histories are separate privacy boundaries on mobile. */
+  executionMode?: 'local' | 'cloud';
   tags?: string[];
   /** Optional project ID this conversation belongs to */
   projectId?: string;
