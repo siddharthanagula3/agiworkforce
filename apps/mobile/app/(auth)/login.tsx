@@ -20,28 +20,59 @@ export default function LoginScreen() {
           contentContainerClassName="flex-1 justify-center px-6"
           keyboardShouldPersistTaps="handled"
         >
-          <View className="gap-8">
-            {/* Logo + Title */}
-            <View className="items-center gap-3">
+          <View style={{ gap: 40, paddingVertical: 32 }}>
+            {/* Logo + heading */}
+            <View style={{ alignItems: 'center', gap: 12 }}>
               <View
-                className="w-16 h-16 rounded-2xl items-center justify-center"
-                style={{ backgroundColor: colors.teal }}
+                accessibilityRole="image"
+                accessibilityLabel="AGI logo"
+                style={{
+                  width: 72,
+                  height: 72,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.teal,
+                }}
               >
-                <Text className="text-2xl font-bold" style={{ color: colors.accentText }}>
+                <Text
+                  style={{ fontSize: 26, fontWeight: '700', color: colors.accentText }}
+                  accessibilityElementsHidden
+                >
                   AG
                 </Text>
               </View>
-              <Text variant="heading" className="text-center">
-                AGI Workforce
+
+              <Text
+                style={{
+                  fontSize: 30,
+                  fontWeight: '700',
+                  color: colors.textPrimary,
+                  letterSpacing: -0.5,
+                  textAlign: 'center',
+                }}
+              >
+                AGI
               </Text>
-              <Text className="text-center" style={{ color: colors.textMuted }}>
-                Your AI desktop agent, in your pocket.
+
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: colors.textSecondary,
+                  textAlign: 'center',
+                  lineHeight: 20,
+                  maxWidth: 280,
+                }}
+              >
+                Cloud access is invite-only. Sign in below if you have an account.
               </Text>
             </View>
 
             {/* Auth form */}
-            <LoginForm />
-            <OAuthButtons />
+            <View style={{ gap: 16 }}>
+              <LoginForm />
+              <OAuthButtons />
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
