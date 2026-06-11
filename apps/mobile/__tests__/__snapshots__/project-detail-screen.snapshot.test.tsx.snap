@@ -175,72 +175,8 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           }
         }
       >
-        Local Mode. Project details sync when you join AGI Cloud.
+        Local project. Details, chats, and sources stay on this device.
       </Text>
-      <View
-        accessibilityLabel="Join Cloud waitlist"
-        accessibilityRole="button"
-        accessibilityState={
-          {
-            "busy": undefined,
-            "checked": undefined,
-            "disabled": undefined,
-            "expanded": undefined,
-            "selected": undefined,
-          }
-        }
-        accessibilityValue={
-          {
-            "max": undefined,
-            "min": undefined,
-            "now": undefined,
-            "text": undefined,
-          }
-        }
-        accessible={true}
-        collapsable={false}
-        focusable={true}
-        onBlur={[Function]}
-        onClick={[Function]}
-        onFocus={[Function]}
-        onResponderGrant={[Function]}
-        onResponderMove={[Function]}
-        onResponderRelease={[Function]}
-        onResponderTerminate={[Function]}
-        onResponderTerminationRequest={[Function]}
-        onStartShouldSetResponder={[Function]}
-        style={
-          {
-            "alignItems": "center",
-            "alignSelf": "flex-start",
-            "backgroundColor": "rgba(244, 244, 244, 0.12)",
-            "borderColor": "rgba(244, 244, 244, 0.24)",
-            "borderRadius": 8,
-            "borderWidth": 1,
-            "flexDirection": "row",
-            "gap": 6,
-            "paddingHorizontal": 14,
-            "paddingVertical": 8,
-          }
-        }
-      >
-        <View
-          color="#f4f4f4"
-          size={14}
-          testID="icon-log-in"
-        />
-        <Text
-          style={
-            {
-              "color": "#f4f4f4",
-              "fontSize": 13,
-              "fontWeight": "600",
-            }
-          }
-        >
-          Join Cloud waitlist
-        </Text>
-      </View>
     </View>
     <View
       style={
