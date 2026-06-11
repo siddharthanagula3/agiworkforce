@@ -44,6 +44,12 @@
       "status": "active-audit-evidence",
       "owner": "Platform lead",
       "reason": "Current website and desktop demo-readiness ledgers reference these captures as user-visible verification evidence."
+    },
+    {
+      "path": "reports/generated/**",
+      "status": "active-generated-qa-output",
+      "owner": "QA/design/platform",
+      "reason": "Current manual and browser QA screenshots produced during demo-readiness work. Summarize durable findings into reports or docs before archiving old captures."
     }
   ],
   "rebuildRequired": [
