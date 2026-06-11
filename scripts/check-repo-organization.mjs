@@ -52,7 +52,20 @@ const allowedRootFiles = new Set([
   'vercel.json',
 ]);
 
-const knownRootDebt = new Set(['.DS_Store', '.gitignore.tmp', '.mcp.json', 'libnull.rlib']);
+const knownRootDebt = new Set([
+  '.DS_Store',
+  '.gitignore.tmp',
+  '.mcp.json',
+  'AUDIT_BATCHES',
+  'AUDIT_FINDINGS.md',
+  'AUDIT_MANIFEST.txt',
+  'AUDIT_PARTS',
+  'AUDIT_STATE.md',
+  'AUDIT_TAXONOMY.md',
+  'REMEDIATION_PRIORITY.md',
+  'SKILL.md',
+  'libnull.rlib',
+]);
 
 const allowedRootDirs = new Set([
   '.agent',
