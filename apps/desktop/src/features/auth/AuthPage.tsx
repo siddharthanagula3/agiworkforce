@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Bot, CheckCircle2, KeyRound, Laptop, Loader2, Shield } from 'lucide-react';
+import { motion, type HTMLMotionProps } from 'framer-motion';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Cpu,
+  Globe,
+  KeyRound,
+  Layers,
+  Loader2,
+  Lock,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react';
 import { AuthForm } from './AuthForm';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { Button } from '@/components/ui/Button';
@@ -12,28 +23,53 @@ interface AuthPageProps {
 
 type PageState = 'auth' | 'verifying' | 'verified' | 'error';
 
-const cloudSyncPoints = [
+const trustPoints = [
   {
-    icon: Bot,
-    title: 'Cloud workspace',
-    description: 'Chats and projects sync across AGI web, desktop, and mobile.',
-  },
-  {
-    icon: Laptop,
-    title: 'Local remains available',
-    description: 'Desktop local mode keeps working with local models when you are signed out.',
+    icon: Lock,
+    label: 'Local stays local',
+    description: 'Local mode never leaves your device — no account required.',
   },
   {
     icon: KeyRound,
-    title: 'BYOK stays yours',
-    description: 'Provider keys remain user-controlled; AGI Cloud is a separate account mode.',
+    label: 'BYOK on Desktop + CLI',
+    description: 'Your provider keys are user-controlled and never stored by AGI Cloud.',
+  },
+  {
+    icon: Sparkles,
+    label: 'Cloud by invite',
+    description: 'Cloud workspace is invite-only. Sign up to join the waitlist.',
   },
 ];
+
+type MotionVariant = Partial<Pick<HTMLMotionProps<'div'>, 'initial' | 'animate' | 'transition'>>;
+
+/** Framer Motion variants — collapse to no-op when reduced-motion is preferred */
+function useMotionVariants(): { fadeUp: MotionVariant; scaleIn: MotionVariant } {
+  const reduced =
+    typeof window !== 'undefined'
+      ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      : false;
+  if (reduced) {
+    return { fadeUp: {}, scaleIn: {} };
+  }
+  return {
+    fadeUp: {
+      initial: { opacity: 0, y: 20 },
+      animate: { opacity: 1, y: 0 },
+    },
+    scaleIn: {
+      initial: { scale: 0 },
+      animate: { scale: 1 },
+      transition: { type: 'spring', delay: 0.2 },
+    },
+  };
+}
 
 export function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [pageState, setPageState] = useState<PageState>('auth');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const timeoutIdsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const { fadeUp, scaleIn } = useMotionVariants();
 
   useEffect(() => {
     const scheduleTimeout = (fn: () => void, ms: number) => {
@@ -60,7 +96,6 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       }
 
       if (accessToken && refreshToken) {
-        // Manually set session if tokens are present
         cloudAccountAuth.setSession({ access_token: accessToken, refresh_token: refreshToken });
       }
 
@@ -92,14 +127,12 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
           const isAuth = cloudAccountAuth.isAuthenticated();
           if (isAuth) {
             setPageState('verified');
-            // Clear URL hash
             window.history.replaceState(null, '', window.location.pathname);
 
             scheduleTimeout(() => {
               onAuthSuccess?.();
             }, 2000);
           } else {
-            // Retry session check just in case
             cloudAccountAuth.checkSession().then(() => {
               if (cloudAccountAuth.isAuthenticated()) {
                 setPageState('verified');
@@ -113,7 +146,6 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
         return;
       }
 
-      // Default case if just access token without specific type (e.g. OAuth implicit)
       if (accessToken) {
         setPageState('verifying');
         scheduleTimeout(() => {
@@ -134,14 +166,12 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
       }
     };
 
-    // 1. Check window hash on mount (for web or if opened directly)
     const hash = window.location.hash;
     if (hash) {
       const params = new URLSearchParams(hash.substring(1));
       processAuthParams(Object.fromEntries(params.entries()));
     }
 
-    // 2. Listen for deep link events (for desktop app)
     const handleDeepLink = (event: Event) => {
       const customEvent = event as CustomEvent;
       if (customEvent.detail) {
@@ -159,41 +189,58 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
     };
   }, [onAuthSuccess]);
 
-  if (pageState === 'verified') {
+  /* ------------------------------------------------------------------ */
+  /* Deep-link state screens                                              */
+  /* ------------------------------------------------------------------ */
+
+  if (pageState === 'verifying') {
     return (
       <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center max-w-md"
+          {...fadeUp}
+          transition={{ duration: 0.3 }}
+          className="flex flex-col items-center gap-5 text-center"
+          role="status"
+          aria-live="polite"
+          aria-label="Verifying your account"
         >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', delay: 0.2 }}
-            className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-emerald-500"
-          >
-            <CheckCircle2 className="h-10 w-10 text-white" />
-          </motion.div>
-          <h1 className="mb-4 text-3xl font-bold text-foreground">Email verified</h1>
-          <p className="text-muted-foreground mb-6">
-            Your account has been verified successfully. You'll be redirected to AGI shortly.
-          </p>
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Redirecting...</span>
+          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-card shadow-sm">
+            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" aria-hidden="true" />
+          </div>
+          <div>
+            <p className="text-base font-medium text-foreground">Verifying your account</p>
+            <p className="mt-1 text-sm text-muted-foreground">This will only take a moment.</p>
           </div>
         </motion.div>
       </div>
     );
   }
 
-  if (pageState === 'verifying') {
+  if (pageState === 'verified') {
     return (
       <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center">
-          <Loader2 className="mx-auto mb-4 h-10 w-10 animate-spin text-foreground" />
-          <p className="text-muted-foreground">Verifying your account...</p>
+        <motion.div
+          {...fadeUp}
+          transition={{ duration: 0.3 }}
+          className="flex flex-col items-center gap-5 text-center"
+          role="status"
+          aria-live="polite"
+          aria-label="Account verified"
+        >
+          <motion.div
+            {...scaleIn}
+            className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-sm"
+          >
+            <CheckCircle2 className="h-8 w-8 text-white" aria-hidden="true" />
+          </motion.div>
+          <div>
+            <p className="text-base font-medium text-foreground">Account verified</p>
+            <p className="mt-1 text-sm text-muted-foreground">Signing you in to AGI now&hellip;</p>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground" aria-hidden="true">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <span>Redirecting</span>
+          </div>
         </motion.div>
       </div>
     );
@@ -203,112 +250,130 @@ export function AuthPage({ onAuthSuccess }: AuthPageProps) {
     return (
       <div className="flex h-full min-h-full items-center justify-center bg-background p-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md rounded-2xl border border-border bg-card p-8 text-center shadow-xl"
+          {...fadeUp}
+          transition={{ duration: 0.3 }}
+          className="w-full max-w-sm"
+          role="alert"
         >
-          <div className="mb-6 inline-flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10">
-            <Shield className="h-7 w-7 text-destructive" />
+          <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-lg">
+            <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10">
+              <AlertTriangle className="h-6 w-6 text-destructive" aria-hidden="true" />
+            </div>
+            <h1 className="mb-2 text-xl font-semibold text-foreground">Authentication failed</h1>
+            <p className="mb-6 text-sm leading-relaxed text-muted-foreground">
+              {errorMessage || 'An error occurred during sign-in. Please try again.'}
+            </p>
+            <Button
+              onClick={() => {
+                setPageState('auth');
+                setErrorMessage(null);
+                window.history.replaceState(null, '', window.location.pathname);
+              }}
+              className="w-full"
+            >
+              <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              Try again
+            </Button>
           </div>
-          <h1 className="mb-4 text-2xl font-bold text-foreground">Something went wrong</h1>
-          <p className="text-muted-foreground mb-6">
-            {errorMessage || 'An error occurred during authentication.'}
-          </p>
-          <Button
-            onClick={() => {
-              setPageState('auth');
-              setErrorMessage(null);
-              window.history.replaceState(null, '', window.location.pathname);
-            }}
-            className="w-full bg-foreground text-background hover:bg-foreground/90"
-          >
-            Try again
-          </Button>
         </motion.div>
       </div>
     );
   }
 
+  /* ------------------------------------------------------------------ */
+  /* Main auth layout: split left aside + right form                     */
+  /* ------------------------------------------------------------------ */
+
   return (
     <div className="flex h-full min-h-full bg-background">
-      <aside className="hidden w-[42%] min-w-[360px] border-r border-border bg-muted/20 lg:flex">
-        <div className="flex w-full flex-col justify-center px-12 py-10 text-foreground">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="mb-10 flex items-center gap-3"
+      {/* ---- Left marketing aside (hidden on small screens) ---- */}
+      <aside
+        className="hidden w-[42%] min-w-[360px] flex-col justify-between border-r border-border bg-muted/20 px-12 py-10 lg:flex"
+        aria-label="AGI Cloud overview"
+      >
+        {/* Brand mark */}
+        <motion.div
+          {...fadeUp}
+          transition={{ delay: 0.15, duration: 0.4 }}
+          className="flex items-center gap-2.5"
+        >
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-xl bg-foreground text-background"
+            aria-hidden="true"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-foreground text-background">
-              <Bot className="h-5 w-5" />
-            </div>
-            <span className="text-xl font-semibold tracking-tight">AGI</span>
-          </motion.div>
+            <Cpu className="h-4.5 w-4.5" />
+          </div>
+          <span className="text-lg font-semibold tracking-tight text-foreground">AGI</span>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="mb-10"
-          >
-            <h1 className="mb-4 max-w-md text-4xl font-semibold leading-tight tracking-tight">
-              Sign in to sync your AGI workspace.
-            </h1>
-            <p className="max-w-md text-base leading-7 text-muted-foreground">
-              Cloud mode stores chats, projects, and account settings in your AGI workspace so the
-              same context follows you across surfaces.
-            </p>
-          </motion.div>
+        {/* Headline + sub-copy */}
+        <motion.div {...fadeUp} transition={{ delay: 0.25, duration: 0.4 }} className="-mt-6">
+          <h1 className="mb-3 max-w-xs text-[2.1rem] font-semibold leading-tight tracking-tight text-foreground">
+            Beyond one model.
+            <br />
+            Beyond one surface.
+          </h1>
+          <p className="max-w-sm text-sm leading-6 text-muted-foreground">
+            AGI brings 10+ AI providers into a single workspace — desktop, mobile, web, CLI,
+            VS&nbsp;Code, and Chrome. Your context, everywhere.
+          </p>
+        </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-            className="space-y-4"
-          >
-            {cloudSyncPoints.map((feature, index) => (
-              <motion.div
-                key={feature.title}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.5 + index * 0.1 }}
-                className="flex items-start gap-3"
+        {/* Trust-mode points */}
+        <motion.ul
+          {...fadeUp}
+          transition={{ delay: 0.35, duration: 0.4 }}
+          className="space-y-4"
+          aria-label="How AGI keeps your data safe"
+        >
+          {trustPoints.map((point, i) => (
+            <motion.li
+              key={point.label}
+              {...fadeUp}
+              transition={{ delay: 0.45 + i * 0.08, duration: 0.3 }}
+              className="flex items-start gap-3"
+            >
+              <div
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground"
+                aria-hidden="true"
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground">
-                  <feature.icon className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="mb-1 text-sm font-medium text-foreground">{feature.title}</h3>
-                  <p className="text-sm leading-6 text-muted-foreground">{feature.description}</p>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
+                <point.icon className="h-3.5 w-3.5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">{point.label}</p>
+                <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                  {point.description}
+                </p>
+              </div>
+            </motion.li>
+          ))}
+        </motion.ul>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-            className="mt-10 border-t border-border pt-6"
-          >
-            <div className="flex items-start gap-3 text-sm leading-6 text-muted-foreground">
-              <Shield className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>
-                Local and BYOK work remain available without signing in. Managed cloud features use
-                your signed-in AGI account.
-              </span>
-            </div>
-          </motion.div>
-        </div>
+        {/* Six-surface footer line */}
+        <motion.div
+          {...fadeUp}
+          transition={{ delay: 0.7, duration: 0.4 }}
+          className="flex items-center gap-2 border-t border-border pt-6"
+        >
+          <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Layers className="h-3 w-3" aria-hidden="true" />
+            </span>{' '}
+            Available on Desktop · Mobile · Web · CLI · VS&nbsp;Code · Chrome
+          </p>
+        </motion.div>
       </aside>
 
+      {/* ---- Right form column ---- */}
       <main className="relative flex flex-1 items-center justify-center p-8">
-        <div className="absolute left-6 top-6 lg:hidden">
+        {/* Mobile-only brand mark */}
+        <div className="absolute left-6 top-6 lg:hidden" aria-hidden="true">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-background">
-              <Bot className="h-4 w-4" />
+              <Cpu className="h-4 w-4" />
             </div>
-            <span className="font-bold text-foreground">AGI</span>
+            <span className="font-semibold text-foreground">AGI</span>
           </div>
         </div>
 
