@@ -93,14 +93,24 @@ const MODEL_DESCRIPTIONS: Record<string, string> = {
   'claude-haiku-4.5': 'Fastest for quick answers',
   // OpenAI
   // eslint-disable-next-line no-restricted-syntax
-  'gpt-5.5': 'Most capable OpenAI model',
+  'gpt-5.5': 'Most capable managed model',
   // eslint-disable-next-line no-restricted-syntax
   'gpt-5.4-mini': 'Fast and affordable responses',
   // Google
   // eslint-disable-next-line no-restricted-syntax
-  'gemini-3.1-pro-preview': "Google's most capable model",
+  'gemini-3.1-pro-preview': 'Most capable multimodal model',
   // eslint-disable-next-line no-restricted-syntax
-  'gemini-3.1-flash-lite': 'Fast and efficient Google model',
+  'gemini-3.1-flash-lite': 'Fast and efficient multimodal model',
+};
+
+const CLOUD_ROUTE_FALLBACK_NAMES: Record<string, string> = {
+  openai: 'AGI Cloud',
+  anthropic: 'AGI Cloud Advanced',
+  google: 'AGI Cloud Multimodal',
+  xai: 'AGI Cloud Fast',
+  deepseek: 'AGI Cloud Code',
+  qwen: 'AGI Cloud Efficient',
+  moonshot: 'AGI Cloud Long Context',
 };
 
 const FALLBACK_LOCAL_MODEL: OnDeviceModel = {
@@ -290,7 +300,7 @@ function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef
 
   return {
     id: model.id,
-    name: model.name,
+    name: model.name || CLOUD_ROUTE_FALLBACK_NAMES[model.provider] || 'AGI Cloud',
     provider: model.provider,
     providerLabel,
     contextWindow: model.contextWindow,
@@ -301,8 +311,8 @@ function toCloudModelDef(model: CloudModelDef, cloudUnlocked: boolean): ModelDef
     surface: 'cloud_managed',
     availability: cloudUnlocked ? 'ready' : 'locked',
     runtimeLabel: 'AGI Cloud',
-    detailLabel: cloudUnlocked ? 'AGI Cloud' : 'AGI Cloud - invite required',
-    description: MODEL_DESCRIPTIONS[model.id],
+    detailLabel: cloudUnlocked ? `${providerLabel} provider` : 'Invite required',
+    description: `${providerLabel} model in AGI Cloud`,
     lockReason: cloudUnlocked ? undefined : CLOUD_LOCK_REASON,
   };
 }
@@ -317,15 +327,17 @@ export const LOCKED_CLOUD_MODELS: ModelDef[] = [
   'openai',
   'anthropic',
   'google',
-  'perplexity',
   'xai',
   'deepseek',
+  'qwen',
+  'moonshot',
 ]
   .map(firstCloudModelByProvider)
   .filter((model): model is CloudModelDef => Boolean(model))
   .map((model) => toCloudModelDef(model, false));
 
 export const MODEL_LIST: ModelDef[] = [...LOCAL_MODEL_LIST, ...LOCKED_CLOUD_MODELS];
+export const DEFAULT_CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id;
 
 const localModelMap = new Map<string, ModelDef>(LOCAL_MODEL_LIST.map((model) => [model.id, model]));
 const cloudModelSourceMap = new Map<string, CloudModelDef>(
@@ -396,7 +408,11 @@ export function getDisplayName(id: string): string {
 }
 
 export function getShortDisplayName(id: string): string {
-  return getDisplayName(id);
+  const autoMode = autoModeMap.get(id);
+  if (autoMode) return autoMode.name;
+  const model = getModelByIdForCloudAccess(id, true);
+  if (model?.surface === 'cloud_managed') return 'AGI Cloud';
+  return model?.name ?? id;
 }
 
 export function getDefaultSelectableModelId(id?: string | null): string {

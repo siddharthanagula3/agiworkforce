@@ -9,7 +9,7 @@
  * a frozen RN tree is the closest structural-parity check we can run in CI.
  *
  * Three variants: success state (rendered ProjectHeader), local-only fallback
- * (FEATURES.auth=false → no-auth error), and loading state.
+ * (cloud project sync disabled), and missing-id empty state.
  *
  * 2026-05-22 round-17 capture sweep.
  */
@@ -24,6 +24,7 @@ const mockDispatch = jest.fn();
 
 let mockSearchParams: { id?: string } = { id: 'proj_snapshot' };
 let mockFeaturesAuth = true;
+let mockFeaturesCrossDeviceSync = true;
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => mockSearchParams,
@@ -67,6 +68,7 @@ jest.mock('lucide-react-native', () => {
     Menu: factory('menu'),
     MessageSquare: factory('message-square'),
     Plus: factory('plus'),
+    SquarePen: factory('square-pen'),
     Trash2: factory('trash-2'),
     Users: factory('users'),
   };
@@ -89,7 +91,7 @@ jest.mock('@/src/ui/theme', () => {
 
 jest.mock('@/lib/v1FeatureFlags', () => ({
   get FEATURES() {
-    return { auth: mockFeaturesAuth };
+    return { auth: mockFeaturesAuth, crossDeviceSync: mockFeaturesCrossDeviceSync };
   },
 }));
 
@@ -136,6 +138,7 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
   beforeEach(() => {
     mockSearchParams = { id: 'proj_snapshot' };
     mockFeaturesAuth = true;
+    mockFeaturesCrossDeviceSync = true;
     mockFetchProject.mockReset();
     mockPush.mockReset();
     mockReplace.mockReset();
@@ -155,6 +158,13 @@ describe('Mobile project-detail screen snapshots (round-17)', () => {
     const { toJSON, getByTestId } = render(<ProjectDetailScreen />);
     await waitFor(() => getByTestId('project-detail-local-fallback'));
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('never fetches cloud project details when cross-device sync is disabled', async () => {
+    mockFeaturesCrossDeviceSync = false;
+    const { getByTestId } = render(<ProjectDetailScreen />);
+    await waitFor(() => getByTestId('project-detail-local-fallback'));
+    expect(mockFetchProject).not.toHaveBeenCalled();
   });
 
   it('locks the no-id empty tree when no params are provided', () => {
