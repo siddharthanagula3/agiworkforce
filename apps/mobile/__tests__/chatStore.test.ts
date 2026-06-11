@@ -168,6 +168,26 @@ const MODEL = 'claude-3-5-sonnet';
 const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.5';
 
+function seedCloudConversation(model = CLOUD_MODEL) {
+  const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);
+  useChatStore.setState({
+    conversations: [
+      {
+        id: CONV_ID,
+        title: existing?.title ?? 'Test Chat',
+        updatedAt: existing?.updatedAt ?? new Date().toISOString(),
+        createdAt: existing?.createdAt ?? new Date().toISOString(),
+        messageCount: existing?.messageCount ?? 0,
+        pinned: existing?.pinned ?? false,
+        model,
+        provider: 'cloud_managed',
+        executionMode: 'cloud',
+      },
+    ],
+    messages: { [CONV_ID]: [] },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -547,6 +567,7 @@ describe('chatStore — streaming state', () => {
 
   describe('cloud invite path', () => {
     it('does not fall back to local generation for locked cloud models', async () => {
+      seedCloudConversation();
       mockRemoteDisabledReason.mockReturnValue('mobile-local-only');
 
       await act(async () => {
@@ -560,6 +581,7 @@ describe('chatStore — streaming state', () => {
     });
 
     it('streams unlocked cloud models through the remote path', async () => {
+      seedCloudConversation();
       useWaitlistStore.setState({ cloudUnlocked: true });
       mockRemoteDisabledReason.mockReturnValue(null);
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
