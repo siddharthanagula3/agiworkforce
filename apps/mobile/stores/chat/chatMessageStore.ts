@@ -4,6 +4,14 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { api } from '@/services/api';
 import { useProjectStore } from '@/src/features/projects/store';
+import { useModelStore } from '@/src/features/model-picker/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import {
+  executionModeForConversation,
+  executionModeForModel,
+  providerForExecutionMode,
+  type ConversationExecutionMode,
+} from '@/src/features/chat/utils/conversationMode';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 
 export interface ForkConversationOptions {
@@ -58,11 +66,13 @@ export const useChatMessageStore = create<MessageState>()(
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
-          if (!isCloudChatEnabled()) return;
+          if (!shouldLoadCloudConversationList()) return;
           const data = await api.get<{ conversations: ConversationSummary[] }>(
             '/api/chat/conversations',
           );
-          set({ conversations: data.conversations ?? [] });
+          set((state) => ({
+            conversations: mergeCloudConversations(state.conversations, data.conversations ?? []),
+          }));
         } catch {
           // Keep existing conversations on failure — offline resilience
         } finally {
@@ -71,35 +81,47 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       createConversation: async (title?: string, projectId?: string) => {
+        const selectedModel = useModelStore.getState().selectedModel;
+        const requestedMode = useChatAppModeStore.getState().appMode;
         const effectiveProjectId =
-          projectId ?? useProjectStore.getState().activeProjectId ?? undefined;
-        if (!isCloudChatEnabled()) {
-          return createLocalConversation(set, title, effectiveProjectId);
-        }
-        try {
-          const data = await api.post<{ conversation: ConversationSummary }>(
-            '/api/chat/conversations',
-            { title: title ?? 'New Chat', projectId: effectiveProjectId },
-          );
-          const conversation = { ...data.conversation, projectId: effectiveProjectId };
-          set((state) => ({
-            conversations: [conversation, ...state.conversations],
-            currentConversationId: conversation.id,
-            messages: { ...state.messages, [conversation.id]: [] },
-          }));
-          return conversation.id;
-        } catch {
-          return createLocalConversation(set, title, effectiveProjectId);
-        }
+          requestedMode === 'local'
+            ? (projectId ?? useProjectStore.getState().activeProjectId ?? undefined)
+            : undefined;
+        const selectedModelMode = executionModeForModel(selectedModel);
+        const conversationModel = selectedModelMode === requestedMode ? selectedModel : undefined;
+
+        return createConversationForMode(
+          set,
+          title,
+          effectiveProjectId,
+          conversationModel,
+          requestedMode,
+        );
       },
 
       forkConversation: async (sourceConversationId, options) => {
         const sourceConversation = get().conversations.find((c) => c.id === sourceConversationId);
         const sourceMessages = get().messages[sourceConversationId] ?? [];
+        const sourceMode = sourceConversation
+          ? executionModeForConversation(sourceConversation)
+          : executionModeForModel(options?.model);
+        const requestedModelMode = options?.model
+          ? executionModeForModel(options.model)
+          : sourceMode;
+        const forkModel =
+          options?.model && requestedModelMode === sourceMode
+            ? options.model
+            : sourceConversation?.model;
         const forkTitle =
           options?.title ??
           `${sourceConversation?.title ?? 'Chat'} (${options?.model ? 'model' : 'copy'} fork)`;
-        const forkId = await get().createConversation(forkTitle, sourceConversation?.projectId);
+        const forkId = await createConversationForMode(
+          set,
+          forkTitle,
+          sourceMode === 'local' ? sourceConversation?.projectId : undefined,
+          forkModel,
+          sourceMode,
+        );
         const now = Date.now();
         const forkedMessages = sourceMessages.map((message, index) => {
           const {
@@ -113,7 +135,7 @@ export const useChatMessageStore = create<MessageState>()(
             ...safeMessage,
             id: `${message.id}_fork_${now}_${index}`,
             conversationId: forkId,
-            model: options?.model ?? message.model,
+            model: forkModel ?? message.model,
           };
         });
 
@@ -123,7 +145,9 @@ export const useChatMessageStore = create<MessageState>()(
               ? {
                   ...conversation,
                   messageCount: forkedMessages.length,
-                  model: options?.model ?? conversation.model,
+                  model: forkModel ?? conversation.model,
+                  provider: providerForExecutionMode(sourceMode),
+                  executionMode: sourceMode,
                   updatedAt: new Date(now).toISOString(),
                 }
               : conversation,
@@ -136,6 +160,8 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       deleteConversation: async (id) => {
+        const conversation = get().conversations.find((c) => c.id === id);
+        const shouldDeleteRemote = shouldSyncConversationRemote(conversation);
         set((state) => {
           const { [id]: _, ...remainingMessages } = state.messages;
           return {
@@ -145,7 +171,7 @@ export const useChatMessageStore = create<MessageState>()(
               state.currentConversationId === id ? null : state.currentConversationId,
           };
         });
-        if (!isCloudChatEnabled()) return;
+        if (!shouldDeleteRemote) return;
         try {
           await api.delete(`/api/chat/conversations/${id}`);
         } catch {
@@ -156,10 +182,11 @@ export const useChatMessageStore = create<MessageState>()(
       loadMessages: async (conversationId) => {
         const existing = get().messages[conversationId];
         if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) return;
+        const conversation = get().conversations.find((c) => c.id === conversationId);
 
         set({ isLoadingMessages: true });
         try {
-          if (!isCloudChatEnabled()) return;
+          if (!shouldLoadRemoteMessages(conversation)) return;
           const data = await api.get<{ messages: ChatMessage[] }>(
             `/api/chat/conversations/${conversationId}`,
           );
@@ -179,10 +206,12 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       renameConversation: async (id, title) => {
+        const conversation = get().conversations.find((c) => c.id === id);
+        const shouldRenameRemote = shouldSyncConversationRemote(conversation);
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, title } : c)),
         }));
-        if (!isCloudChatEnabled()) return;
+        if (!shouldRenameRemote) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { title });
         } catch {
@@ -193,11 +222,12 @@ export const useChatMessageStore = create<MessageState>()(
       pinConversation: async (id) => {
         const conv = get().conversations.find((c) => c.id === id);
         if (!conv) return;
+        const shouldPinRemote = shouldSyncConversationRemote(conv);
         const pinned = !conv.pinned;
         set((state) => ({
           conversations: state.conversations.map((c) => (c.id === id ? { ...c, pinned } : c)),
         }));
-        if (!isCloudChatEnabled()) return;
+        if (!shouldPinRemote) return;
         try {
           await api.put(`/api/chat/conversations/${id}`, { pinned });
         } catch {
@@ -312,13 +342,89 @@ function isCloudChatEnabled(): boolean {
   return FEATURES.cloudChat && !FEATURES.v1LocalOnly;
 }
 
-function createLocalConversation(
+function shouldLoadCloudConversationList(): boolean {
+  return isCloudChatEnabled() && useChatAppModeStore.getState().appMode === 'cloud';
+}
+
+function isCloudConversation(conversation: ConversationSummary | undefined): boolean {
+  return Boolean(conversation && executionModeForConversation(conversation) === 'cloud');
+}
+
+function shouldSyncConversationRemote(conversation: ConversationSummary | undefined): boolean {
+  return isCloudChatEnabled() && isCloudConversation(conversation);
+}
+
+function shouldLoadRemoteMessages(conversation: ConversationSummary | undefined): boolean {
+  if (!isCloudChatEnabled()) return false;
+  if (conversation) return isCloudConversation(conversation);
+  return useChatAppModeStore.getState().appMode === 'cloud';
+}
+
+function mergeCloudConversations(
+  existingConversations: ConversationSummary[],
+  cloudConversations: ConversationSummary[],
+): ConversationSummary[] {
+  const normalizedCloudConversations = cloudConversations.map((conversation) => ({
+    ...conversation,
+    provider: conversation.provider ?? providerForExecutionMode('cloud'),
+    executionMode: conversation.executionMode ?? ('cloud' as const),
+  }));
+  const localConversations = existingConversations.filter(
+    (conversation) => executionModeForConversation(conversation) === 'local',
+  );
+  return [...normalizedCloudConversations, ...localConversations];
+}
+
+async function createConversationForMode(
   set: (
     partial: Partial<MessageState> | ((state: MessageState) => Partial<MessageState>),
     replace?: false,
   ) => void,
   title: string | undefined,
   projectId: string | undefined,
+  model: string | undefined,
+  executionMode: ConversationExecutionMode,
+): Promise<string> {
+  if (executionMode === 'local') {
+    return createStoredConversation(set, title, projectId, model, executionMode);
+  }
+
+  if (!isCloudChatEnabled()) {
+    throw new Error('AGI Cloud chat is not enabled in this mobile build.');
+  }
+
+  try {
+    const data = await api.post<{ conversation: ConversationSummary }>('/api/chat/conversations', {
+      title: title ?? 'New Chat',
+      projectId,
+    });
+    const conversation = {
+      ...data.conversation,
+      projectId,
+      model: data.conversation.model ?? model,
+      provider: data.conversation.provider ?? providerForExecutionMode('cloud'),
+      executionMode: data.conversation.executionMode ?? 'cloud',
+    };
+    set((state) => ({
+      conversations: [conversation, ...state.conversations],
+      currentConversationId: conversation.id,
+      messages: { ...state.messages, [conversation.id]: [] },
+    }));
+    return conversation.id;
+  } catch {
+    throw new Error('AGI Cloud conversation could not be created.');
+  }
+}
+
+function createStoredConversation(
+  set: (
+    partial: Partial<MessageState> | ((state: MessageState) => Partial<MessageState>),
+    replace?: false,
+  ) => void,
+  title: string | undefined,
+  projectId: string | undefined,
+  model: string | undefined,
+  executionMode: ConversationExecutionMode,
 ): string {
   const localId = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
   const now = new Date().toISOString();
@@ -330,6 +436,9 @@ function createLocalConversation(
     messageCount: 0,
     pinned: false,
     projectId,
+    model,
+    provider: providerForExecutionMode(executionMode),
+    executionMode,
   };
   set((state) => ({
     conversations: [localConversation, ...state.conversations],

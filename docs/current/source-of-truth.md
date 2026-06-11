@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-05-28
+Last updated: 2026-06-06
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -16,7 +16,7 @@ For the long-form PRD, serial surface order, Mobile v1 release bar, and decision
 
 AGI is the public product brand. AGI Workforce is the formal platform and repo name.
 
-AGI is an OpenAI/Anthropic-style application suite across six first-class surfaces:
+AGI is a leading AI application suite across six first-class surfaces:
 
 - Mobile
 - Web
@@ -25,7 +25,7 @@ AGI is an OpenAI/Anthropic-style application suite across six first-class surfac
 - Chrome extension
 - VS Code extension
 
-The v1 product target is practical parity with the current ChatGPT and Claude application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or private-beta AGI managed cloud instead of being locked into one model lab.
+The v1 product target is practical parity with current leading AI application ecosystems, with one major differentiation: users can choose Local models, Bring Your Own Key provider access, or private-beta AGI managed cloud instead of being locked into one model lab.
 
 Parity means user-capability parity and workflow parity, not copying proprietary code, private assets, or protected branding. Claude and ChatGPT are competitive references; AGI must implement its own design system, names, contracts, providers, and trust-boundary UX.
 
@@ -76,14 +76,14 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 
 ## Surface Roles
 
-| Surface | Role                                                                                                                                                                       | Sync boundary                                                                                     |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Web     | Account, projects, synced app chats, artifacts, billing/waitlist, admin, web routes. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                     |
-| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                       | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred. |
-| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and Cloud invite/waitlist. Mobile v1 does not expose BYOK.                                           | Normal app chat sync allowed for app chats; heavy generation should be Desktop/managed first.     |
-| CLI     | Developer agent and terminal engine.                                                                                                                                       | Workspace/session scoped; no automatic sync into app chats.                                       |
-| VS Code | IDE-native developer assistant.                                                                                                                                            | Workspace scoped; handoff to app chat must be explicit and redacted.                              |
-| Chrome  | Browser context, page capture/action approvals, native messaging.                                                                                                          | Page data is task scoped; no default global chat memory sync.                                     |
+| Surface | Role                                                                                                                                                                       | Sync boundary                                                                                                                                                                                                      |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web     | Account, projects, synced app chats, artifacts, billing/waitlist, admin, web routes. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                                                                                                                                      |
+| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                       | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred.                                                                                                                  |
+| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and Cloud invite/waitlist. Mobile v1 does not expose BYOK.                                           | Cloud app chat sync is allowed only for signed-in entitled Cloud chats. Local Mode chats, memory, projects, files, profile, and personalization stay local unless the user explicitly chooses a reviewed transfer. |
+| CLI     | Developer agent and terminal engine.                                                                                                                                       | Workspace/session scoped; no automatic sync into app chats.                                                                                                                                                        |
+| VS Code | IDE-native developer assistant.                                                                                                                                            | Workspace scoped; handoff to app chat must be explicit and redacted.                                                                                                                                               |
+| Chrome  | Browser context, page capture/action approvals, native messaging.                                                                                                          | Page data is task scoped; no default global chat memory sync.                                                                                                                                                      |
 
 ## Competitive Baseline
 
@@ -100,7 +100,10 @@ OpenAI/ChatGPT baseline:
 Anthropic/Claude baseline:
 
 - Claude web/desktop includes chat, projects, artifacts, artifacts sidebar, artifact editing/versioning/export, AI-powered artifacts, artifact MCP, artifact storage, connectors/MCP, personalization, settings, and account/team controls.
-- The local Claude reference folder includes Claude Design-style canvas, artboard, prototype, and deck workflows. AGI maps this to an AGI-owned visual artifact/design workspace requirement, not to a separate seventh surface and not to copied Claude assets or product naming.
+- Local Claude reference evidence, not public official documentation, includes
+  visual canvas, artboard, prototype, and deck workflow patterns. AGI maps this
+  to an AGI-owned visual artifact/design workspace requirement, not to a
+  separate seventh surface and not to copied Claude assets or product naming.
 - Claude Desktop is a native app surface for Claude chat and Claude Code/Cowork-style workflows.
 - Claude Code is available in terminal, IDE, desktop app, and browser; it reads codebases, edits files, runs commands, uses MCP, supports instructions/skills/hooks, and has permission controls.
 - Claude Code IDE integration supports VS Code, Cursor, Windsurf, and JetBrains-style workflows, editor context, diagnostics, diff viewing, file references, and quick launch.
@@ -207,13 +210,20 @@ Web:
 Desktop:
 
 - Desktop has a strong v3 chat shell with sidebar, model popover, composer, artifact workbench, connectors/MCP direction, local generated files, and focused settings modals.
-- `apps/desktop/src/features/v3/DesktopShellV3.tsx` still routes `cowork` and `code` to placeholders even though Cowork subpages exist under `apps/desktop/src/features/v3`.
-- Desktop settings currently includes General, Account, Appearance, Privacy, Models/Keys, Agents, MCP/Skills, Connectors, Notifications, Voice, Capabilities, and Memory. It does not yet match the full settings IA above.
+- `apps/desktop/src/features/v3/DesktopShellV3.tsx` no longer exposes separate
+  Cowork and Code mode placeholders. It exposes chat plus Cowork Projects,
+  Artifacts, Scheduled, and Dispatch subpanels. AGI Code remains missing or
+  unmounted in V3; `CodeModeHome.tsx` exists but is not mounted.
+- Desktop settings currently includes General, Account,
+  Personalization/Appearance, Privacy, Models & Keys, Agents, Skills,
+  Connectors, Plugins, Memory, Notifications, and Voice. Legacy Capabilities
+  links map to Agents; there is no current top-level Capabilities tab. It does
+  not yet match the full settings IA above.
 - Desktop must become the main local-private compute host for files, local tools, browser/computer-use approvals, MCP logs/config, and Chrome/native bridges.
 
 Mobile:
 
-- `apps/mobile/lib/v1FeatureFlags.ts` keeps v1 local-only by default.
+- Mobile currently prioritizes Local Mode and keeps hosted sends gated unless Cloud access is explicitly unlocked.
 - `apps/mobile/services/remoteChatGate.ts` fails closed when Cloud sends are disabled.
 - Mobile v1 has small on-device Local LLM chat plus Cloud invite/waitlist only. Mobile BYOK is not a v1 product path.
 - Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.
@@ -227,12 +237,14 @@ Chrome:
 
 - `apps/extension` owns MV3 popup/side panel/content/background/native bridge/page capture/scheduled-task/workflow-recording direction.
 - It has explicit sync-boundary comments and tests asserting Chrome is a developer surface, not a consumer chat-history sync surface.
-- Remaining parity gaps are polished Claude/OpenAI-style side panel UX, permissions UX, Chrome-to-Desktop bridge hardening, and invite-gated cloud bridge flows.
+- Remaining parity gaps are polished side panel UX, permissions UX, Chrome-to-Desktop bridge hardening, and invite-gated cloud bridge flows.
 
 VS Code:
 
 - `apps/extension-vscode` owns IDE chat, terminal capture, patch/checkpoint flows, model picker, and workspace-scoped context.
-- It must align with Codex/Claude IDE baselines: chat/edit/review modes, @ file references, editor context, diagnostics, diff review, approvals, cloud handoff preview, and local application of remote diffs.
+- It must align with Codex/Claude IDE baselines: chat/edit/agent modes, @ file
+  references, editor context, diagnostics, diff review where supported,
+  approvals, cloud handoff preview, and local application of remote diffs.
 
 Services:
 
@@ -242,8 +254,11 @@ Services:
 
 These are the highest-risk gaps before calling v1 competitive.
 
-1. Desktop `cowork` and `code` modes must stop being placeholders and route to real Cowork/AGI Code surfaces.
-2. Desktop settings must match the locked IA: General, Account, Privacy, Billing, Usage, Capabilities, Connectors, AGI Code, AGI in Chrome, Extensions, Developer.
+1. Desktop Cowork subpanels need demo-path verification, and AGI Code must be
+   mounted into the V3 shell or clearly gated before demo.
+2. Desktop settings must match the locked IA: General, Account, Privacy,
+   Billing, Usage, Capabilities, Connectors, AGI Code, AGI in Chrome,
+   Extensions, Developer.
 3. One-chat flow must support normal chat plus selected files/reference files without forcing users into separate chat experiences.
 4. Local to BYOK fork flow must be end-to-end on every surface where it appears: context selection, secret scan, payload preview, provider label, consent, and preserved Local original.
 5. Model selection must use catalog/provider capability metadata everywhere; remove scattered hardcoded current-model assumptions.
@@ -254,7 +269,10 @@ These are the highest-risk gaps before calling v1 competitive.
 10. Web/Mobile/Desktop sync must be complete only inside app-chat boundary; CLI/VS Code/Chrome require explicit handoff.
 11. Cloud Managed must stay invite/waitlist/private beta until metering, billing, abuse, retention, deletion, and provider-term controls are verified.
 12. All six surfaces need screenshot/e2e-style UI verification for the launch-critical flows, not only typecheck/build.
-13. Visual artifact/design workspace parity is not yet specified in code: canvas, artboards, layers/assets/files, properties panel, prototype/deck preview, versioning, export, and trust labels must be designed before claiming Claude Design-style parity.
+13. Visual artifact/design workspace parity is not yet specified in code:
+    canvas, artboards, layers/assets/files, properties panel, prototype/deck
+    preview, versioning, export, and trust labels must be designed before
+    claiming parity with local reference design-workspace patterns.
 
 ## Documentation Rule
 
@@ -299,7 +317,8 @@ For every feature claim:
 - run visual or e2e checks for launch-critical UI,
 - record unresolved risks in `docs/agent-context/known-flaws.md` or the active plan.
 
-The current verified repo baseline from this audit:
+Last recorded verified repo baseline from the prior audit. Re-run these on the
+current dirty worktree before using them as fresh verification:
 
 - `pnpm --filter @agiworkforce/web typecheck` passes.
 - `pnpm --filter @agiworkforce/web test -- core/ai/llm/unified-language-model.test.ts core/integrations/web-search-handler.test.ts` passes.
