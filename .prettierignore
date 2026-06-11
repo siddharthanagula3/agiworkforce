@@ -2,6 +2,7 @@ dist
 build
 out
 node_modules
+pnpm-lock.yaml
 coverage
 apps/desktop/src-tauri
 target
