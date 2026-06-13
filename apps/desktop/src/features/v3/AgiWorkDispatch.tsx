@@ -1,5 +1,5 @@
 import { Check, Loader2, Clock } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { cn } from '../../lib/utils';
@@ -77,12 +77,10 @@ export function AgiWorkDispatch() {
   const [acceptTasks, setAcceptTasks] = useState(true);
   const [requireConfirm, setRequireConfirm] = useState(true);
 
+  // Use persisted tasks from store — do not call fetchTasks on mount because
+  // agi_init has not run at this point and the call would produce a recurring
+  // 'AGI not initialized' error toast. The honest empty state is shown instead.
   const tasks = useAgentTaskStore((s) => s.tasks);
-  const fetchTasks = useAgentTaskStore((s) => s.fetchTasks);
-
-  useEffect(() => {
-    void fetchTasks();
-  }, [fetchTasks]);
 
   const recentOutputs = [...tasks]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())

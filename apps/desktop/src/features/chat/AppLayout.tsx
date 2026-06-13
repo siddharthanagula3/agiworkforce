@@ -30,7 +30,7 @@ import { ArtifactsGallery } from '@/features/artifacts/ArtifactsGallery';
 import { ShareConversationDialog } from './ShareConversationDialog';
 import { ExecutionSidecar } from '@/features/execution-sidecar';
 import { ReminderList } from '@/features/reminders/ReminderList';
-import { AgiWorkTab } from '@/features/agi-work/AgiWorkTab';
+// AgiWorkTab removed — it used mock data only and caused confusion (P0-3)
 
 // Lazy load MediaLab for code splitting
 const MediaLab = lazy(() => import('./MediaLab').then((m) => ({ default: m.MediaLab })));
@@ -536,7 +536,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {activeRightPanel === 'schedules' && <ScheduledTasksPanel />}
             {activeRightPanel === 'artifacts' && <ArtifactsGallery />}
             {activeRightPanel === 'reminders' && <ReminderList />}
-            {activeRightPanel === 'work' && <AgiWorkTab />}
+            {/* work panel removed — AgiWorkTab was mock-only */}
           </div>
         </div>
       )}

@@ -80,8 +80,8 @@ impl Default for ChatPreferences {
             auto_approve_tools: false,
             auto_inject_skills: default_auto_inject_skills(),
             auto_save_memories: false,
-            // IMPORTANT: must match default_chat_storage_mode() — cloud sync is
-            // OFF by default (v1 LOCAL ONLY, ADR 2026-05-22-cross-surface-sync-v1-stance).
+            // IMPORTANT: must match default_chat_storage_mode(); cloud sync is
+            // off by default unless the user explicitly enables a cloud path.
             chat_storage_mode: default_chat_storage_mode(),
         }
     }
@@ -220,7 +220,7 @@ fn default_allowed_directories() -> Vec<String> {
 mod tests {
     use super::*;
 
-    /// R23 gate: cloud sync must be OFF in v1 LOCAL ONLY mode.
+    /// R23 gate: cloud sync must be off unless a cloud path is explicit.
     /// `chat_storage_mode` defaults to "local", so `cloud_sync_enabled` is
     /// `false` unless the user explicitly opts in (which requires Cloud Managed).
     #[test]
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(
             default_chat_storage_mode(),
             "local",
-            "cloud sync must be disabled by default (v1 LOCAL ONLY)"
+            "cloud sync must be disabled by default"
         );
         let prefs = ChatPreferences::default();
         assert_eq!(
@@ -275,6 +275,51 @@ mod tests {
     }
 }
 
+/// Personalization preferences sent from the frontend on each save.
+/// These are stored in settings.json alongside other preferences.
+/// Defaults match defaultPersonalization in settingsStore.ts so that
+/// a neutral profile round-trips without emitting any guidance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Personalization {
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub occupation: String,
+    #[serde(default)]
+    pub bio: String,
+    #[serde(default = "default_slider_neutral")]
+    pub formality: u8,
+    #[serde(default = "default_slider_neutral")]
+    pub warmth: u8,
+    #[serde(default = "default_slider_neutral")]
+    pub detail: u8,
+    #[serde(default = "default_emoji_usage")]
+    pub emoji_usage: String,
+}
+
+fn default_slider_neutral() -> u8 {
+    3
+}
+
+fn default_emoji_usage() -> String {
+    "sometimes".to_string()
+}
+
+impl Default for Personalization {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            occupation: String::new(),
+            bio: String::new(),
+            formality: default_slider_neutral(),
+            warmth: default_slider_neutral(),
+            detail: default_slider_neutral(),
+            emoji_usage: default_emoji_usage(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -293,6 +338,9 @@ pub struct Settings {
     pub custom_models: Vec<serde_json::Value>,
     #[serde(default)]
     pub feature_flags: std::collections::HashMap<String, bool>,
+    /// Personalization preferences (added alongside P0-4 disk-persist wiring)
+    #[serde(default)]
+    pub personalization: Personalization,
 }
 
 fn default_global_hotkey_preferences() -> GlobalHotkeyPreferences {
@@ -366,6 +414,7 @@ impl SettingsState {
                 allowed_directories: default_allowed_directories(),
                 custom_models: Vec::new(),
                 feature_flags: std::collections::HashMap::new(),
+                personalization: Personalization::default(),
             })),
         }
     }
@@ -460,14 +509,14 @@ pub async fn settings_load_from_disk(
             loaded_settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
         }
 
-        // v1 LOCAL ONLY migration: if a user previously opted into cloud sync (before
-        // the v1-local-only gate), coerce chat_storage_mode back to "local" on load.
+        // Cloud gating migration: if a user previously opted into cloud sync before
+        // the explicit cloud gate, coerce chat_storage_mode back to "local" on load.
         // This prevents spawn_sync_message from firing for upgrading users.
         // Remove this coercion when cloud sync is ungated for production.
         if let Some(ref mut chat_prefs) = loaded_settings.chat_preferences {
             if chat_prefs.chat_storage_mode == "cloud" {
                 tracing::info!(
-                    "v1 LOCAL ONLY: coercing persisted chat_storage_mode 'cloud' → 'local'"
+                    "cloud gate: coercing persisted chat_storage_mode 'cloud' to 'local'"
                 );
                 chat_prefs.chat_storage_mode = "local".to_string();
             }
