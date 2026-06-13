@@ -33,9 +33,11 @@ export interface MediaAsset {
   createdAt: string;
 }
 
+export type MediaKind = 'image' | 'video' | 'file';
+
 export interface InsertMediaAssetParams {
   userId: string;
-  kind: 'image' | 'video';
+  kind: MediaKind;
   mimeType: string;
   storageUrl: string;
   byteSize?: number;
@@ -107,7 +109,7 @@ export async function insertMediaAsset(p: InsertMediaAssetParams): Promise<strin
 /** List the current user's media, newest first. Empty array if not yet migrated. */
 export async function listMediaAssets(
   userId: string,
-  opts?: { kind?: 'image' | 'video'; limit?: number },
+  opts?: { kind?: MediaKind; limit?: number },
 ): Promise<MediaAsset[]> {
   const db = getNeonDb();
   const limit = Math.min(Math.max(opts?.limit ?? 60, 1), 200);
