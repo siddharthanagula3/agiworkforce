@@ -11,12 +11,20 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { CreditService } from '@/lib/services/credit-service';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { randomUUID } from 'crypto';
 import {
   getModelMetadataById,
   getModelsForProvider,
   getRoutingSlotModel,
 } from '@agiworkforce/types';
+import {
+  isMediaStorageConfigured,
+  storeMedia,
+  bytesFromBase64,
+  bytesFromUrl,
+} from '@/lib/server/media-storage';
+import { insertMediaAsset } from '@/lib/server/media-assets';
 
 /**
  * Image Generation API
@@ -438,6 +446,20 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
   // Authentication
   const { userId } = await getClerkAuthUser(request);
 
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: 'managed-media',
+      model: 'image-generation',
+      feature: 'media_image_generation',
+    },
+    {
+      ...getCorsHeaders(request),
+      ...getSecurityHeaders(),
+    },
+  );
+  if (managedGateResponse) return managedGateResponse;
+
   // Check subscription
   const subscription = await SubscriptionService.getSubscription(userId);
 
@@ -803,6 +825,50 @@ async function handleImageGeneration(request: NextRequest): Promise<NextResponse
     { userId: userId, provider, model: result.model, costEstimate, estimatedCostCents },
     'Image generation credits deducted',
   );
+
+  // Persist each generated image to durable storage + the user-scoped media_assets
+  // catalog, so it survives a refresh and appears in the Library across every cloud
+  // surface. Best-effort: a storage/DB failure must NOT fail an already-billed
+  // generation, so on error we keep the original inline payload.
+  if (isMediaStorageConfigured()) {
+    await Promise.all(
+      result.images.map(async (img, idx) => {
+        try {
+          let bytes: Buffer | null = null;
+          let contentType = 'image/png';
+          if (img.b64_json) {
+            bytes = bytesFromBase64(img.b64_json);
+          } else if (img.url) {
+            const fetched = await bytesFromUrl(img.url);
+            bytes = fetched.data;
+            contentType = fetched.contentType;
+          }
+          if (!bytes) return;
+
+          const stored = await storeMedia({ userId, kind: 'image', data: bytes, contentType });
+          await insertMediaAsset({
+            userId,
+            kind: 'image',
+            mimeType: contentType,
+            byteSize: stored.byteSize,
+            storageUrl: stored.url,
+            storagePathname: stored.pathname,
+            prompt,
+            provider,
+            model: result.model,
+            sourceSurface: 'web',
+          });
+          // Hand the client the durable URL (slimmer payload, survives refresh).
+          result.images[idx] = { url: stored.url };
+        } catch (err) {
+          logger.warn(
+            { err: err instanceof Error ? err.message : String(err), userId, idx },
+            'Failed to persist generated image; returning it inline',
+          );
+        }
+      }),
+    );
+  }
 
   const response: ImageGenerationResponse = {
     success: true,
