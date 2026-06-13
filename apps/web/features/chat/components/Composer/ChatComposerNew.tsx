@@ -314,7 +314,9 @@ const ChatComposerNewComponent = ({
     accept: acceptSuggestion,
     clear: clearSuggestion,
   } = useApiPromptCompletion(message, {
-    enabled: promptCompletionEnabled && !showSlashMenu && !showMentions,
+    // Ghost-text autocomplete hits /api/completion, which requires an active paid
+    // subscription — never call it for free-trial users (avoids 403 spam per keystroke).
+    enabled: promptCompletionEnabled && !isFreeTrial && !showSlashMenu && !showMentions,
   });
 
   const clearComposerState = useCallback(() => {
