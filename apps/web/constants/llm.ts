@@ -6,6 +6,7 @@
  * This file imports it and re-exports with the same API as the desktop shim.
  */
 
+import { FREE_TRIAL_MODEL } from '@/lib/free-trial-config';
 import {
   canAccessManualModelSelection as canAccessCatalogManualModelSelection,
   getAllowedModelsForTier as getCatalogAllowedModelsForTier,
@@ -196,6 +197,9 @@ export function getAllowedAutoModesForTier(tier: string | null | undefined): str
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
+  // Free users chat on the direct Gemini 3.1 Flash Lite model (not the managed
+  // auto-economy preset). Keeping the default + reset on the same id avoids a flip.
+  if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
   const allowedAutoModes = getAllowedAutoModesForTier(tier);
   return allowedAutoModes[allowedAutoModes.length - 1] ?? 'auto-economy';
 }

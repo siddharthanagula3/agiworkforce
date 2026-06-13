@@ -4,8 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
 import { LLMProviderFactory } from '@/lib/llm-providers/factory';
 import { CreditService } from '@/lib/services/credit-service';
-import { refundAutoEconomyTrialPrompt } from '@/lib/services/auto-economy-trial-service';
+import { refundFreeTrialPrompt } from '@/lib/services/free-trial-service';
 import { handleCorsPreflightRequest, getSecurityHeaders } from '@/lib/cors';
+import { buildManagedComputeGateResponse } from '@/lib/managed-compute-gate';
 import { runAuthGate } from './lib/auth-gate';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
 import { buildStreamResponse } from './lib/stream-transform';
@@ -23,8 +24,8 @@ async function refundFailedReservation(
   processed: ProcessedRequest,
   reason: 'streaming_failure' | 'request_failure',
 ): Promise<void> {
-  if (processed.autoEconomyTrial) {
-    await refundAutoEconomyTrialPrompt({
+  if (processed.freeTrial) {
+    await refundFreeTrialPrompt({
       userId,
       requestId: processed.requestId,
       reason,
@@ -48,6 +49,17 @@ async function handleChatCompletions(request: NextRequest) {
   if (!authResult.ok) return authResult.response;
 
   const { userId, token } = authResult;
+
+  const managedGateResponse = buildManagedComputeGateResponse(
+    request,
+    {
+      provider: 'managed',
+      model: 'chat-completions',
+      feature: 'llm_v1_chat_completions',
+    },
+    getSecurityHeaders(),
+  );
+  if (managedGateResponse) return managedGateResponse;
 
   // 2. Parse body, validate, run classifier, resolve model, quota gate, reserve credits
   const processResult = await processRequest(request, authResult);

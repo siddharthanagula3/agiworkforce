@@ -16,6 +16,7 @@ import {
   getModelMetadata,
   isModelAllowedForTier,
 } from '@/constants/llm';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
@@ -87,6 +88,9 @@ function openAIModelSupportsXHigh(modelId: string): boolean {
 }
 
 function isModelSelectableForTier(model: AIModel, tier: string): boolean {
+  // Free users may select any of the cost-efficient tool-capable trial models
+  // (so they can experience the tool-calling UI); the 3-prompt cap covers the set.
+  if (FREE_TRIAL_MODELS.includes(model.id)) return true;
   if (model.providerKey === 'managed_cloud') {
     return getAllowedAutoModesForTier(tier).includes(model.id);
   }
@@ -94,7 +98,7 @@ function isModelSelectableForTier(model: AIModel, tier: string): boolean {
   return isModelAllowedForTier(model.id, tier);
 }
 
-/** True when the model name contains "Opus" — used to show usage-rate tooltip. */
+/** True when the model name contains "Opus" · used to show usage-rate tooltip. */
 function isOpusModel(model: AIModel): boolean {
   return model.name.toLowerCase().includes('opus');
 }
@@ -317,6 +321,14 @@ interface ComposerFooterProps {
   showStyleSelector?: boolean;
   /** Free-trial prompt usage label, e.g. "2/3 prompts left". */
   trialUsageLabel?: string | null;
+  /**
+   * Inline mode: render ONLY the model/style selector cluster (no hint, budget,
+   * or usage rows) so it can be dropped directly into the composer's control
+   * row. Used by the empty-state composer to keep everything on one bottom row.
+   */
+  inline?: boolean;
+  /** Extra classes applied to the outer element (e.g. flex order / ml-auto). */
+  className?: string;
 }
 
 export function ComposerFooter({
@@ -327,6 +339,8 @@ export function ComposerFooter({
   lockModelSelector = false,
   showStyleSelector = true,
   trialUsageLabel,
+  inline = false,
+  className,
 }: ComposerFooterProps) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -384,12 +398,16 @@ export function ComposerFooter({
   };
 
   return (
-    <div className="mt-2 space-y-2">
-      {/* Budget display — renders only when tokens have been used */}
-      <BudgetTrackerDisplay className="mx-1" />
+    <div
+      className={[inline ? 'flex items-center' : 'mt-2 space-y-2', className ?? '']
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {/* Budget display · renders only when tokens have been used */}
+      {!inline && <BudgetTrackerDisplay className="mx-1" />}
 
-      {/* Usage label — trial prompt count takes precedence over daily-cost hints. */}
-      {usageLabel && (
+      {/* Usage label · trial prompt count takes precedence over daily-cost hints. */}
+      {!inline && usageLabel && (
         <div className="flex items-center gap-1.5 px-1">
           <span
             className={[
@@ -411,9 +429,13 @@ export function ComposerFooter({
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 px-1">
+      <div
+        className={
+          inline ? 'flex items-center gap-2' : 'flex items-center justify-between gap-2 px-1'
+        }
+      >
         {/* Left: keyboard hint */}
-        <span className="text-xs text-muted-foreground">{hint}</span>
+        {!inline && <span className="text-xs text-muted-foreground">{hint}</span>}
 
         <div className="flex items-center gap-2">
           {/* Response style selector */}
@@ -460,12 +482,12 @@ export function ComposerFooter({
                 </button>
               </PopoverTrigger>
               <PopoverContent align="end" sideOffset={6} className="w-72 p-0">
-                {/* Header — model count badge removed per Claude reference */}
+                {/* Header · model count badge removed per Claude reference */}
                 <div className="flex items-center border-b border-border/40 px-3 py-2">
                   <span className="text-xs font-medium text-foreground">Models</span>
                 </div>
 
-                {/* Search input — shown only in code surface */}
+                {/* Search input · shown only in code surface */}
                 {showModelSearch && (
                   <div className="border-b border-border/40 px-3 py-1.5">
                     <input
@@ -506,7 +528,7 @@ export function ComposerFooter({
                     );
                   })}
 
-                  {/* Adaptive thinking toggle row — sits between model list and "More models" */}
+                  {/* Adaptive thinking toggle row · sits between model list and "More models" */}
                   {!isSearching && (
                     <>
                       <div className="my-1 border-t border-border/40" />
@@ -574,7 +596,7 @@ export function ComposerFooter({
                     </>
                   )}
 
-                  {/* More models section — only shown when not searching */}
+                  {/* More models section · only shown when not searching */}
                   {!isSearching && more.length > 0 && (
                     <>
                       <div className="my-1 border-t border-border/40" />
