@@ -12,6 +12,8 @@ import { AgiWorkProjects } from './AgiWorkProjects';
 import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { AgiWorkDispatch } from './AgiWorkDispatch';
+import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
+import { useArtifactStore } from '../../stores/artifactStore';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -62,6 +64,11 @@ export function DesktopShellV3({
   const { mode } = useV3Mode();
   const [activePanel, setActivePanel] = useState<V3Panel>('chat');
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+
+  // Artifact panel is driven by the same artifactStore that AgiWorkArtifacts writes.
+  // conversationId is optional on ArtifactPanel so it works in the gallery context.
+  const artifactPanelOpen = useArtifactStore((s) => s.panelOpen);
+  const closeArtifactPanel = useArtifactStore((s) => s.closePanel);
 
   const handleSwitchModel = useCallback(() => {
     onModelSelectorClick?.();
@@ -115,6 +122,10 @@ export function DesktopShellV3({
         onNavigateView={handleNavigateView}
         onOpenAccountMenu={() => setAccountMenuOpen((o) => !o)}
         accountMenuOpen={accountMenuOpen}
+        onJumpConversation={(id) => {
+          setActivePanel('chat');
+          hostBridge?.selectConversation?.(id);
+        }}
       />
 
       <div style={{ flex: 1, minWidth: 0, position: 'relative', overflow: 'hidden' }}>
@@ -143,6 +154,25 @@ export function DesktopShellV3({
           <AgiWorkDispatch />
         )}
         <CapModal onSwitchModel={handleSwitchModel} onBuyTopUp={onBuyTopUp} />
+
+        {/* Artifact viewer panel — mounts when the artifact store requests it open.
+            Shares the same artifactStore instance that AgiWorkArtifacts writes,
+            so setActiveArtifact + openPanel in the grid card opens this panel. */}
+        {artifactPanelOpen && (
+          <div
+            data-testid="v3-artifact-panel"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              zIndex: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              background: 'var(--chat-surface-base, #0a0c17)',
+            }}
+          >
+            <ArtifactPanel onClose={closeArtifactPanel} />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -41,6 +41,10 @@ pub struct Project {
     pub icon_emoji: Option<String>,
     pub accent_color: Option<String>,
     pub default_privacy_mode: Option<String>,
+    /// JSON-serialized knowledge base file metadata with extracted content.
+    /// Added in v65 migration — None means no knowledge files stored.
+    #[serde(default)]
+    pub knowledge_base_files: Option<serde_json::Value>,
 }
 
 /// Project settings that can be customized per project
@@ -69,6 +73,9 @@ pub struct ProjectUpdate {
     pub icon_emoji: Option<String>,
     pub accent_color: Option<String>,
     pub default_privacy_mode: Option<String>,
+    /// JSON knowledge base files update (added in v65)
+    #[serde(default)]
+    pub knowledge_base_files: Option<serde_json::Value>,
 }
 
 /// Create a new project
@@ -84,12 +91,17 @@ pub async fn project_create(
     let conversation_ids_json =
         serde_json::to_string(&project.conversation_ids).map_err(|e| e.to_string())?;
 
+    let kb_files_json = project
+        .knowledge_base_files
+        .as_ref()
+        .map(|v| serde_json::to_string(v).unwrap_or_default());
+
     conn.execute(
         "INSERT INTO projects (
             id, name, description, custom_instructions, files, conversation_ids,
             color, icon, is_archived, created_at, updated_at,
-            icon_emoji, accent_color, default_privacy_mode
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             project.id,
             project.name,
@@ -105,6 +117,7 @@ pub async fn project_create(
             project.icon_emoji,
             project.accent_color,
             project.default_privacy_mode,
+            kb_files_json,
         ],
     )
     .map_err(|e| format!("Failed to create project: {}", e))?;
@@ -121,7 +134,7 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
         .prepare(
             "SELECT id, name, description, custom_instructions, files, conversation_ids,
                     color, icon, is_archived, created_at, updated_at,
-                    icon_emoji, accent_color, default_privacy_mode
+                    icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
              FROM projects
              ORDER BY updated_at DESC",
         )
@@ -131,10 +144,14 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
         .query_map([], |row| {
             let files_json: String = row.get(4)?;
             let conversation_ids_json: String = row.get(5)?;
+            let kb_files_json: Option<String> = row.get(14)?;
 
             let files: Vec<ProjectFile> = serde_json::from_str(&files_json).unwrap_or_default();
             let conversation_ids: Vec<String> =
                 serde_json::from_str(&conversation_ids_json).unwrap_or_default();
+            let knowledge_base_files: Option<serde_json::Value> = kb_files_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
 
             Ok(Project {
                 id: row.get(0)?,
@@ -151,6 +168,7 @@ pub async fn project_list(db: State<'_, AppDatabase>) -> Result<Vec<Project>, St
                 icon_emoji: row.get(11)?,
                 accent_color: row.get(12)?,
                 default_privacy_mode: row.get(13)?,
+                knowledge_base_files,
             })
         })
         .map_err(|e| format!("Failed to query projects: {}", e))?
@@ -172,7 +190,7 @@ pub async fn project_get(
         .prepare(
             "SELECT id, name, description, custom_instructions, files, conversation_ids,
                     color, icon, is_archived, created_at, updated_at,
-                    icon_emoji, accent_color, default_privacy_mode
+                    icon_emoji, accent_color, default_privacy_mode, knowledge_base_files
              FROM projects
              WHERE id = ?1",
         )
@@ -182,10 +200,14 @@ pub async fn project_get(
         .query_row([&id], |row| {
             let files_json: String = row.get(4)?;
             let conversation_ids_json: String = row.get(5)?;
+            let kb_files_json: Option<String> = row.get(14)?;
 
             let files: Vec<ProjectFile> = serde_json::from_str(&files_json).unwrap_or_default();
             let conversation_ids: Vec<String> =
                 serde_json::from_str(&conversation_ids_json).unwrap_or_default();
+            let knowledge_base_files: Option<serde_json::Value> = kb_files_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
 
             Ok(Project {
                 id: row.get(0)?,
@@ -202,6 +224,7 @@ pub async fn project_get(
                 icon_emoji: row.get(11)?,
                 accent_color: row.get(12)?,
                 default_privacy_mode: row.get(13)?,
+                knowledge_base_files,
             })
         })
         .optional()
@@ -273,6 +296,11 @@ pub async fn project_update(
     if let Some(default_privacy_mode) = &updates.default_privacy_mode {
         set_clauses.push("default_privacy_mode = ?");
         values.push(Box::new(default_privacy_mode.clone()));
+    }
+    if let Some(knowledge_base_files) = &updates.knowledge_base_files {
+        let kb_json = serde_json::to_string(knowledge_base_files).map_err(|e| e.to_string())?;
+        set_clauses.push("knowledge_base_files = ?");
+        values.push(Box::new(kb_json));
     }
 
     if set_clauses.is_empty() {
