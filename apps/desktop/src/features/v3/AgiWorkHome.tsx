@@ -12,7 +12,7 @@ interface OnboardingItem {
   done: boolean;
 }
 
-function agentStatusToCowork(status: AgentTaskStatus): TaskStatus {
+function agentStatusToAgiWork(status: AgentTaskStatus): TaskStatus {
   if (status === 'running' || status === 'recovering') return 'running';
   if (status === 'pending' || status === 'paused') return 'pending';
   if (status === 'completed') return 'done';
@@ -35,23 +35,23 @@ function timeAgo(iso: string, t: TFunction): string {
 function buildOnboarding(t: TFunction): OnboardingItem[] {
   return [
     {
-      title: t('cowork.home.onboarding.startTitle'),
-      desc: t('cowork.home.onboarding.startDesc'),
+      title: t('agiWork.home.onboarding.startTitle'),
+      desc: t('agiWork.home.onboarding.startDesc'),
       done: true,
     },
     {
-      title: t('cowork.home.onboarding.connectTitle'),
-      desc: t('cowork.home.onboarding.connectDesc'),
+      title: t('agiWork.home.onboarding.connectTitle'),
+      desc: t('agiWork.home.onboarding.connectDesc'),
       done: false,
     },
     {
-      title: t('cowork.home.onboarding.scheduleTitle'),
-      desc: t('cowork.home.onboarding.scheduleDesc'),
+      title: t('agiWork.home.onboarding.scheduleTitle'),
+      desc: t('agiWork.home.onboarding.scheduleDesc'),
       done: false,
     },
     {
-      title: t('cowork.home.onboarding.phoneTitle'),
-      desc: t('cowork.home.onboarding.phoneDesc'),
+      title: t('agiWork.home.onboarding.phoneTitle'),
+      desc: t('agiWork.home.onboarding.phoneDesc'),
       done: false,
     },
   ];
@@ -71,7 +71,7 @@ function StatusDot({ status }: { status: TaskStatus }) {
   );
 }
 
-export function CoworkHome() {
+export function AgiWorkHome() {
   const { t } = useTranslation('v3');
   const [onboarding, setOnboarding] = useState<OnboardingItem[]>(() => buildOnboarding(t));
   const [showOnboarding, setShowOnboarding] = useState(true);
@@ -112,14 +112,14 @@ export function CoworkHome() {
         {/* Hero */}
         <div className="space-y-1">
           <h1 className="font-serif text-2xl font-medium text-white/90">
-            {t('cowork.home.headline')}
+            {t('agiWork.home.headline')}
           </h1>
           <a
             href="#"
             className="text-sm text-teal-400 hover:underline"
             onClick={(e) => e.preventDefault()}
           >
-            {t('cowork.home.learnLink')}
+            {t('agiWork.home.learnLink')}
           </a>
         </div>
 
@@ -128,7 +128,7 @@ export function CoworkHome() {
           <div className="relative rounded-xl border border-white/10 bg-white/5 shadow-sm">
             <textarea
               className="w-full resize-none bg-transparent px-4 pt-3 pb-10 text-sm text-white placeholder-white/30 outline-none"
-              placeholder={t('cowork.home.placeholder')}
+              placeholder={t('agiWork.home.placeholder')}
               rows={3}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -140,14 +140,14 @@ export function CoworkHome() {
                 disabled={!draft.trim() || loading}
                 onClick={() => void handleStartTask()}
               >
-                {t('cowork.home.startTask')}
+                {t('agiWork.home.startTask')}
               </button>
             </div>
           </div>
           <div className="flex items-center gap-1 pl-1 text-xs text-white/30">
             <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">⌘</kbd>
             <kbd className="rounded border border-white/10 bg-white/5 px-1 font-mono">↩</kbd>
-            <span>{t('cowork.home.kbdHint')}</span>
+            <span>{t('agiWork.home.kbdHint')}</span>
           </div>
         </div>
 
@@ -156,7 +156,7 @@ export function CoworkHome() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
-                {t('cowork.home.active')}
+                {t('agiWork.home.active')}
               </span>
             </div>
             <div className="space-y-1">
@@ -166,7 +166,7 @@ export function CoworkHome() {
                   type="button"
                   className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-white/5"
                 >
-                  <StatusDot status={agentStatusToCowork(task.status)} />
+                  <StatusDot status={agentStatusToAgiWork(task.status)} />
                   <div className="min-w-0">
                     <div className="truncate text-sm text-white/85">{task.goal}</div>
                     <div className="mt-0.5 text-xs text-white/35">
@@ -184,7 +184,7 @@ export function CoworkHome() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold uppercase tracking-wider text-white/40">
-                {t('cowork.home.onboardingTitle')}
+                {t('agiWork.home.onboardingTitle')}
               </span>
               <button
                 type="button"

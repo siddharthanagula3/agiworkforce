@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, File, RefreshCw, Search, Table } from 'lucide-react';
+import { ExternalLink, File, RefreshCw, Table } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
@@ -41,41 +41,36 @@ function isFresh(summary: ArtifactSummary): boolean {
   return Date.now() - new Date(summary.updated_at).getTime() < STALE_THRESHOLD_MS;
 }
 
-export function CoworkArtifacts() {
+export function AgiWorkArtifacts() {
   const { t } = useTranslation('v3');
-  const { summaries, isLoading, listPersistedArtifacts } = useArtifactStore((s) => ({
-    summaries: s.summaries,
-    isLoading: s.isLoading,
-    listPersistedArtifacts: s.listPersistedArtifacts,
-  }));
+  const summaries = useArtifactStore((s) => s.summaries);
+  const isLoading = useArtifactStore((s) => s.isLoading);
+  const listPersistedArtifacts = useArtifactStore((s) => s.listPersistedArtifacts);
+  const setActiveArtifact = useArtifactStore((s) => s.setActiveArtifact);
+  const openPanel = useArtifactStore((s) => s.openPanel);
 
   useEffect(() => {
     void listPersistedArtifacts(undefined, 50);
   }, [listPersistedArtifacts]);
 
   return (
-    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-white/10">
+    <div className="h-full overflow-y-auto scrollbar-thin scrollbar-thumb-[var(--chat-border-strong)]">
       <div className="mx-auto max-w-3xl px-6 py-8 space-y-5">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-xl font-medium text-white/90">
-              {t('cowork.artifacts.title')}
+            <h1 className="font-serif text-xl font-medium text-[var(--chat-text-primary)]">
+              {t('agiWork.artifacts.title')}
             </h1>
-            <p className="mt-1 text-xs text-white/40">{t('cowork.artifacts.subtitle')}</p>
+            <p className="mt-1 text-xs text-[var(--chat-text-secondary)]">
+              {t('agiWork.artifacts.subtitle')}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <button
               type="button"
-              aria-label={t('common.search')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
-            >
-              <Search size={14} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
               aria-label={t('common.refresh')}
-              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/50 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
               onClick={() => void listPersistedArtifacts(undefined, 50)}
             >
               <RefreshCw size={14} aria-hidden="true" />
@@ -85,12 +80,12 @@ export function CoworkArtifacts() {
 
         {/* Artifact grid */}
         {isLoading && summaries.length === 0 ? (
-          <div className="py-8 text-center text-sm text-white/30">
-            {t('cowork.artifacts.loading')}
+          <div className="py-8 text-center text-sm text-[var(--chat-text-muted)]">
+            {t('agiWork.artifacts.loading')}
           </div>
         ) : summaries.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/30">
-            {t('cowork.artifacts.empty')}
+          <div className="rounded-xl border border-dashed border-[var(--chat-border)] px-4 py-8 text-center text-sm text-[var(--chat-text-muted)]">
+            {t('agiWork.artifacts.empty')}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -102,53 +97,57 @@ export function CoworkArtifacts() {
                   className={cn(
                     'group flex flex-col gap-3 rounded-xl border p-4 transition',
                     fresh
-                      ? 'border-teal-500/20 bg-teal-500/5 hover:border-teal-500/30'
-                      : 'border-white/10 bg-white/5 hover:border-white/15',
+                      ? 'border-[var(--chat-accent-secondary)]/20 bg-[var(--chat-accent-secondary)]/5 hover:border-[var(--chat-accent-secondary)]/30'
+                      : 'border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] hover:border-[var(--chat-border-strong)]',
                   )}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white/8 text-white/50">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)]">
                       <KindIcon artifactType={a.artifact_type} />
                     </span>
                     <span
                       className={cn(
                         'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium',
-                        fresh ? 'bg-teal-500/15 text-teal-400' : 'bg-white/8 text-white/35',
+                        fresh
+                          ? 'bg-[var(--chat-accent-secondary-soft)] text-[var(--chat-accent-secondary)]'
+                          : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
                       )}
                     >
                       <span
                         className={cn(
                           'h-1.5 w-1.5 rounded-full',
-                          fresh ? 'bg-teal-400' : 'bg-white/30',
+                          fresh
+                            ? 'bg-[var(--chat-accent-secondary)]'
+                            : 'bg-[var(--chat-text-muted)]',
                         )}
                       />
                       {fresh ? t('common.fresh') : t('common.stale')}
                     </span>
                   </div>
 
-                  <div className="text-sm font-medium text-white/90 leading-snug">{a.title}</div>
+                  <div className="text-sm font-medium text-[var(--chat-text-primary)] leading-snug">
+                    {a.title}
+                  </div>
 
-                  <div className="flex items-center gap-1.5 text-xs text-white/35">
+                  <div className="flex items-center gap-1.5 text-xs text-[var(--chat-text-muted)]">
                     <RefreshCw size={10} />
                     <span className="truncate">{timeAgo(a.updated_at, t)}</span>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-white/25">{timeAgo(a.created_at, t)}</span>
+                    <span className="text-xs text-[var(--chat-text-muted)]">
+                      {timeAgo(a.created_at, t)}
+                    </span>
                     <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                       <button
                         type="button"
-                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
-                        title={t('common.copy')}
-                        aria-label={t('common.copy')}
-                      >
-                        <Copy size={11} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="flex h-5 w-5 items-center justify-center rounded text-white/30 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
+                        className="flex h-5 w-5 items-center justify-center rounded text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-accent-primary)]"
                         title={t('search.open')}
                         aria-label={t('search.open')}
+                        onClick={() => {
+                          setActiveArtifact(a.id);
+                          openPanel();
+                        }}
                       >
                         <ExternalLink size={11} aria-hidden="true" />
                       </button>
