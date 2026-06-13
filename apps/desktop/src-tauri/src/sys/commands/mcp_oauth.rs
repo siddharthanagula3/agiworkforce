@@ -1302,6 +1302,48 @@ pub async fn mcp_oauth_set_credentials(
     Ok(())
 }
 
+/// Check whether OAuth app credentials (client_id + client_secret) have been
+/// stored for a given provider.  Does NOT decrypt — uses a COUNT(*) presence
+/// check on settings_v2 rows so the vault lock state is irrelevant.
+///
+/// Returns `{ configured: true }` when BOTH client_id and client_secret rows
+/// exist for the resolved provider, `{ configured: false }` otherwise.
+///
+/// The provider string is resolved via `McpOAuthProvider::from_str` exactly as
+/// `get_client_credentials` and `mcp_oauth_set_credentials` do, so badge state
+/// and actual credential lookup are always in sync.
+#[tauri::command]
+pub async fn mcp_oauth_credentials_status(
+    provider: String,
+) -> Result<serde_json::Value, String> {
+    let oauth_provider = McpOAuthProvider::from_str(&provider)
+        .ok_or_else(|| format!("Unknown provider: {}", provider))?;
+
+    let conn = open_mcp_settings_db()?;
+
+    let id_key = format!("mcp_oauth_config_{}_client_id", oauth_provider.as_str());
+    let secret_key = format!("mcp_oauth_config_{}_client_secret", oauth_provider.as_str());
+
+    let id_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![id_key],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let secret_count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM settings_v2 WHERE key = ?1",
+            rusqlite::params![secret_key],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let configured = id_count > 0 && secret_count > 0;
+    Ok(serde_json::json!({ "configured": configured }))
+}
+
 /// Encrypt a single credential value.
 ///
 /// FIX-001 (Sprint 1): when the user has set up a master password and the
