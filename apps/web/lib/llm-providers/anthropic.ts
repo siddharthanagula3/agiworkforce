@@ -200,7 +200,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -329,7 +329,7 @@ export class AnthropicProvider extends BaseLLMProvider {
     const url = `${this.baseUrl}/messages`;
 
     // Resolve cache retention (same logic as sendRequest; must be stable across
-    // the session — do not change based on dynamic conditions).
+    // the session · do not change based on dynamic conditions).
     const effectiveRetentionStream: CacheRetention | undefined = request.usePromptCache
       ? (request.cacheRetention ??
         resolveCacheRetention(undefined, 'anthropic', request.model) ??
@@ -376,7 +376,7 @@ export class AnthropicProvider extends BaseLLMProvider {
       }
     }
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),
@@ -446,7 +446,7 @@ function buildAnthropicContentBlocks(
       // SEV-WEB-01 / WEB-28 (audit 2026-05-19): defense-in-depth. The v1
       // chat-completions route validates user-supplied image_url at the
       // request layer (request-processor.ts:312-321), but the provider
-      // adapter must defend independently — other call sites (v2, internal
+      // adapter must defend independently · other call sites (v2, internal
       // helpers, tests) might invoke this builder with attacker-influenced
       // URLs. `validateUserImageUrl` is synchronous (no DNS resolution),
       // so it does not change this function's signature.

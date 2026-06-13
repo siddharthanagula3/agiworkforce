@@ -867,12 +867,15 @@ const ChatComposerNewComponent = ({
 
         <div
           className={cn(
-            'flex items-end gap-1 p-2 sm:gap-2 sm:p-3',
-            emptyState && 'flex-wrap px-4 py-3 sm:px-5',
+            // Two-row layout (textarea full-width on top, controls below) via
+            // flex-wrap + order — same pattern in both empty and docked states so
+            // the placeholder never gets pushed to the centre.
+            'flex flex-wrap items-end gap-1 p-2 sm:gap-2 sm:p-3',
+            emptyState && 'px-4 py-3 sm:px-5',
           )}
         >
           {/* + Overflow Menu Button */}
-          <div className={cn('relative', emptyState && 'order-2')} ref={overflowRef}>
+          <div className={cn('relative order-2')} ref={overflowRef}>
             <button
               onClick={() => {
                 const next = !showOverflowMenu;
@@ -1159,7 +1162,7 @@ const ChatComposerNewComponent = ({
           {/* Quick Toggle Pills · shown for everyone (incl. free Hobby trial);
               each toggle is gated by the selected model's capabilities below. */}
           {
-            <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
+            <div className={cn('flex items-center gap-1 order-3')}>
               <button
                 onClick={handleWebSearchToggle}
                 disabled={isLoading || disabled || !modelSupportsSearch}
@@ -1237,8 +1240,8 @@ const ChatComposerNewComponent = ({
           {/* Textarea + Ghost-text overlay wrapper */}
           <div
             className={cn(
-              'relative flex-1',
-              emptyState ? 'order-1 min-h-[40px] basis-full' : 'min-h-[52px]',
+              'relative flex-1 basis-full order-1',
+              emptyState ? 'min-h-[40px]' : 'min-h-[52px]',
             )}
           >
             <GhostTextOverlay
@@ -1287,6 +1290,11 @@ const ChatComposerNewComponent = ({
             />
           )}
 
+          {/* Spacer · pushes the voice/send cluster to the right of the controls
+              row in the docked (non-empty) layout. In the empty state the inline
+              model selector (order-4, ml-auto) already does this. */}
+          {!emptyState && <div className="order-4 ml-auto" aria-hidden="true" />}
+
           {/* Voice Input Button */}
           {!isFreeTrial && (
             <VoiceInputButton
@@ -1298,7 +1306,7 @@ const ChatComposerNewComponent = ({
                 setTimeout(() => textareaRef.current?.focus(), 50);
               }}
               disabled={isLoading || composerDisabled}
-              className={emptyState ? 'order-5' : undefined}
+              className="order-5"
             />
           )}
 
@@ -1308,7 +1316,7 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={composerDisabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className={emptyState ? 'order-6' : undefined}
+            className="order-6"
           />
         </div>
 
