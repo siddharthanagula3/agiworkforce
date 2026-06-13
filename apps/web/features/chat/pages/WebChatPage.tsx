@@ -10,6 +10,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useModelStore } from '@shared/stores/model-store';
 import { useBillingStore } from '@/stores/unified/auth';
 import { getBestAutoModeForTier } from '@/constants/llm';
+import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
 import { SendPreview } from '@agiworkforce/unified-chat';
 import {
   summarizeSendPreview,
@@ -20,7 +21,6 @@ import { Share2, Bell, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useShareConversation } from '../hooks/use-share-conversation';
 import { ChatSidebar } from '../components/Sidebar/ChatSidebar';
-import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { ArtifactsPanel, ArtifactsToggleButton } from '../components/artifacts/ArtifactsPanel';
@@ -36,13 +36,11 @@ import {
   type WebHandoffContextCandidate,
   type WebLocalToByokPreview,
 } from '../lib/localByokHandoff';
+import { getRegenerateReplayDecision, replayToSendOptions } from '../lib/regenerateReplay';
 import type { Message, MessageMetadata } from '@/stores/chatStore';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
-import type { WebChatMessageMetadata } from '../types/message-metadata';
-import {
-  getAutoEconomyTrialRemaining,
-  useAutoEconomyTrialStore,
-} from '../stores/autoEconomyTrialStore';
+import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
+import { getFreeTrialRemaining, useFreeTrialStore } from '../stores/freeTrialStore';
 import { cn } from '@shared/lib/utils';
 
 type SendMeta = {
@@ -203,23 +201,28 @@ export default function WebChatPage() {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Model from the model store — needed by the access gate below before the composer hooks.
+  // Model from the model store · needed by the access gate below before the composer hooks.
   const availableModels = useModelStore((s) => s.availableModels);
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);
   const subscriptionTier = useBillingStore((s) => s.subscription?.tier ?? 'free');
   const isWebsiteFreeTrial = subscriptionTier === 'free';
   const freeTrialModelId = getBestAutoModeForTier('free');
-  const activeModelId = isWebsiteFreeTrial ? freeTrialModelId : selectedModelId;
+  const activeModelId =
+    isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(selectedModelId)
+      ? freeTrialModelId
+      : selectedModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
-  const trialPromptsUsed = useAutoEconomyTrialStore((s) => s.promptsUsed);
-  const trialPromptLimit = useAutoEconomyTrialStore((s) => s.promptLimit);
-  const trialPromptsRemaining = getAutoEconomyTrialRemaining(trialPromptsUsed, trialPromptLimit);
+  const trialPromptsUsed = useFreeTrialStore((s) => s.promptsUsed);
+  const trialPromptLimit = useFreeTrialStore((s) => s.promptLimit);
+  const trialPromptsRemaining = getFreeTrialRemaining(trialPromptsUsed, trialPromptLimit);
   const isTrialExhausted = isWebsiteFreeTrial && trialPromptsRemaining <= 0;
 
   useEffect(() => {
     if (!isWebsiteFreeTrial) return;
-    if (selectedModelId !== freeTrialModelId) {
+    // Free users may pick any model in the free tool set; only snap back to the
+    // default when they're on something outside the set.
+    if (!FREE_TRIAL_MODELS.includes(selectedModelId)) {
       setSelectedModelId(freeTrialModelId);
     }
   }, [freeTrialModelId, isWebsiteFreeTrial, selectedModelId, setSelectedModelId]);
@@ -314,7 +317,7 @@ export default function WebChatPage() {
   const chatError = useChatStore((s) => s.error);
   const setChatError = useChatStore((s) => s.setError);
 
-  // SendPreview presentation — privacy-disclosure card rendered above the
+  // SendPreview presentation · privacy-disclosure card rendered above the
   // composer so users always see where the next turn is going (local device,
   // BYOK provider host, or AGI managed gateway) before they send.
   const sendPreviewPresentation = useMemo<SendPreviewPresentation>(() => {
@@ -749,13 +752,24 @@ export default function WebChatPage() {
         handleOpenCloudWaitlist();
         return;
       }
+      const assistantMsg = displayedMessages[idx];
+      const replayDecision = getRegenerateReplayDecision({
+        userMetadata: userMsg.metadata,
+        assistantMetadata: assistantMsg?.metadata,
+      });
+      if (!replayDecision.ok) {
+        setChatError(replayDecision.message);
+        return;
+      }
       const rollbackIds = displayedMessages.slice(idx).map((message) => message.id);
       const deleted = await deletePersistedMessages(rollbackIds);
       if (deleted) {
+        const replayOptions = replayToSendOptions(replayDecision.replay);
         await sendMessage(userMsg.content, {
           model: activeModelId,
           conversationId: displayedConversationId,
           attachments: userMsg.attachments,
+          ...replayOptions,
         });
       }
     },
@@ -768,6 +782,7 @@ export default function WebChatPage() {
       activeModelId,
       isTrialExhausted,
       handleOpenCloudWaitlist,
+      setChatError,
     ],
   );
 
@@ -814,21 +829,21 @@ export default function WebChatPage() {
   const isEmptyChat = !displayedConversationId || (chatMessages.length === 0 && !isLoading);
 
   // Count distinct research sources across all messages for the toggle badge.
-  // chatMessages use the unified-chat shape where searchResults is a flat array.
+  // Metadata may contain a flat result list or a legacy SearchResponse object.
   const researchSourceCount = useMemo(() => {
     let count = 0;
     for (const m of chatMessages) {
       const meta = m.metadata as WebChatMessageMetadata | undefined;
-      const sr = meta?.searchResults;
-      if (Array.isArray(sr)) {
-        count += (sr as Array<{ url?: string }>).filter((r) => r.url).length;
-      }
+      count += countWebSearchSources(meta?.searchResults);
     }
     return count;
   }, [chatMessages]);
 
   return (
-    <div className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]">
+    <div
+      data-chat-theme="cool"
+      className="fixed inset-0 flex overflow-hidden bg-[var(--chat-bg)] text-[var(--chat-text-primary)]"
+    >
       {/* Sidebar */}
       <ChatSidebar
         sessions={conversations}
@@ -893,7 +908,7 @@ export default function WebChatPage() {
             </div>
           )}
 
-          {/* Notification permission banner — shown during long generations */}
+          {/* Notification permission banner · shown during long generations */}
           {showNotifBanner && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
               <div className="flex items-center gap-2">
@@ -925,11 +940,9 @@ export default function WebChatPage() {
           {/* Message list */}
           {isEmptyChat ? (
             <div className="min-h-0 flex-1 overflow-hidden">
-              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6 pb-[8vh]">
-                <div className="mb-9">
-                  <GreetingBanner onSendMessage={(prompt) => setComposerPrefill(prompt)} />
-                </div>
-                <div className="w-full max-w-[900px]">
+              {/* Empty state: a single centered composer (ChatGPT-style), no greeting/chips. */}
+              <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center px-6">
+                <div className="w-full max-w-[940px]">
                   <ChatComposerNew
                     onSend={handleSend}
                     onStop={stopGeneration}

@@ -218,20 +218,6 @@ interface MessageBubbleProps {
   animationIndex?: number;
 }
 
-/** Format a message timestamp as a relative or absolute time string. */
-function formatMessageTime(date: Date): string {
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-
-  if (diffSeconds < 60) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
 const MessageBubbleComponent = function MessageBubble({
   message,
   onEdit,
@@ -325,17 +311,6 @@ const MessageBubbleComponent = function MessageBubble({
     return removeArtifactBlocks(message.content, artifacts);
   }, [message.content, artifacts]);
 
-  // Avatar info derived from message metadata only (no external service)
-  const employeeInitials = message.employeeName
-    ? message.employeeName
-        .split(/\s+/)
-        .map((w) => w.charAt(0))
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
-    : 'AI';
-  const employeeColor = message.employeeColor || '';
-
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
@@ -359,57 +334,37 @@ const MessageBubbleComponent = function MessageBubble({
       animate="visible"
       transition={{ delay: animationIndex * 0.06 }}
       className={cn(
-        /* Row — py-6 px-4 matches desktop .message-row / .message-container */
+        /* Row · py-6 px-4 matches desktop .message-row / .message-container */
         'group message-row message-bubble',
         isUser ? 'message-row-user' : 'message-row-assistant',
       )}
     >
-      {/* Inner content row — constrained to max-w-3xl */}
+      {/* Inner content row · constrained to max-w-3xl. No avatars: user messages
+          read as a right-aligned bubble, assistant messages as a flat left column. */}
       <div className={cn('message-inner', isUser && 'flex-row-reverse')}>
-        {/* Avatar — 32 × 32 circle */}
-        {!isUser ? (
-          <Avatar className="message-avatar mt-0.5">
-            <AvatarImage
-              src={message.employeeAvatar?.startsWith('/') ? message.employeeAvatar : undefined}
-            />
-            <AvatarFallback
-              className="text-xs font-semibold text-white"
-              style={{ backgroundColor: employeeColor }}
-            >
-              {employeeInitials}
-            </AvatarFallback>
-          </Avatar>
-        ) : (
-          /* User: show a gradient avatar on the right — desktop .message-avatar-user */
-          <div className="message-avatar message-avatar-user mt-0.5" aria-hidden="true">
-            U
-          </div>
-        )}
-
         {/* Content */}
-        <div className={cn('message-body', isUser ? 'user-bubble' : 'flex-1 min-w-0')}>
-          {/* Header: Name + Time */}
-          <div className="mb-1 flex items-center gap-2 text-sm">
-            <span className="font-medium">
-              {isUser
-                ? 'You'
-                : message.employeeName
-                    ?.split('-')
-                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                    .join(' ') || 'AI'}
-            </span>
-            <span className="message-timestamp">{formatMessageTime(message.timestamp)}</span>
-            {message.metadata?.isPinned && (
-              <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
-            )}
-            {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
-            {/* PASTED badge (Fix 42) — shown when isPasted metadata is set by the composer */}
-            {isUser && message.metadata?.isPasted && (
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
-                pasted
-              </span>
-            )}
-          </div>
+        <div
+          className={cn(
+            'message-body',
+            isUser ? 'flex max-w-[85%] flex-col items-end' : 'flex-1 min-w-0',
+          )}
+        >
+          {/* Slim badge row · only rendered when a marker is present (no name/timestamp) */}
+          {(message.metadata?.isPinned ||
+            hasBranches ||
+            (isUser && message.metadata?.isPasted)) && (
+            <div className="mb-1 flex items-center gap-1.5">
+              {message.metadata?.isPinned && (
+                <Pin className="h-3 w-3 text-amber-500" aria-hidden="true" />
+              )}
+              {hasBranches && <GitFork className="h-3 w-3 text-primary" aria-hidden="true" />}
+              {isUser && message.metadata?.isPasted && (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  pasted
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Interleaved reasoning + tool flow */}
           {!isUser &&
@@ -482,7 +437,7 @@ const MessageBubbleComponent = function MessageBubble({
               return null;
             })()}
 
-          {/* A/B comparison response — shown instead of main content when options are present */}
+          {/* A/B comparison response · shown instead of main content when options are present */}
           {!isUser && message.metadata?.comparisonOptions && (
             <ComparisonResponse
               optionA={message.metadata.comparisonOptions.a}
@@ -495,7 +450,7 @@ const MessageBubbleComponent = function MessageBubble({
             />
           )}
 
-          {/* Tool timeline (legacy path) — rendered before prose so it appears as
+          {/* Tool timeline (legacy path) · rendered before prose so it appears as
               leading context for the response, not an afterthought appended at the end.
               Only shown when there are no interleaved thinkingSegments (those handle
               their own per-step tool rendering above). */}
@@ -505,12 +460,13 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* Message Content — 15 px body matching desktop .message-text */}
+          {/* Message Content · 15 px body matching desktop .message-text */}
           <div
             className={cn(
               'prose dark:prose-invert max-w-none',
               'message-text', // 15 px / 1.6 lh (defined in globals.css .message-text)
               'break-words overflow-wrap-anywhere text-left',
+              isUser && 'user-bubble', // right-aligned rounded bubble (assistant stays flat)
               !isUser && message.metadata?.comparisonOptions && 'hidden',
             )}
           >
@@ -524,7 +480,7 @@ const MessageBubbleComponent = function MessageBubble({
             )}
           </div>
 
-          {/* Attachments (Fix 43) — image thumbnails or file-type icons */}
+          {/* Attachments (Fix 43) · image thumbnails or file-type icons */}
           {message.attachments && message.attachments.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2">
               {message.attachments.map((attachment) => {
@@ -584,14 +540,14 @@ const MessageBubbleComponent = function MessageBubble({
             </div>
           )}
 
-          {/* ArtifactBlock — rendered code blocks (html/csv/json/mermaid/generic) */}
+          {/* ArtifactBlock · rendered code blocks (html/csv/json/mermaid/generic) */}
           {!isUser && cleanedContent.trim() && (
             <div className="mt-1">
               <ArtifactBlock content={cleanedContent} />
             </div>
           )}
 
-          {/* Inline artifact thumbnail cards — quick visual summary, click to open panel */}
+          {/* Inline artifact thumbnail cards · quick visual summary, click to open panel */}
           {!isUser && artifacts.length > 0 && <InlineArtifactCards artifacts={artifacts} />}
 
           {/* Image Result with Error Handling */}
@@ -647,7 +603,7 @@ const MessageBubbleComponent = function MessageBubble({
               </div>
             )}
 
-          {/* Research sources — unified panel for searchResults + citations */}
+          {/* Research sources · unified panel for searchResults + citations */}
           {!isUser &&
             (() => {
               // Collect sources from searchResults (legacy) and citations (server-managed tools)
