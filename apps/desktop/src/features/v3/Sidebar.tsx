@@ -88,7 +88,6 @@ function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
     { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
-    { id: 'live-artifacts', label: t('sidebar.nav.liveArtifacts'), icon: Box },
     { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
   ];
 }
@@ -171,9 +170,8 @@ export function Sidebar({
       const viewMap: Record<string, string> = {
         projects: 'projects',
         artifacts: 'artifacts',
-        scheduled: 'cowork-scheduled',
-        'live-artifacts': 'cowork-artifacts',
-        dispatch: 'cowork-dispatch',
+        scheduled: 'work-scheduled',
+        dispatch: 'work-dispatch',
       };
       const view = viewMap[id];
       if (view) onNavigateView?.(view);
