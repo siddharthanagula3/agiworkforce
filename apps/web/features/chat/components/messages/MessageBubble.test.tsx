@@ -53,7 +53,7 @@ describe('MessageBubble', () => {
   describe('entrance animation wrapper', () => {
     it('renders the motion.div container (mocked as plain div)', () => {
       const { container } = render(<MessageBubble message={makeMessage()} />);
-      // The motion mock renders a plain div — verify the outer element exists
+      // The motion mock renders a plain div · verify the outer element exists
       const outer = container.firstChild as HTMLElement;
       expect(outer).toBeInTheDocument();
       expect(outer.tagName).toBe('DIV');
@@ -72,9 +72,10 @@ describe('MessageBubble', () => {
       expect(screen.getByText('Hello world')).toBeInTheDocument();
     });
 
-    it('shows "You" as the sender name', () => {
-      render(<MessageBubble message={makeMessage()} />);
-      expect(screen.getByText('You')).toBeInTheDocument();
+    it('renders the user message inside a right-aligned bubble', () => {
+      const { container } = render(<MessageBubble message={makeMessage({ content: 'Hi' })} />);
+      // User content lives in the .user-bubble pill (ChatGPT/Claude pattern).
+      expect(container.querySelector('.user-bubble')).toBeInTheDocument();
     });
 
     it('applies flex-row-reverse for right-alignment', () => {
@@ -84,13 +85,10 @@ describe('MessageBubble', () => {
       expect(outer.className).toMatch(/flex-row-reverse|message-row-user/);
     });
 
-    it('does not render assistant avatar for user messages', () => {
+    it('does not render any avatar (flat ChatGPT/Claude layout)', () => {
       const { container } = render(<MessageBubble message={makeMessage({ role: 'user' })} />);
-      // For user messages, the assistant Avatar (with AvatarFallback showing employee initials)
-      // should not appear. We check the message-avatar-user class is present instead of the
-      // assistant avatar class.
-      const assistantAvatar = container.querySelector('.message-avatar:not(.message-avatar-user)');
-      expect(assistantAvatar).not.toBeInTheDocument();
+      // Neither user nor assistant avatars are rendered in the redesigned bubble.
+      expect(container.querySelector('.message-avatar')).not.toBeInTheDocument();
     });
   });
 
@@ -102,21 +100,11 @@ describe('MessageBubble', () => {
       expect(screen.getByText('I can help')).toBeInTheDocument();
     });
 
-    it('shows "AI" as default sender name', () => {
-      render(<MessageBubble message={assistantMsg()} />);
-      // There may be two "AI" occurrences: one in the avatar fallback, one in the header.
-      // We only need to confirm at least one exists.
-      expect(screen.getAllByText('AI').length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('shows formatted employee name when provided', () => {
-      const msg = makeMessage({
-        role: 'assistant',
-        content: 'test',
-        employeeName: 'research-agent',
-      });
-      render(<MessageBubble message={msg} />);
-      expect(screen.getByText('Research Agent')).toBeInTheDocument();
+    it('renders assistant content flat (no user bubble)', () => {
+      const { container } = render(<MessageBubble message={assistantMsg()} />);
+      // Assistant messages are flat left-aligned prose — never wrapped in .user-bubble.
+      expect(container.querySelector('.user-bubble')).not.toBeInTheDocument();
+      expect(screen.getByText('I can help')).toBeInTheDocument();
     });
 
     it('renders assistant tool activity in the compact timeline', async () => {
@@ -302,7 +290,7 @@ describe('MessageBubble', () => {
         content: 'test',
         metadata: { tokensUsed: 1234, model: 'claude-3-5-sonnet' },
       });
-      // The token count appears inside the dropdown menu (portal) — just verify no render error
+      // The token count appears inside the dropdown menu (portal) · just verify no render error
       expect(() => render(<MessageBubble message={msg} />)).not.toThrow();
     });
   });

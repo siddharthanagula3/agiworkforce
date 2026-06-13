@@ -28,12 +28,11 @@ import { AttachmentPreview } from './AttachmentPreview';
 import { useAttachments } from '@features/chat/hooks/use-attachments';
 import { useApiPromptCompletion } from '@/hooks/useApiPromptCompletion';
 import { useChatStore } from '@shared/stores/chat-store';
+import { useModelStore } from '@shared/stores/model-store';
+import { getModelMetadata } from '@/constants/llm';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import type { ChatMode } from '@features/chat/types';
-import {
-  AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS,
-  getAutoEconomyTrialRemaining,
-} from '../../stores/autoEconomyTrialStore';
+import { FREE_TRIAL_MAX_INPUT_CHARS, getFreeTrialRemaining } from '../../stores/freeTrialStore';
 import { CONNECTORS } from '@features/connectors/data/connectors';
 import { useConnectors } from '@features/connectors/hooks/use-connectors';
 import { Switch } from '@shared/ui/switch';
@@ -202,13 +201,28 @@ const ChatComposerNewComponent = ({
   const [showStyleSubmenu, setShowStyleSubmenu] = useState(false);
   const [showSkillsSubmenu, setShowSkillsSubmenu] = useState(false);
   const [showConnectorsSubmenu, setShowConnectorsSubmenu] = useState(false);
-  const isFreeAutoEconomyTrial = freeTrial?.enabled ?? false;
+  const isFreeTrial = freeTrial?.enabled ?? false;
   const trialPromptLimit = freeTrial?.promptLimit ?? 3;
-  const trialPromptsRemaining = getAutoEconomyTrialRemaining(
+  const trialPromptsRemaining = getFreeTrialRemaining(
     freeTrial?.promptsUsed ?? null,
     trialPromptLimit,
   );
-  const trialExhausted = isFreeAutoEconomyTrial && trialPromptsRemaining <= 0;
+  const trialExhausted = isFreeTrial && trialPromptsRemaining <= 0;
+
+  // Capability gating: enable/disable composer affordances based on the SELECTED
+  // model's capabilities so a user never sends an input the model can't handle
+  // (e.g. an image to a text-only model, or web search to a no-search model).
+  const composerSelectedModelId = useModelStore((s) => s.selectedModelId);
+  const selectedModelCaps = getModelMetadata(composerSelectedModelId)?.capabilities;
+  const modelSupportsVision = selectedModelCaps?.vision ?? false;
+  const modelSupportsSearch = selectedModelCaps?.search ?? false;
+  const modelSupportsThinkingCap = selectedModelCaps?.thinking ?? false;
+
+  // If the user switches to a model that can't search, clear the web-search
+  // toggle so it never stays "on" for an unsupported model.
+  useEffect(() => {
+    if (webSearchEnabled && !modelSupportsSearch) setWebSearchEnabled(false);
+  }, [webSearchEnabled, modelSupportsSearch]);
 
   // Incognito / temporary chat
   const activeConversationId = useChatStore((s) => s.activeConversationId);
@@ -321,7 +335,7 @@ const ChatComposerNewComponent = ({
   }, [clearAttachments, clearSuggestion]);
 
   useEffect(() => {
-    if (!isFreeAutoEconomyTrial) return;
+    if (!isFreeTrial) return;
     setSelectedSkill(null);
     setSkillBody(null);
     setWebSearchEnabled(false);
@@ -333,7 +347,7 @@ const ChatComposerNewComponent = ({
     if (attachments.length > 0) {
       clearAttachments();
     }
-  }, [attachments.length, clearAttachments, isFreeAutoEconomyTrial]);
+  }, [attachments.length, clearAttachments, isFreeTrial]);
 
   useEffect(() => {
     if (clearSignal === undefined || clearSignal === lastClearSignalRef.current) return;
@@ -374,7 +388,7 @@ const ChatComposerNewComponent = ({
     };
   }, [selectedSkill]);
 
-  // Handle prefillText prop — React "derived state from props" pattern.
+  // Handle prefillText prop · React "derived state from props" pattern.
   // When the parent passes a new non-empty prefillText, we update message
   // and notify the parent. This uses the recommended setState-during-render
   // pattern (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
@@ -385,19 +399,38 @@ const ChatComposerNewComponent = ({
     onPrefillConsumed?.();
   }
 
-  // Handle droppedFiles prop — same derived-state-from-props pattern as prefillText.
+  const addImageAttachments = useCallback(
+    (files: File[]) => {
+      const imageFiles = files.filter((file) => file.type.startsWith('image/'));
+      if (imageFiles.length === 0) {
+        setLocalNotice(
+          'Web chat currently accepts images only. Other file types require Cloud file support.',
+        );
+        return;
+      }
+
+      setLocalNotice(
+        imageFiles.length === files.length
+          ? null
+          : 'Only images were attached. Other file types require Cloud file support.',
+      );
+      addFiles(imageFiles);
+    },
+    [addFiles],
+  );
+
+  // Handle droppedFiles prop · same derived-state-from-props pattern as prefillText.
   // When the parent passes files dropped onto the message area, feed them into the
   // attachment hook and notify the parent so it can clear the pending state.
   const [prevDroppedFiles, setPrevDroppedFiles] = useState(droppedFiles);
   if (droppedFiles && droppedFiles.length > 0 && droppedFiles !== prevDroppedFiles) {
     setPrevDroppedFiles(droppedFiles);
-    if (isFreeAutoEconomyTrial) {
+    if (!modelSupportsVision) {
       setLocalNotice(
-        'File upload is available on hosted cloud upgrades. Free web chat accepts text prompts only.',
+        'The selected model can’t read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.',
       );
     } else {
-      setLocalNotice(null);
-      addFiles(droppedFiles);
+      addImageAttachments(droppedFiles);
     }
     onDroppedFilesConsumed?.();
   }
@@ -476,7 +509,7 @@ const ChatComposerNewComponent = ({
         clearSuggestion();
       }
 
-      if (isFreeAutoEconomyTrial && value.startsWith('/')) {
+      if (isFreeTrial && value.startsWith('/')) {
         setShowSlashMenu(false);
         setShowMentions(false);
         setLocalNotice(
@@ -508,7 +541,7 @@ const ChatComposerNewComponent = ({
       }
       setShowMentions(false);
     },
-    [isFreeAutoEconomyTrial, suggestion, clearSuggestion],
+    [isFreeTrial, suggestion, clearSuggestion],
   );
 
   const filteredSkills = availableSkills
@@ -537,7 +570,7 @@ const ChatComposerNewComponent = ({
 
   const handleSlashSelect = useCallback(
     (commandId: string) => {
-      if (isFreeAutoEconomyTrial) {
+      if (isFreeTrial) {
         setMessage('');
         setShowSlashMenu(false);
         setLocalNotice(
@@ -551,12 +584,12 @@ const ChatComposerNewComponent = ({
       if (commandId === 'search') setWebSearchEnabled(true);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [isFreeAutoEconomyTrial],
+    [isFreeTrial],
   );
 
   const handleSkillSelect = useCallback(
     (skillName: string) => {
-      if (isFreeAutoEconomyTrial) {
+      if (isFreeTrial) {
         setMessage('');
         setShowSlashMenu(false);
         setLocalNotice(
@@ -570,7 +603,7 @@ const ChatComposerNewComponent = ({
       setShowSlashMenu(false);
       setTimeout(() => textareaRef.current?.focus(), 0);
     },
-    [isFreeAutoEconomyTrial],
+    [isFreeTrial],
   );
 
   const handleStop = useCallback(() => {
@@ -589,13 +622,13 @@ const ChatComposerNewComponent = ({
         onUpgradeRequest?.();
         return;
       }
-      if (isFreeAutoEconomyTrial && attachments.length > 0) {
+      if (isFreeTrial && attachments.length > 0) {
         setLocalNotice(
           'The website free trial is text-only. Upgrade for hosted file and image uploads.',
         );
         return;
       }
-      if (isFreeAutoEconomyTrial && message.trim().length > AUTO_ECONOMY_TRIAL_MAX_INPUT_CHARS) {
+      if (isFreeTrial && message.trim().length > FREE_TRIAL_MAX_INPUT_CHARS) {
         setLocalNotice(
           'This prompt is too large for the website free trial. Shorten it or upgrade for larger hosted prompts.',
         );
@@ -610,6 +643,7 @@ const ChatComposerNewComponent = ({
           agentMode,
           folderId: selectedFolderId,
           webSearchEnabled,
+          thinkingEnabled,
           styleMode: styleMode !== 'normal' ? styleMode : undefined,
           skillBody: skillBody ?? undefined,
         },
@@ -626,10 +660,11 @@ const ChatComposerNewComponent = ({
       isLoading,
       disabled,
       trialExhausted,
-      isFreeAutoEconomyTrial,
+      isFreeTrial,
       onUpgradeRequest,
       agentMode,
       selectedFolderId,
+      thinkingEnabled,
       onSend,
       clearComposerState,
     ],
@@ -684,28 +719,28 @@ const ChatComposerNewComponent = ({
    */
   const sendButtonMode = isLoading ? 'stop' : isGenerating && hasContent ? 'queue' : 'send';
 
+  // Trial usage is surfaced once, in the banner above the composer (with its
+  // Upgrade CTA). The footer hint stays purely about input affordances so the
+  // count is not repeated three times.
   const footerHint = trialExhausted
     ? 'Free web prompts used · Upgrade for more hosted usage'
-    : isFreeAutoEconomyTrial
-      ? `${trialPromptsRemaining} of ${trialPromptLimit} Auto Economy prompts remaining`
-      : showSlashMenu
-        ? 'Tab to accept · Esc to dismiss'
-        : suggestion
-          ? 'Tab to accept suggestion · Cmd+Enter to send'
-          : 'Cmd+Enter to send · Enter for newline';
+    : showSlashMenu
+      ? 'Tab to accept · Esc to dismiss'
+      : suggestion
+        ? 'Tab to accept suggestion · Cmd+Enter to send'
+        : 'Cmd+Enter to send · Enter for newline';
 
   const handleFileDrop = useCallback(
     (files: File[]) => {
-      if (isFreeAutoEconomyTrial) {
+      if (!modelSupportsVision) {
         setLocalNotice(
-          'File upload is available on hosted cloud upgrades. Free web chat accepts text prompts only.',
+          'The selected model can’t read images. Switch to a vision model (e.g. Gemini 3.1 Flash Lite) to attach images.',
         );
         return;
       }
-      setLocalNotice(null);
-      addFiles(files);
+      addImageAttachments(files);
     },
-    [addFiles, isFreeAutoEconomyTrial],
+    [addImageAttachments, modelSupportsVision],
   );
 
   // + button indicator: amber tint when any feature is active
@@ -713,12 +748,12 @@ const ChatComposerNewComponent = ({
 
   return (
     <div className="relative w-full pb-4 sticky bottom-0 z-20 bg-background/95 backdrop-blur-sm md:static md:bg-transparent md:backdrop-blur-none">
-      {!isFreeAutoEconomyTrial && <DragDropOverlay onDrop={handleFileDrop} />}
+      {modelSupportsVision && <DragDropOverlay onDrop={handleFileDrop} />}
 
-      {isFreeAutoEconomyTrial && (
+      {isFreeTrial && (
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-[var(--chat-glass-border)] bg-[var(--chat-bg-elevated)]/90 px-3 py-2 text-xs text-[var(--chat-text-secondary)] shadow-sm">
           <span>
-            Auto Economy web trial · {trialPromptsRemaining}/{trialPromptLimit} prompts left
+            Free trial · {trialPromptsRemaining}/{trialPromptLimit} prompts left
           </span>
           <button
             type="button"
@@ -743,7 +778,7 @@ const ChatComposerNewComponent = ({
       <ActiveModeTags tags={activeTags} onDismiss={handleTagDismiss} />
 
       {/* Selected Skill Badge */}
-      {selectedSkill && !isFreeAutoEconomyTrial && (
+      {selectedSkill && !isFreeTrial && (
         <div className="mb-2 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
             /{selectedSkill.name}
@@ -778,7 +813,7 @@ const ChatComposerNewComponent = ({
         )}
       >
         {/* Slash Command Menu */}
-        {showSlashMenu && !isFreeAutoEconomyTrial && (
+        {showSlashMenu && !isFreeTrial && (
           <SlashCommandMenu
             ref={slashMenuRef}
             query={slashQuery}
@@ -789,7 +824,7 @@ const ChatComposerNewComponent = ({
         )}
 
         {/* @Mention Dropdown */}
-        {showMentions && filteredSkills.length > 0 && !isFreeAutoEconomyTrial && (
+        {showMentions && filteredSkills.length > 0 && !isFreeTrial && (
           <div
             ref={mentionsRef}
             className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 shadow-xl backdrop-blur-xl"
@@ -833,7 +868,7 @@ const ChatComposerNewComponent = ({
         <div
           className={cn(
             'flex items-end gap-1 p-2 sm:gap-2 sm:p-3',
-            emptyState && 'min-h-[132px] flex-wrap px-5 py-4 sm:px-6',
+            emptyState && 'flex-wrap px-4 py-3 sm:px-5',
           )}
         >
           {/* + Overflow Menu Button */}
@@ -865,24 +900,24 @@ const ChatComposerNewComponent = ({
             {/* + Menu Popover */}
             {showOverflowMenu && (
               <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                {isFreeAutoEconomyTrial ? (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    Free web chat is text-only Auto Economy. Search, files, tools, connectors, and
-                    styles are available on hosted cloud upgrades.
-                  </div>
-                ) : (
+                {
                   <>
-                    {/* 1. Add files or photos */}
+                    {/* 1. Add photos */}
                     <button
                       type="button"
+                      disabled={!modelSupportsVision}
                       onClick={() => {
                         fileInputRef.current?.click();
                         closeMenu();
                       }}
-                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                        !modelSupportsVision && 'cursor-not-allowed opacity-50',
+                      )}
+                      title={modelSupportsVision ? undefined : 'This model can’t read images'}
                     >
                       <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                      <span className="flex-1 text-left">Add files or photos</span>
+                      <span className="flex-1 text-left">Add photos</span>
                     </button>
 
                     {/* 2. Take a screenshot */}
@@ -1055,7 +1090,7 @@ const ChatComposerNewComponent = ({
                         handleWebSearchToggle();
                         closeMenu();
                       }}
-                      disabled={isLoading || disabled}
+                      disabled={isLoading || disabled || !modelSupportsSearch}
                     />
 
                     {/* 9. Use style -- right flyout */}
@@ -1116,26 +1151,29 @@ const ChatComposerNewComponent = ({
                       )}
                     </div>
                   </>
-                )}
+                }
               </div>
             )}
           </div>
 
-          {/* Quick Toggle Pills -- preserved for direct access */}
-          {!isFreeAutoEconomyTrial && (
+          {/* Quick Toggle Pills · shown for everyone (incl. free Hobby trial);
+              each toggle is gated by the selected model's capabilities below. */}
+          {
             <div className={cn('flex items-center gap-1', emptyState && 'order-3')}>
               <button
                 onClick={handleWebSearchToggle}
-                disabled={isLoading || disabled}
+                disabled={isLoading || disabled || !modelSupportsSearch}
                 className={cn(
                   'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                   webSearchEnabled
                     ? 'bg-[var(--chat-accent-primary)]/15 text-[var(--chat-accent-primary)] ring-1 ring-[var(--chat-accent-primary)]/30'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+                  (isLoading || disabled || !modelSupportsSearch) &&
+                    'cursor-not-allowed opacity-50',
                 )}
                 aria-label="Toggle web search"
                 aria-pressed={webSearchEnabled}
+                title={modelSupportsSearch ? undefined : 'This model can’t search the web'}
               >
                 <Globe className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Search</span>
@@ -1143,13 +1181,14 @@ const ChatComposerNewComponent = ({
 
               <button
                 onClick={handleThinkingClick}
-                disabled={isLoading || disabled}
+                disabled={isLoading || disabled || !modelSupportsThinkingCap}
                 className={cn(
                   'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
                   thinkingEnabled
                     ? 'bg-muted/60 text-[var(--chat-accent-primary)] ring-1 ring-border'
                     : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  (isLoading || disabled) && 'cursor-not-allowed opacity-50',
+                  (isLoading || disabled || !modelSupportsThinkingCap) &&
+                    'cursor-not-allowed opacity-50',
                 )}
                 aria-label={
                   thinkingEnabled
@@ -1169,37 +1208,37 @@ const ChatComposerNewComponent = ({
                 )}
               </button>
 
-              <button
-                onClick={handleIncognitoToggle}
-                disabled={!canToggleIncognito}
-                className={cn(
-                  'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
-                  isIncognito
-                    ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
-                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
-                  !canToggleIncognito && 'cursor-not-allowed opacity-50',
-                )}
-                aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
-                aria-pressed={isIncognito}
-                title={
-                  !activeConversationId
-                    ? 'Incognito can be toggled after the first message creates a conversation.'
-                    : isIncognito
-                      ? 'Incognito mode: conversation not saved. Click to disable.'
-                      : 'Start an incognito conversation (not saved to history)'
-                }
-              >
-                <EyeOff className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Incognito</span>
-              </button>
+              {activeConversationId ? (
+                <button
+                  onClick={handleIncognitoToggle}
+                  disabled={!canToggleIncognito}
+                  className={cn(
+                    'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
+                    isIncognito
+                      ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/30'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                    !canToggleIncognito && 'cursor-not-allowed opacity-50',
+                  )}
+                  aria-label={isIncognito ? 'Disable incognito mode' : 'Enable incognito mode'}
+                  aria-pressed={isIncognito}
+                  title={
+                    isIncognito
+                      ? 'Temporary mode is on for this conversation. Click to disable.'
+                      : 'Make the current conversation temporary.'
+                  }
+                >
+                  <EyeOff className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Incognito</span>
+                </button>
+              ) : null}
             </div>
-          )}
+          }
 
           {/* Textarea + Ghost-text overlay wrapper */}
           <div
             className={cn(
               'relative flex-1',
-              emptyState ? 'order-1 min-h-[76px] basis-full' : 'min-h-[52px]',
+              emptyState ? 'order-1 min-h-[40px] basis-full' : 'min-h-[52px]',
             )}
           >
             <GhostTextOverlay
@@ -1220,7 +1259,7 @@ const ChatComposerNewComponent = ({
               className={cn(
                 'relative z-10 max-h-[240px] w-full resize-none overflow-y-auto border-0 bg-transparent px-2 leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50',
                 emptyState
-                  ? 'min-h-[76px] py-2 text-[20px] md:text-[20px]'
+                  ? 'min-h-[40px] py-1.5 text-[18px] md:text-[18px]'
                   : 'min-h-[52px] py-3 text-sm md:text-[15px]',
               )}
               rows={1}
@@ -1235,8 +1274,21 @@ const ChatComposerNewComponent = ({
             )}
           </div>
 
+          {/* Model selector (empty state) — rendered inside the control row so it
+              shares the bottom row with + and send, like ChatGPT/Claude/Comet. */}
+          {emptyState && (
+            <ComposerFooter
+              inline
+              className="order-4 ml-auto"
+              showModelSelector
+              lockModelSelector={false}
+              showStyleSelector={false}
+              onUpgradeRequest={onUpgradeRequest}
+            />
+          )}
+
           {/* Voice Input Button */}
-          {!isFreeAutoEconomyTrial && (
+          {!isFreeTrial && (
             <VoiceInputButton
               onTranscript={(text) => {
                 setMessage((prev) => {
@@ -1246,7 +1298,7 @@ const ChatComposerNewComponent = ({
                 setTimeout(() => textareaRef.current?.focus(), 50);
               }}
               disabled={isLoading || composerDisabled}
-              className={emptyState ? 'order-4 ml-auto' : undefined}
+              className={emptyState ? 'order-5' : undefined}
             />
           )}
 
@@ -1256,38 +1308,41 @@ const ChatComposerNewComponent = ({
             hasContent={hasContent}
             disabled={composerDisabled}
             onClick={sendButtonMode === 'stop' ? handleStop : handleSubmit}
-            className={emptyState ? 'order-5' : undefined}
+            className={emptyState ? 'order-6' : undefined}
           />
         </div>
+
+        {/* Composer footer (docked / with-messages): hint + model selector inside
+            the pill. In the empty state the selector is rendered inline in the
+            control row above instead, so the bar stays a single compact row. */}
+        {!emptyState && (
+          <div className="px-1">
+            <ComposerFooter
+              hint={footerHint}
+              showModelSelector
+              lockModelSelector={false}
+              showStyleSelector={!isFreeTrial}
+              onUpgradeRequest={onUpgradeRequest}
+            />
+          </div>
+        )}
 
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
           multiple
-          disabled={isFreeAutoEconomyTrial}
+          accept="image/*"
+          disabled={isFreeTrial}
           className="hidden"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
             handleFileDrop(files);
             e.target.value = '';
           }}
-          aria-label="File upload"
+          aria-label="Image upload"
         />
       </div>
-
-      <ComposerFooter
-        hint={footerHint}
-        showModelSelector
-        lockModelSelector={isFreeAutoEconomyTrial}
-        showStyleSelector={!isFreeAutoEconomyTrial}
-        trialUsageLabel={
-          isFreeAutoEconomyTrial
-            ? `${trialPromptsRemaining}/${trialPromptLimit} prompts left`
-            : undefined
-        }
-        onUpgradeRequest={onUpgradeRequest}
-      />
     </div>
   );
 };
