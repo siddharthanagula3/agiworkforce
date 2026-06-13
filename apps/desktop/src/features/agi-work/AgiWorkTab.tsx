@@ -22,7 +22,7 @@ interface LiveArtifact {
   sizeKb: number;
 }
 
-interface ScheduledCoworkTask {
+interface ScheduledAgiWorkTask {
   id: string;
   title: string;
   cron: string;
@@ -85,7 +85,7 @@ const MOCK_ARTIFACTS: LiveArtifact[] = [
   },
 ];
 
-const MOCK_SCHEDULED: ScheduledCoworkTask[] = [
+const MOCK_SCHEDULED: ScheduledAgiWorkTask[] = [
   {
     id: 's1',
     title: 'Daily digest',
@@ -191,7 +191,7 @@ function LiveArtifactsPanel({ artifacts }: { artifacts: LiveArtifact[] }) {
   );
 }
 
-function ScheduledTasksCard({ tasks }: { tasks: ScheduledCoworkTask[] }) {
+function ScheduledTasksCard({ tasks }: { tasks: ScheduledAgiWorkTask[] }) {
   const [localTasks, setLocalTasks] = useState(tasks);
 
   function toggle(id: string) {
@@ -241,12 +241,12 @@ function ScheduledTasksCard({ tasks }: { tasks: ScheduledCoworkTask[] }) {
 
 // --- Main tab ---
 
-export function CoworkTab() {
+export function AgiWorkTab() {
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-base font-semibold text-white">Cowork</h1>
+          <h1 className="text-base font-semibold text-white">AGI Work</h1>
           <p className="text-xs text-slate-400">Dispatcher agents working alongside you</p>
         </div>
         <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-300">
