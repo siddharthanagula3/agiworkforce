@@ -17,6 +17,7 @@ import {
   isModelAllowedForTier,
 } from '@/constants/llm';
 import { FREE_TRIAL_MODELS } from '@/lib/free-trial-config';
+import { ProviderMark, hasProviderMark } from '@shared/components/ProviderMark';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { supportsOpenAIReasoningEffort } from '@agiworkforce/llm-normalize';
 
@@ -194,8 +195,18 @@ function partitionModels(
   return { recommended, more, isSearching: false };
 }
 
-/** Provider logo: img when SVG exists, brand-color dot as fallback. */
+/** Provider logo: official vector mark (theme-adaptive) → local SVG → brand dot. */
 function ProviderLogo({ providerKey, size = 14 }: { providerKey: string; size?: number }) {
+  // Prefer the official, theme-adaptive mark (OpenAI/Claude/Gemini/DeepSeek/etc.).
+  const markKey = toProviderId(providerKey) ?? providerKey;
+  if (hasProviderMark(markKey)) {
+    return (
+      <span className="inline-flex shrink-0 items-center justify-center text-[var(--chat-text-secondary)]">
+        <ProviderMark providerKey={markKey} size={size} />
+      </span>
+    );
+  }
+
   const logoUrl = providerLogoUrl(providerKey);
   const hex = providerBrandHex(providerKey);
 
