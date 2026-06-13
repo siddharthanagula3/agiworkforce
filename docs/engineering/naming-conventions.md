@@ -25,6 +25,15 @@ Use these stable conventions where they fit:
 - Do not rename repo paths, npm packages, Cargo packages, bundle IDs, database schemas, auth clients, or historical storage paths just because the public command is `agi`.
 - User-facing CLI examples must prefer `agi`. Use `agiworkforce` only when documenting the backward-compatible alias or an internal package/path name.
 
+## Surface And Mode Names
+
+User-facing surface and mode labels use the AGI-prefixed family. Never ship Claude's product terms (for example "Cowork") as our own UI, marketing, route, or doc labels.
+
+- Surfaces: `AGI Desktop`, `AGI Web`, `AGI Mobile`, `AGI CLI`, `AGI in Chrome`, `AGI for VS Code`.
+- Modes and product lines: `AGI Work` (agentic scheduled / dispatch / local-file work; replaces the former "Cowork" label), `AGI Code` (coding surface), `AGI Cloud` (managed cloud), `AGI Agent` / `AGI agents` (delegated tool-using sessions and subagents).
+- `Cowork` is a Claude product term. Do not use it as an AGI surface, mode, route, or marketing name. It may appear ONLY as an explicit, attributed competitor reference (for example "vs Claude Cowork"), never as our own feature name.
+- This rule applies to UI strings, marketing copy, page titles/metadata, public routes, and docs. Internal identifiers (file paths, component names, store keys) are not required to change for branding alone (see Product And CLI Names), but new code should prefer the AGI Work naming.
+
 ## Root Control Files
 
 Keep only these active control files at repo root:
