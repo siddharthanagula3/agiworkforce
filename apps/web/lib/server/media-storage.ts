@@ -58,7 +58,7 @@ export async function bytesFromUrl(url: string): Promise<{ data: Buffer; content
 /** Upload bytes to durable, user-scoped object storage. */
 export async function storeMedia(params: {
   userId: string;
-  kind: 'image' | 'video';
+  kind: 'image' | 'video' | 'file';
   data: Buffer | Uint8Array;
   contentType: string;
 }): Promise<StoredMedia> {
