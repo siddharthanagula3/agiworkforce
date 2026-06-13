@@ -1,8 +1,8 @@
 /**
- * Knowledge Files API — Cloud Managed feature (waitlist-gated in v1).
+ * Knowledge Files API · Cloud Managed feature (waitlist-gated in v1).
  *
- * GET  /api/projects/[id]/knowledge-files — list active files for a project
- * POST /api/projects/[id]/knowledge-files — record an uploaded file
+ * GET  /api/projects/[id]/knowledge-files · list active files for a project
+ * POST /api/projects/[id]/knowledge-files · record an uploaded file
  *
  * Pre-migration safety: catches PG error 42P01 (undefined_table).
  *   GET  → 200 { files: [] }
@@ -31,15 +31,14 @@ const ALL_SURFACES: readonly SourceSurface[] = [
 ];
 
 const PG_UNDEFINED_TABLE = '42P01';
+const PG_UNDEFINED_COLUMN = '42703';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
-function isUndefinedTable(error: unknown): boolean {
-  return (
-    !!error &&
-    typeof error === 'object' &&
-    (error as Record<string, unknown>)['code'] === PG_UNDEFINED_TABLE
-  );
+function isSchemaNotReady(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as Record<string, unknown>)['code'];
+  return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
 async function handleListKnowledgeFiles(request: NextRequest, context: RouteContext) {
@@ -69,7 +68,7 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
       [projectId],
     );
   } catch (error) {
-    if (isUndefinedTable(error)) {
+    if (isSchemaNotReady(error)) {
       return NextResponse.json({ files: [] });
     }
     logger.error({ error, projectId }, 'Failed to fetch knowledge files');
@@ -170,7 +169,7 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     if (!inserted) throw new Error('No row returned');
     data = inserted;
   } catch (error) {
-    if (isUndefinedTable(error)) {
+    if (isSchemaNotReady(error)) {
       return NextResponse.json(
         {
           error: 'knowledge_files_unavailable',

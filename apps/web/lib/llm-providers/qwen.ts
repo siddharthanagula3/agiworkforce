@@ -3,6 +3,39 @@ import 'server-only';
 import { BaseLLMProvider, LLMProviderRequest, LLMProviderResponse } from './base';
 import { logger } from '@/lib/logger';
 
+function trimTrailingSlash(value: string): string {
+  return value.replace(/\/+$/, '');
+}
+
+function mapOpenAICompatibleMessages(messages: LLMProviderRequest['messages']) {
+  return messages.map((msg) => {
+    const mapped: Record<string, unknown> = {
+      role: msg.role,
+      content: msg.content,
+    };
+    if (msg.tool_calls && msg.tool_calls.length > 0) {
+      mapped['tool_calls'] = msg.tool_calls;
+    }
+    if (msg.tool_call_id) {
+      mapped['tool_call_id'] = msg.tool_call_id;
+    }
+    return mapped;
+  });
+}
+
+function requestIncludesToolState(request: LLMProviderRequest): boolean {
+  return (
+    Boolean(request.tools?.length) ||
+    request.tool_choice !== undefined ||
+    request.messages.some(
+      (message) =>
+        message.role === 'tool' ||
+        Boolean(message.tool_calls?.length) ||
+        message.tool_call_id !== undefined,
+    )
+  );
+}
+
 export class QwenProvider extends BaseLLMProvider {
   getDefaultBaseUrl(): string {
     // Default to Alibaba DashScope, but can be overridden via QWEN_BASE_URL
@@ -33,16 +66,11 @@ export class QwenProvider extends BaseLLMProvider {
   private async sendOpenAICompatibleRequest(
     request: LLMProviderRequest,
   ): Promise<LLMProviderResponse> {
-    // MuleRouter uses OpenAI-compatible format at /vendors/openai/v1/chat/completions
-    // See: https://mulerouter.ai/docs/api-reference/endpoint/openai/chat
-    const url = `${this.baseUrl}/vendors/openai/v1/chat/completions`;
+    const url = this.getOpenAICompatibleChatCompletionsUrl();
 
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
+      messages: mapOpenAICompatibleMessages(request.messages),
     };
 
     if (request.temperature !== undefined) {
@@ -62,7 +90,7 @@ export class QwenProvider extends BaseLLMProvider {
     }
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -102,14 +130,17 @@ export class QwenProvider extends BaseLLMProvider {
       }
 
       const data = await response.json();
+      const message = data.choices?.[0]?.message;
 
       return {
-        content: data.choices?.[0]?.message?.content || '',
+        content: message?.content || '',
         model: data.model || request.model,
         promptTokens: data.usage?.prompt_tokens || 0,
         completionTokens: data.usage?.completion_tokens || 0,
         totalTokens: data.usage?.total_tokens || 0,
         finishReason: data.choices?.[0]?.finish_reason,
+        ...(message?.tool_calls &&
+          message.tool_calls.length > 0 && { tool_calls: message.tool_calls }),
       };
     } catch (error) {
       logger.error({ error, model: request.model }, 'Qwen request failed (MuleRouter)');
@@ -118,10 +149,16 @@ export class QwenProvider extends BaseLLMProvider {
   }
 
   private async sendDashScopeRequest(request: LLMProviderRequest): Promise<LLMProviderResponse> {
+    if (requestIncludesToolState(request)) {
+      throw new Error(
+        'Qwen DashScope native adapter does not support tool calling. Configure QWEN_BASE_URL with an OpenAI-compatible Qwen base URL.',
+      );
+    }
+
     const url = `${this.baseUrl}/services/aigc/text-generation/generation`;
 
     const messages = request.messages.map((msg) => ({
-      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      role: msg.role,
       content: msg.content,
     }));
 
@@ -137,7 +174,7 @@ export class QwenProvider extends BaseLLMProvider {
     };
 
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchWithRetry(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(body),
@@ -193,22 +230,25 @@ export class QwenProvider extends BaseLLMProvider {
   }
 
   async streamRequest(request: LLMProviderRequest): Promise<ReadableStream> {
-    // MuleRouter uses OpenAI-compatible format at /vendors/openai/v1/chat/completions
-    const url = `${this.baseUrl}/vendors/openai/v1/chat/completions`;
+    const url = this.getOpenAICompatibleChatCompletionsUrl();
 
     const body: Record<string, unknown> = {
       model: request.model,
-      messages: request.messages.map((msg) => ({
-        role: msg.role,
-        content: msg.content,
-      })),
+      messages: mapOpenAICompatibleMessages(request.messages),
       stream: true,
     };
 
     if (request.temperature !== undefined) body['temperature'] = request.temperature;
     if (request.max_tokens !== undefined) body['max_tokens'] = request.max_tokens;
+    if (request.tools && request.tools.length > 0) {
+      body['tools'] = request.tools;
+      if (request.tool_choice !== undefined) {
+        body['tool_choice'] = request.tool_choice;
+      }
+    }
+    body['stream_options'] = { include_usage: true };
 
-    const response = await fetch(url, {
+    const response = await this.fetchWithRetry(url, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(body),
@@ -224,5 +264,38 @@ export class QwenProvider extends BaseLLMProvider {
     }
 
     return response.body;
+  }
+
+  private getOpenAICompatibleChatCompletionsUrl(): string {
+    const baseUrl = trimTrailingSlash(this.baseUrl);
+
+    if (baseUrl === trimTrailingSlash(this.getDefaultBaseUrl())) {
+      throw new Error(
+        'Qwen streaming requires an OpenAI-compatible Qwen base URL. Configure QWEN_BASE_URL for MuleRouter or DashScope compatible mode.',
+      );
+    }
+
+    let parsed: URL;
+    try {
+      parsed = new URL(baseUrl);
+    } catch {
+      throw new Error('Qwen base URL is invalid.');
+    }
+
+    if (parsed.hostname === 'api.mulerouter.ai') {
+      return `${baseUrl}/vendors/openai/v1/chat/completions`;
+    }
+
+    if (parsed.pathname.endsWith('/compatible-mode/v1')) {
+      return `${baseUrl}/chat/completions`;
+    }
+
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') {
+      return `${baseUrl}/chat/completions`;
+    }
+
+    throw new Error(
+      'Qwen requests require an OpenAI-compatible Qwen base URL. Use MuleRouter or DashScope compatible mode.',
+    );
   }
 }

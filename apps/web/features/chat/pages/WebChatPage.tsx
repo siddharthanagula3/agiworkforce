@@ -326,7 +326,8 @@ export default function WebChatPage() {
       providerMode,
       modelLabel: selectedModel?.name ?? undefined,
       modelId: activeModelId,
-      destinationHost: 'gateway.agiworkforce.com',
+      // User-facing label only — never leak the internal gateway hostname.
+      destinationHost: 'AGI managed cloud',
     });
   }, [activeModelId, selectedModel]);
 
@@ -966,7 +967,7 @@ export default function WebChatPage() {
             </div>
           ) : (
             <>
-              <div className="min-h-0 flex-1 overflow-hidden pb-60">
+              <div className="min-h-0 flex-1 overflow-hidden">
                 <ChatMessageList
                   messages={chatMessages}
                   isLoading={isLoading && !isStreaming}
@@ -979,33 +980,37 @@ export default function WebChatPage() {
                 />
               </div>
 
-              {/* Composer + Send Preview disclosure */}
-              <div
-                className={cn(
-                  'absolute inset-x-0 bottom-5 z-20 mx-auto w-full max-w-3xl px-4',
-                  sidebarCollapsed ? 'max-w-4xl' : '',
-                )}
-              >
-                <div className="mb-2">
-                  <SendPreview presentation={sendPreviewPresentation} />
+              {/* Composer + Send Preview disclosure · docked in normal flow (not
+                  absolute) so the banner/composer can never float over and overlap
+                  the follow-up suggestions or message content. */}
+              <div className="shrink-0 pb-4">
+                <div
+                  className={cn(
+                    'mx-auto w-full max-w-3xl px-4',
+                    sidebarCollapsed ? 'max-w-4xl' : '',
+                  )}
+                >
+                  <div className="mb-2">
+                    <SendPreview presentation={sendPreviewPresentation} />
+                  </div>
+                  <ChatComposerNew
+                    onSend={handleSend}
+                    onStop={stopGeneration}
+                    isLoading={isLoading}
+                    isGenerating={isStreaming}
+                    placeholder="How can I help you today?"
+                    prefillText={composerPrefill}
+                    onPrefillConsumed={() => setComposerPrefill(undefined)}
+                    clearSignal={composerClearSignal}
+                    attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
+                    onUpgradeRequest={handleOpenCloudWaitlist}
+                    freeTrial={{
+                      enabled: isWebsiteFreeTrial,
+                      promptsUsed: trialPromptsUsed,
+                      promptLimit: trialPromptLimit,
+                    }}
+                  />
                 </div>
-                <ChatComposerNew
-                  onSend={handleSend}
-                  onStop={stopGeneration}
-                  isLoading={isLoading}
-                  isGenerating={isStreaming}
-                  placeholder="How can I help you today?"
-                  prefillText={composerPrefill}
-                  onPrefillConsumed={() => setComposerPrefill(undefined)}
-                  clearSignal={composerClearSignal}
-                  attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-                  onUpgradeRequest={handleOpenCloudWaitlist}
-                  freeTrial={{
-                    enabled: isWebsiteFreeTrial,
-                    promptsUsed: trialPromptsUsed,
-                    promptLimit: trialPromptLimit,
-                  }}
-                />
               </div>
             </>
           )}
