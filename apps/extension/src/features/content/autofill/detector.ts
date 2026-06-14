@@ -5,7 +5,7 @@
  */
 
 /** The platforms that can be detected by this module. */
-export type DetectedPlatform = 'linkedin' | 'lever' | null;
+export type DetectedPlatform = 'linkedin' | 'lever' | 'greenhouse' | 'ashby' | null;
 
 /**
  * A single detected form field ready for autofill.
@@ -30,6 +30,13 @@ export interface DetectionResult {
   isJobApplication: boolean;
   fields: DetectedField[];
 }
+
+import {
+  isGreenhouseUrl,
+  findGreenhouseFormContainer,
+  collectResolvableGreenhouseFields,
+} from './greenhouse';
+import { isAshbyUrl, findAshbyFormContainer, collectResolvableAshbyFields } from './ashby';
 
 // ─── LinkedIn URL patterns ────────────────────────────────────────────────────
 
@@ -378,7 +385,8 @@ function inferFieldType(
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /**
- * Detects whether the current page contains a job application form on LinkedIn or Lever.
+ * Detects whether the current page contains a job application form on LinkedIn,
+ * Lever, Greenhouse, or Ashby.
  *
  * This is the primary entry point called from content.ts when the FAB Autofill
  * button is clicked or when the page first loads on a matching domain.
@@ -402,6 +410,24 @@ export function detectJobApplication(): DetectionResult {
     }
     const fields = detectLeverFields(container);
     return { platform: 'lever', isJobApplication: fields.length > 0, fields };
+  }
+
+  if (isGreenhouseUrl(url)) {
+    const container = findGreenhouseFormContainer();
+    if (!container) {
+      return { platform: 'greenhouse', isJobApplication: false, fields: [] };
+    }
+    const fields = collectResolvableGreenhouseFields();
+    return { platform: 'greenhouse', isJobApplication: fields.length > 0, fields };
+  }
+
+  if (isAshbyUrl(url)) {
+    const container = findAshbyFormContainer();
+    if (!container) {
+      return { platform: 'ashby', isJobApplication: false, fields: [] };
+    }
+    const fields = collectResolvableAshbyFields();
+    return { platform: 'ashby', isJobApplication: fields.length > 0, fields };
   }
 
   return { platform: null, isJobApplication: false, fields: [] };

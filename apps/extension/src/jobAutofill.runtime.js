@@ -2,6 +2,17 @@
 const DEFAULT_DELAY_MS = 120;
 const DEFAULT_MAX_SUBMIT_STEPS = 5;
 
+/**
+ * P3-8: allowSubmitWithMissingRequired defaults to BLOCK (false).
+ *
+ * Audit batch-222 flag: if this were true by default, the autofill runtime
+ * would submit forms even when required fields are empty, risking incomplete
+ * application submissions. The option requires explicit opt-in.
+ *
+ * Callers that set options.allowSubmitWithMissingRequired=true accept the risk.
+ */
+const DEFAULT_ALLOW_SUBMIT_WITH_MISSING_REQUIRED = false;
+
 const NEGATIVE_BUTTON_KEYWORDS = [
   'cancel',
   'close',
@@ -1199,7 +1210,10 @@ async function advanceAndSubmit(
     assertNotTimedOut(deadlineEpochMs);
 
     const missingBefore = collectMissingRequiredFields(platform);
-    if (missingBefore.length > 0 && !options.allowSubmitWithMissingRequired) {
+    // P3-8: fail-CLOSED — block submit unless caller explicitly opts in.
+    const permitMissing =
+      options.allowSubmitWithMissingRequired ?? DEFAULT_ALLOW_SUBMIT_WITH_MISSING_REQUIRED;
+    if (missingBefore.length > 0 && !permitMissing) {
       return {
         submitted: false,
         stepsAdvanced,
@@ -1233,8 +1247,11 @@ async function advanceAndSubmit(
 
     if (isSubmitButton(label)) {
       const missingAfter = collectMissingRequiredFields(platform);
+      // P3-8: submitted=true only when no required fields are missing OR
+      // the caller has explicitly opted into allowing missing required fields.
+      const allowMissingOnSubmit = options.allowSubmitWithMissingRequired === true;
       return {
-        submitted: missingAfter.length === 0 || options.allowSubmitWithMissingRequired === true,
+        submitted: missingAfter.length === 0 || allowMissingOnSubmit,
         stepsAdvanced,
         missingRequiredFields: missingAfter,
       };
