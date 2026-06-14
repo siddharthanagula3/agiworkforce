@@ -14,6 +14,7 @@ import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { AgiWorkDispatch } from './AgiWorkDispatch';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { useArtifactStore } from '../../stores/artifactStore';
+import { useChatStore } from '../../stores/chat';
 
 // ─── mode type (shared with Sidebar) ─────────────────────────────────────────
 
@@ -74,13 +75,20 @@ export function DesktopShellV3({
     onModelSelectorClick?.();
   }, [onModelSelectorClick]);
 
-  const handleNewChat = useCallback(() => {
-    setActivePanel('chat');
-    const conversationId = hostBridge?.createConversation?.('New chat');
-    if (conversationId) {
-      hostBridge?.selectConversation?.(conversationId);
-    }
-  }, [hostBridge]);
+  const handleNewChat = useCallback(
+    (projectId?: string) => {
+      setActivePanel('chat');
+      const conversationId = hostBridge?.createConversation?.('New chat');
+      if (conversationId) {
+        hostBridge?.selectConversation?.(conversationId);
+        // Scope the new chat to a project when started from a project folder.
+        if (projectId) {
+          useChatStore.getState().setConversationProject(conversationId, projectId);
+        }
+      }
+    },
+    [hostBridge],
+  );
 
   const handleNavigateView = useCallback(
     (view: string) => {
