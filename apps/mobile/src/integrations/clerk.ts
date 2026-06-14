@@ -40,10 +40,7 @@ export function setClerkTokenGetter(
 export async function getClerkToken(): Promise<string | null> {
   if (tokenGetter) {
     try {
-      const token = await tokenGetter();
-      // TEMP diagnostic (remove once cloud auth is confirmed):
-      console.log('[clerk] bridged token:', token ? 'present' : 'null');
-      return token;
+      return await tokenGetter();
     } catch (err) {
       console.warn('[clerk] token bridge error:', err);
       return null;
@@ -51,9 +48,7 @@ export async function getClerkToken(): Promise<string | null> {
   }
   try {
     const clerk = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY });
-    const token = (await clerk.session?.getToken()) ?? null;
-    console.log('[clerk] singleton token:', token ? 'present' : 'null (no bridge yet)');
-    return token;
+    return (await clerk.session?.getToken()) ?? null;
   } catch {
     return null;
   }
