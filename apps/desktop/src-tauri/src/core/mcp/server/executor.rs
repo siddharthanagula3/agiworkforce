@@ -224,6 +224,8 @@ impl DesktopMcpServerExecutor {
             max_output_tokens: None,
             enable_agent_mode: Some(false),
             prefer_cloud_credits: false,
+            // MCP server calls are treated as local (no ManagedCloud routing).
+            active_mode: Some("local".to_string()),
             frontend_message_id: None,
             custom_instructions: None,
             project_folder: None,
@@ -343,6 +345,8 @@ impl DesktopMcpServerExecutor {
             max_output_tokens: None,
             enable_agent_mode: Some(false),
             prefer_cloud_credits: false,
+            // MCP server calls are treated as local (no ManagedCloud routing).
+            active_mode: Some("local".to_string()),
             frontend_message_id: None,
             custom_instructions: Some(custom_instructions),
             project_folder: None,

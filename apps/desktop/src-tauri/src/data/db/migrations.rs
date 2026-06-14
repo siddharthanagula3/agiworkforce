@@ -4,7 +4,7 @@ use sha2::Sha256;
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
-const CURRENT_VERSION: i32 = 65;
+const CURRENT_VERSION: i32 = 66;
 const REDACTED_TOKEN_SENTINEL: &str = "[redacted]";
 type HmacSha256 = Hmac<Sha256>;
 
@@ -595,6 +595,10 @@ pub fn run_migrations(conn: &Connection) -> Result<()> {
 
     if current_version < 65 {
         run_migration_in_transaction(conn, 65, apply_migration_v65)?;
+    }
+
+    if current_version < 66 {
+        run_migration_in_transaction(conn, 66, apply_migration_v66)?;
     }
 
     Ok(())
@@ -5392,6 +5396,34 @@ fn apply_migration_v65(conn: &Connection) -> Result<()> {
         "knowledge_base_files",
         "knowledge_base_files TEXT",
     )?;
+    Ok(())
+}
+
+/// Migration v66: Add app_mode column to conversations for strict Local/Cloud separation.
+///
+/// Each conversation belongs to exactly one mode: "local" or "cloud".
+/// Queries that list conversations for the sidebar MUST filter by the active mode
+/// so Local-mode conversations never appear in Cloud mode and vice-versa.
+/// Existing rows default to "local" (the safest default — they were created before
+/// the cloud feature existed and were never synced).
+fn apply_migration_v66(conn: &Connection) -> Result<()> {
+    ensure_column(
+        conn,
+        "conversations",
+        "app_mode",
+        "app_mode TEXT NOT NULL DEFAULT 'local'",
+    )?;
+
+    // A simple single-column index on app_mode is always safe regardless of
+    // which other columns the conversations table has at this migration point.
+    // The combined (user_id, app_mode) filtering is handled at the query level
+    // by existing user_id indexes that were added in migration v42.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_conversations_app_mode \
+         ON conversations(app_mode)",
+        [],
+    )?;
+
     Ok(())
 }
 
