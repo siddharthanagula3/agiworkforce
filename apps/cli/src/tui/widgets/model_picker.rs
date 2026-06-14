@@ -467,8 +467,7 @@ fn format_model_row(
     let suffix = format!("  {:<12} {:>4}K ctx", tier_label, ctx_k);
     let id_width = row_width
         .saturating_sub(prefix.chars().count() + suffix.chars().count())
-        .max(12)
-        .min(34);
+        .clamp(12, 34);
     format!(
         "{}{:<id_width$}{}",
         prefix,
