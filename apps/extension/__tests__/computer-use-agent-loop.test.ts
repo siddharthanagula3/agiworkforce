@@ -275,7 +275,7 @@ describe('computer-use agent loop — one round-trip', () => {
 
     // ── First call: correct endpoint + model + tools ────────────────────────
     const firstCallArgs = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(firstCallArgs[0]).toBe('https://api.agiworkforce.com/v1/chat/completions');
+    expect(firstCallArgs[0]).toBe('https://api.agiworkforce.com/api/llm/v1/chat/completions');
     const firstBody = JSON.parse(firstCallArgs[1].body as string) as {
       model: string;
       tools: Array<{ function: { name: string } }>;
