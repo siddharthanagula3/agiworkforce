@@ -100,6 +100,12 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_SHORTCUT: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_RECORDING_VALUE_CAPTURE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   CANCEL_STREAM: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  // ── Computer-use loop start — side panel / popup only. ─────────────────
+  // Starting the CDP agent loop is a high-privilege action: it attaches
+  // chrome.debugger to a live tab and makes outbound SSE calls to the AGI
+  // Cloud gateway. A content script on any allowlisted site must NOT be able
+  // to trigger this — only the trusted extension UI can.
+  AGI_START_COMPUTER_USE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 };
 
 /**
