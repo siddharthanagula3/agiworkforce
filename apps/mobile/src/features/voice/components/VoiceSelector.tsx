@@ -1,11 +1,11 @@
 import { useEffect, useState, useCallback, forwardRef } from 'react';
 import { View, Pressable, ActivityIndicator, ScrollView as RNScrollView } from 'react-native';
-import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet';
-import { Play, Check, ChevronDown } from 'lucide-react-native';
+import BottomSheet, { BottomSheetScrollView } from '@gorhom/bottom-sheet';
+import { Play, Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import * as TTS from '@/src/features/voice/services/tts';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 import { VOICE_PRESETS, findVoiceForPreset } from '@/src/features/voice/voicePresets';
 import type { VoiceInfo } from '@/src/features/voice/services/tts';
 
@@ -19,7 +19,11 @@ import type { VoiceInfo } from '@/src/features/voice/services/tts';
  *   <VoiceSelector ref={ref} />
  *   // Open: ref.current?.snapToIndex(0)
  */
-export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_props, ref) {
+export const VoiceSelector = forwardRef<
+  BottomSheet,
+  { index?: number; onChange?: (index: number) => void }
+>(function VoiceSelector({ index = -1, onChange }, ref) {
+  const colors = useThemeColors();
   const [voices, setVoices] = useState<VoiceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [availableLanguages, setAvailableLanguages] = useState<
@@ -41,8 +45,8 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
     try {
       const v = await TTS.getVoicesForLanguage(lang);
       setVoices(v);
-    } catch (err) {
-      console.warn('[VoiceSelector] Failed to fetch voices:', err);
+    } catch {
+      setVoices([]);
     } finally {
       setLoading(false);
     }
@@ -55,7 +59,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
   useEffect(() => {
     TTS.getAvailableLanguages()
       .then(setAvailableLanguages)
-      .catch((err) => console.warn('[VoiceSelector] Failed to fetch languages:', err));
+      .catch(() => setAvailableLanguages([]));
   }, []);
 
   const handleSelectLanguage = useCallback(
@@ -125,9 +129,9 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             alignItems: 'center',
             padding: 12,
             borderRadius: 8,
-            backgroundColor: isSelected ? 'rgba(33, 128, 141, 0.15)' : 'transparent',
+            backgroundColor: isSelected ? colors.accentSurface : colors.transparent,
             borderWidth: isSelected ? 1 : 0,
-            borderColor: isSelected ? 'rgba(33, 128, 141, 0.3)' : 'transparent',
+            borderColor: isSelected ? colors.accentBorder : colors.transparent,
             marginBottom: 4,
           }}
           accessibilityLabel={`${item.name} voice`}
@@ -158,7 +162,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             style={{
               padding: 8,
               borderRadius: 20,
-              backgroundColor: 'rgba(255,255,255,0.08)',
+              backgroundColor: colors.surfaceHover,
             }}
             accessibilityLabel={`Play sample for ${item.name}`}
             accessibilityRole="button"
@@ -168,13 +172,27 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
         </Pressable>
       );
     },
-    [selectedVoiceId, selectedPresetId, handleSelectSystemVoice, handlePlaySample],
+    [
+      selectedVoiceId,
+      selectedPresetId,
+      handleSelectSystemVoice,
+      handlePlaySample,
+      colors.accentBorder,
+      colors.accentSurface,
+      colors.surfaceHover,
+      colors.teal,
+      colors.textMuted,
+      colors.textPrimary,
+      colors.textSecondary,
+      colors.transparent,
+    ],
   );
 
   return (
     <BottomSheet
       ref={ref}
-      index={-1}
+      index={index}
+      onChange={onChange}
       snapPoints={['50%', '85%']}
       enablePanDownToClose
       backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
@@ -205,7 +223,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
                 fontWeight: '600',
                 color: colors.textMuted,
                 textTransform: 'uppercase',
-                letterSpacing: 0.8,
+                letterSpacing: 0,
                 marginBottom: 10,
               }}
             >
@@ -226,13 +244,9 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
                       paddingHorizontal: 14,
                       paddingVertical: 8,
                       borderRadius: 20,
-                      backgroundColor: selected
-                        ? 'rgba(33, 128, 141, 0.18)'
-                        : 'rgba(255, 255, 255, 0.06)',
+                      backgroundColor: selected ? colors.accentSurface : colors.inputSurface,
                       borderWidth: 1,
-                      borderColor: selected
-                        ? 'rgba(33, 128, 141, 0.5)'
-                        : 'rgba(255, 255, 255, 0.1)',
+                      borderColor: selected ? colors.accentBorder : colors.border,
                     }}
                     accessibilityLabel={`${lang.label} language`}
                     accessibilityRole="radio"
@@ -261,7 +275,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             fontWeight: '600',
             color: colors.textMuted,
             textTransform: 'uppercase',
-            letterSpacing: 0.8,
+            letterSpacing: 0,
             marginBottom: 10,
           }}
         >
@@ -333,7 +347,7 @@ export const VoiceSelector = forwardRef<BottomSheet>(function VoiceSelector(_pro
             fontWeight: '600',
             color: colors.textMuted,
             textTransform: 'uppercase',
-            letterSpacing: 0.8,
+            letterSpacing: 0,
             marginBottom: 10,
           }}
         >

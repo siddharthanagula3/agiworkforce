@@ -13,7 +13,7 @@
  * The tests below pin the contract of `secureFetch` itself:
  *   - today (`PINNING_ENFORCED = false`): transparent passthrough so we
  *     can wire it into every call site without behaviour change;
- *   - once flipped on: hosts with no pin entry are REFUSED with
+ *   - once flipped on: hosts with no provisioned pin entry are REFUSED with
  *     `PinningError`, which is the intended fail-CLOSED behaviour.
  *
  * The drift sentinel asserts that `lib/pinning.ts` still exposes the
@@ -40,6 +40,15 @@ jest.mock('@/lib/pinning', () => ({
       return mockPins[host] ?? [];
     } catch {
       return [];
+    }
+  },
+  pinsAreProvisionedForUrl: (url: string) => {
+    try {
+      const host = new URL(url).hostname.toLowerCase();
+      const pins = mockPins[host] ?? [];
+      return pins.length > 0 && pins.every((pin) => !pin.includes('PLACEHOLDER'));
+    } catch {
+      return false;
     }
   },
   hostHasPins: (url: string) => {
@@ -85,13 +94,19 @@ describe('secureFetch — passthrough mode (PINNING_ENFORCED = false)', () => {
     expect(mockFetch).toHaveBeenCalledWith('https://agiworkforce.com/api/x', init);
   });
 
+  it('accepts URL objects while preserving the original fetch input', async () => {
+    const url = new URL('https://agiworkforce.com/api/health');
+    await secureFetch(url);
+    expect(mockFetch).toHaveBeenCalledWith(url, undefined);
+  });
+
   it('does not throw on hosts without pins (since enforcement is off)', async () => {
     await expect(secureFetch('https://attacker.example/exfil')).resolves.toBeInstanceOf(Response);
   });
 });
 
 describe('secureFetch — enforced mode (PINNING_ENFORCED = true)', () => {
-  it('refuses requests to hosts with no pins (fail-closed)', async () => {
+  it('refuses requests to hosts with no provisioned pins (fail-closed)', async () => {
     mockEnforced = true;
     // mockPins['agiworkforce.com'] is empty → no pins → must refuse.
     await expect(secureFetch('https://agiworkforce.com/api/health')).rejects.toBeInstanceOf(
@@ -100,11 +115,30 @@ describe('secureFetch — enforced mode (PINNING_ENFORCED = true)', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it('forwards to fetch when at least one pin is configured for the host', async () => {
+  it('refuses requests when host pins are still placeholders', async () => {
+    mockEnforced = true;
+    mockPins['agiworkforce.com'] = ['sha256/PLACEHOLDER_REPLACE_BEFORE_LAUNCH_leaf='];
+    await expect(secureFetch('https://agiworkforce.com/api/health')).rejects.toBeInstanceOf(
+      PinningError,
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('forwards to fetch when at least one provisioned pin is configured for the host', async () => {
     mockEnforced = true;
     mockPins['agiworkforce.com'] = ['sha256/abc='];
     await secureFetch('https://agiworkforce.com/api/health');
     expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes URL objects before checking the pin manifest', async () => {
+    mockEnforced = true;
+    mockPins['agiworkforce.com'] = ['sha256/abc='];
+    const url = new URL('https://agiworkforce.com/api/health');
+
+    await secureFetch(url);
+
+    expect(mockFetch).toHaveBeenCalledWith(url, undefined);
   });
 
   it('matches host case-insensitively', async () => {
@@ -154,7 +188,7 @@ describe('drift sentinel — config knobs are still exposed', () => {
     const path = require('path');
     const src = fs.readFileSync(path.join(__dirname, '..', 'services', 'secureFetch.ts'), 'utf8');
     expect(src).toContain('PINNING_ENFORCED');
-    expect(src).toContain('pinsForUrl');
+    expect(src).toContain('pinsAreProvisionedForUrl');
     expect(src).toContain('PinningError');
   });
 });

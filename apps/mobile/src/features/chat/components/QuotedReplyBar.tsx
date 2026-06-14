@@ -2,6 +2,7 @@ import { View, Pressable } from 'react-native';
 import { X, Reply } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { getShortDisplayName } from '@/src/features/model-picker/service';
 import type { ChatMessage } from '@/types/chat';
 
 interface QuotedReplyBarProps {
@@ -18,7 +19,7 @@ interface QuotedReplyBarProps {
 export function QuotedReplyBar({ message, onDismiss }: QuotedReplyBarProps) {
   const colors = useThemeColors();
   const isUser = message.role === 'user';
-  const label = isUser ? 'You' : (message.model ?? 'Assistant');
+  const label = isUser ? 'You' : message.model ? getShortDisplayName(message.model) : 'Assistant';
   const preview =
     message.content.length > 100 ? message.content.slice(0, 100).trim() + '...' : message.content;
 

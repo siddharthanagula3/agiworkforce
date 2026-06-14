@@ -2,6 +2,7 @@ import { Pressable, Linking } from 'react-native';
 import { ExternalLink } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
+import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 
 interface CitationChipProps {
   index: number;
@@ -12,7 +13,7 @@ interface CitationChipProps {
 export function CitationChip({ index, title, url }: CitationChipProps) {
   const colors = useThemeColors();
   const handlePress = () => {
-    if (url) {
+    if (url && isValidExternalHttpUrl(url)) {
       Linking.openURL(url).catch(() => {
         // Failed to open URL — malformed or no handler installed
       });

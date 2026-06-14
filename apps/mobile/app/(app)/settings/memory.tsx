@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Pressable, TextInput, FlatList, RefreshControl, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { ArrowLeft, Brain, Search, X, Plus, Upload } from 'lucide-react-native';
-import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MemoryItem } from '@/src/features/settings/components/MemoryItem';
-import { AddMemorySheet } from '@/src/features/settings/components/AddMemorySheet';
+import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -25,11 +23,12 @@ function formatCount(n: number): string {
 
 export default function MemoryScreen() {
   const router = useRouter();
-  const addSheetRef = useRef<BottomSheet>(null);
+  const colors = useThemeColors();
 
   const [searchText, setSearchText] = useState('');
   const [activeFilter, setActiveFilter] = useState<string>('All');
   const [editingMemory, setEditingMemory] = useState<MemoryEntry | null>(null);
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   const {
     entries,
@@ -99,12 +98,17 @@ export default function MemoryScreen() {
 
   const handleAddPress = useCallback(() => {
     setEditingMemory(null);
-    addSheetRef.current?.snapToIndex(0);
+    setAddSheetOpen(true);
   }, []);
 
   const handleEdit = useCallback((memory: MemoryEntry) => {
     setEditingMemory(memory);
-    addSheetRef.current?.snapToIndex(0);
+    setAddSheetOpen(true);
+  }, []);
+
+  const handleCloseEditor = useCallback(() => {
+    setAddSheetOpen(false);
+    setEditingMemory(null);
   }, []);
 
   const handleDelete = useCallback(
@@ -144,19 +148,33 @@ export default function MemoryScreen() {
   const keyExtractor = useCallback((item: MemoryEntry) => item.id, []);
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
       <View className="flex-row items-center px-4 h-12">
-        <Pressable onPress={() => router.back()} className="p-2 -ml-2 rounded-lg active:bg-white/5">
+        <Pressable
+          onPress={() =>
+            router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0])
+          }
+          accessibilityLabel="Go back"
+          accessibilityRole="button"
+          className="p-2 -ml-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
+        >
           <ArrowLeft size={22} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1">
+        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
           Memory
         </Text>
         <Pressable
           onPress={handleImportPress}
-          className="p-2 rounded-lg active:bg-white/5"
+          className="p-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
           accessibilityLabel="Import memories"
+          accessibilityRole="button"
         >
           <Upload size={18} color={colors.textSecondary} />
         </Pressable>
@@ -164,7 +182,7 @@ export default function MemoryScreen() {
 
       {/* Count subtitle */}
       <View className="px-4 mb-2">
-        <Text className="text-[11px] text-white/30">
+        <Text style={{ color: colors.textMuted, fontSize: 11 }}>
           {loading ? 'Loading…' : formatCount(entries.length)}
         </Text>
       </View>
@@ -172,19 +190,34 @@ export default function MemoryScreen() {
       {/* Error banner */}
       {error && (
         <Animated.View entering={FadeIn.duration(200)} className="mx-4 mb-2">
-          <View className="bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-            <Text className="text-xs text-red-400">{error}</Text>
+          <View
+            className="rounded-lg px-3 py-2"
+            style={{
+              backgroundColor: colors.dangerSurface,
+              borderWidth: 1,
+              borderColor: colors.dangerBorder,
+            }}
+          >
+            <Text style={{ color: colors.agentError, fontSize: 12 }}>{error}</Text>
           </View>
         </Animated.View>
       )}
 
       {/* Search bar */}
-      <View className="mx-4 mb-3 flex-row items-center gap-2 bg-surface-elevated rounded-xl border border-white/8 px-3 py-2">
+      <View
+        className="mx-4 mb-3 flex-row items-center gap-2 rounded-xl px-3 py-2"
+        style={{
+          backgroundColor: colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
         <Search size={16} color={colors.textMuted} />
         <TextInput
-          className="flex-1 text-white text-sm py-0"
+          className="flex-1 py-0"
+          style={{ color: colors.textPrimary, fontSize: 14, letterSpacing: 0 }}
           placeholder="Search memories..."
-          placeholderTextColor="rgba(255,255,255,0.3)"
+          placeholderTextColor={colors.textMuted}
           value={searchText}
           onChangeText={handleSearchChange}
           selectionColor={colors.teal}
@@ -212,12 +245,22 @@ export default function MemoryScreen() {
               <Pressable
                 key={cat}
                 onPress={() => setActiveFilter(cat)}
-                className={`px-3 py-1.5 rounded-full border ${
-                  isActive ? 'border-teal-500/50 bg-teal-500/15' : 'border-white/10 bg-white/5'
-                }`}
+                accessibilityLabel={`${cat} memories`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                className="px-3 py-1.5 rounded-full"
+                style={{
+                  borderWidth: 1,
+                  borderColor: isActive ? colors.accentBorder : colors.border,
+                  backgroundColor: isActive ? colors.accentSurface : colors.surfaceElevated,
+                }}
               >
                 <Text
-                  className={`text-xs font-medium ${isActive ? 'text-teal-400' : 'text-white/60'}`}
+                  style={{
+                    color: isActive ? colors.textPrimary : colors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: '500',
+                  }}
                 >
                   {cat}
                 </Text>
@@ -229,9 +272,13 @@ export default function MemoryScreen() {
 
       {/* Memory list */}
       {loading && entries.length === 0 ? (
-        <LoadingSkeleton />
+        <LoadingSkeleton colors={colors} />
       ) : displayedEntries.length === 0 ? (
-        <EmptyState hasSearch={searchText.length > 0} isPinnedFilter={activeFilter === 'Pinned'} />
+        <EmptyState
+          hasSearch={searchText.length > 0}
+          isPinnedFilter={activeFilter === 'Pinned'}
+          colors={colors}
+        />
       ) : (
         <FlatList
           data={displayedEntries}
@@ -250,22 +297,41 @@ export default function MemoryScreen() {
       )}
 
       {/* Floating action button */}
-      <View className="absolute bottom-6 right-6">
-        <Pressable
-          onPress={handleAddPress}
-          className="w-14 h-14 rounded-full bg-teal-500 items-center justify-center shadow-lg active:bg-teal-600"
-          accessibilityLabel="Add memory"
-        >
-          <Plus size={24} color={colors.white} />
-        </Pressable>
-      </View>
+      {!addSheetOpen ? (
+        <View style={{ position: 'absolute', right: 24, bottom: 24, zIndex: 10 }}>
+          <Pressable
+            onPress={handleAddPress}
+            accessibilityRole="button"
+            accessibilityLabel="Add memory"
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: colors.black,
+              borderWidth: 1,
+              borderColor: colors.border,
+              shadowColor: colors.black,
+              shadowOffset: { width: 0, height: 8 },
+              shadowOpacity: 0.18,
+              shadowRadius: 16,
+              elevation: 6,
+            }}
+          >
+            <Plus size={24} color={colors.white} />
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* Add/Edit bottom sheet */}
       <AddMemorySheet
-        sheetRef={addSheetRef}
         editingMemory={editingMemory}
+        onClose={handleCloseEditor}
+        onDelete={handleDelete}
         onSave={handleSave}
         onUpdate={handleUpdate}
+        open={addSheetOpen}
       />
     </SafeAreaView>
   );
@@ -275,11 +341,19 @@ export default function MemoryScreen() {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function LoadingSkeleton() {
+function LoadingSkeleton({ colors }: { colors: ColorScheme }) {
   return (
     <View className="px-4 gap-3 mt-2">
       {[1, 2, 3].map((i) => (
-        <View key={i} className="bg-surface-elevated rounded-xl p-4 gap-2">
+        <View
+          key={i}
+          className="rounded-xl p-4 gap-2"
+          style={{
+            backgroundColor: colors.surfaceElevated,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
           <Skeleton width="100%" height={14} />
           <Skeleton width="80%" height={14} />
           <Skeleton width="60%" height={14} />
@@ -296,19 +370,32 @@ function LoadingSkeleton() {
 function EmptyState({
   hasSearch,
   isPinnedFilter,
+  colors,
 }: {
   hasSearch: boolean;
   isPinnedFilter: boolean;
+  colors: ColorScheme;
 }) {
   return (
     <View className="flex-1 items-center justify-center px-8">
-      <View className="w-20 h-20 rounded-2xl bg-white/5 items-center justify-center mb-4">
+      <View
+        className="w-20 h-20 rounded-2xl items-center justify-center mb-4"
+        style={{
+          backgroundColor: colors.surfaceElevated,
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
         <Brain size={36} color={colors.textMuted} />
       </View>
-      <Text variant="subheading" className="text-center mb-1.5">
+      <Text
+        variant="subheading"
+        className="text-center mb-1.5"
+        style={{ color: colors.textPrimary }}
+      >
         {hasSearch ? 'No results found' : isPinnedFilter ? 'No pinned memories' : 'No memories yet'}
       </Text>
-      <Text className="text-white/40 text-sm text-center leading-5">
+      <Text className="text-center leading-5" style={{ color: colors.textMuted, fontSize: 14 }}>
         {hasSearch
           ? 'Try a different search term'
           : isPinnedFilter

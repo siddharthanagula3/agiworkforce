@@ -211,9 +211,13 @@ import {
   getThermalState,
 } from '../services/performanceMonitor';
 
+const mockIsThermallyThrottled = require('@agiworkforce/local-llm')
+  .isThermallyThrottled as jest.MockedFunction<() => boolean>;
+
 describe('performanceMonitor service', () => {
   beforeEach(() => {
     mockStorage.clear();
+    mockIsThermallyThrottled.mockReturnValue(false);
   });
 
   // 1. recordPerfEvent stores events
@@ -319,6 +323,14 @@ describe('performanceMonitor service', () => {
     const state = getThermalState();
     expect(['nominal', 'fair', 'serious', 'critical']).toContain(state);
   });
+
+  it('getThermalState maps the exported local capability thermal signal', () => {
+    mockIsThermallyThrottled.mockReturnValueOnce(true);
+    expect(getThermalState()).toBe('serious');
+
+    mockIsThermallyThrottled.mockReturnValueOnce(false);
+    expect(getThermalState()).toBe('nominal');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -384,6 +396,31 @@ describe('PerformanceScreen rendering', () => {
   it('renders the Device Tier card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Device Tier')).toBeTruthy();
+  });
+
+  it('falls back to the runtime OS version when local capabilities omit it', async () => {
+    const { getCapabilities } = require('@agiworkforce/local-llm');
+    const { Platform } = require('react-native');
+    getCapabilities.mockResolvedValueOnce({
+      totalRAMMB: 8192,
+      osVersion: '',
+      thermalThrottled: false,
+      tier1Available: true,
+      tier1Runtime: 'foundation_models',
+      tier2Available: true,
+      tier3Available: true,
+    });
+    const osName =
+      Platform.OS === 'ios'
+        ? 'iOS'
+        : Platform.OS === 'android'
+          ? 'Android'
+          : `${Platform.OS.charAt(0).toUpperCase()}${Platform.OS.slice(1)}`;
+
+    const { getByText, queryByText } = await renderSettledPerformanceScreen();
+
+    expect(getByText(`${osName} ${String(Platform.Version)}`)).toBeTruthy();
+    expect(queryByText('Unknown')).toBeNull();
   });
 
   // 12. Renders Active Model card

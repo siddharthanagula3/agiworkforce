@@ -4,7 +4,7 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,7 +32,7 @@ interface PlatformCardProps {
   platform: PlatformInfo;
   onConnect: () => void;
   onDisconnect: () => void;
-  onConfigure: () => void;
+  onConfigure?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -43,44 +43,55 @@ type IconComponent = typeof MessageCircle;
 
 const platformMeta: Record<
   MessagingPlatformId,
-  { Icon: IconComponent; color: string; bgClass: string }
+  { Icon: IconComponent; tone: 'active' | 'success' | 'warning' | 'error' | 'purple' }
 > = {
   slack: {
     Icon: Hash,
-    color: '#7C3AED',
-    bgClass: 'bg-purple-500/15',
+    tone: 'purple',
   },
   teams: {
     Icon: Monitor,
-    color: '#5B5EA6',
-    bgClass: 'bg-indigo-500/15',
+    tone: 'active',
   },
   discord: {
     Icon: Zap,
-    color: '#5865F2',
-    bgClass: 'bg-indigo-500/15',
+    tone: 'active',
   },
   whatsapp: {
     Icon: MessageCircle,
-    color: '#25D366',
-    bgClass: 'bg-emerald-500/15',
+    tone: 'success',
   },
   telegram: {
     Icon: Send,
-    color: '#0088cc',
-    bgClass: 'bg-blue-500/15',
+    tone: 'active',
   },
   gmail: {
     Icon: Mail,
-    color: '#EA4335',
-    bgClass: 'bg-red-500/15',
+    tone: 'error',
   },
   outlook: {
     Icon: Mail,
-    color: '#0072C6',
-    bgClass: 'bg-blue-500/15',
+    tone: 'active',
   },
 };
+
+function resolveToneColors(
+  tone: (typeof platformMeta)[MessagingPlatformId]['tone'],
+  colors: ReturnType<typeof useThemeColors>,
+): { icon: string; surface: string } {
+  switch (tone) {
+    case 'active':
+      return { icon: colors.agentActive, surface: colors.accentSurface };
+    case 'success':
+      return { icon: colors.agentSuccess, surface: colors.successSurface };
+    case 'warning':
+      return { icon: colors.agentWarning, surface: colors.warningSurface };
+    case 'error':
+      return { icon: colors.agentError, surface: colors.dangerSurface };
+    case 'purple':
+      return { icon: colors.purple, surface: colors.purpleSurface };
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -115,15 +126,20 @@ export function PlatformCard({
   onDisconnect,
   onConfigure,
 }: PlatformCardProps) {
+  const colors = useThemeColors();
   const meta = platformMeta[platform.icon];
-  const { Icon, color, bgClass } = meta;
+  const { Icon, tone } = meta;
+  const toneColors = resolveToneColors(tone, colors);
 
   return (
     <Card variant="elevated" className="mb-3">
       {/* Header row: icon + name + status badge + settings gear */}
       <View className="flex-row items-center gap-3 mb-3">
-        <View className={`w-10 h-10 rounded-xl items-center justify-center ${bgClass}`}>
-          <Icon size={20} color={color} />
+        <View
+          className="w-10 h-10 rounded-xl items-center justify-center"
+          style={{ backgroundColor: toneColors.surface }}
+        >
+          <Icon size={20} color={toneColors.icon} />
         </View>
 
         <View className="flex-1">
@@ -141,7 +157,7 @@ export function PlatformCard({
         </View>
 
         {/* Settings gear — visible only when connected */}
-        {platform.connected && (
+        {platform.connected && onConfigure && (
           <Pressable
             onPress={onConfigure}
             className="p-2 rounded-lg active:bg-white/5"

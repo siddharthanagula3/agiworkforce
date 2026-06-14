@@ -39,7 +39,8 @@ jest.mock('@/lib/mmkv', () => ({
 
 const mockHK = {
   requestAuthorization: jest.fn<Promise<boolean>, [string[], string[]]>(),
-  getAuthorizationStatusForType: jest.fn<Promise<string>, [string]>(),
+  authorizationStatusFor: jest.fn<Promise<boolean | string | number>, [string]>(),
+  isHealthDataAvailable: jest.fn<Promise<boolean>, []>(),
   queryWorkoutSamples: jest.fn(),
   queryQuantitySamples: jest.fn(),
   queryCategorySamples: jest.fn(),
@@ -77,12 +78,14 @@ function clearMmkv() {
 
 function allGranted() {
   mockHK.requestAuthorization.mockResolvedValue(true);
-  mockHK.getAuthorizationStatusForType.mockResolvedValue('sharingAuthorized');
+  mockHK.authorizationStatusFor.mockResolvedValue(true);
+  mockHK.isHealthDataAvailable.mockResolvedValue(true);
 }
 
 function allDenied() {
   mockHK.requestAuthorization.mockResolvedValue(false);
-  mockHK.getAuthorizationStatusForType.mockResolvedValue('sharingDenied');
+  mockHK.authorizationStatusFor.mockResolvedValue(false);
+  mockHK.isHealthDataAvailable.mockResolvedValue(true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,9 +150,22 @@ describe('healthKitPermission — iOS', () => {
 
   it('returns denied for native module errors (graceful degradation)', async () => {
     mockHK.requestAuthorization.mockResolvedValue(false);
-    mockHK.getAuthorizationStatusForType.mockRejectedValue(new Error('HK error'));
+    mockHK.authorizationStatusFor.mockRejectedValue(new Error('HK error'));
     const result = await permission.requestHealthKitAccess(['workouts']);
     expect(result.denied).toContain('workouts');
+  });
+
+  it('does not treat request completion as permission without status confirmation', async () => {
+    mockHK.requestAuthorization.mockResolvedValue(true);
+    const statusFor = mockHK.authorizationStatusFor;
+    delete (mockHK as { authorizationStatusFor?: unknown }).authorizationStatusFor;
+    try {
+      const result = await permission.requestHealthKitAccess(['steps']);
+      expect(result.granted).toHaveLength(0);
+      expect(result.denied).toContain('steps');
+    } finally {
+      mockHK.authorizationStatusFor = statusFor;
+    }
   });
 
   it('handles module unavailable gracefully (no throw)', async () => {

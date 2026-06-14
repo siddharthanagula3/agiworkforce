@@ -41,6 +41,23 @@ const mobileNativeColors = {
     black: '#000000',
     transparent: 'transparent',
     scrim: 'rgba(0, 0, 0, 0.46)',
+    cameraOverlaySurface: 'rgba(0, 0, 0, 0.50)',
+    cameraOverlaySurfaceStrong: 'rgba(0, 0, 0, 0.75)',
+    cameraOverlayBorder: 'rgba(255, 255, 255, 0.16)',
+    cameraOverlayText: '#ffffff',
+    cameraOverlayTextMuted: 'rgba(255, 255, 255, 0.68)',
+    cameraScanRegionSurface: 'rgba(16, 163, 127, 0.20)',
+    cameraScanRegionBorder: 'rgba(16, 163, 127, 0.75)',
+    cameraShutterBorder: 'rgba(255, 255, 255, 0.35)',
+    voiceCompanionBgStart: '#2a1010',
+    voiceCompanionBgMid: '#0e0808',
+    voiceCompanionBgEnd: '#050305',
+    voiceConversationBgStart: '#1a1040',
+    voiceConversationBgMid: '#0d0d1a',
+    voiceConversationBgEnd: '#050508',
+    voiceControlSurface: 'rgba(255, 255, 255, 0.10)',
+    voiceTranscriptSurface: 'rgba(255, 255, 255, 0.04)',
+    voiceAccentBorder: 'rgba(244, 244, 244, 0.20)',
   },
   dark: {
     terraCotta: '#f4f4f4',
@@ -84,6 +101,23 @@ const mobileNativeColors = {
     black: '#000000',
     transparent: 'transparent',
     scrim: 'rgba(0, 0, 0, 0.62)',
+    cameraOverlaySurface: 'rgba(0, 0, 0, 0.50)',
+    cameraOverlaySurfaceStrong: 'rgba(0, 0, 0, 0.75)',
+    cameraOverlayBorder: 'rgba(255, 255, 255, 0.16)',
+    cameraOverlayText: '#ffffff',
+    cameraOverlayTextMuted: 'rgba(255, 255, 255, 0.68)',
+    cameraScanRegionSurface: 'rgba(16, 163, 127, 0.20)',
+    cameraScanRegionBorder: 'rgba(16, 163, 127, 0.75)',
+    cameraShutterBorder: 'rgba(255, 255, 255, 0.35)',
+    voiceCompanionBgStart: '#2a1010',
+    voiceCompanionBgMid: '#0e0808',
+    voiceCompanionBgEnd: '#050305',
+    voiceConversationBgStart: '#1a1040',
+    voiceConversationBgMid: '#0d0d1a',
+    voiceConversationBgEnd: '#050508',
+    voiceControlSurface: 'rgba(255, 255, 255, 0.10)',
+    voiceTranscriptSurface: 'rgba(255, 255, 255, 0.04)',
+    voiceAccentBorder: 'rgba(244, 244, 244, 0.20)',
   },
 } as const;
 
@@ -94,6 +128,20 @@ export type ColorScheme = {
   [K in keyof typeof mobileNativeColors.dark]: string;
 };
 
+export type AccentToken = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
+
+const accentSwatches: Record<AccentToken, { light: string; dark: string }> = {
+  neutral: {
+    light: mobileNativeColors.light.textPrimary,
+    dark: mobileNativeColors.dark.textPrimary,
+  },
+  green: { light: '#0f8f6f', dark: '#10a37f' },
+  blue: { light: '#2563eb', dark: '#60a5fa' },
+  violet: { light: '#7c3aed', dark: '#a78bfa' },
+  rose: { light: '#e11d48', dark: '#fb7185' },
+  amber: { light: '#b45309', dark: '#fbbf24' },
+};
+
 export function getColors(
   mode: 'dark' | 'light' | 'system',
   systemScheme: string | null | undefined,
@@ -102,6 +150,10 @@ export function getColors(
     return systemScheme === 'light' ? lightColors : colors;
   }
   return mode === 'light' ? lightColors : colors;
+}
+
+export function getAccentSwatch(color: AccentToken, isDark: boolean): string {
+  return isDark ? accentSwatches[color].dark : accentSwatches[color].light;
 }
 
 export const spacing = {

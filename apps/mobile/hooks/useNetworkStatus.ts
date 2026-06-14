@@ -22,19 +22,29 @@ import NetInfo from '@react-native-community/netinfo';
 import { useChatStore } from '@/stores/chatStore';
 import { offlineQueue } from '@/services/offlineQueue';
 
+type ReachabilityState = {
+  isConnected: boolean | null;
+  isInternetReachable: boolean | null;
+};
+
 export interface NetworkStatus {
   isOnline: boolean;
   isReconnecting: boolean;
   queueSize: number;
 }
 
+export function isReachableNetworkState(state: ReachabilityState): boolean {
+  return state.isConnected === true && state.isInternetReachable === true;
+}
+
 export function useNetworkStatus(): NetworkStatus {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [queueSize, setQueueSize] = useState(0);
 
   // Stable reference to avoid stale closure in the NetInfo listener
-  const wasOnlineRef = useRef(true);
+  const wasOnlineRef = useRef(false);
+  const reconnectInFlightRef = useRef(false);
 
   // Pull actions out of the store for queue retry
   const sendMessage = useChatStore((s) => s.sendMessage);
@@ -46,6 +56,8 @@ export function useNetworkStatus(): NetworkStatus {
   }, []);
 
   const handleReconnect = useCallback(async () => {
+    if (reconnectInFlightRef.current) return;
+    reconnectInFlightRef.current = true;
     setIsReconnecting(true);
 
     try {
@@ -56,6 +68,7 @@ export function useNetworkStatus(): NetworkStatus {
         await sendMessage(msg.conversationId, msg.content, msg.model);
       });
     } finally {
+      reconnectInFlightRef.current = false;
       setIsReconnecting(false);
       refreshQueueSize();
     }
@@ -65,7 +78,7 @@ export function useNetworkStatus(): NetworkStatus {
     // Fetch initial state so the badge renders correctly on mount
     NetInfo.fetch()
       .then((state) => {
-        const online = state.isConnected ?? true;
+        const online = isReachableNetworkState(state);
         setIsOnline(online);
         wasOnlineRef.current = online;
       })
@@ -74,12 +87,14 @@ export function useNetworkStatus(): NetworkStatus {
       });
 
     const unsubscribe = NetInfo.addEventListener((state) => {
-      const online = state.isConnected ?? true;
+      const online = isReachableNetworkState(state);
       setIsOnline(online);
 
       if (!wasOnlineRef.current && online) {
         // Device just came back online — drain the offline queue
-        handleReconnect();
+        void handleReconnect().catch((error) => {
+          console.warn('[useNetworkStatus] Offline queue reconnect failed:', error);
+        });
       }
 
       wasOnlineRef.current = online;

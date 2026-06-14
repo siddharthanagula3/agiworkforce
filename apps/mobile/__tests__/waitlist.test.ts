@@ -92,7 +92,7 @@ beforeEach(() => {
 
 describe('joinWaitlist — success', () => {
   it('posts a row with the normalised email', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 2 });
 
     await joinWaitlist({ email: '  Test@Example.COM  ' });
 
@@ -106,7 +106,7 @@ describe('joinWaitlist — success', () => {
   });
 
   it('passes optional country and deviceModel fields when provided', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 3 });
 
     await joinWaitlist({
       email: 'user@test.io',
@@ -129,16 +129,22 @@ describe('joinWaitlist — success', () => {
     );
   });
 
-  it('returns rank 0 because the Web/API route does not expose rank', async () => {
-    post.mockResolvedValueOnce({ ok: true, joined: true });
+  it('returns the server-provided zero-indexed rank', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 14 });
 
     const result = await joinWaitlist({ email: 'a@b.com' });
 
-    expect(result).toEqual({ rank: 0 });
+    expect(result).toEqual({ rank: 14 });
+  });
+
+  it('throws WaitlistNetworkError when the API omits rank', async () => {
+    post.mockResolvedValueOnce({ ok: true, joined: true });
+
+    await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
   });
 
   it('fetches a CSRF token from /api/csrf BEFORE posting (no preflight = 403)', async () => {
-    post.mockResolvedValueOnce({ ok: true });
+    post.mockResolvedValueOnce({ ok: true, joined: true, rank: 0 });
 
     await joinWaitlist({ email: 'a@b.com' });
 

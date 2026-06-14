@@ -352,7 +352,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           <View
             color="#f4f4f4"
             size={16}
-            testID="icon-plus"
+            testID="icon-square-pen"
           />
           <Text
             className="text-[14px] font-semibold"
@@ -447,7 +447,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the local-only 
           <View
             color="#f4f4f4"
             size={15}
-            testID="icon-plus"
+            testID="icon-square-pen"
           />
           <Text
             className="text-[13px] font-semibold"
@@ -1151,7 +1151,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           <View
             color="#f4f4f4"
             size={16}
-            testID="icon-plus"
+            testID="icon-square-pen"
           />
           <Text
             className="text-[14px] font-semibold"
@@ -1246,7 +1246,7 @@ exports[`Mobile project-detail screen snapshots (round-17) locks the success tre
           <View
             color="#f4f4f4"
             size={15}
-            testID="icon-plus"
+            testID="icon-square-pen"
           />
           <Text
             className="text-[13px] font-semibold"

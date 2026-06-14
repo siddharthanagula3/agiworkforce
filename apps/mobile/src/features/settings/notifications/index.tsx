@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   TextInput,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -33,7 +34,6 @@ import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
 import {
   useNotificationPrefsStore,
   type NotificationCategory,
@@ -100,13 +100,20 @@ interface PriorityRowProps {
 }
 
 function PriorityVibrationRow({ label, color, value, onValueChange }: PriorityRowProps) {
+  const colors = useThemeColors();
   return (
     <View className="flex-row items-center justify-between py-2.5 px-1">
       <View className="flex-row items-center gap-3">
         <View className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-        <Text className="text-sm text-white">{label}</Text>
+        <Text className="text-sm" style={{ color: colors.textPrimary }}>
+          {label}
+        </Text>
       </View>
-      <Switch value={value} onValueChange={onValueChange} />
+      <Switch
+        accessibilityLabel={`${label} vibration`}
+        value={value}
+        onValueChange={onValueChange}
+      />
     </View>
   );
 }
@@ -131,7 +138,9 @@ function TimePickerModal({
   onConfirm,
 }: TimePickerModalProps) {
   const colors = useThemeColors();
+  const { width } = useWindowDimensions();
   const [value, setValue] = useState(currentValue);
+  const modalWidth = Math.min(width - 48, 320);
 
   const handleConfirm = useCallback(() => {
     // Validate HH:MM format
@@ -161,24 +170,35 @@ function TimePickerModal({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
+        accessible={false}
         className="flex-1 justify-center items-center"
-        style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+        style={{ backgroundColor: colors.scrim }}
         onPress={onClose}
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <Pressable onPress={(e) => e.stopPropagation()}>
+          <Pressable accessible={false} onPress={(e) => e.stopPropagation()}>
             <View
-              className="rounded-2xl p-5 mx-6"
-              style={{ backgroundColor: colors.surfaceOverlay, minWidth: 280 }}
+              accessibilityViewIsModal
+              className="rounded-2xl p-5"
+              style={{
+                backgroundColor: colors.surfaceOverlay,
+                paddingBottom: 20,
+                width: modalWidth,
+              }}
             >
               {/* Header */}
               <View className="flex-row items-center justify-between mb-4">
-                <Text className="text-[15px] font-semibold text-white">
+                <Text className="text-[15px] font-semibold" style={{ color: colors.textPrimary }}>
                   {field === 'start' ? 'Quiet Hours Start' : 'Quiet Hours End'}
                 </Text>
                 <Pressable
                   onPress={onClose}
-                  className="w-7 h-7 rounded-full items-center justify-center active:bg-white/10"
+                  className="w-7 h-7 rounded-full items-center justify-center"
+                  style={({ pressed }) => ({
+                    backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  })}
+                  accessibilityLabel="Close time picker"
+                  accessibilityRole="button"
                 >
                   <X size={16} color={colors.textMuted} />
                 </Pressable>
@@ -191,6 +211,9 @@ function TimePickerModal({
               >
                 <Clock size={16} color={colors.textMuted} style={{ marginRight: 10 }} />
                 <TextInput
+                  accessibilityLabel={
+                    field === 'start' ? 'Quiet hours start time' : 'Quiet hours end time'
+                  }
                   value={value}
                   onChangeText={setValue}
                   placeholder="HH:MM"
@@ -203,7 +226,6 @@ function TimePickerModal({
                     fontSize: 18,
                     fontVariant: ['tabular-nums'],
                   }}
-                  autoFocus
                   selectTextOnFocus
                 />
               </View>
@@ -212,13 +234,15 @@ function TimePickerModal({
               <View className="flex-row flex-wrap gap-2 mb-4">
                 {QUICK_TIMES.map((t) => (
                   <Pressable
+                    accessibilityLabel={`Set time to ${t}`}
+                    accessibilityRole="button"
                     key={t}
                     onPress={() => setValue(t)}
                     className="px-3 py-1.5 rounded-lg active:opacity-70"
                     style={{
-                      backgroundColor: value === t ? `${colors.teal}25` : colors.surfaceElevated,
+                      backgroundColor: value === t ? colors.accentSurface : colors.surfaceElevated,
                       borderWidth: value === t ? 1 : 0,
-                      borderColor: colors.teal,
+                      borderColor: colors.accentBorder,
                     }}
                   >
                     <Text
@@ -232,21 +256,46 @@ function TimePickerModal({
               </View>
 
               {/* Actions */}
-              <View className="flex-row gap-3">
-                <Button
-                  title="Cancel"
-                  variant="ghost"
-                  size="sm"
-                  onPress={onClose}
-                  className="flex-1"
-                />
-                <Button
-                  title="Set Time"
-                  variant="primary"
-                  size="sm"
+              <View style={{ marginTop: 8 }}>
+                <Pressable
+                  accessibilityLabel="Set Time"
+                  accessibilityRole="button"
                   onPress={handleConfirm}
-                  className="flex-1"
-                />
+                  style={{
+                    alignItems: 'center',
+                    backgroundColor: colors.textPrimary,
+                    borderColor: colors.textPrimary,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    justifyContent: 'center',
+                    minHeight: 44,
+                    width: '100%',
+                  }}
+                >
+                  <Text style={{ color: colors.surfaceElevated, fontSize: 14, fontWeight: '600' }}>
+                    Set Time
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Cancel"
+                  accessibilityRole="button"
+                  onPress={onClose}
+                  style={{
+                    alignItems: 'center',
+                    backgroundColor: colors.surfaceElevated,
+                    borderColor: colors.border,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    justifyContent: 'center',
+                    marginTop: 8,
+                    minHeight: 44,
+                    width: '100%',
+                  }}
+                >
+                  <Text style={{ color: colors.textPrimary, fontSize: 14, fontWeight: '600' }}>
+                    Cancel
+                  </Text>
+                </Pressable>
               </View>
             </View>
           </Pressable>
@@ -276,8 +325,7 @@ export default function NotificationPreferencesScreen() {
   const [timePickerField, setTimePickerField] = useState<'start' | 'end' | null>(null);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/settings' as Parameters<typeof router.replace>[0]);
+    router.navigate('/(app)/(tabs)/settings' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   const handleOpenTimePicker = useCallback((field: 'start' | 'end') => {
@@ -307,18 +355,24 @@ export default function NotificationPreferencesScreen() {
   ];
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       {/* Header */}
-      <View className="flex-row items-center px-3 h-12">
+      <View
+        className="flex-row items-center px-3 h-12"
+        style={{ backgroundColor: colors.surfaceBase }}
+      >
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
+          className="p-2 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+          })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1">
+        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
           Notification Preferences
         </Text>
       </View>
@@ -330,7 +384,10 @@ export default function NotificationPreferencesScreen() {
       >
         {/* Categories */}
         <View className="mt-3 mb-2">
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-3">
+          <Text
+            className="text-[11px] uppercase mb-3"
+            style={{ color: colors.textMuted, letterSpacing: 0 }}
+          >
             Notification Types
           </Text>
         </View>
@@ -344,11 +401,16 @@ export default function NotificationPreferencesScreen() {
                   <View className="flex-row items-center gap-3 flex-1 mr-3">
                     <Icon size={18} color={cat.iconColor} />
                     <View className="flex-1">
-                      <Text className="text-sm text-white font-medium">{cat.label}</Text>
-                      <Text className="text-[11px] text-white/40 mt-0.5">{cat.description}</Text>
+                      <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                        {cat.label}
+                      </Text>
+                      <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
+                        {cat.description}
+                      </Text>
                     </View>
                   </View>
                   <Switch
+                    accessibilityLabel={cat.label}
                     value={categoryEnabled[cat.id]}
                     onValueChange={(v) => setCategoryEnabled(cat.id, v)}
                   />
@@ -360,7 +422,10 @@ export default function NotificationPreferencesScreen() {
 
         {/* Quiet hours */}
         <View className="mt-6 mb-2">
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-3">
+          <Text
+            className="text-[11px] uppercase mb-3"
+            style={{ color: colors.textMuted, letterSpacing: 0 }}
+          >
             Quiet Hours
           </Text>
         </View>
@@ -370,13 +435,16 @@ export default function NotificationPreferencesScreen() {
             <View className="flex-row items-center gap-3">
               <Moon size={18} color={colors.textSecondary} />
               <View>
-                <Text className="text-sm text-white font-medium">Enable Quiet Hours</Text>
-                <Text className="text-[11px] text-white/40 mt-0.5">
+                <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
+                  Enable Quiet Hours
+                </Text>
+                <Text className="text-[11px] mt-0.5" style={{ color: colors.textMuted }}>
                   Suppress non-critical alerts
                 </Text>
               </View>
             </View>
             <Switch
+              accessibilityLabel="Enable Quiet Hours"
               value={quietHours.enabled}
               onValueChange={(v) => setQuietHours({ enabled: v })}
             />
@@ -388,17 +456,22 @@ export default function NotificationPreferencesScreen() {
               {/* Start time */}
               <Pressable
                 onPress={() => handleOpenTimePicker('start')}
-                className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
+                className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                })}
                 accessibilityLabel="Set quiet hours start time"
                 accessibilityRole="button"
               >
                 <View className="flex-row items-center gap-3">
                   <BellOff size={18} color={colors.textSecondary} />
-                  <Text className="text-sm text-white">Start Time</Text>
+                  <Text className="text-sm" style={{ color: colors.textPrimary }}>
+                    Start Time
+                  </Text>
                 </View>
                 <View
                   className="px-3 py-1.5 rounded-lg"
-                  style={{ backgroundColor: `${colors.teal}15` }}
+                  style={{ backgroundColor: colors.accentSurface }}
                 >
                   <Text className="text-sm font-medium" style={{ color: colors.teal }}>
                     {quietHours.startTime}
@@ -409,17 +482,22 @@ export default function NotificationPreferencesScreen() {
               {/* End time */}
               <Pressable
                 onPress={() => handleOpenTimePicker('end')}
-                className="flex-row items-center justify-between py-3 px-1 active:bg-white/5 rounded-lg"
+                className="flex-row items-center justify-between py-3 px-1 rounded-lg"
+                style={({ pressed }) => ({
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                })}
                 accessibilityLabel="Set quiet hours end time"
                 accessibilityRole="button"
               >
                 <View className="flex-row items-center gap-3">
                   <Bell size={18} color={colors.textSecondary} />
-                  <Text className="text-sm text-white">End Time</Text>
+                  <Text className="text-sm" style={{ color: colors.textPrimary }}>
+                    End Time
+                  </Text>
                 </View>
                 <View
                   className="px-3 py-1.5 rounded-lg"
-                  style={{ backgroundColor: `${colors.teal}15` }}
+                  style={{ backgroundColor: colors.accentSurface }}
                 >
                   <Text className="text-sm font-medium" style={{ color: colors.teal }}>
                     {quietHours.endTime}
@@ -429,9 +507,13 @@ export default function NotificationPreferencesScreen() {
 
               <View
                 className="mt-3 mx-1 px-3 py-2 rounded-lg"
-                style={{ backgroundColor: 'rgba(255,255,255,0.04)' }}
+                style={{
+                  backgroundColor: colors.surfaceElevated,
+                  borderColor: colors.border,
+                  borderWidth: 1,
+                }}
               >
-                <Text className="text-[11px] text-white/40 leading-4">
+                <Text className="text-[11px] leading-4" style={{ color: colors.textMuted }}>
                   Critical notifications (agent failures, emergency stops, approval requests) always
                   bypass quiet hours.
                 </Text>
@@ -442,12 +524,19 @@ export default function NotificationPreferencesScreen() {
 
         {/* Vibration */}
         <View className="mt-6 mb-2">
-          <Text className="text-[11px] text-white/40 uppercase tracking-wider mb-3">Vibration</Text>
+          <Text
+            className="text-[11px] uppercase mb-3"
+            style={{ color: colors.textMuted, letterSpacing: 0 }}
+          >
+            Vibration
+          </Text>
         </View>
         <Card>
           <View className="flex-row items-center gap-3 mb-3 px-1">
             <Vibrate size={18} color={colors.textSecondary} />
-            <Text className="text-sm text-white/70">Vibrate per priority level</Text>
+            <Text className="text-sm" style={{ color: colors.textSecondary }}>
+              Vibrate per priority level
+            </Text>
           </View>
           {priorityRows.map((row, idx) => (
             <View key={row.key}>

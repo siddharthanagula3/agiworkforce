@@ -7,6 +7,7 @@ import { ImageIcon, Camera } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { ImageWithQuestion } from '@/src/features/image/components/ImageWithQuestion';
 import { useThemeColors } from '@/src/ui/theme';
+import { pickImageAssetsFromLibrary } from '@/src/features/media/photo-picker';
 
 /**
  * ImageScreen — entry point for the image-with-question flow.
@@ -26,30 +27,14 @@ export default function ImageScreen() {
   }, [router]);
 
   const pickFromLibrary = useCallback(async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert(
-        'Photo Library Access',
-        'Allow photo library access to pick an image for analysis.',
-        [
-          { text: 'Open Settings', onPress: () => Linking.openSettings() },
-          { text: 'Cancel', style: 'cancel' },
-        ],
-      );
-      return;
-    }
-
     setIsPicking(true);
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        quality: 0.85,
-        allowsMultipleSelection: false,
-        exif: false,
-      });
-      if (!result.canceled && result.assets.length > 0) {
-        setImageUri(result.assets[0].uri);
+      const assets = await pickImageAssetsFromLibrary();
+      if (assets.length > 0) {
+        setImageUri(assets[0].uri);
       }
+    } catch {
+      Alert.alert('Photos', 'Could not open Photos. Please try again.');
     } finally {
       setIsPicking(false);
     }

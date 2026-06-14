@@ -61,12 +61,14 @@ export function ReportFlagButton({
   const [sendEmail, setSendEmail] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleOpen = useCallback(() => {
     setSubmitted(false);
     setSelectedCategory(null);
     setUserNote('');
     setSendEmail(false);
+    setErrorMessage(null);
     setModalVisible(true);
   }, []);
 
@@ -77,6 +79,7 @@ export function ReportFlagButton({
   const handleSubmit = useCallback(async () => {
     if (!selectedCategory) return;
     setLoading(true);
+    setErrorMessage(null);
     try {
       await saveContentReport({
         messageId,
@@ -87,6 +90,8 @@ export function ReportFlagButton({
         sendEmail,
       });
       setSubmitted(true);
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Report could not be submitted.');
     } finally {
       setLoading(false);
     }
@@ -113,7 +118,10 @@ export function ReportFlagButton({
         onRequestClose={handleClose}
         accessibilityViewIsModal
       >
-        <Pressable style={styles.backdrop} onPress={handleClose} />
+        <Pressable
+          style={[styles.backdrop, { backgroundColor: colors.scrim }]}
+          onPress={handleClose}
+        />
 
         <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}>
           {submitted ? (
@@ -160,7 +168,7 @@ export function ReportFlagButton({
                         borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
                         backgroundColor:
                           selectedCategory === cat.id
-                            ? 'rgba(62,184,196,0.08)'
+                            ? colors.accentSurface
                             : colors.surfaceElevated,
                       },
                     ]}
@@ -171,7 +179,7 @@ export function ReportFlagButton({
                         {
                           borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
                           backgroundColor:
-                            selectedCategory === cat.id ? colors.teal : 'transparent',
+                            selectedCategory === cat.id ? colors.teal : colors.transparent,
                         },
                       ]}
                     />
@@ -200,7 +208,7 @@ export function ReportFlagButton({
                   {
                     color: colors.textPrimary,
                     borderColor: colors.border,
-                    backgroundColor: 'rgba(255,255,255,0.04)',
+                    backgroundColor: colors.inputSurface,
                   },
                 ]}
                 accessibilityLabel="Additional details about the issue"
@@ -219,7 +227,7 @@ export function ReportFlagButton({
                     styles.checkbox,
                     {
                       borderColor: sendEmail ? colors.teal : colors.border,
-                      backgroundColor: sendEmail ? colors.teal : 'transparent',
+                      backgroundColor: sendEmail ? colors.teal : colors.transparent,
                     },
                   ]}
                 >
@@ -231,6 +239,21 @@ export function ReportFlagButton({
                   Send report to support team via email
                 </Text>
               </Pressable>
+
+              {errorMessage && (
+                <Text
+                  selectable
+                  accessibilityRole="alert"
+                  style={{
+                    color: colors.agentError,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    marginBottom: 12,
+                  }}
+                >
+                  {errorMessage}
+                </Text>
+              )}
 
               {/* Submit */}
               <Pressable
@@ -286,7 +309,6 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   sheet: {
     borderTopLeftRadius: 20,
