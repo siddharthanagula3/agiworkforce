@@ -35,10 +35,11 @@ const modes: Array<{
   },
   {
     id: 'autopilot',
-    label: 'Autopilot',
+    label: 'AGI Mode',
     icon: Zap,
     color: 'amber',
-    description: 'Auto-approves all tools. No confirmation prompts. Use with caution.',
+    description:
+      'God mode — fully autonomous. Runs every tool call without asking; you still see each one as it happens. Use with caution.',
   },
 ];
 
