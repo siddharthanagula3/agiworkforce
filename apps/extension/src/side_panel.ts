@@ -26,12 +26,7 @@ import {
 } from './features/background/conversation-history';
 import { sanitizeHtml, renderMarkdown } from './features/side-panel/markdown';
 import { setupVoiceInput } from './features/side-panel/voice';
-import {
-  ALLOWED_BRIDGE_HOSTS,
-  DEFAULT_AGI_BRIDGE_URL,
-  validateBridgeUrl,
-  sanitizePageText,
-} from './background/policy';
+import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   Terminal,
   FileText,
@@ -1366,6 +1361,50 @@ function injectStyles(): void {
     }
     #sp-status-pill.cloud .sp-status-dot { background: var(--agi-ext-accent); }
 
+    /* ── Bridge-offline notice (shown above composer when desktop not connected) ── */
+    #sp-bridge-notice {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: color-mix(in srgb, var(--agi-ext-danger) 8%, transparent);
+      border-top: 1px solid var(--agi-ext-danger-border);
+      font-size: 11px;
+      color: var(--agi-ext-danger);
+      flex-shrink: 0;
+    }
+    #sp-bridge-notice.visible { display: flex; }
+    #sp-bridge-notice-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--agi-ext-danger);
+      flex-shrink: 0;
+    }
+    #sp-bridge-notice-text { flex: 1; line-height: 1.4; }
+    #sp-bridge-notice-reconnect {
+      background: none;
+      border: 1px solid var(--agi-ext-danger-border);
+      color: var(--agi-ext-danger);
+      border-radius: 5px;
+      padding: 2px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: background 0.12s;
+    }
+    #sp-bridge-notice-reconnect:hover {
+      background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent);
+    }
+    /* Model picker dims when bridge is offline — selection is persisted but has no
+       immediate effect until the desktop bridge is connected. */
+    .sp-model-selector-wrap.bridge-offline #sp-model-selector-btn {
+      opacity: 0.45;
+      cursor: default;
+      pointer-events: none;
+    }
+
     /* ── Tab bar ── */
     #sp-tab-bar {
       display: flex;
@@ -2326,6 +2365,55 @@ function updateConnectionStatus(): void {
     const dot = document.createElement('span');
     dot.className = 'sp-status-dot';
     pill.replaceChildren(dot, 'Offline');
+  }
+  // Keep composer gate and model picker in sync whenever connection changes.
+  updateComposerGatedByConnection();
+}
+
+/**
+ * Gate the chat composer based on bridge availability.
+ *
+ * When the desktop bridge is offline:
+ *  - The bridge-notice banner is shown above the input.
+ *  - The textarea placeholder explains why input is blocked.
+ *  - The send button is disabled (unless already streaming, which has its own stop).
+ *  - The model picker is dimmed (selection is stored but has no immediate effect).
+ *
+ * When connected, all restrictions are lifted.  setBlockedState() may
+ * separately disable the composer on restricted URLs; that takes precedence
+ * because a restricted URL means AGI can't read the page at all.
+ */
+function updateComposerGatedByConnection(): void {
+  const notice = document.getElementById('sp-bridge-notice');
+  const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  const sendBtnEl = document.getElementById('sp-send-btn') as HTMLButtonElement | null;
+  const modelWrap = document.querySelector('.sp-model-selector-wrap');
+
+  const offline = !_ctx.isConnected;
+
+  if (notice) {
+    notice.classList.toggle('visible', offline);
+  }
+
+  if (modelWrap) {
+    modelWrap.classList.toggle('bridge-offline', offline);
+  }
+
+  // Only change the input/send state when the page is NOT already blocked
+  // by setBlockedState (blocked = input.disabled set because of restricted URL).
+  // We detect this by checking if input is already disabled for a non-connection reason:
+  // setBlockedState sets placeholder to "Can't access this page" — if that is set, leave it.
+  if (inputEl && inputEl.placeholder !== "Can't access this page") {
+    if (offline) {
+      inputEl.placeholder = 'Start the AGI desktop app to enable chat…';
+    } else {
+      inputEl.placeholder = 'Ask anything... (/ for commands)';
+    }
+  }
+
+  // Disable send unless we're actively streaming (stop button must remain enabled)
+  if (sendBtnEl && sendBtnEl.getAttribute('data-mode') !== 'stop') {
+    sendBtnEl.disabled = offline;
   }
 }
 
@@ -3986,7 +4074,7 @@ function buildUI(): void {
 
   const inputEl = el('textarea', {
     id: 'sp-input',
-    placeholder: 'Ask about this page',
+    placeholder: 'Ask anything... (/ for commands)',
     rows: '1',
   }) as HTMLTextAreaElement;
 
@@ -4212,6 +4300,28 @@ function buildUI(): void {
   }
 
   composerShell.appendChild(composerBar);
+
+  // Bridge-offline notice — shown at the top of the input area when the
+  // desktop bridge is not connected. Includes a reconnect button that
+  // triggers the same flow as the popup's manual reconnect.
+  const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
+  const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });
+  const bridgeNoticeText = el('span', { id: 'sp-bridge-notice-text' }, 'Desktop not connected');
+  const bridgeNoticeReconnect = el(
+    'button',
+    { id: 'sp-bridge-notice-reconnect', type: 'button' },
+    'Reconnect',
+  );
+  bridgeNoticeReconnect.addEventListener('click', () => {
+    chrome.runtime
+      .sendMessage({ type: 'RECONNECT_NATIVE' })
+      .catch((err: unknown) => console.warn('[SidePanel] RECONNECT_NATIVE failed:', err));
+  });
+  bridgeNotice.appendChild(bridgeNoticeDot);
+  bridgeNotice.appendChild(bridgeNoticeText);
+  bridgeNotice.appendChild(bridgeNoticeReconnect);
+
+  inputArea.appendChild(bridgeNotice);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
   inputArea.appendChild(promptChipsRow);
@@ -4551,6 +4661,23 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
+  // Live connection-status updates from the background service worker.
+  // Background now also broadcasts these via chrome.runtime.sendMessage so
+  // extension views (side panel, popup) receive them — not just content scripts.
+  if (envelope.type === 'CONNECTION_STATUS_CHANGED') {
+    const statusMsg = msg as { connected?: boolean; status?: string };
+    const nowConnected = statusMsg.connected === true;
+    if (nowConnected !== _ctx.isConnected) {
+      _ctx.isConnected = nowConnected;
+      updateConnectionStatus();
+      if (nowConnected) {
+        chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
+        setOfflineOnboardingVisible(false);
+      }
+    }
+    return;
+  }
+
   const chunk = msg as ChatChunk;
   if (chunk.type !== 'CHAT_CHUNK') return;
   if (chunk.id !== _ctx.currentStreamId) return;
@@ -4619,36 +4746,40 @@ Promise.all([
   });
 
 async function probeBridgeStatus(): Promise<void> {
+  // Ask the background service worker for the live native-connection status.
+  // This is the only authoritative source: the desktop `:8787` server only
+  // serves `POST /pair` and WebSocket upgrades — a direct HTTP GET to
+  // `/v1/status` always fails (404 or ECONNREFUSED), so the side panel used
+  // to permanently show "Offline" even when the desktop app was running.
+  //
+  // GET_CONNECTION_STATUS also triggers a fresh native ping in background
+  // (background.ts:1033) so the status it returns is up-to-date.
   try {
-    const stored = await new Promise<string | undefined>((resolve) => {
-      chrome.storage.local.get({ agi_bridge_url: '' }, (items) => {
-        resolve((items['agi_bridge_url'] as string | undefined) || undefined);
-      });
-    });
-    // SECURITY (H-08 audit 2026-05-19): never fetch a stored bridge URL
-    // without first running it through `validateBridgeUrl`. Storage is
-    // writable by the side panel UI and (in principle) by future code
-    // paths; a poisoned value here used to be fetched verbatim. Fall
-    // back to the canonical default when the stored value is invalid.
-    const validated = stored ? validateBridgeUrl(stored.trim()) : null;
-    const baseUrl = validated ?? DEFAULT_AGI_BRIDGE_URL;
-    const resp = await fetch(`${baseUrl}/v1/status`, {
-      method: 'GET',
-      signal: AbortSignal.timeout(3000),
-    });
-    if (resp.ok) {
-      if (!_ctx.isConnected) {
-        _ctx.isConnected = true;
-        updateConnectionStatus();
-      }
-      // Connected — mark ever-connected so we don't show onboarding on future opens
+    const result = (await chrome.runtime.sendMessage({
+      type: 'GET_CONNECTION_STATUS',
+    })) as { success?: boolean; nativeConnected?: boolean; connectionStatus?: string } | undefined;
+
+    const connected = result?.nativeConnected === true;
+    if (connected !== _ctx.isConnected) {
+      _ctx.isConnected = connected;
+      updateConnectionStatus();
+    }
+    if (connected) {
+      // Mark ever-connected so the onboarding screen is not shown on future
+      // opens even if the desktop is temporarily closed.
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
       setOfflineOnboardingVisible(false);
+    } else {
+      // BLOCKER-02b: not connected. Show offline onboarding on first use.
+      chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
+        if (!items['agi_ever_connected']) {
+          setOfflineOnboardingVisible(true);
+        }
+      });
     }
   } catch {
-    // BLOCKER-02b: bridge not running. Show offline onboarding on first use
-    // (agi_ever_connected not set). Returning users see the standard "Not Connected"
-    // status pill — they know how to start the app.
+    // Background not available (e.g. service worker restarting) — show
+    // onboarding only on first use; otherwise leave current state unchanged.
     chrome.storage.local.get({ agi_ever_connected: false }, (items) => {
       if (!items['agi_ever_connected']) {
         setOfflineOnboardingVisible(true);
