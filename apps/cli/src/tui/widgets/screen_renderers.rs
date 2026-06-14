@@ -702,10 +702,9 @@ pub fn render_sandbox(mode: SandboxMode) -> String {
         format!("    Allowed: {}", allowed),
         format!("    Blocked: {}", blocked),
         String::new(),
-        "    Toggle with: --sandbox=<read-only|contained|unrestricted>".to_string(),
-        "                 or env AGIWORKFORCE_SANDBOX=<mode>".to_string(),
-        "                 or /sandbox <mode> inline".to_string(),
-        "    Enforced by: agiworkforce-sandbox-policy".to_string(),
+        "    Set via:     --permission-mode <auto|approve|skip> at startup".to_string(),
+        "                 or --no-sandbox to disable OS-level sandbox".to_string(),
+        "    Enforced by: agiworkforce-sandbox-policy (macOS Seatbelt / bwrap)".to_string(),
     ];
     frame("Sandbox".to_string(), &body, "Esc to close")
 }
