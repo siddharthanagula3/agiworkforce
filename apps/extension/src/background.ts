@@ -2402,25 +2402,30 @@ async function checkDesktopConnection(): Promise<void> {
 }
 
 async function notifyConnectionStatusChange(): Promise<void> {
+  const statusPayload = {
+    type: 'CONNECTION_STATUS_CHANGED',
+    connected: state.isNativeConnected,
+    status: state.connectionStatus,
+  };
+
+  // Broadcast to extension views (side panel, popup, options).
+  // chrome.runtime.sendMessage reaches all live extension pages; ignore the
+  // error that fires when no listener is registered (panel not open).
+  chrome.runtime.sendMessage(statusPayload).catch(() => {});
+
   try {
+    // Also deliver to content scripts in open tabs (they listen on
+    // chrome.runtime.onMessage inside the tab context).
     // Skip discarded tabs — they have no active content script to receive messages.
     const tabs = await chrome.tabs.query({ discarded: false });
 
     for (const tab of tabs) {
       if (tab.id) {
-        chrome.tabs.sendMessage(
-          tab.id,
-          {
-            type: 'CONNECTION_STATUS_CHANGED',
-            connected: state.isNativeConnected,
-            status: state.connectionStatus,
-          },
-          () => {
-            // Reading chrome.runtime.lastError clears the error state (Chrome API
-            // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
-            void chrome.runtime.lastError;
-          },
-        );
+        chrome.tabs.sendMessage(tab.id, statusPayload, () => {
+          // Reading chrome.runtime.lastError clears the error state (Chrome API
+          // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
+          void chrome.runtime.lastError;
+        });
       }
     }
   } catch (error) {
@@ -3009,10 +3014,14 @@ async function handleChatMessage(
         }
       }
 
-      // Nothing available — send a helpful offline message
-      const offlineMsg =
-        'The AGI Workforce desktop app is not running. Please start it and try again.';
-      broadcastChunk(offlineMsg, true);
+      // Nothing available — surface as an error bubble so it renders in red,
+      // not as a normal assistant reply. The side panel already has an offline
+      // onboarding screen; this error is the fallback for in-session disconnects.
+      broadcastChunk(
+        '',
+        true,
+        'Desktop bridge not available. Start the AGI desktop app and try again.',
+      );
     }
   } catch (error) {
     logger.error('handleChatMessage error', error);
