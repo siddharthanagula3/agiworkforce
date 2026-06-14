@@ -130,7 +130,8 @@ export function AgentsSettings() {
                 </div>
               </label>
 
-              {/* Auto-approve all */}
+              {/* AGI Mode — god mode: fully autonomous, bypasses every approval. The
+                  non-AGI-Mode options above stay fail-closed (manual / safe-only). */}
               <label className="flex items-start gap-3 rounded-md border border-orange-400/30 bg-orange-500/5 p-3 cursor-pointer hover:bg-orange-500/10 transition-colors">
                 <input
                   type="radio"
@@ -144,13 +145,15 @@ export function AgentsSettings() {
                 />
                 <div>
                   <p className="text-sm font-medium flex items-center gap-2">
-                    Auto-approve all
+                    AGI Mode
                     <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold text-orange-600 dark:text-orange-400">
-                      ACTIVE
+                      GOD MODE
                     </span>
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Skips every confirmation dialog. Every tool call executes immediately.{' '}
+                    Fully autonomous — the agent runs every tool call immediately and is never
+                    interrupted by a confirmation dialog. You still see each tool call as it
+                    happens; you&apos;re just never asked.{' '}
                     <strong className="text-orange-600 dark:text-orange-400">
                       Use with caution.
                     </strong>
