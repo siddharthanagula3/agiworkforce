@@ -144,6 +144,21 @@ jest.mock('@/lib/v1FeatureFlags', () => ({
   FEATURES: { companion: false, connectors: false },
 }));
 
+jest.mock('@/src/features/auth/store', () => ({
+  useAuthStore: (selector: (s: { user: null; signOut: jest.Mock }) => unknown) =>
+    selector({ user: null, signOut: jest.fn() }),
+}));
+
+jest.mock('@/src/features/waitlist/store', () => ({
+  useWaitlistStore: (selector: (s: { cloudUnlocked: boolean }) => unknown) =>
+    selector({ cloudUnlocked: false }),
+}));
+
+jest.mock('@/src/features/chat/store/appModeStore', () => ({
+  useChatAppModeStore: (selector: (s: { appMode: string }) => unknown) =>
+    selector({ appMode: 'local' }),
+}));
+
 jest.mock('@/src/features/cloud-bridge', () => {
   const { View } = require('react-native');
   return {
