@@ -1,10 +1,14 @@
 /**
  * Mobile auth session facade.
  *
- * Mobile v1 does not own a direct database/auth platform client. Cloud
- * account state is expected to come from Clerk-authenticated Web/API routes
- * backed by Neon once the gated Cloud path is enabled.
+ * Cloud account state comes from Clerk (@clerk/expo). This facade bridges the
+ * Clerk session to the non-React callers that need a Bearer token — primarily
+ * the cloud streaming path in services/streaming.ts. Clerk's token cache
+ * (expo-secure-store) persists the session across launches.
  */
+
+import { getClerkInstance } from '@clerk/expo';
+import { getClerkToken, getClerkUserId, CLERK_PUBLISHABLE_KEY } from '@/src/integrations/clerk';
 
 export interface MobileAuthUser {
   id: string;
@@ -22,8 +26,9 @@ export interface MobileAuthSession {
   user: MobileAuthUser;
 }
 
+/** Current Clerk session JWT, or null when signed out. */
 export async function getAuthToken(): Promise<string | null> {
-  return null;
+  return getClerkToken();
 }
 
 export async function getAuthHeaders(): Promise<Record<string, string>> {
@@ -31,19 +36,42 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+/** Force a fresh Clerk session token; returns true if a session exists. */
 export async function refreshAuthSession(): Promise<boolean> {
-  return false;
+  try {
+    const token = await getClerkToken();
+    return token !== null;
+  } catch {
+    return false;
+  }
 }
 
 export async function clearAuthSession(): Promise<void> {
-  // No direct mobile platform session is stored in v1.
+  try {
+    await getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).signOut();
+  } catch {
+    // Best-effort sign-out; Clerk clears its own SecureStore cache.
+  }
 }
 
 export async function getCurrentUser(): Promise<MobileAuthUser | null> {
-  return null;
+  try {
+    const user = getClerkInstance({ publishableKey: CLERK_PUBLISHABLE_KEY }).user;
+    if (!user) return null;
+    return {
+      id: user.id,
+      email: user.primaryEmailAddress?.emailAddress ?? null,
+      created_at: user.createdAt ? new Date(user.createdAt).toISOString() : null,
+      user_metadata: {
+        full_name: user.fullName ?? null,
+        name: user.firstName ?? null,
+      },
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function getCurrentUserId(): Promise<string | null> {
-  const user = await getCurrentUser();
-  return user?.id ?? null;
+  return getClerkUserId();
 }
