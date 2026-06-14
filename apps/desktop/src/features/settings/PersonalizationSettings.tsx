@@ -1,7 +1,7 @@
 /**
  * PersonalizationSettings
  *
- * ChatGPT-style personalization controls: user identity, response style sliders
+ * AGI personalization controls: user identity, response style sliders
  * (formality, warmth, detail), emoji usage, and custom instructions passthrough.
  *
  * Changes auto-save on every field update (debounced 400 ms).

@@ -1,10 +1,10 @@
 {
   "name": "@agiworkforce/extension",
   "version": "1.2.0",
-  "description": "Intelligent browser automation extension for AGI Workforce desktop application",
+  "description": "Approved-site browser companion extension for AGI Desktop",
   "private": true,
   "type": "module",
-  "author": "AGI Workforce",
+  "author": "AGI",
   "license": "PROPRIETARY",
   "homepage": "https://agiworkforce.com",
   "repository": {

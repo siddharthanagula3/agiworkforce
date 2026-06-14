@@ -9,12 +9,7 @@
  *   - Page title
  *   - Agent status chip (planning / executing / done / error / idle)
  *   - Last action description
- *   - Stop button (terra-cotta #da7756) — calls agent_stop Tauri command
- *
- * Design tokens match the desktop app:
- *   - Teal  #21808d — active / focus accent
- *   - Terra-cotta #da7756 — stop / destructive
- *   - Charcoal surfaces from Tailwind dark classes
+ *   - Stop button — calls agent_stop Tauri command
  */
 
 import { Globe, Loader2, CheckCircle2, XCircle, Square, WifiOff, Zap } from 'lucide-react';
@@ -31,7 +26,7 @@ interface StatusChipProps {
 function StatusChip({ status, connected }: StatusChipProps) {
   if (!connected) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800 px-2.5 py-1 text-[11px] font-medium text-zinc-400">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
         <WifiOff className="h-3 w-3" />
         Extension disconnected
       </span>
@@ -41,36 +36,36 @@ function StatusChip({ status, connected }: StatusChipProps) {
   switch (status) {
     case 'planning':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/30 bg-teal-500/10 px-2.5 py-1 text-[11px] font-medium text-teal-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
           <Loader2 className="h-3 w-3 animate-spin" />
           Planning
         </span>
       );
     case 'executing':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 px-2.5 py-1 text-[11px] font-medium text-blue-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
           <Zap className="h-3 w-3" />
           Executing
         </span>
       );
     case 'done':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">
           <CheckCircle2 className="h-3 w-3" />
           Done
         </span>
       );
     case 'error':
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[11px] font-medium text-red-300">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-[11px] font-medium text-destructive">
           <XCircle className="h-3 w-3" />
           Error
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 text-[11px] font-medium text-zinc-400">
-          <span className="h-2 w-2 rounded-full bg-zinc-600" />
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          <span className="h-2 w-2 rounded-full bg-muted-foreground/50" />
           Idle
         </span>
       );
@@ -80,9 +75,9 @@ function StatusChip({ status, connected }: StatusChipProps) {
 function UrlDisplay({ url, title }: { url: string | null; title: string | null }) {
   if (!url) {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/30 px-3 py-2.5">
-        <Globe className="h-4 w-4 shrink-0 text-zinc-600" />
-        <span className="text-sm text-zinc-500 italic">No page detected yet</span>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
+        <Globe className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <span className="text-sm italic text-muted-foreground">No page detected yet</span>
       </div>
     );
   }
@@ -95,15 +90,15 @@ function UrlDisplay({ url, title }: { url: string | null; title: string | null }
   }
 
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-white/5 bg-black/30 px-3 py-2.5">
+    <div className="flex flex-col gap-1 rounded-lg border border-border bg-muted/30 px-3 py-2.5">
       <div className="flex items-center gap-2">
-        <Globe className="h-4 w-4 shrink-0 text-[#21808d]" />
-        <span className="truncate text-xs font-medium text-zinc-200" title={url}>
+        <Globe className="h-4 w-4 shrink-0 text-primary" />
+        <span className="truncate text-xs font-medium text-foreground" title={url}>
           {hostname}
         </span>
       </div>
       {title && (
-        <p className="truncate text-xs text-zinc-500 pl-6" title={title}>
+        <p className="truncate pl-6 text-xs text-muted-foreground" title={title}>
           {title}
         </p>
       )}
@@ -137,13 +132,13 @@ export function BrowserAutomationPanel({ className }: BrowserAutomationPanelProp
     <div className={cn('flex h-full flex-col gap-4 overflow-y-auto', className)}>
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-100">Browser Agent</h2>
+        <h2 className="text-sm font-semibold text-foreground">Browser Agent</h2>
         <StatusChip status={agentStatus} connected={extensionConnected} />
       </div>
 
       {/* Current page */}
       <section className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Current Page
         </span>
         <UrlDisplay url={currentPageUrl} title={currentPageTitle} />
@@ -151,29 +146,29 @@ export function BrowserAutomationPanel({ className }: BrowserAutomationPanelProp
 
       {/* Last action */}
       <section className="flex flex-col gap-1.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Last Action
         </span>
-        <div className="min-h-[2.5rem] rounded-lg border border-white/5 bg-black/30 px-3 py-2.5">
+        <div className="min-h-[2.5rem] rounded-lg border border-border bg-muted/30 px-3 py-2.5">
           {lastAction ? (
-            <p className="text-sm text-zinc-200">{lastAction}</p>
+            <p className="text-sm text-foreground">{lastAction}</p>
           ) : (
-            <p className="text-sm italic text-zinc-500">Waiting for activity…</p>
+            <p className="text-sm italic text-muted-foreground">Waiting for activity…</p>
           )}
         </div>
       </section>
 
       {/* Error banner */}
       {hasError && lastError && (
-        <div className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2.5">
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-red-400">
+        <div className="rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2.5">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-destructive">
             Error
           </p>
-          <p className="text-xs text-red-300">{lastError}</p>
+          <p className="text-xs text-destructive">{lastError}</p>
           <button
             type="button"
             onClick={resetState}
-            className="mt-2 text-[11px] text-red-400 underline hover:text-red-300"
+            className="mt-2 text-[11px] text-destructive underline hover:opacity-80"
           >
             Dismiss
           </button>
@@ -182,8 +177,8 @@ export function BrowserAutomationPanel({ className }: BrowserAutomationPanelProp
 
       {/* Stats row (only when there's a completed task) */}
       {agentStatus === 'done' && lastTaskActionsPerformed > 0 && (
-        <div className="rounded-lg border border-white/5 bg-black/20 px-3 py-2 text-xs text-zinc-400">
-          <span className="font-medium text-zinc-300">{lastTaskActionsPerformed}</span> action
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">{lastTaskActionsPerformed}</span> action
           {lastTaskActionsPerformed === 1 ? '' : 's'} performed in last task
         </div>
       )}
@@ -191,16 +186,16 @@ export function BrowserAutomationPanel({ className }: BrowserAutomationPanelProp
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Stop button — terra-cotta, only shown when active */}
+      {/* Stop button, only shown when active */}
       {isActive && (
         <button
           type="button"
           onClick={() => void stopAgent()}
           className={cn(
             'flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5',
-            'bg-[#da7756] text-white text-sm font-medium',
-            'transition-colors hover:bg-[#c56a47] active:bg-[#b35e3e]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#da7756]/50',
+            'bg-destructive text-destructive-foreground text-sm font-medium',
+            'transition-colors hover:bg-destructive/90 active:bg-destructive/80',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/50',
           )}
           aria-label="Stop browser agent"
         >
@@ -211,7 +206,7 @@ export function BrowserAutomationPanel({ className }: BrowserAutomationPanelProp
 
       {/* Idle / disconnected hint */}
       {!isActive && !extensionConnected && (
-        <p className="text-center text-xs text-zinc-600">
+        <p className="text-center text-xs text-muted-foreground">
           Install the AGI Workforce Chrome extension to enable browser automation.
         </p>
       )}
