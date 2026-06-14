@@ -24,6 +24,16 @@ import type {
 } from './types';
 import { logger, domUtils, formUtils, validators, sleep } from './utils';
 import { runPlatformJobAutofill } from './jobAutofill';
+import { detectJobApplication } from './features/content/autofill/detector';
+import {
+  autofillGreenhouse,
+  autofillLever,
+  autofillLinkedIn,
+  autofillAshby,
+  loadAutofillProfile,
+  resolveProfileValue,
+} from './features/content/autofill/filler';
+import { makeEscalationDecision } from './features/computer-use/escalationEngine';
 import { discoverAllTools, callTool, watchForToolChanges } from './webmcp';
 import { extractPageMetadata } from './page-metadata';
 import type { PageMetadata } from './page-metadata';
@@ -341,6 +351,9 @@ async function handleMessageAsync(message: ExtensionMessage): Promise<ExtensionR
     case 'CLEAR_CONSOLE_LOGS':
       consoleLogBuffer.length = 0;
       return { success: true } as ExtensionResponse;
+
+    case 'AGI_RUN_AUTOFILL' as ExtensionMessage['type']:
+      return handleRunAutofill();
 
     default:
       return { success: false, error: 'Unknown message type' } as ExtensionResponse;
@@ -1317,6 +1330,82 @@ async function handleAutoFillJobApplication(
   }
 }
 
+/**
+ * AGI_RUN_AUTOFILL handler — runs the fast-path platform autofill and then
+ * calls makeEscalationDecision to determine whether the computer-use agent
+ * loop should be started.
+ *
+ * ARCHITECTURE (secure 3-context design):
+ *   1. Side panel sends AGI_RUN_AUTOFILL → this content-script handler.
+ *   2. Handler runs autofill + returns escalation decision in sendResponse.
+ *   3. Side panel checks escalation.shouldEscalate and, if true, sends
+ *      AGI_START_COMPUTER_USE to the background service worker.
+ *   4. Background (not content script) starts the CDP agent loop.
+ *
+ * SECURITY: this handler only reads the DOM and fills form fields. It never
+ * starts chrome.debugger. The CDP loop stays in the background service worker.
+ */
+async function handleRunAutofill(): Promise<ExtensionResponse> {
+  try {
+    const profile = await loadAutofillProfile();
+    const detection = detectJobApplication();
+
+    if (!detection.isJobApplication || !detection.platform) {
+      return {
+        success: false,
+        error: 'No job application form detected on this page',
+      } as ExtensionResponse;
+    }
+
+    const { platform, fields } = detection;
+
+    // Run the platform-specific fast-path autofill
+    let autofillResult;
+    if (platform === 'greenhouse') {
+      autofillResult = await autofillGreenhouse(profile);
+    } else if (platform === 'lever') {
+      autofillResult = await autofillLever(profile);
+    } else if (platform === 'linkedin') {
+      autofillResult = await autofillLinkedIn(profile);
+    } else if (platform === 'ashby') {
+      autofillResult = await autofillAshby(profile);
+    } else {
+      return {
+        success: false,
+        error: `Unsupported platform: ${String(platform)}`,
+      } as ExtensionResponse;
+    }
+
+    // Build profileValues map for escalation read-back verification
+    const profileValues: Record<string, string> = Object.fromEntries(
+      fields.map((f) => {
+        const v = resolveProfileValue(profile, f.key);
+        return [f.key, v != null ? String(v) : ''];
+      }),
+    );
+
+    const escalation = makeEscalationDecision(
+      autofillResult.filled,
+      fields,
+      profileValues,
+      platform,
+    );
+
+    return {
+      success: true,
+      platform,
+      autofill: autofillResult,
+      escalation,
+    } as ExtensionResponse;
+  } catch (err) {
+    logger.error('AGI_RUN_AUTOFILL failed', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Autofill failed',
+    } as ExtensionResponse;
+  }
+}
+
 async function handleSubmitForm(message: SubmitFormMessage): Promise<ExtensionResponse> {
   try {
     const { formSelector } = message;
@@ -2125,6 +2214,8 @@ const VALID_MESSAGE_TYPES = new Set([
   // Console log reading (forwarded from background)
   'GET_CONSOLE_LOGS',
   'CLEAR_CONSOLE_LOGS',
+  // Autofill + escalation orchestration (side panel → content script)
+  'AGI_RUN_AUTOFILL',
 ]);
 
 function isValidMessage(message: unknown): message is ExtensionMessage {

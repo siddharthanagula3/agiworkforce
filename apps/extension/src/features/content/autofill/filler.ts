@@ -10,8 +10,25 @@ import type { DetectedField } from './detector';
 import type { JobApplicationProfile } from '../../../types';
 import { resolveLinkedInSelector, LINKEDIN_SELECTORS } from './linkedin';
 import { resolveLeverSelector, detectLeverCustomFields, LEVER_SELECTORS } from './lever';
+import {
+  resolveGreenhouseSelector,
+  GREENHOUSE_SELECTORS,
+  detectGreenhouseCustomFields,
+} from './greenhouse';
+import { resolveAshbySelector, ASHBY_SELECTORS, detectAshbyCustomFields } from './ashby';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+
+/**
+ * Canonical skip reason used for ALL file-input fields, shared by both the
+ * generic fillFields() path and the platform-specific orchestrators
+ * (autofillLinkedIn / autofillLever / autofillGreenhouse / autofillAshby).
+ *
+ * escalationEngine.detectFieldTriggers() compares result.reason against this
+ * constant to detect file-upload escalation triggers — the string must match
+ * exactly in both places.
+ */
+export const FILE_INPUT_SKIP_REASON = 'File inputs cannot be filled programmatically';
 
 export interface FillResult {
   key: string;
@@ -22,7 +39,7 @@ export interface FillResult {
 }
 
 export interface AutofillResult {
-  platform: 'linkedin' | 'lever' | 'unknown';
+  platform: 'linkedin' | 'lever' | 'greenhouse' | 'ashby' | 'unknown';
   filled: FillResult[];
   filledCount: number;
   skippedCount: number;
@@ -159,8 +176,15 @@ function normaliseBooleanValue(value: boolean | string | undefined): string {
  * Extracts the string value from a JobApplicationProfile for a given normalised key.
  * Supports dot-notation for nested keys (e.g. "files.resume").
  * Returns null when the profile has no value for the key.
+ *
+ * EXPORTED so the content-script AGI_RUN_AUTOFILL handler can build the
+ * profileValues map needed by makeEscalationDecision() without duplicating
+ * the resolution logic.
  */
-function resolveProfileValue(profile: JobApplicationProfile, key: string): string | boolean | null {
+export function resolveProfileValue(
+  profile: JobApplicationProfile,
+  key: string,
+): string | boolean | null {
   switch (key) {
     case 'firstName':
       return profile.firstName ?? null;
@@ -240,7 +264,7 @@ export async function fillFields(
         selector: field.selector,
         success: false,
         skipped: true,
-        reason: 'File inputs cannot be filled programmatically',
+        reason: FILE_INPUT_SKIP_REASON,
       });
       continue;
     }
@@ -343,7 +367,13 @@ export async function autofillLinkedIn(
 
   for (const key of Object.keys(LINKEDIN_SELECTORS)) {
     if (key.startsWith('files.')) {
-      filled.push({ key, selector: '', success: false, skipped: true, reason: 'File input' });
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: FILE_INPUT_SKIP_REASON,
+      });
       continue;
     }
 
@@ -418,7 +448,13 @@ export async function autofillLever(
   // Standard fields
   for (const key of Object.keys(LEVER_SELECTORS)) {
     if (key.startsWith('files.')) {
-      filled.push({ key, selector: '', success: false, skipped: true, reason: 'File input' });
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: FILE_INPUT_SKIP_REASON,
+      });
       continue;
     }
 
@@ -531,26 +567,277 @@ export async function autofillLever(
   };
 }
 
+// ─── Greenhouse autofill orchestrator ────────────────────────────────────────
+
+/**
+ * Runs the complete Greenhouse autofill for the currently open application form.
+ */
+export async function autofillGreenhouse(
+  profile: JobApplicationProfile,
+  delayMs: number = 80,
+): Promise<AutofillResult> {
+  const filled: FillResult[] = [];
+  const errors: string[] = [];
+
+  for (const key of Object.keys(GREENHOUSE_SELECTORS)) {
+    if (key.startsWith('files.')) {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: FILE_INPUT_SKIP_REASON,
+      });
+      continue;
+    }
+
+    const profileValue = resolveProfileValue(profile, key);
+    if (profileValue === null || profileValue === '') {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'No value in profile',
+      });
+      continue;
+    }
+
+    const match = resolveGreenhouseSelector(key);
+    if (!match) {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'Field not found on page',
+      });
+      continue;
+    }
+
+    const { element, selector } = match;
+    const stringValue = sanitizeProfileValue(String(profileValue));
+    let success = false;
+
+    try {
+      if (element instanceof HTMLSelectElement) {
+        success = fillSelectField(element, stringValue);
+      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        success = fillTextField(element, stringValue);
+      }
+    } catch (e) {
+      errors.push(`${key}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    filled.push({ key, selector, success, skipped: false });
+
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Custom questions
+  const container = document.querySelector('#application_form') ?? document.querySelector('form');
+  if (container && profile.customAnswers && Object.keys(profile.customAnswers).length > 0) {
+    const customFields = detectGreenhouseCustomFields(container);
+    for (const cf of customFields) {
+      const profileValue = resolveProfileValue(profile, cf.key);
+      if (profileValue === null || profileValue === '') {
+        filled.push({
+          key: cf.key,
+          selector: cf.selector,
+          success: false,
+          skipped: true,
+          reason: 'No custom answer in profile',
+        });
+        continue;
+      }
+      const el = document.querySelector(cf.selector);
+      if (!el) {
+        filled.push({
+          key: cf.key,
+          selector: cf.selector,
+          success: false,
+          skipped: false,
+          reason: 'Element not found',
+        });
+        continue;
+      }
+      let success = false;
+      try {
+        if (el instanceof HTMLSelectElement) success = fillSelectField(el, String(profileValue));
+        else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+          success = fillTextField(el, sanitizeProfileValue(String(profileValue)));
+      } catch (e) {
+        errors.push(`${cf.key}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      filled.push({ key: cf.key, selector: cf.selector, success, skipped: false });
+      if (delayMs > 0) await new Promise<void>((r) => setTimeout(r, delayMs));
+    }
+  }
+
+  return {
+    platform: 'greenhouse',
+    filled,
+    filledCount: filled.filter((f) => f.success).length,
+    skippedCount: filled.filter((f) => f.skipped).length,
+    errors,
+  };
+}
+
+// ─── Ashby autofill orchestrator ──────────────────────────────────────────────
+
+/**
+ * Runs the complete Ashby autofill for the currently open application form.
+ * Always waits for React render-settle before attempting fills.
+ * Fields in ASHBY_ALWAYS_ESCALATE_KEYS are always marked skipped.
+ */
+export async function autofillAshby(
+  profile: JobApplicationProfile,
+  delayMs: number = 80,
+): Promise<AutofillResult> {
+  const filled: FillResult[] = [];
+  const errors: string[] = [];
+
+  // Import escalation set inline to avoid a circular dependency
+  const { ASHBY_ALWAYS_ESCALATE_KEYS } = await import('./ashby');
+
+  for (const key of Object.keys(ASHBY_SELECTORS)) {
+    if (key.startsWith('files.') || ASHBY_ALWAYS_ESCALATE_KEYS.has(key)) {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'Requires computer-use escalation',
+      });
+      continue;
+    }
+
+    const profileValue = resolveProfileValue(profile, key);
+    if (profileValue === null || profileValue === '') {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'No value in profile',
+      });
+      continue;
+    }
+
+    const match = resolveAshbySelector(key);
+    if (!match) {
+      filled.push({
+        key,
+        selector: '',
+        success: false,
+        skipped: true,
+        reason: 'Field not found on page',
+      });
+      continue;
+    }
+
+    const { element, selector } = match;
+    const stringValue = sanitizeProfileValue(String(profileValue));
+    let success = false;
+
+    try {
+      if (element instanceof HTMLSelectElement) {
+        success = fillSelectField(element, stringValue);
+      } else if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+        success = fillTextField(element, stringValue);
+      }
+    } catch (e) {
+      errors.push(`${key}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    filled.push({ key, selector, success, skipped: false });
+
+    if (delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Custom questions
+  const container = document.querySelector('form');
+  if (container && profile.customAnswers && Object.keys(profile.customAnswers).length > 0) {
+    const customFields = detectAshbyCustomFields(container);
+    for (const cf of customFields) {
+      const profileValue = resolveProfileValue(profile, cf.key);
+      if (profileValue === null || profileValue === '') {
+        filled.push({
+          key: cf.key,
+          selector: cf.selector,
+          success: false,
+          skipped: true,
+          reason: 'No custom answer in profile',
+        });
+        continue;
+      }
+      const el = document.querySelector(cf.selector);
+      if (!el) {
+        filled.push({
+          key: cf.key,
+          selector: cf.selector,
+          success: false,
+          skipped: false,
+          reason: 'Element not found',
+        });
+        continue;
+      }
+      let success = false;
+      try {
+        if (el instanceof HTMLSelectElement) success = fillSelectField(el, String(profileValue));
+        else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)
+          success = fillTextField(el, sanitizeProfileValue(String(profileValue)));
+      } catch (e) {
+        errors.push(`${cf.key}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      filled.push({ key: cf.key, selector: cf.selector, success, skipped: false });
+      if (delayMs > 0) await new Promise<void>((r) => setTimeout(r, delayMs));
+    }
+  }
+
+  return {
+    platform: 'ashby',
+    filled,
+    filledCount: filled.filter((f) => f.success).length,
+    skippedCount: filled.filter((f) => f.skipped).length,
+    errors,
+  };
+}
+
 // ─── Profile storage helpers ──────────────────────────────────────────────────
 
-/** The chrome.storage.sync key used to persist the autofill profile. */
+/**
+ * The chrome.storage.LOCAL key used to persist the autofill profile.
+ *
+ * SECURITY (audit batch-220 [HIGH] PII leakage, fixed 2026-06-13): the profile
+ * holds PII (full name, email, phone, location, salary expectation,
+ * work-authorization status, custom answers). It MUST be device-scoped
+ * (`chrome.storage.local`) — NOT `chrome.storage.sync`, which replicates the
+ * data to the user's Chrome Sync / Google account off-device. This aligns with
+ * the local-only storage rule used by `memory-bridge.ts`. The one-time
+ * `migrateAutofillProfile()` move handles any profile previously stored in sync.
+ */
 export const AUTOFILL_PROFILE_STORAGE_KEY = 'agi_autofill_profile';
 
-/** Loads the autofill profile from chrome.storage.sync. */
+/** Loads the autofill profile from device-local storage. */
 export async function loadAutofillProfile(): Promise<JobApplicationProfile> {
   try {
-    const result = await chrome.storage.sync.get(AUTOFILL_PROFILE_STORAGE_KEY);
+    const result = await chrome.storage.local.get(AUTOFILL_PROFILE_STORAGE_KEY);
     const stored = result[AUTOFILL_PROFILE_STORAGE_KEY];
     if (stored && typeof stored === 'object') {
       return stored as JobApplicationProfile;
     }
   } catch {
-    // storage.sync may not be available in all contexts
+    // storage.local may not be available in all contexts
   }
   return {};
 }
 
-/** Persists the autofill profile to chrome.storage.sync. */
+/** Persists the autofill profile to device-local storage (never synced off-device). */
 export async function saveAutofillProfile(profile: JobApplicationProfile): Promise<void> {
-  await chrome.storage.sync.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
+  await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
 }
