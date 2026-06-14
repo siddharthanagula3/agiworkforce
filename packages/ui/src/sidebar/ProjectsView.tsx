@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * ProjectsView — the ChatGPT project-folders view (list + detail pane), ported
  * from apps/desktop/src/features/chat/ProjectsView.tsx as pure presentation.
