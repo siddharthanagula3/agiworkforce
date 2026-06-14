@@ -316,29 +316,23 @@ describe('authStore — secure storage persistence', () => {
     mockDeleteItemAsync.mockResolvedValue(undefined);
   });
 
-  // Cloud auth is gated by FEATURES.auth — signInWithEmail throws in v1
-  const itCloudAuth = FEATURES.auth ? it : it.skip;
+  it('signInWithEmail throws and does not write session to secure store (Clerk v1)', async () => {
+    await expect(
+      act(async () => {
+        await getState().signInWithEmail('test@example.com', 'password123');
+      }),
+    ).rejects.toThrow('auth: Clerk mobile auth is not enabled in v1');
 
-  itCloudAuth('writes session to secure store after successful email sign-in', async () => {
-    const session = makeSession();
-
-    mockSignInWithPassword.mockResolvedValue({
-      data: { session, user: session['user'] },
-      error: null,
-    });
-
-    await act(async () => {
-      await getState().signInWithEmail('test@example.com', 'password123');
-    });
-
-    // Zustand persist fires setItem asynchronously
+    // Allow the microtask queue to flush — no secure-store write should have occurred
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    expect(mockSetItemAsync).toHaveBeenCalledWith(
-      'auth-store',
-      expect.stringContaining('"access_token"'),
-      expect.objectContaining({ keychainAccessible: WHEN_UNLOCKED_THIS_DEVICE_ONLY }),
+    expect(getState().session).toBeNull();
+    // Secure storage must NOT have been written with an access_token
+    const accessTokenWrite = mockSetItemAsync.mock.calls.find(
+      ([_key, value]: [string, string]) =>
+        typeof value === 'string' && value.includes('access_token'),
     );
+    expect(accessTokenWrite).toBeUndefined();
   });
 
   it('removes session from secure store after sign-out', async () => {
