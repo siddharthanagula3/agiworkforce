@@ -1014,3 +1014,33 @@ body {
   color: var(--agi-ext-text-muted);
   font-style: italic;
 }
+
+/* ── Cloud unlock CTA — funnel entry point in the footer ── */
+.cloud-unlock-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(
+    135deg,
+    var(--agi-ext-accent) 0%,
+    var(--agi-ext-accent-secondary) 100%
+  );
+  color: var(--agi-ext-on-accent);
+  transition: opacity 0.15s;
+}
+
+.cloud-unlock-btn:hover {
+  opacity: 0.88;
+}
+
+.cloud-unlock-btn:focus-visible {
+  outline: 2px solid var(--agi-ext-accent);
+  outline-offset: 2px;
+}
