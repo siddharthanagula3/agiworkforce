@@ -3105,6 +3105,13 @@ async fn send_message(
     // decision the frozen UI can never deliver). `biased` polls the turn future
     // first; a pending approval can only exist while the turn is still in
     // flight, so this never strands a queued request.
+    // Thread the current effort level's thinking budget into the session before
+    // every send. Only Anthropic respects this field; other providers ignore it.
+    // Low/Medium → None (standard inference), High/Max → Some(N tokens).
+    app.session.thinking_budget_tokens = app
+        .effort
+        .thinking_budget_for_anthropic();
+
     let result = {
         let callback = Box::new(move |chunk: &str| {
             if let Ok(mut buf) = buf_for_callback.lock() {

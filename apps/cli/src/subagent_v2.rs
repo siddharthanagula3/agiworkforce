@@ -503,6 +503,7 @@ impl LlmCaller for ProviderLlmCaller {
             self.max_tokens,
             None,
             on_chunk,
+            None, // Subagents don't use extended thinking
         )
         .await?;
         let text = accumulator.lock().map(|s| s.clone()).unwrap_or_default();
