@@ -172,8 +172,8 @@ export const ConversationListItem = memo(function ConversationListItem({
         className={cn(
           'group relative flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 transition-colors',
           isActive
-            ? 'bg-teal-100 dark:bg-teal-900/30 text-foreground'
-            : 'text-muted-foreground hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-foreground',
+            ? 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-primary)]'
+            : 'text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]',
           isArchived && 'opacity-50',
         )}
         onClick={onClick}
@@ -215,7 +215,7 @@ export const ConversationListItem = memo(function ConversationListItem({
               variant="ghost"
               size="icon"
               className={cn(
-                'h-7 w-7 flex-shrink-0 text-gray-400 hover:text-teal-500 opacity-0 transition-opacity group-hover:opacity-100',
+                'h-7 w-7 flex-shrink-0 text-[var(--chat-text-muted)] hover:text-[var(--chat-accent-primary)] opacity-0 transition-opacity group-hover:opacity-100',
                 isActive && 'opacity-100',
               )}
               onClick={stopPropagation}
