@@ -97,8 +97,8 @@ describe('joinWaitlist — success', () => {
     await joinWaitlist({ email: '  Test@Example.COM  ' });
 
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
-      expect.objectContaining({ email: 'test@example.com' }),
+      '/api/waitlist/public',
+      expect.objectContaining({ email: 'test@example.com', source: 'mobile' }),
       expect.objectContaining({
         headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
       }),
@@ -116,9 +116,10 @@ describe('joinWaitlist — success', () => {
     });
 
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
+      '/api/waitlist/public',
       expect.objectContaining({
         email: 'user@test.io',
+        source: 'mobile',
         country: 'US',
         deviceModel: 'iPhone 16',
         deviceTier: 2,
@@ -137,10 +138,11 @@ describe('joinWaitlist — success', () => {
     expect(result).toEqual({ rank: 14 });
   });
 
-  it('throws WaitlistNetworkError when the API omits rank', async () => {
+  it('resolves {rank: null} when the API omits rank', async () => {
     post.mockResolvedValueOnce({ ok: true, joined: true });
 
-    await expect(joinWaitlist({ email: 'a@b.com' })).rejects.toThrow(WaitlistNetworkError);
+    const result = await joinWaitlist({ email: 'a@b.com' });
+    expect(result).toEqual({ rank: null });
   });
 
   it('fetches a CSRF token from /api/csrf BEFORE posting (no preflight = 403)', async () => {
@@ -151,7 +153,7 @@ describe('joinWaitlist — success', () => {
     expect(get).toHaveBeenCalledWith('/api/csrf');
     // The token must reach the POST so requireCsrfToken passes server-side.
     expect(post).toHaveBeenCalledWith(
-      '/api/waitlist/cloud-managed',
+      '/api/waitlist/public',
       expect.anything(),
       expect.objectContaining({
         headers: expect.objectContaining({ 'x-csrf-token': 'test-csrf-token' }),
