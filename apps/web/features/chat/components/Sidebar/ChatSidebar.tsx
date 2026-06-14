@@ -56,6 +56,9 @@ export interface SessionLike {
   updatedAt: Date | string;
   messageCount?: number;
   userId?: string;
+  isPinned?: boolean;
+  isStarred?: boolean;
+  isArchived?: boolean;
 }
 
 export interface ChatSidebarProps {
@@ -101,7 +104,7 @@ function getTimeGroup(date: Date): string {
   return 'Older';
 }
 
-const GROUP_ORDER = ['Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
+const GROUP_ORDER = ['Pinned', 'Today', 'Yesterday', 'Last 7 Days', 'Last 30 Days', 'Older'];
 
 function groupSessions(sessions: SessionLike[]): Map<string, SessionLike[]> {
   const groups = new Map<string, SessionLike[]>();
@@ -109,6 +112,11 @@ function groupSessions(sessions: SessionLike[]): Map<string, SessionLike[]> {
     groups.set(key, []);
   }
   for (const session of sessions) {
+    // Pinned sessions get their own top section regardless of date.
+    if (session.isPinned) {
+      groups.get('Pinned')!.push(session);
+      continue;
+    }
     const raw = session.updatedAt;
     const d = raw instanceof Date ? raw : raw ? new Date(raw) : new Date();
     const safeDate = isNaN(d.getTime()) ? new Date(0) : d;
@@ -234,6 +242,9 @@ const SessionItem = React.memo(function SessionItem({
         updatedAt={updatedAtDate}
         totalMessages={session.messageCount ?? 0}
         isActive={isActive}
+        isPinned={session.isPinned}
+        isStarred={session.isStarred}
+        isArchived={session.isArchived}
         onClick={() => onSelect(session.id)}
         onRename={() => setIsRenaming(true)}
         onDelete={() => onDelete(session.id)}
