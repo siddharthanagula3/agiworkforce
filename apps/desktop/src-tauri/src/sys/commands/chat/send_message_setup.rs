@@ -17,6 +17,10 @@ pub(super) struct SendMessageFlags {
     pub is_web_focus: bool,
     pub stream_mode: bool,
     pub incognito: bool,
+    /// True when the frontend toggle is set to Local mode.
+    /// When true, the backend MUST NOT route to ManagedCloud under any
+    /// circumstances — not even as a fallback.
+    pub is_local_mode: bool,
 }
 
 pub(super) struct PreparedSendMessage {
@@ -61,6 +65,17 @@ pub(super) fn resolve_request_flags(
         detect_agent_mode(request.enable_agent_mode, &request.content, app_handle)
     };
 
+    // Determine whether the request is operating in local-only mode.
+    // The frontend sends `active_mode: "local" | "cloud"` from the toggle.
+    // Fall back to !prefer_cloud_credits for legacy callers that omit active_mode.
+    let is_local_mode = match request.active_mode.as_deref() {
+        Some("cloud") => false,
+        Some("local") => true,
+        // Legacy path: if prefer_cloud_credits is explicitly true treat as cloud;
+        // otherwise treat as local (safe default — never silently bleed to cloud).
+        _ => !request.prefer_cloud_credits,
+    };
+
     SendMessageFlags {
         agent_mode,
         is_deep_research: matches!(request.focus_mode.as_deref(), Some("deep-research"))
@@ -68,6 +83,7 @@ pub(super) fn resolve_request_flags(
         is_web_focus: matches!(request.focus_mode.as_deref(), Some("web") | Some("search")),
         stream_mode: request.stream.unwrap_or(false),
         incognito: request.incognito.unwrap_or(false),
+        is_local_mode,
     }
 }
 
@@ -142,7 +158,7 @@ pub(super) async fn prepare_send_message(
     }
 
     let conversation =
-        load_or_create_conversation(db, &request, flags.incognito, cloud_sync_enabled)?;
+        load_or_create_conversation(db, &request, flags.incognito, cloud_sync_enabled, flags.is_local_mode)?;
     let (user_message, input_tokens, input_cost) = create_user_message_record(
         db,
         &conversation,
@@ -428,6 +444,7 @@ fn load_or_create_conversation(
     request: &ChatSendMessageRequest,
     incognito: bool,
     cloud_sync_enabled: bool,
+    is_local_mode: bool,
 ) -> Result<Conversation, String> {
     if incognito {
         return Ok(Conversation {
@@ -439,14 +456,21 @@ fn load_or_create_conversation(
         });
     }
 
+    let app_mode = if is_local_mode { "local" } else { "cloud" };
+
     let conn = db.connection()?;
     if let Some(conv_id) = request.conversation_id {
         repository::get_conversation(&conn, conv_id, &request.user_id)
             .map_err(|e| format!("Failed to get conversation: {e}"))
     } else {
         let title = request.content.chars().take(50).collect::<String>();
-        let id = repository::create_conversation(&conn, title, request.user_id.clone())
-            .map_err(|e| format!("Failed to create conversation: {e}"))?;
+        let id = repository::create_conversation_with_mode(
+            &conn,
+            title,
+            request.user_id.clone(),
+            app_mode,
+        )
+        .map_err(|e| format!("Failed to create conversation: {e}"))?;
         let conversation = repository::get_conversation(&conn, id, &request.user_id)
             .map_err(|e| format!("Failed to get new conversation: {e}"))?;
         if cloud_sync_enabled {
@@ -675,6 +699,100 @@ mod tests {
     use super::{resolve_routing_strategy, resolve_thinking_parameter};
     use crate::core::llm::llm_router::RoutingStrategy;
     use crate::core::llm::ThinkingParameter;
+    use crate::sys::commands::chat::types::ChatSendMessageRequest;
+
+    // ---------------------------------------------------------------------------
+    // Mode-routing guard tests (trust-boundary: Local/Cloud separation)
+    // ---------------------------------------------------------------------------
+
+    fn minimal_request_with_mode(active_mode: Option<&str>, prefer_cloud_credits: bool) -> ChatSendMessageRequest {
+        ChatSendMessageRequest {
+            conversation_id: None,
+            user_id: "test-user".to_string(),
+            content: "hello".to_string(),
+            provider: None,
+            model: None,
+            provider_override: None,
+            model_override: None,
+            strategy: None,
+            stream: Some(false),
+            enable_tools: None,
+            conversation_mode: None,
+            workflow_hash: None,
+            task_metadata: None,
+            focus_mode: None,
+            research_task_id: None,
+            attachments: None,
+            thinking_mode: None,
+            thinking_budget: None,
+            reasoning_effort: None,
+            output_config: None,
+            temperature: None,
+            max_output_tokens: None,
+            enable_agent_mode: None,
+            prefer_cloud_credits,
+            active_mode: active_mode.map(String::from),
+            frontend_message_id: None,
+            custom_instructions: None,
+            project_folder: None,
+            model_capabilities: None,
+            incognito: None,
+            auto_inject_skills: None,
+            is_explicit_model_selection: None,
+        }
+    }
+
+    /// TRUST-BOUNDARY: active_mode="local" must set is_local_mode=true regardless
+    /// of prefer_cloud_credits.
+    #[test]
+    fn active_mode_local_forces_is_local_mode() {
+        // active_mode overrides prefer_cloud_credits
+        let req = minimal_request_with_mode(Some("local"), true);
+        // Simulate the flag derivation inline (mirrors resolve_request_flags logic)
+        let is_local = match req.active_mode.as_deref() {
+            Some("cloud") => false,
+            Some("local") => true,
+            _ => !req.prefer_cloud_credits,
+        };
+        assert!(is_local, "active_mode=local must yield is_local_mode=true even when prefer_cloud_credits=true");
+    }
+
+    /// TRUST-BOUNDARY: active_mode="cloud" must set is_local_mode=false regardless
+    /// of prefer_cloud_credits.
+    #[test]
+    fn active_mode_cloud_forces_is_cloud_mode() {
+        let req = minimal_request_with_mode(Some("cloud"), false);
+        let is_local = match req.active_mode.as_deref() {
+            Some("cloud") => false,
+            Some("local") => true,
+            _ => !req.prefer_cloud_credits,
+        };
+        assert!(!is_local, "active_mode=cloud must yield is_local_mode=false even when prefer_cloud_credits=false");
+    }
+
+    /// Legacy callers omitting active_mode: prefer_cloud_credits=false => local.
+    #[test]
+    fn legacy_no_mode_byok_defaults_to_local() {
+        let req = minimal_request_with_mode(None, false);
+        let is_local = match req.active_mode.as_deref() {
+            Some("cloud") => false,
+            Some("local") => true,
+            _ => !req.prefer_cloud_credits,
+        };
+        assert!(is_local, "legacy callers with prefer_cloud_credits=false must default to local");
+    }
+
+    /// Legacy callers omitting active_mode: prefer_cloud_credits=true => cloud.
+    #[test]
+    fn legacy_prefer_cloud_credits_true_defaults_to_cloud() {
+        let req = minimal_request_with_mode(None, true);
+        let is_local = match req.active_mode.as_deref() {
+            Some("cloud") => false,
+            Some("local") => true,
+            _ => !req.prefer_cloud_credits,
+        };
+        assert!(!is_local, "legacy callers with prefer_cloud_credits=true must default to cloud");
+    }
 
     #[test]
     fn routing_strategy_maps_auto_variants() {

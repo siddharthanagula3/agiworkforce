@@ -71,7 +71,12 @@ pub(super) async fn handle_nonstreaming_message(
         return run_nonstreaming_agent(runtime, prepared).await;
     }
 
-    ensure_managed_cloud_provider(&runtime.router).await;
+    // Only attempt to initialize ManagedCloud when the request is explicitly
+    // in cloud mode. Local-mode requests must never touch ManagedCloud even
+    // for provider-initialization purposes.
+    if !prepared.flags.is_local_mode {
+        ensure_managed_cloud_provider(&runtime.router).await;
+    }
     run_nonstreaming_chat(runtime, prepared).await
 }
 
@@ -1494,6 +1499,20 @@ async fn run_nonstreaming_chat(
     };
 
     if candidates.is_empty() {
+        // TRUST-BOUNDARY RULE: when the frontend is in Local mode, inference MUST
+        // NOT be redirected to ManagedCloud under any circumstances — not even as a
+        // fallback.  Local stays local.  Return a clear user-facing error instead.
+        if flags.is_local_mode {
+            return Err(
+                "No local or BYOK providers are configured for this request. \
+                 Please add an API key in Settings > API Keys or select a local model."
+                    .to_string(),
+            );
+        }
+
+        // Cloud mode only: attempt ManagedCloud as a last-resort fallback when
+        // the preferred provider has no matching candidates but ManagedCloud is
+        // registered and the request is explicitly in cloud mode.
         let router = runtime.router.read().await;
         if router.has_provider(crate::core::llm::Provider::ManagedCloud) {
             let provider_name = request
@@ -1502,7 +1521,7 @@ async fn run_nonstreaming_chat(
                 .or(request.provider.clone());
             if let Some(name) = provider_name {
                 info!(
-                    "[Chat] Redirecting request for unconfigured provider '{}' to Managed Cloud",
+                    "[Chat][cloud] Redirecting unconfigured provider '{}' to Managed Cloud (cloud mode)",
                     name
                 );
 
