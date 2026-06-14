@@ -15,24 +15,90 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
       {
         "paddingBottom": 36,
         "paddingHorizontal": 16,
-        "paddingTop": 12,
+        "paddingTop": 24,
       }
     }
     showsVerticalScrollIndicator={false}
   >
     <View>
-      <Text
+      <View
         style={
           {
-            "color": "#fff",
-            "fontSize": 28,
-            "fontWeight": "700",
+            "alignItems": "center",
+            "flexDirection": "row",
+            "gap": 12,
+            "justifyContent": "space-between",
             "marginBottom": 16,
+            "minHeight": 42,
           }
         }
       >
-        Settings
-      </Text>
+        <Text
+          style={
+            {
+              "color": "#fff",
+              "flex": 1,
+              "fontSize": 28,
+              "fontWeight": "700",
+              "lineHeight": 34,
+            }
+          }
+        >
+          Settings
+        </Text>
+        <View
+          accessibilityLabel="Close settings"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          hitSlop={10}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            {
+              "alignItems": "center",
+              "backgroundColor": "#1a1a1a",
+              "borderColor": "#333",
+              "borderRadius": 20,
+              "borderWidth": 1,
+              "height": 40,
+              "justifyContent": "center",
+              "width": 40,
+            }
+          }
+        >
+          <View
+            color="#aaa"
+            size={20}
+            testID="icon-X"
+          />
+        </View>
+      </View>
       <View
         accessibilityLabel="Edit profile"
         accessibilityRole="button"
@@ -529,6 +595,74 @@ exports[`SettingsScreen — inset-grouped card layout locks the full settings sc
               }
             >
               llama-3.2-1b
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityLabel="Capabilities"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Zap"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Capabilities
             </Text>
             <View
               color="#777"

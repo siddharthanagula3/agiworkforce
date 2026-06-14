@@ -180,4 +180,6 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>()(
 );
 
 // FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
-rehydrateWhenMmkvReady(useNotificationPrefsStore, 'notificationPrefsStore');
+// Audit 2026-06-13: align the rehydrate log label with the persisted MMKV key
+// ('notification-prefs-store') so debug logs reference the actual storage key.
+rehydrateWhenMmkvReady(useNotificationPrefsStore, 'notification-prefs-store');

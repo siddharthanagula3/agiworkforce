@@ -8,6 +8,8 @@ import { useTheme } from '@/src/ui/theme';
 /**
  * Small icon button placed in the ChatInput toolbar.
  * When tapped, toggles temporary-chat mode in the settings store.
+ * Current behavior prevents memory learning from the chat; it does not make
+ * the whole conversation invisible in local history.
  * In active state shows a purple EyeOff icon and a "Temporary" label.
  * Tooltip/hint is provided via accessibilityHint.
  */
@@ -34,7 +36,7 @@ export function TemporaryChatToggle() {
       }}
       accessible={true}
       accessibilityLabel={isTemporaryChat ? 'Temporary chat active' : 'Enable temporary chat'}
-      accessibilityHint="This conversation won't be saved"
+      accessibilityHint="Memory will not be saved from this chat"
       accessibilityRole="button"
       accessibilityState={{ selected: isTemporaryChat }}
     >

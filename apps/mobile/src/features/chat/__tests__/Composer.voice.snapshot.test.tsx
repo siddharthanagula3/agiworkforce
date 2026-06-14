@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -165,6 +165,8 @@ jest.mock('expo-linking', () => ({
 
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
+import * as VoiceService from '@/src/features/voice/services/voice';
+import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
 
 // ── Snapshot tests ────────────────────────────────────────────────────────────
 
@@ -213,6 +215,38 @@ describe('Composer — voice scaffolding snapshots', () => {
     it('locks disabled mic button tree (during streaming)', () => {
       const { toJSON } = render(<VoiceInputButton onTranscription={jest.fn()} disabled={true} />);
       expect(toJSON()).toMatchSnapshot();
+    });
+
+    it('does not enter recording state when voice permission is denied', async () => {
+      const onError = jest.fn();
+      const onRecordingStart = jest.fn();
+      const onRecordingStop = jest.fn();
+      (VoiceService.startRecording as jest.Mock).mockRejectedValueOnce(
+        new VoiceCaptureError('mic-permission-denied', 'Microphone permission denied'),
+      );
+
+      const { getByLabelText, queryByLabelText } = render(
+        <VoiceInputButton
+          onTranscription={jest.fn()}
+          onRecordingStart={onRecordingStart}
+          onRecordingStop={onRecordingStop}
+          onError={onError}
+          disabled={false}
+        />,
+      );
+
+      const micButton = getByLabelText('Tap to record, hold for push-to-talk');
+      fireEvent(micButton, 'pressIn');
+      fireEvent(micButton, 'pressOut');
+
+      await waitFor(() => {
+        expect(onError).toHaveBeenCalledWith(
+          'Voice input needs microphone and speech access. You can keep typing instead.',
+        );
+      });
+      expect(onRecordingStart).not.toHaveBeenCalled();
+      expect(VoiceService.stopRecording).not.toHaveBeenCalled();
+      expect(queryByLabelText('Tap to stop recording')).toBeNull();
     });
   });
 });

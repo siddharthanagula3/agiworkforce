@@ -19,7 +19,7 @@ import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native'
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { copyToClipboard } from '@/lib/clipboard';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { exportToPDF, exportToText, shareFile, type ExportResult } from '@/services/fileCreation';
 
 // ---------------------------------------------------------------------------
@@ -43,7 +43,8 @@ interface ActionItem {
   key: ExportAction;
   label: string;
   sublabel: string;
-  icon: React.ReactNode;
+  icon: typeof FileText;
+  iconColorToken: keyof ColorScheme;
 }
 
 // ---------------------------------------------------------------------------
@@ -57,25 +58,29 @@ const ACTIONS: ActionItem[] = [
     key: 'pdf',
     label: 'Export as PDF',
     sublabel: 'Styled document with formatting',
-    icon: <FileText size={20} color={colors.teal} />,
+    icon: FileText,
+    iconColorToken: 'teal',
   },
   {
     key: 'text',
     label: 'Export as Text',
     sublabel: 'Plain text file',
-    icon: <FileDown size={20} color={colors.warmPeach} />,
+    icon: FileDown,
+    iconColorToken: 'textSecondary',
   },
   {
     key: 'copy',
     label: 'Copy to Clipboard',
     sublabel: 'Copy the raw message text',
-    icon: <Copy size={20} color={colors.textSecondary} />,
+    icon: Copy,
+    iconColorToken: 'textSecondary',
   },
   {
     key: 'share',
     label: 'Share...',
     sublabel: 'Export as PDF and open share sheet',
-    icon: <Share2 size={20} color={colors.agentActive} />,
+    icon: Share2,
+    iconColorToken: 'agentActive',
   },
 ];
 
@@ -89,6 +94,7 @@ export function FileExportButton({
   visible,
   onClose,
 }: FileExportButtonProps) {
+  const colors = useThemeColors();
   const sheetRef = useRef<GorhomBottomSheet>(null);
   const [loading, setLoading] = useState<ExportAction | null>(null);
   const [success, setSuccess] = useState<ExportAction | null>(null);
@@ -202,6 +208,7 @@ export function FileExportButton({
           {ACTIONS.map((action) => {
             const isLoading = loading === action.key;
             const isSuccess = success === action.key;
+            const ActionIcon = action.icon;
 
             return (
               <Pressable
@@ -218,7 +225,7 @@ export function FileExportButton({
                   paddingVertical: 14,
                   paddingHorizontal: 12,
                   borderRadius: 12,
-                  backgroundColor: pressed ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
                   opacity: loading !== null && !isLoading ? 0.4 : 1,
                 })}
               >
@@ -228,7 +235,7 @@ export function FileExportButton({
                     width: 40,
                     height: 40,
                     borderRadius: 10,
-                    backgroundColor: 'rgba(255,255,255,0.06)',
+                    backgroundColor: colors.neutralSurface,
                     alignItems: 'center',
                     justifyContent: 'center',
                   }}
@@ -238,7 +245,7 @@ export function FileExportButton({
                   ) : isSuccess ? (
                     <Check size={20} color={colors.agentSuccess} />
                   ) : (
-                    action.icon
+                    <ActionIcon size={20} color={colors[action.iconColorToken]} />
                   )}
                 </View>
 

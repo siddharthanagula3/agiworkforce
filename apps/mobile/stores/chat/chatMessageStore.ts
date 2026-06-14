@@ -46,6 +46,22 @@ interface MessageState {
     model: string,
     queueId: string,
   ) => void;
+  beginImageGeneration: (
+    conversationId: string,
+    commandContent: string,
+    prompt: string,
+    model: string,
+  ) => string;
+  completeImageGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    result: { imageUrl: string; revisedPrompt?: string; model?: string },
+  ) => void;
+  failImageGeneration: (
+    conversationId: string,
+    assistantMessageId: string,
+    errorMessage: string,
+  ) => void;
   resolveOfflineMessage: (conversationId: string, queueId: string) => void;
   clearQueuedPlaceholders: (conversationId: string) => void;
 }
@@ -270,7 +286,7 @@ export const useChatMessageStore = create<MessageState>()(
 
       enqueueOfflineMessage: (conversationId, content, model, queueId) => {
         const userMessage: ChatMessage = {
-          id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          id: generateMessageId(),
           conversationId,
           role: 'user',
           content,
@@ -283,6 +299,137 @@ export const useChatMessageStore = create<MessageState>()(
           const existing = state.messages[conversationId] ?? [];
           return {
             messages: { ...state.messages, [conversationId]: [...existing, userMessage] },
+          };
+        });
+      },
+
+      beginImageGeneration: (conversationId, commandContent, prompt, model) => {
+        const now = new Date().toISOString();
+        const assistantMessageId = generateMessageId();
+        const userMessage: ChatMessage = {
+          id: generateMessageId(),
+          conversationId,
+          role: 'user',
+          content: commandContent,
+          createdAt: now,
+          model,
+        };
+        const assistantMessage: ChatMessage = {
+          id: assistantMessageId,
+          conversationId,
+          role: 'assistant',
+          content: '',
+          createdAt: now,
+          model,
+          isGeneratingImage: true,
+          imageGenStatus: 'generating',
+          imageGenProgress: 0,
+          imageGenPrompt: prompt,
+        };
+
+        set((state) => {
+          const existingMessages = state.messages[conversationId] ?? [];
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: [...existingMessages, userMessage, assistantMessage],
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: commandContent,
+                    messageCount: (conversation.messageCount ?? 0) + 2,
+                    updatedAt: now,
+                    model: conversation.model ?? model,
+                    provider: conversation.provider ?? providerForExecutionMode('cloud'),
+                    executionMode: conversation.executionMode ?? 'cloud',
+                  }
+                : conversation,
+            ),
+          };
+        });
+
+        return assistantMessageId;
+      },
+
+      completeImageGeneration: (conversationId, assistantMessageId, result) => {
+        const now = new Date().toISOString();
+        const finalContent = result.revisedPrompt
+          ? `Generated image: ${result.revisedPrompt}`
+          : 'Generated image';
+
+        set((state) => {
+          const messages = state.messages[conversationId];
+          if (!messages) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      type: 'image',
+                      imageUrl: result.imageUrl,
+                      revisedPrompt: result.revisedPrompt,
+                      content: finalContent,
+                      isGeneratingImage: false,
+                      imageGenStatus: 'completed',
+                      imageGenProgress: 100,
+                      imageGenError: undefined,
+                      model: result.model ?? message.model,
+                    }
+                  : message,
+              ),
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: finalContent,
+                    updatedAt: now,
+                    model: result.model ?? conversation.model,
+                    provider: conversation.provider ?? providerForExecutionMode('cloud'),
+                    executionMode: conversation.executionMode ?? 'cloud',
+                  }
+                : conversation,
+            ),
+          };
+        });
+      },
+
+      failImageGeneration: (conversationId, assistantMessageId, errorMessage) => {
+        const now = new Date().toISOString();
+        const finalContent = `Image generation failed: ${errorMessage}`;
+
+        set((state) => {
+          const messages = state.messages[conversationId];
+          if (!messages) return state;
+          return {
+            messages: {
+              ...state.messages,
+              [conversationId]: messages.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      content: finalContent,
+                      isGeneratingImage: false,
+                      imageGenStatus: 'failed',
+                      imageGenProgress: 100,
+                      imageGenError: errorMessage,
+                    }
+                  : message,
+              ),
+            },
+            conversations: state.conversations.map((conversation) =>
+              conversation.id === conversationId
+                ? {
+                    ...conversation,
+                    lastMessage: finalContent,
+                    updatedAt: now,
+                  }
+                : conversation,
+            ),
           };
         });
       },
@@ -340,6 +487,10 @@ export const useChatMessageStore = create<MessageState>()(
 
 function isCloudChatEnabled(): boolean {
   return FEATURES.cloudChat && !FEATURES.v1LocalOnly;
+}
+
+function generateMessageId(): string {
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
 function shouldLoadCloudConversationList(): boolean {

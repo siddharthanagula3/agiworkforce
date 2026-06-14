@@ -63,6 +63,7 @@ function LabeledInput({
           borderWidth: 1,
           borderColor: c.border,
           color: c.textPrimary,
+          letterSpacing: 0,
         }}
         value={value}
         onChangeText={onChangeText}
@@ -155,9 +156,9 @@ function ThemeSegmentedControl({
               onPress={() => onChange(mode)}
               className="flex-1 items-center gap-1.5 py-2.5 rounded-xl"
               style={{
-                backgroundColor: selected ? 'rgba(33,128,141,0.15)' : c.border,
+                backgroundColor: selected ? c.accentSurface : c.surfaceBase,
                 borderWidth: 1,
-                borderColor: selected ? 'rgba(33,128,141,0.3)' : c.border,
+                borderColor: selected ? c.accentBorder : c.border,
               }}
               accessibilityLabel={label}
               accessibilityRole="radio"
@@ -215,8 +216,7 @@ export default function PersonalizationScreen() {
   };
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+    router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
   }, [router]);
 
   const hasChanges = useMemo(() => {
@@ -285,7 +285,10 @@ export default function PersonalizationScreen() {
         <View className="flex-row items-center">
           <Pressable
             onPress={handleBack}
-            className="p-2 rounded-lg active:bg-white/5"
+            className="p-2 rounded-lg"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? c.surfaceHover : c.transparent,
+            })}
             accessibilityLabel="Go back"
             accessibilityRole="button"
           >
@@ -297,7 +300,10 @@ export default function PersonalizationScreen() {
         </View>
         <Pressable
           onPress={handleSave}
-          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg active:bg-white/5"
+          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg"
+          style={({ pressed }) => ({
+            backgroundColor: pressed ? c.surfaceHover : c.transparent,
+          })}
           accessibilityLabel="Save personalization settings"
           accessibilityRole="button"
         >
@@ -339,7 +345,7 @@ export default function PersonalizationScreen() {
             label="Nickname"
             value={nickname}
             onChangeText={setNickname}
-            placeholder="What should AI call you?"
+            placeholder="What should AGI call you?"
           />
           <LabeledInput
             label="Occupation"
@@ -377,10 +383,17 @@ export default function PersonalizationScreen() {
         </View>
 
         {/* Note */}
-        <View className="mx-1 px-3 py-2.5 rounded-lg" style={{ backgroundColor: c.border }}>
+        <View
+          className="mx-1 px-3 py-2.5 rounded-lg"
+          style={{
+            backgroundColor: c.surfaceElevated,
+            borderWidth: 1,
+            borderColor: c.border,
+          }}
+        >
           <Text className="text-[11px] leading-4" style={{ color: c.textMuted }}>
             Preferences apply to all conversations. Your name and instructions are included as
-            context when chatting with AI.
+            context when chatting with AGI.
           </Text>
         </View>
       </ScrollView>
