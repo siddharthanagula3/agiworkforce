@@ -10,10 +10,6 @@ const ET_URL_PREFIX = 'https://huggingface.co/software-mansion/react-native-exec
 // browser instead of the .pte bytes, so model download fails.
 const ET_VERSION_TAG = 'resolve/v0.8.0';
 
-// License note for Qwen2.5-VL-3B: research report claims Apache-2.0, but the
-// memory lock (v1-model-selection-final-2026-05-18.md) flags it as potentially
-// "Qwen License (not Apache 2.0)" — verify checkpoint before Wave 0 ship.
-// Qwen3-VL-4B is the preferred family-aligned alternative if license is dirty.
 const CATALOG: OnDeviceModel[] = [
   {
     id: 'qwen3-4b-instruct-2507',
@@ -55,12 +51,10 @@ const CATALOG: OnDeviceModel[] = [
       toolCalls: true,
       structuredOutput: true,
     },
-    // WAVE 0 VERIFICATION REQUIRED: research report says Apache-2.0; memory lock
-    // flags potential "Qwen License" restriction — confirm checkpoint license tag
-    // before distributing. Fallback: replace with qwen3-vl-4b-instruct if dirty.
-    license: 'Apache-2.0 (verify checkpoint — see Wave 0 action item)',
+    // Keep hidden until exact checkpoint license and runnable artifacts are verified.
+    license: 'Unverified',
     role: 'premium-vision-pack',
-    shipsInV1: true,
+    shipsInV1: false,
   },
   {
     id: 'gemma4-e4b-instruct',
@@ -68,7 +62,7 @@ const CATALOG: OnDeviceModel[] = [
     family: 'gemma4',
     paramCountB: 4.5, // 4.5B effective / 8B with embeddings
     fileSizeBytes: 4_294_967_296, // ~4 GB Q4 — premium devices only; busts 2.5 GB universal budget
-    supportedRuntimes: ['executorch', 'llama-rn'],
+    supportedRuntimes: ['litert-lm'],
     contextWindow: 128_000,
     capabilities: {
       text: true,
@@ -77,7 +71,7 @@ const CATALOG: OnDeviceModel[] = [
       toolCalls: true,
       structuredOutput: true,
     },
-    license: 'Apache-2.0', // shifted from Gemma terms in April 2026 release
+    license: 'Unverified',
     role: 'premium-multimodal-alt',
     shipsInV1: false,
   },

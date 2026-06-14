@@ -81,18 +81,33 @@ export function formatRelativeTime(date: string | number | Date): string {
   const diffHours = Math.round(diffMs / 3_600_000);
   const diffDays = Math.round(diffMs / 86_400_000);
 
-  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+  const hasRelativeTimeFormat = typeof Intl.RelativeTimeFormat === 'function';
+  const rtf = hasRelativeTimeFormat ? new Intl.RelativeTimeFormat('en', { numeric: 'auto' }) : null;
 
   if (Math.abs(diffSecs) < 60) {
-    return rtf.format(diffSecs, 'second');
+    return formatRelativeUnit(rtf, diffSecs, 'second');
   }
   if (Math.abs(diffMins) < 60) {
-    return rtf.format(diffMins, 'minute');
+    return formatRelativeUnit(rtf, diffMins, 'minute');
   }
   if (Math.abs(diffHours) < 24) {
-    return rtf.format(diffHours, 'hour');
+    return formatRelativeUnit(rtf, diffHours, 'hour');
   }
-  return rtf.format(diffDays, 'day');
+  return formatRelativeUnit(rtf, diffDays, 'day');
+}
+
+function formatRelativeUnit(
+  formatter: Intl.RelativeTimeFormat | null,
+  value: number,
+  unit: Intl.RelativeTimeFormatUnit,
+): string {
+  if (formatter) return formatter.format(value, unit);
+
+  if (value === 0 && unit === 'second') return 'now';
+
+  const amount = Math.abs(value);
+  const label = `${unit}${amount === 1 ? '' : 's'}`;
+  return value < 0 ? `${amount} ${label} ago` : `in ${amount} ${label}`;
 }
 
 /**

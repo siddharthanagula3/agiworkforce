@@ -3,14 +3,13 @@
  *
  * Canonical cross-surface publish boundary for AGI artifacts.
  *
- * v1 LOCAL ONLY (lock: v1-local-only-cloud-waitlist-2026-05-18):
+ * Current publish boundary:
  *   - `privacyMode === 'local'`  → returns a file:// URL pointing to the
  *     exported artifact under the user data directory supplied by the host
  *     adapter. No network call is made.
  *   - `privacyMode === 'byok' | 'managed'` → returns `{ kind: 'waitlist',
- *     waitlistGated: true, shareUrl: null }`. Cloud publish is NOT wired to
- *     any endpoint until Cloud Managed launches. Hitting an endpoint here
- *     would violate the v1-local-only lock.
+ *     waitlistGated: true, shareUrl: null }`. Cloud publish is not wired to
+ *     an endpoint until the managed artifact publishing path is proven.
  *
  * Trust-boundary enforcement:
  *   1. `assertSurfaceCanSyncChats(surface)` — rejects CLI / VS Code / Chrome;
@@ -27,11 +26,12 @@
  * artifact into the local path will get a loud assertion failure rather than a
  * silent mismatch.
  *
- * Deferred (TODO — EXEC-SUMMARY-r2 hours):
- *   - Versioning: `publishedArtifact.version` is always 1 in v1.
- *   - Inline editor / edit-in-place: not yet wired; panel accepts content
+ * Known gaps:
+ *   - Versioning: `publishedArtifact.version` is always 1 in the current path.
+ *   - Inline editor / edit-in-place is not wired; the panel accepts content
  *     as-is from the artifact store.
- *   - Cloud publish endpoint: implement when Cloud Managed tier launches.
+ *   - Cloud publish endpoint waits for managed publishing, retention, deletion,
+ *     billing, and abuse controls.
  *
  * @module artifacts
  */
@@ -76,7 +76,7 @@ export interface LocalPublishResult {
 }
 
 /**
- * Cloud publish is waitlist-gated in v1.
+ * Cloud publish is waitlist-gated until managed artifact publishing is proven.
  * The caller should show a "Join Cloud waitlist" CTA.
  */
 export interface WaitlistPublishResult {
@@ -213,8 +213,9 @@ export async function publishArtifact(input: PublishArtifactInput): Promise<Publ
   // participate in the consumer-facing artifact publish pipeline.
   assertSurfaceCanSyncChats(surface);
 
-  // --- v1 cloud waitlist gate ---
-  // byok and managed modes are waitlist-gated; do not hit any cloud endpoint.
+  // --- Cloud waitlist gate ---
+  // BYOK and managed publish routes are gated here; do not hit a cloud endpoint
+  // until the managed artifact publishing boundary is proven.
   if (privacyMode === 'byok' || privacyMode === 'managed') {
     return { kind: 'waitlist', shareUrl: null, waitlistGated: true };
   }

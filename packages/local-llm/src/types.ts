@@ -45,6 +45,7 @@ export interface GenerateOptions {
   messages?: ChatMessage[];
   requestId?: string;
   tools?: LLMTool[];
+  signal?: AbortSignal;
   onToken?: (token: string) => void;
   onDone?: (opts: { aborted: boolean; reason?: string }) => void;
 }
@@ -54,20 +55,3 @@ export interface GenerateResult {
   runtime: LocalRuntimeName;
   aborted: boolean;
 }
-
-export interface LocalModel {
-  id: string;
-  name: string;
-  filePath?: string;
-  sizeBytes: number;
-  supportedTiers: LocalRuntimeTier[];
-  license: string;
-}
-
-export type LocalModelId =
-  | 'qwen2.5-1.5b-instruct-q4_k_m'
-  | 'llama-3.2-3b-instruct-q4'
-  | 'gemma-3-4b-vision-q4'
-  | 'whisper-base-en'
-  | 'nomic-embed-text-v1.5-q8'
-  | 'system';
