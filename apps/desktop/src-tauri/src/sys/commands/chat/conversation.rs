@@ -27,17 +27,33 @@ pub fn chat_create_conversation(
         .map_err(|e| format!("Failed to retrieve conversation {}: {e}", id))
 }
 
+/// List conversations for a user.
+/// `app_mode`: optional mode filter — "local" or "cloud".
+/// When provided, only conversations created in that mode are returned.
+/// When absent, all conversations for the user are returned (legacy behaviour).
 #[tauri::command]
 pub fn chat_get_conversations(
     db: State<'_, AppDatabase>,
     user_id: String,
+    app_mode: Option<String>,
 ) -> Result<Vec<Conversation>, String> {
     if user_id.is_empty() {
         return Err("User ID cannot be empty".to_string());
     }
     let conn = db.connection()?;
-    repository::list_conversations(&conn, DEFAULT_CONVERSATION_LIST_LIMIT, 0, &user_id)
+    if let Some(ref mode) = app_mode {
+        repository::list_conversations_by_mode(
+            &conn,
+            DEFAULT_CONVERSATION_LIST_LIMIT,
+            0,
+            &user_id,
+            mode,
+        )
         .map_err(|e| format!("Failed to list conversations: {e}"))
+    } else {
+        repository::list_conversations(&conn, DEFAULT_CONVERSATION_LIST_LIMIT, 0, &user_id)
+            .map_err(|e| format!("Failed to list conversations: {e}"))
+    }
 }
 
 #[tauri::command]
@@ -342,11 +358,13 @@ pub async fn sync_conversations_to_cloud(
     let client = cloud_sync::CloudSyncClient::new()
         .ok_or_else(|| "Cloud sync is not available in the desktop runtime".to_string())?;
 
-    // Scope the MutexGuard so it is dropped before any .await
+    // Scope the MutexGuard so it is dropped before any .await.
+    // Only sync conversations that were created in cloud mode — local conversations
+    // must NEVER be synced to the cloud without explicit user action.
     let (conversations, all_messages) = {
         let conn = db.connection()?;
         let convs =
-            repository::list_conversations(&conn, DEFAULT_CONVERSATION_LIST_LIMIT, 0, &user_id)
+            repository::list_conversations_by_mode(&conn, DEFAULT_CONVERSATION_LIST_LIMIT, 0, &user_id, "cloud")
                 .map_err(|e| format!("Failed to list conversations: {e}"))?;
 
         let mut msgs = Vec::new();

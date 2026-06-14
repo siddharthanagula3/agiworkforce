@@ -174,6 +174,14 @@ pub struct ChatSendMessageRequest {
     #[serde(default, alias = "preferCloudCredits")]
     pub prefer_cloud_credits: bool,
 
+    /// The active app mode sent from the frontend toggle.
+    /// "local"  = on-device / BYOK only — ManagedCloud is NEVER used.
+    /// "cloud"  = AGI-managed cloud — local/BYOK providers are NOT used.
+    /// When absent (legacy callers) the backend falls back to the
+    /// `prefer_cloud_credits` bool for backwards compatibility.
+    #[serde(default, alias = "activeMode")]
+    pub active_mode: Option<String>,
+
     // Frontend message ID for event coordination
     #[serde(default, alias = "frontendMessageId")]
     pub frontend_message_id: Option<String>,
@@ -442,6 +450,19 @@ impl Validate for ChatSendMessageRequest {
                     message: format!(
                         "Custom instructions exceed maximum length of {} characters",
                         MAX_CUSTOM_INSTRUCTIONS_LENGTH
+                    ),
+                });
+            }
+        }
+
+        // Validate active_mode — only "local" and "cloud" are valid values.
+        if let Some(ref mode) = self.active_mode {
+            if mode != "local" && mode != "cloud" {
+                return Err(ValidationError {
+                    field: "active_mode".to_string(),
+                    message: format!(
+                        "Invalid active_mode '{}'. Must be 'local' or 'cloud'.",
+                        mode
                     ),
                 });
             }

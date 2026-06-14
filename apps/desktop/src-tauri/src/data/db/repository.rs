@@ -36,6 +36,28 @@ pub fn create_conversation(conn: &Connection, title: String, user_id: String) ->
     Ok(conn.last_insert_rowid())
 }
 
+/// Create a conversation tagged with the active app mode ("local" or "cloud").
+/// Use this for all new conversations created after migration v66 so that the
+/// mode-scoped list queries correctly partition the history.
+pub fn create_conversation_with_mode(
+    conn: &Connection,
+    title: String,
+    user_id: String,
+    app_mode: &str,
+) -> Result<i64> {
+    // Reject unknown modes at the repository boundary so mis-wired callers fail loudly
+    // rather than persisting an invalid value.
+    let safe_mode = match app_mode {
+        "cloud" => "cloud",
+        _ => "local", // default to local for unknown values
+    };
+    conn.execute(
+        "INSERT INTO conversations (title, user_id, app_mode) VALUES (?1, ?2, ?3)",
+        params![title, user_id, safe_mode],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
 pub fn get_conversation(conn: &Connection, id: i64, user_id: &str) -> Result<Conversation> {
     conn.query_row(
         "SELECT id, title, created_at, updated_at, user_id FROM conversations WHERE id = ?1 AND user_id = ?2",
@@ -60,6 +82,39 @@ pub fn list_conversations(
 
     let conversations = stmt
         .query_map(params![limit, offset, user_id], map_conversation)?
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(conversations)
+}
+
+/// List conversations scoped to a specific app mode ("local" or "cloud").
+///
+/// This is the PREFERRED query for all UI-facing conversation list calls.
+/// It enforces the hard Local/Cloud boundary so each mode shows only its own
+/// history — conversations created in Local mode never appear in Cloud mode
+/// and vice-versa.
+pub fn list_conversations_by_mode(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+    user_id: &str,
+    app_mode: &str,
+) -> Result<Vec<Conversation>> {
+    let safe_mode = match app_mode {
+        "cloud" => "cloud",
+        _ => "local",
+    };
+    let mut stmt = conn.prepare(
+        "SELECT id, title, created_at, updated_at, user_id
+         FROM conversations
+         WHERE user_id = ?3
+           AND (app_mode = ?4 OR app_mode IS NULL)
+         ORDER BY updated_at DESC
+         LIMIT ?1 OFFSET ?2",
+    )?;
+
+    let conversations = stmt
+        .query_map(params![limit, offset, user_id, safe_mode], map_conversation)?
         .collect::<Result<Vec<_>>>()?;
 
     Ok(conversations)
