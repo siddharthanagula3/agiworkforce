@@ -129,7 +129,8 @@ describe('DesktopShellV3 duplication ownership', () => {
 
     expect(container.querySelectorAll('[data-v3-sidebar]')).toHaveLength(1);
     expect(screen.getByTestId('chat-interface')).toBeInTheDocument();
-    expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+    // EmptyChat now renders null (composer-only empty state, founder 2026-06-13);
+    // delegation to unified-chat is still verified via the truthy emptyStateSlot below.
     expect(screen.queryByText('Settings')).not.toBeInTheDocument();
 
     expect(unifiedChatMock.chatInterfaceProps).toHaveLength(1);
