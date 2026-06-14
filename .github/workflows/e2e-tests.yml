@@ -54,6 +54,9 @@ jobs:
         working-directory: apps/desktop
         env:
           CI: true
+          # Vite needs the web target so esbuild uses the right browser support
+          # matrix (without it the build fails with esbuild safari14 errors).
+          VITE_BUILD_TARGET: web
 
       - name: Start Vite dev server (background)
         run: |
