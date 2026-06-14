@@ -482,6 +482,7 @@ pub async fn stream_completion(
     max_tokens: u32,
     tools: Option<&[ToolDefinition]>,
     mut on_chunk: StreamCallback,
+    thinking_budget: Option<u32>,
 ) -> Result<CompletionResult> {
     let client = Client::new();
     let temperature = config.default.temperature;
@@ -552,6 +553,7 @@ pub async fn stream_completion(
                 temperature,
                 tools,
                 &mut on_chunk,
+                thinking_budget,
             )
             .await
         }
@@ -685,6 +687,7 @@ async fn stream_anthropic(
     temperature: Option<f32>,
     tools: Option<&[ToolDefinition]>,
     on_chunk: &mut StreamCallback,
+    thinking_budget: Option<u32>,
 ) -> Result<CompletionResult> {
     let api_messages: Vec<Value> = messages
         .iter()
@@ -759,12 +762,27 @@ async fn stream_anthropic(
         body["tools"] = serde_json::json!(anthropic_tools_json(tool_defs));
     }
 
+    // Extended thinking: inject a `thinking` block when the caller requests it.
+    // Only supported by claude-3-7-sonnet and later Anthropic models.
+    // Requires the interleaved-thinking-2025-05-14 beta header.
+    let use_thinking = thinking_budget.is_some();
+    if let Some(budget) = thinking_budget {
+        body["thinking"] = serde_json::json!({
+            "type": "enabled",
+            "budget_tokens": budget
+        });
+    }
+
     let url = "https://api.anthropic.com/v1/messages";
-    let resp = client
+    let mut req = client
         .post(url)
         .header("x-api-key", api_key)
         .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
+        .header("content-type", "application/json");
+    if use_thinking {
+        req = req.header("anthropic-beta", "interleaved-thinking-2025-05-14");
+    }
+    let resp = req
         .json(&body)
         .send()
         .await
@@ -785,6 +803,9 @@ async fn stream_anthropic(
     let mut output_tokens: u32 = 0;
     let mut cache_read_input_tokens: u32 = 0;
     let mut cache_creation_input_tokens: u32 = 0;
+    let mut reasoning_output_tokens: u32 = 0;
+    // True while the parser is inside a `thinking` content block
+    let mut in_thinking_block = false;
     let mut stream = resp.bytes_stream();
     let mut buffer = String::new();
 
@@ -833,20 +854,29 @@ async fn stream_anthropic(
 
                     match event_type {
                         "content_block_start" => {
-                            // Check if this is a tool_use block
+                            // Check if this is a tool_use or thinking block
                             if let Some(cb) = event.get("content_block") {
-                                if cb.get("type").and_then(|t| t.as_str()) == Some("tool_use") {
-                                    current_tool_id = cb
-                                        .get("id")
-                                        .and_then(|i| i.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_name = cb
-                                        .get("name")
-                                        .and_then(|n| n.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    current_tool_input.clear();
+                                match cb.get("type").and_then(|t| t.as_str()) {
+                                    Some("tool_use") => {
+                                        in_thinking_block = false;
+                                        current_tool_id = cb
+                                            .get("id")
+                                            .and_then(|i| i.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        current_tool_name = cb
+                                            .get("name")
+                                            .and_then(|n| n.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        current_tool_input.clear();
+                                    }
+                                    Some("thinking") => {
+                                        in_thinking_block = true;
+                                    }
+                                    _ => {
+                                        in_thinking_block = false;
+                                    }
                                 }
                             }
                         }
@@ -856,11 +886,27 @@ async fn stream_anthropic(
                                     delta.get("type").and_then(|t| t.as_str()).unwrap_or("");
                                 match delta_type {
                                     "text_delta" => {
-                                        if let Some(text) =
-                                            delta.get("text").and_then(|t| t.as_str())
+                                        if !in_thinking_block {
+                                            if let Some(text) =
+                                                delta.get("text").and_then(|t| t.as_str())
+                                            {
+                                                full_text.push_str(text);
+                                                on_chunk(text);
+                                            }
+                                        }
+                                    }
+                                    "thinking_delta" => {
+                                        // Thinking text is for internal reasoning; don't surface
+                                        // it to the user but count the tokens for the HUD.
+                                        // The Anthropic API reports thinking tokens in the usage
+                                        // object; we count characters here as a best-effort
+                                        // estimate and override with the real count on message_delta.
+                                        if let Some(thinking_text) =
+                                            delta.get("thinking").and_then(|t| t.as_str())
                                         {
-                                            full_text.push_str(text);
-                                            on_chunk(text);
+                                            // Rough estimate: 4 chars ≈ 1 token (will be overridden)
+                                            reasoning_output_tokens +=
+                                                (thinking_text.len() / 4).max(1) as u32;
                                         }
                                     }
                                     "input_json_delta" => {
@@ -875,6 +921,7 @@ async fn stream_anthropic(
                             }
                         }
                         "content_block_stop" => {
+                            in_thinking_block = false;
                             // If we were accumulating a tool call, finalize it
                             if !current_tool_name.is_empty() {
                                 let arguments = parse_tool_arguments_json(
@@ -948,6 +995,19 @@ async fn stream_anthropic(
                                 if delta_cache_creation > cache_creation_input_tokens {
                                     cache_creation_input_tokens = delta_cache_creation;
                                 }
+                                // Capture real thinking/reasoning tokens from the usage object.
+                                // Anthropic reports these as `thinking_tokens` or
+                                // `reasoning_tokens` in the usage block when extended-thinking
+                                // is enabled. Override the character-estimate above.
+                                let real_reasoning = usage
+                                    .get("thinking_tokens")
+                                    .or_else(|| usage.get("reasoning_tokens"))
+                                    .and_then(|v| v.as_u64())
+                                    .unwrap_or(0)
+                                    as u32;
+                                if real_reasoning > 0 {
+                                    reasoning_output_tokens = real_reasoning;
+                                }
                             }
                         }
                         _ => {}
@@ -966,7 +1026,7 @@ async fn stream_anthropic(
         cache_creation_input_tokens,
         via_subscription: false,
         stop_reason,
-        reasoning_output_tokens: 0,
+        reasoning_output_tokens,
     })
 }
 
