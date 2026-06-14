@@ -14,8 +14,14 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
-router.use(authenticateToken);
+// Rate-limit BEFORE authentication so a flood of unauthenticated requests is
+// throttled before it reaches JWT verification + the per-route membership/DB
+// lookups. Registering the limiter ahead of `authenticateToken` also makes it
+// guard the authorization middleware (CodeQL js/missing-rate-limiting). The
+// per-route limiters below key by userId (post-auth); this router-level default
+// keys by IP since req.user is not yet populated here.
 router.use(createRateLimiter('default'));
+router.use(authenticateToken);
 
 const uuidParamSchema = z.object({
   orgId: z.uuid(),
