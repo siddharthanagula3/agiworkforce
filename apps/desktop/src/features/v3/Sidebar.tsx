@@ -1,10 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
   SquarePen,
   Search,
   FolderOpen,
+  FolderPlus,
   Box,
   RefreshCw,
   GitBranch,
@@ -16,7 +17,9 @@ import {
 } from 'lucide-react';
 import { useChatStore } from '../../stores/chat';
 import type { ChatState, ConversationSummary } from '../../stores/chat';
+import { useProjectStore, type Project } from '../../stores/projectStore';
 import { ConversationRow } from './ConversationRow';
+import { ProjectRow } from './ProjectRow';
 import {
   useUnifiedAuthStore,
   selectUser,
@@ -97,12 +100,30 @@ type NavItem = {
 
 function navItemsForMode(mode: V3Mode, t: TFunction): NavItem[] {
   void mode;
+  // Projects moved to its own ChatGPT-style folder section below; the rest
+  // stay as flat nav entries.
   return [
-    { id: 'projects', label: t('sidebar.nav.projects'), icon: FolderOpen },
     { id: 'artifacts', label: t('sidebar.nav.artifacts'), icon: Box },
     { id: 'scheduled', label: t('sidebar.nav.scheduled'), icon: RefreshCw },
     { id: 'dispatch', label: t('sidebar.nav.dispatch'), icon: GitBranch, beta: true },
   ];
+}
+
+// Folder-icon accent for a project: explicit color override, else a stable
+// cycle through the design-token palette (mirrors AgiWorkProjects).
+const PROJECT_ACCENTS = [
+  'var(--chat-accent-secondary)',
+  'var(--chat-accent-primary)',
+  'var(--chat-info)',
+  'var(--chat-success)',
+  'var(--chat-warning)',
+  'var(--chat-destructive)',
+];
+
+function projectAccent(project: Project, index: number): string {
+  return (
+    project.color ?? PROJECT_ACCENTS[index % PROJECT_ACCENTS.length] ?? 'var(--chat-text-muted)'
+  );
 }
 
 // ─── collapsed rail items ─────────────────────────────────────────────────────
@@ -129,7 +150,8 @@ function initials(name?: string | null, email?: string | null): string {
 
 export interface SidebarProps {
   mode: V3Mode;
-  onNewChat?: () => void;
+  /** Start a new chat; pass a projectId to scope the new chat to a project. */
+  onNewChat?: (projectId?: string) => void;
   onOpenSearch?: () => void;
   onNavigateView?: (view: string) => void;
   onJumpConversation?: (id: string) => void;
@@ -155,6 +177,13 @@ export function Sidebar({
   const renameConversation = useChatStore((s: ChatState) => s.renameConversation);
   const deleteConversation = useChatStore((s: ChatState) => s.deleteConversation);
   const togglePinnedConversation = useChatStore((s: ChatState) => s.togglePinnedConversation);
+  const projects = useProjectStore((s) => s.projects);
+  const activeProjectId = useProjectStore((s) => s.activeProjectId);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const createProject = useProjectStore((s) => s.createProject);
+  const updateProject = useProjectStore((s) => s.updateProject);
+  const deleteProject = useProjectStore((s) => s.deleteProject);
+  const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const user = useUnifiedAuthStore(selectUser);
   const planDisplayName = useUnifiedAuthStore(selectPlanDisplayName);
   const hasCloudAccountSession = useUnifiedAuthStore(selectHasCloudAccountSession);
@@ -195,6 +224,58 @@ export function Sidebar({
       if (view) onNavigateView?.(view);
     },
     [onNavigateView],
+  );
+
+  useEffect(() => {
+    void loadProjects();
+  }, [loadProjects]);
+
+  const visibleProjects = useMemo(
+    () => projects.filter((p) => !p.isArchived).slice(0, 6),
+    [projects],
+  );
+
+  const handleCreateProject = useCallback(() => {
+    void createProject({
+      name: t('agiWork.projects.untitled'),
+      description: '',
+      customInstructions: '',
+      files: [],
+      conversationIds: [],
+      isArchived: false,
+    }).catch(() => {
+      /* errors are surfaced by the projects panel */
+    });
+  }, [createProject, t]);
+
+  const handleOpenProject = useCallback(
+    (id: string) => {
+      setActiveProject(id);
+      onNavigateView?.('projects');
+    },
+    [setActiveProject, onNavigateView],
+  );
+
+  const handleProjectNewChat = useCallback(
+    (id: string) => {
+      setActiveProject(id);
+      onNewChat?.(id);
+    },
+    [setActiveProject, onNewChat],
+  );
+
+  const handleRenameProject = useCallback(
+    (id: string, name: string) => {
+      void updateProject(id, { name });
+    },
+    [updateProject],
+  );
+
+  const handleDeleteProject = useCallback(
+    (id: string) => {
+      void deleteProject(id);
+    },
+    [deleteProject],
   );
 
   const handleFooterPrimaryClick = useCallback(() => {
@@ -268,7 +349,7 @@ export function Sidebar({
       {/* New chat button */}
       <div style={{ padding: '4px 8px', flexShrink: 0 }}>
         <button
-          onClick={onNewChat}
+          onClick={() => onNewChat?.()}
           title={newLabel}
           style={{
             width: '100%',
@@ -375,6 +456,71 @@ export function Sidebar({
               </button>
             );
           })}
+        </div>
+      )}
+
+      {/* Projects — ChatGPT-style folder section (expanded only) */}
+      {!collapsed && !showAccountMenu && (
+        <div style={{ padding: '4px 8px 0', flexShrink: 0 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '2px 10px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onNavigateView?.('projects')}
+              style={{
+                flex: 1,
+                textAlign: 'left',
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                fontSize: 11,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                color: 'var(--chat-text-muted)',
+                padding: 0,
+              }}
+            >
+              {t('sidebar.nav.projects')}
+            </button>
+            <button
+              type="button"
+              onClick={handleCreateProject}
+              title={t('sidebar.projects.newProject')}
+              aria-label={t('sidebar.projects.newProject')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 22,
+                height: 22,
+                borderRadius: 5,
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--chat-text-muted)',
+              }}
+            >
+              <FolderPlus size={14} />
+            </button>
+          </div>
+          {visibleProjects.map((p, i) => (
+            <ProjectRow
+              key={p.id}
+              project={p}
+              active={p.id === activeProjectId}
+              accentColor={projectAccent(p, i)}
+              onOpen={handleOpenProject}
+              onNewChat={handleProjectNewChat}
+              onRename={handleRenameProject}
+              onDelete={handleDeleteProject}
+            />
+          ))}
         </div>
       )}
 

@@ -47,6 +47,11 @@
       "delete": "Delete",
       "confirmDelete": "Confirm delete"
     },
+    "projects": {
+      "newChat": "New chat in project",
+      "open": "Open project",
+      "newProject": "New project"
+    },
     "groups": {
       "lastHour": "Last hour",
       "today": "Today",
