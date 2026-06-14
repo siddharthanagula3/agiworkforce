@@ -43,29 +43,73 @@ function buildCspWithNonce(nonce: string): string {
     .trim();
 }
 
+// Fallback CSP used only when the nonce-forwarding path throws (see
+// buildCspResponse). It drops the per-request nonce and allows inline scripts so
+// the framework bootstrap/hydration scripts are not blocked — strictly less
+// secure than the nonce path, but it keeps the site rendering instead of 500ing
+// the entire surface when the edge runtime rejects the nonce path.
+function buildFallbackCsp(): string {
+  const sandboxOrigin = process.env['NEXT_PUBLIC_SANDBOX_ORIGIN']?.trim().replace(/\/+$/, '');
+  const sandboxFrameSrc = sandboxOrigin ? ` ${sandboxOrigin}` : '';
+  const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
+  return `
+    default-src 'self';
+    script-src 'self' 'unsafe-inline'${devUnsafeEval} https://*.clerk.accounts.dev https://*.clerk.com https://js.stripe.com https://challenges.cloudflare.com https://www.googletagmanager.com;
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
+    img-src 'self' data: blob: https:;
+    font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
+    connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    worker-src 'self' blob:;
+    frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
+    frame-ancestors 'none';
+    form-action 'self';
+    base-uri 'self';
+    object-src 'none';
+    upgrade-insecure-requests;
+    block-all-mixed-content;
+  `
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 function buildCspResponse(request: NextRequest): NextResponse {
-  // Generate a cryptographically-secure per-request nonce
-  const nonce = btoa(crypto.randomUUID());
-  const csp = buildCspWithNonce(nonce);
+  try {
+    // Generate a cryptographically-secure per-request nonce
+    const nonce = btoa(crypto.randomUUID());
+    const csp = buildCspWithNonce(nonce);
 
-  // Forward nonce to Server Components via request header (readable via next/headers)
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
-  // CRITICAL: Next.js reads the nonce from the Content-Security-Policy *request*
-  // header to stamp it onto every framework-injected inline <script>. Without
-  // this, the bootstrap/hydration scripts have no nonce and the response CSP
-  // blocks them, breaking the page. (Next.js CSP guide — set CSP on both the
-  // request and the response.)
-  requestHeaders.set('Content-Security-Policy', csp);
+    // Forward nonce to Server Components via request header (readable via next/headers)
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-nonce', nonce);
+    requestHeaders.set('x-agi-pathname', `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    // CRITICAL: Next.js reads the nonce from the Content-Security-Policy *request*
+    // header to stamp it onto every framework-injected inline <script>. Without
+    // this, the bootstrap/hydration scripts have no nonce and the response CSP
+    // blocks them, breaking the page. (Next.js CSP guide — set CSP on both the
+    // request and the response.)
+    requestHeaders.set('Content-Security-Policy', csp);
 
-  // Create new pass-through response with the modified request headers
-  const response = NextResponse.next({ request: { headers: requestHeaders } });
+    // Create new pass-through response with the modified request headers
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
 
-  // Set nonce-based CSP on the response
-  response.headers.set('Content-Security-Policy', csp);
+    // Set nonce-based CSP on the response
+    response.headers.set('Content-Security-Policy', csp);
 
-  return response;
+    return response;
+  } catch (error) {
+    // RESILIENCE: a throwing CSP middleware must never take the whole surface
+    // down. The nonce-forwarding path above 500'd every route on Vercel's edge
+    // runtime (worked under local `next start`'s node runtime). Degrade to a
+    // nonce-less CSP so the site keeps rendering, and surface the real error in
+    // the logs + a response header so the root cause stays diagnosable.
+    const err = error instanceof Error ? error : new Error(String(error));
+
+    console.error('[proxy] buildCspResponse fell back to nonce-less CSP:', err.name, err.message);
+    const response = NextResponse.next();
+    response.headers.set('Content-Security-Policy', buildFallbackCsp());
+    response.headers.set('x-agi-proxy-fallback', `${err.name}: ${err.message}`.slice(0, 200));
+    return response;
+  }
 }
 
 function hasBrowserSessionCookie(request: NextRequest): boolean {
