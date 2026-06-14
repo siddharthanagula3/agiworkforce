@@ -491,11 +491,6 @@ export function ChatInput({
               )}
             </div>
           </div>
-
-          {/* Cmd/Ctrl+Enter shortcut helper — visible only when focused */}
-          <div className="min-h-[12px] text-center text-[10px] leading-3 text-[var(--chat-text-muted)] pointer-events-none select-none">
-            {focused && !isStreaming ? `${modKey}+Enter to send` : null}
-          </div>
         </div>
       </div>
     </div>

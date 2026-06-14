@@ -9,7 +9,7 @@ import { detectCapabilities } from './capabilities';
 import { tier1Generate } from './tier1';
 import { tier2Generate } from './tier2';
 import { tier3Generate } from './tier3';
-import { getDefaultModel, getLiteModeModel, getModelById } from './catalog';
+import { getDefaultModel, getModelById } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 
 // Cached capability snapshot — refreshed on demand or app resume.
@@ -31,18 +31,14 @@ export async function selectTier(opts: {
   modelPath?: string;
   modelId?: string;
 }): Promise<{ tier: LocalRuntimeTier; runtime: LocalRuntimeName }> {
-  const caps = await getCapabilities();
+  const caps = await getFreshCapabilitiesForInference();
   const ref = normalizeModelRef(opts.modelPath, opts.modelId);
 
   if (caps.thermalThrottled) {
     throw new Error('Device is thermally throttled — inference paused. Try again in a moment.');
   }
 
-  if (
-    caps.tier1Available &&
-    caps.tier1Runtime &&
-    canUseTier1ForModel(ref.modelId, caps.tier1Runtime)
-  ) {
+  if (caps.tier1Available && caps.tier1Runtime && canUseTier1ForModel(ref, caps.tier1Runtime)) {
     return { tier: 1, runtime: caps.tier1Runtime };
   }
 
@@ -66,12 +62,6 @@ function resolvePreset(modelId: string | undefined): ExecutorchPreset | null {
   }
   const exact = getModelById(modelId);
   if (exact) return exact.executorchPreset ?? null;
-
-  // Look up by id — check default, then lite
-  const def = getDefaultModel();
-  if (def.id === modelId) return def.executorchPreset ?? null;
-  const lite = getLiteModeModel();
-  if (lite?.id === modelId) return lite.executorchPreset ?? null;
   return null;
 }
 
@@ -97,9 +87,12 @@ function normalizeModelRef(
 }
 
 function canUseTier1ForModel(
-  modelId: string | undefined,
+  ref: { modelId?: string; modelPath?: string },
   runtime: Exclude<DeviceCapabilities['tier1Runtime'], null>,
 ): boolean {
+  if (ref.modelPath) return false;
+
+  const modelId = ref.modelId;
   if (!modelId) return true;
 
   const model = getModelById(modelId);
@@ -116,18 +109,14 @@ export async function localGenerate(
   modelPathOrId: string | undefined,
   opts: GenerateOptions,
 ): Promise<GenerateResult> {
-  const caps = await getCapabilities();
+  const caps = await getFreshCapabilitiesForInference();
   const ref = normalizeModelRef(modelPathOrId, opts.modelId);
 
   if (caps.thermalThrottled) {
     throw new Error('Device is thermally throttled — inference paused.');
   }
 
-  if (
-    caps.tier1Available &&
-    caps.tier1Runtime &&
-    canUseTier1ForModel(ref.modelId, caps.tier1Runtime)
-  ) {
+  if (caps.tier1Available && caps.tier1Runtime && canUseTier1ForModel(ref, caps.tier1Runtime)) {
     return tier1Generate(opts);
   }
 
@@ -158,6 +147,11 @@ export async function localGenerate(
   throw new Error(
     'No local model is ready. Download a local model first, or join AGI Cloud when it is available.',
   );
+}
+
+async function getFreshCapabilitiesForInference(): Promise<DeviceCapabilities> {
+  _caps = await detectCapabilities();
+  return _caps;
 }
 
 export type {
