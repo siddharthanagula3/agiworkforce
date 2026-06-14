@@ -8,14 +8,17 @@ import { StatusBar } from 'expo-status-bar';
 import {
   View,
   ActivityIndicator,
+  Appearance,
   BackHandler,
   Platform,
   ToastAndroid,
   Pressable,
   Text,
   AppState,
+  LogBox,
   type AppStateStatus,
 } from 'react-native';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { Fingerprint } from 'lucide-react-native';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useTierStore } from '@/src/features/billing/store';
@@ -23,6 +26,9 @@ import { storage, initMmkvEncryption } from '@/lib/mmkv';
 import { hydrateBiometricFlag } from '@/lib/biometricFlagStore';
 import { useBiometricGate } from '@/src/features/auth/hooks/useBiometricGate';
 import { useTheme } from '@/src/ui/theme';
+import { ClerkProvider, useAuth } from '@clerk/expo';
+import { tokenCache } from '@clerk/expo/token-cache';
+import { CLERK_PUBLISHABLE_KEY, setClerkTokenGetter, getClerkUserId } from '@/lib/clerk';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   registerForPushNotifications,
@@ -41,9 +47,46 @@ import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import '../global.css';
 
+LogBox.ignoreLogs([
+  '[React Native ExecuTorch] No content-length header for ',
+  'InteractionManager has been deprecated and will be removed in a future release',
+]);
+
+/**
+ * Registers Clerk's React `useAuth().getToken()` with the non-React token
+ * bridge (lib/clerk.ts) so the cloud streaming path can authenticate against
+ * the native AuthView session. Also bridges `isSignedIn` into useAuthStore so
+ * that cloud-lifecycle effects in RootLayout (which renders outside
+ * <ClerkProvider> and cannot call useAuth() directly) can gate on a real
+ * sign-in signal rather than the legacy `session` field (which is always null
+ * in v1 because useAuthStore.initialize() never sets it). Must render inside
+ * <ClerkProvider>.
+ */
+function ClerkTokenBridge() {
+  const { getToken, userId, isSignedIn } = useAuth();
+  const setClerkSignedIn = useAuthStore((s) => s.setClerkSignedIn);
+  useEffect(() => {
+    if (isSignedIn) {
+      setClerkTokenGetter(
+        () => getToken(),
+        () => userId ?? null,
+      );
+      setClerkSignedIn(true);
+    } else {
+      setClerkTokenGetter(null, null);
+      setClerkSignedIn(false);
+    }
+    return () => {
+      setClerkTokenGetter(null, null);
+      setClerkSignedIn(false);
+    };
+  }, [getToken, userId, isSignedIn, setClerkSignedIn]);
+  return null;
+}
+
 export default function RootLayout() {
   const [isMmkvReady, setIsMmkvReady] = useState(false);
-  const { session, isLoading, isInitialized, initialize } = useAuthStore();
+  const { session, isLoading, isInitialized, initialize, isClerkSignedIn } = useAuthStore();
   const authEnabled = FEATURES.auth;
   const refreshTier = useTierStore((s) => s.refreshTier);
   const segments = useSegments();
@@ -51,6 +94,18 @@ export default function RootLayout() {
   const url = useURL();
   const backPressCount = useRef(0);
   const { colors: themeColors, statusBarStyle } = useTheme();
+  const themeMode = useSettingsStore((s) => s.themeMode);
+
+  // Sync the NATIVE color scheme to the app's theme choice. Clerk's native
+  // AuthView (clerk-ios SwiftUI) follows the system/app userInterfaceStyle, so
+  // without this it renders light on a light device while the RN UI stays dark.
+  // 'system' → null lets native follow the OS; explicit dark/light force it.
+  useEffect(() => {
+    // 'unspecified' clears the override so native follows the OS (system mode).
+    Appearance.setColorScheme(
+      themeMode === 'dark' ? 'dark' : themeMode === 'light' ? 'light' : 'unspecified',
+    );
+  }, [themeMode]);
   // AUDIT-FIX: H-10 — block the navigator tree on `isReady` so the
   // biometric-flag SecureStore read completes before any gated UI renders.
   const { isUnlocked, isReady: isBiometricReady, authenticate } = useBiometricGate();
@@ -95,22 +150,24 @@ export default function RootLayout() {
     setCurrentSession(session ?? null);
   }, [session]);
 
-  // Tier refresh — fetch /api/auth/me once after the session is available and
-  // persist the result to MMKV-backed tierStore. The persisted value is used
+  // Tier refresh — fetch /api/auth/me once after the Clerk session is available
+  // and persist the result to MMKV-backed tierStore. The persisted value is used
   // immediately on the next cold start so the UI shows the correct tier without
   // waiting for the network call.
+  // #386: gated on isClerkSignedIn (real signal) instead of the legacy
+  // useAuthStore.session (always null in v1 — initialize() never sets it).
   useEffect(() => {
-    if (!session || !isInitialized) return;
+    if (!isClerkSignedIn || !isInitialized) return;
     refreshTier().catch((err) => {
       console.warn('[RootLayout] Tier refresh failed:', err);
     });
-  }, [session, isInitialized, refreshTier]);
+  }, [isClerkSignedIn, isInitialized, refreshTier]);
 
   // Tier refresh on app foreground — invalidate cached tier when the user
   // returns to the app (e.g. after completing a subscription upgrade in the
   // browser). Mirrors the model-catalog TTL invalidation pattern.
   useEffect(() => {
-    if (!session) return;
+    if (!isClerkSignedIn) return;
 
     const handleAppStateChange = (nextState: AppStateStatus) => {
       if (nextState === 'active') {
@@ -122,7 +179,7 @@ export default function RootLayout() {
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     return () => subscription.remove();
-  }, [session, refreshTier]);
+  }, [isClerkSignedIn, refreshTier]);
 
   // LOW-MOB-3 fix: tell notifications.ts the navigator is mounted. Slot is
   // rendered on every render of this component, so on the first render we
@@ -144,8 +201,9 @@ export default function RootLayout() {
   // valid token. The push token would then be POST'd to the backend
   // with no Authorization header, registering an unauthenticated
   // device record on the user's account.
+  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.auth || !session || !isInitialized) return;
+    if (!FEATURES.auth || !isClerkSignedIn || !isInitialized) return;
 
     registerForPushNotifications();
     const removeListeners = setupNotificationListeners();
@@ -154,11 +212,12 @@ export default function RootLayout() {
     handleInitialNotification();
 
     return removeListeners;
-  }, [session, isInitialized]);
+  }, [isClerkSignedIn, isInitialized]);
 
   // Background fetch — register agent status polling on login
+  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !session) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn) return;
 
     registerBackgroundFetch().catch((err) => {
       console.warn('[RootLayout] Background fetch registration failed:', err);
@@ -169,11 +228,12 @@ export default function RootLayout() {
         console.warn('[RootLayout] Background fetch unregister failed:', err);
       });
     };
-  }, [session]);
+  }, [isClerkSignedIn]);
 
   // Cloud realtime — cross-surface sync of conversations/messages
+  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.cloudChat || !session) return;
+    if (!FEATURES.cloudChat || !isClerkSignedIn) return;
 
     let unsubscribe: (() => void) | undefined;
     subscribeToRealtime()
@@ -188,11 +248,12 @@ export default function RootLayout() {
       unsubscribe?.();
       unsubscribeFromRealtime();
     };
-  }, [session]);
+  }, [isClerkSignedIn]);
 
   // Dispatch Realtime — desktop→mobile task updates
+  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !session) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn) return;
 
     let unsubscribe: (() => void) | undefined;
     subscribeToDispatch()
@@ -207,27 +268,32 @@ export default function RootLayout() {
       unsubscribe?.();
       unsubscribeFromDispatch();
     };
-  }, [session]);
+  }, [isClerkSignedIn]);
 
   // Desktop liveness polling — catch missed Realtime heartbeat updates
+  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
   useEffect(() => {
-    if (!FEATURES.dispatch || !session) return;
+    if (!FEATURES.dispatch || !isClerkSignedIn) return;
     const cleanup = startDesktopStatusPolling();
     return cleanup;
-  }, [session]);
+  }, [isClerkSignedIn]);
 
   // 3-device conversation sync — sync on app resume
+  // #386: gated on isClerkSignedIn; user_id sourced from Clerk (session is null).
   useEffect(() => {
-    if (!session || !FEATURES.crossDeviceSync) return;
+    if (!isClerkSignedIn || !FEATURES.crossDeviceSync) return;
 
     const syncService = getMobileSyncService();
     syncService.startBackgroundSync(
       () => {
-        // Convert local conversations to SyncedConversation shape for merge
+        // Convert local conversations to SyncedConversation shape for merge.
+        // User ID comes from the Clerk bridge — session.user.id is always null
+        // in v1 because useAuthStore.initialize() never sets it.
         const state = useChatStore.getState();
+        const userId = getClerkUserId() ?? 'unknown';
         return state.conversations.map((c) => ({
           id: c.id,
-          user_id: session.user.id,
+          user_id: userId,
           title: c.title,
           model: null,
           is_active: true,
@@ -247,7 +313,7 @@ export default function RootLayout() {
     return () => {
       syncService.stopBackgroundSync();
     };
-  }, [session]);
+  }, [isClerkSignedIn]);
 
   // Auth guard + onboarding check
   // P1-8: gate on isMmkvReady so cold start never force-redirects to
@@ -257,27 +323,38 @@ export default function RootLayout() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = (segments[0] as string) === '(public)';
+    const inLegal = segments[0] === 'legal';
 
     // Public v1 keeps auth hidden. Invite-redeemed alpha testers are allowed
     // through the existing auth group after Cloud Managed unlock.
     if (!authEnabled) {
-      if (inAuthGroup) {
-        const onboardingDone = storage.getString('onboarding-done');
-        if (!onboardingDone) {
-          if (!isAgeGateConfirmed()) {
-            router.replace({ pathname: '/(public)/age-gate' as never });
-          } else {
-            router.replace({ pathname: '/(public)/onboarding' as never });
-          }
+      const onboardingDone = storage.getString('onboarding-done');
+      if (!onboardingDone && !inOnboarding && !inLegal) {
+        if (!isAgeGateConfirmed()) {
+          router.replace({ pathname: '/(public)/age-gate' as never });
         } else {
-          router.replace({ pathname: '/(app)' as const });
+          router.replace({ pathname: '/(public)/onboarding' as never });
         }
+        return;
+      }
+      if (onboardingDone && (inAuthGroup || inOnboarding)) {
+        router.replace({ pathname: '/(app)' as const });
       }
       return;
     }
 
     if (!session && !inAuthGroup) {
-      router.replace({ pathname: '/(auth)/login' as const });
+      // Cloud auth (Clerk) is OPTIONAL — Local Mode never forces sign-in (locked
+      // rule: Local is the free, account-less hook). Route Local-first; sign-in
+      // is reached on demand via the Cloud toggle / invite-redeem flow.
+      const onboardingDone = storage.getString('onboarding-done');
+      if (!onboardingDone && !inOnboarding && !inLegal) {
+        router.replace({
+          pathname: (isAgeGateConfirmed() ? '/(public)/onboarding' : '/(public)/age-gate') as never,
+        });
+      } else if (onboardingDone && inOnboarding) {
+        router.replace({ pathname: '/(app)' as const });
+      }
     } else if (session && inAuthGroup) {
       const onboardingDone = storage.getString('onboarding-done');
       if (!onboardingDone && !inOnboarding) {
@@ -335,6 +412,7 @@ export default function RootLayout() {
       scheme === 'https' && hostname === 'agiworkforce.com' && segments[0] === 'pair';
 
     if (!isCustomSchemePair && !isUniversalLinkPair) return;
+    if (!FEATURES.companion || !FEATURES.dispatch) return;
 
     const code =
       (parsed.queryParams?.code as string | undefined) ??
@@ -478,7 +556,7 @@ export default function RootLayout() {
                 borderRadius: 12,
               }}
             >
-              <Text style={{ color: '#fff', fontWeight: '600' }}>Unlock</Text>
+              <Text style={{ color: themeColors.accentText, fontWeight: '600' }}>Unlock</Text>
             </Pressable>
           </View>
         </SafeAreaProvider>
@@ -487,13 +565,16 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
-        <StatusBar style={statusBarStyle} />
-        <Slot />
-        {/* Global offline banner — renders above all content when NetInfo is offline */}
-        <OfflineBanner />
-      </SafeAreaProvider>
-    </GestureHandlerRootView>
+    <ClerkProvider publishableKey={CLERK_PUBLISHABLE_KEY} tokenCache={tokenCache}>
+      <ClerkTokenBridge />
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <SafeAreaProvider>
+          <StatusBar style={statusBarStyle} />
+          <Slot />
+          {/* Global offline banner — renders above all content when NetInfo is offline */}
+          <OfflineBanner />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    </ClerkProvider>
   );
 }
