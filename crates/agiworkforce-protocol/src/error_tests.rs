@@ -59,7 +59,7 @@ fn usage_limit_reached_error_formats_plus_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again later."
+        "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist or try again later."
     );
 }
 
@@ -180,7 +180,7 @@ fn usage_limit_reached_error_formats_free_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Plus to continue using Agiworkforce (https://chatgpt.com/explore/plus), or try again later."
+        "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist or try again later."
     );
 }
 
@@ -194,7 +194,7 @@ fn usage_limit_reached_error_formats_go_plan() {
     };
     assert_eq!(
         err.to_string(),
-        "You've hit your usage limit. Upgrade to Plus to continue using Agiworkforce (https://chatgpt.com/explore/plus), or try again later."
+        "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist or try again later."
     );
 }
 
@@ -300,7 +300,7 @@ fn usage_limit_reached_error_formats_pro_plan_with_reset() {
             promo_message: None,
         };
         let expected = format!(
-            "You've hit your usage limit. Visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at {expected_time}."
+            "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist or try again at {expected_time}."
         );
         assert_eq!(err.to_string(), expected);
     });
@@ -321,8 +321,7 @@ fn usage_limit_reached_error_hides_upsell_for_non_agiworkforce_limit_name() {
                 ..rate_limit_snapshot()
             })),
             promo_message: Some(
-                "Visit https://chatgpt.com/codex/settings/usage to purchase more credits"
-                    .to_string(),
+                "Join the managed cloud waitlist to request more access".to_string(),
             ),
         };
         let expected = format!(
@@ -484,7 +483,7 @@ fn usage_limit_reached_includes_hours_and_minutes() {
             promo_message: None,
         };
         let expected = format!(
-            "You've hit your usage limit. Upgrade to Pro (https://chatgpt.com/explore/pro), visit https://chatgpt.com/codex/settings/usage to purchase more credits or try again at {expected_time}."
+            "You've hit your usage limit. Switch to a local model or your own provider key (BYOK), or join the managed cloud waitlist or try again at {expected_time}."
         );
         assert_eq!(err.to_string(), expected);
     });

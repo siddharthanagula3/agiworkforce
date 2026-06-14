@@ -1,6 +1,5 @@
 ---
-source: apps/cli/src/tui/widgets/snapshot_smoke.rs
-assertion_line: 182
+source: apps/cli/src/tui/widgets/effort_picker.rs
 expression: terminal.backend()
 ---
 "                                                                                "
@@ -12,14 +11,12 @@ expression: terminal.backend()
 "                                                                                "
 "                                                                                "
 "                                                                                "
-"                                                                                "
-"                                                                                "
-"  ┌ Models  Local · BYOK · Cloud ────────────────────────────────────────────┐  "
-"  │/ open                                                                    │  "
-"  │──────────────────────────────────────────────────────────────────────────│  "
-"  │Bring your own key · your own provider keys                               │  "
-"  │  OpenAI                                                                  │  "
-"  │    fixture-fast                        Balanced      128K ctx            │  "
-"  │ Thinking: on · Effort: ◀ Medium ▶   Tab/←→                               │  "
+"  ┌ Effort ──────────────────────────────────────────────────────────────────┐  "
+"  │                                                                          │  "
+"  │    Low       Minimal thinking. Fastest response.     (~4K tokens)        │  "
+"  │ ●  Medium    Balanced thinking. Default.             (~16K tokens)       │  "
+"  │    High      Extended thinking. More accurate.       (~32K tokens)       │  "
+"  │    Max       Maximum thinking. Best accuracy.        (~65K tokens)       │  "
+"  │                                                                          │  "
 "  └──────────────────────────────────────────────────────────────────────────┘  "
 "                                                                                "

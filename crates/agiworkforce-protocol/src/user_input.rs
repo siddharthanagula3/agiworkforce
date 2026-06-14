@@ -6,12 +6,38 @@ use ts_rs::TS;
 /// Conservative cap so one user message cannot monopolize a large context window.
 pub const MAX_USER_INPUT_TEXT_CHARS: usize = 1 << 20;
 
+/// Clamp user input text to at most [`MAX_USER_INPUT_TEXT_CHARS`] characters,
+/// truncating on a `char` boundary so the result stays valid UTF-8.
+///
+/// This enforces the cap so a single user message cannot monopolize a large
+/// context window. It is applied automatically when a [`UserInput::Text`] is
+/// deserialized (the untrusted boundary); construction sites that build text
+/// from already-trusted sources may call it directly.
+pub fn clamp_user_input_text(text: String) -> String {
+    if text.chars().count() <= MAX_USER_INPUT_TEXT_CHARS {
+        return text;
+    }
+    text.chars().take(MAX_USER_INPUT_TEXT_CHARS).collect()
+}
+
+fn deserialize_clamped_text<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let text = String::deserialize(deserializer)?;
+    Ok(clamp_user_input_text(text))
+}
+
 /// User input
 #[non_exhaustive]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, TS, JsonSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum UserInput {
     Text {
+        /// User-supplied message text. Capped at [`MAX_USER_INPUT_TEXT_CHARS`]
+        /// characters on deserialization (the untrusted boundary) so one message
+        /// cannot monopolize a large context window.
+        #[serde(deserialize_with = "deserialize_clamped_text")]
         text: String,
         /// UI-defined spans within `text` that should be treated as special elements.
         /// These are byte ranges into the UTF-8 `text` buffer and are used to render
@@ -104,6 +130,61 @@ impl From<std::ops::Range<usize>> for ByteRange {
         Self {
             start: range.start,
             end: range.end,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clamp_truncates_to_char_cap() {
+        let oversized = "x".repeat(MAX_USER_INPUT_TEXT_CHARS + 100);
+        let clamped = clamp_user_input_text(oversized);
+        assert_eq!(clamped.chars().count(), MAX_USER_INPUT_TEXT_CHARS);
+    }
+
+    #[test]
+    fn clamp_leaves_short_text_untouched() {
+        let short = "hello world".to_string();
+        assert_eq!(clamp_user_input_text(short.clone()), short);
+    }
+
+    #[test]
+    fn clamp_respects_char_boundary_for_multibyte() {
+        // Each char is multibyte; clamping must not split a char and must stay
+        // valid UTF-8 (collecting from chars() guarantees this).
+        let oversized = "é".repeat(MAX_USER_INPUT_TEXT_CHARS + 10);
+        let clamped = clamp_user_input_text(oversized);
+        assert_eq!(clamped.chars().count(), MAX_USER_INPUT_TEXT_CHARS);
+    }
+
+    #[test]
+    fn deserialization_enforces_text_cap() {
+        // The cap must be enforced at the untrusted deserialization boundary.
+        let oversized_text = "y".repeat(MAX_USER_INPUT_TEXT_CHARS + 50);
+        let json = serde_json::json!({ "type": "text", "text": oversized_text });
+        let input: UserInput = serde_json::from_value(json).expect("should deserialize");
+        match input {
+            UserInput::Text { text, .. } => {
+                assert_eq!(
+                    text.chars().count(),
+                    MAX_USER_INPUT_TEXT_CHARS,
+                    "deserialized text must be clamped to the cap"
+                );
+            }
+            other => panic!("expected Text variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserialization_preserves_within_cap_text() {
+        let json = serde_json::json!({ "type": "text", "text": "ok" });
+        let input: UserInput = serde_json::from_value(json).expect("should deserialize");
+        match input {
+            UserInput::Text { text, .. } => assert_eq!(text, "ok"),
+            other => panic!("expected Text variant, got {other:?}"),
         }
     }
 }

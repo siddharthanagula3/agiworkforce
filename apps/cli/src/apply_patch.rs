@@ -3,6 +3,8 @@ use anyhow::{anyhow, Result};
 use colored::Colorize;
 use std::path::{Component, Path, PathBuf};
 
+use crate::terminal_style as ts;
+
 #[derive(Debug)]
 pub struct PatchResult {
     pub applied: Vec<String>,
@@ -202,20 +204,20 @@ pub async fn apply_from_file(path: &Path) -> Result<PatchResult> {
 
 pub fn print_patch_result(result: &PatchResult) {
     for f in &result.applied {
-        println!("  {} {}", "+".green(), f);
+        println!("  {} {}", ts::addition("+"), f);
     }
     for f in &result.skipped {
-        println!("  {} {}", "~".yellow(), f);
+        println!("  {} {}", ts::warning("~"), f);
     }
     for f in &result.conflicted {
-        println!("  {} {}", "!".red(), f);
+        println!("  {} {}", ts::danger("!"), f);
     }
     if result.exit_code == 0 {
-        println!("{}", "Patch applied.".green().bold());
+        println!("{}", ts::success_header("Patch applied."));
     } else if result.conflicted.is_empty() {
-        println!("{}", "Patch applied with warnings.".yellow().bold());
+        println!("{}", ts::warning_header("Patch applied with warnings."));
     } else {
-        println!("{}", "Patch had conflicts.".red().bold());
+        println!("{}", ts::danger_header("Patch had conflicts."));
     }
 }
 

@@ -6,6 +6,7 @@ use dialoguer::Confirm;
 use tokio::process::Command;
 
 use crate::safety::{classify_command, CommandSafety};
+use crate::terminal_style as ts;
 use crate::tui::approval_broker::{ApprovalDecision, ApprovalRequest, ApprovalRequestKind};
 
 use super::common::{
@@ -95,14 +96,14 @@ pub(super) async fn execute_run_command(
                             CommandSafety::Dangerous => {
                                 eprintln!(
                                     "  {} {}",
-                                    "DANGEROUS:".red().bold(),
-                                    describe_command(command).red()
+                                    ts::danger_header("DANGEROUS:"),
+                                    ts::danger(describe_command(command))
                                 );
                             }
                             _ => {
                                 eprintln!(
                                     "  {} {}",
-                                    "Command:".yellow(),
+                                    ts::warning("Command:"),
                                     describe_command(command).dimmed()
                                 );
                             }

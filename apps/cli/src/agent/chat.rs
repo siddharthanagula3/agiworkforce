@@ -7,6 +7,7 @@ use crate::config::CliConfig;
 use crate::errors::CliError;
 use crate::hooks;
 use crate::models::{self, ContentBlock, Message, StreamCallback, ToolCallResponse};
+use crate::terminal_style as ts;
 
 use super::executor::{
     detect_content_loop, hash_tool_call, value_to_legacy_args, LOOP_DETECTION_THRESHOLD,
@@ -219,7 +220,10 @@ impl AgentSession {
         } else if usage.near_limit {
             eprintln!(
                 "  {}",
-                format!("Warning: {}", compaction::format_context_report(&usage)).yellow()
+                ts::warning(format!(
+                    "Warning: {}",
+                    compaction::format_context_report(&usage)
+                ))
             );
         }
 
@@ -284,7 +288,9 @@ message -- revise and call `update_plan` again.\n\n",
         if let Err(error) = self.persist_managed_session() {
             eprintln!(
                 "{}",
-                format!("  warning: failed to persist managed session: {error:#}").yellow()
+                ts::warning(format!(
+                    "  warning: failed to persist managed session: {error:#}"
+                ))
             );
         }
 
@@ -372,7 +378,11 @@ message -- revise and call `update_plan` again.\n\n",
                             let delay = cli_err.retry_delay();
                             eprintln!(
                                 "  {}",
-                                format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
                             );
                             tokio::time::sleep(delay).await;
                             match models::stream_completion(
@@ -426,11 +436,10 @@ message -- revise and call `update_plan` again.\n\n",
                                 }
                                 eprintln!(
                                     "  {}",
-                                    format!(
+                                    ts::warning(format!(
                                         "↘ Falling back: {} → {} ({})",
                                         prev_model, fallback_model, kind
-                                    )
-                                    .yellow()
+                                    ))
                                 );
                                 if let Some(sink) = self.on_fallback.as_ref() {
                                     (sink.0)(&prev_model, fallback_model, kind);
@@ -530,7 +539,7 @@ message -- revise and call `update_plan` again.\n\n",
                     if self.loop_strike_count >= 2 {
                         eprintln!(
                             "\n{}",
-                            "  Auto-stopping: second loop detected in this session.".red()
+                            ts::danger("  Auto-stopping: second loop detected in this session.")
                         );
                         hooks::run_hooks(
                             &self.hooks_config,
@@ -559,7 +568,7 @@ message -- revise and call `update_plan` again.\n\n",
                             .unwrap_or("unknown"),
                         self.loop_strike_count
                     );
-                    eprintln!("\n{}", loop_msg.yellow());
+                    eprintln!("\n{}", ts::warning(&loop_msg));
                     hooks::run_hooks(
                         &self.hooks_config,
                         hooks::HookEvent::Notification,
@@ -722,7 +731,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 "  {} {} blocked by hook: {}",
                                 "->".dimmed(),
                                 tc.name.bold(),
-                                reason_text.red()
+                                ts::danger(&reason_text)
                             );
                         }
                         result_blocks.push(ContentBlock::ToolResult {
@@ -897,9 +906,9 @@ message -- revise and call `update_plan` again.\n\n",
                 };
 
                 let sa_display_status = if tool_result.success {
-                    "success".green().to_string()
+                    ts::success("success").to_string()
                 } else {
-                    "failed".red().to_string()
+                    ts::danger("failed").to_string()
                 };
                 eprintln!(
                     "  {} {} [{}]",
@@ -992,7 +1001,7 @@ message -- revise and call `update_plan` again.\n\n",
                                     "  {} {} blocked by hook: {}",
                                     "->".dimmed(),
                                     tc.name.bold(),
-                                    reason_text.red()
+                                    ts::danger(&reason_text)
                                 );
                             }
                             result_blocks.push(ContentBlock::ToolResult {
@@ -1080,9 +1089,9 @@ message -- revise and call `update_plan` again.\n\n",
 
                     if !self.quiet {
                         let status = if tool_result.success {
-                            "success".green().to_string()
+                            ts::success("success").to_string()
                         } else {
-                            "failed".red().to_string()
+                            ts::danger("failed").to_string()
                         };
                         eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
                     }
@@ -1184,7 +1193,7 @@ message -- revise and call `update_plan` again.\n\n",
                                 "  {} {} blocked by hook: {}",
                                 "->".dimmed(),
                                 tc.name.bold(),
-                                reason_text.red()
+                                ts::danger(&reason_text)
                             );
                         }
                         result_blocks.push(ContentBlock::ToolResult {
@@ -1273,7 +1282,10 @@ message -- revise and call `update_plan` again.\n\n",
                         output: payload.to_string(),
                     }
                 } else if is_team_tool(&tc.name) {
-                    execute_team_tool(&self.team_manager, &tc.name, &legacy.args).await?
+                    // `None`: this orchestrator session has no per-teammate
+                    // identity yet. Pass the executing teammate's name here once
+                    // teammate-scoped sessions exist to enforce the message sender.
+                    execute_team_tool(&self.team_manager, &tc.name, &legacy.args, None).await?
                 } else if tc.name.starts_with("mcp_") {
                     execute_mcp_tool(&mut self.mcp_manager, &tc.name, effective_args.clone())
                         .await?
@@ -1292,9 +1304,9 @@ message -- revise and call `update_plan` again.\n\n",
 
                 if !self.quiet {
                     let status = if tool_result.success {
-                        "success".green().to_string()
+                        ts::success("success").to_string()
                     } else {
-                        "failed".red().to_string()
+                        ts::danger("failed").to_string()
                     };
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
                 }
@@ -1403,7 +1415,11 @@ message -- revise and call `update_plan` again.\n\n",
                             let delay = cli_err.retry_delay();
                             eprintln!(
                                 "  {}",
-                                format!("Retrying in {}s: {}", delay.as_secs(), cli_err).yellow()
+                                ts::warning(format!(
+                                    "Retrying in {}s: {}",
+                                    delay.as_secs(),
+                                    cli_err
+                                ))
                             );
                             tokio::time::sleep(delay).await;
                             models::stream_completion(
@@ -1448,11 +1464,10 @@ message -- revise and call `update_plan` again.\n\n",
                 if cumulative >= budget_cap {
                     eprintln!(
                         "\n{}",
-                        format!(
+                        ts::warning(format!(
                             "  Budget cap reached: ${:.4} >= ${:.4}. Stopping agent loop.",
                             cumulative, budget_cap
-                        )
-                        .yellow()
+                        ))
                     );
                     // Emit the machine-readable event via the injected callback.
                     // lib.rs wires this only when --json-events is active so that
@@ -1470,18 +1485,19 @@ message -- revise and call `update_plan` again.\n\n",
                 if self.loop_strike_count >= 2 {
                     eprintln!(
                         "\n{}",
-                        "  Auto-stopping: second content loop detected in this session.".red()
+                        ts::danger(
+                            "  Auto-stopping: second content loop detected in this session."
+                        )
                     );
                     break;
                 }
 
                 eprintln!(
                     "\n{}",
-                    format!(
+                    ts::warning(format!(
                         "  Warning: Detected repetitive content in LLM response. Possible content loop. [strike {}/2]",
                         self.loop_strike_count
-                    )
-                    .yellow()
+                    ))
                 );
 
                 let confirmed = dialoguer::Confirm::new()
@@ -1571,7 +1587,9 @@ message -- revise and call `update_plan` again.\n\n",
         if let Err(error) = self.persist_managed_session() {
             eprintln!(
                 "{}",
-                format!("  warning: failed to persist managed session: {error:#}").yellow()
+                ts::warning(format!(
+                    "  warning: failed to persist managed session: {error:#}"
+                ))
             );
         }
 
