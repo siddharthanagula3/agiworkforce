@@ -6,13 +6,9 @@
  *
  * API surface notes (expo-camera@55, expo-image-picker@55, expo-notifications@55,
  * expo-contacts@55):
- *   - expo-location is NOT a dependency. Location permission is surfaced to the
- *     user as a UI row but deferred to the OS Settings app for actual change —
- *     we open Linking.openSettings() and reflect whatever the OS reports via
- *     expo-contacts (contacts) or camera. For location specifically, we use a
- *     no-op getStatus that returns 'undetermined' and route all interactions to
- *     Settings. (expo-location can be wired in a future sprint when the package
- *     is added as a dependency.)
+ *   - expo-location is NOT a dependency. Location remains in the type registry
+ *     for future route compatibility, but it is not surfaced in the visible
+ *     settings list until a real Expo adapter exists.
  *   - expo-camera@55 exposes getCameraPermissionsAsync / requestCameraPermissionsAsync
  *     and getMicrophonePermissionsAsync / requestMicrophonePermissionsAsync on the
  *     `Camera` named export (not as namespace-level functions).
@@ -85,9 +81,8 @@ async function requestCamera(): Promise<OsPermissionStatus> {
   return toOsStatus(result.status, result.canAskAgain);
 }
 
-// expo-location is not installed. Location permission is displayed but all
-// changes route through the OS Settings app. We report 'undetermined' until
-// expo-location is added as a dependency.
+// expo-location is not installed. Location is intentionally not included in
+// PERMISSION_KINDS until a real adapter exists.
 async function getLocationStatus(): Promise<OsPermissionStatus> {
   return 'undetermined';
 }
@@ -159,11 +154,9 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     location: {
       kind: 'location',
       label: 'Location',
-      description: 'Used for location-aware queries and context.',
+      description: 'Not used by Local Mode.',
       icon: MapPin,
-      // Location has all 4 levels. Actual permission request routes through
-      // OS Settings until expo-location is added as a dependency.
-      applicableLevels: ['denied', 'ask_each_time', 'allow_while_using', 'allow_always'],
+      applicableLevels: ['denied'],
       getStatus: getLocationStatus,
       requestPermission: requestLocation,
     },
@@ -180,7 +173,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     notifications: {
       kind: 'notifications',
       label: 'Notifications',
-      description: 'Used for agent status, approvals, and task alerts.',
+      description: 'Used for local model, download, and reminder alerts.',
       icon: Bell,
       // Notifications is effectively binary on iOS/Android — no while-using semantics
       applicableLevels: ['denied', 'allow_always'],
@@ -190,7 +183,7 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
     contacts: {
       kind: 'contacts',
       label: 'Contacts',
-      description: 'Used for contact lookup in agent tasks.',
+      description: 'Optional. Used only when you choose contact lookup.',
       icon: Users,
       applicableLevels: ['denied', 'ask_each_time', 'allow_while_using'],
       getStatus: getContactsStatus,
@@ -202,7 +195,6 @@ export const PERMISSION_REGISTRY: Readonly<Record<MobilePermissionKind, Permissi
 export const PERMISSION_KINDS: MobilePermissionKind[] = [
   'microphone',
   'camera',
-  'location',
   'photos',
   'notifications',
   'contacts',

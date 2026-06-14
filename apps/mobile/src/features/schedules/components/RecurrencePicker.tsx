@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
@@ -49,6 +49,26 @@ const MINUTES = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart
 
 const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
+function isValidIsoDateInput(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() + 1 === month &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function isValidCronInput(value: string): boolean {
+  const parts = value.trim().split(/\s+/);
+  return parts.length === 5 && parts.every((part) => /^[0-9*/,-]+$/.test(part));
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -64,6 +84,19 @@ export function RecurrencePicker({
 }: RecurrencePickerProps) {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const [localCron, setLocalCron] = useState(cronExpression);
+  const [localDate, setLocalDate] = useState(scheduledAt ?? '');
+  const [dateError, setDateError] = useState<string | undefined>();
+  const [cronError, setCronError] = useState<string | undefined>();
+
+  useEffect(() => {
+    setLocalDate(scheduledAt ?? '');
+    setDateError(undefined);
+  }, [scheduledAt]);
+
+  useEffect(() => {
+    setLocalCron(cronExpression);
+    setCronError(undefined);
+  }, [cronExpression]);
 
   const timeParts = (timeOfDay || '09:00').split(':');
   const hours = timeParts[0] ?? '09';
@@ -128,6 +161,12 @@ export function RecurrencePicker({
   // --- Scheduled date for "once" ---
   const handleDateChange = useCallback(
     (text: string) => {
+      setLocalDate(text);
+      if (!isValidIsoDateInput(text)) {
+        setDateError('Use a valid date in YYYY-MM-DD format.');
+        return;
+      }
+      setDateError(undefined);
       onChange('once', { scheduledAt: text });
     },
     [onChange],
@@ -137,6 +176,11 @@ export function RecurrencePicker({
   const handleCronChange = useCallback(
     (text: string) => {
       setLocalCron(text);
+      if (!isValidCronInput(text)) {
+        setCronError('Use a 5-field cron expression with numbers, *, /, - and commas.');
+        return;
+      }
+      setCronError(undefined);
       onChange('custom', { cronExpression: text });
     },
     [onChange],
@@ -243,8 +287,9 @@ export function RecurrencePicker({
         <Input
           label="Date (YYYY-MM-DD)"
           placeholder="2026-03-01"
-          value={scheduledAt ?? ''}
+          value={localDate}
           onChangeText={handleDateChange}
+          error={dateError}
           autoCapitalize="none"
           keyboardType="numbers-and-punctuation"
         />
@@ -257,6 +302,7 @@ export function RecurrencePicker({
           placeholder="0 9 * * 1-5"
           value={localCron}
           onChangeText={handleCronChange}
+          error={cronError}
           autoCapitalize="none"
           autoCorrect={false}
         />

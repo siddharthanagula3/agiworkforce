@@ -81,7 +81,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: jest.fn(), replace: jest.fn(), back: jest.fn() }),
 }));
 
 jest.mock('expo-constants', () => ({
@@ -107,6 +107,11 @@ const mockSettingsState = {
   hapticsEnabled: true,
   themeMode: 'system' as const,
   accentColor: 'neutral' as const,
+  personalization: {
+    nickname: '',
+    fullName: '',
+    occupation: '',
+  },
   isTemporaryChat: false,
   autoApproveMode: 'ask',
   setHapticsEnabled: jest.fn(),
@@ -128,6 +133,7 @@ jest.mock('@/src/features/model-picker/store', () => ({
 
 jest.mock('@/src/features/model-picker/service', () => ({
   getDisplayName: (id: string) => id,
+  getShortDisplayName: (id: string) => id,
 }));
 
 jest.mock('@/lib/safeOpenURL', () => ({

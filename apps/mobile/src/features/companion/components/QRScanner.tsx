@@ -146,7 +146,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
               setManualError(null);
             }}
             placeholder="agiw:CODE:TOKEN"
-            placeholderTextColor="rgba(255,255,255,0.3)"
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
             autoFocus
@@ -156,7 +156,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             style={{
               backgroundColor: colors.surfaceElevated,
               borderWidth: 1,
-              borderColor: manualError ? colors.agentError : 'rgba(255,255,255,0.1)',
+              borderColor: manualError ? colors.agentError : colors.border,
               borderRadius: 12,
               paddingHorizontal: 16,
               paddingVertical: 14,

@@ -41,7 +41,7 @@ interface VoiceInputButtonProps {
   disabled?: boolean;
 }
 
-type VoiceState = 'idle' | 'recording' | 'ptt' | 'processing';
+type VoiceState = 'idle' | 'starting' | 'recording' | 'ptt' | 'processing';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -69,6 +69,17 @@ export function VoiceInputButton({
   const pressStartRef = useRef<number>(0);
   const isLongPressRef = useRef(false);
   const isPTTRef = useRef(false);
+  const stopWhenStartedRef = useRef(false);
+  const pttTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const clearPTTTimer = useCallback(() => {
+    if (pttTimerRef.current) {
+      clearTimeout(pttTimerRef.current);
+      pttTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearPTTTimer(), [clearPTTTimer]);
 
   useEffect(() => {
     if (state === 'recording' || state === 'ptt') {
@@ -102,16 +113,18 @@ export function VoiceInputButton({
 
   useEffect(() => {
     if (resetSignal <= 0) return;
+    clearPTTTimer();
     pressStartRef.current = 0;
     isLongPressRef.current = false;
     isPTTRef.current = false;
+    stopWhenStartedRef.current = false;
     setState('idle');
-  }, [resetSignal]);
+  }, [clearPTTTimer, resetSignal]);
 
   const reportError = useCallback(
     (err: unknown) => {
       if (err instanceof VoiceCaptureError && err.code === 'mic-permission-denied') {
-        onError?.('Voice input needs microphone and speech recognition access.');
+        onError?.('Voice input needs microphone and speech access. You can keep typing instead.');
         return;
       }
       const message = err instanceof Error ? err.message : 'Voice capture failed';
@@ -122,14 +135,16 @@ export function VoiceInputButton({
 
   const startTapRecording = useCallback(async () => {
     try {
+      setState('starting');
+      await VoiceService.startRecording((event) => onMetering?.(event));
       setState('recording');
       if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       onRecordingStart?.();
-      await VoiceService.startRecording((event) => onMetering?.(event));
     } catch (err) {
       setState('idle');
       pressStartRef.current = 0;
       isPTTRef.current = false;
+      stopWhenStartedRef.current = false;
       onRecordingStop?.();
       reportError(err);
     }
@@ -152,22 +167,6 @@ export function VoiceInputButton({
     }
   }, [hapticsEnabled, onRecordingStop, onTranscription, reportError]);
 
-  const startPTTRecording = useCallback(async () => {
-    try {
-      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      isPTTRef.current = true;
-      setState('ptt');
-      onRecordingStart?.();
-      await VoiceService.startRecording((event) => onMetering?.(event));
-    } catch (err) {
-      isPTTRef.current = false;
-      setState('idle');
-      pressStartRef.current = 0;
-      onRecordingStop?.();
-      reportError(err);
-    }
-  }, [hapticsEnabled, onMetering, onRecordingStart, onRecordingStop, reportError]);
-
   const stopPTTRecording = useCallback(async () => {
     isPTTRef.current = false;
     try {
@@ -186,6 +185,36 @@ export function VoiceInputButton({
     }
   }, [hapticsEnabled, onRecordingStop, onTranscription, reportError]);
 
+  const startPTTRecording = useCallback(async () => {
+    try {
+      isPTTRef.current = true;
+      stopWhenStartedRef.current = false;
+      setState('starting');
+      await VoiceService.startRecording((event) => onMetering?.(event));
+      if (hapticsEnabled) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      setState('ptt');
+      onRecordingStart?.();
+      if (stopWhenStartedRef.current || pressStartRef.current <= 0) {
+        stopWhenStartedRef.current = false;
+        stopPTTRecording();
+      }
+    } catch (err) {
+      isPTTRef.current = false;
+      setState('idle');
+      pressStartRef.current = 0;
+      stopWhenStartedRef.current = false;
+      onRecordingStop?.();
+      reportError(err);
+    }
+  }, [
+    hapticsEnabled,
+    onMetering,
+    onRecordingStart,
+    onRecordingStop,
+    reportError,
+    stopPTTRecording,
+  ]);
+
   const handlePressIn = useCallback(() => {
     if (disabled || state === 'processing') return;
     if (state === 'recording') {
@@ -193,18 +222,21 @@ export function VoiceInputButton({
       return;
     }
     if (state !== 'idle') return;
+    clearPTTTimer();
     pressStartRef.current = Date.now();
     isLongPressRef.current = false;
     isPTTRef.current = false;
 
-    setTimeout(() => {
+    pttTimerRef.current = setTimeout(() => {
+      pttTimerRef.current = null;
       if (!isLongPressRef.current && pressStartRef.current > 0) {
         startPTTRecording();
       }
     }, PTT_THRESHOLD_MS);
-  }, [disabled, state, startPTTRecording]);
+  }, [clearPTTTimer, disabled, state, startPTTRecording]);
 
   const handlePressOut = useCallback(() => {
+    clearPTTTimer();
     const holdMs = Date.now() - pressStartRef.current;
     pressStartRef.current = 0;
 
@@ -212,6 +244,13 @@ export function VoiceInputButton({
 
     if (state === 'recording') {
       stopTapRecording();
+      return;
+    }
+
+    if (state === 'starting') {
+      if (isPTTRef.current) {
+        stopWhenStartedRef.current = true;
+      }
       return;
     }
 
@@ -225,7 +264,7 @@ export function VoiceInputButton({
         startTapRecording();
       }
     }
-  }, [state, stopPTTRecording, startTapRecording, stopTapRecording]);
+  }, [clearPTTTimer, state, stopPTTRecording, startTapRecording, stopTapRecording]);
 
   const handleLongPress = useCallback(() => {
     isLongPressRef.current = true;
@@ -235,7 +274,7 @@ export function VoiceInputButton({
   }, [hapticsEnabled, onLongPress]);
 
   const isActive = state === 'recording' || state === 'ptt';
-  const isProcessing = state === 'processing';
+  const isProcessing = state === 'processing' || state === 'starting';
   const isDisabled = disabled || isProcessing;
 
   const iconColor = isActive
@@ -249,9 +288,11 @@ export function VoiceInputButton({
       ? 'Tap to stop recording'
       : state === 'ptt'
         ? 'Release to transcribe'
-        : state === 'processing'
-          ? 'Processing voice...'
-          : 'Tap to record, hold for push-to-talk';
+        : state === 'starting'
+          ? 'Starting voice input...'
+          : state === 'processing'
+            ? 'Processing voice...'
+            : 'Tap to record, hold for push-to-talk';
 
   return (
     <View className="relative items-center justify-center">

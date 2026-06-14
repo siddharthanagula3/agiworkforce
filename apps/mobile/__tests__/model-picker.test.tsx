@@ -75,6 +75,10 @@ jest.mock('@gorhom/bottom-sheet', () => {
     default: mockBottomSheet,
     BottomSheetBackdrop: jest.fn().mockReturnValue(null),
     BottomSheetScrollView: jest.fn().mockImplementation(({ children }) => children),
+    BottomSheetTextInput: jest.fn().mockImplementation((props) => {
+      const { TextInput } = require('react-native');
+      return <TextInput {...props} />;
+    }),
   };
 });
 
@@ -164,12 +168,14 @@ const mockSheetRef = { current: { close: jest.fn(), snapToIndex: jest.fn() } };
 function renderPicker(overrides?: {
   onSelect?: (id: string) => void;
   onOpenCloudAccess?: (defaultTab?: 'invite' | 'waitlist') => void;
+  modelScope?: 'local' | 'cloud' | 'all';
 }) {
   return render(
     <ModelPickerSheet
       sheetRef={mockSheetRef as never}
       onSelect={overrides?.onSelect}
       onOpenCloudAccess={overrides?.onOpenCloudAccess}
+      modelScope={overrides?.modelScope}
     />,
   );
 }
@@ -185,19 +191,20 @@ describe('ModelPickerSheet', () => {
   });
 
   it('renders all local auto mode cards', () => {
-    const { getAllByText } = renderPicker();
+    const { getAllByText, queryByText } = renderPicker();
 
-    for (const mode of AUTO_MODES) {
+    for (const mode of AUTO_MODES.filter((mode) => mode.id !== 'auto-premium')) {
       expect(getAllByText(mode.name).length).toBeGreaterThanOrEqual(1);
     }
+    expect(queryByText('Vision')).toBeNull();
   });
 
-  it('renders local auto mode descriptions', () => {
-    const { getAllByText } = renderPicker();
+  it('renders only production-ready local auto mode descriptions', () => {
+    const { getAllByText, queryByText } = renderPicker();
 
     expect(getAllByText('Best local model for this device').length).toBeGreaterThanOrEqual(1);
     expect(getAllByText('Small local model when battery matters').length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText('On-device vision when available').length).toBeGreaterThanOrEqual(1);
+    expect(queryByText('On-device vision when available')).toBeNull();
   });
 
   it('marks the selected auto mode as selected', () => {
@@ -219,8 +226,16 @@ describe('ModelPickerSheet', () => {
     expect(queryByText('Apple Intelligence')).toBeNull();
   });
 
-  it('renders local and locked cloud hierarchy immediately', () => {
-    const { getByText, getAllByText } = renderPicker();
+  it('keeps the default picker scoped to local models', () => {
+    const { getByText, queryByText, queryByLabelText } = renderPicker();
+
+    expect(getByText('On device')).toBeTruthy();
+    expect(queryByText('Cloud')).toBeNull();
+    expect(queryByLabelText(/invite required/i)).toBeNull();
+  });
+
+  it('renders local and locked cloud hierarchy when all models are requested', () => {
+    const { getByText, getAllByText } = renderPicker({ modelScope: 'all' });
 
     expect(getByText('On device')).toBeTruthy();
     expect(getByText('Cloud')).toBeTruthy();
@@ -235,9 +250,19 @@ describe('ModelPickerSheet', () => {
     expect(standardRow.props.accessibilityState.selected).toBe(true);
   });
 
+  it('does not mark a local model as selected until it is ready', () => {
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    useModelInstallStore.setState({ installedModelIds: [], readySystemModelIds: [], jobs: {} });
+    const { getByLabelText, queryByLabelText } = renderPicker();
+
+    expect(queryByLabelText('AGI Standard, selected')).toBeNull();
+    const standardRow = getByLabelText('AGI Standard');
+    expect(standardRow.props.accessibilityState.selected).toBe(false);
+  });
+
   it('marks cloud rows as invite-gated but tappable', () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText } = renderPicker();
+    const { getByLabelText } = renderPicker({ modelScope: 'cloud' });
 
     const lockedRow = getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`);
     expect(lockedRow.props.accessibilityState.disabled).toBe(false);
@@ -295,7 +320,7 @@ describe('ModelPickerSheet', () => {
 
   it('does not select locked cloud rows and opens invite access', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText, getByTestId } = renderPicker();
+    const { getByLabelText, getByTestId } = renderPicker({ modelScope: 'cloud' });
 
     fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
 
@@ -307,7 +332,10 @@ describe('ModelPickerSheet', () => {
   it('delegates locked cloud rows to the parent invite surface when provided', async () => {
     const lockedModel = LOCKED_CLOUD_MODELS[0]!;
     const onOpenCloudAccess = jest.fn();
-    const { getByLabelText, queryByTestId } = renderPicker({ onOpenCloudAccess });
+    const { getByLabelText, queryByTestId } = renderPicker({
+      onOpenCloudAccess,
+      modelScope: 'cloud',
+    });
 
     fireEvent.press(getByLabelText(`${lockedModel.name}, invite required, ${CLOUD_LOCK_REASON}`));
 
@@ -320,9 +348,9 @@ describe('ModelPickerSheet', () => {
   it('selects cloud rows after invite access', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     const cloudModel = LOCKED_CLOUD_MODELS[0]!;
-    const { getByLabelText, getByText, queryByTestId } = renderPicker();
+    const { getByLabelText, getByText, queryByTestId } = renderPicker({ modelScope: 'cloud' });
 
-    expect(getByText('Local and AGI Cloud models are selectable.')).toBeTruthy();
+    expect(getByText('AGI Cloud models are managed separately from Local Mode.')).toBeTruthy();
 
     fireEvent.press(getByLabelText(cloudModel.name));
 

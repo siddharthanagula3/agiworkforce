@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Pressable,
@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
+  Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -18,13 +19,12 @@ import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy } from 'lucide-react-na
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
 type ScanPhase = 'camera' | 'processing' | 'preview';
 
@@ -36,10 +36,13 @@ type ScanPhase = 'camera' | 'processing' | 'preview';
  *   2. User taps shutter → capture → on-device OCR (Apple Vision / ML Kit)
  *   3. Preview: photo with teal bounding rects over detected text blocks
  *   4. Editable composer pre-filled "Summarize this:\n<extracted text>"
- *   5. Send → new conversation with Qwen3-4B (or selected model)
+ *   5. Send → new conversation with the selected local model
  */
 export default function ScanScreen() {
   const router = useRouter();
+  const c = useThemeColors();
+  const styles = useMemo(() => createStyles(c), [c]);
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const [permission, requestPermission] = useCameraPermissions();
 
   const [phase, setPhase] = useState<ScanPhase>('camera');
@@ -47,6 +50,7 @@ export default function ScanScreen() {
   const [capturedUri, setCapturedUri] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [cameraSlow, setCameraSlow] = useState(false);
 
   // OCR results
   const [extractedText, setExtractedText] = useState('');
@@ -65,6 +69,16 @@ export default function ScanScreen() {
   const createConversation = useChatMessageStore((s) => s.createConversation);
   const sendMessage = useChatExecutionStore((s) => s.sendMessage);
   const selectedModel = useModelStore((s) => s.selectedModel);
+
+  useEffect(() => {
+    if (!permission?.granted || phase !== 'camera' || cameraReady) {
+      setCameraSlow(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => setCameraSlow(true), 3500);
+    return () => clearTimeout(timeout);
+  }, [permission?.granted, phase, cameraReady]);
 
   const handleClose = useCallback(() => {
     router.back();
@@ -98,12 +112,16 @@ export default function ScanScreen() {
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'OCR failed';
         setOcrError(msg);
-        setPromptText('What do you see in this image?');
+        setPromptText('');
       }
 
       setPhase('preview');
-    } catch {
-      // Camera capture failed silently
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'The camera could not capture the image. Please try again.';
+      Alert.alert('Capture failed', message);
     } finally {
       setIsCapturing(false);
     }
@@ -119,6 +137,7 @@ export default function ScanScreen() {
     setCopied(false);
     setPhase('camera');
     setCameraReady(false);
+    setCameraSlow(false);
   }, []);
 
   const handleCopy = useCallback(async () => {
@@ -135,10 +154,29 @@ export default function ScanScreen() {
     setIsSending(true);
     try {
       const conversationId = await createConversation('Scan');
-      const content = promptText.trim() || 'What do you see in this image?';
-      await sendMessage(conversationId, content, selectedModel, []);
+      const content = promptText.trim();
+      if (!content) {
+        Alert.alert(
+          'No text to send',
+          'AGI could not extract text from this image. Retake the scan or type the text you want to use.',
+        );
+        setIsSending(false);
+        return;
+      }
+
+      const now = Date.now();
+      const attachment: Attachment = {
+        id: `scan_${now}`,
+        uri: capturedUri,
+        mimeType: 'image/jpeg',
+        fileName: `scan_${now}.jpg`,
+      };
+
+      await sendMessage(conversationId, content, selectedModel, [attachment]);
       router.replace(`/(app)/chat/${conversationId}` as Parameters<typeof router.replace>[0]);
-    } catch {
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'The scan could not be sent.';
+      Alert.alert('Send failed', message);
       setIsSending(false);
     }
   }, [capturedUri, isSending, createConversation, sendMessage, selectedModel, promptText, router]);
@@ -147,11 +185,16 @@ export default function ScanScreen() {
     setFlashMode((prev) => (prev === 'off' ? 'on' : 'off'));
   }, []);
 
+  const handleCameraReady = useCallback(() => {
+    setCameraReady(true);
+    setCameraSlow(false);
+  }, []);
+
   // ── Permission not yet determined ────────────────────────────────────────
   if (!permission) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={colors.teal} />
+        <ActivityIndicator color={c.teal} />
       </View>
     );
   }
@@ -162,12 +205,15 @@ export default function ScanScreen() {
       <SafeAreaView style={styles.permissionContainer}>
         <View style={styles.permissionContent}>
           <View style={styles.permissionIconWrap}>
-            <ScanText size={36} color={colors.textMuted} />
+            <ScanText size={36} color={c.textMuted} />
           </View>
-          <Text className="text-white text-center text-base font-medium mt-4">
+          <Text className="text-center text-base font-medium mt-4" style={{ color: c.textPrimary }}>
             Camera access required
           </Text>
-          <Text className="text-white/50 text-center text-sm mt-2 leading-5">
+          <Text
+            className="text-center text-sm mt-2 leading-5"
+            style={{ color: c.cameraOverlayTextMuted }}
+          >
             Allow camera access to scan and extract text from documents, signs, and screens.
           </Text>
           <View style={styles.permissionButtons}>
@@ -177,7 +223,9 @@ export default function ScanScreen() {
               accessibilityRole="button"
               accessibilityLabel="Allow camera access"
             >
-              <Text className="text-white font-semibold text-sm">Allow Access</Text>
+              <Text className="font-semibold text-sm" style={{ color: c.accentText }}>
+                Allow Access
+              </Text>
             </Pressable>
             <Pressable
               onPress={() => Linking.openSettings()}
@@ -185,7 +233,9 @@ export default function ScanScreen() {
               accessibilityRole="button"
               accessibilityLabel="Open device settings"
             >
-              <Text className="text-white/70 text-sm">Open Settings</Text>
+              <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
+                Open Settings
+              </Text>
             </Pressable>
             <Pressable
               onPress={handleClose}
@@ -193,7 +243,9 @@ export default function ScanScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close"
             >
-              <Text className="text-white/40 text-sm">Cancel</Text>
+              <Text className="text-sm" style={{ color: c.cameraOverlayTextMuted }}>
+                Cancel
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -207,7 +259,7 @@ export default function ScanScreen() {
       <View style={styles.flex}>
         <Image source={{ uri: capturedUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
         <View style={styles.processingOverlay}>
-          <ActivityIndicator color={colors.teal} size="large" />
+          <ActivityIndicator color={c.teal} size="large" />
           <Text style={styles.processingLabel}>Extracting text…</Text>
         </View>
       </View>
@@ -239,6 +291,10 @@ export default function ScanScreen() {
               regions={regions}
               imgNaturalW={imgNaturalSize.w}
               imgNaturalH={imgNaturalSize.h}
+              screenW={screenW}
+              screenH={screenH}
+              colors={c}
+              styles={styles}
             />
           )}
 
@@ -251,11 +307,11 @@ export default function ScanScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Close"
               >
-                <X size={22} color={colors.white} />
+                <X size={22} color={c.cameraOverlayText} />
               </Pressable>
 
               <View style={styles.topBadge}>
-                <ScanText size={14} color={colors.teal} />
+                <ScanText size={14} color={c.teal} />
                 <Text style={styles.topBadgeText}>
                   {regions.length > 0
                     ? `${regions.length} text block${regions.length !== 1 ? 's' : ''}`
@@ -271,7 +327,7 @@ export default function ScanScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Retake"
               >
-                <RotateCcw size={20} color={colors.white} />
+                <RotateCcw size={20} color={c.cameraOverlayText} />
               </Pressable>
             </View>
           </SafeAreaView>
@@ -287,8 +343,8 @@ export default function ScanScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Copy extracted text"
                 >
-                  <Copy size={13} color={copied ? colors.teal : colors.white} />
-                  <Text style={[styles.copyPillText, copied && { color: colors.teal }]}>
+                  <Copy size={13} color={copied ? c.teal : c.cameraOverlayText} />
+                  <Text style={[styles.copyPillText, copied && { color: c.teal }]}>
                     {copied ? 'Copied' : 'Copy text'}
                   </Text>
                 </Pressable>
@@ -300,7 +356,7 @@ export default function ScanScreen() {
                   value={promptText}
                   onChangeText={setPromptText}
                   placeholder="Ask about this text…"
-                  placeholderTextColor="rgba(255,255,255,0.45)"
+                  placeholderTextColor={c.cameraOverlayTextMuted}
                   multiline
                   maxLength={2000}
                   style={styles.promptInput}
@@ -314,9 +370,9 @@ export default function ScanScreen() {
                   accessibilityLabel="Send to AI"
                 >
                   {isSending ? (
-                    <ActivityIndicator size="small" color={colors.white} />
+                    <ActivityIndicator size="small" color={c.accentText} />
                   ) : (
-                    <Send size={20} color={colors.white} />
+                    <Send size={20} color={c.accentText} />
                   )}
                 </Pressable>
               </View>
@@ -336,7 +392,7 @@ export default function ScanScreen() {
         facing="back"
         flash={flashMode}
         mode="picture"
-        onCameraReady={() => setCameraReady(true)}
+        onCameraReady={handleCameraReady}
       />
 
       {/* Scan-guide frame */}
@@ -356,7 +412,7 @@ export default function ScanScreen() {
             accessibilityRole="button"
             accessibilityLabel="Close"
           >
-            <X size={22} color={colors.white} />
+            <X size={22} color={c.cameraOverlayText} />
           </Pressable>
 
           <Text style={styles.screenTitle}>Scan Text</Text>
@@ -368,9 +424,9 @@ export default function ScanScreen() {
             accessibilityLabel={flashMode === 'on' ? 'Turn flash off' : 'Turn flash on'}
           >
             {flashMode === 'on' ? (
-              <Zap size={20} color={colors.agentWarning} />
+              <Zap size={20} color={c.agentWarning} />
             ) : (
-              <ZapOff size={20} color={colors.white} />
+              <ZapOff size={20} color={c.cameraOverlayText} />
             )}
           </Pressable>
         </View>
@@ -378,7 +434,13 @@ export default function ScanScreen() {
 
       {/* Hint */}
       <View style={styles.hintBadge} pointerEvents="none">
-        <Text style={styles.hintText}>Point at text to scan</Text>
+        <Text style={styles.hintText}>
+          {cameraReady
+            ? 'Point at text to scan'
+            : cameraSlow
+              ? 'Camera is still starting'
+              : 'Starting camera...'}
+        </Text>
       </View>
 
       {/* Bottom: shutter */}
@@ -395,9 +457,11 @@ export default function ScanScreen() {
             accessibilityLabel="Capture and scan"
           >
             {isCapturing ? (
-              <ActivityIndicator color={colors.surfaceBase} />
+              <ActivityIndicator color={c.accentText} />
+            ) : !cameraReady ? (
+              <ActivityIndicator color={c.accentText} />
             ) : (
-              <ScanText size={26} color={colors.surfaceBase} />
+              <ScanText size={26} color={c.accentText} />
             )}
           </Pressable>
         </View>
@@ -412,12 +476,24 @@ interface OcrOverlayProps {
   regions: OcrRegion[];
   imgNaturalW: number;
   imgNaturalH: number;
+  screenW: number;
+  screenH: number;
+  colors: ColorScheme;
+  styles: ReturnType<typeof createStyles>;
 }
 
-function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
+function OcrOverlay({
+  regions,
+  imgNaturalW,
+  imgNaturalH,
+  screenW,
+  screenH,
+  colors,
+  styles,
+}: OcrOverlayProps) {
   // The image is rendered with contentFit="cover" filling the full screen.
   // We compute the displayed image rect (cover scaling) to map pixel coords → screen coords.
-  const screenAspect = SCREEN_W / SCREEN_H;
+  const screenAspect = screenW / screenH;
   const imgAspect = imgNaturalW / imgNaturalH;
 
   let displayW: number;
@@ -427,14 +503,14 @@ function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
 
   if (imgAspect > screenAspect) {
     // Image is wider — height fills screen, width is cropped
-    displayH = SCREEN_H;
-    displayW = SCREEN_H * imgAspect;
-    offsetX = (SCREEN_W - displayW) / 2;
+    displayH = screenH;
+    displayW = screenH * imgAspect;
+    offsetX = (screenW - displayW) / 2;
   } else {
     // Image is taller — width fills screen, height is cropped
-    displayW = SCREEN_W;
-    displayH = SCREEN_W / imgAspect;
-    offsetY = (SCREEN_H - displayH) / 2;
+    displayW = screenW;
+    displayH = screenW / imgAspect;
+    offsetY = (screenH - displayH) / 2;
   }
 
   const scaleX = displayW / imgNaturalW;
@@ -449,11 +525,26 @@ function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
         const height = r.height * scaleY;
 
         // Skip rects outside visible screen area
-        if (left + width < 0 || left > SCREEN_W || top + height < 0 || top > SCREEN_H) {
+        if (left + width < 0 || left > screenW || top + height < 0 || top > screenH) {
           return null;
         }
 
-        return <View key={i} style={[styles.ocrRect, { left, top, width, height }]} />;
+        return (
+          <View
+            key={i}
+            style={[
+              styles.ocrRect,
+              {
+                left,
+                top,
+                width,
+                height,
+                borderColor: colors.cameraScanRegionBorder,
+                backgroundColor: colors.cameraScanRegionSurface,
+              },
+            ]}
+          />
+        );
       })}
     </View>
   );
@@ -461,282 +552,280 @@ function OcrOverlay({ regions, imgNaturalW, imgNaturalH }: OcrOverlayProps) {
 
 // ── Styles ─────────────────────────────────────────────────────────────────
 
-const TEAL_DIM = 'rgba(33, 182, 168, 0.35)';
-const TEAL_BORDER = 'rgba(33, 182, 168, 0.75)';
 const CORNER_SIZE = 20;
 const CORNER_THICKNESS = 2.5;
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-    backgroundColor: colors.black,
-  },
-  centered: {
-    flex: 1,
-    backgroundColor: colors.black,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+function createStyles(colors: ColorScheme) {
+  return StyleSheet.create({
+    flex: {
+      flex: 1,
+      backgroundColor: colors.black,
+    },
+    centered: {
+      flex: 1,
+      backgroundColor: colors.black,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  // Permission
-  permissionContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  permissionContent: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  permissionIconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  permissionButtons: {
-    width: '100%',
-    gap: 12,
-    marginTop: 24,
-  },
-  primaryButton: {
-    backgroundColor: colors.teal,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
+    // Permission
+    permissionContainer: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    permissionContent: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 32,
+    },
+    permissionIconWrap: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.neutralSurface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    permissionButtons: {
+      width: '100%',
+      gap: 12,
+      marginTop: 24,
+    },
+    primaryButton: {
+      backgroundColor: colors.teal,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    outlineButton: {
+      borderWidth: 1,
+      borderColor: colors.neutralBorder,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
 
-  // Processing overlay
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrim,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 14,
-  },
-  processingLabel: {
-    color: colors.textSecondary,
-    fontSize: 15,
-    fontWeight: '500',
-  },
+    // Processing overlay
+    processingOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.scrim,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 14,
+    },
+    processingLabel: {
+      color: colors.cameraOverlayText,
+      fontSize: 15,
+      fontWeight: '500',
+    },
 
-  // Top bar
-  topBarSafeArea: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 8,
-  },
-  screenTitle: {
-    color: colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(33, 182, 168, 0.3)',
-  },
-  topBadgeText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '500',
-  },
+    // Top bar
+    topBarSafeArea: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+    },
+    topBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 8,
+    },
+    screenTitle: {
+      color: colors.cameraOverlayText,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    iconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.cameraOverlaySurface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    topBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: colors.cameraOverlaySurface,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.successBorder,
+    },
+    topBadgeText: {
+      color: colors.cameraOverlayText,
+      fontSize: 12,
+      fontWeight: '500',
+    },
 
-  // Scan guide corners
-  scanGuide: {
-    position: 'absolute',
-    top: '25%',
-    left: '10%',
-    right: '10%',
-    bottom: '30%',
-  },
-  scanCornerTL: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderTopWidth: CORNER_THICKNESS,
-    borderLeftWidth: CORNER_THICKNESS,
-    borderColor: colors.teal,
-    borderTopLeftRadius: 3,
-  },
-  scanCornerTR: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderTopWidth: CORNER_THICKNESS,
-    borderRightWidth: CORNER_THICKNESS,
-    borderColor: colors.teal,
-    borderTopRightRadius: 3,
-  },
-  scanCornerBL: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderBottomWidth: CORNER_THICKNESS,
-    borderLeftWidth: CORNER_THICKNESS,
-    borderColor: colors.teal,
-    borderBottomLeftRadius: 3,
-  },
-  scanCornerBR: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: CORNER_SIZE,
-    height: CORNER_SIZE,
-    borderBottomWidth: CORNER_THICKNESS,
-    borderRightWidth: CORNER_THICKNESS,
-    borderColor: colors.teal,
-    borderBottomRightRadius: 3,
-  },
+    // Scan guide corners
+    scanGuide: {
+      position: 'absolute',
+      top: '25%',
+      left: '10%',
+      right: '10%',
+      bottom: '30%',
+    },
+    scanCornerTL: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+      borderTopWidth: CORNER_THICKNESS,
+      borderLeftWidth: CORNER_THICKNESS,
+      borderColor: colors.teal,
+      borderTopLeftRadius: 3,
+    },
+    scanCornerTR: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+      borderTopWidth: CORNER_THICKNESS,
+      borderRightWidth: CORNER_THICKNESS,
+      borderColor: colors.teal,
+      borderTopRightRadius: 3,
+    },
+    scanCornerBL: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+      borderBottomWidth: CORNER_THICKNESS,
+      borderLeftWidth: CORNER_THICKNESS,
+      borderColor: colors.teal,
+      borderBottomLeftRadius: 3,
+    },
+    scanCornerBR: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      width: CORNER_SIZE,
+      height: CORNER_SIZE,
+      borderBottomWidth: CORNER_THICKNESS,
+      borderRightWidth: CORNER_THICKNESS,
+      borderColor: colors.teal,
+      borderBottomRightRadius: 3,
+    },
 
-  // Hint
-  hintBadge: {
-    position: 'absolute',
-    bottom: '32%',
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
-  hintText: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    fontWeight: '400',
-  },
+    // Hint
+    hintBadge: {
+      position: 'absolute',
+      bottom: '32%',
+      alignSelf: 'center',
+      backgroundColor: colors.cameraOverlaySurface,
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 6,
+    },
+    hintText: {
+      color: colors.cameraOverlayTextMuted,
+      fontSize: 13,
+      fontWeight: '400',
+    },
 
-  // Shutter
-  bottomBarSafeArea: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  bottomBar: {
-    alignItems: 'center',
-    paddingBottom: 24,
-    paddingTop: 16,
-  },
-  captureButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: 'rgba(255,255,255,0.35)',
-  },
-  captureButtonDisabled: {
-    opacity: 0.5,
-  },
+    // Shutter
+    bottomBarSafeArea: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    },
+    bottomBar: {
+      alignItems: 'center',
+      paddingBottom: 24,
+      paddingTop: 16,
+    },
+    captureButton: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.cameraOverlayText,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 4,
+      borderColor: colors.cameraShutterBorder,
+    },
+    captureButtonDisabled: {
+      opacity: 0.5,
+    },
 
-  // OCR region rect
-  ocrRect: {
-    position: 'absolute',
-    borderWidth: 1.5,
-    borderColor: TEAL_BORDER,
-    backgroundColor: TEAL_DIM,
-    borderRadius: 3,
-  },
+    // OCR region rect
+    ocrRect: {
+      position: 'absolute',
+      borderWidth: 1.5,
+      borderRadius: 3,
+    },
 
-  // Preview bottom stack
-  promptSafeArea: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  bottomStack: {
-    gap: 8,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  copyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  copyPillText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  promptContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 10,
-  },
-  promptInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 15,
-    lineHeight: 22,
-    maxHeight: 140,
-    paddingVertical: 0,
-  },
-  sendButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.teal,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sendButtonDisabled: {
-    opacity: 0.6,
-  },
-});
+    // Preview bottom stack
+    promptSafeArea: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+    },
+    bottomStack: {
+      gap: 8,
+      marginHorizontal: 16,
+      marginBottom: 16,
+    },
+    copyPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      alignSelf: 'flex-start',
+      backgroundColor: colors.cameraOverlaySurfaceStrong,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: colors.cameraOverlayBorder,
+    },
+    copyPillText: {
+      color: colors.cameraOverlayText,
+      fontSize: 12,
+      fontWeight: '500',
+    },
+    promptContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      backgroundColor: colors.cameraOverlaySurfaceStrong,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.cameraOverlayBorder,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 10,
+    },
+    promptInput: {
+      flex: 1,
+      color: colors.cameraOverlayText,
+      fontSize: 15,
+      lineHeight: 22,
+      maxHeight: 140,
+      paddingVertical: 0,
+    },
+    sendButton: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.teal,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    sendButtonDisabled: {
+      opacity: 0.6,
+    },
+  });
+}

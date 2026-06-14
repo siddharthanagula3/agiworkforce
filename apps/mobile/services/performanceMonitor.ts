@@ -7,11 +7,10 @@
  *
  * Design constraints:
  *   - No native module calls outside @agiworkforce/local-llm
- *   - Thermal state polled via isThermallyThrottled() (sync, low-cost)
+ *   - Thermal state read from the last local capability snapshot
  *   - Memory estimated via a heuristic until a native module surfaces it
  */
 
-import { Platform, NativeModules } from 'react-native';
 import { storage } from '@/lib/mmkv';
 import { isThermallyThrottled } from '@agiworkforce/local-llm';
 
@@ -71,32 +70,12 @@ const ROLLING_WINDOW = 100;
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the current thermal state. On iOS 16+ this maps to
- * ProcessInfo.ThermalState (nominal / fair / serious / critical).
- * On Android it falls back to a boolean via AGIAICore.
- * If the native module is unavailable, returns 'nominal'.
+ * Returns the current thermal state from the local capability snapshot.
+ * The current native capability bridge exposes a boolean thermal-throttle
+ * value, so avoid calling platform methods that are not exported.
  */
 export function getThermalState(): ThermalState {
-  if (isThermallyThrottled()) {
-    return 'serious';
-  }
-  // Attempt richer state from native module (iOS only).
-  // AGIFoundationModels exposes getThermalState() → 0‒3 int on iOS.
-  if (Platform.OS === 'ios') {
-    try {
-      const mod = NativeModules.AGIFoundationModels as
-        | { getThermalState?: () => number }
-        | undefined;
-      if (mod && typeof mod.getThermalState === 'function') {
-        const stateInt: number = mod.getThermalState();
-        const map: ThermalState[] = ['nominal', 'fair', 'serious', 'critical'];
-        return map[stateInt] ?? 'nominal';
-      }
-    } catch {
-      // module unavailable — fall through to nominal
-    }
-  }
-  return 'nominal';
+  return isThermallyThrottled() ? 'serious' : 'nominal';
 }
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-import { colors } from '@/src/ui/theme';
+import { useThemeColors } from '@/src/ui/theme';
 
 interface ThinkingBottomSheetProps {
   /** The full thinking/reasoning text */
@@ -41,6 +41,7 @@ export function ThinkingBottomSheet({
   sheetIndex,
   onClose,
 }: ThinkingBottomSheetProps) {
+  const colors = useThemeColors();
   const sheetRef = useRef<BottomSheet>(null);
   const snapPoints = useMemo(() => ['90%'], []);
   const cleanText = stripReasoningTags(thinkingText);
@@ -84,7 +85,7 @@ export function ThinkingBottomSheet({
         borderTopRightRadius: 16,
       }}
       handleIndicatorStyle={{
-        backgroundColor: 'rgba(255, 255, 255, 0.3)',
+        backgroundColor: colors.neutralBorder,
         width: 36,
       }}
       backdropComponent={renderBackdrop}
@@ -139,7 +140,7 @@ export function ThinkingBottomSheet({
           style={{
             fontSize: 14,
             lineHeight: 22,
-            color: 'rgba(245, 247, 251, 0.75)',
+            color: colors.textSecondary,
           }}
           selectable
         >

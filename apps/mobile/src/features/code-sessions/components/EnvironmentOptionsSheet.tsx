@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { Modal, Pressable, Text as NativeText, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Cloud, Monitor, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
@@ -18,6 +19,7 @@ export function EnvironmentOptionsSheet({
   onOpenDesktop,
 }: EnvironmentOptionsSheetProps) {
   const c = useThemeColors();
+  const insets = useSafeAreaInsets();
   const [waitlistVisible, setWaitlistVisible] = useState(false);
 
   const openDesktop = useCallback(() => {
@@ -40,35 +42,65 @@ export function EnvironmentOptionsSheet({
         accessibilityViewIsModal
       >
         <Pressable
-          className="flex-1 justify-end"
-          style={{ backgroundColor: c.scrim }}
+          accessible={false}
+          style={{
+            flex: 1,
+            justifyContent: 'flex-end',
+            backgroundColor: c.scrim,
+          }}
           onPress={onClose}
-          accessibilityLabel="Close environment options"
         >
           <Pressable
             testID="code-environment-sheet"
+            accessible={false}
             onPress={() => {
               /* keep taps inside the sheet */
             }}
-            className="rounded-t-[28px] px-5 pt-5 pb-8"
-            style={{ backgroundColor: c.surfaceBase }}
+            style={{
+              borderTopLeftRadius: 28,
+              borderTopRightRadius: 28,
+              paddingHorizontal: 20,
+              paddingTop: 20,
+              paddingBottom: Math.max(insets.bottom + 16, 32),
+              backgroundColor: c.surfaceBase,
+            }}
           >
-            <View className="flex-row items-center justify-between mb-4">
-              <Text className="text-[20px] font-semibold" style={{ color: c.textPrimary }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+                marginBottom: 12,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ flex: 1, color: c.textPrimary, fontSize: 20, fontWeight: '700' }}
+              >
                 Start code session
               </Text>
               <Pressable
                 onPress={onClose}
-                className="w-10 h-10 rounded-full items-center justify-center border active:opacity-80"
-                style={{ borderColor: c.border, backgroundColor: c.surfaceElevated }}
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: c.border,
+                  backgroundColor: pressed ? c.surfaceHover : c.surfaceElevated,
+                })}
                 accessibilityRole="button"
                 accessibilityLabel="Close"
+                hitSlop={8}
               >
                 <X size={20} color={c.textSecondary} />
               </Pressable>
             </View>
 
-            <Text className="text-[13px] leading-[19px] mb-5" style={{ color: c.textMuted }}>
+            <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 18 }}>
               Mobile can view, approve, and add feedback. Code execution needs AGI Desktop or a
               Cloud environment.
             </Text>
@@ -115,25 +147,45 @@ function EnvironmentOption({
   return (
     <Pressable
       onPress={onPress}
-      className="flex-row items-center gap-4 rounded-2xl border p-4 mb-3 active:opacity-80"
-      style={{ borderColor: c.border, backgroundColor: c.surfaceElevated }}
+      style={({ pressed }) => ({
+        width: '100%',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: c.border,
+        backgroundColor: pressed ? c.surfaceHover : c.surfaceElevated,
+        padding: 14,
+        marginBottom: 12,
+      })}
       accessibilityRole="button"
       accessibilityLabel={title}
     >
-      <View
-        className="w-11 h-11 rounded-2xl items-center justify-center"
-        style={{ backgroundColor: c.surfaceHover }}
-      >
-        {icon}
-      </View>
-      <View className="flex-1">
-        <Text className="text-[16px] font-semibold" style={{ color: c.textPrimary }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+        <View
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: c.surfaceHover,
+            marginRight: 12,
+          }}
+        >
+          {icon}
+        </View>
+        <NativeText
+          numberOfLines={1}
+          style={{ color: c.textPrimary, fontSize: 15, fontWeight: '700', flex: 1 }}
+        >
           {title}
-        </Text>
-        <Text className="text-[13px] leading-[18px] mt-1" style={{ color: c.textMuted }}>
-          {body}
-        </Text>
+        </NativeText>
       </View>
+      <NativeText
+        numberOfLines={2}
+        style={{ color: c.textMuted, fontSize: 13, lineHeight: 18, paddingLeft: 44 }}
+      >
+        {body}
+      </NativeText>
     </Pressable>
   );
 }

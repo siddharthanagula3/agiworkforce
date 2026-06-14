@@ -1,10 +1,12 @@
 import {
   getPickerModels,
   PROVIDERS_IN_ORDER as PROVIDER_ORDER,
+  PROVIDER_DISPLAY,
   normalizeModelId,
   providerLabels,
   type PickerModelTier,
   type Provider,
+  type ProviderId,
 } from '@agiworkforce/types';
 
 export type ModelTier = PickerModelTier;
@@ -60,16 +62,16 @@ export const AUTO_MODES: AutoModeDef[] = [
   },
 ];
 
-const PROVIDER_META: Partial<Record<Provider | string, Omit<ProviderDef, 'id' | 'name'>>> = {
-  openai: { icon: 'Sparkles', color: '#10a37f' },
-  anthropic: { icon: 'Brain', color: '#d4a27f' },
-  google: { icon: 'Globe', color: '#4285f4' },
-  xai: { icon: 'Atom', color: '#1da1f2' },
-  deepseek: { icon: 'Search', color: '#536dfe' },
-  moonshot: { icon: 'Moon', color: '#f5c542' },
-  qwen: { icon: 'Cloud', color: '#6c5ce7' },
-  zhipu: { icon: 'Cpu', color: '#00bfa5' },
-  perplexity: { icon: 'Compass', color: '#20b2aa' },
+const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>>> = {
+  openai: { icon: 'Sparkles' },
+  anthropic: { icon: 'Brain' },
+  google: { icon: 'Globe' },
+  xai: { icon: 'Atom' },
+  deepseek: { icon: 'Search' },
+  moonshot: { icon: 'Moon' },
+  qwen: { icon: 'Cloud' },
+  zhipu: { icon: 'Cpu' },
+  perplexity: { icon: 'Compass' },
 };
 
 const MOBILE_PROVIDER_IDS = PROVIDER_ORDER.filter((providerId) => providerId in PROVIDER_META);
@@ -78,7 +80,9 @@ export const PROVIDERS: ProviderDef[] = MOBILE_PROVIDER_IDS.map((providerId) => 
   id: providerId,
   name: providerLabels[providerId] ?? providerId,
   icon: PROVIDER_META[providerId]?.icon ?? 'Sparkles',
-  color: PROVIDER_META[providerId]?.color ?? '#888',
+  color:
+    PROVIDER_DISPLAY[providerId as ProviderId]?.brandColor ??
+    PROVIDER_DISPLAY['custom-openai-compatible'].brandColor,
 }));
 
 export const MODEL_LIST: ModelDef[] = getPickerModels({
@@ -147,13 +151,5 @@ export function getShortDisplayName(id: string): string {
     return id;
   }
 
-  // MOB-HARDCODED-MODELS fix: strip well-known provider name prefixes generically
-  // so this survives era changes without manual updates.
-  // Pattern: "Claude X.Y ", "GPT-X.Y ", "Gemini X.Y ", "Grok X ", "OpenAI " etc.
-  return model.name
-    .replace(/^Claude\s+[\d.]+\s+/i, '')
-    .replace(/^GPT-[\d.]+\s+/, 'GPT-')
-    .replace(/^Gemini\s+[\d.]+\s+/i, '')
-    .replace(/^Grok\s+\d+\s+/i, '')
-    .replace(/^OpenAI\s+/i, '');
+  return model.name;
 }

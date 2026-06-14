@@ -38,6 +38,7 @@ import { mmkvDisclosureLedger } from '@/services/complianceLedger';
 import {
   detectCapabilities,
   getDefaultModel,
+  getModelById,
   getShippableModels,
   tier2LoadModel,
   type LocalRuntimeTier,
@@ -119,19 +120,35 @@ function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
   return { ...model, needsDownload: true };
 }
 
+function pickModelForPickerSelection(
+  modelId: string,
+  fallbackTier: LocalRuntimeTier,
+): RecommendedModel | null {
+  if (modelId === 'auto-balanced') return pickRecommendedModel(fallbackTier);
+
+  const localModels = getShippableModels();
+  if (modelId === 'auto-economy') {
+    const liteModel = localModels.find((model) => model.role === 'lite-mode');
+    return liteModel ? { ...liteModel, needsDownload: liteModel.fileSizeBytes > 0 } : null;
+  }
+  if (modelId === 'auto-premium') {
+    const premiumModel = localModels.find(
+      (model) => model.role === 'premium-vision-pack' || model.role === 'premium-multimodal-alt',
+    );
+    return premiumModel ? { ...premiumModel, needsDownload: premiumModel.fileSizeBytes > 0 } : null;
+  }
+
+  const catalogModel = getModelById(modelId);
+  if (!catalogModel) return null;
+  return { ...catalogModel, needsDownload: catalogModel.fileSizeBytes > 0 };
+}
+
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const gb = bytes / (1024 * 1024 * 1024);
   if (gb >= 1) return `${gb.toFixed(1)} GB`;
   const mb = bytes / (1024 * 1024);
   return `${Math.round(mb)} MB`;
-}
-
-function estimateWifiMinutes(bytes: number): string {
-  if (bytes === 0) return 'instant';
-  const seconds = bytes / (10 * 1024 * 1024); // ~10 MB/s avg Indian Wi-Fi
-  if (seconds < 60) return `< 1 min`;
-  return `~${Math.round(seconds / 60)} min`;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +188,16 @@ export default function OnboardingScreen() {
   const handlePickModel = useCallback(() => {
     modelPickerRef.current?.snapToIndex(0);
   }, []);
+
+  const handleSelectModel = useCallback(
+    (modelId: string) => {
+      const nextModel = pickModelForPickerSelection(modelId, deviceInfo.tier);
+      if (!nextModel) return;
+      setDownloadError(null);
+      setRecommendedModel(nextModel);
+    },
+    [deviceInfo.tier],
+  );
 
   // Detect device capabilities once on mount
   useEffect(() => {
@@ -285,6 +312,7 @@ export default function OnboardingScreen() {
       }
       setScreen('download');
       setDownloadProgress(0);
+      setDownloadSpeedMBs(0);
       setDownloadError(null);
 
       // ExecuTorch path — catalog has an executorchPreset with HF URLs. This
@@ -429,7 +457,7 @@ export default function OnboardingScreen() {
 
       {/* Model picker sheet — overlays the full screen, only shown when user
           taps "Pick a different model" on the device-tier screen. */}
-      <ModelPickerSheet sheetRef={modelPickerRef} />
+      <ModelPickerSheet sheetRef={modelPickerRef} modelScope="local" onSelect={handleSelectModel} />
     </SafeAreaView>
   );
 }
@@ -585,7 +613,7 @@ function DeviceTierScreen({
               {formatBytes(model.fileSizeBytes)} download · Wi-Fi recommended
             </Text>
             <Text style={[styles.modelDetail, { color: colors.textMuted }]}>
-              Estimated download: {estimateWifiMinutes(model.fileSizeBytes)} on Wi-Fi
+              Download time depends on your connection.
             </Text>
           </>
         ) : (
@@ -675,21 +703,22 @@ function DownloadScreen({
 
   return (
     <View testID="onboarding-download-screen" style={styles.downloadRoot}>
-      <RadialProgress
-        progress={progress}
-        size={160}
-        stroke={10}
-        color={colors.terraCotta}
-        trackColor={colors.progressTrack}
-      />
-
-      <Text
-        testID="download-percent"
-        style={[styles.downloadPct, { color: colors.textPrimary }]}
-        accessibilityLabel={`${pct} percent downloaded`}
-      >
-        {pct}%
-      </Text>
+      <View style={styles.progressLockup}>
+        <RadialProgress
+          progress={progress}
+          size={160}
+          stroke={10}
+          color={colors.terraCotta}
+          trackColor={colors.progressTrack}
+        />
+        <Text
+          testID="download-percent"
+          style={[styles.downloadPct, { color: colors.textPrimary }]}
+          accessibilityLabel={`${pct} percent downloaded`}
+        >
+          {pct}%
+        </Text>
+      </View>
 
       <Text style={[styles.downloadModelName, { color: colors.textSecondary }]}>
         {model.displayName}
@@ -709,7 +738,7 @@ function DownloadScreen({
       </Text>
 
       <Text style={[styles.downloadHint, { color: colors.textMuted }]}>
-        You can leave this screen — download continues in the background.
+        You can leave this screen. The download continues in the background.
       </Text>
 
       {error && (
@@ -926,12 +955,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
+  progressLockup: {
+    width: 180,
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   downloadPct: {
-    fontSize: 64,
+    position: 'absolute',
+    fontSize: 38,
+    lineHeight: 46,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     letterSpacing: 0,
-    marginTop: 8,
+    textAlign: 'center',
   },
   downloadModelName: {
     fontSize: 16,

@@ -117,9 +117,12 @@ export async function togglePinMemoryFact(id: string, pinned: boolean): Promise<
 
 export async function searchMemoryByText(query: string, k = 10): Promise<MemoryFact[]> {
   const db = await getDb();
-  const q = `%${query.toLowerCase()}%`;
+  // Escape LIKE metacharacters so user-typed `%`, `_`, or `\` match literally
+  // instead of acting as wildcards (correctness/relevance, not an injection risk).
+  const escaped = query.toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+  const q = `%${escaped}%`;
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM memory_facts WHERE lower(fact) LIKE ? ORDER BY pinned DESC, created_at DESC LIMIT ?;',
+    "SELECT * FROM memory_facts WHERE lower(fact) LIKE ? ESCAPE '\\' ORDER BY pinned DESC, created_at DESC LIMIT ?;",
     [q, k],
   );
   return rows.map(row2fact);

@@ -102,9 +102,13 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        void import('@/services/companion').then(({ sendApprovalResponse }) => {
-          sendApprovalResponse(id, true);
-        });
+        void import('@/services/companion')
+          .then(({ sendApprovalResponse }) => {
+            sendApprovalResponse(id, true);
+          })
+          .catch((error) => {
+            console.warn('[agentStore] Failed to send approval response:', error);
+          });
       },
 
       rejectRequest: (id, reason) => {
@@ -115,9 +119,13 @@ export const useAgentStore = create<AgentState>()(
           ),
         }));
         // Send decision to desktop via WebRTC
-        void import('@/services/companion').then(({ sendApprovalResponse }) => {
-          sendApprovalResponse(id, false, reason);
-        });
+        void import('@/services/companion')
+          .then(({ sendApprovalResponse }) => {
+            sendApprovalResponse(id, false, reason);
+          })
+          .catch((error) => {
+            console.warn('[agentStore] Failed to send rejection response:', error);
+          });
       },
     }),
     {
@@ -128,6 +136,11 @@ export const useAgentStore = create<AgentState>()(
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[agentStore] Hydration failed:', error);
       },
+      partialize: () => ({
+        agents: [],
+        selectedAgentId: null,
+        pendingApprovals: [],
+      }),
     },
   ),
 );

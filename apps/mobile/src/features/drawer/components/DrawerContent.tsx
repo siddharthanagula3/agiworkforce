@@ -7,10 +7,10 @@ import {
   Cloud,
   FolderOpen,
   HelpCircle,
-  Plus,
   Search,
   Settings,
   Sparkles,
+  SquarePen,
   UserCircle,
   X,
   type LucideIcon,
@@ -19,14 +19,19 @@ import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
-import { useAuthStore } from '@/src/features/auth/store';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useModelStore } from '@/src/features/model-picker/store';
+import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
+import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 type RoutePath =
   | '/(app)/(tabs)/projects'
+  | '/(app)/(tabs)/chat'
   | '/(app)/artifacts'
   | '/(app)/(tabs)/settings'
   | '/(app)/about'
@@ -62,6 +67,8 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     cloud: true,
   },
 ];
+
+const DRAWER_RECENT_LIMIT = 8;
 
 function Tag({ label }: { label: string }) {
   const colors = useThemeColors();
@@ -201,7 +208,20 @@ function SearchBox({
         style={{ flex: 1, color: colors.textPrimary, fontSize: 15, paddingVertical: 0 }}
       />
       {value.trim().length > 0 ? (
-        <Pressable onPress={onClear} hitSlop={8} accessibilityLabel="Clear search">
+        <Pressable
+          testID="drawer-search-clear"
+          onPress={onClear}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: 14,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
           <X size={16} color={colors.textMuted} />
         </Pressable>
       ) : null}
@@ -210,16 +230,18 @@ function SearchBox({
 }
 
 /**
- * ChatGPT-style mobile drawer with AGI-owned labels and cloud gating.
+ * Mobile drawer with AGI-owned labels and cloud gating.
  */
 export function DrawerContent(props: DrawerContentComponentProps) {
   const colors = useThemeColors();
   const router = useRouter();
   const pathname = usePathname();
   const conversations = useChatStore((s) => s.conversations);
-  const createConversation = useChatStore((s) => s.createConversation);
   const projects = useProjectStore((s) => s.projects);
-  const user = useAuthStore((s) => s.user);
+  const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
+  const setModel = useModelStore((s) => s.setModel);
+  const appMode = useChatAppModeStore((s) => s.appMode);
+  const setAppMode = useChatAppModeStore((s) => s.setAppMode);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -240,20 +262,25 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     [closeDrawer, router],
   );
 
-  const handleNewChat = useCallback(async () => {
+  const handleNewChat = useCallback(() => {
     closeDrawer();
-    try {
-      const id = await createConversation('New Chat');
-      router.push({ pathname: '/(app)/chat/[id]' as const, params: { id } });
-    } catch {
-      router.push({ pathname: '/(app)/(tabs)/chat' as const });
-    }
-  }, [closeDrawer, createConversation, router]);
+    router.push({ pathname: '/(app)/(tabs)/chat' as const });
+  }, [closeDrawer, router]);
 
   const openInvite = useCallback(() => {
-    closeDrawer();
     setInviteOpen(true);
-  }, [closeDrawer]);
+  }, []);
+
+  const openAgiAgent = useCallback(() => {
+    if (!cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
+      openInvite();
+      return;
+    }
+
+    setAppMode('cloud');
+    setModel(DEFAULT_CLOUD_MODEL_ID);
+    navigate('/(app)/(tabs)/chat');
+  }, [cloudUnlocked, navigate, openInvite, setAppMode, setModel]);
 
   const displayedConversations = useMemo(() => {
     const source = isSearching
@@ -261,16 +288,28 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           (conversation.title || '').toLowerCase().includes(query),
         )
       : conversations;
-    return source.slice(0, 12);
-  }, [conversations, isSearching, query]);
+    return source
+      .filter((conversation) => executionModeForConversation(conversation) === appMode)
+      .slice(0, DRAWER_RECENT_LIMIT);
+  }, [appMode, conversations, isSearching, query]);
 
   const displayedProjects = useMemo(() => {
+    if (appMode === 'cloud') return [];
     if (!FEATURES.projects) return [];
     const source = isSearching
       ? projects.filter((project) => project.name.toLowerCase().includes(query))
       : projects;
     return source.slice(0, 6);
-  }, [isSearching, projects, query]);
+  }, [appMode, isSearching, projects, query]);
+
+  const visiblePrimaryItems = useMemo(
+    () =>
+      PRIMARY_ITEMS.filter((item) => {
+        if (appMode === 'cloud') return item.key !== 'projects';
+        return item.key !== 'agi-agent';
+      }),
+    [appMode],
+  );
 
   const activeKey = useCallback(
     (key: PrimaryItem['key']) => {
@@ -282,18 +321,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     [pathname],
   );
 
-  const displayName =
-    user?.user_metadata?.full_name ||
-    user?.user_metadata?.name ||
-    user?.email?.split('@')[0] ||
-    'Profile';
-
   return (
-    <SafeAreaView
-      className="flex-1"
-      edges={['top', 'bottom']}
-      style={{ backgroundColor: colors.background }}
-    >
+    <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={{ flex: 1, paddingHorizontal: 14 }}>
         <View
           style={{
@@ -312,7 +341,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             icon={UserCircle}
             onPress={() => navigate('/(app)/profile')}
           />
-          <HeaderIconButton label="New chat" icon={Plus} onPress={handleNewChat} />
+          <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
         </View>
 
         <SearchBox
@@ -323,12 +352,12 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
         <ScrollView
           style={{ flex: 1, marginTop: 14 }}
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: 96 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
           <View style={{ gap: 2 }}>
-            {PRIMARY_ITEMS.map((item) => (
+            {visiblePrimaryItems.map((item) => (
               <NavRow
                 key={item.key}
                 label={item.label}
@@ -336,7 +365,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 active={activeKey(item.key)}
                 tag={item.cloud ? 'Cloud' : undefined}
                 onPress={() => {
-                  if (item.cloud) openInvite();
+                  if (item.cloud) openAgiAgent();
                   else if (item.route) navigate(item.route);
                 }}
               />
@@ -457,24 +486,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           onPress={() => navigate('/(app)/(tabs)/settings')}
         />
         <NavRow label="Help & About" icon={HelpCircle} onPress={() => navigate('/(app)/about')} />
-        <Pressable
-          onPress={() => navigate('/(app)/profile')}
-          accessibilityLabel="Open profile"
-          accessibilityRole="button"
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            paddingHorizontal: 12,
-            paddingTop: 8,
-            minHeight: 36,
-          }}
-        >
-          <UserCircle size={14} color={colors.textMuted} />
-          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: 12, flex: 1 }}>
-            {displayName}
-          </Text>
-        </Pressable>
       </View>
 
       <InviteCodeModal

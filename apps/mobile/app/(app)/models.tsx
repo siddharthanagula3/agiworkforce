@@ -6,7 +6,6 @@ import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
@@ -64,8 +63,7 @@ export default function ModelsScreen() {
   }, [hydrateInstalledModels]);
 
   const handleBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/chat' as Parameters<typeof router.replace>[0]);
+    router.navigate('/(app)/settings/general' as Parameters<typeof router.navigate>[0]);
   }, [router]);
 
   const openPicker = useCallback(() => {
@@ -105,30 +103,37 @@ export default function ModelsScreen() {
     .slice(0, 5) as (typeof LOCAL_MODEL_LIST)[number][];
 
   return (
-    <SafeAreaView className="flex-1 bg-surface-base">
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.surfaceBase }}>
       <View
-        className="flex-row items-center px-3 h-12"
-        style={{ borderBottomWidth: 1, borderBottomColor: c.border }}
+        style={{
+          alignItems: 'center',
+          borderBottomColor: c.border,
+          borderBottomWidth: 1,
+          flexDirection: 'row',
+          height: 48,
+          paddingHorizontal: 12,
+        }}
       >
         <Pressable
           onPress={handleBack}
-          className="p-2 rounded-lg"
           style={({ pressed }) => ({ backgroundColor: pressed ? c.surfaceHover : c.transparent })}
           accessibilityLabel="Go back"
           accessibilityRole="button"
         >
-          <ArrowLeft size={20} color={c.textSecondary} />
+          <View style={{ alignItems: 'center', height: 40, justifyContent: 'center', width: 40 }}>
+            <ArrowLeft size={20} color={c.textSecondary} />
+          </View>
         </Pressable>
-        <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
+        <Text variant="subheading" style={{ color: c.textPrimary, marginLeft: 4 }}>
           Models
         </Text>
       </View>
 
-      <View className="flex-1 px-4 pt-4 gap-4">
+      <View style={{ flex: 1, gap: 16, paddingHorizontal: 16, paddingTop: 16 }}>
         <Card>
           <Text
-            className="text-[11px] uppercase tracking-wider font-semibold mb-3"
-            style={{ color: c.textMuted }}
+            className="text-[11px] uppercase font-semibold mb-3"
+            style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Active Model
           </Text>
@@ -166,14 +171,14 @@ export default function ModelsScreen() {
         {favoriteModels.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase tracking-wider font-semibold mb-3"
-              style={{ color: c.textMuted }}
+              className="text-[11px] uppercase font-semibold mb-3"
+              style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Favorites
             </Text>
             {favoriteModels.map((m, idx) => (
               <View key={m.id}>
-                {idx > 0 && <Separator />}
+                {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
                 <View className="flex-row items-center justify-between py-2.5">
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
@@ -190,14 +195,14 @@ export default function ModelsScreen() {
         {recentModelDefs.length > 0 && (
           <Card>
             <Text
-              className="text-[11px] uppercase tracking-wider font-semibold mb-3"
-              style={{ color: c.textMuted }}
+              className="text-[11px] uppercase font-semibold mb-3"
+              style={{ color: c.textMuted, letterSpacing: 0 }}
             >
               Recent
             </Text>
             {recentModelDefs.map((m, idx) => (
               <View key={m.id}>
-                {idx > 0 && <Separator />}
+                {idx > 0 && <View style={{ height: 1, backgroundColor: c.border }} />}
                 <View className="flex-row items-center justify-between py-2.5">
                   <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                     {m.name}
