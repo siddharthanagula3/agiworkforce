@@ -765,6 +765,20 @@ const MessageBubbleComponent = function MessageBubble({
             </Collapsible>
           )}
 
+          {/* Model name · shown under completed assistant messages, hidden while streaming */}
+          {!isUser && !message.isStreaming && message.metadata?.model && (
+            <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100">
+              {
+                message.metadata.model
+                  .replace(
+                    /^(anthropic|openai|google|xai|deepseek|perplexity|qwen|moonshot|zhipu|ollama|lmstudio)\//i,
+                    '',
+                  )
+                  .replace(/-(\d{8})$/, '') /* strip date suffixes like -20250219 */
+              }
+            </div>
+          )}
+
           {/* Actions (show on hover) */}
           {!message.isStreaming && (
             <div
