@@ -84,9 +84,11 @@ async function handleChatCompletions(request: NextRequest) {
     const hasMcpTools = mcpTools.length > 0 && !processed.freeTrial;
 
     if (hasMcpTools) {
-      // Determine approval mode from query param (default: manual = fail-closed).
-      const approvalMode =
-        request.nextUrl.searchParams.get('approval_mode') === 'auto' ? 'auto' : 'manual';
+      // Fail-closed: tool calls require explicit per-tool approval. Auto-approval
+      // is intentionally NOT read from a client-supplied query param — a client
+      // must not be able to skip the gate. The only thing that may grant 'auto'
+      // is a future server-side policy (authenticated tier + tool sensitivity).
+      const approvalMode = 'manual' as const;
 
       // Build the agentic SSE stream from the tool-loop generator.
       const toolLoopGen = runToolLoop(processed, { mcpTools, approvalMode });
