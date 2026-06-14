@@ -229,8 +229,12 @@ function getCloudApiEndpoint(): string {
 }
 
 function getModel(): string {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return normalizeConfiguredModelId(config.get<string>('model'));
+  // SECURITY (audit 219): read global-only, like getCloudApiEndpoint, so a
+  // malicious workspace .vscode/settings.json cannot silently override the
+  // model id (and thus routing/cost/behaviour) for every LLM call.
+  return normalizeConfiguredModelId(
+    getGlobalConfig<string | undefined>('agiWorkforce', 'model', undefined),
+  );
 }
 
 function isStreamingEnabled(): boolean {
@@ -754,8 +758,8 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
 
 // ─── Provider-stream path ─────────────────────────────────────────────────────
 //
-// The direct platform-token path has been removed. Until Clerk-backed AGI
-// account auth is wired into the VS Code extension, this setting fails closed
+// The direct platform-token path has been removed. Until AGI Cloud account
+// sign-in is wired into the VS Code extension, this setting fails closed
 // instead of accepting manually pasted runtime tokens.
 
 /**
@@ -775,7 +779,7 @@ export async function streamChatCompletionViaProvider(
   void cancellationToken;
   void overrideModel;
   throw new AgiWorkforceApiError(
-    'AGI account web auth is not wired in the VS Code extension yet. Disable agiWorkforce.useProviderStream or use AGI Workforce Web for account-gated provider streaming.',
+    'AGI Cloud sign-in is not available in the VS Code extension yet. Disable agiWorkforce.useProviderStream or use AGI Web for account-gated provider streaming.',
     401,
     'AGI_ACCOUNT_WEB_AUTH_NOT_WIRED',
   );

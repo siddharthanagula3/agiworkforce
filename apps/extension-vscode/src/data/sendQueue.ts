@@ -3,9 +3,9 @@
  *
  * Wraps `messageQueueManager` from `@agiworkforce/runtime` with a
  * `vscode.Memento`-backed storage adapter so the `next` and `later` lanes
- * survive window-reload events without leaking secret data into the
- * `ExtensionContext.workspaceState` (which would persist across reloads
- * but stays scoped to the workspace).
+ * survive window-reload events. The backing store IS `ExtensionContext.
+ * workspaceState` (persisted, workspace-scoped) — so callers must NOT enqueue
+ * secret payloads; only command/intent metadata belongs in the queue.
  *
  * The queue is opt-in: callers must pass a `vscode.Memento` (typically
  * `context.workspaceState`) at first call. Subsequent calls return the
@@ -41,10 +41,16 @@ export function getVSCodeSendQueue(memento: MementoLike | null): MessageQueue {
           return Array.isArray(raw) ? raw : null;
         },
         write: (commands) => {
-          // Memento.update is async but our adapter is fire-and-forget;
-          // VS Code persists state on host shutdown so a missed flush is
-          // bounded.
-          void memento.update(STORAGE_KEY, commands);
+          // Fire-and-forget (VS Code also persists state on host shutdown), but
+          // surface a failed flush so a dropped persist is observable rather
+          // than silently lost (audit 217 L43).
+          Promise.resolve(memento.update(STORAGE_KEY, commands)).catch((err: unknown) => {
+            console.error(
+              `[agi] sendQueue: failed to persist queue — ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            );
+          });
         },
       },
     });
