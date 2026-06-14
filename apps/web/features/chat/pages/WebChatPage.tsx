@@ -819,6 +819,20 @@ export default function WebChatPage() {
     [conversations, updateConversationInStore],
   );
 
+  // Share from the sidebar dropdown. If the target is not the active
+  // conversation, navigate to it first; the user can then share via the
+  // header share button or re-open the dropdown.
+  const handleShareSession = useCallback(
+    (id: string) => {
+      if (id === displayedConversationId) {
+        void share();
+      } else {
+        router.push(`/chat/${id}`);
+      }
+    },
+    [displayedConversationId, share, router],
+  );
+
   const handleEditMessage = useCallback(
     async (id: string) => {
       if (!displayedConversationId || isStreaming) return;
@@ -970,6 +984,7 @@ export default function WebChatPage() {
         onPinSession={handlePinSession}
         onStarSession={handleStarSession}
         onArchiveSession={handleArchiveSession}
+        onShareSession={handleShareSession}
       />
 
       {/* Main area + artifact workbench */}
