@@ -1052,6 +1052,16 @@ message -- revise and call `update_plan` again.\n\n",
                             summary: tool_event_summary(&tc.name, &effective_args),
                         },
                     );
+                    if self.json_events {
+                        crate::agent_events::AgentEvent::RunningTool {
+                            session_id: self.json_session_id.clone(),
+                            name: tc.name.clone(),
+                            args_redacted: crate::agent_events::redact_args(
+                                &effective_args.to_string(),
+                            ),
+                        }
+                        .emit_stdout();
+                    }
                     runnable.push((tc.id.clone(), tc.name.clone(), effective_args));
                 }
 
@@ -1078,6 +1088,10 @@ message -- revise and call `update_plan` again.\n\n",
                 let outcomes = join_all(futures).await;
 
                 for (tool_use_id, tool_name, tool_args, exec_result) in outcomes {
+                    let started_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0);
                     let tool_result = match exec_result {
                         Ok(r) => r,
                         Err(e) => crate::tools::ToolResult {
@@ -1086,6 +1100,11 @@ message -- revise and call `update_plan` again.\n\n",
                             output: format!("tool error: {:#}", e),
                         },
                     };
+                    let elapsed_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0)
+                        .saturating_sub(started_ms);
 
                     if !self.quiet {
                         let status = if tool_result.success {
@@ -1094,6 +1113,16 @@ message -- revise and call `update_plan` again.\n\n",
                             ts::danger("failed").to_string()
                         };
                         eprintln!("  {} {} [{}]", "->".dimmed(), tool_name.bold(), status);
+                    }
+
+                    if self.json_events {
+                        crate::agent_events::AgentEvent::ToolResult {
+                            session_id: self.json_session_id.clone(),
+                            name: tool_name.clone(),
+                            duration_ms: elapsed_ms,
+                            ok: tool_result.success,
+                        }
+                        .emit_stdout();
                     }
 
                     emit_tool_event(
@@ -1250,6 +1279,22 @@ message -- revise and call `update_plan` again.\n\n",
                     },
                 );
 
+                if self.json_events {
+                    crate::agent_events::AgentEvent::RunningTool {
+                        session_id: self.json_session_id.clone(),
+                        name: tc.name.clone(),
+                        args_redacted: crate::agent_events::redact_args(
+                            &effective_args.to_string(),
+                        ),
+                    }
+                    .emit_stdout();
+                }
+
+                let seq_tool_start_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+
                 let tool_result = if tc.name == "update_plan" {
                     let payload = self.handle_update_plan(&effective_args);
                     let success = payload.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
@@ -1309,6 +1354,21 @@ message -- revise and call `update_plan` again.\n\n",
                         ts::danger("failed").to_string()
                     };
                     eprintln!("  {} {} [{}]", "->".dimmed(), tc.name.bold(), status);
+                }
+
+                if self.json_events {
+                    let seq_elapsed_ms = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis() as u64)
+                        .unwrap_or(0)
+                        .saturating_sub(seq_tool_start_ms);
+                    crate::agent_events::AgentEvent::ToolResult {
+                        session_id: self.json_session_id.clone(),
+                        name: tc.name.clone(),
+                        duration_ms: seq_elapsed_ms,
+                        ok: tool_result.success,
+                    }
+                    .emit_stdout();
                 }
 
                 emit_tool_event(
