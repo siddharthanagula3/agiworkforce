@@ -2251,23 +2251,45 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/diff-review" => {
             use crate::tui::widgets::diff_review::{DiffReviewView, FileDiff};
             // Gather changed files from `git status --porcelain` synchronously.
-            let files: Vec<FileDiff> = std::process::Command::new("git")
+            let status_out = std::process::Command::new("git")
                 .args(["status", "--porcelain"])
                 .output()
                 .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                .unwrap_or_default()
+                .unwrap_or_default();
+            let changed_paths: Vec<String> = status_out
                 .lines()
                 .filter_map(|line| {
                     let path = line.get(3..)?;
-                    if path.is_empty() {
-                        return None;
-                    }
-                    Some(FileDiff::new(path, vec![], 0, 0))
+                    if path.is_empty() { None } else { Some(path.to_string()) }
                 })
                 .collect();
-            if files.is_empty() {
+            if changed_paths.is_empty() {
                 SlashResult::SystemMessage("No changed files (working tree clean).".into())
             } else {
+                // For each changed file, run `git diff HEAD -- <path>` to get real hunks.
+                // Untracked files use an empty diff body (no HEAD revision to compare).
+                let files: Vec<FileDiff> = changed_paths.iter().map(|path| {
+                    let diff_text = std::process::Command::new("git")
+                        .args(["diff", "HEAD", "--", path])
+                        .output()
+                        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                        .unwrap_or_default();
+                    let mut additions = 0usize;
+                    let mut deletions = 0usize;
+                    let mut hunks: Vec<String> = Vec::new();
+                    for line in diff_text.lines() {
+                        if line.starts_with('+') && !line.starts_with("+++") {
+                            additions += 1;
+                            hunks.push(line.to_string());
+                        } else if line.starts_with('-') && !line.starts_with("---") {
+                            deletions += 1;
+                            hunks.push(line.to_string());
+                        } else if line.starts_with("@@") {
+                            hunks.push(line.to_string());
+                        }
+                    }
+                    FileDiff::new(path.as_str(), hunks, additions, deletions)
+                }).collect();
                 let view = DiffReviewView::new(files);
                 app.open_overlay(Box::new(view));
                 SlashResult::SystemMessage(
