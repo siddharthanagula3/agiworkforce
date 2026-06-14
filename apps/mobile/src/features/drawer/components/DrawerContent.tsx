@@ -28,6 +28,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { DEFAULT_CLOUD_MODEL_ID } from '@/src/features/model-picker/service';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { ModeSwitchModal } from '@/src/features/chat/components/ModeSwitchModal';
 
 type RoutePath =
   | '/(app)/(tabs)/projects'
@@ -245,6 +246,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
+  // SILENT-SWITCH-FIX: mode switches to Cloud always require explicit user consent
+  // via ModeSwitchModal — never silently call setAppMode('cloud').
+  const [modeSwitchVisible, setModeSwitchVisible] = useState(false);
   const query = searchQuery.trim().toLowerCase();
   const isSearching = query.length > 0;
 
@@ -276,11 +280,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       openInvite();
       return;
     }
+    // SILENT-SWITCH-FIX: show the consent modal instead of silently switching mode.
+    // The actual setAppMode('cloud') call is deferred to the modal's onConfirm handler.
+    setModeSwitchVisible(true);
+  }, [cloudUnlocked, openInvite]);
 
+  const handleModeSwitchConfirm = useCallback(() => {
+    setModeSwitchVisible(false);
+    if (!DEFAULT_CLOUD_MODEL_ID) return;
     setAppMode('cloud');
     setModel(DEFAULT_CLOUD_MODEL_ID);
     navigate('/(app)/(tabs)/chat');
-  }, [cloudUnlocked, navigate, openInvite, setAppMode, setModel]);
+  }, [navigate, setAppMode, setModel]);
+
+  const handleModeSwitchCancel = useCallback(() => {
+    setModeSwitchVisible(false);
+  }, []);
 
   const displayedConversations = useMemo(() => {
     const source = isSearching
@@ -493,6 +508,16 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         onClose={() => setInviteOpen(false)}
         source="other"
         defaultTab="invite"
+      />
+
+      {/* SILENT-SWITCH-FIX: consent modal for Local→Cloud mode switch from AGI Agent button */}
+      <ModeSwitchModal
+        visible={modeSwitchVisible}
+        fromMode="local"
+        toMode="cloud"
+        onConfirm={handleModeSwitchConfirm}
+        onCancel={handleModeSwitchCancel}
+        onClose={handleModeSwitchCancel}
       />
     </SafeAreaView>
   );
